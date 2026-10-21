@@ -1548,27 +1548,28 @@ Format: **invariant** — tier — enforced by.
   placement has since moved is unlinked where it was written rather than where the placement now points, and a per-row
   delete takes only the record it names. What makes the destructive-op rule (the `backup-or-confirm` entry) concrete for
   BIOS files is that authority to delete comes from having placed the file, and the record is the only evidence of that,
-  because `BiosFile.mark_downloaded` is written in the download path and nowhere else. So the records are the delete's
-  whole input: it iterates them, not a status listing, which is also what keeps a download RomM has since dropped
-  deletable instead of gated behind a file list that no longer names it. The authorisations a reader reaches for instead
-  are wrong in opposite directions. `downloaded` is `os.path.exists` and nothing more: authorise on it and the
-  platform-wide delete destroys firmware RetroDECK ships with its own components, which no RomM library holds and
-  nothing here can fetch back — it did exactly that to `<bios>/dolphin-emu/Sys/codehandler.bin` on a real device.
-  `on_server` describes what the library holds _now_, not who wrote the file: authorise on it and a file dropped from
-  RomM after we downloaded it is stranded on disk with nothing in the UI able to remove it. The PATH has its own version
-  of the same trap: a status row's `local_path` is recomputed from today's placement, so for a file fetched before an
-  emu-atlas bump moved it the name still matches our record while the path names whatever now occupies the new
-  destination — RetroDECK's own `codehandler.bin`, in the case that motivated this. The count the UI offers is bound to
-  the same set: `deletable_count` on the `get_platform_firmware_status` payload is records-still-on-disk, counted as
-  distinct paths, because `local_count` is the library's progress ratio and is wrong in both directions — it hid the
-  button entirely for a platform whose downloads had all left the library. **Since #1815 the same field is stamped per
-  ROW** (`_stamp_deletable`), and the frontend authorises a destructive action on it: a row's Delete is offered where
-  `deletable_count` is non-zero and nowhere else, and a folder row's counts the distinct files our records name
-  underneath it, because a folder is never a download but what we put inside one is still ours — and two records naming
-  one path are one unlink, the platform count's own rule read one layer in. That is a wire field a page reads to decide
-  whether to offer a delete, so deriving it from `downloaded` — the same substitution as below, one layer out — puts the
-  button on `codehandler.bin`; `TestGetFirmwareStatusDeletableCount` pins the row's answer for a file Tender did not
-  place. **Three buttons now reach one removal loop** (`PlatformBiosDeleter._delete_recorded_io`, under a record
+  because a `downloaded_bios` record is written by the download path and nowhere else — the refiling
+  (`services/firmware/refiling.py`) only moves an older record to its platform, every field but the platform kept. So
+  the records are the delete's whole input: it iterates them, not a status listing, which is also what keeps a download
+  RomM has since dropped deletable instead of gated behind a file list that no longer names it. The authorisations a
+  reader reaches for instead are wrong in opposite directions. `downloaded` is `os.path.exists` and nothing more:
+  authorise on it and the platform-wide delete destroys firmware RetroDECK ships with its own components, which no RomM
+  library holds and nothing here can fetch back — it did exactly that to `<bios>/dolphin-emu/Sys/codehandler.bin` on a
+  real device. `on_server` describes what the library holds _now_, not who wrote the file: authorise on it and a file
+  dropped from RomM after we downloaded it is stranded on disk with nothing in the UI able to remove it. The PATH has
+  its own version of the same trap: a status row's `local_path` is recomputed from today's placement, so for a file
+  fetched before an emu-atlas bump moved it the name still matches our record while the path names whatever now occupies
+  the new destination — RetroDECK's own `codehandler.bin`, in the case that motivated this. The count the UI offers is
+  bound to the same set: `deletable_count` on the `get_platform_firmware_status` payload is records-still-on-disk,
+  counted as distinct paths, because `local_count` is the library's progress ratio and is wrong in both directions — it
+  hid the button entirely for a platform whose downloads had all left the library. **Since #1815 the same field is
+  stamped per ROW** (`_stamp_deletable`), and the frontend authorises a destructive action on it: a row's Delete is
+  offered where `deletable_count` is non-zero and nowhere else, and a folder row's counts the distinct files our records
+  name underneath it, because a folder is never a download but what we put inside one is still ours — and two records
+  naming one path are one unlink, the platform count's own rule read one layer in. That is a wire field a page reads to
+  decide whether to offer a delete, so deriving it from `downloaded` — the same substitution as below, one layer out —
+  puts the button on `codehandler.bin`; `TestGetFirmwareStatusDeletableCount` pins the row's answer for a file Tender
+  did not place. **Three buttons now reach one removal loop** (`PlatformBiosDeleter._delete_recorded_io`, under a record
   predicate per button): a second copy of that loop is the shape this rule is about, because the copies would drift
   silently. **Nothing mechanical stands behind any of this.** A delete path looping a status list on `downloaded` alone
   would go green — which is exactly the shape this one had when it destroyed that file

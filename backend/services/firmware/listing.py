@@ -7,8 +7,10 @@ unreachable server degrades in one place instead of five.
 
 The firmware comes off RomM's platform list, which carries each platform's
 files, and each file belongs to the platform its ``platform_id`` names
-(``domain/firmware_platforms.py``). A fresh read also moves Tender's older
-entries to those platforms (:class:`~services.firmware.refiling.FirmwareRefiling`).
+(``domain/firmware_platforms.py``). Each read that reaches the server also
+moves Tender's older entries to those platforms
+(:class:`~services.firmware.refiling.FirmwareRefiling`); a read the cache
+answers moves nothing.
 
 The cache is durable by way of the SQLite ``firmware_cache`` table, so a
 restart still has a listing to answer from while the server is unreachable.
@@ -64,10 +66,10 @@ class FirmwareListing:
     def _restore_firmware_cache(self) -> None:
         """Rebuild the in-memory firmware cache from the SQLite cache table.
 
-        The ``firmware_cache`` table is a thin record per ADR-0003 — it carries
-        each file's platform and name but not its ``md5_hash``, so a restart
-        still has a listing to answer from while the server is unreachable;
-        ``md5_hash`` is intentionally absent (display-only).
+        The ``firmware_cache`` table is a thin record per ADR-0003: it carries
+        each file's id, name, platform and size, so a restart still has a
+        listing to answer from while the server is unreachable. It does not
+        carry ``md5_hash``, which a restored row answers as empty.
         """
         try:
             with self._uow_factory() as uow:
@@ -154,7 +156,9 @@ class FirmwareListing:
         try:
             self._refiling.do_refile(platforms, rows)
         except Exception as e:
-            self._logger.warning(f"Failed to move older BIOS records and picks to their platforms: {e}")
+            self._logger.warning(
+                f"Failed to move older BIOS records and per-platform emulator overrides to their platforms: {e}"
+            )
 
     def invalidate(self) -> None:
         """Clear cached firmware list so the next call re-fetches."""

@@ -1,10 +1,11 @@
-"""Tests for services/firmware/refiling.py — older download records and picks moved to the platform RomM states."""
+"""Tests for services/firmware/refiling.py — older download records and overrides moved to the platform RomM states."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
+import pytest
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
@@ -21,26 +22,49 @@ _PLATFORMS: list[dict[str, Any]] = [
         "firmware": [{"id": 10, "file_name": "scph5501.bin", "platform_id": 1}],
     },
     {"id": 2, "slug": "gba", "fs_slug": "gba", "firmware": []},
+    {
+        "id": 3,
+        "slug": "neogeo",
+        "fs_slug": "neogeo",
+        "firmware": [{"id": 30, "file_name": "neogeo.zip", "platform_id": 3}],
+    },
+    {"id": 4, "slug": "arcade", "fs_slug": "arcade", "firmware": []},
 ]
 
 
-def _record(platform_slug: str, *, path: str = "/bios/scph5501.bin", firmware_id: int | None = 10) -> BiosFile:
+def _record(
+    platform_slug: str,
+    *,
+    path: str = "/bios/scph5501.bin",
+    firmware_id: int | None = 10,
+    file_name: str = "scph5501.bin",
+) -> BiosFile:
     return BiosFile.mark_downloaded(
         platform_slug=platform_slug,
-        file_name="scph5501.bin",
+        file_name=file_name,
         file_path=path,
         downloaded_at="2026-01-01T00:00:00+00:00",
         firmware_id=firmware_id,
     )
 
 
+class _FailingPersister(FakeSettingsPersister):
+    def save_settings(self) -> None:
+        raise OSError("disk full")
+
+
 class _Harness:
-    def __init__(self, *records: BiosFile, picks: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        *records: BiosFile,
+        overrides: dict[str, str] | None = None,
+        persister: FakeSettingsPersister | None = None,
+    ) -> None:
         self.uow = FakeUnitOfWork()
         for record in records:
             self.uow.bios_files.save(record)
-        self.settings: dict[str, Any] = {"platform_cores": dict(picks or {})}
-        self.persister = FakeSettingsPersister()
+        self.settings: dict[str, Any] = {"platform_cores": dict(overrides or {})}
+        self.persister = persister if persister is not None else FakeSettingsPersister()
         self.refiling = FirmwareRefiling(
             config=FirmwareRefilingConfig(
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
@@ -110,6 +134,14 @@ class TestDownloadRecords:
 
         assert harness.records() == {("psx", "scph5501.bin", "/bios/scph5501.bin")}
 
+    def test_a_record_under_a_listed_platform_stays_though_its_id_names_a_same_named_file_elsewhere(self):
+        """``arcade`` is a platform of its own; the file id 30 now names is filed on ``neogeo``."""
+        harness = _Harness(_record("arcade", path="/bios/neogeo.zip", firmware_id=30, file_name="neogeo.zip"))
+
+        harness.refile()
+
+        assert harness.records() == {("arcade", "neogeo.zip", "/bios/neogeo.zip")}
+
     def test_a_record_already_under_its_platform_is_left_alone(self):
         harness = _Harness(_record("psx"))
 
@@ -118,17 +150,49 @@ class TestDownloadRecords:
         assert harness.records() == {("psx", "scph5501.bin", "/bios/scph5501.bin")}
 
 
-class TestPicks:
-    def test_a_pick_under_the_server_folder_name_moves_to_its_platform_and_is_saved(self):
-        harness = _Harness(picks={"ps": "SwanStation", "gba": "mGBA"})
+class TestPerPlatformEmulatorOverrides:
+    def test_an_override_under_the_server_folder_name_moves_to_its_platform_and_is_saved(self):
+        harness = _Harness(overrides={"ps": "SwanStation", "gba": "mGBA"})
 
         harness.refile()
 
         assert harness.settings["platform_cores"] == {"psx": "SwanStation", "gba": "mGBA"}
         assert harness.persister.save_count == 1
 
+    def test_the_overrides_move_in_the_live_dict_itself(self):
+        """A reader holding the dict — the per-platform override's own writer — sees the move, and keeps its writes."""
+        harness = _Harness(overrides={"ps": "SwanStation"})
+        live = harness.settings["platform_cores"]
+
+        harness.refile()
+
+        assert harness.settings["platform_cores"] is live
+        assert live == {"psx": "SwanStation"}
+
+    def test_an_override_stored_for_another_platform_meanwhile_is_kept(self):
+        harness = _Harness(overrides={"ps": "SwanStation"})
+        live = harness.settings["platform_cores"]
+
+        class _StoresOneMeanwhile(FakeSettingsPersister):
+            def save_settings(self) -> None:
+                live["gba"] = "mGBA"
+                super().save_settings()
+
+        harness.refiling._settings_persister = _StoresOneMeanwhile()
+        harness.refile()
+
+        assert live == {"psx": "SwanStation", "gba": "mGBA"}
+
+    def test_a_save_that_fails_gives_every_move_back_and_raises(self):
+        harness = _Harness(overrides={"ps": "SwanStation", "gba": "mGBA"}, persister=_FailingPersister())
+
+        with pytest.raises(OSError, match="disk full"):
+            harness.refile()
+
+        assert harness.settings["platform_cores"] == {"ps": "SwanStation", "gba": "mGBA"}
+
     def test_running_again_saves_nothing(self):
-        harness = _Harness(picks={"ps": "SwanStation"})
+        harness = _Harness(overrides={"ps": "SwanStation"})
         harness.refile()
 
         harness.refile()
@@ -136,15 +200,15 @@ class TestPicks:
         assert harness.settings["platform_cores"] == {"psx": "SwanStation"}
         assert harness.persister.save_count == 1
 
-    def test_a_pick_stays_where_its_platform_has_its_own(self):
-        harness = _Harness(picks={"ps": "SwanStation", "psx": "Beetle PSX"})
+    def test_an_override_stays_where_its_platform_has_its_own(self):
+        harness = _Harness(overrides={"ps": "SwanStation", "psx": "Beetle PSX"})
 
         harness.refile()
 
         assert harness.settings["platform_cores"] == {"ps": "SwanStation", "psx": "Beetle PSX"}
         assert harness.persister.save_count == 0
 
-    def test_settings_without_picks_are_left_alone(self):
+    def test_settings_without_overrides_are_left_alone(self):
         harness = _Harness()
         del harness.settings["platform_cores"]
 

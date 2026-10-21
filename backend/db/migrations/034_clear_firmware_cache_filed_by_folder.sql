@@ -4,12 +4,14 @@
 -- #2191 (D1)
 -- =============================================================================
 --
---   * firmware_cache — every row is dropped. Its platform_slug was the server
---     folder a file's path started with; it is now the platform RomM states
---     for the file (domain/firmware_platforms.py). A row of the old kind would
---     answer for the wrong platform until the cache's hour ran out, and the
---     first read after this step is a fresh one, which also moves Tender's older
---     download records and picks (services/firmware/refiling.py).
+--   * firmware_cache — every row is dropped. Its platform_slug was a folder
+--     name read out of a file's path (the segment after bios/, or the path's
+--     first segment otherwise); it is now the platform RomM states for the file
+--     (domain/firmware_platforms.py). A row of the old kind would answer for
+--     the wrong platform until the cache's hour ran out. With the table empty,
+--     the first listing read asks the server, and the first read that reaches
+--     it also moves Tender's older download records and per-platform emulator
+--     overrides (services/firmware/refiling.py).
 --
 -- The table is a cache: the next read from the server fills it again.
 --

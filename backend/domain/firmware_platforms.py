@@ -1,16 +1,18 @@
-"""Which platform a library firmware file belongs to, and where Tender's older records of one belong.
+"""Which platform a library firmware file belongs to, and where Tender's older entries for one belong.
 
 RomM states each firmware file's platform as ``platform_id``, and its platform
-list carries every platform's firmware beside the platform's own ``slug``. A
-platform's firmware folder on the server is named by its ``fs_slug``, and that
-folder name says nothing Tender reads: RomM's firmware structure may put every
-file under one folder for all platforms (``bios_from_user/{platform}``).
+list carries every platform's firmware beside the platform's own ``slug``. The
+folder a file lies in on the server does not decide its platform: RomM's
+firmware structure may put every platform's files below one folder
+(``bios_from_user/{platform}``).
 
 Before the platform came from ``platform_id``, Tender filed a download record
-and a platform's emulator pick under the folder name a file's path started
-with. :func:`refiled_record_platform` and :func:`refiled_picks` say where such
-an entry belongs now; both answer nothing for an entry that is already where it
-belongs, so asking again moves nothing.
+and a per-platform emulator override under a folder name read out of a file's
+path — the segment after ``bios/``, or the path's first segment otherwise.
+:func:`refiled_record_platform` and :func:`override_moves` say where such an
+entry belongs now. Only an entry filed under a name that is no listed
+platform's slug is judged at all, so an entry already under a platform is never
+moved, and asking again moves nothing.
 
 Pure compute — no I/O, no state mutation.
 """
@@ -44,15 +46,20 @@ def library_firmware(platforms: Iterable[Mapping[str, Any]]) -> list[dict[str, A
     return rows
 
 
-def folder_platforms(platforms: Iterable[Mapping[str, Any]]) -> dict[str, str]:
-    """Each server folder name that names exactly one platform and is no platform's slug, mapped to that slug.
+def listed_slugs(platforms: Iterable[Mapping[str, Any]]) -> frozenset[str]:
+    """Every platform slug the platform list carries."""
+    slugs = (platform.get("slug") for platform in platforms)
+    return frozenset(slug for slug in slugs if isinstance(slug, str) and slug)
 
-    These are the names Tender once filed an entry under in place of the
-    platform's slug. A folder name that is some platform's slug, or that two
-    platforms share, names no one platform, so it is not in the answer.
+
+def folder_platforms(platforms: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    """Each server folder name (``fs_slug``) that names exactly one platform and is no platform's slug, mapped to it.
+
+    A folder name that is some platform's slug, or that two platforms share,
+    names no one platform, so it is not in the answer.
     """
     listed = list(platforms)
-    slugs = {slug for slug in (platform.get("slug") for platform in listed) if isinstance(slug, str) and slug}
+    slugs = listed_slugs(listed)
     owners: dict[str, set[str]] = {}
     for platform in listed:
         folder, slug = platform.get("fs_slug"), platform.get("slug")
@@ -66,16 +73,21 @@ def refiled_record_platform(
     file_name: str,
     firmware_id: int | None,
     rows: Iterable[Mapping[str, Any]],
-    folders: Mapping[str, str],
+    platforms: Iterable[Mapping[str, Any]],
 ) -> str | None:
     """The platform a download record filed under *platform_slug* belongs under, or ``None`` where it stays.
 
-    The library file the record names by its ``firmware_id`` decides, as long
-    as that file still carries the record's *file_name*: RomM gives a file a new
-    id when it scans it again, so an id alone may now name another file. A
-    record whose file the library no longer holds is moved by its folder name
-    (*folders*, :func:`folder_platforms`).
+    A record already under a listed platform's slug stays: it was filed by its
+    platform and is not judged again. Any other is moved to the platform of the
+    library file its ``firmware_id`` names, as long as that file still carries
+    the record's *file_name* — RomM keeps a file's id when it scans it again,
+    but a file removed from the library and added back comes back under a new
+    id, which may then name another file. A record whose file the library no
+    longer holds is moved by its folder name (:func:`folder_platforms`).
     """
+    listed = list(platforms)
+    if platform_slug in listed_slugs(listed):
+        return None
     target = None
     if firmware_id is not None:
         target = next(
@@ -87,21 +99,17 @@ def refiled_record_platform(
             None,
         )
     if target is None:
-        target = folders.get(platform_slug)
-    return target if target is not None and target != platform_slug else None
+        target = folder_platforms(listed).get(platform_slug)
+    return target
 
 
-def refiled_picks(picks: Mapping[str, str], folders: Mapping[str, str]) -> dict[str, str] | None:
-    """*picks* with each pick filed under a folder name moved to its platform's slug, or ``None`` where none moves.
+def override_moves(overrides: Mapping[str, str], folders: Mapping[str, str]) -> dict[str, str]:
+    """Each per-platform emulator override filed under a folder name, mapped to the platform slug it moves to.
 
-    A pick moves only where its platform has none of its own; otherwise it
-    stays where it is, and nothing is lost.
+    An override moves only where its platform has none of its own; otherwise
+    it stays where it is, and nothing is lost. Empty where none moves.
     """
-    refiled = dict(picks)
-    for folder, slug in folders.items():
-        if folder in refiled and slug not in refiled:
-            refiled[slug] = refiled.pop(folder)
-    return refiled if refiled != dict(picks) else None
+    return {folder: slug for folder, slug in folders.items() if folder in overrides and slug not in overrides}
 
 
 def _slugs_by_id(platforms: list[Mapping[str, Any]]) -> dict[Any, str]:

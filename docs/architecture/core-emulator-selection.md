@@ -624,6 +624,10 @@ so standalone emulators and disabled un-bakeable entries render identically (#12
    cannot add a second way to report a stored switch as failed. The platform detail re-reads the platform once the
    re-bake is done, and that read answers for the new core's firmware.
 
+`platform_cores` has one more writer: the firmware listing's refiling (`services/firmware/refiling.py`) moves an
+override stored under a server folder name, before a firmware file's platform came from RomM's `platform_id`, to its
+platform's slug, in the same live dict, and gives the move back when `settings.json` cannot be written.
+
 The frontend confirm-sets each `rebake_items` entry on its live Steam shortcut the same way the per-game flow does, so a
 per-platform core change applies **immediately** to every installed game on the platform — no sync required. Because the
 `PlatformCoreReaderAdapter` holds the live settings dict, the fan-out resolves the value just written rather than a

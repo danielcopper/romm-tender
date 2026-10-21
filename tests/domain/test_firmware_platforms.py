@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from domain.firmware_platforms import folder_platforms, library_firmware, refiled_picks, refiled_record_platform
+from domain.firmware_platforms import (
+    folder_platforms,
+    library_firmware,
+    listed_slugs,
+    override_moves,
+    refiled_record_platform,
+)
 
 
 def _platform(platform_id: int, slug: str, fs_slug: str | None = None, *firmware: dict[str, Any]) -> dict[str, Any]:
@@ -94,40 +100,52 @@ class TestFolderPlatforms:
         assert folder_platforms([{"id": 1, "slug": "psx"}, {"id": 2, "slug": "gba", "fs_slug": ""}]) == {}
 
 
+class TestListedSlugs:
+    def test_every_platform_s_slug_and_no_empty_one(self):
+        assert listed_slugs([_platform(1, "psx", "ps"), {"id": 2, "slug": ""}, {"id": 3}]) == {"psx"}
+
+
 class TestRefiledRecordPlatform:
     _ROWS = ({"id": 10, "file_name": "scph5501.bin", "platform_slug": "psx"},)
+    _PLATFORMS = (_platform(1, "psx", "ps"), _platform(2, "arcade"), _platform(3, "neogeo"))
+
+    def _target(self, platform_slug: str, file_name: str, firmware_id: int | None, rows=_ROWS) -> str | None:
+        return refiled_record_platform(platform_slug, file_name, firmware_id, rows, self._PLATFORMS)
 
     def test_a_record_moves_to_the_platform_of_the_file_its_id_names(self):
-        assert refiled_record_platform("bios_from_user", "scph5501.bin", 10, self._ROWS, {}) == "psx"
+        assert self._target("bios_from_user", "scph5501.bin", 10) == "psx"
 
     def test_an_id_that_now_names_another_file_does_not_move_the_record(self):
-        assert refiled_record_platform("bios_from_user", "other.bin", 10, self._ROWS, {}) is None
+        assert self._target("bios_from_user", "other.bin", 10) is None
 
     def test_a_record_whose_file_the_library_no_longer_holds_moves_by_its_folder_name(self):
-        assert refiled_record_platform("ps", "scph5501.bin", 99, self._ROWS, {"ps": "psx"}) == "psx"
+        assert self._target("ps", "scph5501.bin", 99) == "psx"
 
     def test_a_record_with_no_firmware_id_moves_by_its_folder_name(self):
-        assert refiled_record_platform("ps", "scph5501.bin", None, self._ROWS, {"ps": "psx"}) == "psx"
+        assert self._target("ps", "scph5501.bin", None) == "psx"
 
     def test_a_record_already_under_its_platform_stays(self):
-        assert refiled_record_platform("psx", "scph5501.bin", 10, self._ROWS, {"ps": "psx"}) is None
+        assert self._target("psx", "scph5501.bin", 10) is None
+
+    def test_a_record_under_a_listed_platform_is_never_judged_again(self):
+        """Its id now names a file of that name on another platform; it was filed by its platform all the same."""
+        rows = ({"id": 7, "file_name": "neogeo.zip", "platform_slug": "neogeo"},)
+
+        assert self._target("arcade", "neogeo.zip", 7, rows) is None
 
     def test_a_record_nothing_places_stays(self):
-        assert refiled_record_platform("bios_from_user", "gone.bin", None, self._ROWS, {"ps": "psx"}) is None
+        assert self._target("bios_from_user", "gone.bin", None) is None
 
 
-class TestRefiledPicks:
-    def test_a_pick_under_a_folder_name_moves_to_its_platform(self):
-        assert refiled_picks({"ps": "SwanStation", "gba": "mGBA"}, {"ps": "psx"}) == {
-            "psx": "SwanStation",
-            "gba": "mGBA",
-        }
+class TestOverrideMoves:
+    def test_an_override_under_a_folder_name_moves_to_its_platform(self):
+        assert override_moves({"ps": "SwanStation", "gba": "mGBA"}, {"ps": "psx"}) == {"ps": "psx"}
 
-    def test_a_pick_stays_where_its_platform_has_one_of_its_own(self):
-        assert refiled_picks({"ps": "SwanStation", "psx": "Beetle PSX"}, {"ps": "psx"}) is None
+    def test_an_override_stays_where_its_platform_has_one_of_its_own(self):
+        assert override_moves({"ps": "SwanStation", "psx": "Beetle PSX"}, {"ps": "psx"}) == {}
 
-    def test_nothing_to_move_answers_none(self):
-        assert refiled_picks({"psx": "SwanStation"}, {"ps": "psx"}) is None
+    def test_nothing_to_move_answers_nothing(self):
+        assert override_moves({"psx": "SwanStation"}, {"ps": "psx"}) == {}
 
-    def test_a_pick_under_a_folder_no_one_platform_owns_stays(self):
-        assert refiled_picks({"bios_from_user": "SwanStation"}, {}) is None
+    def test_an_override_under_a_folder_no_one_platform_owns_stays(self):
+        assert override_moves({"bios_from_user": "SwanStation"}, {}) == {}

@@ -47,7 +47,7 @@ area:firmware:
           - 'backend/services/firmware/**'
           - 'backend/adapters/firmware_file.py'
           - 'backend/adapters/atlas_firmware.py'
-          - 'backend/domain/firmware_paths.py'
+          - 'backend/domain/firmware_platforms.py'
           - 'backend/domain/firmware_wants.py'
           - 'backend/domain/bios_status.py'
 

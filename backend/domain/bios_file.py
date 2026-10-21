@@ -2,9 +2,11 @@
 
 Identified by ``(platform_slug, file_name)`` — a bare filename is unsafe because
 two platforms can ship same-named BIOS. ``platform_slug`` is the RomM platform
-the file was downloaded for (``domain/firmware_platforms.py``). ``firmware_id``
-is nullable metadata from RomM, not part of the identity. Tracked so migrations
-can move the file when the RetroDECK home path changes.
+the library files the file on (``domain/firmware_platforms.py``); a record
+written before the platform came from RomM's ``platform_id`` holds a server
+folder name there until it is refiled. ``firmware_id`` is nullable metadata from
+RomM, not part of the identity. Tracked so migrations can move the file when
+the RetroDECK home path changes.
 """
 
 from __future__ import annotations
@@ -44,7 +46,11 @@ class BiosFile:
         )
 
     def refiled_under(self, platform_slug: str) -> BiosFile:
-        """This record filed under *platform_slug* instead — a new identity, so a new record."""
+        """This record filed under *platform_slug* instead, every other field kept.
+
+        The platform is part of the identity, so the answer is a new record;
+        the caller removes the old one.
+        """
         return BiosFile.mark_downloaded(
             platform_slug=platform_slug,
             file_name=self.file_name,

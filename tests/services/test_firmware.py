@@ -3822,6 +3822,23 @@ class TestWhetherADownloadIsInFlight:
 
 class TestDownloadAllFirmware:
     @pytest.mark.asyncio
+    async def test_a_batch_reads_the_platform_list_once_whatever_it_fetches(self, fake_romm_api, tmp_path):
+        """Every download invalidates the listing, so a per-file lookup would read the platform list per file."""
+        fake_romm_api.seed_firmware(
+            "dc",
+            *({"id": index, "file_name": f"bios{index}.bin", "md5_hash": ""} for index in (1, 2, 3)),
+        )
+        fw = _make_firmware_service(
+            romm_api=fake_romm_api, retrodeck_folders=FakeRetroDeckFolders(bios=str(tmp_path / "bios"))
+        )
+        _set_loop(fw, asyncio.get_running_loop())
+
+        result = await fw.download_all_firmware("dc")
+
+        assert result["downloaded"] == 3
+        assert [name for name, _args, _kwargs in fake_romm_api.call_log].count("list_platforms") == 1
+
+    @pytest.mark.asyncio
     async def test_downloads_missing_only(self, firmware, fw, tmp_path):
 
         # Pre-create one file so it's skipped (flat in bios root — no declared placement)
@@ -3850,7 +3867,7 @@ class TestDownloadAllFirmware:
 
         download_called_ids = []
 
-        async def fake_download_firmware(fw_id, _placements):
+        async def fake_download_firmware(fw_id, _placements, platform_slug=None):
             download_called_ids.append(fw_id)
             return {"success": True}
 
@@ -3883,7 +3900,7 @@ class TestDownloadAllFirmware:
         _set_loop(fw, asyncio.get_running_loop())
         download_called_ids = []
 
-        async def failing_download(fw_id, _placements):
+        async def failing_download(fw_id, _placements, platform_slug=None):
             download_called_ids.append(fw_id)
             raise Refused("bios_download_failed", "scph5501.bin could not be downloaded")
 
@@ -3920,7 +3937,7 @@ class TestDownloadAllFirmware:
         _set_loop(fw, asyncio.get_running_loop())
         download_called_ids = []
 
-        async def fake_download_firmware(fw_id, _placements):
+        async def fake_download_firmware(fw_id, _placements, platform_slug=None):
             download_called_ids.append(fw_id)
             return {"success": True}
 
@@ -3963,7 +3980,7 @@ class TestAPlaceThatCouldNotBeLookedAt:
         bios_dir, listing = self._service(fw, tmp_path)
         asked: list[int] = []
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             asked.append(fw_id)
             return {"success": True}
 
@@ -3981,7 +3998,7 @@ class TestAPlaceThatCouldNotBeLookedAt:
     async def test_the_per_row_download_is_refused(self, firmware, fw, tmp_path):
         bios_dir, listing = self._service(fw, tmp_path)
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             raise AssertionError(f"an unreadable place must not be downloaded into, but {fw_id} was requested")
 
         with (
@@ -4032,7 +4049,7 @@ class TestDownloadPlatformFirmwareFile:
         _set_loop(fw, asyncio.get_running_loop())
         fetched = []
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             fetched.append(fw_id)
             return {"success": True, "file_path": "/bios/dc/missing.bin", "md5_match": None}
 
@@ -4055,7 +4072,7 @@ class TestDownloadPlatformFirmwareFile:
         (bios_dir / "existing.bin").write_bytes(b"\x00" * 50)
         _set_loop(fw, asyncio.get_running_loop())
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             raise AssertionError(f"nothing to fetch, but firmware {fw_id} was requested")
 
         with (
@@ -4075,7 +4092,7 @@ class TestDownloadPlatformFirmwareFile:
         bios_dir.mkdir(parents=True)
         _set_loop(fw, asyncio.get_running_loop())
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             raise AssertionError(f"nothing to fetch, but firmware {fw_id} was requested")
 
         with (
@@ -4097,7 +4114,7 @@ class TestDownloadPlatformFirmwareFile:
         bios_dir.mkdir(parents=True)
         _set_loop(fw, asyncio.get_running_loop())
 
-        async def fake_download_one(_fw_id, _placements):
+        async def fake_download_one(_fw_id, _placements, platform_slug=None):
             raise ServerUnreachable("RomM is unreachable")
 
         with (
@@ -4135,7 +4152,7 @@ class TestDownloadPlatformFirmwareFile:
         )
         _set_loop(fw, asyncio.get_running_loop())
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             raise AssertionError(f"a folder declaration must not be fetched, but firmware {fw_id} was requested")
 
         with (
@@ -5214,7 +5231,7 @@ class TestDownloadRequiredFirmware:
 
         download_called_ids = []
 
-        async def fake_download_firmware(fw_id, _placements):
+        async def fake_download_firmware(fw_id, _placements, platform_slug=None):
             download_called_ids.append(fw_id)
             return {"success": True}
 
@@ -5291,7 +5308,7 @@ class TestDownloadRequiredFirmware:
 
         asked: list[int] = []
 
-        async def fake_download_firmware(fw_id, _placements):
+        async def fake_download_firmware(fw_id, _placements, platform_slug=None):
             asked.append(fw_id)
             return {"success": True}
 
@@ -5339,7 +5356,7 @@ class TestDownloadRequiredFirmware:
         _inline_executor(fw)
         asked: list[int] = []
 
-        async def fake_download_firmware(fw_id, _placements):
+        async def fake_download_firmware(fw_id, _placements, platform_slug=None):
             asked.append(fw_id)
             return {"success": True}
 
@@ -5357,7 +5374,7 @@ class TestDownloadRequiredFirmware:
         fw = _one_of_service(**service)
         fetched: set[int] = set()
 
-        async def fake_download_firmware(fw_id, _placements):
+        async def fake_download_firmware(fw_id, _placements, platform_slug=None):
             fetched.add(fw_id)
             return {"success": True}
 
@@ -5422,7 +5439,7 @@ class TestDownloadRequiredFirmware:
 
         download_called_ids: list[int] = []
 
-        async def fake_download_firmware(fw_id, _placements):
+        async def fake_download_firmware(fw_id, _placements, platform_slug=None):
             download_called_ids.append(fw_id)
             return {"success": True}
 
@@ -5471,7 +5488,7 @@ class TestDownloadRequiredFirmware:
 
         download_called_ids = []
 
-        async def fake_download_firmware(fw_id, _placements):
+        async def fake_download_firmware(fw_id, _placements, platform_slug=None):
             download_called_ids.append(fw_id)
             return {"success": True}
 
@@ -6018,7 +6035,7 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
         fw = self._service(tmp_path)
         attempted = []
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             attempted.append(fw_id)
             if fw_id == 1:
                 raise Refused("bios_download_failed", "refused.bin could not be downloaded")
@@ -6051,7 +6068,7 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
         fw = self._service(tmp_path)
         attempted = []
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             attempted.append(fw_id)
             if fw_id == 2:
                 raise switched_off(BIOS_DOWNLOAD)
@@ -6070,7 +6087,7 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
         fw = self._service(tmp_path)
         attempted = []
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             attempted.append(fw_id)
             raise RuntimeError("a bug")
 
@@ -6111,7 +6128,7 @@ class TestThePlatformRommStatesForAFile:
         _set_loop(fw, asyncio.get_running_loop())
         fetched: list[int] = []
 
-        async def fake_download_one(fw_id, _placements):
+        async def fake_download_one(fw_id, _placements, platform_slug=None):
             fetched.append(fw_id)
             return {"success": True}
 
@@ -6253,7 +6270,7 @@ class TestTheListingMovesOlderEntries:
             result = fw._listing.get_firmware_list()
 
         assert [row["file_name"] for row in result] == ["scph5501.bin"]
-        assert "Failed to move older BIOS records and picks to their platforms" in caplog.text
+        assert "Failed to move older BIOS records and per-platform emulator overrides to their platforms" in caplog.text
 
 
 class TestFirmwareListCache:
@@ -6946,7 +6963,7 @@ class TestEachEmulatorsOwnPlace:
         fw, _ = self._service(tmp_path, pick, kronos_first=kronos_first)
         fetched: list[str] = []
 
-        async def capture(fw_id, placements):
+        async def capture(fw_id, placements, platform_slug=None):
             placement = placements["saturn_bios.bin"]
             fetched.append(fw._demand.dest_path({"file_name": "saturn_bios.bin"}, placement))
             return {"success": True}
@@ -6969,7 +6986,7 @@ class TestEachEmulatorsOwnPlace:
         fw, _ = self._service(tmp_path, "YabaSanshiro", options=options)
         fetched: list[str] = []
 
-        async def capture(fw_id, placements):
+        async def capture(fw_id, placements, platform_slug=None):
             fetched.append(fw._demand.dest_path({"file_name": "saturn_bios.bin"}, placements["saturn_bios.bin"]))
             return {"success": True}
 
@@ -6991,7 +7008,7 @@ class TestEachEmulatorsOwnPlace:
         fw, _ = self._service(tmp_path, "YabaSanshiro", active_core=game, options=options, kronos_first=False)
         fetched: list[str] = []
 
-        async def capture(fw_id, placements):
+        async def capture(fw_id, placements, platform_slug=None):
             fetched.append(fw._demand.dest_path({"file_name": "saturn_bios.bin"}, placements["saturn_bios.bin"]))
             return {"success": True}
 
@@ -7006,7 +7023,7 @@ class TestEachEmulatorsOwnPlace:
         fw, _ = self._service(tmp_path, "YabaSanshiro")
         fetched: list[str] = []
 
-        async def capture(fw_id, placements):
+        async def capture(fw_id, placements, platform_slug=None):
             fetched.append(fw._demand.dest_path({"file_name": "saturn_bios.bin"}, placements["saturn_bios.bin"]))
             return {"success": True}
 
@@ -7025,7 +7042,7 @@ class TestEachEmulatorsOwnPlace:
         fw, _ = self._service(tmp_path, pick)
         fetched: list[str] = []
 
-        async def capture(fw_id, placements):
+        async def capture(fw_id, placements, platform_slug=None):
             fetched.append(fw._demand.dest_path({"file_name": "saturn_bios.bin"}, placements["saturn_bios.bin"]))
             return {"success": True}
 
@@ -7040,7 +7057,7 @@ class TestEachEmulatorsOwnPlace:
         fw, _ = self._service(tmp_path, "YabaSanshiro")
         fetched: list[str] = []
 
-        async def capture(fw_id, placements):
+        async def capture(fw_id, placements, platform_slug=None):
             fetched.append(fw._demand.dest_path({"file_name": "saturn_bios.bin"}, placements["saturn_bios.bin"]))
             return {"success": True}
 
@@ -7078,7 +7095,7 @@ class TestEachEmulatorsOwnPlace:
         fw, _ = self._service(tmp_path, "YabaSanshiro", active_core=game)
         fetched: list[str] = []
 
-        async def capture(fw_id, placements):
+        async def capture(fw_id, placements, platform_slug=None):
             fetched.append(fw._demand.dest_path({"file_name": "saturn_bios.bin"}, placements["saturn_bios.bin"]))
             return {"success": True}
 

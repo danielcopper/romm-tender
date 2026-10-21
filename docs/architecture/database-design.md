@@ -777,11 +777,13 @@ SteamGridDB image id the user chose and `chosen_at` in REAL Unix-epoch seconds, 
 chosen before the migration. How each is read is [Game page artwork](steam-non-steam-shortcuts.md#game-page-artwork).
 
 `034_clear_firmware_cache_filed_by_folder.sql` (`user_version = 34`) empties `firmware_cache`
-([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D1). The cached rows carried the server folder a
-file's path started with as their `platform_slug`, and a firmware file's platform is now the one RomM states for it
-(`platform_id`). The table is a cache, so the first read after the upgrade is a fresh one from the server, and that read
-also moves `downloaded_bios` rows and emulator picks filed under a folder name to their platform
-(`services/firmware/refiling.py`, [Backend Architecture](backend-architecture.md)).
+([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D1). The cached rows carried, as their
+`platform_slug`, a folder name read out of a file's path — the segment after `bios/`, or the path's first segment
+otherwise — and a firmware file's platform is now the one RomM states for it (`platform_id`). With the table empty, the
+first listing read after the upgrade asks the server, where a cache row would have answered for up to the cache's hour.
+The first read that reaches the server also moves `downloaded_bios` rows and per-platform emulator overrides filed under
+a folder name to their platform (`services/firmware/refiling.py`, [Backend Architecture](backend-architecture.md));
+until then those rows stay where they are, and a platform's delete does not reach them.
 
 ## The runtime Unit of Work
 

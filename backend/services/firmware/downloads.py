@@ -155,11 +155,17 @@ class FirmwareDownloader:
         placements = await self._loop.run_in_executor(None, self._demand.placement_index)
         return await self._download_one(firmware_id, placements)
 
-    async def _download_one(self, firmware_id, placements: Mapping[str, FirmwarePlacement]) -> dict[str, Any]:
+    async def _download_one(
+        self, firmware_id, placements: Mapping[str, FirmwarePlacement], platform_slug: str | None = None
+    ) -> dict[str, Any]:
         """Fetch, place and record one firmware file against a pre-read demand index.
 
         The index is a parameter rather than a per-call read so a batch pays for
-        the machine-wide question once instead of once per file.
+        the machine-wide question once instead of once per file. So is
+        *platform_slug*, the platform the listing row the caller picked files the
+        file on: every download invalidates the listing, and a batch that looked
+        each file's platform up again would read the server's platform list once
+        per file. ``None`` looks it up (:meth:`_platform_of`).
 
         A RomM error propagates unlogged: whoever answers it logs it. Every
         refusal raised here is logged here. Where this device cannot create the
@@ -170,7 +176,8 @@ class FirmwareDownloader:
         """
         firmware_id = int(firmware_id)
         fw = await self._loop.run_in_executor(None, self._romm_api.get_firmware, firmware_id)
-        platform_slug = await self._loop.run_in_executor(None, self._platform_of, firmware_id)
+        if platform_slug is None:
+            platform_slug = await self._loop.run_in_executor(None, self._platform_of, firmware_id)
 
         file_name = fw.get("file_name", "")
         try:
@@ -286,7 +293,7 @@ class FirmwareDownloader:
                 continue
             name = fw.get("file_name", str(fw["id"]))
             try:
-                await self._download_one(fw["id"], placements)
+                await self._download_one(fw["id"], placements, platform_slug=fw["platform_slug"])
             except Refused:
                 errors.append(name)
                 continue
@@ -360,7 +367,7 @@ class FirmwareDownloader:
         if dest is not None and self._firmware_file_store.exists(dest):
             return {"success": True, "message": f"{file_name} is already here", "downloaded": 0}
 
-        result = await self._download_one(fw["id"], placements)
+        result = await self._download_one(fw["id"], placements, platform_slug=fw["platform_slug"])
         return {**result, "message": f"Downloaded {file_name}", "downloaded": 1}
 
     async def download_required_firmware(self, platform_slug, emulator: str | None = None) -> dict[str, Any]:
