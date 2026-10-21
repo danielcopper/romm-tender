@@ -745,11 +745,12 @@ changed on the server arrives with the next sync.
 
 Opening a game's page sets its hero banner, logo, wide grid and icon only where the game has none yet — an icon counts
 as none while it is the empty spot a newly added game shows, or Tender's logo — so an image you set yourself stays.
-Switching the game to another version replaces all four with that version's, an image you set yourself included; it uses
-the images Tender already downloaded for that version and downloads only the ones it has not. **Refresh Artwork** is the
-way to replace them otherwise: it downloads the hero banner, logo, wide grid and icon from SteamGridDB anew and applies
-them, an image you set yourself included, so the image SteamGridDB ranks first today reaches the game. An image whose
-new download fails keeps the one Tender had.
+Switching the game to another version sets all four to that version's, over an image you set yourself too (whether Steam
+then shows Tender's image over one you set from a JPEG is not yet known); it uses the images Tender already downloaded
+for that version and downloads only the ones it has not. **Refresh Artwork** is the way to replace them otherwise: it
+downloads the hero banner, logo, wide grid and icon from SteamGridDB anew and applies them over an image you set
+yourself too (with the same unknown for one you set from a JPEG), so the image SteamGridDB ranks first today reaches the
+game. An image whose new download fails keeps the one Tender had.
 
 When you tap **Refresh Artwork**, Tender asks your RomM server which SteamGridDB game the ROM maps to and applies the
 hero banner, logo, wide grid, and icon for that game. **RomM is the source of truth**: whenever your server has a
