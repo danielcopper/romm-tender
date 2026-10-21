@@ -175,7 +175,7 @@ class RecoveryCoordinator:
         # Named after the row the run is actually removing, not the lowest id in
         # the group — a folder called after a version that survives would point
         # at the wrong thing.
-        headline = min(delete_ids) if delete_ids else min(rom_ids)
+        headline = min(delete_ids)
         bundle_id = recovery_bundle_id(
             names.get(headline, ""),
             now.strftime("%Y-%m-%d"),
@@ -190,7 +190,7 @@ class RecoveryCoordinator:
                     "name": row.name,
                     "fs_name": row.fs_name,
                     "platform_slug": row.platform_slug,
-                    "role": self._bundle_role(row.rom_id, delete_ids),
+                    "role": "removed by this cleanup",
                 }
                 for row in rows
             ],
@@ -229,11 +229,6 @@ class RecoveryCoordinator:
                     {"source_path": source, "safe_root": folder, "kind": "installed_rom", "rom_id": install["rom_id"]}
                 )
         return artifacts
-
-    @staticmethod
-    def _bundle_role(rom_id: int, delete_ids: set[int]) -> str:
-        """Say what this run does to one row, in the reader's terms."""
-        return "removed by this cleanup" if rom_id in delete_ids else "kept — recorded for context"
 
     @staticmethod
     def _playtime_lines(snapshot: dict[str, object], names: dict[int, str]) -> list[str]:
