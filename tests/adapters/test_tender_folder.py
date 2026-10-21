@@ -194,3 +194,55 @@ class TestTheDrives:
 
         assert isinstance(only, Drive)
         assert (only.name, only.mount_point) == ("SD", str(drive))
+
+
+class TestTheDrivesKind:
+    """The kind is read off the device behind the mount: ``/sys/dev/block/<major>:<minor>`` and where it leads."""
+
+    @staticmethod
+    def _device_at(tmp_path, mount_point, device_path: str) -> str:
+        number = os.stat(mount_point).st_dev
+        devices = tmp_path / "sys-dev-block"
+        devices.mkdir(exist_ok=True)
+        target = tmp_path / "sys" / device_path
+        target.mkdir(parents=True)
+        (devices / f"{os.major(number)}:{os.minor(number)}").symlink_to(target)
+        return str(devices)
+
+    @pytest.mark.parametrize(
+        ("device_path", "kind"),
+        [
+            ("devices/pci0000:00/0000:02:00.0/mmc_host/mmc0/mmc0:aaaa/block/mmcblk0/mmcblk0p1", "sd_card"),
+            ("devices/pci0000:00/0000:00:08.1/usb3/3-1/3-1:1.0/host0/target0:0:0/0:0:0:0/block/sda/sda1", "usb_drive"),
+            ("devices/pci0000:00/0000:00:01.2/nvme/nvme1/nvme1n1/nvme1n1p1", "drive"),
+        ],
+    )
+    def test_a_drive_is_an_sd_card_a_usb_drive_or_a_drive_by_the_device_behind_it(self, tmp_path, device_path, kind):
+        drive = tmp_path / "media" / "Emulation"
+        drive.mkdir(parents=True)
+        devices = self._device_at(tmp_path, drive, device_path)
+        adapter = TenderFolderAdapter(
+            settings={},
+            user_home=str(tmp_path / "home"),
+            drives_root=str(tmp_path / "media"),
+            is_mount=lambda path: path == str(drive),
+            devices=devices,
+        )
+
+        (only,) = adapter.drives()
+
+        assert only.kind == kind
+
+    def test_a_device_that_cannot_be_read_is_a_drive(self, tmp_path):
+        adapter = TenderFolderAdapter(settings={}, user_home=str(tmp_path), devices=str(tmp_path / "no-such-dir"))
+
+        assert adapter.drive_kind(str(tmp_path)) == "drive"
+        assert adapter.drive_kind(str(tmp_path / "gone")) == "drive"
+
+
+class TestFreeSpace:
+    def test_the_space_free_where_a_path_lies(self, tmp_path):
+        assert _adapter(tmp_path).free_bytes(str(tmp_path)) > 0
+
+    def test_a_path_that_cannot_be_read_has_none(self, tmp_path):
+        assert _adapter(tmp_path).free_bytes(str(tmp_path / "gone")) == 0

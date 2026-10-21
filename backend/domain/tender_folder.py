@@ -47,6 +47,12 @@ _STATE_FRAGMENTS = {
     FOLDER_NOT_WRITABLE: "the folder cannot be written to.",
 }
 
+# What kind of drive a mount is, read off the device behind it.
+DRIVE_SD_CARD = "sd_card"
+DRIVE_USB = "usb_drive"
+DRIVE_OTHER = "drive"
+DRIVE_KINDS = (DRIVE_SD_CARD, DRIVE_USB, DRIVE_OTHER)
+
 # The reasons a choice of place is refused with.
 PLACE_IN_ROM_FOLDER = "place_in_rom_folder"
 PLACE_ABOVE_ROM_FOLDER = "place_above_rom_folder"
@@ -54,6 +60,9 @@ PLACE_NOT_WRITABLE = "place_not_writable"
 PLACE_NOT_ABSOLUTE = "place_not_absolute"
 PLACE_DRIVE_NOT_MOUNTED = "place_drive_not_mounted"
 SOURCES_UNREADABLE = "sources_unreadable"
+PLACE_IS_CURRENT_FOLDER = "place_is_current_folder"
+PLACE_IN_CURRENT_FOLDER = "place_in_current_folder"
+PLACE_ABOVE_CURRENT_FOLDER = "place_above_current_folder"
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,10 +85,14 @@ class TenderPlace:
 
 @dataclass(frozen=True, slots=True)
 class Drive:
-    """A writable drive a place may be offered on: its folder name, its mount point and its free bytes."""
+    """A writable drive a place may be offered on: its folder name, its mount point, its kind and its free bytes.
+
+    ``kind`` is one of :data:`DRIVE_KINDS`, read off the device behind the mount.
+    """
 
     name: str
     mount_point: str
+    kind: str
     free_bytes: int
 
 
@@ -246,6 +259,35 @@ def rom_folder_refusal(folder: str, sources: Iterable[SourceRomFolders], shown: 
                     folder=system_folder,
                     system=system,
                 )
+    return None
+
+
+def current_folder_refusal(folder: str, current: str, shown: str, current_shown: str) -> DomainRefused | None:
+    """Why *folder* may not be Tender's folder because of Tender's *current* folder, or ``None``.
+
+    *folder* and *current* are symlink-resolved; *shown* names the new folder
+    as typed, *current_shown* the current folder as the settings name it. The
+    current folder itself is answered as already Tender's folder; one inside
+    it, or holding it, is refused.
+    """
+    if folder == current:
+        return DomainRefused(
+            PLACE_IS_CURRENT_FOLDER, f"{current_shown} is already Tender's folder.", folder=current_shown
+        )
+    if inside(folder, current):
+        return DomainRefused(
+            PLACE_IN_CURRENT_FOLDER,
+            f"{shown} lies inside Tender's current folder ({current_shown}). Choose a place outside it.",
+            path=shown,
+            folder=current_shown,
+        )
+    if inside(current, folder):
+        return DomainRefused(
+            PLACE_ABOVE_CURRENT_FOLDER,
+            f"Tender's current folder ({current_shown}) lies inside {shown}. Choose another place.",
+            path=shown,
+            folder=current_shown,
+        )
     return None
 
 

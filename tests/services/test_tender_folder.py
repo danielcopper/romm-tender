@@ -66,6 +66,7 @@ class _Rig:
             user_home=str(self.home),
             drives_root=str(self.media),
             is_mount=lambda path: path in self.mounts or os.path.ismount(path),
+            devices=str(tmp_path / "sys-dev-block"),
         )
         conflicts = _make_prune_conflicts()
         if cleanup:
@@ -116,16 +117,20 @@ class TestTheState:
             "condition": "folder_missing",
             "unreachable": None,
             "elsewhere": [],
+            "home_free_bytes": state["home_free_bytes"],
+            "drives_root": str(rig.media),
             "drives": [
                 {
                     "name": "SD",
                     "mount_point": str(sd),
+                    "kind": "drive",
                     "folder": str(sd / "Tender"),
                     "free_bytes": state["drives"][0]["free_bytes"],
                 }
             ],
         }
         assert state["drives"][0]["free_bytes"] > 0
+        assert state["home_free_bytes"] > 0
 
     async def test_with_nothing_recorded_a_drive_that_is_gone_is_a_condition_and_never_unreachable(self, tmp_path):
         rig = _Rig(tmp_path, _Records())
@@ -355,6 +360,47 @@ class TestCheckingATypedPlace:
 
         assert refused.value.reason == "sources_unreadable"
         assert refused.value.message == "Tender could not read the emulator sources, so it cannot check this place."
+
+
+class TestTheCurrentFolderRule:
+    async def test_typing_the_place_whose_folder_is_the_current_one_answers_it_is_already_tenders_folder(
+        self, tmp_path
+    ):
+        rig = _Rig(tmp_path)
+        (rig.home / "Tender").mkdir()
+
+        with pytest.raises(DomainRefused) as refused:
+            await rig.service.check_tender_place("~")
+
+        assert refused.value.reason == "place_is_current_folder"
+        assert refused.value.message == f"{rig.home / 'Tender'} is already Tender's folder."
+
+    async def test_tender_typed_while_the_folder_is_the_default_is_refused_before_any_question(self, tmp_path):
+        rig = _Rig(tmp_path, sources=None)
+        (rig.home / "Tender").mkdir()
+
+        with pytest.raises(DomainRefused) as refused:
+            await rig.service.check_tender_place("~/Tender")
+
+        assert refused.value.reason == "place_in_current_folder"
+        assert refused.value.message == (
+            f"~/Tender/Tender lies inside Tender's current folder ({rig.home / 'Tender'}). Choose a place outside it."
+        )
+
+    async def test_a_place_whose_folder_would_hold_the_current_one_is_refused_and_nothing_switches(self, tmp_path):
+        rig = _Rig(tmp_path)
+        nested = rig.home / "Games" / "Tender" / "inner"
+        nested.mkdir(parents=True)
+        rig.settings["tender_folder"] = {"place": str(nested), "mount_point": "/"}
+
+        with pytest.raises(DomainRefused) as refused:
+            await rig.service.choose_tender_place("~/Games")
+
+        assert refused.value.reason == "place_above_current_folder"
+        assert refused.value.message == (
+            f"Tender's current folder ({nested / 'Tender'}) lies inside ~/Games/Tender. Choose another place."
+        )
+        assert rig.settings["tender_folder"]["place"] == str(nested)
 
 
 class TestChoosingAPlace:

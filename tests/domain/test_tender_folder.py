@@ -11,6 +11,7 @@ from domain.tender_folder import (
     FOLDER_NOT_WRITABLE,
     SourceRomFolders,
     TenderPlace,
+    current_folder_refusal,
     drive_below,
     place_asks,
     place_setting,
@@ -214,3 +215,37 @@ class TestReachability:
     )
     def test_an_action_refused_names_the_folder_and_the_reason(self, state, ending):
         assert unreachable_message("/sd/Tender", state) == f"Tender's folder at /sd/Tender cannot be reached: {ending}"
+
+
+class TestTheCurrentFolder:
+    def test_the_current_folder_itself_is_already_tenders_folder(self):
+        refusal = current_folder_refusal("/home/deck/Tender", "/home/deck/Tender", "~/Tender", "/home/deck/Tender")
+
+        assert refusal is not None
+        assert refusal.reason == "place_is_current_folder"
+        assert refusal.message == "/home/deck/Tender is already Tender's folder."
+
+    def test_a_folder_inside_the_current_folder_is_refused(self):
+        refusal = current_folder_refusal(
+            "/home/deck/Tender/Tender", "/home/deck/Tender", "~/Tender/Tender", "/home/deck/Tender"
+        )
+
+        assert refusal is not None
+        assert refusal.reason == "place_in_current_folder"
+        assert refusal.message == (
+            "~/Tender/Tender lies inside Tender's current folder (/home/deck/Tender). Choose a place outside it."
+        )
+
+    def test_a_folder_holding_the_current_folder_is_refused(self):
+        refusal = current_folder_refusal("/sd/Tender", "/sd/Tender/x/Tender", "/sd/Tender", "/sd/Tender/x/Tender")
+
+        assert refusal is not None
+        assert refusal.reason == "place_above_current_folder"
+        assert (
+            refusal.message
+            == "Tender's current folder (/sd/Tender/x/Tender) lies inside /sd/Tender. Choose another place."
+        )
+
+    def test_a_folder_beside_the_current_folder_is_neither(self):
+        assert current_folder_refusal("/sd/Tender", "/home/deck/Tender", "/sd/Tender", "/home/deck/Tender") is None
+        assert current_folder_refusal("/home/deck/Tenderly/Tender", "/home/deck/Tender", "x", "y") is None

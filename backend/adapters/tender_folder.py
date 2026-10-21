@@ -13,13 +13,15 @@ it would land on whatever lies underneath.
 
 from __future__ import annotations
 
-import contextlib
 import os
 import pwd
 from typing import TYPE_CHECKING, Any
 
 from domain.tender_folder import (
     DRIVE_NOT_MOUNTED,
+    DRIVE_OTHER,
+    DRIVE_SD_CARD,
+    DRIVE_USB,
     FOLDER_ID_FILENAME,
     FOLDER_MISSING,
     FOLDER_NOT_WRITABLE,
@@ -44,7 +46,8 @@ class TenderFolderAdapter:
     Implements the ``TenderFolderStore`` Protocol structurally. *drives_root*
     is where the drives are mounted, the current user's folder under
     ``/run/media`` when none is given; *is_mount* answers whether a path is a
-    mount point.
+    mount point; *devices* is the kernel's directory of block devices by
+    number, which a drive's kind is read from.
     """
 
     def __init__(
@@ -54,11 +57,13 @@ class TenderFolderAdapter:
         user_home: str,
         drives_root: str | None = None,
         is_mount: Callable[[str], bool] = os.path.ismount,
+        devices: str = "/sys/dev/block",
     ) -> None:
         self._settings = settings
         self._home = os.path.abspath(user_home)
         self._drives_root = None if drives_root is None else os.path.normpath(drives_root)
         self._is_mount = is_mount
+        self._devices = devices
 
     def home(self) -> str:
         """The home folder, the default place."""
@@ -163,9 +168,41 @@ class TenderFolderAdapter:
             mount_point = os.path.join(root, name)
             if not self._is_mount(mount_point) or not self.writable(mount_point):
                 continue
-            free = 0
-            with contextlib.suppress(OSError):
-                stat = os.statvfs(mount_point)
-                free = stat.f_bavail * stat.f_frsize
-            drives.append(Drive(name=name, mount_point=mount_point, free_bytes=free))
+            drives.append(
+                Drive(
+                    name=name,
+                    mount_point=mount_point,
+                    kind=self.drive_kind(mount_point),
+                    free_bytes=self.free_bytes(mount_point),
+                )
+            )
         return tuple(drives)
+
+    def free_bytes(self, path: str) -> int:
+        """The bytes free to this user on the filesystem holding *path*; 0 where it cannot be read."""
+        try:
+            stat = os.statvfs(path)
+        except OSError:
+            return 0
+        return stat.f_bavail * stat.f_frsize
+
+    def drive_kind(self, mount_point: str) -> str:
+        """What kind of drive is mounted at *mount_point*, read off the block device behind it.
+
+        The device's number is the mount's ``st_dev``; the kernel links
+        ``/sys/dev/block/<major>:<minor>`` to the device's place in the device
+        tree. A device below an MMC host is an SD card (the Deck's slot is
+        ``…/mmc_host/mmc0/…/mmcblk0p1``), one below a USB bus a USB drive, and
+        anything else — or a device that cannot be read — a drive.
+        """
+        try:
+            number = os.stat(mount_point).st_dev
+            path = os.path.realpath(os.path.join(self._devices, f"{os.major(number)}:{os.minor(number)}"))
+        except OSError:
+            return DRIVE_OTHER
+        parts = path.split(os.sep)
+        if "mmc_host" in parts:
+            return DRIVE_SD_CARD
+        if any(part.startswith("usb") for part in parts):
+            return DRIVE_USB
+        return DRIVE_OTHER

@@ -25,6 +25,7 @@ from domain.tender_folder import (
     FOLDER_NAME,
     FOLDER_NOT_WRITABLE,
     PLACE_SETTING,
+    current_folder_refusal,
     drive_below,
     drive_not_mounted,
     not_writable,
@@ -104,11 +105,14 @@ class TenderFolderService:
         """The folder's place and state, the folders recorded elsewhere, and the drives a place may lie on.
 
         ``{"place", "folder", "default", "condition", "unreachable",
-        "elsewhere", "drives"}``: ``condition`` is why the folder cannot be
-        used now, or ``None``; ``unreachable`` is that condition only while
-        something is recorded under the folder; ``elsewhere`` the other
-        folders something is recorded under; ``drives`` each writable drive
-        as ``{"name", "mount_point", "folder", "free_bytes"}``.
+        "elsewhere", "home_free_bytes", "drives_root", "drives"}``:
+        ``condition`` is why the folder cannot be used now, or ``None``;
+        ``unreachable`` is that condition only while something is recorded
+        under the folder; ``elsewhere`` the other folders something is
+        recorded under; ``home_free_bytes`` the space free on the internal
+        storage; ``drives_root`` where drives are mounted; ``drives`` each
+        writable drive as ``{"name", "mount_point", "kind", "folder",
+        "free_bytes"}``.
         """
         return await self._loop.run_in_executor(None, self._state_io)
 
@@ -213,10 +217,13 @@ class TenderFolderService:
             "condition": condition,
             "unreachable": unreachable_state(folder, recorded, condition),
             "elsewhere": [recorded[resolved] for resolved in recorded_elsewhere(folder, recorded)],
+            "home_free_bytes": self._store.free_bytes(self._store.home()),
+            "drives_root": self._store.drives_root(),
             "drives": [
                 {
                     "name": drive.name,
                     "mount_point": drive.mount_point,
+                    "kind": drive.kind,
                     "folder": os.path.join(drive.mount_point, FOLDER_NAME),
                     "free_bytes": drive.free_bytes,
                 }
@@ -278,21 +285,26 @@ class TenderFolderService:
         return self._state_io()
 
     def _judge(self, place: str, text: str) -> None:
-        """Refuse *place*, typed as *text*, where its drive is not connected or a source's ROM folders rule it out.
+        """Refuse *place*, typed as *text*, where its drive is not connected or a folder rules it out.
 
-        Ruled out is a place where Tender's folder would lie inside a source's
-        ROM folder or a system's folder, or hold a ROM folder — and any place
-        while the sources, or one source's folders, could not be read.
+        Ruled out is a place where Tender's folder would be Tender's current
+        folder, lie inside it or hold it — asked first, since it needs no
+        source — then one where it would lie inside a source's ROM folder or a
+        system's folder, or hold a ROM folder, and any place while the sources,
+        or one source's folders, could not be read.
         """
         drive = drive_below(place, self._store.drives_root())
         if drive is not None and not self._store.is_mount(os.path.join(self._store.drives_root(), drive)):
             raise drive_not_mounted(drive)
+        folder = self._store.resolved(os.path.join(place, FOLDER_NAME))
+        current = self._store.place().folder
+        nested = current_folder_refusal(folder, self._store.resolved(current), shown_folder(text), current)
+        if nested is not None:
+            raise nested
         folders = self._sources.rom_folders()
         if folders is None:
             raise sources_unreadable()
-        refusal = rom_folder_refusal(
-            self._store.resolved(os.path.join(place, FOLDER_NAME)), folders, shown_folder(text)
-        )
+        refusal = rom_folder_refusal(folder, folders, shown_folder(text))
         if refusal is not None:
             raise refusal
 

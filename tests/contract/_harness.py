@@ -269,6 +269,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
             user_home=str(tmp_path / "home"),
             drives_root=drives_root,
             is_mount=lambda path: path in mounts or os.path.ismount(path),
+            devices=str(tmp_path / "sys-dev-block"),
         ),
     )
 

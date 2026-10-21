@@ -35,10 +35,13 @@ async def test_the_folder_answers_its_default_place_and_the_connected_drives(har
         "condition": "folder_missing",
         "unreachable": None,
         "elsewhere": [],
+        "home_free_bytes": result["home_free_bytes"],
+        "drives_root": harness.drives_root,
         "drives": [
             {
                 "name": "SD",
                 "mount_point": sd,
+                "kind": "drive",
                 "folder": os.path.join(sd, "Tender"),
                 "free_bytes": result["drives"][0]["free_bytes"],
             }
