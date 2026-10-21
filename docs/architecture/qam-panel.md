@@ -2256,10 +2256,11 @@ button, because a disabled control still reports a press on the device, and the 
 
 A save of the RomM URL the backend refuses — from its modal, or from the **Allow Insecure SSL** switch, which saves the
 URL again — puts the refusal's message on the section's status line and gives back what is stored: the URL row the URL
-the backend holds (once the settings have loaded; before that the attempt stays), the switch the flag the backend holds.
-The next save of either that the backend accepts clears the line, but only of a message such a save put there: what
-loading the settings or signing in said stays. A save that fails in transport says _Failed to save settings_ and leaves
-the attempt where it was typed.
+the backend holds (once the settings have loaded; before that the attempt stays), the switch the flag the backend holds
+(before the settings have loaded, the position it had). An accepted URL save puts the switch at the flag it sent. The
+next save of either that the backend accepts clears the line, but only of a message such a save put there: what loading
+the settings or signing in said stays. A save that fails in transport says _Failed to save settings_ and leaves the
+attempt where it was typed.
 
 ## Data Management
 

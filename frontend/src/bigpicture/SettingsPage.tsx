@@ -367,10 +367,12 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         showSaveStatus(INVALID_URL_MESSAGE);
         return;
       }
-      const result = await saveServerUrl(trimmed, allowInsecureSsl);
+      const sentSsl = allowInsecureSsl;
+      const result = await saveServerUrl(trimmed, sentSsl);
       if (result.success) {
         storedUrl.current = trimmed;
-        storedSsl.current = allowInsecureSsl;
+        storedSsl.current = sentSsl;
+        setAllowInsecureSsl(sentSsl);
         clearSaveStatus();
       } else {
         if (storedUrl.current !== null) setUrl(storedUrl.current);
@@ -410,7 +412,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
           clearSaveStatus();
           return;
         }
-        if (storedSsl.current !== null) setAllowInsecureSsl(storedSsl.current);
+        setAllowInsecureSsl(storedSsl.current ?? !val);
         showSaveStatus(result.message);
       })
       .catch(() => {
