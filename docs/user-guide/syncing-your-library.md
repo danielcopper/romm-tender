@@ -106,7 +106,8 @@ time** line, shown as "up to X min".
 Cover changes count too: if you replaced a game's cover on the server but nothing else changed, the page reads "No
 shortcut changes — N cover updates" in place of the table and still offers **Apply Sync** — applying refreshes those
 tiles without touching the shortcuts. A cover you set yourself in Steam is left as it is and not counted, and a sync
-does not bring the server's new cover later on its own; **Refresh Artwork** on the game's page loads it. A platform or a
+does not bring the server's new cover later on its own; **Refresh Artwork** on the game's page loads it. A cover you set
+in Steam from a JPEG keeps showing even then: Steam keeps it beside Tender's PNG and shows yours. A platform or a
 collection Tender has to read in full again although none of its shortcuts change reads "No shortcut changes — recording
 what RomM has now." and offers **Apply Sync** as well: applying records what RomM serves on that platform or in that
 collection, so the next sync can skip it again. You see it once after an update that introduced this check, while every

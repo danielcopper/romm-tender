@@ -529,7 +529,8 @@ and a path change). Two compare layers run per unit, both in `ArtworkService`:
   rule is "Set in Steam" under [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#game-page-artwork)) is left out
   of the apply's cover download altogether: nothing is downloaded for it, the commit copies nothing over its
   `{app_id}p.png`, and its fingerprint is not advanced ([#2381](https://github.com/danielcopper/romm-tender/issues/2381)
-  D4, D9).
+  D4, D9). The rule reads the ROM already bound to the shortcut, so a sync that moves the binding to another version of
+  the game writes that version's cover over a hand-set one, as a version switch does (D8).
 - **The invalidation pass** (`refresh_changed_covers`, reached through `CoverPreparer` from `_sync_one_unit` before the
   cover download): for every BOUND fetched ROM whose stored fingerprint differs — delta-skipped ROMs included — it
   re-downloads the cache file (atomic tmp+rename), republishes the grid `{app_id}p.png` copy, persists the new

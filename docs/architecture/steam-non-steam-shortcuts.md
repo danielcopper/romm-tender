@@ -638,9 +638,10 @@ step does what, and how that change arrives later, is the cover-cache invalidati
 [Backend Architecture](backend-architecture.md).
 
 The backend also writes each `{app_id}p.png` grid file at commit (`SyncReporter._finalize_cover_path` →
-`ArtworkService.finalize_cover_path`), but for a cover set in Steam. That copy costs no renderer heap and is the
-durability net: it lands the grid file even if a per-item API call failed, so a residual gray tile resolves the next
-time the game's page is opened or on the next client restart.
+`ArtworkService.finalize_cover_path`), but for a cover set in Steam on the ROM already bound to the shortcut. A sync
+that moves the binding to another version of the game writes that version's cover over it, as a version switch does.
+That copy costs no renderer heap and is the durability net: it lands the grid file even if a per-item API call failed,
+so a residual gray tile resolves the next time the game's page is opened or on the next client restart.
 
 ### Game page artwork
 
