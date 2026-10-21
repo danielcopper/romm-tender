@@ -24,11 +24,13 @@ ResolutionDecision = Literal["use_state", "use_romm", "unresolved"]
 # The asset-type strings on the right are what the SGDB HTTP API exposes
 # (``/heroes/game/{id}``, ``/logos/game/{id}``, ``/grids/game/{id}``,
 # ``/icons/game/{id}``).
+# The cover is a portrait grid, so it is asked from ``/grids`` as the wide grid is.
 _ASSET_TYPE_TO_ENDPOINT: dict[str, str] = {
     "hero": "heroes",
     "logo": "logos",
     "grid": "grids",
     "icon": "icons",
+    "cover": "grids",
 }
 
 # Numeric asset-type codes the frontend passes to the `get_sgdb_artwork_base64`
@@ -56,22 +58,33 @@ def asset_type_endpoint(asset_type: str) -> str | None:
 _ASSET_TYPE_QUERY: dict[str, str] = {
     "grid": "?dimensions=460x215,920x430&types=static",
     "logo": "?types=static",
+    "cover": "?dimensions=600x900,660x930,342x482&types=static",
 }
 
-# A wide grid's sizes in the order they are preferred, and the widths a logo is
-# preferred within; the reasons are the same doc section's.
+# A wide grid's and a cover's sizes in the order they are preferred, and the
+# widths a logo is preferred within; the reasons are the same doc section's.
 _WIDE_GRID_SIZES: tuple[tuple[int, int], ...] = ((920, 430), (460, 215))
+_COVER_SIZES: tuple[tuple[int, int], ...] = ((600, 900), (660, 930), (342, 482))
 _LOGO_WIDTHS = range(640, 2048 + 1)
 
 
 @dataclass(frozen=True, slots=True)
 class SgdbCandidate:
-    """One image SteamGridDB lists for an asset: its id, where it is, and its stated size."""
+    """One image SteamGridDB lists for an asset: its id, where it is, its stated size and its thumbnail."""
 
     image_id: int
     url: str
     width: int | None
     height: int | None
+    thumb: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SgdbCandidatePage:
+    """One page of an asset's candidates, in SteamGridDB's order, and whether a next page may hold more."""
+
+    candidates: list[SgdbCandidate]
+    has_more: bool
 
 
 def sgdb_endpoint_path(asset_type: str, sgdb_game_id: int) -> str | None:
@@ -87,28 +100,64 @@ def sgdb_endpoint_path(asset_type: str, sgdb_game_id: int) -> str | None:
     return f"/{endpoint}/game/{sgdb_game_id}" + _ASSET_TYPE_QUERY.get(asset_type, "")
 
 
+def sgdb_candidates_page_path(asset_type: str, sgdb_game_id: int, page: int) -> str | None:
+    """:func:`sgdb_endpoint_path` for page *page* of the candidates, counted from 0 as SteamGridDB counts its pages.
+
+    Page 0 is the list the automatic choice is made from.
+    """
+    path = sgdb_endpoint_path(asset_type, sgdb_game_id)
+    if path is None:
+        return None
+    return f"{path}{'&' if '?' in path else '?'}page={page}"
+
+
+def parse_candidate_page(payload: object, page: int) -> SgdbCandidatePage | None:
+    """The candidates of *payload*, an asset response for page *page*; ``None`` for an unsuccessful answer.
+
+    Where the answer states its ``total`` and ``limit`` they decide whether a
+    next page holds more, and a ``limit`` alone whether this page was full;
+    otherwise a page that listed anything may be followed by one, and an empty
+    page ends the list.
+    """
+    if not isinstance(payload, dict) or not payload.get("success"):
+        return None
+    data = payload.get("data")
+    candidates = _candidates(data)
+    total, limit = _int_or_none(payload.get("total")), _int_or_none(payload.get("limit"))
+    if total is not None and limit:
+        has_more = (page + 1) * limit < total
+    elif limit:
+        has_more = isinstance(data, list) and len(data) >= limit
+    else:
+        has_more = isinstance(data, list) and bool(data)
+    return SgdbCandidatePage(candidates=candidates, has_more=has_more)
+
+
 def choose_candidate(asset_type: str, data: object) -> SgdbCandidate | None:
     """Choose the image to use among *data*, an asset response's ``data`` list, by stated size.
 
     A candidate is an entry with a non-empty ``url`` and an integer ``id``,
     which names its cache file. The wide grid prefers 920x430, then 460x215;
-    the logo prefers the first candidate between 640 and 2048 pixels wide.
-    Either falls back to the first candidate, and every other asset type takes
-    the first. ``None`` when *data* holds no candidate.
+    the cover 600x900, then 660x930, then 342x482; the logo prefers the first
+    candidate between 640 and 2048 pixels wide. Each falls back to the first
+    candidate, and every other asset type takes the first. ``None`` when *data*
+    holds no candidate.
     """
     candidates = _candidates(data)
     if not candidates:
         return None
     preferred = None
     if asset_type == "grid":
-        preferred = _preferred_wide_grid(candidates)
+        preferred = _preferred_size(candidates, _WIDE_GRID_SIZES)
+    elif asset_type == "cover":
+        preferred = _preferred_size(candidates, _COVER_SIZES)
     elif asset_type == "logo":
         preferred = _preferred_logo(candidates)
     return preferred or candidates[0]
 
 
-def _preferred_wide_grid(candidates: list[SgdbCandidate]) -> SgdbCandidate | None:
-    for size in _WIDE_GRID_SIZES:
+def _preferred_size(candidates: list[SgdbCandidate], sizes: tuple[tuple[int, int], ...]) -> SgdbCandidate | None:
+    for size in sizes:
         for candidate in candidates:
             if (candidate.width, candidate.height) == size:
                 return candidate
@@ -131,7 +180,16 @@ def _candidates(data: object) -> list[SgdbCandidate]:
         if not isinstance(url, str) or not url or image_id is None:
             continue
         width, height = _int_or_none(entry.get("width")), _int_or_none(entry.get("height"))
-        candidates.append(SgdbCandidate(image_id=image_id, url=url, width=width, height=height))
+        thumb = entry.get("thumb")
+        candidates.append(
+            SgdbCandidate(
+                image_id=image_id,
+                url=url,
+                width=width,
+                height=height,
+                thumb=thumb if isinstance(thumb, str) and thumb else None,
+            )
+        )
     return candidates
 
 
@@ -161,9 +219,16 @@ def cached_image_id(name: str, rom_id: int, asset_type: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+# The asset types an older release cached under a name without an image id; it
+# never cached a cover.
+_NAMED_WITHOUT_AN_ID = frozenset({"hero", "logo", "grid", "icon"})
+
+
 def is_cached_artwork(name: str, rom_id: int, asset_type: str) -> bool:
     """Whether *name* is a cache file of *rom_id*'s *asset_type*, under any name it has been given."""
-    return name == f"{rom_id}_{asset_type}.png" or cached_image_id(name, rom_id, asset_type) is not None
+    if asset_type in _NAMED_WITHOUT_AN_ID and name == f"{rom_id}_{asset_type}.png":
+        return True
+    return cached_image_id(name, rom_id, asset_type) is not None
 
 
 _CACHE_FILE = re.compile(rf"(\d+)_({'|'.join(sorted(_ASSET_TYPE_TO_ENDPOINT))})(?:_\d+)?\.png")
@@ -265,6 +330,15 @@ def first_grid_url(payload: dict[str, Any] | None) -> str | None:
     if isinstance(url, str) and url:
         return url
     return None
+
+
+def parse_game_name(payload: object) -> str | None:
+    """The game's name in *payload*, a ``/games/id/{id}`` answer; ``None`` for an unsuccessful or nameless one."""
+    if not isinstance(payload, dict) or not payload.get("success"):
+        return None
+    data = payload.get("data")
+    name = data.get("name") if isinstance(data, dict) else None
+    return name if isinstance(name, str) and name else None
 
 
 def effective_sgdb_id(romm_sgdb_id: int | None, chosen_sgdb_id: int | None) -> int | None:

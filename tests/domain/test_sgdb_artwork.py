@@ -6,6 +6,7 @@ import pytest
 
 from domain.sgdb_artwork import (
     SgdbCandidate,
+    SgdbCandidatePage,
     asset_type_endpoint,
     asset_type_name,
     build_autocomplete_path,
@@ -18,6 +19,9 @@ from domain.sgdb_artwork import (
     first_grid_url,
     is_cached_artwork,
     parse_autocomplete_results,
+    parse_candidate_page,
+    parse_game_name,
+    sgdb_candidates_page_path,
     sgdb_endpoint_path,
     to_signed_app_id,
     to_unsigned_app_id,
@@ -52,6 +56,7 @@ class TestAssetTypeEndpoint:
             ("logo", "logos"),
             ("grid", "grids"),
             ("icon", "icons"),
+            ("cover", "grids"),
         ],
     )
     def test_known_names(self, name, endpoint):
@@ -79,6 +84,9 @@ class TestSgdbEndpointPath:
 
     def test_unknown_asset_returns_none(self):
         assert sgdb_endpoint_path("banner", 1) is None
+
+    def test_the_cover_is_asked_in_its_three_portrait_sizes(self):
+        assert sgdb_endpoint_path("cover", 7) == "/grids/game/7?dimensions=600x900,660x930,342x482&types=static"
 
 
 class TestToSignedAppId:
@@ -376,6 +384,7 @@ class TestCachedArtworkNames:
             ("42_icon_7.png", (42, "icon")),
             ("42_hero.png", (42, "hero")),
             ("42_hero_7.png", (42, "hero")),
+            ("42_cover_7.png", (42, "cover")),
         ],
     )
     def test_a_cache_file_names_its_rom_and_asset_type(self, name, slot):
@@ -386,3 +395,111 @@ class TestCachedArtworkNames:
     )
     def test_no_other_name_is_a_cache_file(self, name):
         assert cached_slot_of(name) is None
+
+
+class TestChooseTheCover:
+    def test_600_by_900_wins_over_an_earlier_660_by_930(self):
+        data = [_image(1, 660, 930), _image(2, 600, 900)]
+
+        assert _chosen("cover", data).image_id == 2
+
+    def test_660_by_930_wins_over_an_earlier_342_by_482(self):
+        data = [_image(1, 342, 482), _image(2, 660, 930)]
+
+        assert _chosen("cover", data).image_id == 2
+
+    def test_342_by_482_wins_over_an_earlier_candidate_of_another_size(self):
+        data = [_image(1, 1024, 1024), _image(2, 342, 482)]
+
+        assert _chosen("cover", data).image_id == 2
+
+    def test_without_any_of_the_three_the_first_candidate_is_taken(self):
+        data = [_image(1, 1024, 1024), _image(2, 920, 430)]
+
+        assert _chosen("cover", data).image_id == 1
+
+
+class TestCandidatePages:
+    def test_page_zero_is_the_automatic_query_with_its_page(self):
+        assert sgdb_candidates_page_path("grid", 7, 0) == "/grids/game/7?dimensions=460x215,920x430&types=static&page=0"
+
+    def test_an_asset_without_a_query_gets_one(self):
+        assert sgdb_candidates_page_path("hero", 7, 2) == "/heroes/game/7?page=2"
+
+    def test_an_unknown_asset_has_no_page(self):
+        assert sgdb_candidates_page_path("banner", 7, 0) is None
+
+    def test_the_candidates_carry_their_thumbnail_in_steamgriddbs_order(self):
+        payload = {
+            "success": True,
+            "data": [
+                {**_image(2, 920, 430), "thumb": "https://cdn.example/t2.jpg"},
+                _image(1, 460, 215),
+            ],
+        }
+
+        page = parse_candidate_page(payload, 0)
+
+        assert page == SgdbCandidatePage(
+            candidates=[
+                SgdbCandidate(
+                    image_id=2,
+                    url="https://cdn.example/2.png",
+                    width=920,
+                    height=430,
+                    thumb="https://cdn.example/t2.jpg",
+                ),
+                SgdbCandidate(image_id=1, url="https://cdn.example/1.png", width=460, height=215),
+            ],
+            has_more=True,
+        )
+
+    @pytest.mark.parametrize(
+        ("page", "total", "has_more"),
+        [(0, 51, True), (0, 50, False), (1, 101, True), (1, 100, False)],
+    )
+    def test_a_stated_total_and_limit_decide_whether_more_follow(self, page, total, has_more):
+        payload = {"success": True, "page": page, "total": total, "limit": 50, "data": [_image(1, 1, 1)]}
+
+        answer = parse_candidate_page(payload, page)
+
+        assert answer is not None
+        assert answer.has_more is has_more
+
+    @pytest.mark.parametrize(("listed", "has_more"), [(50, True), (49, False)])
+    def test_a_limit_alone_says_whether_the_page_was_full(self, listed, has_more):
+        payload = {"success": True, "limit": 50, "data": [_image(i, 1, 1) for i in range(1, listed + 1)]}
+
+        answer = parse_candidate_page(payload, 0)
+
+        assert answer is not None
+        assert answer.has_more is has_more
+
+    @pytest.mark.parametrize(("data", "has_more"), [([_image(1, 1, 1)], True), ([], False)])
+    def test_without_either_an_empty_page_ends_the_list(self, data, has_more):
+        answer = parse_candidate_page({"success": True, "data": data}, 3)
+
+        assert answer is not None
+        assert answer.has_more is has_more
+
+    @pytest.mark.parametrize("payload", [None, {"success": False}, "junk"])
+    def test_an_unsuccessful_answer_is_no_page(self, payload):
+        assert parse_candidate_page(payload, 0) is None
+
+    def test_an_empty_thumb_is_none(self):
+        page = parse_candidate_page({"success": True, "data": [{**_image(1, 1, 1), "thumb": ""}]}, 0)
+
+        assert page is not None
+        assert page.candidates[0].thumb is None
+
+
+class TestParseGameName:
+    def test_the_games_name(self):
+        assert parse_game_name({"success": True, "data": {"id": 7, "name": "Mario Golf"}}) == "Mario Golf"
+
+    @pytest.mark.parametrize(
+        "payload",
+        [None, {"success": False}, {"success": True, "data": []}, {"success": True, "data": {"name": ""}}],
+    )
+    def test_no_name_without_a_successful_named_answer(self, payload):
+        assert parse_game_name(payload) is None

@@ -38,6 +38,11 @@ RECORDED_SLOTS: frozenset[ArtworkSlot] = frozenset(
     {ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO, ArtworkSlot.HERO, ArtworkSlot.ICON}
 )
 
+# The slots an image Tender set can be recorded for, with its hash: the four
+# above, and the cover where its image came from SteamGridDB. A cover is never
+# recorded as having no image or a refused one.
+SET_RECORDED_SLOTS: frozenset[ArtworkSlot] = RECORDED_SLOTS | {ArtworkSlot.COVER}
+
 # The extension Steam keeps the logo's position under, beside the logo itself.
 _NOT_AN_IMAGE_EXTENSION = "json"
 

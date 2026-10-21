@@ -62,6 +62,17 @@ class TestTheConstructors:
         with pytest.raises(ValueError, match="cover"):
             ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.COVER, sgdb_id=7, recorded_at=NOW)
 
+    def test_a_cover_steam_refused_has_no_outcome(self):
+        with pytest.raises(ValueError, match="cover"):
+            ArtworkSlotOutcome.record_refused(rom_id=1, slot=ArtworkSlot.COVER, sgdb_id=7, recorded_at=NOW)
+
+    def test_a_cover_set_from_steamgriddb_records_its_image(self):
+        record = ArtworkSlotOutcome.record_set(
+            rom_id=1, slot=ArtworkSlot.COVER, sgdb_id=7, image_id=12, image_sha256="ab", recorded_at=NOW
+        )
+
+        assert (record.slot, record.outcome, record.image_id) == (ArtworkSlot.COVER, SlotOutcome.SET, 12)
+
 
 class TestNoneAndRefusedRuleTheSlotOutForAWeek:
     @pytest.mark.parametrize("record", [_none(), _refused()], ids=["none", "refused"])

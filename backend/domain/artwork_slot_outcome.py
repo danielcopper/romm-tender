@@ -1,4 +1,4 @@
-"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo, hero or shortcut icon.
+"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo, hero or icon, or set as its cover.
 
 ``set`` (an image was set, with SteamGridDB's image id and a hash of the bytes),
 ``none`` (SteamGridDB has no candidate) or ``refused`` (Steam's
@@ -17,7 +17,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from domain._aggregate import cosmic_aggregate
-from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_slot_filled
+from domain.artwork_slot import RECORDED_SLOTS, SET_RECORDED_SLOTS, ArtworkSlot, is_slot_filled
 from domain.shortcut_icon import is_icon_filled, shows_no_icon
 
 if TYPE_CHECKING:
@@ -62,9 +62,9 @@ class ArtworkSlotOutcome:
     ) -> ArtworkSlotOutcome:
         """Record that SteamGridDB's image *image_id*, whose bytes hash to *image_sha256*, was set.
 
-        Raises ``ValueError`` for a slot that is not recorded or an empty hash.
+        Raises ``ValueError`` for a slot no set image is recorded for or an empty hash.
         """
-        _require_recorded(slot)
+        _require_recorded(slot, SET_RECORDED_SLOTS)
         if not image_sha256:
             raise ValueError("a set image carries its hash")
         return cls(
@@ -171,6 +171,6 @@ def _not_ruled_out(recorded: ArtworkSlotOutcome | None, *, sgdb_id: int | None, 
     return recorded is None or not recorded.rules_out(sgdb_id=sgdb_id, now=now)
 
 
-def _require_recorded(slot: ArtworkSlot) -> None:
-    if slot not in RECORDED_SLOTS:
+def _require_recorded(slot: ArtworkSlot, recorded: frozenset[ArtworkSlot] = RECORDED_SLOTS) -> None:
+    if slot not in recorded:
         raise ValueError(f"no outcome is recorded for the {slot.value} slot")
