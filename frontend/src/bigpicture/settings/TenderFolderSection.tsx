@@ -76,7 +76,8 @@ interface Tile {
 function breakablePath(path: string): ReactNode {
   const parts = path.split("/");
   return parts.map((part, index) => (
-    <Fragment key={index}>
+    // The path up to this part: unique per position, and the same on every render of the same path.
+    <Fragment key={parts.slice(0, index + 1).join("/")}>
       {part}
       {index < parts.length - 1 && (
         <>
@@ -139,9 +140,15 @@ function focusLook(focused: boolean): CSSProperties {
   return focused ? { background: TILE_FOCUSED, outline: `2px solid ${SELECTION_ACCENT}`, outlineOffset: "2px" } : {};
 }
 
+/** The line at a tile's foot: Not connected for a drive that is gone, else its free space where it is known. */
+function footLine(tile: Tile): string | null {
+  if (tile.notConnected) return NOT_CONNECTED;
+  return tile.freeBytes === null ? null : freeLine(tile.freeBytes);
+}
+
 const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
   const { focused, handlers } = useFocusWithin();
-  const free = tile.notConnected ? NOT_CONNECTED : tile.freeBytes === null ? null : freeLine(tile.freeBytes);
+  const free = footLine(tile);
   return (
     <Focusable
       {...handlers}
@@ -340,7 +347,7 @@ export const TenderFolderSection: FC<{ folder: TenderFolderView }> = ({ folder }
         </PanelSectionRow>
       )}
       {state && tileRows(tilesOf(state, folder), busy)}
-      {state && state.drives.length === 0 && (
+      {state?.drives.length === 0 && (
         <div style={{ color: MUTED, fontSize: "13px", margin: "0 0 12px" }}>{NO_DRIVE_NOTE}</div>
       )}
       <PanelSectionRow>
