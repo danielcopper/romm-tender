@@ -70,12 +70,16 @@ class TenderPlace:
     """Where Tender's folder lies: the place, the mount point it lay on when chosen, and whether it is the default.
 
     ``mount_point`` is ``None`` for the default, which lies on the internal
-    drive and has no drive to be gone.
+    drive and has no drive to be gone. ``drive_kind`` and ``drive_name`` name
+    the drive a place was chosen on, stored with it so a drive that is gone
+    can still be named; ``None`` where none was stored.
     """
 
     place: str
     mount_point: str | None
     default: bool
+    drive_kind: str | None = None
+    drive_name: str | None = None
 
     @property
     def folder(self) -> str:
@@ -129,7 +133,8 @@ class PlaceAsks:
 def read_place(value: object, home: str) -> TenderPlace:
     """The place the stored *value* names; the default, inside *home*, where it names no valid choice.
 
-    A choice is an object with an absolute ``place`` and ``mount_point``;
+    A choice is an object with an absolute ``place`` and ``mount_point``, and
+    the drive's ``drive_kind`` and ``drive_name`` where they were stored;
     anything else — no choice, or one a hand edit broke — is the default.
     """
     if isinstance(value, dict):
@@ -140,15 +145,43 @@ def read_place(value: object, home: str) -> TenderPlace:
             and os.path.isabs(place)
             and os.path.isabs(mount_point)
         ):
-            return TenderPlace(place=os.path.normpath(place), mount_point=os.path.normpath(mount_point), default=False)
+            kind, name = value.get("drive_kind"), value.get("drive_name")
+            stored = kind in DRIVE_KINDS and isinstance(name, str) and name != ""
+            return TenderPlace(
+                place=os.path.normpath(place),
+                mount_point=os.path.normpath(mount_point),
+                default=False,
+                drive_kind=kind if stored else None,
+                drive_name=name if stored else None,
+            )
     return TenderPlace(place=os.path.normpath(home), mount_point=None, default=True)
 
 
-def place_setting(place: str, mount_point: str, home: str) -> dict[str, str] | None:
-    """The value stored for a choice of *place* on *mount_point*: none for the default place, so a reset restores it."""
+def place_setting(
+    place: str, mount_point: str, home: str, drive: tuple[str, str] | None = None
+) -> dict[str, str] | None:
+    """The value stored for a choice of *place* on *mount_point*: none for the default place, so a reset restores it.
+
+    *drive* is the kind and name of the drive the place lies on, stored with
+    it where it is known.
+    """
     if os.path.normpath(place) == os.path.normpath(home):
         return None
-    return {"place": os.path.normpath(place), "mount_point": os.path.normpath(mount_point)}
+    value = {"place": os.path.normpath(place), "mount_point": os.path.normpath(mount_point)}
+    if drive is not None:
+        value["drive_kind"], value["drive_name"] = drive
+    return value
+
+
+def place_drive(place: TenderPlace, drives_root: str) -> tuple[str, str] | None:
+    """The kind and name of the drive *place* lies on: the stored ones, or for a choice stored without them on a
+    mount directly under *drives_root*, a drive named after that mount's folder; ``None`` for any other place.
+    """
+    if place.drive_kind is not None and place.drive_name is not None:
+        return place.drive_kind, place.drive_name
+    if place.mount_point is not None and os.path.dirname(place.mount_point) == os.path.normpath(drives_root):
+        return DRIVE_OTHER, os.path.basename(place.mount_point)
+    return None
 
 
 def typed_place(text: str, home: str) -> str:

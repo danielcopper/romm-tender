@@ -117,6 +117,7 @@ class TestTheState:
             "condition": "folder_missing",
             "unreachable": None,
             "elsewhere": [],
+            "drive": None,
             "home_free_bytes": state["home_free_bytes"],
             "drives_root": str(rig.media),
             "drives": [
@@ -362,6 +363,51 @@ class TestCheckingATypedPlace:
         assert refused.value.message == "Tender could not read the emulator sources, so it cannot check this place."
 
 
+class TestTheDriveInUse:
+    async def test_a_typed_place_on_a_mounted_drive_stores_the_drives_kind_and_name(self, tmp_path):
+        rig = _Rig(tmp_path)
+        sd = rig.drive("SD")
+        (sd / "Games").mkdir()
+
+        state = await rig.service.choose_tender_place(str(sd / "Games"))
+
+        assert rig.settings["tender_folder"]["drive_kind"] == "drive"
+        assert rig.settings["tender_folder"]["drive_name"] == "SD"
+        assert state["drive"] == {"kind": "drive", "name": "SD", "mount_point": str(sd), "connected": True}
+
+    async def test_a_place_on_no_drive_stores_none(self, tmp_path):
+        rig = _Rig(tmp_path)
+
+        state = await rig.service.choose_tender_place("~/Games")
+
+        assert "drive_kind" not in rig.settings["tender_folder"]
+        assert state["drive"] is None
+
+    async def test_a_drive_that_is_gone_is_still_named_by_what_was_stored(self, tmp_path):
+        rig = _Rig(tmp_path)
+        sd = str(rig.media / "Emulation")
+        rig.settings["tender_folder"] = {
+            "place": sd,
+            "mount_point": sd,
+            "drive_kind": "sd_card",
+            "drive_name": "Emulation",
+        }
+
+        state = await rig.service.get_tender_folder()
+
+        assert state["drive"] == {"kind": "sd_card", "name": "Emulation", "mount_point": sd, "connected": False}
+        assert state["condition"] == "drive_not_mounted"
+
+    async def test_a_drive_stored_without_kind_and_name_is_named_after_its_mount(self, tmp_path):
+        rig = _Rig(tmp_path)
+        sd = str(rig.media / "Emulation")
+        rig.on_drive(rig.media / "Emulation")
+
+        state = await rig.service.get_tender_folder()
+
+        assert state["drive"] == {"kind": "drive", "name": "Emulation", "mount_point": sd, "connected": False}
+
+
 class TestTheCurrentFolderRule:
     async def test_typing_the_place_whose_folder_is_the_current_one_answers_it_is_already_tenders_folder(
         self, tmp_path
@@ -424,7 +470,12 @@ class TestChoosingAPlace:
 
         state = await rig.service.choose_tender_place(str(sd))
 
-        assert rig.settings["tender_folder"] == {"place": str(sd), "mount_point": str(sd)}
+        assert rig.settings["tender_folder"] == {
+            "place": str(sd),
+            "mount_point": str(sd),
+            "drive_kind": "drive",
+            "drive_name": "SD",
+        }
         assert rig.persister.save_count == 1
         assert state["folder"] == str(sd / "Tender")
         assert state["condition"] is None
@@ -599,7 +650,12 @@ class TestWhatIsRecordedElsewhere:
 
         state = await rig.service.use_recorded_tender_folder(str(sd_folder))
 
-        assert rig.settings["tender_folder"] == {"place": str(sd), "mount_point": str(sd)}
+        assert rig.settings["tender_folder"] == {
+            "place": str(sd),
+            "mount_point": str(sd),
+            "drive_kind": "drive",
+            "drive_name": "SD",
+        }
         assert state["elsewhere"] == []
         assert state["unreachable"] is None
         assert not (rig.home / "Tender").exists()

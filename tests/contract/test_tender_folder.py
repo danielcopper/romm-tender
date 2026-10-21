@@ -35,6 +35,7 @@ async def test_the_folder_answers_its_default_place_and_the_connected_drives(har
         "condition": "folder_missing",
         "unreachable": None,
         "elsewhere": [],
+        "drive": None,
         "home_free_bytes": result["home_free_bytes"],
         "drives_root": harness.drives_root,
         "drives": [
@@ -57,7 +58,13 @@ async def test_choosing_a_drive_creates_the_folder_there_and_stores_the_choice(h
     assert result["folder"] == os.path.join(sd, "Tender")
     assert result["condition"] is None
     assert os.path.isfile(os.path.join(sd, "Tender", ".tender-folder"))
-    assert harness.settings["tender_folder"] == {"place": sd, "mount_point": sd}
+    assert harness.settings["tender_folder"] == {
+        "place": sd,
+        "mount_point": sd,
+        "drive_kind": "drive",
+        "drive_name": "SD",
+    }
+    assert result["drive"] == {"kind": "drive", "name": "SD", "mount_point": sd, "connected": True}
 
 
 async def test_a_place_on_a_drive_that_is_not_connected_is_refused_in_the_canonical_shape(harness):

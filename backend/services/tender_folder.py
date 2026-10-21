@@ -31,6 +31,7 @@ from domain.tender_folder import (
     drive_not_mounted,
     not_writable,
     place_asks,
+    place_drive,
     place_setting,
     recorded_elsewhere,
     rom_folder_refusal,
@@ -107,8 +108,10 @@ class TenderFolderService:
         """The folder's place and state, the folders recorded elsewhere, and the drives a place may lie on.
 
         ``{"place", "folder", "default", "condition", "unreachable",
-        "elsewhere", "home_free_bytes", "drives_root", "drives"}``:
+        "elsewhere", "drive", "home_free_bytes", "drives_root", "drives"}``:
         ``condition`` is why the folder cannot be used now, or ``None``;
+        ``drive`` the drive the place lies on as ``{"kind", "name",
+        "mount_point", "connected"}``, ``None`` for a place on no drive;
         ``unreachable`` is that condition only while something is recorded
         under the folder; ``elsewhere`` the other folders something is
         recorded under; ``home_free_bytes`` the space free on the internal
@@ -220,6 +223,7 @@ class TenderFolderService:
             "condition": condition,
             "unreachable": unreachable_state(folder, recorded, condition),
             "elsewhere": [recorded[resolved] for resolved in recorded_elsewhere(folder, recorded)],
+            "drive": self._drive_payload(place),
             "home_free_bytes": self._store.free_bytes(self._store.home()),
             "drives_root": self._store.drives_root(),
             "drives": [
@@ -232,6 +236,18 @@ class TenderFolderService:
                 }
                 for drive in self._store.drives()
             ],
+        }
+
+    def _drive_payload(self, place: TenderPlace) -> dict[str, Any] | None:
+        drive = None if place.default else place_drive(place, self._store.drives_root())
+        if drive is None or place.mount_point is None:
+            return None
+        kind, name = drive
+        return {
+            "kind": kind,
+            "name": name,
+            "mount_point": place.mount_point,
+            "connected": self._store.is_mount(place.mount_point),
         }
 
     def _check_io(self, text: str) -> dict[str, Any]:
@@ -260,7 +276,7 @@ class TenderFolderService:
             raise not_writable(shown) from exc
         if not self._store.writable(folder):
             raise not_writable(shown)
-        self._switch(place, self._store.mount_point_of(place))
+        self._switch(place, self._store.mount_point_of(place), self._mounted_drive(place))
         return self._state_io()
 
     def _use_recorded_io(self, text: str) -> dict[str, Any]:
@@ -276,7 +292,7 @@ class TenderFolderService:
         mount_point = (
             os.path.join(self._store.drives_root(), drive) if drive is not None else self._store.mount_point_of(place)
         )
-        self._switch(place, mount_point)
+        self._switch(place, mount_point, self._mounted_drive(place))
         return self._state_io()
 
     def _forget_io(self, text: str) -> dict[str, Any]:
@@ -316,9 +332,19 @@ class TenderFolderService:
         if refusal is not None:
             raise refusal
 
-    def _switch(self, place: str, mount_point: str) -> None:
+    def _mounted_drive(self, place: str) -> tuple[str, str] | None:
+        """The kind and name of the drive *place* lies on, where that drive is mounted now."""
+        drive = drive_below(place, self._store.drives_root())
+        if drive is None:
+            return None
+        mount_point = os.path.join(self._store.drives_root(), drive)
+        if not self._store.is_mount(mount_point):
+            return None
+        return self._store.drive_kind(mount_point), drive
+
+    def _switch(self, place: str, mount_point: str, drive: tuple[str, str] | None) -> None:
         old: TenderPlace = self._store.place()
-        self._settings[PLACE_SETTING] = place_setting(place, mount_point, self._store.home())
+        self._settings[PLACE_SETTING] = place_setting(place, mount_point, self._store.home(), drive)
         self._settings_persister.save_settings()
         new = self._store.place()
         self._log_debug(f"[folder] place {old.place} -> {new.place} (mount {new.mount_point})")

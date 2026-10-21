@@ -14,6 +14,7 @@ from domain.tender_folder import (
     current_folder_refusal,
     drive_below,
     place_asks,
+    place_drive,
     place_setting,
     read_place,
     recorded_elsewhere,
@@ -249,3 +250,36 @@ class TestTheCurrentFolder:
     def test_a_folder_beside_the_current_folder_is_neither(self):
         assert current_folder_refusal("/sd/Tender", "/home/deck/Tender", "/sd/Tender", "/home/deck/Tender") is None
         assert current_folder_refusal("/home/deck/Tenderly/Tender", "/home/deck/Tender", "x", "y") is None
+
+
+class TestTheDriveAPlaceLiesOn:
+    def test_a_choice_keeps_the_kind_and_name_of_its_drive(self):
+        stored = place_setting("/run/media/deck/SD", "/run/media/deck/SD", _HOME, ("sd_card", "Emulation"))
+
+        assert stored == {
+            "place": "/run/media/deck/SD",
+            "mount_point": "/run/media/deck/SD",
+            "drive_kind": "sd_card",
+            "drive_name": "Emulation",
+        }
+        place = read_place(stored, _HOME)
+        assert (place.drive_kind, place.drive_name) == ("sd_card", "Emulation")
+        assert place_drive(place, "/run/media/deck") == ("sd_card", "Emulation")
+
+    def test_a_choice_stored_without_them_on_a_drive_is_a_drive_named_after_its_mount(self):
+        place = read_place({"place": "/run/media/deck/SD/Games", "mount_point": "/run/media/deck/SD"}, _HOME)
+
+        assert place_drive(place, "/run/media/deck") == ("drive", "SD")
+
+    @pytest.mark.parametrize("value", [{"drive_kind": "floppy", "drive_name": "A"}, {"drive_kind": "sd_card"}])
+    def test_a_kind_or_name_a_hand_edit_broke_is_not_read(self, value):
+        place = read_place({"place": "/mnt/x", "mount_point": "/mnt", **value}, _HOME)
+
+        assert (place.drive_kind, place.drive_name) == (None, None)
+
+    def test_a_place_on_no_drive_has_none(self):
+        assert (
+            place_drive(read_place({"place": "/home/deck/Games", "mount_point": "/home"}, _HOME), "/run/media/deck")
+            is None
+        )
+        assert place_drive(read_place(None, _HOME), "/run/media/deck") is None
