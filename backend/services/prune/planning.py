@@ -187,7 +187,7 @@ class GroupPlanner:
         if not delete_ids:
             return self._nothing_to_do(rows, proof.uncertain_ids, spared_bound=spared_bound)
 
-        drifted, unsynced = await self._probe_drift(rows, bound_row, proof, whole_game_action, options)
+        stranded, unsynced = await self._probe_drift(rows, bound_row, proof, whole_game_action, options)
         if unsynced is not None:
             return unsynced
 
@@ -199,7 +199,7 @@ class GroupPlanner:
             delete_ids=delete_ids,
             fully_dead=proof.fully_dead,
             whole_game_action=whole_game_action,
-            drifted=drifted,
+            drifted=stranded,
         )
 
     def _log_liveness(
@@ -268,24 +268,24 @@ class GroupPlanner:
     ) -> tuple[bool, dict[str, Any] | None]:
         """Ask whether the shortcut this run would change still holds saves it would strand.
 
-        A save changed since its last recorded sync, one with no recorded sync,
-        and a check that could not read all hold it; each answers its own
-        message.
+        The drift probe's verdict decides
+        (``domain/save_stranding.py::stranding_verdict``); a check that could
+        not read says so in its own message.
         """
         if bound_row is None or bound_row.rom_id not in proof.vanished_ids:
             return False, None
         if not whole_game_action:
             return False, None
         stranding = (await self._drift_probe(bound_row.rom_id))["stranding"]
-        drifted = stranding != STRANDING_NONE
-        if drifted and not options.create_recovery_bundle:
-            return drifted, self._results.group_result(
+        stranded = stranding != STRANDING_NONE
+        if stranded and not options.create_recovery_bundle:
+            return stranded, self._results.group_result(
                 rows,
                 "skipped",
                 "unsynced_saves",
                 _UNCHECKED_SAVES_MESSAGE if stranding == STRANDING_UNCHECKED else _UNSYNCED_SAVES_MESSAGE,
             )
-        return drifted, None
+        return stranded, None
 
 
 __all__ = ["GroupPlan", "GroupPlanner", "GroupPlannerConfig"]

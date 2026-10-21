@@ -35,11 +35,10 @@ interface StrandedVersion {
 }
 
 function strandedBannerText({ name, stranding }: StrandedVersion): string {
-  const what =
-    stranding === "unchecked"
-      ? `Tender couldn't check whether version "${name}" has saves that haven't been synced to RomM`
-      : `Version "${name}" has saves that haven't been synced to RomM`;
-  return `${what} — switch back to sync them.`;
+  return stranding === "unchecked"
+    ? `Tender couldn't check whether version "${name}" has saves that haven't been synced to RomM — switch back to ` +
+        "check and sync them."
+    : `Version "${name}" has saves that haven't been synced to RomM — switch back to sync them.`;
 }
 
 /** The local-save check's verdict for `romId`; a call that rejects or gets no answer in time could not check. */
@@ -86,9 +85,6 @@ export const SavesTab: FC<SavesTabProps> = ({
   const [newSlotError, setNewSlotError] = useState<string | null>(null);
   const newSlotErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOffline, setIsOffline] = useState(getRommConnectionState() === "offline");
-  // An INACTIVE sibling version that is still on disk and holds saves the
-  // switch left behind (#1298) — null when none. Reminds the user to switch back
-  // and sync before those saves are lost.
   const [strandedVersion, setStrandedVersion] = useState<StrandedVersion | null>(null);
 
   const handleVersionRestored = () => {
@@ -110,12 +106,10 @@ export const SavesTab: FC<SavesTabProps> = ({
     };
   }, []);
 
-  // Stranded-saves reminder (#1298): after a version switch the previously-bound
-  // install becomes an INACTIVE sibling that still holds its (possibly unsynced)
-  // saves on disk. Surface a banner when the check's stranding verdict holds for
-  // such a version, so the user knows to switch back and sync before those saves
-  // are lost. Re-runs on saves-tab load (mount) and on a version switch (romId
-  // changes).
+  // Stranded-saves reminder: after a version switch the previously-bound
+  // install is an INACTIVE sibling whose saves stay on disk and sync only once
+  // the user switches back to it. Re-runs on saves-tab load (mount) and on a
+  // version switch (romId changes).
   useEffect(() => {
     let cancelled = false;
     // Getter, not a bare read: the two post-await `cancelled` checks would
@@ -176,7 +170,7 @@ export const SavesTab: FC<SavesTabProps> = ({
     </div>
   ) : null;
 
-  // --- Stranded-version reminder banner (#1298) ---
+  // --- Stranded-version reminder banner ---
   const strandedBanner = strandedVersion ? (
     <div
       key="stranded-banner"

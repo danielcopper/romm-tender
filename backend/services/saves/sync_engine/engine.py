@@ -497,8 +497,9 @@ class SyncEngine:
 
         The caller holds ``rom_lock``, hands over the reading it already took,
         and calls this before it looks at any local file. Public (peer-called):
-        the peer services' write, delete, count and status paths follow first
-        as well; ``resolve_sync_conflict`` does so here. It does nothing while
+        the peer services' write, delete, count and status paths and the
+        local-save check follow first as well; ``resolve_sync_conflict`` does
+        so here. It does nothing while
         save sync is off, an update is being installed, or a RetroDECK home
         migration is pending or still running — why is
         ``docs/architecture/save-file-sync-architecture.md``'s. A failure is

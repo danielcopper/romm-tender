@@ -16,7 +16,7 @@ function noSyncReason(serverReachable: boolean, versionGone: boolean): UnsyncedS
 }
 
 /**
- * Unsynced-saves confirm for switching away from a downloaded version (#1298).
+ * Unsynced-saves confirm for switching away from a downloaded version.
  * Shown by the version picker when the backend soft-blocks the switch
  * (`reason: "unsynced_saves"`): the bound install has local saves that haven't
  * been synced to RomM, or Tender couldn't check whether it has.
@@ -24,9 +24,9 @@ function noSyncReason(serverReachable: boolean, versionGone: boolean): UnsyncedS
  * Two variants (one component, conditional middle/OK buttons), mirroring
  * `showOfflineDriftModal`'s `showModal(...)`-returns-a-Promise pattern:
  *
- * - Sync offered (T4): OK = "Sync now & switch" (`sync_and_switch`), middle =
+ * - Sync offered: OK = "Sync now & switch" (`sync_and_switch`), middle =
  *   "Switch anyway" (`switch_anyway`), Cancel (`cancel`).
- * - No sync (T5): OK = "Switch anyway" (`switch_anyway`), Cancel (`cancel`) —
+ * - No sync: OK = "Switch anyway" (`switch_anyway`), Cancel (`cancel`) —
  *   while RomM is unreachable, or when the version being left is gone from
  *   RomM, the saves can't be uploaded, and the description says which.
  *

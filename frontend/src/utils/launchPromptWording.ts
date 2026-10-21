@@ -72,7 +72,7 @@ export function unsyncedSavesDescription({ versionName, stranding, noSync }: Uns
       ? `Tender couldn't check whether "${versionName}" has saves that haven't been synced to RomM.`
       : `"${versionName}" has saves that haven't been synced to RomM.`;
   if (noSync === "version_gone") {
-    return `${what} This version is no longer available on RomM, so its saves can't be uploaded. They stay on this device.`;
+    return `${what} "${versionName}" is no longer available on RomM, so its saves can't be uploaded. They stay on disk.`;
   }
   const why = noSync === "unreachable" ? " RomM is not reachable right now, so they can't be synced first." : "";
   return `${what}${why} They stay on disk, but won't sync until you switch back.`;

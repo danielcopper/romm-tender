@@ -14,16 +14,16 @@ A version switch is a pure binding move: the shortcut's name and appId stay
 sticky (ADR-0021 §2) and no save state migrates (ADR-0021 §4). Switching a
 *downloaded* game keeps its existing files in place — the switch never deletes
 or transfers saves — but a switch *away* from a downloaded version whose local
-saves changed since their last recorded sync, or have none recorded, is
-soft-blocked so the user can sync first; an explicit ``allow_stranded``
-override honours "switch anyway". A switch back onto a still-installed version
-re-bakes that install's full Steam ``launch_options`` (the frontend writes it
-onto the shortcut); switching to an uninstalled version returns the empty
-placeholder (ADR-0009). The group is resolved by ``sibling_group_key`` over
-the migration-010 index; the server view comes from
-``get_rom_simple(bound).sibling_roms``. Server I/O and the relaunch resolver
-run outside the Unit of Work (ADR-0006) — read/close, then fetch/resolve, then a
-short write UoW. The liveness request narrows the race but cannot transact with
+saves the stranding verdict holds
+(``domain/save_stranding.py::stranding_verdict``) is soft-blocked so the user
+can sync first; an explicit ``allow_stranded`` override honours "switch
+anyway". A switch back onto a still-installed version re-bakes that install's
+full Steam ``launch_options`` (the frontend writes it onto the shortcut);
+switching to an uninstalled version returns the empty placeholder (ADR-0009).
+The group is resolved by ``sibling_group_key`` over the migration-010 index;
+the server view comes from ``get_rom_simple(bound).sibling_roms``. Server I/O
+and the relaunch resolver run outside the Unit of Work (ADR-0006) — read/close,
+then fetch/resolve, then a short write UoW. The liveness request narrows the race but cannot transact with
 RomM and SQLite as one unit.
 """
 
@@ -614,8 +614,8 @@ class VersionSwitchService:
         group's ``app_id`` and the repository's collision-unbind clears the old
         representative. Switching away from a *downloaded* version whose local
         saves would be stranded is soft-blocked (:class:`UnsyncedSaves`) so the
-        user can sync first — the refusal carries ``stranding`` (``unsynced``, or
-        ``unchecked`` where the check could not read), ``server_reachable`` (from
+        user can sync first — the refusal carries ``stranding`` (the drift
+        probe's verdict, ``unsynced`` or ``unchecked``), ``server_reachable`` (from
         the reachability probe), ``unsynced_rom_id``, and
         ``unsynced_version_name`` so the frontend modal can offer "Sync now &
         switch" / "Switch anyway" / "Cancel".
@@ -745,12 +745,11 @@ class VersionSwitchService:
 
         Only fires when the currently-bound version is downloaded and
         ``allow_stranded`` is unset — otherwise there is nothing to strand, or the
-        user chose "Switch anyway". The drift probe is a purely-local read (its
-        own short-lived reads, run before any write UoW opens — the
-        rom_save_sync_states baseline it reads must not be touched while this service's
-        write UoW is open), and its ``stranding`` verdict decides: a save changed
-        since its last recorded sync or with none recorded, or a check that
-        could not read. The reachability probe is fired only on the blocking
+        user chose "Switch anyway". The drift probe asks no server and runs
+        before any write UoW opens — the rom_save_sync_states baseline it reads
+        must not be touched while this service's write UoW is open — and its
+        ``stranding`` verdict (``domain/save_stranding.py::stranding_verdict``)
+        decides. The reachability probe is fired only on the blocking
         branch so the free switch paths (synced saves, uninstalled, offline
         override) make no server contact. Raises :class:`UnsyncedSaves`, or
         returns to let the switch proceed.

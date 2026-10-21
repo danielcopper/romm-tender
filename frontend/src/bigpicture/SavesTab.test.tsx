@@ -857,7 +857,7 @@ describe("SavesTab", () => {
   describe("stranded-version banner (#1298)", () => {
     const UNCHECKED_COPY =
       "Tender couldn't check whether version \"Game (USA)\" has saves that haven't been synced to RomM — " +
-      "switch back to sync them.";
+      "switch back to check and sync them.";
     const STRANDED_COPY =
       'Version "Game (USA)" has saves that haven\'t been synced to RomM — switch back to sync them.';
 
@@ -941,12 +941,7 @@ describe("SavesTab", () => {
 
       const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
 
-      await waitFor(() =>
-        expect(container.textContent).toContain(
-          "Tender couldn't check whether version \"Game (USA)\" has saves that haven't been synced to RomM — " +
-            "switch back to sync them.",
-        ),
-      );
+      await waitFor(() => expect(container.textContent).toContain(UNCHECKED_COPY));
     });
 
     it("says Tender couldn't check a version whose check call was rejected", async () => {

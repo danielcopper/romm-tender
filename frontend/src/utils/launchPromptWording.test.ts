@@ -41,8 +41,8 @@ describe("unsyncedSavesDescription", () => {
 
   it("says the saves can't be uploaded where the version is gone from RomM", () => {
     expect(unsyncedSavesDescription({ versionName: "USA", stranding: "unsynced", noSync: "version_gone" })).toBe(
-      '"USA" has saves that haven\'t been synced to RomM. This version is no longer available on RomM, so its ' +
-        "saves can't be uploaded. They stay on this device.",
+      '"USA" has saves that haven\'t been synced to RomM. "USA" is no longer available on RomM, so its saves ' +
+        "can't be uploaded. They stay on disk.",
     );
   });
 });

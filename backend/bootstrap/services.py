@@ -698,10 +698,11 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     )
 
     # Built after SaveService + ConnectionService: the version-switch
-    # save-stranding gate draws drift from SaveService.check_local_drift and
-    # reachability from ConnectionService.probe_reachability, and re-bakes a
-    # switched-onto install via the relaunch resolver. The active-download guard
-    # reads DownloadService's in-progress set (built earlier — no LateBinding) (#1298).
+    # save-stranding gate reads the stranding verdict of
+    # SaveService.check_local_drift and reachability from
+    # ConnectionService.probe_reachability, and re-bakes a switched-onto install
+    # via the relaunch resolver. The active-download guard reads
+    # DownloadService's in-progress set (built earlier — no LateBinding).
     version_switch_service = VersionSwitchService(
         config=VersionSwitchServiceConfig(
             loop=cfg.runtime.loop,

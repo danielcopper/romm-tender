@@ -141,7 +141,8 @@ describe("UnsyncedSavesSwitchModal — the version being left is gone from RomM"
       });
       const props = lastConfirmModalProps();
       expect(props.strDescription).toContain("no longer available on RomM, so its saves can't be uploaded");
-      expect(props.strDescription).toContain("They stay on this device.");
+      expect(props.strDescription).toContain('"Game (USA)" is no longer available on RomM');
+      expect(props.strDescription).toContain("They stay on disk.");
       expect(props.strOKButtonText).toBe("Switch anyway");
       expect(props.strMiddleButtonText).toBeUndefined();
       expect(props.onMiddleButton).toBeUndefined();

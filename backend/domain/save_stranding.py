@@ -1,10 +1,9 @@
 """Whether a ROM's local saves would be left behind by a change of its shortcut.
 
-The stranding reading of the local-save check: "does this save exist anywhere
-but here?". A save with no recorded sync answers it in the strongest way, the
-opposite of what the offline launch's "will a later sync overwrite a local
-edit?" makes of the same file, so the two readings stay apart and this module
-holds only the stranding one.
+The stranding reading of the local-save check. Which callers read it, which
+read the check's ``drifted`` instead, and why "nothing recorded" means the
+opposite to the two, is ``docs/architecture/save-file-sync-architecture.md``,
+"The Local-Save Check".
 """
 
 from __future__ import annotations

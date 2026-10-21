@@ -376,11 +376,11 @@ export const getInstalledRom = endpoint<[number], InstalledRom | null>("get_inst
 export type SaveStranding = "none" | "unsynced" | "unchecked";
 
 /**
- * The local-save check, read off the disk alone. `drifted` (a save changed
- * since its last recorded sync) is what Play while RomM is unreachable reads,
- * and only that; `only_here` (a save with no recorded sync) is reported apart
- * from it; `stranding` is the one answer the version switch, the removed-game
- * cleanup and the Saves tab's reminder read.
+ * The local-save check, answered without asking the server: `drifted` (a save
+ * changed since its last recorded sync) and `only_here` (a save with no
+ * recorded sync) reported apart, and `stranding`, the one answer the version
+ * switch, the removed-game cleanup and the Saves tab's reminder read. Which
+ * field the offline launch reads is `docs/architecture/save-file-sync-architecture.md`'s.
  */
 export interface LocalDriftAnswer {
   rom_id: number;
@@ -915,11 +915,12 @@ export interface SwitchVersionSuccess {
 
 /**
  * Soft-block: switching away from a downloaded version whose local saves would
- * be stranded (#1298). `stranding` says whether they are unsynced or could not
- * be checked; `server_reachable` decides which confirm modal to show (T4
- * reachable offers "Sync now & switch", T5 offline does not);
- * `unsynced_rom_id` / `unsynced_version_name` name the version that would be
- * stranded. The user resolves it with the `allow_stranded` override.
+ * be stranded. `stranding` says whether they are unsynced or could not be
+ * checked; `server_reachable` is one of the two facts, with whether the
+ * version being left is gone from RomM, that decide whether the confirm offers
+ * "Sync now & switch"; `unsynced_rom_id` / `unsynced_version_name` name the
+ * version that would be stranded. The user resolves it with the
+ * `allow_stranded` override.
  */
 export interface SwitchVersionUnsyncedSaves {
   success: false;

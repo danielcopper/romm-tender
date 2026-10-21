@@ -471,21 +471,20 @@ class StatusService:
     async def check_local_drift(self, rom_id: int) -> dict[str, Any]:
         """Report how the ROM's local save files stand against their last recorded sync.
 
-        Purely local: it finds the save files the way a sync does and never
-        asks the server, so it answers while the server is unreachable. Answers
+        It finds the save files the way a sync does and never asks the server,
+        so it answers while the server is unreachable. Answers
         ``{"rom_id", "drifted", "only_here", "stranding"}``, two facts and the
         verdict the stranding callers read:
 
         - ``drifted``: a file's content differs from its recorded hash. Hashing
           stops at the first one that does. A file with no recorded hash is not
-          drift, and an unknown is never drift — the one field the offline
-          launch reads, so its warning comes only for a change it can prove.
+          drift, and an unknown is never drift.
         - ``only_here``: save sync is on and a file has no recorded sync — the
           ROM has no save state, or its save state has no entry for that file.
           RomM is not asked, so a save it already holds that Tender has not
           recorded counts too.
-        - ``stranding``: :func:`stranding_verdict` over the two, ``unchecked``
-          where the reading failed and ``none`` while save sync is off.
+        - ``stranding``: :func:`stranding_verdict` over the two and over whether
+          the reading succeeded.
 
         A ROM that is not installed or has no save files on disk has neither
         fact. A moved save directory is followed first, under the ROM's
@@ -494,9 +493,9 @@ class StatusService:
         prediction, never followed).
 
         Never raises: any internal error (a file vanished mid-hash, a failed
-        read of the save state, …) is logged and answers neither fact, with
-        ``stranding`` ``unchecked`` — also where the reading had already found a
-        file with no recorded sync before it failed.
+        read of the save state, …) is logged and answers neither fact, and a
+        reading that failed — also where it had already found a file with no
+        recorded sync — for the verdict.
         """
         rom_id = int(rom_id)
         save_sync_on = save_sync_enabled(self._settings)
