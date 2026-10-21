@@ -1662,6 +1662,32 @@ Format: **invariant** — tier — enforced by.
   has to check the state itself, as `services/saves/save_directory.py::_followable_directory` does — a new mover that
   does not carries files into a place the emulator's settings never named, and nothing would say so. Detail:
   `docs/architecture/save-sync-coverage.md`, GLOSSARY.md → Save state / Save scope
+- **A save place whose directory still holds a resolver template (`<cwd>`, `<region>`, `<save_id>`) is never followed,
+  recorded, renamed into or used as a save-state place** — test + prompt-only — the resolver answers a place it cannot
+  complete as a template and lists the holes in `needs`: a RetroArch save folder set as a relative path answers
+  `<cwd>/…`, below the folder a game is started from, which Tender names it no value for (#2385 D20); Dolphin's GameCube
+  cards answer `…/<region>/Card A`; a Wii or Cemu title answers `…/<save_id>/…`. Such a string names no folder. Carried
+  into, it is a literal `<region>` folder or a path relative to the backend's own working directory, and the upgrade to
+  emu-atlas 0.25.0 made that reachable for real files: a relative save folder that 0.24.0 answered as the platform
+  default — recorded as such — answers `<cwd>/saves` after it, and a follow that took the new answer would move the
+  game's saves into a folder below wherever the backend happens to run. The rule spans three files:
+  `SaveAnswer.concrete_directory` (`domain/save_answer.py`) is `None` wherever a hole in `needs` appears in the
+  directory as `<hole>`, `_followable_directory` (`services/saves/save_directory.py`) reads it for the follow and both
+  records, the rename on adoption's `_save_dir` (`services/rom_adoption/renamer.py`) reads it, and
+  `resolve_savestate_location` (`adapters/atlas_saves.py`) answers `None` — nothing established — while the savestate
+  placement's `needs` is not empty. A hole in a file name alone leaves the directory a folder (Flycast's cards).
+  Enforced by `tests/services/saves/test_save_directory.py::TestNeverIntoAPlaceWithAHole` (the upgrade case: a concrete
+  record, a `<cwd>/saves` answer, the file left where it is, no folder created, the record unchanged; a region-keyed
+  folder; a first sight that records nothing),
+  `tests/services/test_rom_adoption.py::TestAdoptCandidate::test_a_save_directory_with_a_hole_still_in_it_carries_no_save`,
+  and in `tests/adapters/test_atlas_saves.py` `TestWhatTheAnswerCarries`' hole cases,
+  `TestTheSavestateQuestion::test_a_place_with_a_hole_still_in_it_establishes_nothing` and
+  `TestTheVocabularyIsTheResolversOwn::test_the_start_folder_hole_and_how_the_resolver_spells_a_hole_in_a_path`, which
+  holds the `<hole>` spelling to the resolver's own template constants. Unseen by them: a new mover or recorder that
+  reads `SaveAnswer.directory` instead of `concrete_directory` — the field stays the resolver's answer, because the
+  status read shows it — a savestate place taken from anywhere but that adapter, and a template the resolver spells
+  other than `<hole>`, or one whose hole `needs` does not list. Detail: `docs/architecture/save-sync-coverage.md`, "Nor
+  is it always the game's"
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter

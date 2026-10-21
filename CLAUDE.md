@@ -1028,6 +1028,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `._uninstalled_answer` and `services/rom_adoption/renamer.py`; nothing caches an answer; a refusal for a place not
   read keeps the resolver's directory for the rename on adoption, so anything else that moves files by
   `SaveAnswer.directory` checks the state first, as `services/saves/save_directory.py::_followable_directory` does
+- **A save place whose directory still holds a resolver template (`<cwd>`, `<region>`, `<save_id>`) is never followed,
+  recorded, renamed into or used as a save-state place** — test + prompt-only — `SaveAnswer.concrete_directory`
+  (`domain/save_answer.py`) is `None` for such a directory, `_followable_directory` (`services/saves/save_directory.py`)
+  and the rename's `_save_dir` (`services/rom_adoption/renamer.py`) read it, and `resolve_savestate_location`
+  (`adapters/atlas_saves.py`) answers `None` while `needs` is not empty;
+  `tests/services/saves/test_save_directory.py::TestNeverIntoAPlaceWithAHole`,
+  `tests/services/test_rom_adoption.py::TestAdoptCandidate::test_a_save_directory_with_a_hole_still_in_it_carries_no_save`,
+  `tests/adapters/test_atlas_saves.py` (`TestWhatTheAnswerCarries`' hole cases,
+  `TestTheSavestateQuestion::test_a_place_with_a_hole_still_in_it_establishes_nothing`, and
+  `TestTheVocabularyIsTheResolversOwn::test_the_start_folder_hole_and_how_the_resolver_spells_a_hole_in_a_path`). Unseen
+  by them: a new mover or recorder that reads `answer.directory` instead of `concrete_directory`, a savestate place
+  taken from anywhere but that adapter, and a template the resolver spells other than `<hole>` or whose hole `needs`
+  does not list
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; a legacy delete is refused up-front
