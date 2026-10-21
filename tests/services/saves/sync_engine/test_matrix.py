@@ -2539,7 +2539,7 @@ class TestADownloadThatFailsLeavesNoTmp:
 
     @pytest.mark.parametrize(
         "failure",
-        [RommApiError("upstream 502"), RuntimeError("disk full")],
+        [RommApiError("upstream 502"), RuntimeError("a bug")],
         ids=["romm-answers-an-error", "any-other-fault"],
     )
     def test_the_per_file_sync_leaves_no_tmp(self, tmp_path, failure):

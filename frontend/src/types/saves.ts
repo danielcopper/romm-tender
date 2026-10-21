@@ -278,6 +278,4 @@ export type CopySaveToSlotStatus =
   | { status: "preflight_failed"; errors: string[] }
   | { status: "target_slot_busy"; message: string }
   | { status: "copy_failed"; message: string }
-  // The copy is complete on this device and the target slot is active; only
-  // its upload failed, which the next sync makes.
   | { status: "upload_failed"; message: string };

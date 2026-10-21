@@ -32,8 +32,7 @@ async function handleResult(
     return;
   }
   showToast(feedback.message);
-  // Only a copy refreshes the slot views: `already_present` copied nothing, and
-  // `upload_failed` copied onto this device and made the target slot active.
+  // Only a copy refreshes the slot views: `already_present` copied nothing.
   if (!isEndpointFailure(result) && (result.status === "ok" || result.status === "upload_failed")) {
     announceSaveSync(romId);
   }

@@ -289,8 +289,9 @@ class MatrixExecutor:
         """Download a save file from server. Backs up existing local file first.
 
         The content lands in ``<filename>.tmp`` and replaces the local file only
-        once complete; any failure up to that replacement removes the ``.tmp``
-        and raises on. Mutates *save_state* in memory (per-file baseline); the
+        once complete; any failure up to that replacement tries to remove the
+        ``.tmp`` (a removal that fails is not reported) and raises the
+        download's own failure. Mutates *save_state* in memory (per-file baseline); the
         operation entry owns the surrounding write Unit of Work.
         """
         local_path = os.path.join(saves_dir, filename)
