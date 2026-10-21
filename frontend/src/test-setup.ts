@@ -324,9 +324,20 @@ vi.mock("@decky/ui", () => {
     },
     PanelSection: passthrough("section"),
     PanelSectionRow: passthrough("div"),
-    TextField: (p: AnyProps & { value?: string; onChange?: (e: unknown) => void; onKeyDown?: (e: unknown) => void }) =>
+    TextField: (
+      p: AnyProps & {
+        value?: string;
+        label?: unknown;
+        description?: unknown;
+        onChange?: (e: unknown) => void;
+        onKeyDown?: (e: unknown) => void;
+      },
+    ) =>
       createElement("input", {
         "data-testid": "text-field",
+        // A string label and description, for a test to read what the field says.
+        "data-label": typeof p.label === "string" ? p.label : undefined,
+        "data-description": typeof p.description === "string" ? p.description : undefined,
         value: p.value ?? "",
         onChange: (e: unknown) => p.onChange?.(e),
         onKeyDown: (e: unknown) => p.onKeyDown?.(e),

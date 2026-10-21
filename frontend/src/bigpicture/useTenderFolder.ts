@@ -1,9 +1,11 @@
 /**
- * Tender's folder as one page holds it: the state read on mount, and every
- * change the settings section and Main's notices make to it. Each change
- * answers the state as it now stands, which replaces the one held; a refusal
- * keeps the state and holds the sentence it is shown with until the next
- * change.
+ * Tender's folder as one page holds it: the state read on mount, the changes
+ * the settings section and Main's notices make to it — a tile's choice, a
+ * switch to a recorded folder, forgetting one — and the state the "Another
+ * folder…" window hands over once it has chosen a typed place itself. Each
+ * answers the state as it now stands, which replaces the one held, and every
+ * switch that took effect is confirmed with a toast; a refusal keeps the state
+ * and holds the sentence it is shown with until the next change.
  */
 
 import { useEffect, useState } from "react";

@@ -99,6 +99,7 @@ describe("TenderFolderSection", () => {
 
     const internal = getByTestId("tender-folder-tile-internal");
     expect(internal).toHaveTextContent("Internal storage");
+    expect(internal).toHaveTextContent("This device");
     expect(internal).toHaveTextContent("Default");
     expect(internal).toHaveTextContent("~/Tender");
     expect(internal).toHaveTextContent("41.00 GB free");
@@ -184,6 +185,28 @@ describe("TenderFolderSection", () => {
     expect((tile.parentElement as HTMLElement).style.opacity).toBe("0.6");
     press(tile);
     expect(folder.chooseDrive).not.toHaveBeenCalled();
+  });
+
+  it("keeps the tile of a connected drive in use the drives list does not carry outlined and not greyed", () => {
+    const sd = "/run/media/deck/Emulation";
+    const folder = view({
+      default: false,
+      place: sd,
+      folder: `${sd}/Tender`,
+      condition: "folder_not_writable",
+      drives: [],
+      drive: { kind: "sd_card", name: "Emulation", mount_point: sd, connected: true },
+    });
+    const { getByTestId, getByText } = render(<TenderFolderSection folder={folder} />);
+
+    expect(getByText("In use: SD card · Emulation")).toBeInTheDocument();
+    expect(getByTestId("tender-folder-pill")).toHaveTextContent("Not writable");
+    const tile = getByTestId(`tender-folder-tile-${sd}`);
+    expect(tile).toHaveAttribute("data-in-use", "true");
+    expect(tile).not.toHaveAttribute("data-not-connected");
+    expect(tile).toHaveTextContent("Emulation");
+    expect(tile).not.toHaveTextContent("Not connected");
+    expect((tile.parentElement as HTMLElement).style.opacity).toBe("1");
   });
 
   it("nothing can be pressed while a change is in flight", () => {

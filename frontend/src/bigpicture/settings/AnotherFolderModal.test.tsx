@@ -51,6 +51,66 @@ describe("AnotherFolderModal", () => {
     expect(field.value).toBe("");
   });
 
+  it("labels the field and gives the example below it", () => {
+    const { field } = open(async (text) => asks(text));
+
+    expect(field.dataset["label"]).toBe("Tender puts its folder named Tender inside the place you enter.");
+    expect(field.dataset["description"]).toBe("For example ~/Games or /run/media/deck/Archive");
+  });
+
+  it("OK is disabled while a question is shown", async () => {
+    const window = open(async () => asks("/sd/Tender", { tender_parent: "/sd" }));
+    window.type("/sd/Tender");
+    expect(window.getByText("OK")).not.toBeDisabled();
+    window.ok();
+    await window.findByTestId("another-folder-question");
+
+    expect(window.getByText("OK")).toBeDisabled();
+  });
+
+  it("an answer that arrives after the text was edited is dropped, and nothing is chosen", async () => {
+    let answer: (asks: TenderPlaceAsks) => void = () => undefined;
+    const window = open(() => new Promise((resolve) => (answer = resolve)));
+    window.type("~/Games");
+    window.ok();
+
+    window.type("~/Other");
+    answer(asks("/home/deck/Games"));
+
+    await waitFor(() => expect(window.getByText("OK")).not.toBeDisabled());
+    expect(window.choose).not.toHaveBeenCalled();
+    expect(window.onAccepted).not.toHaveBeenCalled();
+    expect(window.closeModal).not.toHaveBeenCalled();
+  });
+
+  it("a question that arrives after the text was edited is not shown, so Keep as typed chooses nothing", async () => {
+    let answer: (asks: TenderPlaceAsks) => void = () => undefined;
+    const window = open(() => new Promise((resolve) => (answer = resolve)));
+    window.type("/sd/Tender");
+    window.ok();
+
+    window.type("/sd/Other");
+    answer(asks("/sd/Tender", { tender_parent: "/sd" }));
+
+    await waitFor(() => expect(window.getByText("OK")).not.toBeDisabled());
+    expect(window.queryByTestId("another-folder-question")).toBeNull();
+    expect(window.queryByText("Keep as typed")).toBeNull();
+    expect(window.choose).not.toHaveBeenCalled();
+  });
+
+  it("a refusal that arrives after the text was edited is not shown under the new text", async () => {
+    let answer: (refusal: TenderPlaceRefusal) => void = () => undefined;
+    const window = open(() => new Promise((resolve) => (answer = resolve)));
+    window.type("~/locked");
+    window.ok();
+
+    window.type("~/Games");
+    answer(REFUSED);
+
+    await waitFor(() => expect(window.getByText("OK")).not.toBeDisabled());
+    expect(window.queryByTestId("another-folder-refusal")).toBeNull();
+  });
+
   it("an accepted place closes the window and is handed on", async () => {
     const window = open(async () => asks("/home/deck/Games"));
     window.type("~/Games");

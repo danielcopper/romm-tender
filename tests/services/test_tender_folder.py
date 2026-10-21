@@ -93,6 +93,15 @@ class _Rig:
             self.mounts.add(str(path))
         return path
 
+    def read_as_sd_card(self, drive) -> None:
+        """Make the device behind *drive* read as one below an MMC host, as the Deck's card slot is."""
+        number = os.stat(drive).st_dev
+        target = self.media.parent / "sys" / "mmc_host" / "mmc0" / "mmcblk0p1"
+        target.mkdir(parents=True, exist_ok=True)
+        devices = self.media.parent / "sys-dev-block"
+        devices.mkdir(exist_ok=True)
+        (devices / f"{os.major(number)}:{os.minor(number)}").symlink_to(target)
+
     def on_drive(self, drive) -> None:
         """Point the setting at *drive* as a choice of it would have."""
         self.settings["tender_folder"] = {"place": str(drive), "mount_point": str(drive)}
@@ -397,6 +406,31 @@ class TestTheDriveInUse:
 
         assert state["drive"] == {"kind": "sd_card", "name": "Emulation", "mount_point": sd, "connected": False}
         assert state["condition"] == "drive_not_mounted"
+
+    async def test_a_connected_drive_is_named_by_its_kind_as_read_now(self, tmp_path):
+        rig = _Rig(tmp_path)
+        sd = rig.drive("Emulation")
+        rig.read_as_sd_card(sd)
+        rig.on_drive(sd)
+
+        state = await rig.service.get_tender_folder()
+
+        assert state["drive"] == {"kind": "sd_card", "name": "Emulation", "mount_point": str(sd), "connected": True}
+
+    async def test_a_connected_drive_stored_with_another_kind_is_named_by_the_kind_read_now(self, tmp_path):
+        rig = _Rig(tmp_path)
+        sd = rig.drive("Emulation")
+        rig.read_as_sd_card(sd)
+        rig.settings["tender_folder"] = {
+            "place": str(sd),
+            "mount_point": str(sd),
+            "drive_kind": "usb_drive",
+            "drive_name": "Emulation",
+        }
+
+        state = await rig.service.get_tender_folder()
+
+        assert state["drive"]["kind"] == "sd_card"
 
     async def test_a_drive_stored_without_kind_and_name_is_named_after_its_mount(self, tmp_path):
         rig = _Rig(tmp_path)

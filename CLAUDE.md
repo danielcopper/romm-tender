@@ -1111,11 +1111,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own; text between two stops of
   the same card is reached through them and is no stop of its own (an emulator source card's folder and health lines,
-  between its arrows and its switch), and so is a line a section opens with above its first stop, which the section's
-  `ScrollRegion` brings into view when focus reaches that stop (the Tender folder section's status line)** — check +
-  prompt-only — `tender/qam-focusable-row` for the syntactic slice — it passes a row with an unknown spread, any opaque
-  child, or a browser-focusable descendant (`tabIndex`, `button`), so those rows are prompt-only too; prompt-only: focus
-  order, runtime reachability, edge revelation (`ScrollRegion`'s `revealEdge`, whose decision
+  between its arrows and its switch), and so is a line above the first stop of a `ScrollRegion`, which the region brings
+  into view when focus reaches that stop (the Tender folder section's status line)** — check + prompt-only —
+  `tender/qam-focusable-row` for the syntactic slice — it passes a row with an unknown spread, any opaque child, or a
+  browser-focusable descendant (`tabIndex`, `button`), so those rows are prompt-only too; prompt-only: focus order,
+  runtime reachability, edge revelation (`ScrollRegion`'s `revealEdge`, whose decision
   `frontend/src/bigpicture/layout/ScrollRegion.test.tsx` pins), scrolling geometry and controller behaviour, and that a
   page's controls sit above its long focusable lists, not below
 - **A list-and-detail page opens on the row it was opened WITH, not on its first row** — test + prompt-only —

@@ -3,8 +3,10 @@
  * place in use, its state and its folder; one tile per place, two to a row —
  * the internal storage, marked Default, and each writable drive by its kind and
  * name — the place in use outlined; and "Another folder…". Choosing switches
- * the place and nothing else. Pure renderer: the parent owns the folder's state
- * and the changes.
+ * the place and nothing else. The parent owns the folder's state and the
+ * changes a tile makes; "Another folder…" opens its window, which checks and
+ * chooses a typed place through the backend itself and hands the parent the
+ * state it was answered with.
  *
  * The tiles and the "Another folder…" row are `Focusable` stops that draw
  * their own look rather than `DialogButton`s, whose focused state Steam paints
@@ -55,7 +57,8 @@ interface Tile {
   kind: string;
   name: string;
   folder: string;
-  freeBytes: number;
+  /** `null` where the space free is not known: a drive in use the drives list does not carry. */
+  freeBytes: number | null;
   isDefault: boolean;
   inUse: boolean;
   /** A drive in use that is not connected: greyed, "Not connected" for its free space. */
@@ -105,17 +108,20 @@ function tilesOf(state: TenderFolderState, folder: TenderFolderView): Tile[] {
     notConnected: false,
     choose: () => folder.chooseDrive(drive.mount_point),
   }));
-  const gone = driveInUse(state);
-  if (gone !== null && !state.drives.some((drive) => drive.mount_point === gone.mount_point)) {
+  // The drive in use keeps its tile where the list of writable drives does
+  // not carry it: greyed where it is not connected, and as any tile in use
+  // where it is (one mounted read-only), its state on the status line's pill.
+  const unlisted = driveInUse(state);
+  if (unlisted !== null && !state.drives.some((drive) => drive.mount_point === unlisted.mount_point)) {
     drives.push({
-      key: gone.mount_point,
-      kind: driveKind(gone),
-      name: gone.name,
+      key: unlisted.mount_point,
+      kind: driveKind(unlisted),
+      name: unlisted.name,
       folder: state.folder,
-      freeBytes: 0,
+      freeBytes: null,
       isDefault: false,
       inUse: true,
-      notConnected: true,
+      notConnected: !unlisted.connected,
       choose: () => undefined,
     });
   }
@@ -129,6 +135,7 @@ function focusLook(focused: boolean): CSSProperties {
 
 const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
   const { focused, handlers } = useFocusWithin();
+  const free = tile.notConnected ? NOT_CONNECTED : tile.freeBytes === null ? null : freeLine(tile.freeBytes);
   return (
     <Focusable
       {...handlers}
@@ -207,9 +214,7 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
         )}
         <span style={{ fontWeight: 600, fontSize: "17px" }}>{tile.name}</span>
         <Path path={tile.folder} />
-        <span style={{ fontSize: "13px", color: MUTED }}>
-          {tile.notConnected ? NOT_CONNECTED : freeLine(tile.freeBytes)}
-        </span>
+        {free !== null && <span style={{ fontSize: "13px", color: MUTED }}>{free}</span>}
       </div>
     </Focusable>
   );

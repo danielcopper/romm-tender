@@ -243,11 +243,13 @@ class TenderFolderService:
         if drive is None or place.mount_point is None:
             return None
         kind, name = drive
+        connected = self._store.is_mount(place.mount_point)
         return {
-            "kind": kind,
+            # A connected drive is named by its kind as read now, as its tile is.
+            "kind": self._store.drive_kind(place.mount_point) if connected else kind,
             "name": name,
             "mount_point": place.mount_point,
-            "connected": self._store.is_mount(place.mount_point),
+            "connected": connected,
         }
 
     def _check_io(self, text: str) -> dict[str, Any]:
