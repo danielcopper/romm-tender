@@ -636,8 +636,7 @@ class RommHttpAdapter:
         byte count, not the whole file (the full size comes from ``Content-Range``).
         """
         if total is None:
-            raw_total = resp.headers.get("Content-Length")
-            total = int(raw_total) if raw_total else 0
+            total = RommHttpAdapter._content_length(resp.headers)
         f = _on_device(open, dest_path, mode)
         try:
             while True:
@@ -667,6 +666,15 @@ class RommHttpAdapter:
         # close, so a full disk shows here rather than in a write.
         _on_device(f.close)
         return total, downloaded
+
+    @staticmethod
+    def _content_length(headers) -> int:
+        """The announced ``Content-Length``, or 0 where there is none or it is not a number."""
+        raw = headers.get("Content-Length")
+        try:
+            return int(raw) if raw else 0
+        except ValueError:
+            return 0
 
     @staticmethod
     def _validate_download(total: int, downloaded: int) -> None:
@@ -916,8 +924,7 @@ class RommHttpAdapter:
                 # short/corrupt file.
                 return ("wb", 0, parsed[1])
         # 200 (server ignored Range — safe full re-download) → restart from byte 0.
-        raw_total = resp.headers.get("Content-Length")
-        return ("wb", 0, int(raw_total) if raw_total else 0)
+        return ("wb", 0, self._content_length(resp.headers))
 
     def json_request(self, path: str, data, method: str = "POST"):
         """Send a JSON request (POST/PUT) to RomM API, return parsed response."""

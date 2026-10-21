@@ -2642,17 +2642,19 @@ class TestNoCredentialReachesAnErrorOrALog:
 
         self._assert_no_sentinel(err, caplog, log_debug)
 
-    @pytest.mark.parametrize("name", _REQUEST_METHODS)
+    @pytest.mark.parametrize("name", [name for name in _REQUEST_METHODS if name != "download_external"])
     def test_a_scheme_less_address_with_a_password_carries_none(self, secrets_http, caplog, tmp_path, name):
-        """``urllib.request.Request`` itself refuses an address without a scheme, naming all of it."""
+        """``urllib.request.Request`` itself refuses an address without a scheme, naming all of it.
+
+        ``download_external`` is left out: it fetches a URL of its own, never the RomM URL.
+        """
         adapter, settings, log_debug = secrets_http
         settings["romm_url"] = f"//user:{_ADDRESS_PASSWORD}@romm.local"
 
         with patch("urllib.request.urlopen") as urlopen:
             err = self._failure(name, adapter, tmp_path)
 
-        if name != "download_external":
-            urlopen.assert_not_called()
+        urlopen.assert_not_called()
         self._assert_no_sentinel(err, caplog, log_debug)
 
     @pytest.mark.parametrize("name", _REQUEST_METHODS)
@@ -2724,3 +2726,25 @@ class TestAnAnswerThatCannotBeReadKeepsItsText:
         err = RommHttpAdapter._translate_unwrapped(exc, "/api", "GET")
 
         assert str(err) == f"Unexpected error: {type(exc).__name__}"
+
+
+class TestAContentLengthThatIsNotANumber:
+    """An announced length that does not parse counts as no length, as a missing one does."""
+
+    @pytest.mark.parametrize(
+        "fetch",
+        [
+            pytest.param(lambda adapter, dest: adapter.download("/api/roms/1/content/x.zip", dest), id="download"),
+            pytest.param(
+                lambda adapter, dest: adapter.download_conditional("/assets/cover.png", dest), id="download_conditional"
+            ),
+        ],
+    )
+    def test_the_body_is_still_written(self, romm_http, tmp_path, fetch):
+        _configure_server(romm_http.settings)
+        dest = tmp_path / "out.bin"
+
+        with patch("urllib.request.urlopen", return_value=_make_resp(200, {"Content-Length": "abc"}, b"BYTES")):
+            fetch(romm_http.adapter, str(dest))
+
+        assert dest.read_bytes() == b"BYTES"
