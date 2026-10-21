@@ -563,8 +563,8 @@ class SessionPlaytimeRecorder(Protocol):
 class SessionPostExitSync(Protocol):
     """Post-exit save sync consumed by SessionLifecycleService.
 
-    The composition root satisfies this with ``SaveService``'s
-    ``post_exit_sync``. Returned shape carries ``success`` / ``synced`` /
+    The composition root satisfies this with ``SaveService``.
+    ``post_exit_sync``'s returned shape carries ``success`` / ``synced`` /
     ``uploaded`` / ``downloaded`` / ``conflicts`` / ``message``. A refusal is
     raised as ``Refused``, with an ``offline`` detail when the server could
     not be reached, and a RomM error propagates. ``syncs_after_exit`` answers

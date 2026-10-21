@@ -1133,6 +1133,21 @@ class TestASyncSwitchedOffIsNeverToasted:
         assert result.total_seconds == 3600
         assert migration.refresh_calls == 1
 
+    def test_the_skip_is_logged(self, event_loop, logger, caplog):
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=FakePostExitSync(syncs_after_exit=False),
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            event_loop.run_until_complete(service.finalize(99))
+            event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert "post-exit sync skipped for rom_id=99: switched off in settings" in caplog.text
+
 
 class TestTheUpdateIsCheckedBeforeTheMigration:
     def test_with_both_holding_the_toast_is_the_updates(self, event_loop, logger):

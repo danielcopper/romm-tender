@@ -289,7 +289,7 @@ class SyncEngine:
         return save_sync_enabled(self._settings)
 
     def syncs_after_exit(self) -> bool:
-        """Whether a game's exit is followed by a sync: save sync and sync after exit both switched on."""
+        """Whether the settings let a game's exit be followed by a sync."""
         return self.is_save_sync_enabled() and sync_after_exit(self._settings)
 
     def get_device_id(self) -> str | None:

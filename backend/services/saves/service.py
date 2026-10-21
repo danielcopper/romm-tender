@@ -298,7 +298,7 @@ class SaveService:
         return await self._sync_engine.post_exit_sync(rom_id)
 
     def syncs_after_exit(self) -> bool:
-        """Whether a game's exit is followed by a sync: save sync and sync after exit both switched on."""
+        """``SyncEngine.syncs_after_exit``."""
         return self._sync_engine.syncs_after_exit()
 
     async def sync_rom_saves(self, rom_id: int) -> dict[str, Any]:

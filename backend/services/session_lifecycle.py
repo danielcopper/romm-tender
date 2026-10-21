@@ -55,9 +55,10 @@ class SessionFinalizeSyncResult:
     frontend renders the directional completion toast from via its shared
     ``saveSyncToastBody`` helper — the single source of that copy.
     ``failure_toast`` is the backend-owned body for the non-directional
-    outcomes (offline, classified failure, generic failure); ``None``
-    means no failure toast — including the #239 content-dir benign skip,
-    whose suppression stays a backend decision. The directional and
+    outcomes (offline, classified failure, generic failure, a sync an update
+    or a pending migration held off); ``None`` means no failure toast —
+    including the #239 content-dir benign skip, whose suppression stays a
+    backend decision, and a sync the settings switched off. The directional and
     failure toasts are mutually exclusive by construction: a successful
     run renders directional from the counts and carries
     ``failure_toast=None``. ``conflicts_toast`` is the additive
@@ -180,20 +181,6 @@ def _benign_skip() -> SessionFinalizeSyncResult:
     )
 
 
-def _switched_off() -> SessionFinalizeSyncResult:
-    """The verdict of a post-exit sync the settings switched off: success-shaped, nothing moved, no toast."""
-    return SessionFinalizeSyncResult(
-        offline=False,
-        success=True,
-        synced=0,
-        uploaded=0,
-        downloaded=0,
-        conflicts=[],
-        failure_toast=None,
-        conflicts_toast=None,
-    )
-
-
 def _render_conflicts_toast(conflicts: list[dict[str, Any]]) -> str | None:
     """Render the additive "N save conflict(s) need resolution" body.
 
@@ -249,8 +236,8 @@ class SessionLifecycleService:
             carries the per-direction transfer counts (the frontend
             renders the directional toast from them), the backend-owned
             ``failure_toast`` / ``conflicts_toast`` strings, and the raw
-            offline / success flags the frontend still needs for the
-            ``romm_data_changed`` event dispatch. ``migration`` carries
+            offline / success flags, of which ``success`` decides whether
+            the frontend renders the directional toast. ``migration`` carries
             the RetroDECK home migration's status payload.
         """
         async with self._rules.hold("finalize_game_session", prune=True):
@@ -301,6 +288,20 @@ class SessionLifecycleService:
         except Exception as e:
             self._logger.warning(f"SessionLifecycle achievement sync failed for rom_id={rom_id}: {e}")
 
+    def _switched_off(self, rom_id: int) -> SessionFinalizeSyncResult:
+        """The verdict of a post-exit sync the settings switched off: the shape the sync answers for save sync off."""
+        self._logger.info(f"SessionLifecycle post-exit sync skipped for rom_id={rom_id}: switched off in settings")
+        return SessionFinalizeSyncResult(
+            offline=False,
+            success=True,
+            synced=0,
+            uploaded=0,
+            downloaded=0,
+            conflicts=[],
+            failure_toast=None,
+            conflicts_toast=None,
+        )
+
     def _skipped_sync(self, rom_id: int, why: str, toast: str) -> SessionFinalizeSyncResult:
         """The failed-sync verdict of a post-exit sync that did not run, logged with *why* and toasted as *toast*."""
         self._logger.info(f"SessionLifecycle post-exit sync skipped for rom_id={rom_id}: {why}")
@@ -339,21 +340,17 @@ class SessionLifecycleService:
         Carries the per-direction transfer counts (from which the
         frontend renders the directional success toast) plus the
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
-        Where save sync or sync after exit is switched off, nothing is checked
-        and nothing synced, and the verdict is the success-shaped one with no
-        toast, as the sync itself answers then. Otherwise, while an update is
-        being installed or a RetroDECK migration is pending the post-exit sync
-        does not run, the log says which held it off, and the verdict is the
-        failed-sync one, toasted with what held it off: the update's own body,
-        or the sentence the migration rule's refusals carry.
-        The ``finalize_game_session`` use case checks neither rule, so this is
-        the first check either meets on the way to that sync. A refusal the
-        sync raises is toasted from its reason and message — as offline when
-        its ``offline`` detail says so — or not shown at all for a benign skip;
-        a RomM error it raises is toasted with ``classify_error``'s message.
+        A sync the settings switched off is answered success-shaped and
+        untoasted; one an update or a pending migration holds off, as failed
+        and toasted with what held it off. The ``finalize_game_session`` use
+        case checks neither rule, so this is the first check either meets on
+        the way to that sync. A refusal the sync raises is toasted from its
+        reason and message — as offline when its ``offline`` detail says so —
+        or not shown at all for a benign skip; a RomM error it raises is
+        toasted with ``classify_error``'s message.
         """
         if not self._post_exit_sync.syncs_after_exit():
-            return _switched_off()
+            return self._switched_off(rom_id)
         if self._update_in_progress():
             return self._skipped_sync(rom_id, "an update is being installed", _TOAST_BODY_UPDATING)
         if self._migration_reader.is_retrodeck_migration_pending():

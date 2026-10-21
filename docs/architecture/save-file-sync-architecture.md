@@ -1558,7 +1558,7 @@ dialog — except the conflict dialog's `resolve_sync_conflict`, which has none 
 
 ### Post-exit sync
 
-Triggered automatically when a game stops (if `sync_after_exit` is enabled).
+Triggered automatically when a game stops (if save sync and `sync_after_exit` are both on).
 
 1. `RegisterForAppLifetimeNotifications` fires with `bRunning: false`. The notification arrives for **every** app Steam
    tracks, so `handleGameStop(unAppID)` finalizes only when the stopping app is the one that opened the active session —
@@ -1580,10 +1580,10 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
 5. Toast notification shown on success or conflict — the per-direction completion toast above (uploaded / downloaded /
    both) on a successful transfer, rendered frontend-side by `sessionManager` from the `uploaded` / `downloaded` counts
    on the `SessionFinalizeSyncResult` payload via `saveSyncToastBody` (#1481). Offline / failure keeps its backend-owned
-   body on `SessionFinalizeSyncResult.failure_toast`. An update being installed and a pending RetroDECK migration each
-   hold the sync off before it starts, the update checked first, with a body of their own there — the migration's is
-   `MIGRATION_MESSAGE`, the sentence the migration rule's refusals carry. Neither is checked, and nothing is toasted,
-   when save sync or `sync_after_exit` is switched off.
+   body on `SessionFinalizeSyncResult.failure_toast`. While an update is being installed or a RetroDECK migration is
+   pending the sync does not start, and `failure_toast` says which held it off: the update is checked first and has a
+   body of its own, the migration answers with `MIGRATION_MESSAGE`. With save sync or `sync_after_exit` switched off
+   neither is checked, and nothing is toasted.
 
 The session manager handles Steam's start and stop notifications one after another on a single chain, so a backend call
 there that never answers would hold every later notification — including the stop that takes Tender's Play button off
