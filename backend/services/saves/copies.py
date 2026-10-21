@@ -161,18 +161,20 @@ class SaveCopyService:
 
         1. Locate the chosen save in the (unfiltered) server list; a missing id
            is ``version_deleted``.
-        2. Make the target the ROM's active/confirmed slot
+        2. Download the chosen save's content onto the canonical local file
+           (quarantines the current local file first, #965). Where this device
+           cannot write it, the copy is ``copy_failed``; a RomM error raises on.
+           Either way the active slot is the one the copy started from.
+        3. Make the target the ROM's active/confirmed slot
            (:meth:`RomSaveSyncState.confirm_slot`) — the upload resolves its slot
            purely from ``active_slot`` (``_resolve_upload_slot``), so this must
            precede the POST for the copy to land in the target.
-        3. Download the chosen save's content onto the canonical local file
-           (quarantines the current local file first, #965). Where this device
-           cannot write it, the copy is ``copy_failed``.
         4. POST that content into the now-active target slot
            (``server_save=None`` → a new save, ``overwrite=false`` → the 409
            backstop guards a busy target). A 409 is ``target_slot_busy`` (the
            target has newer changes from another device — resolve it first); any
-           other upload error is ``copy_failed``.
+           other upload error is ``upload_failed``: the copy is complete on this
+           device, the target stays active, and the next sync uploads it.
 
         The source save is never touched. Mutates *save_state* in memory; the
         caller owns the write UoW.
@@ -187,11 +189,6 @@ class SaveCopyService:
         save_names = info["save_answer"].synced_names
         canonical = local_save_target(target_save, rom_name, known_names=save_names)
         local_path = os.path.join(saves_dir, canonical)
-
-        # Make the target current BEFORE the upload: do_upload_save resolves the
-        # upload slot from save_state.active_slot with no per-call override, so
-        # the POST only lands in the target once it is the confirmed active slot.
-        save_state.confirm_slot(target_slot)
 
         # Bring the chosen save's content down onto the canonical local file. The
         # existing local file (the current slot's save) is quarantined into
@@ -208,6 +205,10 @@ class SaveCopyService:
                 e,
             )
             return {"status": "copy_failed", "message": with_system_text("it could not be written on this device", e)}
+
+        # Never before the download: the caller persists this state however the
+        # copy ends, so a download that fails must leave the active slot as it was.
+        save_state.confirm_slot(target_slot)
 
         try:
             self._sync_engine.do_upload_save(
@@ -242,7 +243,7 @@ class SaveCopyService:
                 save_id,
                 e,
             )
-            return {"status": "copy_failed", "message": str(e)}
+            return {"status": "upload_failed", "message": str(e)}
 
         return {"status": "ok"}
 
@@ -286,7 +287,8 @@ class SaveCopyService:
         ``ok | already_present{existing_id} | not_configured | invalid_slot_name |
         rom_not_installed | version_deleted | unsupported{reason?} |
         server_unreachable{message} | not_found{message} | conflict_blocked{conflicts} |
-        preflight_failed{errors} | target_slot_busy{message} | copy_failed{message}``.
+        preflight_failed{errors} | target_slot_busy{message} | copy_failed{message} |
+        upload_failed{message}``.
         """
         rom_id = int(rom_id)
         save_id = int(save_id)

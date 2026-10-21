@@ -1,8 +1,9 @@
 /**
  * Hook driving the per-save "Copy to slot…" flow. Returns an opener that shows
  * the CopyToSlotModal for one source save, runs `copySaveToSlot`, and routes
- * every discriminated status to the right feedback: `ok` toasts and dispatches
- * `romm_data_changed` (so the parent re-fetches source AND target views);
+ * every discriminated status to the right feedback: `ok` and `upload_failed`
+ * toast and dispatch `romm_data_changed` (so the parent re-fetches source AND
+ * target views);
  * `conflict_blocked` opens the standard sync-conflict modal (as
  * VersionHistoryPanel does); `target_slot_busy` and each refusal toast.
  */
@@ -31,8 +32,9 @@ async function handleResult(
     return;
   }
   showToast(feedback.message);
-  // Only a copy refreshes the slot views: `already_present` copied nothing.
-  if (!isEndpointFailure(result) && result.status === "ok") {
+  // Only a copy refreshes the slot views: `already_present` copied nothing, and
+  // `upload_failed` copied onto this device and made the target slot active.
+  if (!isEndpointFailure(result) && (result.status === "ok" || result.status === "upload_failed")) {
     announceSaveSync(romId);
   }
 }

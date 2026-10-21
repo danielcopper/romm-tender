@@ -93,6 +93,17 @@ describe("useCopyToSlot", () => {
     expect(dataChanged).toHaveBeenCalled();
   });
 
+  it("upload_failed: toasts that the save is copied on this device and refreshes the views", async () => {
+    await runCopy({ status: "upload_failed", message: "server 500" }, { target: "promoted" });
+
+    expect(toaster.toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "Save copied to slot 'promoted' on this device. The upload finishes on the next sync.",
+      }),
+    );
+    expect(dataChanged).toHaveBeenCalled();
+  });
+
   it("already_present: toasts the existing save location and does NOT refresh", async () => {
     await runCopy({ status: "already_present", existing_id: 55 }, { target: "promoted" });
 

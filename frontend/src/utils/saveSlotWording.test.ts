@@ -147,6 +147,13 @@ describe("copyToSlotFeedback", () => {
       message: "Enter a valid slot name.",
     });
   });
+
+  it("formats upload_failed as a copy made on this device whose upload finishes on the next sync", () => {
+    expect(copyToSlotFeedback({ status: "upload_failed", message: "server 500" }, "speedrun")).toEqual({
+      kind: "toast",
+      message: "Save copied to slot 'speedrun' on this device. The upload finishes on the next sync.",
+    });
+  });
 });
 
 describe("rollbackFeedback", () => {

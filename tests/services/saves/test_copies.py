@@ -13,7 +13,7 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.save_answer import save_shape_message, unestablished_answer
-from lib.errors import DeviceWriteError, RommNotFoundError, RommRateLimitedError
+from lib.errors import DeviceWriteError, RommNotFoundError, RommRateLimitedError, RommTimeoutError
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -512,6 +512,67 @@ class TestCopySaveToSlotRefusals:
             "status": "copy_failed",
             "message": "it could not be written on this device (No space left on device)",
         }
+        assert not any(call[0] == "upload_save" for call in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_copy_whose_download_breaks_off_on_romm_keeps_the_previous_slot(self, tmp_path):
+        svc, fake = self._a_copy_from_a_legacy_save(tmp_path)
+        failure = RommTimeoutError("read timed out")
+        fake.break_download_on(10, failure)
+
+        with pytest.raises(RommTimeoutError) as caught:
+            await svc.copy_save_to_slot(42, 10, TARGET)
+
+        assert caught.value is failure
+        self._assert_the_previous_slot_is_kept(svc, fake, tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_a_copy_whose_download_this_device_cannot_write_keeps_the_previous_slot(self, tmp_path):
+        svc, fake = self._a_copy_from_a_legacy_save(tmp_path)
+        fake.break_download_on(10, DeviceWriteError(28, "No space left on device"))
+
+        result = await svc.copy_save_to_slot(42, 10, TARGET)
+
+        assert result["status"] == "copy_failed"
+        self._assert_the_previous_slot_is_kept(svc, fake, tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_a_copy_whose_upload_fails_after_the_download_is_upload_failed(self, tmp_path, monkeypatch):
+        svc, fake = self._a_copy_from_a_legacy_save(tmp_path)
+        fake.set_server_save_content(10, b"legacy-save-bytes")
+
+        def failing_upload(*_args, **_kwargs):
+            raise RuntimeError("server 500")
+
+        monkeypatch.setattr(fake, "upload_save", failing_upload)
+
+        result = await svc.copy_save_to_slot(42, 10, TARGET)
+
+        assert result == {"status": "upload_failed", "message": "server 500"}
+        state = _require_save_state(svc, 42)
+        assert (state.active_slot, state.slot_confirmed) == (TARGET, True)
+        assert TARGET in state.slots
+        assert (tmp_path / "saves" / "gba" / "pokemon.srm").read_bytes() == b"legacy-save-bytes"
+
+    @staticmethod
+    def _a_copy_from_a_legacy_save(tmp_path):
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path, content=b"current-slot-bytes")
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        _setup_configured(svc, tmp_path, active_slot="autosave", tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = _tracked_save(100, slot="autosave")
+        fake.saves[10] = _server_save(save_id=10, rom_id=42, slot=None, updated_at="2026-02-01T10:00:00Z")
+        return svc, fake
+
+    @staticmethod
+    def _assert_the_previous_slot_is_kept(svc, fake, tmp_path) -> None:
+        state = _require_save_state(svc, 42)
+        assert (state.active_slot, state.slot_confirmed) == ("autosave", True)
+        assert TARGET not in state.slots
+        assert state.files["pokemon.srm"].tracked_save_id == 100
+        saves_dir = tmp_path / "saves" / "gba"
+        assert (saves_dir / "pokemon.srm").read_bytes() == b"current-slot-bytes"
+        assert not (saves_dir / "pokemon.srm.tmp").exists()
         assert not any(call[0] == "upload_save" for call in fake.call_log)
 
     @pytest.mark.asyncio
