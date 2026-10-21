@@ -826,8 +826,8 @@ class TestApplySgdbGameId:
             assert _cached_path(sgdb_artwork_cache, 42, asset_type) not in sgdb_artwork_cache.files
 
     @pytest.mark.asyncio
-    async def test_persists_nothing(self, steamgrid, uow, sgdb_artwork_cache, fake_steamgrid_db_api):
-        """A manual pick never writes the ROM row's sgdb_id."""
+    async def test_stores_the_pick_beside_romms_id(self, steamgrid, uow, sgdb_artwork_cache, fake_steamgrid_db_api):
+        """A manual pick is stored as the user's choice and never written as RomM's sgdb_id."""
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
         steamgrid.service._loop = asyncio.get_running_loop()
 
@@ -837,9 +837,9 @@ class TestApplySgdbGameId:
 
         await steamgrid.service.apply_sgdb_game_id(42, 8888)
 
-        # No sgdb_id stored on the ROM row, no extra write.
         with uow:
-            assert uow.roms.get(42).sgdb_id is None
+            rom = uow.roms.get(42)
+        assert (rom.sgdb_id, rom.chosen_sgdb_id) == (None, 8888)
         assert uow.roms.save_count == save_count_before
 
     @pytest.mark.asyncio
@@ -891,18 +891,9 @@ class TestApplySgdbGameId:
         assert not any("_logo" in path for path in sgdb_artwork_cache.files)
 
     @pytest.mark.asyncio
-    async def test_pick_does_not_persist_so_next_resolution_reopens_picker(
+    async def test_the_next_resolution_resolves_to_the_pick_without_asking_again(
         self, steamgrid, uow, sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api
     ):
-        """Regression for #755: a manual pick leaves a later refresh on ``needs_pick``.
-
-        Because the pick persists no sgdb_id, a subsequent
-        ``get_sgdb_resolution`` for the same rom — RomM still silent —
-        falls through to the name-search picker instead of
-        resolving the (no-longer-stored) manual id. Pre-fix the pick
-        stored the id and this returned ``resolved``, dead-ending the
-        re-pick.
-        """
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
         steamgrid.service._loop = asyncio.get_running_loop()
 
@@ -911,13 +902,48 @@ class TestApplySgdbGameId:
 
         await steamgrid.service.apply_sgdb_game_id(42, 8888)
 
-        # RomM still has no sgdb_id; name search yields nothing.
         fake_romm_api.roms[42] = {"id": 42, "name": "Obscure Port"}
-        fake_steamgrid_db_api.seed_raw_response("/search/autocomplete/Obscure%20Port", {"success": True, "data": []})
+        requested = len(fake_steamgrid_db_api.requested_paths)
 
         result = await steamgrid.service.get_sgdb_resolution(42)
 
-        assert result == {"decision": "needs_pick", "candidates": []}
+        assert result == {"decision": "resolved", "sgdb_id": 8888}
+        assert fake_steamgrid_db_api.requested_paths[requested:] == []
+
+    @pytest.mark.asyncio
+    async def test_an_id_romm_supplies_later_wins_over_the_pick(
+        self, steamgrid, uow, sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        steamgrid.service._loop = asyncio.get_running_loop()
+        _seed_rom(uow, 42, app_id=1)
+        _seed_all_artwork(fake_steamgrid_db_api, 8888)
+        await steamgrid.service.apply_sgdb_game_id(42, 8888)
+
+        fake_romm_api.roms[42] = {"id": 42, "sgdb_id": 7777}
+        result = await steamgrid.service.get_sgdb_resolution(42)
+
+        assert result == {"decision": "resolved", "sgdb_id": 7777}
+        with uow:
+            rom = uow.roms.get(42)
+        assert (rom.sgdb_id, rom.chosen_sgdb_id) == (7777, 8888)
+
+    @pytest.mark.asyncio
+    async def test_romm_naming_the_picked_game_is_still_stored_as_romms(
+        self, steamgrid, uow, sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        steamgrid.service._loop = asyncio.get_running_loop()
+        _seed_rom(uow, 42, app_id=1)
+        _seed_all_artwork(fake_steamgrid_db_api, 8888)
+        await steamgrid.service.apply_sgdb_game_id(42, 8888)
+
+        fake_romm_api.roms[42] = {"id": 42, "sgdb_id": 8888}
+        result = await steamgrid.service.get_sgdb_resolution(42)
+
+        assert result == {"decision": "resolved", "sgdb_id": 8888}
+        with uow:
+            assert uow.roms.get(42).sgdb_id == 8888
 
 
 class TestIconSupport:
@@ -2057,6 +2083,71 @@ class TestTheGamePagesIconSlot:
         assert (result["status"], result["image_id"]) == ("image", 12)
 
 
+def _seed_chosen_game(uow, rom_id: int, *, romm_sgdb_id: int | None = None, chosen: int = 8888) -> None:
+    """A bound ROM *rom_id* the user chose SteamGridDB game *chosen* for, beside RomM's *romm_sgdb_id*."""
+    _seed_rom(uow, rom_id, app_id=_APP_ID, sgdb_id=romm_sgdb_id)
+    with uow:
+        uow.roms.set_chosen_sgdb_id(rom_id, chosen)
+
+
+class TestAChosenGameIsTheRomsSteamGridDbGame:
+    """Without RomM's id, every artwork reader takes the game the user chose; with it, RomM's."""
+
+    @pytest.mark.asyncio
+    async def test_the_game_pages_fetch_downloads_from_the_chosen_game(
+        self, steamgrid, uow, home, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_chosen_game(uow, 42)
+        _grid_dir(home)
+        fake_steamgrid_db_api.seed_raw_response(
+            "/logos/game/8888?types=static",
+            {"success": True, "data": [{"id": 5, "url": "https://cdn.example/5.png", "width": 800}]},
+        )
+        fake_steamgrid_db_api.seed_image_bytes("https://cdn.example/5.png", b"logo 5")
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "logo")
+
+        await steamgrid.prune_conflicts.release_lease(answer.pop("prune_lease_token"))
+        assert (answer["status"], answer["image_id"], answer["sgdb_id"]) == ("image", 5, 8888)
+
+    @pytest.mark.asyncio
+    async def test_romms_id_wins_where_both_exist(self, steamgrid, uow, home, fake_steamgrid_db_api):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_chosen_game(uow, 42, romm_sgdb_id=9999)
+        _grid_dir(home)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300))
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "logo")
+
+        await steamgrid.prune_conflicts.release_lease(answer.pop("prune_lease_token"))
+        assert answer["sgdb_id"] == 9999
+        assert [path.split("?")[0] for path in fake_steamgrid_db_api.requested_paths] == ["/logos/game/9999"]
+
+    def test_the_job_fetches_from_the_chosen_game_and_records_under_it(self, steamgrid, uow, fake_steamgrid_db_api):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_chosen_game(uow, 42)
+        fake_steamgrid_db_api.seed_raw_response("/icons/game/8888", {"success": True, "data": []})
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.ICON) is SlotAnswer.NONE
+        assert fake_steamgrid_db_api.requested_paths == ["/icons/game/8888"]
+        assert _outcome(uow, ArtworkSlot.ICON) == ArtworkSlotOutcome.record_none(
+            rom_id=42, slot=ArtworkSlot.ICON, sgdb_id=8888, recorded_at=steamgrid.clock.time()
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_refused_pick_stores_no_choice(self, steamgrid, uow, sgdb_artwork_cache, fake_steamgrid_db_api):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_rom(uow, 42, app_id=_APP_ID)
+        fake_steamgrid_db_api.request_side_effect = SgdbRateLimitedError("Too Many Requests")
+
+        with pytest.raises(Refused):
+            await steamgrid.service.apply_sgdb_game_id(42, 8888)
+
+        with uow:
+            assert uow.roms.get(42).chosen_sgdb_id is None
+
+
 class TestAPickWithoutAStoredId:
     """A ROM with no SteamGridDB id stored: the per-slot fetch serves what a pick put into the cache."""
 
@@ -2094,7 +2185,7 @@ class TestAPickWithoutAStoredId:
         answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "grid")
 
         await steamgrid.prune_conflicts.release_lease(answer.pop("prune_lease_token"))
-        assert (answer["status"], answer["image_id"], answer["sgdb_id"]) == ("image", _PICKED_IMAGE_IDS["grid"], None)
+        assert (answer["status"], answer["image_id"], answer["sgdb_id"]) == ("image", _PICKED_IMAGE_IDS["grid"], 7777)
         assert base64.b64decode(answer["base64"]) == b"grid bytes"
         assert len(fake_steamgrid_db_api.requested_paths) == requested
 

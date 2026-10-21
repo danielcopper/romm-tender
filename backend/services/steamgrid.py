@@ -28,6 +28,7 @@ from domain.sgdb_artwork import (
     cached_slot_of,
     choose_candidate,
     classify_resolution,
+    effective_sgdb_id,
     first_grid_url,
     parse_autocomplete_results,
     sgdb_endpoint_path,
@@ -119,9 +120,9 @@ class SteamGridServiceConfig:
     Holds the Protocol-typed adapters (``sgdb_api``, ``romm_api``,
     ``steam_config``, ``sgdb_artwork_cache``), the live settings dict,
     runtime infrastructure, the ``settings.json`` persister, the SQLite
-    Unit-of-Work factory (a resolved ``sgdb_id`` is persisted onto the
-    ``roms`` aggregate via the UoW), the pending-sync read seam, the
-    debug-logger seam SteamGridService needs at construction time, the
+    Unit-of-Work factory (a resolved ``sgdb_id`` and the game the user chose
+    are persisted onto the ``roms`` aggregate via the UoW), the pending-sync
+    read seam, the debug-logger seam SteamGridService needs at construction time, the
     ``ConflictRules`` the artwork, icon, resolution and game-id use cases check
     at their entry, and the artwork ones take the ``sgdb_artwork`` lease through,
     the downscale every icon passes through before it is written, and the clock
@@ -171,11 +172,12 @@ class SteamGridService:
         # save and the artwork job's write take turns under.
         self._icon_generations: dict[int, int] = {}
         self._icon_locks: dict[int, asyncio.Lock] = {}
-        # Per ROM and asset type, the names in the artwork cache: listed once, then kept by this service's own downloads
-        # and removals, so a lookup does not list the whole cache. Lookups run
-        # on executor threads and a service takes no lock, so each entry is
-        # replaced rather than changed: a reader holds a frozen snapshot. A note
-        # two threads race to lose costs one download more, nothing else.
+        # Per ROM and asset type, the names in the artwork cache: listed once,
+        # then kept by this service's own downloads and removals, so a lookup
+        # does not list the whole cache. Lookups run on executor threads and a
+        # service takes no lock, so each entry is replaced rather than changed:
+        # a reader holds a frozen snapshot. A note two threads race to lose
+        # costs one download more, nothing else.
         self._slot_cache_names: dict[tuple[int, str], frozenset[str]] | None = None
 
     # -- artwork download --------------------------------------------------
@@ -300,21 +302,28 @@ class SteamGridService:
             return None
 
     def _resolve_sgdb_id_state_only(self, rom_id):
-        """Resolve a SGDB game ID from local state only — no network.
+        """Resolve the SGDB game *rom_id*'s artwork comes from, from local state only — no network.
 
-        Checks the persisted ROM row first, then the in-memory
-        pending-sync map. Returns ``None`` when neither carries a
-        ``sgdb_id``. RomM re-reads and the name search are left to the
-        explicit ``get_sgdb_resolution`` user action.
+        RomM's id where :meth:`_sgdb_ids_state_only` finds one, else the game
+        the user chose (``domain.sgdb_artwork.effective_sgdb_id``); ``None``
+        when there is neither. RomM re-reads and the name search are left to
+        the explicit ``get_sgdb_resolution`` user action.
+        """
+        return effective_sgdb_id(*self._sgdb_ids_state_only(rom_id))
+
+    def _sgdb_ids_state_only(self, rom_id) -> tuple[int | None, int | None]:
+        """RomM's SGDB id for *rom_id* and the one the user chose, from local state only.
+
+        RomM's comes from the persisted ROM row first, then the in-memory
+        pending-sync map; the user's from the ROM row.
         """
         rom_id = int(rom_id)
         with self._uow_factory() as uow:
             rom = uow.roms.get(rom_id)
-        sgdb_id = rom.sgdb_id if rom is not None else None
-        if not sgdb_id:
-            pending = self._get_pending_sync().get(rom_id, {})
-            sgdb_id = pending.get("sgdb_id")
-        return sgdb_id
+        romm_id = rom.sgdb_id if rom is not None else None
+        if not romm_id:
+            romm_id = self._get_pending_sync().get(rom_id, {}).get("sgdb_id")
+        return romm_id or None, rom.chosen_sgdb_id if rom is not None else None
 
     async def _fetch_sgdb_id_from_romm(self, rom_id):
         """Fetch ``(sgdb_id, rom_data)`` from RomM without persisting.
@@ -351,6 +360,16 @@ class SteamGridService:
             rom.assign_sgdb_id(int(sgdb_id))
             uow.roms.save(rom)
 
+    def _persist_chosen_sgdb_id(self, rom_id: int, sgdb_id: int) -> None:
+        """Store the SGDB game the user chose for *rom_id*; a ROM with no ``roms`` row has nothing to store it on."""
+        with self._uow_factory() as uow:
+            rom = uow.roms.get(rom_id)
+            if rom is None:
+                self._logger.warning(f"Cannot store the chosen SteamGridDB game for unsynced rom_id={rom_id}")
+                return
+            rom.choose_sgdb_game(sgdb_id)
+            uow.roms.set_chosen_sgdb_id(rom_id, rom.chosen_sgdb_id)
+
     def _forget_slot_outcomes(self, rom_id: int) -> None:
         with self._uow_factory() as uow:
             uow.artwork_slot_outcomes.delete_for_rom(rom_id)
@@ -377,14 +396,16 @@ class SteamGridService:
         The single explicit user action that may re-read RomM and offer the
         name search. Deletes the ROM's recorded artwork slot outcomes before
         it resolves: an explicit request asks SteamGridDB again. RomM's
-        ``sgdb_id`` always wins when present. Returns one of:
+        ``sgdb_id`` always wins when present, then the game the user chose.
+        Returns one of:
 
         - ``{"decision": "no_api_key"}`` — no key configured.
         - ``{"decision": "resolved", "sgdb_id": int}`` — a winning id was
           found (and persisted when it came from RomM).
         - ``{"decision": "needs_pick", "candidates": [...]}`` — no id is
-          stored or pending and RomM has none; offer a manual name-search
-          picker, with no candidates when the name search fails.
+          stored or pending, RomM has none and the user chose none; offer a
+          manual name-search picker, with no candidates when the name search
+          fails.
 
         Refuses with ``auth_failed`` when SteamGridDB refuses the key or no
         header can carry it, and ``rate_limited`` when it answers the name
@@ -401,12 +422,13 @@ class SteamGridService:
             return {"decision": "no_api_key"}
         _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
 
-        state_id = self._resolve_sgdb_id_state_only(rom_id)
+        stored_id, chosen_id = self._sgdb_ids_state_only(rom_id)
+        state_id = effective_sgdb_id(stored_id, chosen_id)
         romm_id, rom_data = await self._fetch_sgdb_id_from_romm(rom_id)
 
         decision = classify_resolution(state_id, romm_id)
         if decision == "use_romm" and romm_id is not None:
-            if romm_id != state_id:
+            if romm_id != stored_id:
                 self._persist_sgdb_id(rom_id_str, romm_id)
             return {"decision": "resolved", "sgdb_id": int(romm_id)}
         if decision == "use_state" and state_id is not None:
@@ -458,22 +480,19 @@ class SteamGridService:
         return {"success": True, "games": games}
 
     async def apply_sgdb_game_id(self, rom_id, sgdb_id):
-        """Paint a manually-picked game's artwork into *rom_id*'s cache.
+        """Store *sgdb_id* as the SteamGridDB game the user chose for *rom_id*, and cache its artwork.
 
-        A manual pick only paints pixels — it downloads the chosen
-        game's four asset types into the rom's artwork cache (which the
-        cache-first ``get_sgdb_artwork_base64`` serves for the hero, the
-        logo and the wide grid, and ``get_sgdb_slot_artwork`` for the icon,
-        also for a ROM with no SteamGridDB id stored) and persists
-        **nothing**. Only RomM's ``sgdb_id``
-        is remembered as the resolved id; a manual pick is not. So a later
-        "Refresh Artwork" on an otherwise-unresolvable rom stays
-        ``needs_pick`` and reopens the picker, giving the user a free
-        re-pick. The previously applied art stays visible until replaced.
+        Downloads the chosen game's four asset types into the ROM's artwork
+        cache, which the cache-first ``get_sgdb_artwork_base64`` serves for
+        the hero, the logo and the wide grid, and ``get_sgdb_slot_artwork``
+        for the icon. The choice is stored beside RomM's id, which wins where
+        RomM gives one, so a later Refresh Artwork resolves to it instead of
+        asking again. The previously applied art stays visible until replaced.
 
-        The previous pick's cached images go only once SteamGridDB has answered
-        without refusing: ``auth_failed`` for a refused key, ``rate_limited``
-        for a 429, as :meth:`refresh_sgdb_artwork` refuses.
+        The previous pick's cached images go, and the choice is stored, only
+        once SteamGridDB has answered without refusing: ``auth_failed`` for a
+        refused key, ``rate_limited`` for a 429, as :meth:`refresh_sgdb_artwork`
+        refuses.
         """
         async with self._rules.hold("apply_sgdb_game_id", prune=True):
             return await self._apply_sgdb_game_id(rom_id, sgdb_id)
@@ -483,6 +502,7 @@ class SteamGridService:
         sgdb_id = int(sgdb_id)
         _refuse_a_key_that_cannot_be_sent(self._settings.get("steamgriddb_api_key", ""))
         answers = await self._download_all_anew(rom_id, sgdb_id)
+        await self._loop.run_in_executor(None, self._persist_chosen_sgdb_id, rom_id, sgdb_id)
         for asset_type, answer in zip(_ASSET_TYPES, answers, strict=True):
             if not isinstance(answer, _CachedArtwork):
                 await self._loop.run_in_executor(None, self._drop_cached_artwork, rom_id, asset_type)
@@ -598,8 +618,8 @@ class SteamGridService:
         ``"icon"``. With *replace* none of the checks that leave a slot alone
         is made: the slot is served whatever it holds, whatever its record
         says, and whether ``shortcuts.vdf`` can be read. Without a SteamGridDB
-        id stored, what the artwork cache holds for the slot is served, as a
-        manual pick leaves it. Answers a discriminated ``status``:
+        game — RomM's or one the user chose — what the artwork cache holds for
+        the slot is served. Answers a discriminated ``status``:
 
         - ``"image"`` — for a wide grid, logo or hero: ``base64``, SteamGridDB's
           ``image_id``, the bytes' ``sha256`` and the
@@ -613,7 +633,7 @@ class SteamGridService:
           ``shortcuts.vdf`` points at one (``domain.shortcut_icon.is_icon_filled``)
           — or a recorded ``none`` or ``refused`` rules it out;
         - ``"none"`` — SteamGridDB's list is empty or it does not know the game,
-          or the ROM has no SteamGridDB id and the cache holds nothing for the
+          or the ROM has no SteamGridDB game and the cache holds nothing for the
           slot; recorded;
         - ``"failed"`` — an unsuccessful answer, a list with no usable entry, a
           download or read that failed, or, for the icon, a ``shortcuts.vdf``
@@ -679,12 +699,12 @@ class SteamGridService:
         }
 
     def _cached_without_an_id_io(self, rom_id: int, asset_type: str) -> _CachedArtwork | _NoArtwork:
-        """What the artwork cache holds for *rom_id*'s *asset_type* where the ROM has no SteamGridDB id stored.
+        """What the artwork cache holds for *rom_id*'s *asset_type* where the ROM has no SteamGridDB game.
 
-        A manual pick fills the cache and stores no id (:meth:`apply_sgdb_game_id`),
-        so its images are served from there; ``NONE`` when the cache holds none,
-        since nothing can be downloaded without an id, and ``FAILED`` when the
-        cache cannot be looked up, which is logged.
+        A manual pick an older release made filled the cache and stored no
+        game, so its images are served from there; ``NONE`` when the cache
+        holds none, since nothing can be downloaded without an id, and
+        ``FAILED`` when the cache cannot be looked up, which is logged.
         """
         try:
             cached = self._cached_artwork(rom_id, asset_type)

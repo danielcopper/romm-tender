@@ -1369,6 +1369,44 @@ class TestTheWideGridAndTheLogo:
         assert job.source.slots_fetched == []
 
     @pytest.mark.asyncio
+    async def test_a_game_the_user_chose_lifts_a_none_recorded_without_a_game(self):
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({"100.png"}))
+        with job.uow:
+            job.uow.roms.set_chosen_sgdb_id(1, 8)
+            job.uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_none(
+                    rom_id=1, slot=ArtworkSlot.LOGO, sgdb_id=None, recorded_at=job.clock.time()
+                )
+            )
+
+        await job.run()
+
+        assert job.source.slots_fetched == [(1, ArtworkSlot.LOGO)]
+
+    @pytest.mark.asyncio
+    async def test_a_none_recorded_under_the_chosen_game_rules_it_out(self):
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({"100.png"}))
+        with job.uow:
+            job.uow.roms.set_chosen_sgdb_id(1, 8)
+            job.uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.LOGO, sgdb_id=8, recorded_at=job.clock.time())
+            )
+
+        await job.run()
+
+        assert job.source.slots_fetched == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("extension", ["jpg", "jpeg", "webp"])
+    async def test_a_slot_set_in_steam_under_another_extension_is_never_fetched(self, extension):
+        grid_files = frozenset({f"100.{extension}", f"100_logo.{extension}"})
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=grid_files)
+
+        await job.run()
+
+        assert job.source.slots_fetched == []
+
+    @pytest.mark.asyncio
     async def test_a_failed_slot_is_not_handed_over_and_waits_for_the_next_run(self):
         job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({"100_logo.png"}))
         job.source.answer_slot(1, ArtworkSlot.WIDE_GRID, SlotAnswer.FAILED)

@@ -267,6 +267,14 @@ def first_grid_url(payload: dict[str, Any] | None) -> str | None:
     return None
 
 
+def effective_sgdb_id(romm_sgdb_id: int | None, chosen_sgdb_id: int | None) -> int | None:
+    """The SteamGridDB game a ROM's artwork comes from: RomM's id where RomM gives one, else the one the user chose.
+
+    ``None`` when neither exists.
+    """
+    return romm_sgdb_id or chosen_sgdb_id or None
+
+
 def classify_resolution(state_id: int | None, romm_id: int | None) -> ResolutionDecision:
     """Decide which sgdb_id wins given the state and RomM values.
 

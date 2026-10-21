@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_outcome import icon_waits, logo_icon_waits, slot_waits
+from domain.sgdb_artwork import effective_sgdb_id
 from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG
 from lib.background_tasks import BackgroundTasks
 from lib.errors import SteamGridDirMissingError
@@ -444,17 +445,18 @@ class ShortcutArtworkService:
 
         def waits(app_id: int, rom: Rom, slot: ArtworkSlot) -> bool:
             recorded = outcomes[(rom.rom_id, slot)]
+            sgdb_id = effective_sgdb_id(rom.sgdb_id, rom.chosen_sgdb_id)
             if slot is ArtworkSlot.ICON:
                 return app_id in icons and icon_waits(
                     icons[app_id],
                     recorded,
                     grid_dir=grid.path,
                     file_names=grid.file_names,
-                    sgdb_id=rom.sgdb_id,
+                    sgdb_id=sgdb_id,
                     now=now,
                 )
             return grid.file_names is not None and slot_waits(
-                grid.file_names, app_id, slot, recorded, sgdb_id=rom.sgdb_id, now=now
+                grid.file_names, app_id, slot, recorded, sgdb_id=sgdb_id, now=now
             )
 
         first: list[_Item] = []
@@ -462,7 +464,10 @@ class ShortcutArtworkService:
         for app_id, rom in sorted(roms.items(), key=lambda pair: pair[1].rom_id):
             slots = tuple(slot for slot in (ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID) if waits(app_id, rom, slot))
             logo_icon = app_id in icons and logo_icon_waits(
-                icons[app_id], outcomes[(rom.rom_id, ArtworkSlot.ICON)], sgdb_id=rom.sgdb_id, now=now
+                icons[app_id],
+                outcomes[(rom.rom_id, ArtworkSlot.ICON)],
+                sgdb_id=effective_sgdb_id(rom.sgdb_id, rom.chosen_sgdb_id),
+                now=now,
             )
             if slots or logo_icon:
                 first.append(_Item(rom.rom_id, app_id, slots, generations[app_id], logo_icon))

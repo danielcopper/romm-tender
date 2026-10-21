@@ -14,6 +14,7 @@ from domain.sgdb_artwork import (
     cached_slot_of,
     choose_candidate,
     classify_resolution,
+    effective_sgdb_id,
     first_grid_url,
     is_cached_artwork,
     parse_autocomplete_results,
@@ -218,6 +219,17 @@ class TestClassifyResolution:
 
     def test_both_none_unresolved(self):
         assert classify_resolution(None, None) == "unresolved"
+
+
+class TestEffectiveSgdbId:
+    def test_romms_id_wins_over_the_users_choice(self):
+        assert effective_sgdb_id(7777, 8888) == 7777
+
+    def test_the_users_choice_stands_where_romm_gives_none(self):
+        assert effective_sgdb_id(None, 8888) == 8888
+
+    def test_neither_is_none(self):
+        assert effective_sgdb_id(None, None) is None
 
 
 class TestToUnsignedAppId:
