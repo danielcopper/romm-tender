@@ -15,7 +15,7 @@ import pytest
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.sync_action import Conflict, Skip
-from lib.errors import DeviceNotRegisteredError, DeviceWriteError, RommApiError, RommConflictError
+from lib.errors import DeviceNotRegisteredError, DeviceWriteError, RommApiError, RommConflictError, RommTimeoutError
 from services.saves.sync_engine.matrix import (
     DispatchSink,
     RomDispatchContext,
@@ -2464,14 +2464,85 @@ class TestGetServerSaveHashNonRetryable:
         assert result is None
 
 
-class TestHandleUnexpectedError:
-    """_handle_unexpected_error records the error and cleans up the .tmp file
-    (matrix.py lines 322-326). Reached from _dispatch_sync_action's generic
-    except branch (line 480-481)."""
+class TestADownloadThatFailsLeavesNoTmp:
+    """``do_download_save`` removes its ``.tmp`` on every failure and raises on."""
 
-    def test_dispatch_sync_action_handles_unexpected_exception(self, tmp_path):
-        """A non-RommApiError raised during dispatch is classified, recorded,
-        and the .tmp file is cleaned up."""
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            RommTimeoutError("read timed out"),
+            DeviceWriteError(28, "No space left on device"),
+            RuntimeError("a bug"),
+        ],
+        ids=["stalled", "this-device-cannot-write", "any-other-fault"],
+    )
+    def test_a_download_that_breaks_off_leaves_no_tmp(self, tmp_path, failure):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        save_path = _create_save(tmp_path, content=b"local bytes")
+        fake.saves[100] = _server_save(save_id=100)
+        fake.break_download_on(100, failure)
+        state = RomSaveSyncState()
+
+        with pytest.raises(type(failure)) as caught:
+            svc._sync_engine._matrix.do_download_save(
+                fake.saves[100], str(save_path.parent), "pokemon.srm", state, "device-1", "gba"
+            )
+
+        assert caught.value is failure
+        assert not (save_path.parent / "pokemon.srm.tmp").exists()
+        assert save_path.read_bytes() == b"local bytes"
+        assert state.files == {}
+
+    def test_a_download_that_cannot_be_moved_into_place_leaves_no_tmp(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        saves_dir = tmp_path / "saves" / "gba"
+        saves_dir.mkdir(parents=True)
+        fake.saves[100] = _server_save(save_id=100)
+
+        def failing_rename(_src: str, _dst: str) -> None:
+            raise PermissionError("save directory is read-only")
+
+        monkeypatch.setattr(svc._save_file_store, "rename", failing_rename)
+
+        with pytest.raises(PermissionError, match="read-only"):
+            svc._sync_engine._matrix.do_download_save(
+                fake.saves[100], str(saves_dir), "pokemon.srm", RomSaveSyncState(), "device-1", "gba"
+            )
+
+        assert not (saves_dir / "pokemon.srm.tmp").exists()
+
+    def test_a_tmp_that_cannot_be_removed_leaves_the_download_s_own_failure_raised(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        saves_dir = tmp_path / "saves" / "gba"
+        saves_dir.mkdir(parents=True)
+        fake.saves[100] = _server_save(save_id=100)
+        failure = RommTimeoutError("read timed out")
+        fake.break_download_on(100, failure)
+        removals: list[str] = []
+
+        def failing_remove(path: str) -> None:
+            removals.append(path)
+            raise PermissionError("save directory is read-only")
+
+        monkeypatch.setattr(svc._save_file_store, "remove_file", failing_remove)
+
+        with pytest.raises(RommTimeoutError) as caught:
+            svc._sync_engine._matrix.do_download_save(
+                fake.saves[100], str(saves_dir), "pokemon.srm", RomSaveSyncState(), "device-1", "gba"
+            )
+
+        assert caught.value is failure
+        assert removals == [str(saves_dir / "pokemon.srm.tmp")]
+
+    @pytest.mark.parametrize(
+        "failure",
+        [RommApiError("upstream 502"), RuntimeError("disk full")],
+        ids=["romm-answers-an-error", "any-other-fault"],
+    )
+    def test_the_per_file_sync_leaves_no_tmp(self, tmp_path, failure):
         from domain.sync_action import Download
 
         svc, fake = make_service(tmp_path)
@@ -2479,10 +2550,48 @@ class TestHandleUnexpectedError:
         _install_rom(svc, tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True, exist_ok=True)
-        # Seed a .tmp file at the expected path — the cleanup branch must remove it.
-        tmp_file = saves_dir / "pokemon.srm.tmp"
-        tmp_file.write_bytes(b"partial download")
-        assert tmp_file.exists()
+        fake.break_download_on(100, failure)
+
+        errors: list[str] = []
+        svc._sync_engine._matrix._dispatch_sync_action(
+            Download(server_save={"id": 100, "file_name": "pokemon.srm"}),
+            ctx=RomDispatchContext(
+                rom_id=42,
+                save_state=RomSaveSyncState(),
+                device_id=None,
+                rom_name="pokemon",
+                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
+                saves_dir=str(saves_dir),
+                system="gba",
+                core_so=None,
+            ),
+            filename="pokemon.srm",
+            local_path=None,
+            local_hash=None,
+            last_sync_hash=None,
+            last_sync_server_hash=None,
+            server_candidates=[],
+            options=SyncRunOptions(),
+            sink=DispatchSink(errors=errors, conflicts=[]),
+        )
+
+        assert len(errors) == 1
+        assert not (saves_dir / "pokemon.srm.tmp").exists()
+
+
+class TestHandleUnexpectedError:
+    """_handle_unexpected_error records the error. Reached from
+    _dispatch_sync_action's generic except branch."""
+
+    def test_dispatch_sync_action_handles_unexpected_exception(self, tmp_path):
+        """A non-RommApiError raised during dispatch is classified and recorded."""
+        from domain.sync_action import Download
+
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        saves_dir = tmp_path / "saves" / "gba"
+        saves_dir.mkdir(parents=True, exist_ok=True)
 
         # do_download_save is reached for Download action; make it raise an
         # unexpected (non-RommApi) Exception so _handle_unexpected_error fires.
@@ -2519,8 +2628,6 @@ class TestHandleUnexpectedError:
         assert direction is None
         assert len(errors) == 1
         assert errors[0].startswith("pokemon.srm:")
-        # The .tmp file was removed by the cleanup branch.
-        assert not tmp_file.exists()
 
 
 class TestDispatchSyncActionErrorBranches:
@@ -2530,7 +2637,7 @@ class TestDispatchSyncActionErrorBranches:
     def test_dispatch_sync_action_records_rommapi_error(self, tmp_path, caplog):
         """A RommApiError from a Download action is recorded with classify_error
         message AND logged at WARNING (so a sync failure leaves a log trace, not
-        only an errors-list entry); no .tmp cleanup is attempted on this branch."""
+        only an errors-list entry)."""
         from domain.sync_action import Download
 
         svc, fake = make_service(tmp_path)

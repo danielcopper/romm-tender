@@ -288,26 +288,33 @@ class MatrixExecutor:
     ) -> None:
         """Download a save file from server. Backs up existing local file first.
 
-        Mutates *save_state* in memory (per-file baseline); the operation entry
-        owns the surrounding write Unit of Work.
+        The content lands in ``<filename>.tmp`` and replaces the local file only
+        once complete; any failure up to that replacement removes the ``.tmp``
+        and raises on. Mutates *save_state* in memory (per-file baseline); the
+        operation entry owns the surrounding write Unit of Work.
         """
         local_path = os.path.join(saves_dir, filename)
         self._save_file_store.make_dirs(saves_dir)
         tmp_path = local_path + ".tmp"
 
-        self._retry.with_retry(
-            lambda: self._romm_api.download_save_content(
-                server_save["id"],
-                tmp_path,
-                device_id=device_id,
-                optimistic=True,
-            ),
-        )
+        try:
+            self._retry.with_retry(
+                lambda: self._romm_api.download_save_content(
+                    server_save["id"],
+                    tmp_path,
+                    device_id=device_id,
+                    optimistic=True,
+                ),
+            )
 
-        # Back up the existing local save before the download overwrites it.
-        self.quarantine_local_file(saves_dir, filename)
+            # Back up the existing local save before the download overwrites it.
+            self.quarantine_local_file(saves_dir, filename)
 
-        self._save_file_store.rename(tmp_path, local_path)
+            self._save_file_store.rename(tmp_path, local_path)
+        except Exception:
+            with contextlib.suppress(OSError):
+                self._save_file_store.remove_file(tmp_path)
+            raise
         self.update_file_sync_state(save_state, filename, server_save, local_path, system, default_slot=default_slot)
         self._log_debug(f"Downloaded save: {filename}")
 
@@ -504,15 +511,11 @@ class MatrixExecutor:
         self,
         e: Exception,
         filename: str,
-        saves_dir: str,
         errors: list[str],
     ) -> None:
-        """Handle an unexpected exception by recording an error and cleaning up temp files."""
+        """Handle an unexpected exception by recording an error."""
         _code, _msg = classify_error(e)
         errors.append(f"{filename}: {_msg}")
-        tmp = os.path.join(saves_dir, filename + ".tmp")
-        with contextlib.suppress(OSError):
-            self._save_file_store.remove_file(tmp)
 
     def _build_local_input(self, local_path: str, filename: str) -> dict[str, Any]:
         """Build the dict shape consumed by ``compute_sync_action``."""
@@ -777,7 +780,7 @@ class MatrixExecutor:
             sink.errors.append(f"{filename}: {_msg}")
         except Exception as e:
             self._logger.warning(f"_dispatch_sync_action({ctx.rom_id}): {filename} unexpected error: {e}")
-            self._handle_unexpected_error(e, filename, ctx.saves_dir, sink.errors)
+            self._handle_unexpected_error(e, filename, sink.errors)
         return None
 
     def adopt_baseline_hash(self, save_state: RomSaveSyncState, filename: str, local_hash: str) -> None:
