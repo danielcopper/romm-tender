@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render } from "@testing-library/react";
 import { showModal } from "@decky/ui";
 import type { ReactElement } from "react";
@@ -44,6 +44,11 @@ function view(state: Partial<TenderFolderState> = {}, overrides: Partial<TenderF
   };
 }
 
+/** The controller's A press on *el*, the way Steam delivers it to the stop that holds it. */
+function press(el: Element): void {
+  fireEvent(el, new CustomEvent("decky-button-down", { detail: { button: 1 }, bubbles: true }));
+}
+
 function lastModal(): ReactElement<{
   label: string;
   fieldLabel?: string;
@@ -56,6 +61,10 @@ function lastModal(): ReactElement<{
 }
 
 describe("TenderFolderSection", () => {
+  beforeEach(() => {
+    vi.mocked(showModal).mockClear();
+  });
+
   it("states the place in use, that it is reachable, and its folder", () => {
     const { getByText, getByTestId } = render(<TenderFolderSection folder={view()} />);
 
@@ -103,7 +112,7 @@ describe("TenderFolderSection", () => {
     expect(getByTestId(`tender-folder-tile-${USB.mount_point}`)).toHaveTextContent("USB drive");
     expect(getByTestId(`tender-folder-tile-${NVME.mount_point}`)).toHaveTextContent("Drive");
     const rows = [...container.querySelectorAll("[data-testid^='tender-folder-tile-']")].map(
-      (tile) => tile.closest("button")?.parentElement,
+      (tile) => tile.parentElement?.parentElement,
     );
     expect(rows[0]).toBe(rows[1]);
     expect(rows[2]).toBe(rows[3]);
@@ -118,7 +127,7 @@ describe("TenderFolderSection", () => {
     expect(internal).toHaveAttribute("data-in-use", "true");
     expect(internal).toHaveTextContent("In use");
     expect(getByTestId(`tender-folder-tile-${SD.mount_point}`)).not.toHaveAttribute("data-in-use");
-    fireEvent.click(internal);
+    press(internal);
 
     expect(folder.chooseDefault).not.toHaveBeenCalled();
   });
@@ -127,12 +136,12 @@ describe("TenderFolderSection", () => {
     const folder = view({ default: false, place: SD.mount_point, folder: SD.folder });
     const { getByTestId } = render(<TenderFolderSection folder={folder} />);
 
-    fireEvent.click(getByTestId("tender-folder-tile-internal"));
+    press(getByTestId("tender-folder-tile-internal"));
     expect(folder.chooseDefault).toHaveBeenCalledTimes(1);
 
     const other = view({ drives: [SD, USB] });
     const second = render(<TenderFolderSection folder={other} />);
-    fireEvent.click(second.getByTestId(`tender-folder-tile-${USB.mount_point}`));
+    press(second.getByTestId(`tender-folder-tile-${USB.mount_point}`));
     expect(other.chooseDrive).toHaveBeenCalledWith(USB.mount_point);
   });
 
@@ -147,7 +156,7 @@ describe("TenderFolderSection", () => {
     const { getByText } = render(<TenderFolderSection folder={folder} />);
 
     expect(getByText("Type a path, for example a folder on a drive below")).toBeInTheDocument();
-    fireEvent.click(getByText("Another folder…"));
+    press(getByText("Another folder…"));
 
     const modal = lastModal();
     expect(modal.props.label).toBe("Another folder…");
@@ -158,10 +167,63 @@ describe("TenderFolderSection", () => {
     expect(folder.chooseTyped).toHaveBeenCalledWith("~/Games");
   });
 
-  it("no tile can be pressed while a change is in flight", () => {
-    const { getAllByRole } = render(<TenderFolderSection folder={view({}, { busy: true })} />);
+  it("nothing can be pressed while a change is in flight", () => {
+    const folder = view({ default: false, place: SD.mount_point, folder: SD.folder }, { busy: true });
+    const { getByTestId, getByText } = render(<TenderFolderSection folder={folder} />);
 
-    expect(getAllByRole("button").every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    press(getByTestId("tender-folder-tile-internal"));
+    press(getByText("Another folder…"));
+
+    expect(folder.chooseDefault).not.toHaveBeenCalled();
+    expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+  });
+
+  it("a focused tile keeps its dark fill and shows the accent outline, and the in-use tile keeps its border", () => {
+    const { getByTestId } = render(<TenderFolderSection folder={view()} />);
+    const stop = getByTestId("tender-folder-tile-internal").parentElement as HTMLElement;
+
+    expect(stop.style.borderColor).toBe("#1a9fff");
+    fireEvent.focus(stop);
+
+    expect(stop.style.background).toBe("#323a46");
+    expect(stop.style.outlineColor).toBe("#1a9fff");
+    expect(stop.style.outlineWidth).toBe("2px");
+    expect(stop.style.borderColor).toBe("#1a9fff");
+  });
+
+  it("the badge sits in the tile's corner on one line, and the kind line never wraps", () => {
+    const { getByTestId } = render(<TenderFolderSection folder={view()} />);
+    const tile = getByTestId("tender-folder-tile-internal");
+    const badge = [...tile.querySelectorAll("span")].find((span) => span.textContent === "In use") as HTMLElement;
+
+    expect(badge.style.position).toBe("absolute");
+    expect(badge.style.whiteSpace).toBe("nowrap");
+    expect((tile.firstElementChild as HTMLElement).style.whiteSpace).toBe("nowrap");
+  });
+
+  it("a path may break only after a slash", () => {
+    const { getByTestId } = render(<TenderFolderSection folder={view()} />);
+    const path = [...getByTestId(`tender-folder-tile-${SD.mount_point}`).querySelectorAll("span")].find(
+      (span) => span.textContent === SD.folder,
+    ) as HTMLElement;
+
+    expect(path.querySelectorAll("wbr")).toHaveLength(5);
+    for (const wbr of path.querySelectorAll("wbr")) expect(wbr.previousSibling?.textContent).toBe("/");
+  });
+
+  it("the status line is no stop of its own; the tiles below it are", () => {
+    const { getByText, getByTestId } = render(<TenderFolderSection folder={view()} />);
+
+    expect(getByText("In use: Internal storage").closest("[data-activate]")).toBeNull();
+    expect(getByTestId("tender-folder-tile-internal").closest("[data-activate]")).not.toBeNull();
+  });
+
+  it("another folder is one row holding its line and a chevron", () => {
+    const { getByText } = render(<TenderFolderSection folder={view()} />);
+    const row = getByText("Another folder…").closest("[data-activate]") as HTMLElement;
+
+    expect(row).toHaveTextContent("Type a path, for example a folder on a drive below");
+    expect(row).toHaveTextContent("›");
   });
 
   it("shows why a choice was refused", () => {
