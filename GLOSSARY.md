@@ -1196,16 +1196,18 @@ and IGDB-collection are both `kind="virtual"`, distinguished by `virtual_type` (
 complete-set reconcile on the next normal sync (no Force Full Sync). Collections whose Steam names come out the same
 still union.
 
-### Artwork slot / filled slot / slot outcome
+### Artwork slot / filled slot / slot outcome / slot choice
 
-An **artwork slot** is one of the images Steam draws for a shortcut — here the hero, the logo, the wide grid and the
-icon, which Tender takes from SteamGridDB (`domain/artwork_slot.py`, `ArtworkSlot`; the cover has rules of its own). A
-slot is **filled** when Steam's grid directory holds an image file for it, whoever put it there — the icon's when the
-shortcut's icon path is neither empty, the **placeholder icon** nor the **logo icon**, and, in the grid directory, its
-file is there — and a filled slot is left alone except by **Refresh Artwork**, the SteamGridDB picker and a version
-switch. A **slot outcome** is what was last found for a ROM's wide grid, logo or icon — `set`, `none` or `refused`
-(`ArtworkSlotOutcome`). Detail: [Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork).
-_Avoid_: plain "slot", which means a **Save-sync slot** or a **Conditional slot**.
+An **artwork slot** is one of the five images Steam draws for a shortcut — the hero, the logo, the wide grid and the
+icon, which Tender takes from SteamGridDB, and the cover, which the sync takes from RomM (`domain/artwork_slot.py`,
+`ArtworkSlot`; the cover has rules of its own). A slot is **filled** when Steam's grid directory holds an image file for
+it, whoever put it there — the icon's when the shortcut's icon path is neither empty, the **placeholder icon** nor the
+**logo icon**, and, in the grid directory, its file is there — and a filled slot is left alone except by **Refresh
+Artwork**, the SteamGridDB picker and a version switch. A **slot outcome** is what was last found for a ROM's hero, wide
+grid, logo or icon — `set`, `none` or `refused` (`ArtworkSlotOutcome`). A **slot choice** is the SteamGridDB image a
+user chose for one of a ROM's slots (`ArtworkSlotChoice`); a slot without one is automatic. Detail:
+[Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork). _Avoid_: plain "slot", which
+means a **Save-sync slot** or a **Conditional slot**.
 
 ### Shortcut artwork job / placeholder icon / logo icon
 

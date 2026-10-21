@@ -361,7 +361,7 @@ Format: **invariant** — tier — enforced by.
   RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
-  `<...>.<repo>.<method>` shape against the thirteen repositories the UoW exposes). Read or write is decided **by the
+  `<...>.<repo>.<method>` shape against the fourteen repositories the UoW exposes). Read or write is decided **by the
   name's shape** — `get` / `get_*` / `iter_*` / `count` plus the explicitly listed reads — and
   `tests/scripts/test_check_read_only_module.py` re-derives every method name from `services/protocols/repositories.py`
   and pins its classification, so a new repository method fails there until it is classified. **The two directions are

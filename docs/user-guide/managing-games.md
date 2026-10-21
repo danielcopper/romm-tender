@@ -756,17 +756,18 @@ hero banner, logo, wide grid, and icon for that game. **RomM is the source of tr
 SteamGridDB id for a game, that id wins — on both sync and refresh. Where RomM's id comes from, and how to give RomM
 one, is under [Game not found on SteamGridDB](troubleshooting.md#game-not-found-on-steamgriddb). If neither RomM nor
 Tender has an id, a picker opens, where you search SteamGridDB by name and choose from the results (with thumbnails). A
-name pick is applied immediately. Because a manual pick isn't stored as the resolved id, you can change it any time:
-just tap **Refresh Artwork** again and the picker reopens. Once RomM has an id for a game you picked, **Refresh
-Artwork** replaces each picked image with that game's, where SteamGridDB has such an image for that game. Only **Refresh
-Artwork** does this: opening the game's page and the background artwork job keep using the images Tender already
-downloaded for the game.
+name pick is applied immediately, and Tender remembers the game you picked: the next **Refresh Artwork** downloads that
+game's images instead of opening the picker again, and opening the game's page and the background artwork job use it for
+the images the game has none of yet. Once RomM has an id for a game you picked, RomM's id wins, and **Refresh Artwork**
+replaces each picked image with that game's, where SteamGridDB has such an image for that game. Only **Refresh Artwork**
+does this: opening the game's page and the background artwork job keep using the images Tender already downloaded for
+the game.
 
-One exception after you update Tender: for a game Tender knows on SteamGridDB, an icon, wide grid or logo Tender
-downloaded before the update is downloaded once more the first time the game is switched to another version, or the
-first time the game gets that image because it has none yet. If you had picked the game in the picker and RomM has an id
-for it now, that image then becomes the one of the game RomM's id points to. An image the game already shows stays until
-then.
+One exception after you update Tender: for a game Tender knows on SteamGridDB, an icon, wide grid, logo or hero banner
+Tender downloaded before the update is downloaded once more the first time the game is switched to another version, or
+the first time the game gets that image because it has none yet. If you had picked the game in the picker and RomM has
+an id for it now, that image then becomes the one of the game RomM's id points to. An image the game already shows stays
+until then.
 
 When SteamGridDB refuses your API key, **Refresh Artwork** says "SteamGridDB refused the API key — check it in Settings"
 and opens no picker; when SteamGridDB is rate-limiting requests, it says that instead. Opening a game's page stays quiet

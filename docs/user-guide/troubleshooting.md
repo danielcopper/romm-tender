@@ -645,8 +645,10 @@ game has none yet (Tender's logo counts as no icon), so a picked image stays the
 switch the game to another version.
 
 For a game SteamGridDB lists under another name, or not at all, a scan may find nothing. **Refresh Artwork** then opens
-a picker where you search SteamGridDB by name and apply a match. If a game genuinely has no artwork uploaded to
-SteamGridDB, those slots fall back to Steam's defaults — you can contribute artwork there to help the community.
+a picker where you search SteamGridDB by name and apply a match; Tender remembers it, so the next **Refresh Artwork**
+uses that game without asking again, until RomM has an id of its own for the game. If a game genuinely has no artwork
+uploaded to SteamGridDB, those slots fall back to Steam's defaults — you can contribute artwork there to help the
+community.
 
 ### SteamGridDB refused the API key
 
