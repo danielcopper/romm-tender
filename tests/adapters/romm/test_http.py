@@ -2729,7 +2729,7 @@ class TestAnAnswerThatCannotBeReadKeepsItsText:
 
 
 class TestAContentLengthThatIsNotANumber:
-    """An announced length that does not parse counts as no length, as a missing one does."""
+    """An announced length that does not parse, or is not positive, counts as no length, as a missing one does."""
 
     @pytest.mark.parametrize(
         "fetch",
@@ -2740,11 +2740,25 @@ class TestAContentLengthThatIsNotANumber:
             ),
         ],
     )
-    def test_the_body_is_still_written(self, romm_http, tmp_path, fetch):
+    @pytest.mark.parametrize("length", ["abc", "-5"])
+    def test_the_body_is_still_written(self, romm_http, tmp_path, fetch, length):
         _configure_server(romm_http.settings)
         dest = tmp_path / "out.bin"
 
-        with patch("urllib.request.urlopen", return_value=_make_resp(200, {"Content-Length": "abc"}, b"BYTES")):
+        with patch("urllib.request.urlopen", return_value=_make_resp(200, {"Content-Length": length}, b"BYTES")):
             fetch(romm_http.adapter, str(dest))
 
         assert dest.read_bytes() == b"BYTES"
+
+    def test_a_negative_length_is_never_reported_as_the_size(self, romm_http, tmp_path):
+        _configure_server(romm_http.settings)
+        progress: list[tuple[int, int]] = []
+
+        with patch("urllib.request.urlopen", return_value=_make_resp(200, {"Content-Length": "-5"}, b"BYTES")):
+            romm_http.adapter.download(
+                "/api/roms/1/content/x.zip",
+                str(tmp_path / "out.bin"),
+                lambda done, total: progress.append((done, total)),
+            )
+
+        assert progress == []

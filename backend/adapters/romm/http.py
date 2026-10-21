@@ -669,12 +669,13 @@ class RommHttpAdapter:
 
     @staticmethod
     def _content_length(headers) -> int:
-        """The announced ``Content-Length``, or 0 where there is none or it is not a number."""
+        """The announced ``Content-Length``, or 0 where there is none or it is not a positive number."""
         raw = headers.get("Content-Length")
         try:
-            return int(raw) if raw else 0
+            length = int(raw) if raw else 0
         except ValueError:
             return 0
+        return length if length > 0 else 0
 
     @staticmethod
     def _validate_download(total: int, downloaded: int) -> None:
