@@ -5,9 +5,11 @@
  * is named Tender, and folders that do not exist yet — are asked in the same
  * window under the field, each with its own buttons. Editing the text drops a
  * shown refusal or question, and an answer that arrives after an edit is
- * dropped too, so a question's buttons act on the text that was checked. An
- * accepted place closes the window and is handed to `onAccepted`; Cancel closes
- * it with nothing chosen. The backend calls are the caller's, passed in.
+ * dropped too, so a question's buttons act on the text that was checked — all
+ * but a choice that went through, which has switched Tender's folder and still
+ * closes the window. An accepted place closes the window and is handed to
+ * `onAccepted`; Cancel closes it with nothing chosen. The backend calls are the
+ * caller's, passed in.
  */
 
 import { ChangeEvent, FC, useRef, useState } from "react";

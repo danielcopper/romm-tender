@@ -1040,7 +1040,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `TestTheVocabularyIsTheResolversOwn::test_the_start_folder_hole_and_how_the_resolver_spells_a_hole_in_a_path`). Unseen
   by them: a new mover or recorder that reads `answer.directory` instead of `concrete_directory`, a savestate place
   taken from anywhere but that adapter, and a template the resolver spells other than `<hole>` or whose hole `needs`
-  does not list
+  does not list. Prompt-only: a new mover or recorder of save files reads `concrete_directory`, and a new reader of a
+  savestate place goes through `resolve_savestate_location`
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; a legacy delete is refused up-front

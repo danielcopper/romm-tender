@@ -12,9 +12,8 @@ import { ValidatingModalShell } from "./ValidatingModalShell";
 type AnyProps = Record<string, unknown> & { children?: unknown };
 
 vi.mock("@decky/ui", () => ({
-  // Steam's ModalRoot answers its own OK (Enter in a field, R2) by running
-  // `onOK` unless `bOKDisabled`, then closing unless `bCloseAfterOK` is false; a
-  // test presses that OK by firing `submit` inside the modal.
+  // Steam's ModalRoot answers its own OK as the shell's `dialogOKSubmits`
+  // describes; a test presses that OK by firing `submit` inside the modal.
   ModalRoot: (p: AnyProps & { onOK?: () => unknown; closeModal?: () => void }) =>
     createElement(
       "div",

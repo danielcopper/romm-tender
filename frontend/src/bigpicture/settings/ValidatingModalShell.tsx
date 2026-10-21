@@ -39,7 +39,14 @@ interface ValidatingModalShellProps {
   /**
    * Answer Steam's own OK — Enter in a field, R2 — with `onSubmit`, held back by
    * `submitDisabled` as the primary button is, and leave closing to `onSubmit`.
-   * Without it, that OK closes the modal with nothing submitted.
+   *
+   * Steam's `ModalRoot` renders its content in a form, and Enter in a field or
+   * R2 submits it: unless `bOKDisabled`, the submit awaits `onOK` and then
+   * closes the modal unless `bCloseAfterOK` is false (the generic dialog in
+   * the Steam client's `steamui/sp.js`). So without this prop that OK closes
+   * the modal with nothing submitted. Confirmed on the Steam Deck in Game
+   * Mode: with it, Enter and R2 keep the "Another folder…" window open on a
+   * refusal.
    */
   dialogOKSubmits?: boolean;
   /** The modal's field content, rendered between the title and the error line. */

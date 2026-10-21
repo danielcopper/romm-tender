@@ -314,8 +314,9 @@ class SaveAnswer:
         it in :attr:`needs` — a relative save folder answers ``<cwd>/…``,
         Dolphin's GameCube cards ``…/<region>/…``, a Wii title ``…/<save_id>/…`` —
         and such a string is no folder: carried into or recorded, it would be a
-        literal ``<region>`` folder or a path relative to Tender's own. A hole in
-        a file name alone leaves the directory a folder.
+        literal ``<region>`` folder or a path relative to the backend's own
+        working directory. A hole in a file name alone leaves the directory a
+        folder.
         """
         if self.directory is None or any(f"<{hole}>" in self.directory for hole in self.needs):
             return None

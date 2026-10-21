@@ -110,7 +110,8 @@ export const SgdbApiKeyModal: FC<SgdbApiKeyModalProps> = ({ closeModal, onVerify
       </div>
       {/* Wrapped in <Focusable> like ConnectModal's token field: on the Deck,
           R2/OSK-Enter on an unwrapped single field otherwise closes the
-          ModalRoot even when the Enter handler no-ops on an incomplete field. */}
+          ModalRoot even when the Enter handler no-ops on an incomplete field
+          (why Steam closes it: ValidatingModalShell's `dialogOKSubmits`). */}
       <Focusable>
         <TextField
           focusOnMount={true}

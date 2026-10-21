@@ -336,13 +336,12 @@ be statements about an installation nobody heard from. Like a finding's refusal 
 from starting (`EveryFolderRefused`, which both are).
 
 A system's own ROM folder (`rom_location(system)`) is not a root: it is asked only by the questions that need it, the
-download's folder, a removal's bound and the check of a place for Tender's folder. Its raise refuses those alone, with
-the same sentence — a game download, using files already on disk and Check Against Server, the adoption's target, and
-uninstalling, extracting into it and the removed-game cleanup's removal of that system's games — and every other press,
-and every other system, goes on: "Uninstall all" removes the other systems' games, and the cleanup keeps such a game's
-record and reports it. From [#2244](https://github.com/danielcopper/romm-tender/issues/2244) D13 and
-[#2285](https://github.com/danielcopper/romm-tender/issues/2285) D7. That check asks for every system's folder of each
-source in one question (`rom_locations()`), and a raise there refuses the check alone.
+download's folder and a removal's bound. Its raise refuses those alone, with the same sentence — a game download, using
+files already on disk and Check Against Server, the adoption's target, and uninstalling, extracting into it and the
+removed-game cleanup's removal of that system's games — and every other press, and every other system, goes on:
+"Uninstall all" removes the other systems' games, and the cleanup keeps such a game's record and reports it. From
+[#2244](https://github.com/danielcopper/romm-tender/issues/2244) D13 and
+[#2285](https://github.com/danielcopper/romm-tender/issues/2285) D7.
 
 Without RetroDECK the move code moves nothing either: the migrate press says **Moving needs RetroDECK, which is not
 installed.** and the pending move stays recorded ([#2285](https://github.com/danielcopper/romm-tender/issues/2285) D6).

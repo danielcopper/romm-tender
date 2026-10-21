@@ -169,10 +169,9 @@ vi.mock("@decky/ui", () => {
   // identical, since React was already dropping the rest. Neither shell is ever
   // handed className or style — every caller wraps its own body in a div.
   const modalShell = (props: AnyProps) => createElement("div", null, props.children as never);
-  // Steam's ModalRoot wraps its content in a form, and Enter in a field or R2
-  // submits it: unless `bOKDisabled`, that runs `onOK` and then closes the modal
-  // unless `bCloseAfterOK` is false. A test presses that OK by firing `submit`
-  // on anything inside the modal.
+  // Steam's ModalRoot answers its own OK as ValidatingModalShell's
+  // `dialogOKSubmits` describes; a test presses that OK by firing `submit` on
+  // anything inside the modal.
   const modalRoot = (props: AnyProps & { onOK?: () => unknown; closeModal?: () => void }) =>
     createElement(
       "div",

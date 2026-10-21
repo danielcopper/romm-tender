@@ -1686,8 +1686,10 @@ Format: **invariant** — tier — enforced by.
   holds the `<hole>` spelling to the resolver's own template constants. Unseen by them: a new mover or recorder that
   reads `SaveAnswer.directory` instead of `concrete_directory` — the field stays the resolver's answer, because the
   status read shows it — a savestate place taken from anywhere but that adapter, and a template the resolver spells
-  other than `<hole>`, or one whose hole `needs` does not list. Detail: `docs/architecture/save-sync-coverage.md`, "Nor
-  is it always the game's"
+  other than `<hole>`, or one whose hole `needs` does not list. Prompt-only: a new mover or recorder of save files reads
+  `concrete_directory`, and a new reader of a savestate place goes through `resolve_savestate_location`, so the guard
+  holds at it without a test of its own. Detail: `docs/architecture/save-sync-coverage.md`, "Nor is it always the
+  game's"
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter
