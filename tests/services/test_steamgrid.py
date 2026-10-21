@@ -4,7 +4,7 @@ import hashlib
 import logging
 import os
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import patch
 
@@ -17,6 +17,7 @@ from _factories import (
 )
 from _vendor import vdf
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+from fakes.fake_cover_slot_reader import FakeCoverSlotReader
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -76,7 +77,8 @@ class SteamGridHarness:
     ``library`` is the library service whose pending sync the SteamGridDB
     service reads when ``roms`` holds no SGDB id for the ROM. ``settings`` is the
     dict both services read, the SteamGridDB API key included. ``clock`` times
-    an artwork slot's outcome.
+    an artwork slot's outcome. ``cover`` is the cover's owner the service reads
+    the cover's state from and reloads RomM's cover through.
     """
 
     service: SteamGridService
@@ -85,6 +87,7 @@ class SteamGridHarness:
     prune_conflicts: PruneConflicts
     settings: dict[str, Any]
     clock: FakeClock
+    cover: FakeCoverSlotReader = field(default_factory=FakeCoverSlotReader)
 
 
 @pytest.fixture
@@ -94,6 +97,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
     steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     prune_conflicts = _make_prune_conflicts()
     clock = FakeClock()
+    cover = FakeCoverSlotReader()
 
     library = LibraryService(
         config=LibraryServiceConfig(
@@ -141,6 +145,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
             downscale_icon=lambda data: data,
             clock=clock,
+            cover=cover,
         ),
     )
     return SteamGridHarness(
@@ -150,6 +155,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
         prune_conflicts=prune_conflicts,
         settings=settings,
         clock=clock,
+        cover=cover,
     )
 
 
@@ -1206,6 +1212,7 @@ class TestDebugLoggerProtocolSeam:
                 conflict_rules=_make_conflict_rules(),
                 downscale_icon=lambda data: data,
                 clock=clock,
+                cover=FakeCoverSlotReader(),
             ),
         )
         harness = SteamGridHarness(

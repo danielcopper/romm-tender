@@ -811,6 +811,22 @@ class Endpoints:
     async def refresh_sgdb_artwork(self, rom_id, sgdb_id):
         return await self._services.sgdb_service.refresh_sgdb_artwork(rom_id, sgdb_id)
 
+    @route
+    async def get_artwork_slots(self, rom_id, app_id):
+        return await self._services.sgdb_service.get_artwork_slots(rom_id, app_id)
+
+    @route
+    async def get_artwork_slot_candidates(self, rom_id, slot, page=0):
+        return await self._services.sgdb_service.get_artwork_slot_candidates(rom_id, slot, page)
+
+    @route
+    async def choose_artwork_slot_image(self, rom_id, slot, image_id):
+        return await self._services.sgdb_service.choose_artwork_slot_image(rom_id, slot, image_id)
+
+    @route
+    async def set_artwork_slot_automatic(self, rom_id, slot):
+        return await self._services.sgdb_service.set_artwork_slot_automatic(rom_id, slot)
+
     # ── Metadata delegation to MetadataService ────────────────
 
     @route

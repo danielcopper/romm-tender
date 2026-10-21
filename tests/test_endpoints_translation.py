@@ -36,6 +36,7 @@ from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
+from fakes.fake_cover_slot_reader import FakeCoverSlotReader
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_download_file_store import FakeDownloadFileStore
 from fakes.fake_emulator_sources import FakeEmulatorSources
@@ -1594,6 +1595,7 @@ def _dispatcher_over_steamgrid(api_key: str = "sgdb-key", uow: FakeUnitOfWork | 
             conflict_rules=_make_conflict_rules(),
             downscale_icon=lambda data: data,
             clock=FakeClock(),
+            cover=FakeCoverSlotReader(),
         )
     )
     endpoints = Endpoints(_make_application(_make_services_bundle(sgdb_service=service)), HostStatus())
