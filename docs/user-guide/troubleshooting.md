@@ -313,6 +313,29 @@ journalctl --user -u romm-tender-update
 Then press **Try again**. A download that failed is often just the network; a checksum that did not match again, or an
 installer that stops each time, is worth reporting together with that output.
 
+## RomM Won't Connect
+
+### The Connection row says "Remove login from RomM URL"
+
+**Symptom**: The **Connection** row on Tender's main QAM panel says _Remove login from RomM URL_; saving the RomM URL or
+signing in says "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; use
+Sign in under RomM Account instead."
+
+**Explanation**: The stored RomM URL carries a user name and password (`https://user:password@host`). Tender cannot sign
+in through the address, and no request to it reaches RomM.
+
+**Fix**: In [Settings › Connections](configuration.md#connection-settings), tap **Edit** next to **RomM URL** and enter
+the address without the user name and password, then sign in with **Sign in** under **RomM Account**.
+
+### "Your saved RomM login cannot be used"
+
+**Symptom**: A sync, download or game page says "Your saved RomM login cannot be used. Sign in again to continue."
+
+**Explanation**: The stored token holds a character no request can carry, such as a line break — only a hand-edited
+settings file holds one. Tender refuses it before it is sent rather than putting it on a request.
+
+**Fix**: Tap **Sign in again** under **RomM Account** in [Settings › Connections](configuration.md#connection-settings).
+
 ## Games Won't Launch
 
 ### "RomM Sync" is still installed
