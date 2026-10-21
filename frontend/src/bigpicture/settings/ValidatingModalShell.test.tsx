@@ -12,7 +12,24 @@ import { ValidatingModalShell } from "./ValidatingModalShell";
 type AnyProps = Record<string, unknown> & { children?: unknown };
 
 vi.mock("@decky/ui", () => ({
-  ModalRoot: (p: AnyProps) => createElement("div", { "data-testid": "modal-root" }, p.children as never),
+  // Steam's ModalRoot answers its own OK (Enter in a field, R2) by running
+  // `onOK` unless `bOKDisabled`, then closing unless `bCloseAfterOK` is false; a
+  // test presses that OK by firing `submit` inside the modal.
+  ModalRoot: (p: AnyProps & { onOK?: () => unknown; closeModal?: () => void }) =>
+    createElement(
+      "div",
+      {
+        "data-testid": "modal-root",
+        onSubmit: (event: Event) => {
+          event.preventDefault();
+          if (p["bOKDisabled"] === true) return;
+          void Promise.resolve(p.onOK?.()).then(() => {
+            if (p["bCloseAfterOK"] !== false) p.closeModal?.();
+          });
+        },
+      },
+      p.children as never,
+    ),
   DialogButton: ({ children, onClick, disabled }: AnyProps & { onClick?: () => void; disabled?: boolean }) =>
     createElement("button", { onClick, disabled }, children as never),
   // The footer's flow direction is recorded as an attribute so the handover is
@@ -192,5 +209,55 @@ describe("ValidatingModalShell", () => {
       </ValidatingModalShell>,
     );
     expect(getByTestId("shell-footer").getAttribute("data-flow-children")).toBe("horizontal");
+  });
+  describe("Steam's own OK (Enter in a field, R2)", () => {
+    const shell = (props: { submitDisabled?: boolean; dialogOKSubmits?: boolean }) => {
+      const onSubmit = vi.fn();
+      const closeModal = vi.fn();
+      const view = render(
+        <ValidatingModalShell
+          closeModal={closeModal}
+          title="My Title"
+          error={null}
+          errorTestId="shell-error"
+          submitLabel="Save"
+          submitDisabled={props.submitDisabled ?? false}
+          onSubmit={onSubmit}
+          {...(props.dialogOKSubmits === undefined ? {} : { dialogOKSubmits: props.dialogOKSubmits })}
+        >
+          {child()}
+        </ValidatingModalShell>,
+      );
+      return { ...view, onSubmit, closeModal };
+    };
+
+    it("with dialogOKSubmits, runs onSubmit and leaves the modal open", async () => {
+      const { getByTestId, onSubmit, closeModal } = shell({ dialogOKSubmits: true });
+
+      fireEvent.submit(getByTestId("shell-child"));
+
+      await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      await Promise.resolve();
+      expect(closeModal).not.toHaveBeenCalled();
+    });
+
+    it("with dialogOKSubmits, is held back by submitDisabled as the primary button is", async () => {
+      const { getByTestId, onSubmit, closeModal } = shell({ dialogOKSubmits: true, submitDisabled: true });
+
+      fireEvent.submit(getByTestId("shell-child"));
+      await Promise.resolve();
+
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(closeModal).not.toHaveBeenCalled();
+    });
+
+    it("without it, closes the modal with nothing submitted, as Steam does", async () => {
+      const { getByTestId, onSubmit, closeModal } = shell({});
+
+      fireEvent.submit(getByTestId("shell-child"));
+
+      await vi.waitFor(() => expect(closeModal).toHaveBeenCalledTimes(1));
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
   });
 });

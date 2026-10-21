@@ -36,6 +36,12 @@ interface ValidatingModalShellProps {
   submitDisabled: boolean;
   /** Invoked when the primary button is clicked. */
   onSubmit: () => void;
+  /**
+   * Answer Steam's own OK — Enter in a field, R2 — with `onSubmit`, held back by
+   * `submitDisabled` as the primary button is, and leave closing to `onSubmit`.
+   * Without it, that OK closes the modal with nothing submitted.
+   */
+  dialogOKSubmits?: boolean;
   /** The modal's field content, rendered between the title and the error line. */
   children: ReactNode;
 }
@@ -48,9 +54,13 @@ export const ValidatingModalShell: FC<ValidatingModalShellProps> = ({
   submitLabel,
   submitDisabled,
   onSubmit,
+  dialogOKSubmits = false,
   children,
 }) => (
-  <ModalRoot {...(closeModal === undefined ? {} : { closeModal })}>
+  <ModalRoot
+    {...(closeModal === undefined ? {} : { closeModal })}
+    {...(dialogOKSubmits ? { onOK: onSubmit, bOKDisabled: submitDisabled, bCloseAfterOK: false } : {})}
+  >
     <div style={modalBodyStyle}>
       <div style={titleStyle}>{title}</div>
       {children}

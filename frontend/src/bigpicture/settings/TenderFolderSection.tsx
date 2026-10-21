@@ -166,7 +166,10 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
         <span
           style={{
             display: "flex",
-            gap: "8px",
+            // The Default tag moves to a line of its own where it does not fit
+            // beside the kind, rather than running past the room kept for the badge.
+            flexWrap: "wrap",
+            gap: "4px 8px",
             alignItems: "center",
             whiteSpace: "nowrap",
             fontSize: "11px",
@@ -174,11 +177,13 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             color: MUTED,
-            // Room for the badge in the corner, so the kind never runs under it.
+            // Room for the badge in the corner, so nothing on this line runs under it.
             paddingRight: tile.inUse ? "56px" : 0,
           }}
         >
-          {tile.kind}
+          <span style={{ minWidth: 0, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {tile.kind}
+          </span>
           {tile.isDefault && (
             <span
               style={{

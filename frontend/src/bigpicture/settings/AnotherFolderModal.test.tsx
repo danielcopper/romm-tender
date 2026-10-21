@@ -233,6 +233,45 @@ describe("AnotherFolderModal", () => {
     await waitFor(() => expect(window.choose).toHaveBeenCalledWith("/sd/Tender"));
   });
 
+  it("Enter in the field checks the place as OK does, and a refusal keeps the window open with the text", async () => {
+    const check = vi.fn(async () => REFUSED);
+    const window = open(check);
+    window.type("~/locked");
+
+    fireEvent.submit(window.field);
+
+    expect(await window.findByTestId("another-folder-refusal")).toHaveTextContent("~/locked cannot be written to.");
+    expect(check).toHaveBeenCalledWith("~/locked");
+    expect(window.field.value).toBe("~/locked");
+    expect(window.closeModal).not.toHaveBeenCalled();
+  });
+
+  it("Enter on a place that is accepted closes the window once", async () => {
+    const window = open(async () => asks("/home/deck/Games"));
+    window.type("~/Games");
+
+    fireEvent.submit(window.field);
+
+    await waitFor(() => expect(window.onAccepted).toHaveBeenCalledWith(CHOSEN));
+    expect(window.closeModal).toHaveBeenCalledTimes(1);
+  });
+
+  it("Enter does nothing while a question is shown, or while the field is empty", async () => {
+    const check = vi.fn(async () => asks("/sd/Tender", { tender_parent: "/sd" }));
+    const window = open(check);
+    fireEvent.submit(window.field);
+    window.type("/sd/Tender");
+    window.ok();
+    await window.findByTestId("another-folder-question");
+
+    fireEvent.submit(window.field);
+    await Promise.resolve();
+
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(window.getByTestId("another-folder-question")).toBeInTheDocument();
+    expect(window.closeModal).not.toHaveBeenCalled();
+  });
+
   it("Cancel in the footer closes the window with nothing chosen", () => {
     const window = open(async (text) => asks(text));
 

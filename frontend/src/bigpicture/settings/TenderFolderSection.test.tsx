@@ -243,6 +243,19 @@ describe("TenderFolderSection", () => {
     expect((tile.firstElementChild as HTMLElement).style.whiteSpace).toBe("nowrap");
   });
 
+  it("on the tile in use, the Default tag wraps to a line of its own rather than run under the badge", () => {
+    const { getByTestId } = render(<TenderFolderSection folder={view()} />);
+    const kindLine = getByTestId("tender-folder-tile-internal").firstElementChild as HTMLElement;
+    const kind = kindLine.firstElementChild as HTMLElement;
+
+    expect(kindLine.style.flexWrap).toBe("wrap");
+    expect(kindLine.style.paddingRight).toBe("56px");
+    expect(kindLine).toHaveTextContent("Default");
+    expect(kind).toHaveTextContent("Internal storage");
+    expect(kind.style.overflow).toBe("hidden");
+    expect(kind.style.textOverflow).toBe("ellipsis");
+  });
+
   it("a path may break only after a slash", () => {
     const { getByTestId } = render(<TenderFolderSection folder={view()} />);
     const path = [...getByTestId(`tender-folder-tile-${SD.mount_point}`).querySelectorAll("span")].find(

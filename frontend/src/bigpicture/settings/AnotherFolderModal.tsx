@@ -10,7 +10,7 @@
  * it with nothing chosen. The backend calls are the caller's, passed in.
  */
 
-import { ChangeEvent, FC, KeyboardEvent, useRef, useState } from "react";
+import { ChangeEvent, FC, useRef, useState } from "react";
 import { DialogButton, Focusable, TextField } from "@decky/ui";
 import { isEndpointFailure, logError } from "../../api/backend";
 import type { TenderFolderState, TenderPlaceAsks, TenderPlaceRefusal } from "../../types";
@@ -131,6 +131,8 @@ export const AnotherFolderModal: FC<AnotherFolderModalProps> = ({
       onSubmit={() => {
         if (canSubmit) void submit();
       }}
+      // Enter in the field and R2 do what OK does: only an accepted place closes the window.
+      dialogOKSubmits={true}
     >
       <TextField
         focusOnMount={true}
@@ -141,10 +143,6 @@ export const AnotherFolderModal: FC<AnotherFolderModalProps> = ({
           current.current = e.target.value;
           setText(e.target.value);
           setShown(null);
-        }}
-        // Enter (the on-screen keyboard's confirm key) does what OK does.
-        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-          if (e.key === "Enter" && canSubmit) void submit();
         }}
       />
       {shown?.kind === "refusal" && (
