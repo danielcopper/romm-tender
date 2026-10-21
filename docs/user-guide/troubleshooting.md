@@ -666,15 +666,13 @@ stores one when it asked SteamGridDB and found the game there. What a game witho
 Once RomM has the id, the next sync brings it over, and the background artwork job then gives the game its SteamGridDB
 wide grid and logo where it has none yet, and its SteamGridDB icon in place of Tender's logo; the hero comes when the
 game's page is opened. To have them at once, tap **Refresh Artwork** on the game's page: it asks RomM for the id,
-downloads that game's hero banner, logo, wide grid and icon anew and applies them, replacing an image you picked in the
-picker below too, where SteamGridDB has such an image for that game. Opening the game's page for the first time in a
-session, once a sync has brought the id over from RomM, sets the hero banner, logo, wide grid and icon only where the
-game has none yet (Tender's logo counts as no icon), so a picked image stays there until you tap **Refresh Artwork** or
-switch the game to another version.
+downloads Tender's pick anew for every image on automatic and applies it; an image you picked in the ARTWORK tab and one
+set in Steam stay. Opening the game's page for the first time in a session, once a sync has brought the id over from
+RomM, sets the hero banner, logo, wide grid and icon only where the game has none yet (Tender's logo counts as no icon).
 
-For a game SteamGridDB lists under another name, or not at all, a scan may find nothing. **Refresh Artwork** then opens
-a picker where you search SteamGridDB by name and apply a match; Tender remembers it, so the next **Refresh Artwork**
-uses that game without asking again, until RomM has an id of its own for the game. If a game genuinely has no artwork
+For a game SteamGridDB lists under another name, or not at all, a scan may find nothing. The game's **ARTWORK** tab then
+offers **Choose game…**, where you search SteamGridDB by name and apply a match; Tender remembers it until RomM has an
+id of its own for the game ([The ARTWORK tab](managing-games.md#the-artwork-tab)). If a game genuinely has no artwork
 uploaded to SteamGridDB, those slots fall back to Steam's defaults — you can contribute artwork there to help the
 community.
 

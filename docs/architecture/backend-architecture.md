@@ -529,25 +529,27 @@ and a path change). Two compare layers run per unit, both in `ArtworkService`:
   rule is "Set in Steam" under [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#game-page-artwork)) is left out
   of the apply's cover download altogether: nothing is downloaded for it, the commit copies nothing over its
   `{app_id}p.png`, and its fingerprint is not advanced ([#2381](https://github.com/danielcopper/romm-tender/issues/2381)
-  D4, D9). The rule reads the ROM already bound to the shortcut, so a sync that moves the binding to another version of
-  the game writes that version's cover over a hand-set one, as a version switch does (D8).
+  D4, D9), and so is a cover the user chose from SteamGridDB in the ARTWORK tab (D1). The rule reads the ROM already
+  bound to the shortcut, so a sync that moves the binding to another version of the game writes that version's cover
+  over a hand-set one, as a version switch does (D8).
 - **The invalidation pass** (`refresh_changed_covers`, reached through `CoverPreparer` from `_sync_one_unit` before the
   cover download): for every BOUND fetched ROM whose stored fingerprint differs — delta-skipped ROMs included — it
   re-downloads the cache file (atomic tmp+rename), republishes the grid `{app_id}p.png` copy, persists the new
   fingerprint in a small write UoW (an observed server fact, deliberately NOT ack-coupled like
-  `applied_launch_options`), and collects `{rom_id, app_id}`. A changed cover that is set in Steam is skipped with its
-  cache and its fingerprint as they are, so RomM's change stays pending
-  ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D9). A later sync does not reliably fetch it: once
-  the platform's apply completes, the platform skip rebuilds its rows without their covers until something else on it
-  changes. Refresh Artwork on the game page reloads RomM's cover at once (`refresh_cover`, which does not ask whether
-  the cover is set in Steam). The pass scans against the unit's bound-row registry projection
-  (`LocalLibraryReader.do_read_apply_registry`, which carries `cover_source`) — the same read the group collapse diffs
-  against, so it opens no per-ROM DB lookups. That list rides the unit's **first** `sync_apply_unit` chunk as
-  `cover_refreshes`, clipped to the session-budget headroom left after the chunk's own projected cost (each refresh ≈
-  one transient cover, `COVER_TRANSIENT_KB`) — clipped, never pausing the run: the grid files are already updated, a
-  Steam restart shows the rest. The frontend re-applies each entry via `SetCustomArtworkForApp` at the 50 ms cadence
-  before the chunk ack — without that push the tile stays stale in-session, since `rt_custom_image_mtime` only bumps
-  through `SetCustomArtworkForApp` or a client restart.
+  `applied_launch_options`), and collects `{rom_id, app_id}`. A changed cover that is set in Steam, or that the user
+  chose, is skipped with its cache and its fingerprint as they are (`_covers_left_alone_io`), so RomM's change stays
+  pending ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D9). A later sync does not reliably fetch
+  it: once the platform's apply completes, the platform skip rebuilds its rows without their covers until something else
+  on it changes. Setting the cover back to automatic in the ARTWORK tab reloads RomM's cover at once
+  (`refresh_cover_unchecked`, under `set_artwork_slot_automatic`'s rules), and Refresh Artwork reloads it while the
+  cover is automatic (`refresh_cover`, which itself does not ask; the frontend asks the tab's slots first). The pass
+  scans against the unit's bound-row registry projection (`LocalLibraryReader.do_read_apply_registry`, which carries
+  `cover_source`) — the same read the group collapse diffs against, so it opens no per-ROM DB lookups. That list rides
+  the unit's **first** `sync_apply_unit` chunk as `cover_refreshes`, clipped to the session-budget headroom left after
+  the chunk's own projected cost (each refresh ≈ one transient cover, `COVER_TRANSIENT_KB`) — clipped, never pausing the
+  run: the grid files are already updated, a Steam restart shows the rest. The frontend re-applies each entry via
+  `SetCustomArtworkForApp` at the 50 ms cadence before the chunk ack — without that push the tile stays stale
+  in-session, since `rt_custom_image_mtime` only bumps through `SetCustomArtworkForApp` or a client restart.
 - **The preview-side count** (`sync_preview` → `CoverPreparer.count_cover_refreshes` →
   `ArtworkService.count_cover_refreshes`): `classify_roms` is deliberately cover-blind (ADR-0025), so a cover-only
   server change yields an empty shortcut delta — and the QAM's preview flow used to short-circuit on "no changes",
@@ -555,16 +557,17 @@ and a path change). Two compare layers run per unit, both in `ArtworkService`:
   therefore counts the fingerprint mismatches itself, with the SAME pure kernel the apply pass scans by
   (`scan_cover_refresh_candidates` — shared via `domain/cover_refresh.py`), as an in-memory compare of the fetched union
   (platform and collection units alike) against the registry projection the classify already read, and leaves out the
-  covers set in Steam through the same read the pass makes (`services/artwork/_cover_set_in_steam.py`): one read UoW
-  over the changed covers' recorded outcomes, the grid file and the cover cache of each. Preview count and apply set
-  agree while Steam's grid directory does not change between the two. No downloads, no writes. The result rides the
-  summary as the additive `cover_refresh_count` (absent/0 tolerated by old consumers); the frontend treats a cover-only
-  preview (all diffs zero, count > 0) as apply-able, showing "No shortcut changes — N cover updates" with the normal
-  Apply/Cancel confirm. NULL-fingerprint rows are not counted: their adopt-vs-download fork needs a cache-file check the
-  preview must not perform, and the adopt is invisible to the user. The wholesale platform-skip gate needs no cover
-  awareness to fetch a cover change — the change bumps the ROM's `updated_at`, which already forces the fetch; a skipped
-  platform's registry-reconstructed thin ROMs carry no cover fields and count 0. So a change the pass skipped because
-  the cover was set in Steam is not fetched again by a later skipped sync (above).
+  covers set in Steam or chosen by the user through the same read the pass makes
+  (`services/artwork/_cover_set_in_steam.py`): one read UoW over the changed covers' recorded outcomes, the grid file
+  and the cover cache of each. Preview count and apply set agree while Steam's grid directory does not change between
+  the two. No downloads, no writes. The result rides the summary as the additive `cover_refresh_count` (absent/0
+  tolerated by old consumers); the frontend treats a cover-only preview (all diffs zero, count > 0) as apply-able,
+  showing "No shortcut changes — N cover updates" with the normal Apply/Cancel confirm. NULL-fingerprint rows are not
+  counted: their adopt-vs-download fork needs a cache-file check the preview must not perform, and the adopt is
+  invisible to the user. The wholesale platform-skip gate needs no cover awareness to fetch a cover change — the change
+  bumps the ROM's `updated_at`, which already forces the fetch; a skipped platform's registry-reconstructed thin ROMs
+  carry no cover fields and count 0. So a change the pass skipped because the cover was set in Steam is not fetched
+  again by a later skipped sync (above).
 - **The empty-unit chunk vehicle**: a cover-only unit has an empty apply delta, but `build_unit_chunks` yields exactly
   one empty chunk for it (ADR-0023's empty-unit round-trip), so the `cover_refreshes` list still rides a
   `sync_apply_unit` frame with `shortcuts: []`; the frontend processes the refreshes and acks the empty chunk, and the

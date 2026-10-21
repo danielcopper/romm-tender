@@ -770,9 +770,10 @@ until that apply writes the collection a stamp with both.
 
 `033_add_artwork_slot_choices.sql` (`user_version = 33`) widens `artwork_slot_outcomes`' slot `CHECK` with `hero` and
 `cover`, rebuilding the table in place as `028` did, so the hero is recorded by the rule the other SteamGridDB slots
-follow; nothing records a cover outcome yet. It creates `artwork_slot_choices` — one row per ROM and slot with the
-SteamGridDB image id the user chose and `chosen_at` in REAL Unix-epoch seconds, `STRICT`, the same slot `CHECK`, and
-`ON DELETE CASCADE` to `roms` — and adds the nullable `roms.chosen_sgdb_id INTEGER`, the SteamGridDB game the user chose
+follow, and a cover chosen from SteamGridDB is recorded as `set` (no other cover outcome is). It creates
+`artwork_slot_choices` — one row per ROM and slot with the SteamGridDB image id the user chose and `chosen_at` in REAL
+Unix-epoch seconds, `STRICT`, the same slot `CHECK`, and `ON DELETE CASCADE` to `roms` — and adds the nullable
+`roms.chosen_sgdb_id INTEGER`, the SteamGridDB game the user chose
 ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D1, D8). Both are created empty and NULL: nothing was
 chosen before the migration. How each is read is [Game page artwork](steam-non-steam-shortcuts.md#game-page-artwork).
 
