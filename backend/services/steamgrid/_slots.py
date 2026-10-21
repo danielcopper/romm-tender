@@ -10,7 +10,6 @@ the leases; nothing here does.
 from __future__ import annotations
 
 import hashlib
-import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -25,14 +24,14 @@ from domain.sgdb_artwork import (
     sgdb_candidates_page_path,
 )
 from domain.shortcut_icon import is_icon_filled, is_icon_set_in_steam
-from lib.errors import Refused, SgdbApiError, SgdbRateLimitedError
+from lib.errors import Refused, SgdbApiError, SgdbRateLimitedError, SteamGridDirMissingError
 from models.shortcut_artwork import SlotAnswer
 from services.steamgrid._files import CachedArtwork, NoArtwork
 from services.steamgrid._refusals import RATE_LIMITED, refusal_for
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Collection, Mapping
+    from collections.abc import Callable, Collection, Mapping
 
     from domain.artwork_slot_outcome import ArtworkSlotOutcome
     from domain.sgdb_artwork import SgdbCandidate
@@ -65,7 +64,7 @@ _PAGES_WALKED_FOR_A_CHOICE = 10
 class ArtworkSlotsConfig:
     """Wiring for :class:`ArtworkSlots`.
 
-    ``cache`` reads a file in Steam's grid directory to hash it; ``cover`` is the
+    ``cache`` reads Tender's cached copy of a slot to hash it; ``cover`` is the
     cover's owner, for the cover's state.
     """
 
@@ -227,16 +226,16 @@ class ArtworkSlots:
             if recorded is not None and recorded.outcome is SlotOutcome.SET:
                 tenders_sha256 = recorded.image_sha256
             elif cached is not None:
-                tenders_sha256 = self._sha256_io(cached.path)
+                tenders_sha256 = self._sha256_io(self._cache.read_bytes, cached.path)
             if tenders_sha256 is not None:
-                png_sha256 = self._sha256_io(os.path.join(grid.grid_dir, png))
+                png_sha256 = self._sha256_io(self._steam_config.read_grid_file, png)
         return is_set_in_steam(grid.file_names, app_id, slot, png_sha256=png_sha256, tenders_sha256=tenders_sha256)
 
-    def _sha256_io(self, path: str) -> str | None:
-        """The SHA-256 of *path*'s bytes; ``None`` where it cannot be read, which is logged."""
+    def _sha256_io(self, read: Callable[[str], bytes], path: str) -> str | None:
+        """The SHA-256 of the bytes *read* answers for *path*; ``None`` where they cannot be read, which is logged."""
         try:
-            return hashlib.sha256(self._cache.read_bytes(path)).hexdigest()
-        except OSError as e:
+            return hashlib.sha256(read(path)).hexdigest()
+        except (OSError, SteamGridDirMissingError) as e:
             self._logger.warning(f"Could not read {path} to tell whether its slot is set in Steam: {e}")
             return None
 

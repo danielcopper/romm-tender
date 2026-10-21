@@ -199,6 +199,19 @@ class SteamConfigAdapter:
         with os.scandir(grid_dir) as entries:
             return frozenset(entry.name for entry in entries if entry.is_file())
 
+    def read_grid_file(self, name: str) -> bytes:
+        """The bytes of *name* in Steam's grid directory.
+
+        Raises ``lib.errors.SteamGridDirMissingError`` when the Steam grid
+        directory cannot be located, and ``OSError`` when the file cannot be
+        read.
+        """
+        grid_dir = self.grid_dir()
+        if not grid_dir:
+            raise SteamGridDirMissingError("Cannot find Steam grid directory")
+        with open(os.path.join(grid_dir, os.path.basename(name)), "rb") as f:
+            return f.read()
+
     def write_shortcut_icon(self, app_id: int, icon_bytes: bytes) -> str:
         """Write an icon PNG into Steam's grid dir and return its path.
 

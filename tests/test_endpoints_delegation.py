@@ -702,6 +702,22 @@ class TestSgdbEndpointDelegation:
         assert result == {"success": True}
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("name", "args"),
+        [
+            ("get_artwork_slots", (42, 7)),
+            ("get_artwork_slot_candidates", (42, "logo", 1)),
+            ("choose_artwork_slot_image", (42, "logo", 12)),
+            ("set_artwork_slot_automatic", (42, "cover")),
+        ],
+    )
+    async def test_the_artwork_tabs_endpoints_delegate(self, endpoints, services, name, args):
+        setattr(services.sgdb_service, name, AsyncMock(return_value={"success": True}))
+        result = await getattr(endpoints, name)(*args)
+        getattr(services.sgdb_service, name).assert_awaited_once_with(*args)
+        assert result == {"success": True}
+
+    @pytest.mark.asyncio
     async def test_save_shortcut_icon_delegates(self, endpoints, services):
         services.sgdb_service.save_shortcut_icon = AsyncMock(return_value={"ok": True})
         result = await endpoints.save_shortcut_icon(123, 41)

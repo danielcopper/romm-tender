@@ -624,3 +624,34 @@ class TestGridFileNames:
 
     def test_no_steam_user_directory_is_no_listing(self, adapter):
         assert adapter.grid_file_names() is None
+
+
+class TestReadGridFile:
+    """The bytes of a file in Steam's grid directory, read to tell whether a slot's image is Tender's."""
+
+    @staticmethod
+    def _grid(tmp_path):
+        grid = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config" / "grid"
+        grid.mkdir(parents=True)
+        return grid
+
+    def test_reads_the_named_file(self, tmp_path, adapter):
+        (self._grid(tmp_path) / "100_hero.png").write_bytes(b"hero bytes")
+
+        assert adapter.read_grid_file("100_hero.png") == b"hero bytes"
+
+    def test_a_name_with_a_directory_reads_only_inside_the_grid_directory(self, tmp_path, adapter):
+        (self._grid(tmp_path) / "100.png").write_bytes(b"in the grid")
+        (tmp_path / "100.png").write_bytes(b"outside")
+
+        assert adapter.read_grid_file("../../../../../../../100.png") == b"in the grid"
+
+    def test_a_missing_file_raises(self, tmp_path, adapter):
+        self._grid(tmp_path)
+
+        with pytest.raises(FileNotFoundError):
+            adapter.read_grid_file("100_logo.png")
+
+    def test_without_a_steam_user_the_grid_directory_is_missing(self, adapter):
+        with pytest.raises(SteamGridDirMissingError):
+            adapter.read_grid_file("100.png")
