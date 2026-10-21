@@ -2,7 +2,14 @@
 
 import pytest
 
-from lib.url_host import is_origin_change, is_valid_server_url, normalize_origin, same_origin
+from lib.url_host import (
+    carries_userinfo,
+    is_origin_change,
+    is_valid_server_url,
+    normalize_origin,
+    same_origin,
+    without_userinfo,
+)
 
 
 class TestNormalizeOrigin:
@@ -222,3 +229,32 @@ class TestIsValidServerUrl:
 
     def test_trims_before_validating(self):
         assert is_valid_server_url("\t https://romm.local \n") is True
+
+
+class TestUserinfo:
+    @pytest.mark.parametrize(
+        ("url", "shown"),
+        [
+            ("https://user:fake-pw@romm.local/api/x", "https://romm.local/api/x"),
+            ("https://user@romm.local:8443", "https://romm.local:8443"),
+            ("https://:fake-pw@romm.local", "https://romm.local"),
+            ("https://us@er:fake-pw@romm.local/a@b", "https://romm.local/a@b"),
+            ("https://user:fake-pw@[::1/api", "https://[::1/api"),
+        ],
+    )
+    def test_a_user_name_or_password_is_carried_and_taken_out(self, url, shown):
+        assert carries_userinfo(url) is True
+        assert without_userinfo(url) == shown
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://romm.local/api/x?next=a@b#c@d",
+            "https://romm.local:8443",
+            "romm.local",
+            "",
+        ],
+    )
+    def test_an_address_without_one_is_left_as_it_is(self, url):
+        assert carries_userinfo(url) is False
+        assert without_userinfo(url) == url

@@ -19,6 +19,7 @@ from typing import Any, ClassVar
 
 from adapters.romm.retry import RetryLadder, RetryListener
 from domain.custom_headers import stored_custom_headers
+from domain.header_value import no_header_can_carry
 from lib.certifi_bundle import ca_bundle as _ca_bundle
 from lib.errors import (
     DeviceWriteError,
@@ -36,8 +37,9 @@ from lib.errors import (
     RommTimeoutError,
     RommUnprocessableEntityError,
     TokenHostMismatchError,
+    TokenUnsendableError,
 )
-from lib.url_host import same_origin
+from lib.url_host import same_origin, without_userinfo
 from models.cover import CoverRevalidation
 
 _CONTENT_TYPE_JSON = "application/json"
@@ -138,6 +140,8 @@ class RommHttpAdapter:
         instead of leaking the bearer to a wrong/hostile host (#1039). A legacy
         token minted before origin stamping (origin ``None``) is still attached,
         so existing installs keep working until their next sign-in stamps it.
+        A token no header can carry raises :class:`TokenUnsendableError` before
+        it is put on a request.
 
         Returning ``None`` lets callers omit the ``Authorization`` header on
         unauthenticated probes (fresh setup, before a token is minted). An empty
@@ -150,6 +154,8 @@ class RommHttpAdapter:
         origin = self._settings.get("romm_api_token_origin")
         if origin is not None and not same_origin(origin, self._settings.get("romm_url")):
             raise TokenHostMismatchError("Stored token was minted for a different server than the configured URL")
+        if no_header_can_carry(token):
+            raise TokenUnsendableError("Stored token holds a character no HTTP header can carry")
         return f"Bearer {token}"
 
     def _apply_origin_headers(self, req: urllib.request.Request) -> None:
@@ -365,8 +371,10 @@ class RommHttpAdapter:
         Same status → type mapping as :meth:`translate_http_error` (422 keeps its
         own structured path), but the FastAPI ``detail`` string is read once and
         attached to the typed error, so a caller can branch on reasons that share
-        a status code (two 404s that differ only by ``detail``).
+        a status code (two 404s that differ only by ``detail``). The error's
+        text names *url* without its user name and password.
         """
+        url = without_userinfo(url)
         if exc.code == 422:
             return self._translate_unprocessable(exc, url, method)
         if exc.code >= 500:
@@ -382,14 +390,20 @@ class RommHttpAdapter:
 
     @staticmethod
     def _translate_unwrapped(exc: Exception, url: str, method: str) -> RommApiError:
-        """Translate non-HTTP exceptions (ssl, timeout, connection) to typed errors."""
+        """Translate non-HTTP exceptions (ssl, timeout, connection) to typed errors.
+
+        Anything else is a request ``http.client`` could not build —
+        ``InvalidURL`` for an address carrying a password, ``ValueError`` or
+        ``UnicodeEncodeError`` for a header value — and its text holds the
+        request material it refused, so only its type is kept.
+        """
         if isinstance(exc, ssl.SSLError):
             return RommSSLError(str(exc), url=url, method=method)
         if isinstance(exc, socket.timeout | TimeoutError):
             return RommTimeoutError(str(exc), url=url, method=method)
         if isinstance(exc, ConnectionError | OSError):
             return RommConnectionError(str(exc), url=url, method=method)
-        return RommApiError(f"Unexpected error: {exc}", url=url, method=method)
+        return RommApiError(f"Unexpected error: {type(exc).__name__}", url=url, method=method)
 
     def translate_http_error(
         self, exc: Exception, url: str, method: str = "GET", *, asset_route: bool = False, romm_origin: bool = True
@@ -409,7 +423,10 @@ class RommHttpAdapter:
 
         *romm_origin* is ``False`` for the third-party cover CDN: its 5xx is
         never RomM reporting an error, whatever its body says.
+
+        The error's text names *url* without its user name and password.
         """
+        url = without_userinfo(url)
         if isinstance(exc, urllib.error.HTTPError):
             if exc.code == 422:
                 # A 422 carries a structured validation body (FastAPI's

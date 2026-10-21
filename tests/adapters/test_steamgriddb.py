@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from adapters.steamgriddb import SteamGridDbAdapter
-from lib.errors import SgdbApiError, SgdbRateLimitedError
+from lib.errors import SgdbApiError, SgdbKeyUnsendableError, SgdbRateLimitedError
 
 
 @pytest.fixture
@@ -290,3 +290,29 @@ class TestTooManyRequests:
             assert adapter.download_image("https://cdn2.steamgriddb.com/icon/x.png", str(dest)) is False
         assert "SGDB image download failed: HTTP Error 404: Not Found" in caplog.text
         assert not dest.exists()
+
+
+class TestAKeyNoHeaderCanCarry:
+    @pytest.mark.parametrize(
+        "key",
+        [
+            pytest.param("fake-sgdb-key\r\nX-Injected: 1", id="line-break"),
+            pytest.param("fake-sgdb-key-\u2019", id="past-latin-1"),
+        ],
+    )
+    @pytest.mark.parametrize("call", ["request", "verify_api_key"])
+    def test_it_is_refused_before_any_request_and_named_nowhere(self, key, call):
+        adapter = SteamGridDbAdapter(
+            settings={"steamgriddb_api_key": key}, logger=logging.getLogger("test"), user_agent="romm-tender/9.9.9"
+        )
+        ask = {
+            "request": lambda: adapter.request("/grids/game/9999"),
+            "verify_api_key": lambda: adapter.verify_api_key(key),
+        }[call]
+
+        with patch("urllib.request.urlopen") as urlopen, pytest.raises(SgdbKeyUnsendableError) as exc_info:
+            ask()
+
+        urlopen.assert_not_called()
+        assert exc_info.value.status_code is None
+        assert "fake-sgdb-key" not in str(exc_info.value)

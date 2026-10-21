@@ -68,8 +68,9 @@ class RetryLadder:
     @staticmethod
     def is_retryable(exc: Exception) -> bool:
         """Check if an exception is a transient error worth retrying."""
-        # TokenHostMismatchError is intentionally absent: a wrong-origin token
-        # can never become right by retrying, so with_retry re-raises it at once.
+        # TokenHostMismatchError and TokenUnsendableError are intentionally
+        # absent: a wrong-origin token or one no header can carry can never
+        # become right by retrying, so with_retry re-raises either at once.
         # Refused before the branches below would take them (a 429 is a
         # RommServerError, a disk fault an OSError): another attempt seconds
         # after a 429 only adds to the load the server is turning away, and a

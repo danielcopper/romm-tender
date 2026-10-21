@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_slot_filled
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome, icon_waits
+from domain.header_value import no_header_can_carry
 from domain.sgdb_artwork import (
     asset_type_name,
     build_autocomplete_path,
@@ -38,6 +39,7 @@ from lib.errors import (
     Refused,
     ServerUnreachable,
     SgdbApiError,
+    SgdbKeyUnsendableError,
     SgdbRateLimitedError,
     SteamGridDirMissingError,
 )
@@ -88,12 +90,15 @@ def _artwork_slot(slot: object) -> ArtworkSlot:
 
 
 _KEY_REFUSED = "SteamGridDB refused the API key — check it in Settings"
+_INVALID_KEY = "Invalid API key"
 _RATE_LIMITED = "SteamGridDB is rate-limiting requests — try again in a moment"
 _ASSET_TYPES = ("hero", "logo", "grid", "icon")
 
 
 def _refusal_for(error: SgdbApiError, *, key_refused: str = _KEY_REFUSED) -> Refused:
     """The refusal an ``SgdbApiError`` answers with, *key_refused* for a 401 or 403; never the error's own text."""
+    if isinstance(error, SgdbKeyUnsendableError):
+        return AuthFailed(_INVALID_KEY)
     if error.status_code in (401, 403):
         return AuthFailed(key_refused)
     if error.status_code == 429:
@@ -104,13 +109,14 @@ def _refusal_for(error: SgdbApiError, *, key_refused: str = _KEY_REFUSED) -> Ref
 
 
 def _refuse_a_key_that_cannot_be_sent(api_key: str) -> None:
-    """Refuse a key no HTTP header can carry, one with a CR or LF or past latin-1, as ``auth_failed``.
+    """Refuse a key no HTTP header can carry (``domain.header_value``) as ``auth_failed``, before any other work.
 
-    Checked before the key reaches the adapter: ``http.client`` raises on such a
-    header value, and the exception holds the whole ``Bearer`` value.
+    The adapter refuses the same key at the request as well, which is what
+    covers the shortcut artwork job; this check gives each endpoint its answer
+    before it does anything else.
     """
-    if any(ch in "\r\n" or ch > "\xff" for ch in api_key):
-        raise AuthFailed("Invalid API key")
+    if no_header_can_carry(api_key):
+        raise AuthFailed(_INVALID_KEY)
 
 
 @dataclass(frozen=True)
@@ -817,7 +823,7 @@ class SteamGridService:
             data = await self._loop.run_in_executor(None, self._sgdb_api.verify_api_key, api_key)
         except SgdbApiError as e:
             self._logger.warning(f"SGDB API key verification failed: {e}")
-            raise _refusal_for(e, key_refused="Invalid API key") from e
+            raise _refusal_for(e, key_refused=_INVALID_KEY) from e
         if not data.get("success"):
             raise AuthFailed("API key rejected by SteamGridDB")
         return {"success": True, "message": "API key is valid"}
@@ -1008,7 +1014,7 @@ class SteamGridService:
         except SgdbApiError as e:
             if e.status_code == 404:
                 return _NoArtwork.NONE
-            if e.status_code in (401, 403):
+            if e.status_code in (401, 403) or isinstance(e, SgdbKeyUnsendableError):
                 return SlotAnswer.KEY_REFUSED
             self._logger.warning(f"SGDB {asset_type} fetch failed for rom_id={rom_id}: HTTP {e.status_code}")
         except Exception as e:

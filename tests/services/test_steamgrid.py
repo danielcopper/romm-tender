@@ -6,6 +6,7 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from _factories import (
@@ -30,6 +31,7 @@ from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.steam_config import SteamConfigAdapter
+from adapters.steamgriddb import SteamGridDbAdapter
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, SlotOutcome
 from domain.rom import Rom
@@ -2663,6 +2665,55 @@ class TestTheJobsSlotFetch:
 
         assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.FAILED
         assert fake_steamgrid_db_api.requested_paths == []
+
+
+class TestTheJobsSlotFetchWithAKeyNoHeaderCanCarry:
+    """The shortcut artwork job's fetch over the real ``SteamGridDbAdapter``, with a stored key that cannot be sent."""
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            pytest.param("fake-sgdb-key-6b4\r\nX-Injected: 1", id="line-break"),
+            pytest.param("fake-sgdb-key-6b4\u2019", id="past-latin-1"),
+        ],
+    )
+    @pytest.mark.parametrize("slot", [ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO])
+    def test_it_is_a_refused_key_and_no_part_of_it_is_logged(
+        self, steamgrid, uow, slot_ready, sgdb_artwork_cache, fake_romm_api, logger, caplog, key, slot
+    ):
+        caplog.set_level(logging.DEBUG)
+        steamgrid.settings["steamgriddb_api_key"] = key
+        service = SteamGridService(
+            config=SteamGridServiceConfig(
+                sgdb_api=SteamGridDbAdapter(settings=steamgrid.settings, logger=logger, user_agent="romm-tender/9.9.9"),
+                romm_api=fake_romm_api,
+                steam_config=steamgrid.steam_config,
+                sgdb_artwork_cache=sgdb_artwork_cache,
+                settings=steamgrid.settings,
+                loop=running_loop(),
+                logger=logger,
+                settings_persister=FakeSettingsPersister(),
+                get_pending_sync=dict,
+                log_debug=SettingsAwareDebugLogger(
+                    settings={**steamgrid.settings, "log_level": "debug"}, logger=logger
+                ),
+                uow_factory=FakeUnitOfWorkFactory(uow=uow),
+                conflict_rules=_make_conflict_rules(),
+                downscale_icon=lambda data: data,
+                clock=steamgrid.clock,
+            )
+        )
+
+        with (
+            patch("http.client.HTTPSConnection.connect", side_effect=OSError("no network in this test")) as connect,
+        ):
+            answer = service.do_fetch_slot_artwork(42, slot)
+
+        assert answer is SlotAnswer.KEY_REFUSED
+        connect.assert_not_called()
+        assert "fake-sgdb-key" not in caplog.text
+        assert "Bearer" not in caplog.text
+        assert uow.artwork_slot_outcomes.save_count == 0
 
 
 class TestTheReplacingPathCarriesWhatTheReportNeeds:

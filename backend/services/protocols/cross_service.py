@@ -803,7 +803,8 @@ class ShortcutArtworkSource(Protocol):
         page uses. ``READY`` once the cache holds it; ``NONE``, recorded, when
         SteamGridDB has no candidate or does not know the game, or the ROM has
         no SteamGridDB id stored (no request then); a 429 ``RATE_LIMITED``; a
-        401 or 403 ``KEY_REFUSED``; anything else ``FAILED``, unrecorded.
+        401 or 403, or a stored key no HTTP header can carry, ``KEY_REFUSED``;
+        anything else ``FAILED``, unrecorded.
         Synchronous — callers on the loop offload it.
         """
         ...

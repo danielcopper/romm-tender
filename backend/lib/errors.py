@@ -10,6 +10,7 @@ import socket
 from typing import Any
 
 from lib.list_result import ErrorCode
+from lib.url_host import without_userinfo
 
 
 class SgdbApiError(Exception):
@@ -21,6 +22,13 @@ class SgdbApiError(Exception):
     def __init__(self, status_code: int | None, message: str) -> None:
         super().__init__(message)
         self.status_code = status_code
+
+
+class SgdbKeyUnsendableError(SgdbApiError):
+    """A stored SteamGridDB API key no HTTP header can carry, refused before any request was made."""
+
+    def __init__(self) -> None:
+        super().__init__(None, "Invalid API key")
 
 
 class SgdbRateLimitedError(SgdbApiError):
@@ -40,7 +48,7 @@ class SteamGridDirMissingError(Exception):
 
 
 class RommApiError(Exception):
-    """Base exception for all RomM HTTP API errors."""
+    """Base exception for all RomM HTTP API errors; its ``url`` never carries the address's user name or password."""
 
     status_code = None
     # Parsed FastAPI ``detail`` body, populated only by the request paths that
@@ -54,7 +62,7 @@ class RommApiError(Exception):
     phrase: str | None = None
 
     def __init__(self, message, url=None, method=None):
-        self.url = url
+        self.url = without_userinfo(url) if url is not None else None
         self.method = method
         super().__init__(message)
 
@@ -175,6 +183,14 @@ class TokenHostMismatchError(RommApiError):
     Raised before any request carries the bearer token to a host the token was
     not minted for, so the credential never leaks to a wrong/hostile server.
     Non-retryable: replaying it cannot succeed, only re-signing-in can.
+    """
+
+
+class TokenUnsendableError(RommApiError):
+    """The stored Client API Token holds a character no HTTP header can carry.
+
+    Raised before the token is put on a request. Non-retryable: only signing in
+    again stores a token that can be sent.
     """
 
 
@@ -322,6 +338,8 @@ def classify_error(exc):
         return ErrorCode.UNSUPPORTED.value, f"This feature requires RomM {exc.min_version} or newer"
     if isinstance(exc, TokenHostMismatchError):
         return "config_error", "Your saved RomM login is for a different server. Sign in again to continue."
+    if isinstance(exc, TokenUnsendableError):
+        return "config_error", "Your saved RomM login cannot be used. Sign in again to continue."
     if isinstance(exc, RommSyncDisabledError):
         return (
             "device_sync_disabled",

@@ -97,6 +97,46 @@ def is_valid_server_url(url: str) -> bool:
     return normalize_origin(url.strip()) is not None
 
 
+# urllib takes no credentials from an address: ``http.client`` reads the
+# ``user:password@host`` authority as a host with a non-numeric port and raises
+# ``InvalidURL`` before any request leaves.
+ADDRESS_WITH_USERINFO_MESSAGE = (
+    "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; "
+    "use Sign in under RomM Account instead."
+)
+
+
+def _userinfo_end(url: str) -> tuple[int, int] | None:
+    """Where *url*'s ``user:password@`` part starts and where the host after it begins, or ``None``.
+
+    Read off the text the way ``urllib.parse.urlsplit`` bounds the authority —
+    after ``//``, up to the first ``/``, ``?`` or ``#`` — but without parsing,
+    so an address ``urlsplit`` refuses is still read.
+    """
+    start = url.find("//")
+    if start == -1:
+        return None
+    start += 2
+    end = len(url)
+    for delimiter in "/?#":
+        found = url.find(delimiter, start)
+        if found != -1:
+            end = min(end, found)
+    at = url.rfind("@", start, end)
+    return None if at == -1 else (start, at + 1)
+
+
+def carries_userinfo(url: str) -> bool:
+    """Whether *url*'s authority carries a user name, a password or both."""
+    return _userinfo_end(url) is not None
+
+
+def without_userinfo(url: str) -> str:
+    """*url* with its user name and password taken out, every other character as it was."""
+    span = _userinfo_end(url)
+    return url if span is None else url[: span[0]] + url[span[1] :]
+
+
 def romm_namespace(settings: dict[str, Any]) -> str:
     """Return the stable server/user namespace destructive RomM proofs belong to."""
     origin = normalize_origin(str(settings.get("romm_url") or "")) or "invalid-origin"

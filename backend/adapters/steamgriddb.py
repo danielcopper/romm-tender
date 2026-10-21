@@ -11,8 +11,9 @@ import urllib.error
 import urllib.request
 from typing import TYPE_CHECKING, Any
 
+from domain.header_value import no_header_can_carry
 from lib.certifi_bundle import ca_bundle as _ca_bundle
-from lib.errors import SgdbApiError, SgdbRateLimitedError
+from lib.errors import SgdbApiError, SgdbKeyUnsendableError, SgdbRateLimitedError
 
 if TYPE_CHECKING:
     import logging
@@ -46,6 +47,8 @@ class SteamGridDbAdapter:
 
     def _get_json(self, url: str, api_key: str) -> dict[str, Any]:
         """Authenticated GET of *url*, answering SteamGridDB's JSON object; raises as ``SteamGridDbApi`` states."""
+        if no_header_can_carry(api_key):
+            raise SgdbKeyUnsendableError
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {api_key}")
         req.add_header("User-Agent", self._user_agent)

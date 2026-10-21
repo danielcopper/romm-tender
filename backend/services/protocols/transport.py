@@ -553,7 +553,9 @@ class SteamGridDbApi(Protocol):
     ``request`` and ``verify_api_key`` raise ``lib.errors.SgdbApiError`` on
     every failure to reach SteamGridDB or to read its answer: ``status_code`` is
     the HTTP status of a non-2xx answer (401/403 for a key it refuses), and
-    ``None`` where there is none.
+    ``None`` where there is none. A key no HTTP header can carry
+    (``domain.header_value``) raises ``lib.errors.SgdbKeyUnsendableError``, an
+    ``SgdbApiError`` with no status, before any request is made.
     """
 
     def request(self, path: str) -> dict[str, Any] | None:
