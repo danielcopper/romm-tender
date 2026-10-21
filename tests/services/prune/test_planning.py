@@ -226,7 +226,6 @@ class TestRefusals:
             drift_answer={"drifted": False, "only_here": True, "stranding": "unsynced"},
         )
         assert isinstance(plan, GroupPlan)
-        assert plan.drifted is True
 
     async def test_a_drifted_save_with_save_sync_off_leaves_the_group_free(self):
         rows = [_rom(1, app_id=0x8001)]
@@ -237,7 +236,6 @@ class TestRefusals:
             options=_options(create_recovery_bundle=False),
         )
         assert isinstance(plan, GroupPlan)
-        assert plan.drifted is False
 
 
 class TestAGameShownAsGoneEntirely:
@@ -298,12 +296,6 @@ class TestPlans:
             "shortcut_version_kept",
             "The version this game's shortcut is on is kept while another version is on RomM; switch versions first.",
         )
-
-    async def test_drift_rides_the_plan_when_a_bundle_will_be_sealed(self):
-        rows = [_rom(1, app_id=0x8001)]
-        plan, _ = await _plan(rows, {1: "vanished"}, drifted=True)
-        assert isinstance(plan, GroupPlan)
-        assert plan.drifted is True
 
     async def test_an_unbound_vanished_row_plans_a_plain_row_removal(self):
         rows = [_rom(1)]

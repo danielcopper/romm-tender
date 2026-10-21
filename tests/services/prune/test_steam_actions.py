@@ -41,7 +41,6 @@ def _plan(*, rows: list[Rom], whole_game: bool = False) -> GroupPlan:
         delete_ids={rows[0].rom_id},
         fully_dead=whole_game,
         whole_game_action=whole_game,
-        drifted=False,
     )
 
 

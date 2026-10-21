@@ -45,7 +45,6 @@ class GroupPlan:
     delete_ids: set[int]
     fully_dead: bool
     whole_game_action: bool
-    drifted: bool
 
 
 @dataclass(frozen=True)
@@ -187,7 +186,7 @@ class GroupPlanner:
         if not delete_ids:
             return self._nothing_to_do(rows, proof.uncertain_ids, spared_bound=spared_bound)
 
-        stranded, unsynced = await self._probe_drift(rows, bound_row, proof, whole_game_action, options)
+        unsynced = await self._stranding_refusal(rows, bound_row, proof, whole_game_action, options)
         if unsynced is not None:
             return unsynced
 
@@ -199,7 +198,6 @@ class GroupPlanner:
             delete_ids=delete_ids,
             fully_dead=proof.fully_dead,
             whole_game_action=whole_game_action,
-            drifted=stranded,
         )
 
     def _log_liveness(
@@ -258,34 +256,33 @@ class GroupPlanner:
             rows, "skipped", "options_excluded", "No confirmed rows matched the selected options."
         )
 
-    async def _probe_drift(
+    async def _stranding_refusal(
         self,
         rows: list[Rom],
         bound_row: Rom | None,
         proof: _GroupLiveness,
         whole_game_action: bool,
         options: PruneOptions,
-    ) -> tuple[bool, dict[str, Any] | None]:
-        """Ask whether the shortcut this run would change still holds saves it would strand.
+    ) -> dict[str, Any] | None:
+        """Skip the group where its shortcut holds saves this run would strand and no bundle seals them.
 
         The drift probe's verdict decides
         (``domain/save_stranding.py::stranding_verdict``); a check that could
         not read says so in its own message.
         """
         if bound_row is None or bound_row.rom_id not in proof.vanished_ids:
-            return False, None
+            return None
         if not whole_game_action:
-            return False, None
+            return None
         stranding = (await self._drift_probe(bound_row.rom_id))["stranding"]
-        stranded = stranding != STRANDING_NONE
-        if stranded and not options.create_recovery_bundle:
-            return stranded, self._results.group_result(
-                rows,
-                "skipped",
-                "unsynced_saves",
-                _UNCHECKED_SAVES_MESSAGE if stranding == STRANDING_UNCHECKED else _UNSYNCED_SAVES_MESSAGE,
-            )
-        return stranded, None
+        if stranding == STRANDING_NONE or options.create_recovery_bundle:
+            return None
+        return self._results.group_result(
+            rows,
+            "skipped",
+            "unsynced_saves",
+            _UNCHECKED_SAVES_MESSAGE if stranding == STRANDING_UNCHECKED else _UNSYNCED_SAVES_MESSAGE,
+        )
 
 
 __all__ = ["GroupPlan", "GroupPlanner", "GroupPlannerConfig"]
