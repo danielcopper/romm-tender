@@ -2519,18 +2519,32 @@ class TestReportSlotArtwork:
     @pytest.mark.parametrize(
         "args",
         [
-            ("cover", "set", 9999, 12, "ab"),
             ("grid", "lost", 9999, 12, "ab"),
             ("grid", "set", 9999, None, "ab"),
             ("grid", "set", 9999, 12, ""),
         ],
-        ids=["the-cover", "unknown-outcome", "set-without-id", "set-without-hash"],
+        ids=["unknown-outcome", "set-without-id", "set-without-hash"],
     )
     async def test_a_report_that_cannot_be_recorded_is_refused(self, steamgrid, uow, slot_ready, args):
         with pytest.raises(Refused) as refused:
             await steamgrid.service.report_sgdb_slot_artwork(42, *args)
 
         assert refused.value.reason == "invalid_payload"
+        assert uow.artwork_slot_outcomes.save_count == 0
+
+    @pytest.mark.asyncio
+    async def test_a_cover_set_from_steamgriddb_records_its_image_and_hash(self, steamgrid, uow, slot_ready):
+        answer = await steamgrid.service.report_sgdb_slot_artwork(42, "cover", "set", 9999, 12, "ab" * 32)
+
+        recorded = _outcome(uow, ArtworkSlot.COVER)
+        assert answer == {"success": True}
+        assert (recorded.outcome, recorded.image_id, recorded.image_sha256) == (SlotOutcome.SET, 12, "ab" * 32)
+
+    @pytest.mark.asyncio
+    async def test_a_cover_steam_refused_records_nothing(self, steamgrid, uow, slot_ready):
+        answer = await steamgrid.service.report_sgdb_slot_artwork(42, "cover", "refused", 9999, None, None)
+
+        assert answer == {"success": True}
         assert uow.artwork_slot_outcomes.save_count == 0
 
     @pytest.mark.asyncio

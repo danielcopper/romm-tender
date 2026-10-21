@@ -711,19 +711,26 @@ class SteamGridService:
         ``get_sgdb_slot_artwork`` or ``get_sgdb_artwork_base64`` answered for a
         wide grid, logo or hero, or, for an icon, what :meth:`save_shortcut_icon`
         answered or the shortcut artwork job's batch named, passed back.
+        The cover is reported too once the ARTWORK tab set a SteamGridDB image
+        on it: a ``set`` is recorded, so that image is read as Tender's, and a
+        ``refused`` records nothing, since no cover is recorded as refused.
         Refuses with ``invalid_payload`` for a slot that is not recorded, an
         unknown outcome, or a ``set`` without its image id and hash.
         """
         async with self._rules.hold("report_sgdb_slot_artwork", prune=True):
             record = self._reported_outcome(int(rom_id), slot, outcome, sgdb_id, image_id, sha256)
-            await self._loop.run_in_executor(None, self._record_slot_outcome, record)
+            if record is not None:
+                await self._loop.run_in_executor(None, self._record_slot_outcome, record)
             return {"success": True}
 
-    def _reported_outcome(self, rom_id, slot, outcome, sgdb_id, image_id, sha256) -> ArtworkSlotOutcome:
-        artwork_slot = _artwork_slot(slot)
+    def _reported_outcome(self, rom_id, slot, outcome, sgdb_id, image_id, sha256) -> ArtworkSlotOutcome | None:
+        artwork_slot = ArtworkSlot.COVER if slot == ArtworkSlot.COVER else _artwork_slot(slot)
         sgdb_id = int(sgdb_id) if sgdb_id is not None else None
         now = self._clock.time()
         if outcome == SlotOutcome.REFUSED:
+            if artwork_slot is ArtworkSlot.COVER:
+                self._log_debug(f"Steam refused the cover chosen for rom_id={rom_id}; nothing is recorded")
+                return None
             return ArtworkSlotOutcome.record_refused(rom_id=rom_id, slot=artwork_slot, sgdb_id=sgdb_id, recorded_at=now)
         if outcome != SlotOutcome.SET:
             raise Refused("invalid_payload", f"Unknown artwork outcome: {outcome}")

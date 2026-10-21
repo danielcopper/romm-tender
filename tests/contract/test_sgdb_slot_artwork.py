@@ -111,14 +111,12 @@ async def test_an_unknown_slot_answers_the_failure_shape(harness, grid):
     assert answer == {"success": False, "reason": "invalid_payload", "message": "Unknown artwork slot: banner"}
 
 
-async def test_a_cover_report_answers_the_failure_shape(harness, grid):
-    answer = await harness.endpoints.report_sgdb_slot_artwork(_ROM_ID, "cover", "set", 9999, 12, "ab")
+async def test_a_cover_report_is_recorded_in_the_real_table(harness, grid):
+    answer = await harness.endpoints.report_sgdb_slot_artwork(_ROM_ID, "cover", "set", 9999, 12, "ab" * 32)
 
-    assert answer == {
-        "success": False,
-        "reason": "invalid_payload",
-        "message": "The cover slot is not filled from SteamGridDB",
-    }
+    recorded = _outcome(harness, ArtworkSlot.COVER)
+    assert answer == {"success": True}
+    assert (recorded.outcome, recorded.image_id, recorded.image_sha256) == (SlotOutcome.SET, 12, "ab" * 32)
 
 
 async def test_the_heros_report_is_recorded_in_the_real_table(harness, grid):
