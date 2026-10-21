@@ -709,6 +709,16 @@ class TestFakeArtworkSlotOutcomeRepository:
         assert repo.get(1, ArtworkSlot.WIDE_GRID) is None
         assert repo.get(2, ArtworkSlot.LOGO) == self._none(2, ArtworkSlot.LOGO)
 
+    def test_delete_slot_drops_one_slot(self):
+        repo = FakeArtworkSlotOutcomeRepository()
+        repo.save(self._none(1, ArtworkSlot.LOGO))
+        repo.save(self._none(1, ArtworkSlot.WIDE_GRID))
+
+        repo.delete_slot(1, ArtworkSlot.LOGO)
+
+        assert repo.get(1, ArtworkSlot.LOGO) is None
+        assert repo.get(1, ArtworkSlot.WIDE_GRID) == self._none(1, ArtworkSlot.WIDE_GRID)
+
     def test_an_orphan_row_aborts_the_commit(self):
         uow = FakeUnitOfWork()
         orphan = self._none(42, ArtworkSlot.LOGO)
@@ -755,6 +765,19 @@ class TestFakeArtworkSlotChoiceRepository:
         assert repo.get(1, ArtworkSlot.WIDE_GRID) == self._choice(1, ArtworkSlot.WIDE_GRID)
         assert repo.get(1, ArtworkSlot.HERO) == self._choice(1, ArtworkSlot.HERO, image_id=2)
         assert repo.get(1, ArtworkSlot.LOGO) is None
+
+    def test_list_delete_slot_and_delete_for_rom(self):
+        repo = FakeArtworkSlotChoiceRepository()
+        repo.save(self._choice(1, ArtworkSlot.WIDE_GRID))
+        repo.save(self._choice(1, ArtworkSlot.HERO))
+        repo.save(self._choice(2, ArtworkSlot.HERO))
+
+        repo.delete_slot(1, ArtworkSlot.HERO)
+        assert repo.list_for_rom(1) == [self._choice(1, ArtworkSlot.WIDE_GRID)]
+
+        repo.delete_for_rom(1)
+        assert repo.list_for_rom(1) == []
+        assert repo.list_for_rom(2) == [self._choice(2, ArtworkSlot.HERO)]
 
     def test_an_orphan_row_aborts_the_commit(self):
         uow = FakeUnitOfWork()

@@ -84,6 +84,19 @@ class TestDeletingAGamesRows:
         assert uow.artwork_slot_outcomes.get(5, ArtworkSlot.LOGO) is None
         assert uow.artwork_slot_outcomes.get(6, ArtworkSlot.LOGO) == _set(6, ArtworkSlot.LOGO)
 
+    def test_delete_slot_drops_that_slot_of_that_rom_only(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        _seed_rom(uow, 6)
+        uow.artwork_slot_outcomes.save(_set(5, ArtworkSlot.WIDE_GRID))
+        uow.artwork_slot_outcomes.save(_set(5, ArtworkSlot.LOGO))
+        uow.artwork_slot_outcomes.save(_set(6, ArtworkSlot.LOGO))
+
+        uow.artwork_slot_outcomes.delete_slot(5, ArtworkSlot.LOGO)
+
+        assert uow.artwork_slot_outcomes.get(5, ArtworkSlot.LOGO) is None
+        assert uow.artwork_slot_outcomes.get(5, ArtworkSlot.WIDE_GRID) == _set(5, ArtworkSlot.WIDE_GRID)
+        assert uow.artwork_slot_outcomes.get(6, ArtworkSlot.LOGO) == _set(6, ArtworkSlot.LOGO)
+
     def test_the_rows_go_with_their_rom(self, db: str):
         with SqliteUnitOfWork(db) as uow:
             _seed_rom(uow, 5)

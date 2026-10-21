@@ -318,6 +318,10 @@ class ArtworkSlotOutcomeRepository(Protocol):
         """Drop every slot's record of *rom_id*. A no-op when none exists."""
         ...
 
+    def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:
+        """Drop the record of *rom_id*'s *slot*. A no-op when none exists."""
+        ...
+
 
 class ArtworkSlotChoiceRepository(Protocol):
     """Persistence seam for the ``ArtworkSlotChoice`` aggregate (the image a user chose per ROM and slot).
@@ -331,6 +335,18 @@ class ArtworkSlotChoiceRepository(Protocol):
 
     def save(self, choice: ArtworkSlotChoice) -> None:
         """Upsert *choice* under its ``(rom_id, slot)``."""
+        ...
+
+    def list_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
+        """Every slot choice of *rom_id*, in no particular order."""
+        ...
+
+    def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:
+        """Drop the choice of *rom_id*'s *slot*, setting it back to automatic. A no-op when none exists."""
+        ...
+
+    def delete_for_rom(self, rom_id: int) -> None:
+        """Drop every slot choice of *rom_id*. A no-op when none exists."""
         ...
 
 
