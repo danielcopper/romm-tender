@@ -4,7 +4,10 @@ import * as backend from "../api/backend";
 import type { TenderFolderState, TenderPlaceAsks } from "../types";
 import { TENDER_FOLDER_AT_HOME } from "../test-utils/tenderFolder";
 import { showCreateMissingModal, showForgetRecordedModal, showTenderNamedModal } from "./settings/TenderFolderModals";
+import { showToast } from "../utils/toast";
 import { useTenderFolder } from "./useTenderFolder";
+
+vi.mock("../utils/toast", () => ({ showToast: vi.fn() }));
 
 vi.mock("./settings/TenderFolderModals", () => ({
   showCreateMissingModal: vi.fn(),
@@ -17,6 +20,15 @@ const ON_SD: TenderFolderState = {
   place: "/run/media/deck/SD",
   folder: "/run/media/deck/SD/Tender",
   default: false,
+  drives: [
+    {
+      name: "Emulation",
+      mount_point: "/run/media/deck/SD",
+      kind: "sd_card",
+      folder: "/run/media/deck/SD/Tender",
+      free_bytes: 1,
+    },
+  ],
 };
 
 function asks(place: string, overrides: Partial<TenderPlaceAsks> = {}): TenderPlaceAsks {
@@ -160,6 +172,59 @@ describe("useTenderFolder", () => {
         ),
       );
       expect(backend.chooseTenderPlace).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the toast after a switch", () => {
+    it("names a drive by its kind and name", async () => {
+      const hook = await mounted();
+
+      act(() => hook.result.current.chooseDrive("/run/media/deck/SD"));
+
+      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on SD card · Emulation."));
+    });
+
+    it("names the internal storage as this device", async () => {
+      vi.mocked(backend.chooseTenderPlace).mockResolvedValue(TENDER_FOLDER_AT_HOME);
+      const hook = await mounted();
+
+      act(() => hook.result.current.chooseDefault());
+
+      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on This device."));
+    });
+
+    it("names another folder by its path", async () => {
+      vi.mocked(backend.checkTenderPlace).mockResolvedValue(asks("/home/deck/Games"));
+      vi.mocked(backend.chooseTenderPlace).mockResolvedValue({
+        ...TENDER_FOLDER_AT_HOME,
+        place: "/home/deck/Games",
+        folder: "/home/deck/Games/Tender",
+        default: false,
+      });
+      const hook = await mounted();
+
+      act(() => hook.result.current.chooseTyped("~/Games"));
+
+      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on /home/deck/Games/Tender."));
+    });
+
+    it("is not raised for a refused choice or for forgetting", async () => {
+      vi.mocked(backend.chooseTenderPlace).mockResolvedValue({
+        success: false,
+        reason: "place_not_writable",
+        message: "/locked cannot be written to.",
+      });
+      vi.mocked(backend.forgetTenderFolderRecords).mockResolvedValue(TENDER_FOLDER_AT_HOME);
+      vi.mocked(showForgetRecordedModal).mockResolvedValue(true);
+      const hook = await mounted();
+
+      act(() => hook.result.current.chooseDrive("/locked"));
+      await waitFor(() => expect(hook.result.current.refusal).toBe("/locked cannot be written to."));
+      act(() => hook.result.current.forget("/sd/Tender"));
+      await waitFor(() => expect(backend.forgetTenderFolderRecords).toHaveBeenCalled());
+      await waitFor(() => expect(hook.result.current.busy).toBe(false));
+
+      expect(showToast).not.toHaveBeenCalled();
     });
   });
 

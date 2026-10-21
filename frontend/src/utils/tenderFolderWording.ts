@@ -25,7 +25,7 @@ const CONDITION_ENDINGS: Record<TenderFolderCondition, string> = {
   folder_not_writable: "the folder cannot be written to.",
 };
 
-/** The folder and why it cannot be used, as Main's notice and the settings' current place say it. */
+/** The folder and why it cannot be used, as Main's notice says it. */
 export function folderConditionLine(folder: string, condition: TenderFolderCondition): string {
   return `${folder}: ${CONDITION_ENDINGS[condition]}`;
 }
@@ -111,6 +111,17 @@ const CONDITION_PILLS: Record<TenderFolderCondition, string> = {
 /** The pill beside the place in use: reachable, or why its folder cannot be used. */
 export function conditionPill(condition: TenderFolderCondition | null): string {
   return condition === null ? "Reachable" : CONDITION_PILLS[condition];
+}
+
+/** The toast after a switch: the new place by the name its tile carries, or its folder where no tile names it. */
+export function switchedToast(state: TenderFolderState): string {
+  const drive = state.drives.find((candidate) => candidate.mount_point === state.place);
+  const label = state.default
+    ? INTERNAL_NAME
+    : drive === undefined
+      ? state.folder
+      : `${driveKind(drive)} · ${drive.name}`;
+  return `Tender's folder is now on ${label}.`;
 }
 
 export function freeLine(bytes: number): string {

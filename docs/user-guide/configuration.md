@@ -369,8 +369,10 @@ it does nothing.
   whether you meant the folder above it; where folders of the path do not exist yet, it names them and asks before
   creating them. A path on a drive that is not connected is refused.
 
-A place whose `Tender/` would be the folder in use is answered as already Tender's folder; one whose `Tender/` would lie
-inside the folder in use, or hold it, is refused — both before any question.
+A place whose `Tender/` would be the folder in use is answered as already Tender's folder, and so is a typed path that
+names the folder in use itself, such as `~/Tender` while it lies there; one whose `Tender/` would lie inside the folder
+in use, or hold it, is refused — all before any question. After a switch, a short message names the new place:
+**Tender's folder is now on This device.**, on the drive by its kind and name, or on the folder.
 
 A place is refused where `Tender/` would lie inside an emulator source's ROM folder or inside the folder a source keeps
 a system's games in — also where that folder is a link to another drive — or would hold a ROM folder. So is a place

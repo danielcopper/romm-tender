@@ -18,7 +18,8 @@ import {
 } from "../api/backend";
 import type { TenderFolderForgetRefusal, TenderFolderRefusal, TenderFolderState, TenderPlaceRefusal } from "../types";
 import { detach } from "../utils/detach";
-import { placeRefusalSentence } from "../utils/tenderFolderWording";
+import { placeRefusalSentence, switchedToast } from "../utils/tenderFolderWording";
+import { showToast } from "../utils/toast";
 import { showCreateMissingModal, showForgetRecordedModal, showTenderNamedModal } from "./settings/TenderFolderModals";
 
 export interface TenderFolderView {
@@ -59,7 +60,8 @@ export function useTenderFolder(): TenderFolderView {
     };
   }, []);
 
-  const run = (change: () => Promise<Answer | null>) => {
+  /** Run *change*; a *switches* change that is answered with a state says so in a toast. */
+  const run = (change: () => Promise<Answer | null>, switches = false) => {
     if (busy) return;
     setBusy(true);
     detach(
@@ -72,6 +74,7 @@ export function useTenderFolder(): TenderFolderView {
           } else {
             setRefusal(null);
             setState(answer);
+            if (switches) showToast(switchedToast(answer));
           }
         } catch (e) {
           logError(`Failed to change Tender's folder: ${e}`);
@@ -111,10 +114,10 @@ export function useTenderFolder(): TenderFolderView {
     state,
     busy,
     refusal,
-    chooseDefault: () => run(() => chooseTenderPlace(null)),
-    chooseDrive: (mountPoint) => run(() => chooseTenderPlace(mountPoint)),
-    chooseTyped: (text) => run(() => chooseAfterAsking(text)),
-    switchToRecorded: (folder) => run(() => switchToRecordedTenderFolder(folder)),
+    chooseDefault: () => run(() => chooseTenderPlace(null), true),
+    chooseDrive: (mountPoint) => run(() => chooseTenderPlace(mountPoint), true),
+    chooseTyped: (text) => run(() => chooseAfterAsking(text), true),
+    switchToRecorded: (folder) => run(() => switchToRecordedTenderFolder(folder), true),
     forget: (folder) =>
       run(async () => ((await showForgetRecordedModal(folder)) ? forgetTenderFolderRecords(folder) : null)),
   };
