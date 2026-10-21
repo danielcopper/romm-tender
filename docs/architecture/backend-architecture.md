@@ -1856,14 +1856,14 @@ a different destination, not the same one. A legacy token minted before origin s
 None` and is treated as un-bound: it is still attached (never blocked) so existing installs
 keep working until their next sign-in stamps the origin.
 
-**An address carrying a user name or password is refused where it is entered and where the connection is checked.** No
-request to such an address reaches RomM; why is the comment above the two sentences in `lib/url_host.py`.
-`carries_userinfo` beside them decides it, and each refusal is a `config_error`: `ENTERED_ADDRESS_WITH_USERINFO_MESSAGE`
-when the URL is saved (`SettingsService.save_server_url`), and `STORED_ADDRESS_WITH_USERINFO_MESSAGE` at each of the
-three sign-ins — the panel signs in with the URL it holds saved — and at `test_connection`, before any request. The
-panel's Connection row names it _Remove login from RomM URL_. A stored one is not refused anywhere else: a sync, a
-download or any other request to it is still attempted and fails, with errors that carry no login (below, "what an
-error's text carries").
+**An address carrying a user name or password is refused where it is entered, and, saved, at each sign-in and at the
+connection check.** No request to such an address reaches RomM; why is the comment above the two sentences in
+`lib/url_host.py`. `carries_userinfo` beside them decides it, and each refusal is a `config_error`:
+`ENTERED_ADDRESS_WITH_USERINFO_MESSAGE` when the URL is saved (`SettingsService.save_server_url`), and
+`STORED_ADDRESS_WITH_USERINFO_MESSAGE` at each of the three sign-ins — the panel signs in with the URL it holds saved —
+and at `test_connection`, before any request. The panel's Connection row names it _Remove login from RomM URL_. A stored
+one is not refused anywhere else: a sync, a download or any other request to it is still attempted and fails, with
+errors that carry no login (below, "what an error's text carries").
 
 **A stored token no HTTP header can carry is refused before it is used.** `auth_header()` raises `TokenUnsendableError`
 for a token holding a CR, an LF or a character past latin-1 (`domain/header_value.py`, the same rule the SteamGridDB key
