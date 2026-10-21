@@ -34,6 +34,7 @@ Pure text in, value object out. No I/O — the machine seam supplies the texts.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Callable, Literal, Sequence
 
@@ -154,7 +155,11 @@ class RejectedDirectory:
 
     ``path_is_directory`` failed on it, so that read set nothing
     (``configuration.c:6920-6932``). ``layer`` is the chain file that stated
-    the value, ``value`` the value as RetroArch tested it (``~`` expanded). Unlike
+    the value, ``value`` the value as the configs spell it, ``~`` expanded —
+    the line to edit. ``tested`` is the folder the test was made at, where
+    that is not ``value`` itself: a relative value joined to the working
+    directory it resolves against, which RetroArch opens and the configs
+    never spell. Unlike
     :class:`IgnoredSetting` this is not a spelling mistake: the value is
     well-formed, the machine just has no such directory.
 
@@ -170,6 +175,7 @@ class RejectedDirectory:
     layer: "CfgSource"
     value: str
     superseded: bool = False
+    tested: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,7 +199,8 @@ class RetroArchCfg:
 
     ``keys`` says which family this is — which four cfg keys were read, and
     therefore what the fields below mean. ``directory`` is the resolved root
-    value with ``~`` expanded, or ``None`` when the platform default applies
+    value with ``~`` expanded and a relative value joined to the working
+    directory the caller gave, or ``None`` when the platform default applies
     (key absent, blank, or the literal ``"default"``). RetroArch initializes
     platform default directories before applying the config — on desktop Unix
     the SRAM default is ``saves`` and the savestate default ``states``, both
@@ -212,6 +219,10 @@ class RetroArchCfg:
     kind of gap for the root: values RetroArch read and found not to be
     directories. ``appended_overridden`` names each governing key an appended
     file sets whose standing value an override supplied instead.
+    ``relative_root_read`` says whether the root that stands, or a refusal
+    ``rejected_directories`` states, came from a relative value and so was
+    opened from the working directory — which is when that directory matters
+    to the answer. A relative value a later read replaced does not count.
     """
 
     keys: LayoutKeys
@@ -223,6 +234,7 @@ class RetroArchCfg:
     ignored: tuple[IgnoredSetting, ...] = ()
     rejected_directories: tuple[RejectedDirectory, ...] = ()
     appended_overridden: tuple[AppendedOverridden, ...] = ()
+    relative_root_read: bool = False
 
 
 # RetroArch's parser, ported line for line from ``config_file.c`` (pinned
@@ -524,6 +536,62 @@ def expand_home(raw: str, *, home: str | None) -> str | None:
     return raw
 
 
+def _opened_from(value: str, *, working_directory: str | None) -> str:
+    """Where *value* is opened once :func:`expand_home` is done with it.
+
+    ``fill_pathname_expand_special`` expands a leading ``~`` or ``:`` and
+    nothing else (``file_path.c:1066-1101``), so any other relative value
+    reaches the filesystem calls as written and resolves against the working
+    directory of the RetroArch process — the launch's. *working_directory* is
+    that directory as the caller states it: a host path, against which the
+    joined value is normalised, or a template standing for it, which is joined
+    as written, because normalising would cancel a ``..`` against the template
+    itself. ``None`` leaves the value as written.
+    """
+    if working_directory is None or value.startswith("/") or is_app_relative(value):
+        return value
+    joined = os.path.join(working_directory, value)
+    return os.path.normpath(joined) if os.path.isabs(working_directory) else joined
+
+
+# What a root's provenance line adds where the value was relative and joined.
+_RELATIVE_NOTE = (
+    " — a relative value, opened from the working directory of the RetroArch process "
+    "(file_path.c:1066-1101 expands only a leading ~ or :)"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _RootRead:
+    """One root value as the configs spell it (``~`` expanded) and as RetroArch opens it.
+
+    ``spelled`` is ``None`` where the value sets no path (:func:`expand_home`);
+    ``opened`` is the folder below the working directory where the value is
+    relative, and ``None`` where it is ``spelled`` itself.
+    """
+
+    spelled: str | None
+    opened: str | None = None
+
+    @property
+    def tested(self) -> str | None:
+        """The folder ``path_is_directory`` is asked about."""
+        return self.opened or self.spelled
+
+    def passes(self, check: "DirectoryCheck | None") -> bool:
+        """Whether the read sets the root: a path, and one the directory test accepts."""
+        return self.tested is not None and (check is None or check(self.tested))
+
+
+def _root_candidate(raw: str, *, home: str | None, working_directory: str | None) -> _RootRead:
+    """The value as the configs spell it with ``~`` expanded, and the folder RetroArch tests for it."""
+    expanded = expand_home(raw, home=home)
+    if expanded is None:
+        return _RootRead(None)
+    opened = _opened_from(expanded, working_directory=working_directory)
+    return _RootRead(expanded, opened if opened != expanded else None)
+
+
 # Which file of the chain a value was read from — the kind, not the path. Five
 # kinds and no more, in RetroArch's load order: the global cfg, the files a
 # launch appends with ``--appendconfig`` (``configuration.c:6309-6353``), and
@@ -789,7 +857,8 @@ def _resolve_directory(
     home: str | None,
     is_directory: DirectoryCheck | None,
     appended_is_directory: DirectoryCheck | None = None,
-) -> tuple[str | None, _Resolved, tuple[RejectedDirectory, ...]]:
+    working_directory: str | None = None,
+) -> tuple[str | None, _Resolved, tuple[RejectedDirectory, ...], bool]:
     """The family's root through the chain — ``None`` when the platform default applies.
 
     Each read is validated the way ``config_load_file`` validates it
@@ -828,9 +897,16 @@ def _resolve_directory(
 
     An application-relative value (``:`` prefix) is kept as written: it names a
     directory only the running process knows, and the consumer states that
-    rather than expanding it into a host path atlas cannot verify.
+    rather than expanding it into a host path atlas cannot verify. Any other
+    relative value is joined to *working_directory* (:func:`_opened_from`)
+    before it is tested, so the test and the answer name the folder RetroArch
+    opens rather than one below atlas's own working directory; a refusal keeps
+    the value as the configs spell it and names that folder beside it. The
+    last element says whether the root that stands, or a refusal, was joined
+    so.
     """
     directory: str | None = None
+    standing_relative = False
     source = (
         f"default: {keys.directory} unset — RetroArch platform default applies "
         f"({keys.platform_default_subdir} under the config tree, platform_unix.c:2133-2136)"
@@ -838,32 +914,33 @@ def _resolve_directory(
     # Which read produced the root that stands decides how a refusal reads: a
     # refusal the chain never got past fell back to what preceded it, while one
     # a later read overwrote did not — see RejectedDirectory.superseded.
-    refusals: list[tuple[int, CfgSource, str]] = []
+    refusals: list[tuple[int, CfgSource, str, str | None]] = []
     last_set = -1
     reads = _read_layers(layers, keys.directory)
     for index, (layer, parsed, is_override) in enumerate(reads):
         raw = parsed.values[keys.directory]
         suffix = " (override wins)" if is_override else ""
         if raw == _UNSET_VALUE:
-            directory, last_set = None, index
+            directory, last_set, standing_relative = None, index, False
             source = (
                 f'{layer.label}: {keys.directory} = "{raw}" — resets to the RetroArch '
                 f"platform default{suffix}"
             )
             continue
-        candidate = expand_home(raw, home=home)
+        read = _root_candidate(raw, home=home, working_directory=working_directory)
         check = _directory_check(layer, is_directory=is_directory, appended_is_directory=appended_is_directory)
-        if candidate is None or (check is not None and not check(candidate)):
-            refusals.append((index, layer, candidate if candidate is not None else raw))
+        if not read.passes(check):
+            refusals.append((index, layer, read.spelled or raw, read.opened))
             continue
-        directory, last_set = candidate, index
-        source = f'{layer.label}: {keys.directory} = "{raw}"{suffix}'
+        directory, last_set, standing_relative = read.tested, index, read.opened is not None
+        source = f'{layer.label}: {keys.directory} = "{raw}"{_RELATIVE_NOTE if read.opened else ""}{suffix}'
     rejected = [
-        RejectedDirectory(layer, value, superseded=index < last_set)
-        for index, layer, value in refusals
+        RejectedDirectory(layer, value, superseded=index < last_set, tested=tested)
+        for index, layer, value, tested in refusals
     ]
     deciding = reads[last_set] if last_set >= 0 else None
-    return directory, _Resolved(source, deciding), tuple(rejected)
+    relative = standing_relative or any(entry.tested is not None for entry in rejected)
+    return directory, _Resolved(source, deciding), tuple(rejected), relative
 
 
 def _dropped_governing_lines(layers: Sequence[_Layer], keys: LayoutKeys) -> tuple[IgnoredSetting, ...]:
@@ -895,6 +972,7 @@ def resolve_layout(
     overrides: Sequence[CfgLayer] = (),
     is_directory: DirectoryCheck | None = None,
     appended_is_directory: DirectoryCheck | None = None,
+    working_directory: str | None = None,
 ) -> RetroArchCfg:
     """Resolve one family's layout through the override chain, as RetroArch reads it.
 
@@ -940,6 +1018,11 @@ def resolve_layout(
         The same test for a root an appended file states, where the caller
         answers it through the program's own view of the filesystem rather
         than through *is_directory*. Omitted, *is_directory* tests those too.
+    working_directory:
+        The working directory of the RetroArch process, which a relative root
+        value resolves against in every layer — the launch's own, or a
+        template standing for it where the caller does not know it. Omitted, a
+        relative value is taken as written.
     """
     empty = ParsedCfg({})
     layers: list[_Layer] = [
@@ -962,8 +1045,13 @@ def resolve_layout(
     sort_by_core, r3, i3 = _resolve_flag(
         layers, keys.sort_by_core, default=defaults.sort_by_core, defaults_label=defaults_label
     )
-    directory, r4, rejected = _resolve_directory(
-        layers, keys=keys, home=home, is_directory=is_directory, appended_is_directory=appended_is_directory
+    directory, r4, rejected, relative = _resolve_directory(
+        layers,
+        keys=keys,
+        home=home,
+        is_directory=is_directory,
+        appended_is_directory=appended_is_directory,
+        working_directory=working_directory,
     )
     resolved = (r1, r2, r3, r4)
     overridden = (_appended_overridden(layers, key, r) for key, r in zip(keys.governing, resolved, strict=True))
@@ -977,5 +1065,6 @@ def resolve_layout(
         sources=tuple(r.source for r in resolved),
         ignored=(*_dropped_governing_lines(layers, keys), *i1, *i2, *i3),
         rejected_directories=rejected,
+        relative_root_read=relative,
         appended_overridden=tuple(o for o in overridden if o is not None),
     )

@@ -40,6 +40,7 @@ from .contract import (
     launchable_contract,
     mod_answer_contract,
     platform_systems_contract,
+    rom_locations_contract,
     rom_placement_contract,
     roots_contract,
     savefile_answer_contract,
@@ -118,6 +119,7 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
         catalogue_contract,
     ),
     "rom-location": (lambda target, args: target.rom_location(args.system), rom_placement_contract),
+    "rom-locations": (lambda target, _args: target.rom_locations(), rom_locations_contract),
     "launchable": (
         lambda target, args: target.launchable(args.system, args.content),
         launchable_contract,
@@ -322,6 +324,12 @@ def build_parser() -> argparse.ArgumentParser:
         "rom-location", parents=[common, selecting], help="where this system's ROMs are kept"
     )
     rom.add_argument("system", help=_SYSTEM_ID_HELP)
+
+    commands.add_parser(
+        "rom-locations",
+        parents=[common, selecting],
+        help="where every system the systems answer lists keeps its ROMs",
+    )
 
     launch = commands.add_parser(
         "launchable",

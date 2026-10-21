@@ -54,6 +54,7 @@ from .installations import (
     LaunchabilityAnswer,
     LaunchCommandAnswer,
     PlatformSystemsAnswer,
+    RomLocationsAnswer,
     RomPlacement,
     SystemPlatformsAnswer,
     SystemsAnswer,
@@ -273,6 +274,10 @@ class EveryInstallation:
     def rom_location(self, system: str) -> tuple[InstallationAnswer[RomPlacement], ...]:
         """Where each installation keeps *system*'s ROMs, or why it states nowhere."""
         return self._ask(lambda installation: installation.rom_location(system))
+
+    def rom_locations(self) -> tuple[InstallationAnswer[RomLocationsAnswer], ...]:
+        """Where each installation keeps every system's ROMs, or why it states nowhere."""
+        return self._ask(lambda installation: installation.rom_locations())
 
     def launchable(
         self, system: str, content_path: str

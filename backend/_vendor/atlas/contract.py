@@ -54,6 +54,7 @@ from .installations import (
     LaunchabilityAnswer,
     LaunchCommandAnswer,
     PlatformSystemsAnswer,
+    RomLocationsAnswer,
     RomPlacement,
     RootsAnswer,
     SystemPlatformsAnswer,
@@ -862,6 +863,25 @@ def rom_placement_contract(placement: RomPlacement) -> dict[str, Any]:
         "physical_dir": placement.physical_dir,
         "extensions": list(placement.extensions),
         "caveats": _caveats_contract(placement.caveats),
+    }
+
+
+def rom_locations_contract(answer: RomLocationsAnswer) -> dict[str, Any]:
+    """The stable form of every system's ROM placement — one entry per system, and the catalogue's caveats.
+
+    ``placements`` keeps the systems answer's order, and each entry's
+    ``placement`` is :func:`rom_placement_contract` of the answer the
+    per-system question gives, so a client reads one entry exactly as it reads
+    that question's answer. The top-level ``caveats`` are the systems answer's:
+    on an empty list they say whether the catalogue declares no systems or
+    could not be read.
+    """
+    return {
+        "placements": [
+            {"system": entry.system, "placement": rom_placement_contract(entry.placement)}
+            for entry in answer.placements
+        ],
+        "caveats": _caveats_contract(answer.caveats),
     }
 
 

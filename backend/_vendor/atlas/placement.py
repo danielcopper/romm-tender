@@ -554,6 +554,30 @@ CAVEAT_APPENDED_CONFIG_OVERRIDDEN = "appended-config-overridden"
 # answer, ``data`` naming the sandbox's ``app_id``; a RetroArch running on the
 # host has no sandbox and never carries it.
 CAVEAT_APPENDED_CONFIG_VISIBILITY_UNESTABLISHED = "appended-config-visibility-unestablished"
+# The same unknown for the save and savestate folders the global cfg and the
+# overrides set: RetroDECK's model of its sandbox cannot tell whether RetroArch
+# sees one of them (a Flatpak overrides file that sets the filesystem grants, a
+# path under ``/run/user``), so the folder is read as the host's own path: the
+# host's directory test decides it, and a spelling only the sandbox has, such
+# as one under ``/run/user``, passes untested beside
+# ``sandbox-path-untranslated``. The same holds for the working directory a
+# relative folder of any layer is joined to (#647 D2): a ``cwd``, or the
+# sandbox ``HOME`` RetroArch falls back to, that the model cannot tell is
+# taken as shown, read as the host's. One note per
+# answer, ``data`` naming the sandbox's ``app_id``. Only where atlas models the
+# sandbox: where it does not, every such answer would carry it and tell a
+# client nothing, so those folders are read as the host's without it. The
+# folders the appended files set keep the note above.
+CAVEAT_SAVE_DIRECTORY_VISIBILITY_UNESTABLISHED = "save-directory-visibility-unestablished"
+# The ``cwd`` a question names is not where RetroArch runs inside RetroDECK's
+# sandbox (#647 D2): flatpak hands bubblewrap no ``--chdir`` without an explicit
+# ``--cwd`` (``common/flatpak-run.c:3634-3635`` at flatpak 1.16.6), and
+# bubblewrap changes into the old working directory only where the sandbox maps
+# it, otherwise into ``$HOME``, otherwise ``/`` (``bubblewrap.c:3407-3426`` at
+# v0.12.0). The sandbox shows nothing at ``cwd``, so a relative save folder is
+# opened from the directory it fell back to. ``data``: ``app_id``, the ``cwd``
+# the caller named, and the ``working_directory`` the process runs in instead.
+CAVEAT_CWD_HIDDEN_IN_SANDBOX = "cwd-hidden-in-sandbox"
 # The entry runs a standalone emulator, which never reads RetroArch's
 # configuration, so the appended files the question was asked with change
 # nothing: the answer is the one without them, and this note says the redirect
@@ -632,10 +656,13 @@ CAVEAT_SAVE_ROOT_REVOKED = "save-root-revoked"
 CAVEAT_DEAD_SYMLINK = "dead-symlink"
 CAVEAT_SYMLINK_LOOP = "symlink-loop"
 CAVEAT_SAVE_DIR_UNLISTABLE = "save-dir-unlistable"
-# The working_directory root's rider: the directory is a property of how the
-# emulator is launched, not of anything on disk, so no read of the machine can
-# resolve it — the answer stays a template whose one hole only the launcher
-# can fill. A question asked with ``cwd=`` has it filled and states no rider.
+# The rider of a save location only the launch's working directory completes —
+# the working_directory root, an emulator's relative save path, and a relative
+# RetroArch save or savestate folder (#647): the directory is a property of
+# how the emulator is launched, not of anything on disk, so no read of the
+# machine can resolve it — the answer stays a template whose one hole only the
+# launcher can fill. A question asked with ``cwd=`` has it filled and states no
+# rider.
 CAVEAT_SAVE_DIR_LAUNCH_DEPENDENT = "save-dir-launch-dependent"
 # No separate save file exists: the loaded content file itself takes the
 # writes. The file set is a declared emptiness — true as stated — and this
@@ -1139,6 +1166,11 @@ def checked_cwd(cwd: str | None) -> str | None:
     if cwd is not None and not os.path.isabs(cwd):
         raise ValueError(f"cwd must be an absolute path, got {cwd!r}")
     return cwd
+
+
+def cwd_templated(directory: str) -> bool:
+    """Is this directory the launch's own — the ``<cwd>`` template or below it?"""
+    return directory == TEMPLATE_CWD or directory.startswith(TEMPLATE_CWD + "/")
 
 
 def checked_appendconfig(appendconfig: Sequence[str]) -> tuple[str, ...]:
@@ -2486,6 +2518,25 @@ class _ResolvedDirectory:
     sources: tuple[str, ...]
 
 
+def _placement_root(
+    layout: RetroArchCfg, *, platform_default_dir: str, content_dir_path: str | None
+) -> tuple[str, str | None]:
+    """The root the path math builds on (``runloop.c:8785-8813``), and the hole it leaves, if any.
+
+    The content's own directory where the flag roots there, otherwise the
+    configured root or the platform default. A configured root can be the
+    ``<cwd>`` template: a relative value the launch's working directory
+    completes (#647).
+    """
+    if layout.in_content_dir:
+        if content_dir_path is not None:
+            return content_dir_path, None
+        return TEMPLATE_CONTENT_DIR, HOLE_CONTENT_DIR
+    if layout.directory is None:
+        return platform_default_dir, None
+    return layout.directory, HOLE_CWD if cwd_templated(layout.directory) else None
+
+
 def _resolve_placement_dir(
     *,
     layout: RetroArchCfg,
@@ -2503,21 +2554,15 @@ def _resolve_placement_dir(
     only thing that differs is which four settings were read, which is what
     ``layout.keys`` carries.
     """
-    needs: list[str] = []
     sources = list(layout.sources)
-    keys = layout.keys
-
-    if layout.in_content_dir:
-        rooted_in_content = True
-        sources.append(f"layout: root is the ROM's own directory ({keys.in_content_dir})")
-        if content_dir_path is not None:
-            parts = [content_dir_path]
-        else:
-            parts = [TEMPLATE_CONTENT_DIR]
-            needs.append(HOLE_CONTENT_DIR)
-    else:
-        rooted_in_content = False
-        parts = [platform_default_dir if layout.directory is None else layout.directory]
+    rooted_in_content = layout.in_content_dir
+    if rooted_in_content:
+        sources.append(f"layout: root is the ROM's own directory ({layout.keys.in_content_dir})")
+    root, root_hole = _placement_root(
+        layout, platform_default_dir=platform_default_dir, content_dir_path=content_dir_path
+    )
+    parts = [root]
+    needs: list[str] = [root_hole] if root_hole is not None else []
 
     if layout.sort_by_content:
         if content_dir_name is not None:

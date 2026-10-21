@@ -21,12 +21,14 @@ syntactically correct path handed out as if it were usable.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
 import shlex
 import tomllib
 from glob import escape as _glob_escape
+from types import MappingProxyType
 from typing import (
     Any,
     Callable,
@@ -44,7 +46,7 @@ from typing import (
 from dataclasses import dataclass, field, replace as _dc_replace
 
 from . import _xml as _ET
-from ._question import one_question
+from ._question import once, one_question
 from . import whdload
 from .content_path import (
     content_basename,
@@ -259,6 +261,8 @@ from .placement import (
     CAVEAT_APPENDED_CONFIG_NOT_READ,
     CAVEAT_APPENDED_CONFIG_OVERRIDDEN,
     CAVEAT_APPENDED_CONFIG_VISIBILITY_UNESTABLISHED,
+    CAVEAT_SAVE_DIRECTORY_VISIBILITY_UNESTABLISHED,
+    CAVEAT_CWD_HIDDEN_IN_SANDBOX,
     CAVEAT_UNVERIFIED_VERSION,
     CAVEAT_PER_GAME_ALTERNATIVE_EMULATOR,
     CAVEAT_PER_GAME_BUILD_LAYER_UNREAD,
@@ -299,6 +303,7 @@ from .placement import (
     ROOT_CONTENT_DIRECTORY,
     ROOT_EMULATOR_DIRECTORY,
     ROOT_SAVEFILE_DIRECTORY,
+    ROOT_SAVESTATE_DIRECTORY,
     ROOT_SYSTEM_DIRECTORY,
     ROOT_WORKING_DIRECTORY,
     STATE_ROOT_CONTENT_DIRECTORY,
@@ -384,6 +389,7 @@ from .placement import (
     build_soft_patch_candidates,
     checked_appendconfig,
     checked_cwd,
+    cwd_templated,
     file_set_holes,
     needs_with_file_set,
 )
@@ -737,11 +743,13 @@ _ANY_INI_GLOB = "*.ini"
 # "/var/config/retroarch/config". Verified on this machine — /var/config and
 # ~/.var/app/<app id>/config are the same inode, as are /var/data and /var/cache
 # against .../data and .../cache (docs/research/retrodeck-save-placement.md,
-# "Flatpak sandbox spellings").
+# "Flatpak sandbox spellings"). The sandbox's own /var/tmp is bound the same
+# way, to .../cache/tmp, as the sandbox's mount table shows.
 _SANDBOX_XDG_BINDS: tuple[tuple[str, str], ...] = (
     ("/var/config", "config"),
     ("/var/data", "data"),
     ("/var/cache", "cache"),
+    ("/var/tmp", "cache/tmp"),  # NOSONAR S5443: a sandbox spelling to translate; nothing is written here
 )
 
 # Where a flatpak app reads its own deploy tree: the deploy's ``files``
@@ -1046,8 +1054,9 @@ _FLATPAK_BUILT_DIRS = frozenset(("/var", "/run"))
 # ``/boot``, ``/efi`` and ``/root`` are therefore not where the sandbox's
 # paths of those names lead: what the sandbox has there is what flatpak binds
 # into them on purpose — the per-app directories, ``/var/home``,
-# ``/run/media`` and ``/run/host``, each answered by name — and an explicit
-# grant, which the view checks first. Anything else there is no file the
+# ``/run/media`` and ``/run/host``, each answered by name, the target of a
+# link in the host's root, read off the machine — and an explicit grant,
+# which the view checks first. Anything else there is no file the
 # frontend sees, the host's copy included: the host's
 # ``/var/lib/flatpak/exports`` entries the shipped find rules name never hit.
 # The sandbox's ``/etc``, ``/tmp``, ``/dev``, ``/proc`` and ``/sys`` are not
@@ -1055,6 +1064,15 @@ _FLATPAK_BUILT_DIRS = frozenset(("/var", "/run"))
 # does not read, so a path there is not established rather than a miss.
 _FLATPAK_HOST_HIDDEN = frozenset(("var", "run", "boot", "efi", "root"))
 _FLATPAK_SANDBOX_OWN = frozenset(("etc", "tmp", "dev", "proc", "sys"))
+# The whole ``dont_mount_in_root`` list (flatpak-context.c:2765-2786 @ 1.16.6):
+# the names of the host's root a ``host`` grant leaves out. Every other entry
+# is exposed, and one that is a symlink is exposed by its target, the link
+# recreated beside it (flatpak-exports.c:1013-1050) — which is how an ostree
+# host's ``/mnt -> var/mnt``, ``/opt`` or ``/srv`` reaches into its ``/var``.
+_FLATPAK_DONT_MOUNT_IN_ROOT = frozenset(
+    ("app", "bin", "boot", "dev", "efi", "etc", "lib", "lib32", "lib64")
+    + ("proc", "root", "run", "sbin", "sys", "tmp", "usr", "var")
+)
 
 # Where the host's operating system shows inside the sandbox under a ``host``
 # (or ``host-os`` / ``host-etc``) grant: its ``/usr`` and ``/etc`` bound at
@@ -1288,10 +1306,10 @@ class _SandboxLaunchView:
     - ``/app`` is the running deploy (:func:`_running_deploy`), ``/usr`` the
       runtime's deploy (:func:`_runtime_files`), and ``/bin``, ``/lib`` and
       the other merged-``/usr`` directories are flatpak's links into it;
-    - ``/var/config``, ``/var/data`` and ``/var/cache`` are the app's per-app
-      directories (:data:`_SANDBOX_XDG_BINDS`), and ``~/.var/app/<app id>``
-      is that same tree under its home spelling, which flatpak always binds
-      (flatpak-context.c:3033-3044 @ 1.16.6);
+    - ``/var/config``, ``/var/data``, ``/var/cache`` and ``/var/tmp`` are the
+      app's per-app directories (:data:`_SANDBOX_XDG_BINDS`), and
+      ``~/.var/app/<app id>`` is that same tree under its home spelling, which
+      flatpak always binds (flatpak-context.c:3033-3044 @ 1.16.6);
     - an explicit grant of the metadata (``~/…``, ``/…``, ``xdg-data`` and
       its siblings — :class:`_FlatpakGrants`) is the host's own path, and so
       are the directories leading to it, which flatpak creates to bind it — a
@@ -1304,10 +1322,12 @@ class _SandboxLaunchView:
       every revoked directory are masked with a tmpfs, and the host's ``/var``,
       ``/run``, ``/boot``, ``/efi`` and ``/root`` are not bound
       (:meth:`_mask_root`) — ``/run/media`` excepted, which the ``host`` grant
-      binds (flatpak-context.c:2884-2888), and ``/var/home``, the host's homes
-      on an ostree system (:data:`_OSTREE_HOME`). Only a grant at or under such
-      a root lifts it. Under the ``host`` grant a path there is an established
-      miss;
+      binds (flatpak-context.c:2884-2888), ``/var/home``, the host's homes
+      on an ostree system (:data:`_OSTREE_HOME`), and the target of a link in
+      the host's root, which the ``host`` grant exposes in the link's place
+      (:meth:`_root_link_targets`) — an ostree host's ``/mnt -> var/mnt``.
+      Only a grant at or under such a root lifts it. Under the ``host``
+      grant a path there is an established miss;
     - everything else is the host's own path under the ``host`` grant
       (under ``home``, the home directory alone). The sandbox's own ``/etc``,
       ``/tmp``, ``/dev``, ``/proc`` and ``/sys``, its private ``/run/user``,
@@ -1340,6 +1360,10 @@ class _SandboxLaunchView:
     # Each host path's readlink, asked once: the walks of one answer share
     # every directory above the files they test.
     links: dict[str, str | None] = field(default_factory=dict)
+    # The host root's link targets a ``host`` grant exposes
+    # (:meth:`_root_link_targets`), read once — ``None`` where the root
+    # could not be listed.
+    root_targets: list[tuple[str, ...] | None] = field(default_factory=list)
 
     def rom_directory(self) -> str | None:
         return self.rom_root()
@@ -1376,7 +1400,7 @@ class _SandboxLaunchView:
         granted = max((g for g in grants.paths if _under(path, g)), key=len, default=None)
         mask = self._mask_root(path)
         if mask is not None and (granted is None or not _under(granted, mask)):
-            if mask in grants.unread:
+            if mask in grants.unread or self._unbound_root_unread(mask):
                 return None
             return _HIDDEN if grants.host and not grants.unplaced else None
         return _NOT_OWN if granted is None else path
@@ -1386,17 +1410,19 @@ class _SandboxLaunchView:
 
         Masked with a tmpfs: the rest of ``~/.var/app``, the user's own
         Flatpak installation, and every revoked directory
-        (flatpak-context.c:3019-3031, :3131-3143; flatpak-exports.c:1104-1105);
-        a revoked path whose kind is unread is a root too, which
-        :meth:`_granted_or_masked` answers as unknown. Not bound under the
-        ``host`` grant: the host's ``/var``, ``/run``, ``/boot``, ``/efi`` and
-        ``/root`` (:data:`_FLATPAK_HOST_HIDDEN`), ``/var/home`` and
-        ``/run/media`` aside. Only a grant at or under such a root lifts it. At
-        the root itself the higher mode wins and a tmpfs is mode NONE
+        (flatpak-context.c:3019-3031, :3131-3143;
+        flatpak-exports.c:1104-1105); a revoked path whose kind is unread is a
+        root too, which :meth:`_granted_or_masked` answers as unknown. Not
+        bound under the ``host`` grant: the host's ``/var``, ``/run``,
+        ``/boot``, ``/efi`` and ``/root`` (:data:`_FLATPAK_HOST_HIDDEN`),
+        ``/var/home``, ``/run/media`` and the targets of the host root's links
+        (:meth:`_root_link_targets`), with the directories leading to them,
+        aside. Only a grant at or under such a root lifts it. At the root
+        itself the higher mode wins and a tmpfs is mode NONE
         (flatpak-exports.c:102, :772-790), so a grant there binds it; beneath
         the root, exports are emitted parents first (:309-337, :445-447,
-        :487-506), so a parent's bind is mounted before the tmpfs over the root
-        and does not reach beneath it.
+        :487-506), so a parent's bind is mounted before the tmpfs over the
+        root and does not reach beneath it.
         """
         roots = [
             os.path.join(self.real_home, ".var", "app"),
@@ -1407,8 +1433,53 @@ class _SandboxLaunchView:
         first = path.split("/")[1] if path != "/" else ""
         shared = _under(path, _OSTREE_HOME.rstrip("/")) or _under(path, _RUN_MEDIA)
         if self.grants.host and not shared and first in _FLATPAK_HOST_HIDDEN:
-            roots.append("/" + first)
+            # A link's target is the host's own, and so are the directories
+            # leading to it, which flatpak creates to bind it there.
+            targets = self._root_link_targets() or ()
+            if not any(_under(path, target) or target.startswith(path + "/") for target in targets):
+                roots.append("/" + first)
         return max((root for root in roots if _under(path, root)), key=len, default=None)
+
+    def _unbound_root_unread(self, mask: str) -> bool:
+        """Whether *mask* is a root the ``host`` grant leaves unbound while the host root, whose links may lift it,
+        could not be listed — nothing beneath it is established then.
+        """
+        return mask.lstrip("/") in _FLATPAK_HOST_HIDDEN and self._root_link_targets() is None
+
+    def _root_link_targets(self) -> tuple[str, ...] | None:
+        """The targets of the host root's symlinks a ``host`` grant exposes — ``None`` where the root cannot be listed.
+
+        flatpak exposes every entry of ``/`` but :data:`_FLATPAK_DONT_MOUNT_IN_ROOT`
+        (flatpak-context.c:2854-2866 @ 1.16.6), and an entry that is a link
+        by the target the host resolves it to, the link recreated in the
+        sandbox (flatpak-exports.c:1013-1050, ``flatpak_resolve_link``
+        flatpak-utils-base.c:87-101). The target is the host's own directory
+        there even under a root the sandbox otherwise does not bind — an
+        ostree host's ``/mnt -> var/mnt`` makes its ``/var/mnt`` visible, as
+        ``/home -> var/home`` does its homes (:data:`_OSTREE_HOME`). A target
+        flatpak refuses to export (:func:`_flatpak_refuses`) binds nothing.
+        The links are read off this machine, never assumed by name: which
+        ones a host has is its own layout.
+        """
+        if not self.root_targets:
+            self.root_targets.append(self._read_root_link_targets())
+        return self.root_targets[0]
+
+    def _read_root_link_targets(self) -> tuple[str, ...] | None:
+        names = _host_listing(self.machine, "/")
+        if names is None:
+            return None
+        targets: list[str] = []
+        for name in names:
+            if name in _FLATPAK_DONT_MOUNT_IN_ROOT or name in (".", ".."):
+                continue
+            link = self._readlink("/" + name)
+            if link is None:
+                continue
+            target = os.path.normpath(os.path.join("/", link))
+            if not _flatpak_refuses(target):
+                targets.append(target)
+        return tuple(targets)
 
     def _run_host(self, path: str) -> str | _Hidden | None:
         """The host path a ``/run/host`` spelling binds.
@@ -1923,9 +1994,11 @@ class _SaveQuery:
     appendconfig: tuple[str, ...] = ()
     # The program's own view of the filesystem, where atlas models the sandbox
     # RetroArch runs in — RetroDECK's, whose RetroArch shares the frontend's
-    # Flatpak. ``None`` where it is not modelled or there is no sandbox at all;
-    # ``sandbox.app_id`` tells those two apart (:func:`_read_appended`).
-    appended_view: "Callable[[], _SandboxLaunchView] | None" = None
+    # Flatpak. The appended files and every layer's save folders are tested
+    # through it (issues #637, #641). ``None`` where it is not modelled or
+    # there is no sandbox at all; ``sandbox.app_id`` tells those two apart
+    # (:func:`_read_appended`).
+    program_view: "Callable[[], _SandboxLaunchView] | None" = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2411,27 +2484,43 @@ def _read_appended(machine: Machine, query: _SaveQuery, view: "_SandboxLaunchVie
 
 @dataclass
 class _ViewDirectoryCheck:
-    """``path_is_directory`` for a root an appended file states, asked of the program's own view (D4).
+    """``path_is_directory`` for a save root, asked of the program's own view (#637 D4, #641 D1).
 
     RetroDECK's RetroArch tests the folder inside its sandbox, so a folder the
     sandbox hides or does not hold fails there and the read sets nothing,
-    whatever the host has at that spelling. One the view cannot tell passes —
-    the emulator's own test still decides it — and is remembered, because the
-    answer then rests on a visibility nobody established (D7, D8). Roots the
-    global cfg and the overrides state keep the check every layer had before.
+    whatever the host has at that spelling. One the view cannot tell is
+    remembered, because the answer then rests on a visibility nobody
+    established, and is decided by *host_check*: the folder read as the
+    host's own path (#637 D7, #641 D1 and D5). Each layer group keeps its own
+    check, because each states its own note: the appended files' folders
+    :func:`_visibility_note`, the global cfg's and the overrides'
+    :func:`_save_dir_visibility_note`.
     """
 
     view: "_SandboxLaunchView"
+    host_check: Callable[[str], bool]
     unestablished: bool = False
 
     def __call__(self, value: str) -> bool:
-        if is_app_relative(value):
+        if _untestable_save_dir(value):
             return True
         probe = self.view.is_directory(value)
         if probe == PROBE_UNKNOWN:
             self.unestablished = True
-            return True
+            return self.host_check(value)
         return probe == PROBE_HIT
+
+
+def _untestable_save_dir(value: str) -> bool:
+    """A folder RetroArch's directory test cannot be reproduced for, so it passes and the launch decides.
+
+    An application-relative value names a directory only the running
+    executable knows; a relative one with no ``cwd`` given is the ``<cwd>``
+    template, a directory only the launch knows (#647 D1). A relative value
+    with ``cwd`` given never reaches here: it is joined to it first and tested
+    like any other (:func:`atlas.retroarch_cfg.resolve_layout`).
+    """
+    return is_app_relative(value) or cwd_templated(value)
 
 
 def _visibility_note(app_id: str) -> Caveat:
@@ -2442,6 +2531,108 @@ def _visibility_note(app_id: str) -> Caveat:
         "was not established, so they were read as this host's own paths",
         {"app_id": app_id},
     )
+
+
+def _save_dir_visibility_note(app_id: str) -> Caveat:
+    """The one #641 D1 note an answer carries where the view could not tell a folder the global cfg or an override
+    sets.
+    """
+    return Caveat(
+        CAVEAT_SAVE_DIRECTORY_VISIBILITY_UNESTABLISHED,
+        f"whether RetroArch in {app_id}'s sandbox sees the save folders the global cfg and the overrides "
+        "set, or the working directory a relative folder is opened from, was not established, so each was "
+        "tested as this host's own path — or, where only the sandbox can spell it, left untested",
+        {"app_id": app_id},
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _LaunchDirectory:
+    """The working directory a relative save folder is opened from, and what the answer says about it (#647).
+
+    ``unestablished`` is a working directory — the ``cwd``, or the sandbox's
+    ``HOME`` it falls back to — whose visibility the sandbox model cannot
+    tell, taken as shown; ``caveats`` the note where the sandbox does not show
+    the ``cwd`` and the process runs elsewhere. Either matters only to an
+    answer whose standing root, or a refusal it states, came from a relative
+    folder.
+    """
+
+    directory: str
+    caveats: tuple[Caveat, ...] = ()
+    unestablished: bool = False
+
+
+def _launch_directory(view: "_SandboxLaunchView | None", cwd: str | None, home: str | None) -> _LaunchDirectory:
+    """Where RetroArch runs for a launch from *cwd* — the ``<cwd>`` template where no ``cwd`` was named.
+
+    Without a modelled sandbox the process runs in *cwd* itself. Inside
+    RetroDECK's (#647 D2) flatpak hands bubblewrap no ``--chdir``
+    (``common/flatpak-run.c:3634-3635`` at flatpak 1.16.6), and bubblewrap
+    changes into the old working directory where the sandbox maps it,
+    otherwise into ``$HOME``, otherwise ``/`` (``bubblewrap.c:3407-3426`` at
+    v0.12.0). So *cwd* is read in the sandbox's view: shown, it is the
+    directory; not shown, the sandbox's *home* is, or ``/`` where that is not
+    shown either; and where the view cannot tell, *cwd* is read as the host's.
+    A *home* whose visibility the view cannot tell is taken as shown, and
+    that reading is stated the same way (#647 D3: the visibility notes keep
+    meaning "could not tell").
+    """
+    if cwd is None:
+        return _LaunchDirectory(TEMPLATE_CWD)
+    if view is None:
+        return _LaunchDirectory(cwd)
+    probe = view.is_directory(cwd)
+    if probe == PROBE_HIT:
+        return _LaunchDirectory(cwd)
+    if probe == PROBE_UNKNOWN:
+        return _LaunchDirectory(cwd, unestablished=True)
+    home_probe = view.is_directory(home) if home and home.startswith("/") else PROBE_MISS
+    fallback = home if home_probe != PROBE_MISS and home else "/"
+    return _LaunchDirectory(
+        fallback,
+        unestablished=home_probe == PROBE_UNKNOWN,
+        caveats=(
+            Caveat(
+                CAVEAT_CWD_HIDDEN_IN_SANDBOX,
+                f"RetroArch in {view.app_id}'s sandbox cannot run in {cwd!r}: the sandbox shows no "
+                f"directory there, so bubblewrap starts it in {fallback!r} instead (flatpak-run.c:3634-3635 "
+                "at flatpak 1.16.6, bubblewrap.c:3407-3426 at v0.12.0), and a relative save folder is "
+                "opened from there",
+                {"app_id": view.app_id, "cwd": cwd, "working_directory": fallback},
+            ),
+        ),
+    )
+
+
+def _visibility_caveats(
+    appended: _Appended,
+    *,
+    appended_dirs: _ViewDirectoryCheck | None,
+    base_dirs: _ViewDirectoryCheck | None,
+    launch: _LaunchDirectory,
+    layout: RetroArchCfg,
+) -> list[Caveat]:
+    """What the chain says about the sandbox's view: one note per layer group, and the launch's own.
+
+    The appended files and the folders they set carry :func:`_visibility_note`;
+    the global cfg's and the overrides' folders, and the working directory a
+    relative folder of any layer is joined to (#647 D2),
+    :func:`_save_dir_visibility_note`. The launch's statements matter only
+    where the standing root, or a refusal the answer states, was relative.
+    """
+    caveats: list[Caveat] = []
+    unestablished = appended.unestablished
+    if unestablished is None and appended_dirs is not None and appended_dirs.unestablished:
+        unestablished = appended_dirs.view.app_id
+    if unestablished is not None:
+        caveats.append(_visibility_note(unestablished))
+    cwd_unestablished = launch.unestablished and layout.relative_root_read
+    if base_dirs is not None and (base_dirs.unestablished or cwd_unestablished):
+        caveats.append(_save_dir_visibility_note(base_dirs.view.app_id))
+    if layout.relative_root_read:
+        caveats.extend(launch.caveats)
+    return caveats
 
 
 def _boot_values(base: Sequence[_CfgLayer]) -> dict[str, str]:
@@ -2489,6 +2680,42 @@ class _SaveRoot:
     reachable: bool = True
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
+    # The <cwd> template's rider, kept apart from the caveats: it rides only
+    # on an answer that hangs off this root (:func:`_rooted_rider`).
+    rider: tuple[Caveat, ...] = ()
+
+
+def _rooted_rider(rider: tuple[Caveat, ...], root_kind: str) -> tuple[Caveat, ...]:
+    """The templated save root's rider, for an answer that hangs off that root (#647).
+
+    The template and its ``cwd`` hole reach exactly the answers built on the
+    save root — the standard placement of either family, a card that keeps the
+    save below it, a texture or mod tree under it — and the rider goes where
+    the hole goes. An answer the content flag or a card roots elsewhere (a
+    system-directory card, a content-directory one, the working-directory
+    root) names no part of the folder and carries neither.
+    """
+    return rider if root_kind in (ROOT_SAVEFILE_DIRECTORY, ROOT_SAVESTATE_DIRECTORY) else ()
+
+
+def _relative_save_dir_caveat(key: str, templated: str) -> Caveat:
+    """The rider of a relative save folder no ``cwd`` was given for (#647 D1).
+
+    RetroArch expands only a leading ``~`` or ``:`` (``file_path.c:1066-1101``)
+    and opens any other relative value as written, so the kernel resolves it
+    against the working directory of the RetroArch process — the launch's,
+    exactly the ``working_directory`` root's fact. ``path`` is the value below
+    that directory, as the template carries it.
+    """
+    value = templated[len(TEMPLATE_CWD) + 1 :] or "."
+    return Caveat(
+        CAVEAT_SAVE_DIR_LAUNCH_DEPENDENT,
+        f"{key} is the relative value {value!r}, which RetroArch opens relative to the working "
+        "directory of its own process (it expands only a leading ~ or :, file_path.c:1066-1101) — "
+        "a property of the launch, not of the machine, so its directory test was not run and the "
+        "launch decides it; fill 'cwd' with the launcher's working directory to complete the path",
+        {"key": key, "path": value},
+    )
 
 
 def _host_save_dir(sandbox: _Sandbox, layout: RetroArchCfg) -> _SaveRoot:
@@ -2503,6 +2730,11 @@ def _host_save_dir(sandbox: _Sandbox, layout: RetroArchCfg) -> _SaveRoot:
 
     Which key is being translated comes off the layout itself, so the savefile
     and savestate roots take the same route and each names its own key.
+
+    A relative value the caller gave no ``cwd`` for is the ``<cwd>`` template:
+    a host path on no machine, so it is not translated, and its rider says the
+    launch completes it (#647 D1). Nothing is read below it, because every
+    answer built on it carries the ``cwd`` hole, which withholds the reads.
     """
     key = layout.keys.directory
     configured = layout.directory
@@ -2510,6 +2742,8 @@ def _host_save_dir(sandbox: _Sandbox, layout: RetroArchCfg) -> _SaveRoot:
         return _SaveRoot(layout)
     if is_app_relative(configured):
         return _SaveRoot(layout, reachable=False, caveats=(_app_relative_caveat(key, configured),))
+    if cwd_templated(configured):
+        return _SaveRoot(layout, rider=(_relative_save_dir_caveat(key, configured),))
     resolved = sandbox.host(key, configured)
     if resolved.path == configured:
         return _SaveRoot(layout)
@@ -2526,16 +2760,22 @@ def _save_dir_probe(machine: Machine, sandbox: _Sandbox, key: str) -> Callable[[
 
     RetroArch runs this test on every value it reads (``configuration.c:6920``
     for the saves root, ``:6941`` for the savestate one) and keeps the value
-    only when it passes. A value atlas cannot test — one that exists only
-    inside the Flatpak sandbox, one relative to the running executable's
-    directory — passes: the emulator's own test still decides it, and answering
-    "not a directory" here would reject a root that is very likely there. That
-    the answer rests on an unperformed read is stated by the translation's own
-    caveat.
+    only when it passes. Where the program's sandbox is modelled (RetroDECK)
+    the test is asked of its view first (:class:`_ViewDirectoryCheck`), and
+    this one decides only a folder the view cannot tell, which the answer then
+    notes (#641 D1). Where it is not — a RetroArch on the host, EmuDeck's or a
+    bare RetroArch Flatpak — this test is the whole of it, and no note says
+    so (#641 D2): it would stand on every such answer. A value atlas cannot
+    test — one that exists only inside the Flatpak sandbox, one relative to
+    the running executable's directory, one relative to a working directory
+    the caller did not name — passes: the emulator's own test
+    still decides it, and answering "not a directory" here would reject a
+    root that is very likely there. That the answer rests on an unperformed
+    read is stated by the translation's own caveat.
     """
 
     def is_directory(value: str) -> bool:
-        if is_app_relative(value):
+        if _untestable_save_dir(value):
             return True
         host = sandbox.host(key, value).path
         return host is None or machine.path_kind(host) == KIND_DIRECTORY
@@ -2565,9 +2805,11 @@ def _rejected_dir_caveats(
     which file to fix.
 
     ``configured`` stays the cfg's own spelling — that is the line to edit —
-    but inside a Flatpak that spelling is not where atlas looked. Where the two
-    differ, the message names the host path too, so "not an existing directory"
-    can be checked against the place the check was actually made.
+    but that spelling is not always where the test was made: a relative value
+    is opened from the working directory (:attr:`RejectedDirectory.tested`),
+    and inside a Flatpak a path is read at its host spelling. Where either
+    differs, the message names it too, so "not an existing directory" can be
+    checked against the place the check was actually made.
 
     The code is the same for both families and the data is unchanged, because
     the caveat rides on the answer whose root it is about: a client reading it
@@ -2582,12 +2824,13 @@ def _rejected_dir_caveats(
             if entry.superseded
             else f"keeps {effective!r}, the root that stood before this file"
         )
-        host = sandbox.host(key, entry.value).path
-        looked_at = (
-            f" (atlas looked at its host spelling {host!r})"
-            if host is not None and host != entry.value
-            else ""
-        )
+        tested = entry.tested or entry.value
+        host = sandbox.host(key, tested).path
+        places = [
+            *([f"opened from the working directory as {tested!r}"] if entry.tested is not None else []),
+            *([f"atlas looked at its host spelling {host!r}"] if host is not None and host != tested else []),
+        ]
+        looked_at = f" ({'; '.join(places)})" if places else ""
         caveats.append(
             Caveat(
                 CAVEAT_INVALID_SAVE_DIRECTORY,
@@ -5262,15 +5505,13 @@ def _standard_placement(
     machine: Machine,
     query: _SaveQuery,
     *,
-    layout: RetroArchCfg,
-    platform_default_dir: str,
+    chain: _Chain,
     content: _Content,
     core: _CoreIdentity,
     card: CoreCard | None,
     mode: SaveMode | None,
     granularity: Granularity | None,
     cross_parts: _CrossParts,
-    reachable: bool,
     sources: tuple[str, ...],
     caveats: tuple[Caveat, ...],
 ) -> SavefilePlacement:
@@ -5281,13 +5522,16 @@ def _standard_placement(
     card core's nested subtree and the files actually present are all resolved
     against the machine before the answer is stated.
 
-    Unless the root cannot be reached from here (*reachable* false, a sandbox
-    path with no host location): the path math still applies and ``dir`` still
-    names where the emulator writes, but every observation of the result —
-    whether the sorted directory exists, what it links to, which files lie in
-    it — would come from a read that never applied, so none is performed and
-    ``fallback_dir`` stays empty rather than claiming a fallback nobody takes.
+    Unless the root cannot be reached from here (``chain.reachable`` false, a
+    sandbox path with no host location): the path math still applies and
+    ``dir`` still names where the emulator writes, but every observation of
+    the result — whether the sorted directory exists, what it links to, which
+    files lie in it — would come from a read that never applied, so none is
+    performed and ``fallback_dir`` stays empty rather than claiming a fallback
+    nobody takes. The layout, its platform default and the save root's rider
+    come off *chain* too.
     """
+    layout, platform_default_dir = chain.layout, chain.platform_default_dir
     all_caveats = list(caveats)
     if card is not None and mode is not None:
         all_caveats.extend(_stated_mode_caveats(card, mode, granularity))
@@ -5325,6 +5569,7 @@ def _standard_placement(
         library_name=core.library_name,
         extra_sources=sources,
     )
+    all_caveats.extend(_rooted_rider(chain.save_root_rider, placement.root_kind))
 
     final_dir = placement.dir
     fallback_dir: str | None = None
@@ -5350,7 +5595,7 @@ def _standard_placement(
                 card=card,
                 mode=mode,
                 declared=declared,
-                reachable=reachable,
+                reachable=chain.reachable,
             )
         )
         final_sources.extend(subdir_sources)
@@ -5443,6 +5688,9 @@ class _Chain:
     # The rest of the chain is then read without the appended files and is
     # not an answer: the save routes return this instead.
     appended_unreachable: Unresolved | None = None
+    # The rider of a <cwd>-templated save root (#647), for the answers that
+    # hang off that root to add (:func:`_rooted_rider`); never in ``caveats``.
+    save_root_rider: tuple[Caveat, ...] = ()
 
     @property
     def effective_root(self) -> str:
@@ -5472,7 +5720,7 @@ def _read_chain(machine: Machine, query: _SaveQuery, keys: LayoutKeys) -> _Chain
     each (``runloop.c:8752-8979``), so the port takes the same shape.
     """
     content = _content_coordinates(query.content_path)
-    view = query.appended_view() if query.appendconfig and query.appended_view is not None else None
+    view = query.program_view() if query.program_view is not None else None
     appended = _read_appended(machine, query, view)
     base = _base_layers(query.global_text, cfg_label=query.cfg_label, appended=appended.layers)
     boot_values = _boot_values(base)
@@ -5510,7 +5758,14 @@ def _read_chain(machine: Machine, query: _SaveQuery, keys: LayoutKeys) -> _Chain
     )
     sources_extra.extend(override_sources)
 
-    appended_dirs = _ViewDirectoryCheck(view) if view is not None else None
+    # Every layer's folder is tested where RetroArch tests it: inside the
+    # sandbox where atlas models one, on the host where it does not (#641).
+    # A relative folder is first joined to the launch's working directory, or
+    # to the <cwd> template where the caller did not name it (#647).
+    launch = _launch_directory(view, query.cwd, query.sandbox.expansion_home)
+    host_dirs = _save_dir_probe(machine, query.sandbox, keys.directory)
+    base_dirs = _ViewDirectoryCheck(view, host_dirs) if view is not None else None
+    appended_dirs = _ViewDirectoryCheck(view, host_dirs) if view is not None else None
     layout = resolve_layout(
         query.global_text,
         keys=keys,
@@ -5519,14 +5774,15 @@ def _read_chain(machine: Machine, query: _SaveQuery, keys: LayoutKeys) -> _Chain
         defaults=query.defaults,
         appended=appended.layers,
         overrides=overrides,
-        is_directory=_save_dir_probe(machine, query.sandbox, keys.directory),
+        is_directory=base_dirs if base_dirs is not None else host_dirs,
         appended_is_directory=appended_dirs,
+        working_directory=launch.directory,
     )
-    unestablished = appended.unestablished
-    if unestablished is None and appended_dirs is not None and appended_dirs.unestablished:
-        unestablished = appended_dirs.view.app_id
-    if unestablished is not None:
-        caveats.append(_visibility_note(unestablished))
+    caveats.extend(
+        _visibility_caveats(
+            appended, appended_dirs=appended_dirs, base_dirs=base_dirs, launch=launch, layout=layout
+        )
+    )
     caveats.extend(_ignored_caveats(layout.ignored))
     caveats.extend(_appended_overridden_caveats(layout))
     layers: list[_CfgLayer] = [*base, *overrides]
@@ -5563,6 +5819,7 @@ def _read_chain(machine: Machine, query: _SaveQuery, keys: LayoutKeys) -> _Chain
         sources=tuple(sources_extra),
         caveats=tuple(caveats),
         appended_unreachable=appended.unreachable,
+        save_root_rider=saves_root.rider,
     )
 
 
@@ -5684,7 +5941,6 @@ def _savefile_location_resolved(machine: Machine, query: _SaveQuery) -> Savefile
     content, core = chain.content, chain.core
     layout, layers = chain.layout, list(chain.layers)
     retroarch_config_dir = chain.retroarch_config_dir
-    platform_default_dir = chain.platform_default_dir
     sources_extra = list(chain.sources)
     caveats = list(chain.caveats)
 
@@ -5765,15 +6021,13 @@ def _savefile_location_resolved(machine: Machine, query: _SaveQuery) -> Savefile
     return _standard_placement(
         machine,
         query,
-        layout=layout,
-        platform_default_dir=platform_default_dir,
+        chain=chain,
         content=content,
         core=core,
         card=card,
         mode=card_mode,
         granularity=granularity,
         cross_parts=cross_parts,
-        reachable=chain.reachable,
         sources=tuple(sources_extra),
         caveats=tuple(caveats),
     )
@@ -5985,6 +6239,7 @@ def _savestate_location_resolved(machine: Machine, query: _SaveQuery) -> Savesta
         library_name=chain.core.library_name,
         extra_sources=chain.sources,
     )
+    caveats.extend(_rooted_rider(chain.save_root_rider, placement.root_kind))
 
     final_dir = placement.dir
     fallback_dir: str | None = None
@@ -6329,7 +6584,9 @@ def _card_root(
     return _SystemRoot(
         chain.effective_root,
         ROOT_SAVEFILE_DIRECTORY,
+        needs=(HOLE_CWD,) if cwd_templated(chain.effective_root) else (),
         reachable=chain.reachable,
+        caveats=_rooted_rider(chain.save_root_rider, ROOT_SAVEFILE_DIRECTORY),
         sources=(
             f"{query.cfg_label} chain: the core builds its user directory under the save root "
             f"({chain.effective_root})",
@@ -8912,11 +9169,6 @@ def _xemu_launch_dependent_caveat(token: str, key: str, value: str) -> Caveat:
     )
 
 
-def _cwd_templated(directory: str) -> bool:
-    """Is this directory the launch's own — the ``<cwd>`` template or below it?"""
-    return directory == TEMPLATE_CWD or directory.startswith(TEMPLATE_CWD + "/")
-
-
 def _xemu_group(
     sandbox: _Sandbox,
     key: str,
@@ -9144,7 +9396,7 @@ def _xemu_savefile_placement(
     # The caller's cwd fills the template, and the directory below it is then
     # walked like any other; it is still the launch's directory that anchors it.
     launch_anchored = _xemu_primary_is_relative(hdd if disk_groups else eeprom)
-    if _cwd_templated(directory):
+    if cwd_templated(directory):
         physical = None
     else:
         physical, link_caveats = _link_view(machine, directory)
@@ -9155,7 +9407,7 @@ def _xemu_savefile_placement(
     return SavefilePlacement(
         dir=directory,
         root_kind=ROOT_WORKING_DIRECTORY if launch_anchored else ROOT_EMULATOR_DIRECTORY,
-        needs=(HOLE_CWD,) if any(_cwd_templated(g.dir) for g in groups) else (),
+        needs=(HOLE_CWD,) if any(cwd_templated(g.dir) for g in groups) else (),
         fallback_dir=None,
         file_set=FileSet(
             FILE_SET_DECLARED,
@@ -18028,6 +18280,10 @@ class _FlatpakQueryContext:
     base_table: dict[str, _FsEntry]
     effective_table: dict[str, _FsEntry]
     home: str
+    # Every flatpak file the query read, path to text: the deploy's metadata
+    # and the overrides files. The sandbox view of the same query is built
+    # from these rather than from a second read of each.
+    texts: Mapping[str, str | None] = field(default_factory=dict)
 
     def revocation(self, path: str) -> Caveat | None:
         if not path.startswith("/"):
@@ -18091,6 +18347,7 @@ def _flatpak_query_context(machine: Machine, home: str, app_id: str) -> _Flatpak
         base_table=base_table,
         effective_table=effective_table,
         home=home,
+        texts=dict(metadata) | dict(texts),
     )
 
 
@@ -18122,6 +18379,66 @@ _ES_FIND_RULES_XML = "es_find_rules.xml"
 # both handles parse that layer under it, and EmuDeck's launch answer reads it
 # back to tell the file its launcher rewrites.
 _CUSTOM_OVERLAY_PROVENANCE = "es_systems.xml (custom_systems overlay)"
+
+
+def _catalogue_layer_once(
+    machine: Machine, path: str, provenance: str
+) -> tuple[ReadResult, CatalogueLayer | None]:
+    """One on-disk ``es_systems.xml`` layer → ``(read, layer)``, read and parsed once per question.
+
+    ``layer`` is ``None`` exactly where the read answered no text. A question
+    that asks the catalogue about every system it declares would otherwise
+    read and parse each layer once per system (issue #670); within one
+    question the layers are the same files, so the reading is done once and
+    handed on (:mod:`atlas._question`). Both halves are immutable, so every
+    caller shares the one reading.
+    """
+
+    def read_and_parse() -> tuple[ReadResult, CatalogueLayer | None]:
+        read = machine.read_text(path)
+        if read.text is None:
+            return read, None
+        return read, parse_es_systems(read.text, provenance=provenance)
+
+    return once(("es_systems", id(machine), path, provenance), read_and_parse)
+
+
+def _embedded_catalogue_layer_once(machine: Machine, appimage_path: str, entry: str) -> CatalogueLayer | None:
+    """The ``es_systems.xml`` layer embedded in an AppImage, read and parsed once per question.
+
+    :func:`_catalogue_layer_once` for the layer EmuDeck's ES-DE seals inside
+    its image: ``None`` is every outcome of the read short of text, which the
+    caller states as the sealed layer it always was.
+    """
+
+    def read_and_parse() -> CatalogueLayer | None:
+        embedded = machine.read_appimage_text(appimage_path, entry)
+        if embedded.text is None:
+            return None
+        return parse_es_systems(embedded.text, provenance="es_systems.xml (AppImage-embedded)")
+
+    return once(("es_systems_embedded", id(machine), appimage_path, entry), read_and_parse)
+
+
+def _esde_settings_once(machine: Machine, path: str) -> tuple[ReadResult, Mapping[str, str] | None]:
+    """ES-DE's ``es_settings.xml`` → ``(read, settings)``, read and parsed once per question.
+
+    ``settings`` is ``None`` where the read answered no text or the text did
+    not parse; the read's status tells the two apart. Every ROM placement
+    resolves ``%ROMPATH%`` through this file, so a question that places every
+    system's ROMs would otherwise read and parse it once per system (issue
+    #670); the settings are handed out read-only, so every caller shares the
+    one reading (:mod:`atlas._question`).
+    """
+
+    def read_and_parse() -> tuple[ReadResult, Mapping[str, str] | None]:
+        read = machine.read_text(path)
+        if read.text is None:
+            return read, None
+        settings = parse_es_settings(read.text)
+        return read, None if settings is None else MappingProxyType(settings)
+
+    return once(("es_settings", id(machine), path), read_and_parse)
 
 
 def _catalogue_unread_caveat(system: str | None = None) -> tuple[Caveat, ...]:
@@ -19023,6 +19340,40 @@ class RomPlacement:
     caveats: tuple[Caveat, ...] = ()
     """Every degradation of this answer, and on an absent ``dir`` the statement of which
     kind of unresolved it is.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class SystemRomPlacement:
+    """One system of a :class:`RomLocationsAnswer` and where its ROMs live."""
+
+    system: str
+    """The system, in the catalogue's own spelling, as the systems answer lists it."""
+    placement: RomPlacement
+    """Exactly the placement the per-system ROM question answers for this system, caveats included."""
+
+
+@dataclass(frozen=True, slots=True)
+class RomLocationsAnswer:
+    """Where every system an installation's systems answer lists keeps its ROMs, in one answer.
+
+    The bulk form of :class:`RomPlacement` for a client that needs every ROM
+    folder at once: one entry per system the systems answer lists, in its
+    order, each carrying the placement the per-system question gives. What
+    the systems answer states about the catalogue as a whole — what was read,
+    and on an empty answer whether the catalogue declares no systems or could
+    not be read — is stated once here rather than inferred from the entries.
+    """
+
+    placements: tuple[SystemRomPlacement, ...] = ()
+    """One entry per system the systems answer lists, in its order — an empty list says
+    nothing on its own, and the caveats say which empty it is.
+    """
+    sources: tuple[str, ...] = ()
+    caveats: tuple[Caveat, ...] = ()
+    """The systems answer's caveats: every degradation of the catalogue as a whole,
+    and on an empty answer the statement of whether the catalogue declares no
+    systems or could not be read.
     """
 
 
@@ -19938,12 +20289,18 @@ def _platform_matches(
 
 
 def _commented_map(texts: tuple[str | None, ...]) -> dict[str, tuple[str, ...]]:
-    """The commented-out systems of *texts*, first sighting of a name winning."""
+    """The commented-out systems of *texts*, first sighting of a name winning.
+
+    Each text's commented blocks are parsed once per question, the way its
+    declarations are (:func:`_catalogue_layer_once`): every catalogue read
+    reaches here, so a question that reads the catalogue once per system would
+    otherwise parse them once per system too (issue #670).
+    """
     disabled: dict[str, tuple[str, ...]] = {}
     for text in texts:
         if text is None:
             continue
-        for name, tags in commented_out_systems(text):
+        for name, tags in once(("commented_out_systems", text), functools.partial(commented_out_systems, text)):
             disabled.setdefault(name, tags)
     return disabled
 
@@ -20216,6 +20573,24 @@ class _CatalogueQueries:
         answer, version = self._rom_location_answer(system)
         return _rom_placement_with_caveats(
             answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
+        )
+
+    @one_question
+    def rom_locations(self) -> RomLocationsAnswer:
+        """Where every system :meth:`systems` lists keeps its ROMs, in that answer's order.
+
+        Each entry is exactly what :meth:`rom_location` answers for that
+        system, asked within this one question, so the catalogue is read and
+        parsed once for all of them rather than once per system. The systems
+        answer's sources and caveats ride once on the whole answer: an empty
+        one says whether the catalogue declares no systems or could not be
+        read.
+        """
+        listed = self.systems()
+        return RomLocationsAnswer(
+            tuple(SystemRomPlacement(system, self.rom_location(system)) for system in listed.systems),
+            listed.sources,
+            listed.caveats,
         )
 
     @one_question
@@ -20920,11 +21295,10 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         """
         empty: dict[str, SystemDeclaration] = {}
         no_disabled: dict[str, tuple[str, ...]] = {}
-        custom = CatalogueLayer(systems={})
         overlay_path = self._overlay_path(root)
-        custom_text = self._machine.read_text(overlay_path).text
-        if custom_text is not None:
-            custom = parse_es_systems(custom_text, provenance=_CUSTOM_OVERLAY_PROVENANCE)
+        custom_read, custom_layer = _catalogue_layer_once(self._machine, overlay_path, _CUSTOM_OVERLAY_PROVENANCE)
+        custom_text = custom_read.text
+        custom = CatalogueLayer(systems={}) if custom_layer is None else custom_layer
         if custom.invalid is not None:
             return empty, True, False, _catalogue_invalid_finding(overlay_path, custom.invalid), no_disabled
         if custom.load_exclusive:
@@ -20934,16 +21308,18 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         bundled_text: str | None = None
         bundled_path = self._sandbox().bundled(self._ESDE_BUNDLED_SANDBOX)
         if bundled_path is not None:
-            text = self._machine.read_text(bundled_path).text
-            if text is not None:
-                bundled = parse_es_systems(text, provenance="es_systems.xml (bundled)")
+            bundled_read, bundled_layer = _catalogue_layer_once(
+                self._machine, bundled_path, "es_systems.xml (bundled)"
+            )
+            if bundled_layer is not None:
+                bundled = bundled_layer
                 if bundled.invalid is not None:
                     return empty, True, False, _catalogue_invalid_finding(bundled_path, bundled.invalid), no_disabled
                 # Read AND parsed. RetroDECK ships the custom overlay fully
                 # commented out inside an empty <systemList/>, so it parses to
                 # zero systems by design and can never stand in for this.
                 read = True
-                bundled_text = text
+                bundled_text = bundled_read.text
         return (
             merge_layers(bundled.systems, custom.systems),
             read,
@@ -21047,9 +21423,13 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         shadow_path = os.path.join(self._esde_config_home(), self._FIND_RULES_SHADOW_SUFFIX)
         return files.layered(custom, custom_path, shadow_path, lambda: shipped, shipped)
 
-    def _launch_view(self) -> _SandboxLaunchView:
+    def _launch_view(self, read: Mapping[str, str | None] | None = None) -> _SandboxLaunchView:
         """The frontend's sandbox as the launch lookup reads it — the deploy resolved once, each file it needs read
         once.
+
+        *read* holds files the caller has read already, path to text — a save
+        query's flatpak context (:func:`_flatpak_query_context`) — so that one
+        query reads each of them once.
 
         The deploy's ``metadata`` names the runtime behind ``/usr`` and grants
         the filesystem; the overrides files (:func:`_flatpak_override_files_for`,
@@ -21063,15 +21443,19 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         widened it, and atlas does not compose those grants here, so
         everything outside the app's own trees is then not established.
         """
+        known = read or {}
+
+        def text(path: str) -> str | None:
+            return known[path] if path in known else self._machine.read_text(path).text
+
         deploy = _running_deploy(self._machine, self._home, self._APP_ID)
         layers: list[tuple[str, str | None]] = []
         if deploy is not None:
             metadata_path = _flatpak_metadata_path(deploy)
-            layers.append((metadata_path, self._machine.read_text(metadata_path).text))
+            layers.append((metadata_path, text(metadata_path)))
         metadata = _keyfile_groups(layers[0][1]) if layers and layers[0][1] is not None else None
         overrides = tuple(
-            (path, self._machine.read_text(path).text)
-            for path in _flatpak_override_files_for(deploy, self._home, self._APP_ID)
+            (path, text(path)) for path in _flatpak_override_files_for(deploy, self._home, self._APP_ID)
         )
         environment = _flatpak_environment_from((*layers, *overrides))
         search_path = _FLATPAK_DEFAULT_PATH
@@ -21131,12 +21515,11 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         The status rather than the caveat, because the two callers label it
         differently and only one of them has a system to name.
         """
-        result = self._machine.read_text(self._esde_settings_path())
+        result, settings = _esde_settings_once(self._machine, self._esde_settings_path())
         if result.status == READ_MISSING:
             return None, None
         if result.text is None:
             return None, result.status
-        settings = parse_es_settings(result.text)
         if settings is None:
             return None, _SETTINGS_UNPARSEABLE
         return settings.get(self._ROM_DIRECTORY_SETTING) or None, None
@@ -21603,7 +21986,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         context's filesystem tables ride along as the revocation check the
         save resolvers apply to their final directory (issue #103). RetroArch
         runs inside the frontend's own Flatpak here, so the launch view is how
-        it sees the files a launch appends (issue #637).
+        it sees the files a launch appends (issue #637) and the save folders
+        every layer states (issue #641).
         """
         health = self._health_from(config, marker_issues)
         global_cfg_path = self._cfg_path()
@@ -21635,7 +22019,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             revocation=context.revocation,
             cwd=cwd,
             appendconfig=appendconfig,
-            appended_view=self._launch_view,
+            program_view=lambda: self._launch_view(context.texts),
         )
 
     def _savefile_location_from(
@@ -21672,6 +22056,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         content_path: str | None,
         core_so: str | None,
         extra_caveats: tuple[Caveat, ...] = (),
+        cwd: str | None = None,
         appendconfig: tuple[str, ...] = (),
     ) -> SavestatePlacement | Unresolved:
         return _retroarch_savestate_location(
@@ -21682,6 +22067,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
                 content_path=content_path,
                 core_so=core_so,
                 extra_caveats=extra_caveats,
+                cwd=cwd,
                 appendconfig=appendconfig,
             ),
         )
@@ -21705,11 +22091,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         three are optional — missing ones leave holes and stated caveats, never
         guesses. ``cwd`` is the working folder the launch will use, an absolute
         host path: it fills the ``cwd`` hole of a core that saves relative to
-        it, is ignored where the answer does not depend on it, and a value that
-        is not absolute raises ``ValueError``. ``appendconfig`` names the files
-        the launch appends with ``--appendconfig``, absolute paths in
-        RetroArch's order (``|``-joined ones are split as RetroArch splits
-        them): the answer is where the saves land with them in the chain.
+        it and completes a relative ``savefile_directory``, is ignored where
+        the answer does not depend on it, and a value that is not absolute
+        raises ``ValueError``. ``appendconfig`` names the files the launch
+        appends with ``--appendconfig``, absolute paths in RetroArch's order
+        (``|``-joined ones are split as RetroArch splits them): the answer is
+        where the saves land with them in the chain.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
@@ -21739,10 +22126,10 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
 
         The savefile question's twin, taking the same optional arguments but
         ``system`` and answering off the same configs — through the savestate
-        quartet of keys instead of the savefile one. RetroArch writes every
-        state itself, below a directory its own configuration names, so
-        ``cwd`` is checked like the savefile question's and changes nothing
-        here; ``appendconfig`` is taken as the savefile question takes it.
+        quartet of keys instead of the savefile one. ``cwd`` and
+        ``appendconfig`` are taken as the savefile question takes them: the
+        working folder completes a relative ``savestate_directory``, which
+        RetroArch opens from the launch's working directory.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
@@ -21754,6 +22141,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             marker_issues,
             content_path=content_path,
             core_so=core_so,
+            cwd=cwd,
             appendconfig=files,
         )
 
@@ -22233,6 +22621,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             content_path=content_path,
             core_so=spec.core_so,
             extra_caveats=entry_caveats,
+            cwd=cwd,
             appendconfig=appendconfig,
         )
         return _entry_savestate_with_caveats(placement, extra)
@@ -22982,11 +23371,9 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         fine, so what the catalogue says is unknown, never refused.
         """
         appdata = self._esde_appdata_dir()
-        custom = CatalogueLayer(systems={})
         overlay_path = os.path.join(appdata, self._ESDE_OVERLAY_SUFFIX)
-        custom_text = self._machine.read_text(overlay_path).text
-        if custom_text is not None:
-            custom = parse_es_systems(custom_text, provenance=_CUSTOM_OVERLAY_PROVENANCE)
+        _, custom_layer = _catalogue_layer_once(self._machine, overlay_path, _CUSTOM_OVERLAY_PROVENANCE)
+        custom = CatalogueLayer(systems={}) if custom_layer is None else custom_layer
         if custom.invalid is not None:
             return {}, True, False, False, _catalogue_invalid_finding(overlay_path, custom.invalid)
         if custom.load_exclusive:
@@ -23011,13 +23398,12 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         """
         empty = CatalogueLayer(systems={})
         shadow_path = os.path.join(appdata, self._ESDE_SHADOW_SUFFIX)
-        shadow = self._machine.read_text(shadow_path)
+        shadow, bundled = _catalogue_layer_once(
+            self._machine, shadow_path, "es_systems.xml (resource-override shadow)"
+        )
         if shadow.status != READ_MISSING:
-            if shadow.text is None:
+            if bundled is None:
                 return empty, False, True, None
-            bundled = parse_es_systems(
-                shadow.text, provenance="es_systems.xml (resource-override shadow)"
-            )
             if bundled.invalid is not None:
                 return empty, True, False, _catalogue_invalid_finding(shadow_path, bundled.invalid)
             # Read AND parsed: the shadow is the bundled layer, on disk.
@@ -23041,12 +23427,11 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         same embedded file and aborts its whole ``loadConfig`` on it.
         """
         appimage_path = self._esde_appimage_path()
-        embedded = self._machine.read_appimage_text(
-            appimage_path, self._ESDE_APPIMAGE_CATALOGUE_ENTRY
+        bundled = _embedded_catalogue_layer_once(
+            self._machine, appimage_path, self._ESDE_APPIMAGE_CATALOGUE_ENTRY
         )
-        if embedded.text is None:
+        if bundled is None:
             return None, None
-        bundled = parse_es_systems(embedded.text, provenance="es_systems.xml (AppImage-embedded)")
         if bundled.invalid is not None:
             return None, _catalogue_invalid_finding(appimage_path, bundled.invalid)
         return bundled, None
@@ -23306,12 +23691,11 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         seds ``${romsPath}`` into it (``emuDeckESDE.sh:407-409``) — so on a
         stock machine it is configured and absolute.
         """
-        result = self._machine.read_text(self._esde_settings_path())
+        result, settings = _esde_settings_once(self._machine, self._esde_settings_path())
         if result.status == READ_MISSING:
             return None, None
         if result.text is None:
             return None, result.status
-        settings = parse_es_settings(result.text)
         if settings is None:
             return None, _SETTINGS_UNPARSEABLE
         return settings.get(self._ROM_DIRECTORY_SETTING) or None, None
@@ -24165,19 +24549,20 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
 
         With an id the launch runs inside that app's sandbox, and its
         configuration is read in that sandbox's spellings
-        (:meth:`_Sandbox._translate`): ``/var/config``, ``/var/data`` and
-        ``/var/cache`` are flatpak's bind points for the app's own trees below
-        ``~/.var/app``; ``/app`` is the deploy that runs, resolved against the
-        installation ``flatpak run`` would start — EmuDeck installs these into
-        the user installation (``flatpak install flathub "$ID" -y --user``,
-        installEmuFP.sh:32) and may leave an older system one behind until the
-        user one is confirmed (:36-38), which is the order
-        :func:`_running_deploy` searches; and the sandbox-only prefixes left
-        over name nothing this host shares, so a value there is refused. Every
-        HOST spelling stays the path it names, because EmuDeck grants each
-        emulator flatpak ``--filesystem=host`` (installEmuFP.sh:33). That grant
-        is what makes a host path mean what it says; it says nothing about
-        where the sandbox's own bind points lead.
+        (:meth:`_Sandbox._translate`): ``/var/config``, ``/var/data``,
+        ``/var/cache`` and ``/var/tmp`` are flatpak's bind points for the
+        app's own trees below ``~/.var/app``; ``/app`` is the deploy that
+        runs, resolved against the installation ``flatpak run`` would start —
+        EmuDeck installs these into the user installation (``flatpak install
+        flathub "$ID" -y --user``, installEmuFP.sh:32) and may leave an older
+        system one behind until the user one is confirmed (:36-38), which is
+        the order :func:`_running_deploy` searches; and the sandbox-only
+        prefixes left over name nothing this host shares, so a value there is
+        refused. Every HOST spelling stays the path it names, because EmuDeck
+        grants each emulator flatpak ``--filesystem=host``
+        (installEmuFP.sh:33). That grant is what makes a host path mean what
+        it says; it says nothing about where the sandbox's own bind points
+        lead.
 
         Without an id nothing sandboxes the launch, so every spelling but
         ``/app`` is the host path it names — and ``/app`` is refused, because
@@ -24217,6 +24602,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 content_path=content_path,
                 core_so=spec.core_so,
                 extra_caveats=entry_caveats,
+                cwd=cwd,
                 appendconfig=appendconfig,
             ),
         )
@@ -24504,11 +24890,11 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         catalogue, and it is never guessed from the core — a core's own
         metadata says which systems it *can* run, never which one this content
         is. ``cwd`` is the working folder the launch will use, an absolute host
-        path: it fills the ``cwd`` hole of a core that saves relative to it, is
-        ignored where the answer does not depend on it, and a value that is not
-        absolute raises ``ValueError``. ``appendconfig`` names the files the
-        launch appends with ``--appendconfig``, as RetroDECK's question takes
-        them.
+        path: it fills the ``cwd`` hole of a core that saves relative to it and
+        completes a relative ``savefile_directory``, is ignored where the answer
+        does not depend on it, and a value that is not absolute raises
+        ``ValueError``. ``appendconfig`` names the files the launch appends
+        with ``--appendconfig``, as RetroDECK's question takes them.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
@@ -24541,15 +24927,16 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         tree via ``RetroArch_maincfg.sh:3053`` — a writer that at the current
         pin has no caller in the Linux backend and targets an override file no
         launch path reads. The handle reads the live cfg either way; the
-        installer history is context, not an input. ``cwd`` is checked as the
-        savefile question checks it and changes nothing here: RetroArch writes
-        every state below a directory its own configuration names.
-        ``appendconfig`` is taken as the savefile question takes it.
+        installer history is context, not an input. ``cwd`` and
+        ``appendconfig`` are taken as the savefile question takes them: the
+        working folder completes a relative ``savestate_directory``, which
+        RetroArch opens from the launch's working directory.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
         return _retroarch_savestate_location(
-            self._machine, self._query(content_path=content_path, core_so=core_so, appendconfig=files)
+            self._machine,
+            self._query(content_path=content_path, core_so=core_so, cwd=cwd, appendconfig=files),
         )
 
     @one_question
@@ -24957,11 +25344,11 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         catalogue, and it is never guessed from the core — a core's own
         metadata says which systems it *can* run, never which one this content
         is. ``cwd`` is the working folder the launch will use, an absolute host
-        path: it fills the ``cwd`` hole of a core that saves relative to it, is
-        ignored where the answer does not depend on it, and a value that is not
-        absolute raises ``ValueError``. ``appendconfig`` names the files the
-        launch appends with ``--appendconfig``, as RetroDECK's question takes
-        them.
+        path: it fills the ``cwd`` hole of a core that saves relative to it and
+        completes a relative ``savefile_directory``, is ignored where the answer
+        does not depend on it, and a value that is not absolute raises
+        ``ValueError``. ``appendconfig`` names the files the launch appends
+        with ``--appendconfig``, as RetroDECK's question takes them.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
@@ -24987,15 +25374,15 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         ``sort_savestates_enable`` is **true** (``config.def.h:983``) exactly as
         its savefile twin is — so an unconfigured install sorts states into
         per-``library_name`` subdirectories of ``states`` under the config tree.
-        ``cwd`` is checked as the savefile question checks it and changes
-        nothing here: RetroArch writes every state below a directory its own
-        configuration names. ``appendconfig`` is taken as the savefile
-        question takes it.
+        ``cwd`` and ``appendconfig`` are taken as the savefile question takes
+        them: the working folder completes a relative ``savestate_directory``,
+        which RetroArch opens from the launch's working directory.
         """
         checked_cwd(cwd)
         files = checked_appendconfig(appendconfig)
         return _retroarch_savestate_location(
-            self._machine, self._query(content_path=content_path, core_so=core_so, appendconfig=files)
+            self._machine,
+            self._query(content_path=content_path, core_so=core_so, cwd=cwd, appendconfig=files),
         )
 
     @one_question
@@ -25268,8 +25655,8 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         """The savefile entry route's twin — same sources, the savestate keys.
 
         The guards stand for the day a spec arrives from somewhere else, as on
-        the savefile route: a derived entry is always a libretro core, and no
-        RetroArch state depends on *cwd*, which is checked and changes nothing.
+        the savefile route: a derived entry is always a libretro core. *cwd* is
+        the launch's working folder, as the entry question takes it.
         """
         checked_cwd(cwd)
         foreign = _foreign_core_of(spec.kind, spec.command)
@@ -25283,6 +25670,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
                 content_path=content_path,
                 core_so=spec.core_so,
                 extra_caveats=entry_caveats,
+                cwd=cwd,
                 appendconfig=appendconfig,
             ),
         )
@@ -25445,6 +25833,8 @@ class Installation(Protocol):
     ) -> LaunchCommandAnswer: ...
 
     def rom_location(self, system: str) -> RomPlacement: ...
+
+    def rom_locations(self) -> RomLocationsAnswer: ...
 
     def firmware_for_core(
         self, core_so: str, *, verify: bool = False, cwd: str | None = None

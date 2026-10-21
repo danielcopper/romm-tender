@@ -64,7 +64,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.24.0"  # x-release-please-version
+__version__ = "0.25.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -123,6 +123,7 @@ from .contract import (
     savestate_absence_contract,
     savestate_answer_contract,
     savestate_placement_contract,
+    rom_locations_contract,
     rom_placement_contract,
     roots_contract,
     emulator_contract,
@@ -189,11 +190,13 @@ from .installations import (
     LaunchCommandAnswer,
     PlatformSystemMatch,
     PlatformSystemsAnswer,
+    RomLocationsAnswer,
     RomPlacement,
     RootProvenance,
     RootSetting,
     RootsAnswer,
     SystemPlatformsAnswer,
+    SystemRomPlacement,
     SystemsAnswer,
 )
 from .launch_formats import (
@@ -546,6 +549,8 @@ from .placement import (
     CAVEAT_APPENDED_CONFIG_NOT_READ,
     CAVEAT_APPENDED_CONFIG_OVERRIDDEN,
     CAVEAT_APPENDED_CONFIG_VISIBILITY_UNESTABLISHED,
+    CAVEAT_SAVE_DIRECTORY_VISIBILITY_UNESTABLISHED,
+    CAVEAT_CWD_HIDDEN_IN_SANDBOX,
     CAVEAT_INVALID_SCREENSHOT_DIRECTORY,
     CAVEAT_NO_CORE,
     CAVEAT_PATCH_FORMATS_UNESTABLISHED,
@@ -801,6 +806,8 @@ __all__ = [
     "lookup_standalone_launch",
     "esde_extension",
     "RomPlacement",
+    "RomLocationsAnswer",
+    "SystemRomPlacement",
     "RootsAnswer",
     "InstallationRoot",
     "RootSetting",
@@ -844,6 +851,7 @@ __all__ = [
     "installation_answers_contract",
     "catalogue_contract",
     "rom_placement_contract",
+    "rom_locations_contract",
     "roots_contract",
     "emulator_contract",
     "systems_contract",
@@ -1289,6 +1297,8 @@ __all__ = [
     "CAVEAT_APPENDED_CONFIG_NOT_READ",
     "CAVEAT_APPENDED_CONFIG_OVERRIDDEN",
     "CAVEAT_APPENDED_CONFIG_VISIBILITY_UNESTABLISHED",
+    "CAVEAT_SAVE_DIRECTORY_VISIBILITY_UNESTABLISHED",
+    "CAVEAT_CWD_HIDDEN_IN_SANDBOX",
     "CAVEAT_INVALID_SCREENSHOT_DIRECTORY",
     "CAVEAT_NO_CORE",
     "CAVEAT_NO_FIRMWARE_DECLARATION",
