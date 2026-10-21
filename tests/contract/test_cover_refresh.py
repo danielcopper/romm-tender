@@ -329,8 +329,10 @@ async def test_pure_no_changes_preview_keeps_zero_cover_count(harness):
 async def test_ts_only_rescan_revalidates_304_then_second_sync_does_zero_cover_work(harness):
     """The #1454 win, end to end over the real wiring.
 
-    A rescan re-stamps every cover's ``?ts=`` without touching the files, so the
-    fingerprint changes; run two REVALIDATES with a conditional request (the file
+    A RomM scan moves the cover's ``?ts=`` without touching the file (which
+    scans do: docs/architecture/backend-architecture.md, "Conditional-request
+    revalidation on a ts-only change"), so the fingerprint changes; run two
+    REVALIDATES with a conditional request (the file
     server's ETag is stable across ts), draws a 304, keeps the cached bytes, and
     adopts the fresh fingerprint. A third sync over the unchanged state then does
     ZERO cover work — the fingerprint is clean.
@@ -348,7 +350,7 @@ async def test_ts_only_rescan_revalidates_304_then_second_sync_does_zero_cover_w
     with harness.uow_factory() as uow:
         assert uow.roms.get(10).cover_source == _COVER_OLD
 
-    # A rescan re-stamps the ts + bumps updated_at, but the file (and its ETag) is unchanged.
+    # The scan moves updated_at and with it the ts, but the file (and its ETag) is unchanged.
     _seed_library(harness, cover=_COVER_NEW, updated_at="2027-01-01T00:00:00")
     harness.romm.cover_etags[_COVER_ASSET] = '"etag-v1"'
     harness.emit.reset_mock()

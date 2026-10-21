@@ -22,16 +22,18 @@ that third-party host (#1450). The fingerprint records the source *actually*
 applied (``url_cover`` on a fallback), so a later fixed RomM asset or changed
 ``url_cover`` is still detected as a change.
 
-When the fingerprint changed by ONLY its ``?ts=`` cache-buster (a server-side
-rescan re-stamps every ROM's ``updated_at`` without touching the cover files),
-the cached bytes are REVALIDATED with a conditional request instead of
-re-downloaded (#1454): each regular download records the response's HTTP
-validator (``ETag`` / ``Last-Modified``) in a ``{rom_id}.cover-meta.json``
-sidecar beside the cache file, and a ts-only fingerprint change re-requests with
-``If-None-Match`` (else ``If-Modified-Since``) — a ``304`` keeps the bytes and
-adopts the fresh fingerprint, a ``200`` replaces them. Validators are an optional
-capability: a ROM with no stored validator (or a server/proxy that sends none)
-falls back to a plain download, unchanged.
+When the fingerprint changed by ONLY its ``?ts=`` cache-buster (which RomM
+scans do that without touching the cover file:
+docs/architecture/backend-architecture.md, "Conditional-request revalidation
+on a ts-only change"), the cached bytes are REVALIDATED with a conditional
+request instead of re-downloaded (#1454): each regular download records the
+response's HTTP validator (``ETag`` / ``Last-Modified``) in a
+``{rom_id}.cover-meta.json`` sidecar beside the cache file, and a ts-only
+fingerprint change re-requests with ``If-None-Match`` (else
+``If-Modified-Since``) — a ``304`` keeps the bytes and adopts the fresh
+fingerprint, a ``200`` replaces them. Validators are an optional capability: a
+ROM with no stored validator (or a server/proxy that sends none) falls back to
+a plain download, unchanged.
 """
 
 from __future__ import annotations
@@ -572,11 +574,10 @@ class ArtworkService:
         Sync worker for the executor. Revalidates with a conditional request
         (instead of re-downloading) only when *stored_source* differs from
         *cover_url* by ONLY its ``?ts=`` cache-buster, a validator sidecar
-        exists, and the cache file is present — the case a server-side rescan
-        creates. Otherwise it is a plain download. Either way the sidecar is
-        refreshed from the response so the *next* sync can revalidate. Returns
-        the :class:`_CoverWrite` the caller persists as the ``cover_source``
-        fingerprint.
+        exists, and the cache file is present. Otherwise it is a plain
+        download. Either way the sidecar is refreshed from the response so the
+        *next* sync can revalidate. Returns the :class:`_CoverWrite` the caller
+        persists as the ``cover_source`` fingerprint.
         """
         etag, last_modified = self._read_cover_meta(rom_id)
         revalidate = (
