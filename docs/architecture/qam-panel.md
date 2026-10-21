@@ -2256,12 +2256,13 @@ the device, and the button says which state it is in.
 
 The RomM URL's modal checks the URL the way **Another folder…** checks a place: OK, Enter in the field and R2 save it
 through the backend, a refusal — or _Failed to save settings_ where the backend could not be reached — is shown under
-the field in amber with the text kept, editing the text drops it, and only a stored URL closes the window. The **Allow
-Insecure SSL** switch saves the URL again with its flag; a refusal of that save puts its message on the section's status
-line, and the switch goes back to the stored flag, or, where none is known, to where it stood before the press. An
-accepted save of either puts the switch at the flag it sent, and clears the line of a message the switch's save put
-there; what loading the settings or signing in said stays. The status line shows a refusal or a failure — of a save, of
-loading the settings, of signing out — in amber behind a warning sign, and any other message plain.
+the field in amber with the text kept, editing the text drops it, and a stored URL closes the window — as do Cancel and
+B, without saving. The **Allow Insecure SSL** switch saves the URL again with its flag; a refusal of that save puts its
+message on the section's status line, and the switch goes back to the stored flag, or, where none is known, to where it
+stood before the press. An accepted save of either puts the switch at the flag it sent, and clears the line of a message
+the switch's save put there; what loading the settings or signing in said stays. The status line shows a refusal or a
+failure — of a save, of loading the settings, of signing out — in amber behind a warning sign, and any other message
+plain.
 
 ## Data Management
 

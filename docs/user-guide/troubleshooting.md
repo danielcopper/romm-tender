@@ -318,9 +318,9 @@ installer that stops each time, is worth reporting together with that output.
 ### Connection shows "Remove login from RomM URL"
 
 **Symptom**: The **Connection** row on Tender's main QAM panel says _Remove login from RomM URL_, and a sync or download
-fails with an unexpected error, or as server unreachable. Saving a RomM URL with a user name and password in it, or
-signing in with one, is refused with the sentence under **RomM URL** in
-[Connection Settings](configuration.md#connection-settings).
+fails with an unexpected error, or as server unreachable. Signing in says, in the sign-in window, "Your saved RomM URL
+holds a user name and password, which Tender cannot sign in through. Remove them from the RomM URL, then sign in to RomM
+under RomM Account; a login for a proxy in front of RomM goes into Custom headers."
 
 **Explanation**: The stored RomM URL carries a user name and password (`https://user:password@host`). Tender cannot sign
 in through the address, and no request to it reaches RomM.
