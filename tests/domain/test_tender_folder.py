@@ -75,6 +75,8 @@ class TestATypedPlace:
             ("~", "/home/deck"),
             ("~/Games", "/home/deck/Games"),
             ("  ~/Games/  ", "/home/deck/Games"),
+            ("~//Tender", "/home/deck/Tender"),
+            ("~///Games//x", "/home/deck/Games/x"),
             ("/mnt/games/../library", "/mnt/library"),
             ("/", "/"),
         ],

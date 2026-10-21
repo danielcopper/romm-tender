@@ -191,7 +191,8 @@ def typed_place(text: str, home: str) -> str:
     """
     stripped = text.strip()
     if stripped == "~" or stripped.startswith("~/"):
-        return os.path.normpath(os.path.join(home, stripped[2:]))
+        # Every slash after the ~ goes, or os.path.join reads "~//x" as the absolute "/x".
+        return os.path.normpath(os.path.join(home, stripped[1:].lstrip("/")))
     if stripped.startswith("/"):
         return os.path.normpath(stripped)
     raise DomainRefused(PLACE_NOT_ABSOLUTE, "Enter a full path starting with / or ~.")
