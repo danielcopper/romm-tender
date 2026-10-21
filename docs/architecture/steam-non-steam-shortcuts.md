@@ -680,13 +680,13 @@ a pick asks `apply_sgdb_game_id`. Both download all four images and replace a ca
 succeeded, before `applyArtwork` serves them; a pick then drops the previous pick's file of each image it did not
 download. A SteamGridDB id RomM now provides therefore replaces an image a manual pick left in the cache, where
 SteamGridDB has such an image for that game. A 401 or 403 from SteamGridDB on either, or on the resolution's name
-search, refuses `auth_failed` with `_KEY_REFUSED` (`services/steamgrid.py`), and a 429 refuses `rate_limited`; the
-frontend shows that message instead of opening the picker. Only the key dialog's check (`verify_sgdb_api_key`) answers a
-401 or 403 with "Invalid API key", as does every use case for a key no header can carry. On Refresh Artwork and in the
-picker, a refusal of an artwork endpoint is shown as its own message rather than read as "no image"; the first visit
-only logs it, and stops asking once a slot answers `key_refused`. Refresh Artwork's one toast also names a failed RomM
-cover refresh after the SteamGridDB result, once where both say the same; when the picker opens instead, the cover
-failure is a toast of its own before it.
+search, refuses `auth_failed` with `_KEY_REFUSED` (`services/steamgrid/service.py`), and a 429 refuses `rate_limited`;
+the frontend shows that message instead of opening the picker. Only the key dialog's check (`verify_sgdb_api_key`)
+answers a 401 or 403 with "Invalid API key", as does every use case for a key no header can carry. On Refresh Artwork
+and in the picker, a refusal of an artwork endpoint is shown as its own message rather than read as "no image"; the
+first visit only logs it, and stops asking once a slot answers `key_refused`. Refresh Artwork's one toast also names a
+failed RomM cover refresh after the SteamGridDB result, once where both say the same; when the picker opens instead, the
+cover failure is a toast of its own before it.
 
 **When a slot is filled** (`domain/artwork_slot.py`, `is_slot_filled`). A slot already holding an image is left alone,
 whoever set it — an image set by hand is never replaced. It is filled when Steam's grid directory holds a regular file,

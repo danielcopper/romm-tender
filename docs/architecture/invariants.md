@@ -944,8 +944,8 @@ Format: **invariant** — tier — enforced by.
   the rule rather than an enforcement of it. They are also not the store's only real I/O — `grid_dir()` is called from
   `services/artwork/` (seven sites), `services/shortcut_removal.py` and `services/library/reporter.py`,
   `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
-  `services/library/reporter.py`, `write_shortcut_icon()` from `services/steamgrid.py`, and `ensure_grid_file()` from
-  `services/shortcut_artwork.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
+  `services/library/reporter.py`, `write_shortcut_icon()` from `services/steamgrid/service.py`, and `ensure_grid_file()`
+  from `services/shortcut_artwork.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
   `.read_shortcut_icons` (the same whole-file parse, for the shortcut artwork job's worklist, called plainly, so its
   entry is enforced), `.grid_file_names` (lists Steam's grid directory to answer which artwork slots a shortcut has),
   the shortcut artwork job's reading of Steam's renderer memory before each batch (`_renderer_above_ceiling`, with

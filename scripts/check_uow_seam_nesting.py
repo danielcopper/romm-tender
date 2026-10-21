@@ -245,7 +245,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # services/shortcut_removal.py and services/library/reporter.py,
         # set_steam_input_config() from services/settings.py,
         # services/shortcut_removal.py and services/library/reporter.py,
-        # write_shortcut_icon() from services/steamgrid.py, and
+        # write_shortcut_icon() from services/steamgrid/service.py, and
         # ensure_grid_file() from services/shortcut_artwork.py.
         "read_shortcut_exes",
         "read_shortcut_launch_options",
