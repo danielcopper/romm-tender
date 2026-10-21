@@ -180,6 +180,20 @@ def _benign_skip() -> SessionFinalizeSyncResult:
     )
 
 
+def _switched_off() -> SessionFinalizeSyncResult:
+    """The verdict of a post-exit sync the settings switched off: success-shaped, nothing moved, no toast."""
+    return SessionFinalizeSyncResult(
+        offline=False,
+        success=True,
+        synced=0,
+        uploaded=0,
+        downloaded=0,
+        conflicts=[],
+        failure_toast=None,
+        conflicts_toast=None,
+    )
+
+
 def _render_conflicts_toast(conflicts: list[dict[str, Any]]) -> str | None:
     """Render the additive "N save conflict(s) need resolution" body.
 
@@ -325,16 +339,21 @@ class SessionLifecycleService:
         Carries the per-direction transfer counts (from which the
         frontend renders the directional success toast) plus the
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
-        While an update is being installed or a RetroDECK migration is pending
-        the post-exit sync does not run, the log says which held it off, and
-        the verdict is the failed-sync one, toasted with what held it off: the
-        update's own body, or the sentence every migration refusal answers with.
+        Where save sync or sync after exit is switched off, nothing is checked
+        and nothing synced, and the verdict is the success-shaped one with no
+        toast, as the sync itself answers then. Otherwise, while an update is
+        being installed or a RetroDECK migration is pending the post-exit sync
+        does not run, the log says which held it off, and the verdict is the
+        failed-sync one, toasted with what held it off: the update's own body,
+        or the sentence every migration refusal answers with.
         The ``finalize_game_session`` use case checks neither rule, so this is
         the first check either meets on the way to that sync. A refusal the
         sync raises is toasted from its reason and message — as offline when
         its ``offline`` detail says so — or not shown at all for a benign skip;
         a RomM error it raises is toasted with ``classify_error``'s message.
         """
+        if not self._post_exit_sync.syncs_after_exit():
+            return _switched_off()
         if self._update_in_progress():
             return self._skipped_sync(rom_id, "an update is being installed", _TOAST_BODY_UPDATING)
         if self._migration_reader.is_retrodeck_migration_pending():

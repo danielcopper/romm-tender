@@ -63,18 +63,23 @@ class FakePostExitSync:
         *,
         payload: dict[str, Any] | None = None,
         side_effect: BaseException | None = None,
+        syncs_after_exit: bool = True,
     ) -> None:
         self.payload: dict[str, Any] = (
             payload if payload is not None else {"success": True, "synced": 0, "conflicts": []}
         )
         self.side_effect = side_effect
         self.calls: list[int] = []
+        self._syncs_after_exit = syncs_after_exit
 
     async def post_exit_sync(self, rom_id: int) -> dict[str, Any]:
         self.calls.append(rom_id)
         if self.side_effect is not None:
             raise self.side_effect
         return self.payload
+
+    def syncs_after_exit(self) -> bool:
+        return self._syncs_after_exit
 
 
 class FakeAchievementSync:
@@ -1089,6 +1094,65 @@ class TestTheSkippedSyncIsLogged:
             event_loop.run_until_complete(_drain_background_tasks(service))
 
         assert f"post-exit sync skipped for rom_id=99: {why}" in caplog.text
+
+
+class TestASyncSwitchedOffIsNeverToasted:
+    @pytest.mark.parametrize(
+        ("update_in_progress", "pending"),
+        [(True, False), (False, True), (True, True)],
+        ids=["an update", "a pending migration", "both"],
+    )
+    def test_nothing_is_toasted_while_an_update_or_a_migration_would_have_held_it_off(
+        self, event_loop, logger, update_in_progress, pending
+    ):
+        post = FakePostExitSync(syncs_after_exit=False)
+        migration = FakeMigrationReader(pending=pending)
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=migration,
+            logger=logger,
+            update_in_progress=update_in_progress,
+        )
+
+        result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert post.calls == []
+        assert result.sync == SessionFinalizeSyncResult(
+            offline=False,
+            success=True,
+            synced=0,
+            uploaded=0,
+            downloaded=0,
+            conflicts=[],
+            failure_toast=None,
+            conflicts_toast=None,
+        )
+        assert result.total_seconds == 3600
+        assert migration.refresh_calls == 1
+
+
+class TestTheUpdateIsCheckedBeforeTheMigration:
+    def test_with_both_holding_the_toast_is_the_updates(self, event_loop, logger):
+        post = FakePostExitSync()
+        migration = FakeMigrationReader(pending=True)
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=migration,
+            logger=logger,
+            update_in_progress=True,
+        )
+
+        result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert post.calls == []
+        assert result.sync.failure_toast == "Tender is installing an update — saves sync with the next sync that runs"
+        assert migration.pending_calls == 0
 
 
 class TestFinalizeAchievementSync:

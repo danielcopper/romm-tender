@@ -409,6 +409,19 @@ class TestPostExitSync:
         result = await svc.post_exit_sync(42)
         assert result["synced"] == 0
 
+    @pytest.mark.parametrize(
+        ("save_sync_enabled", "sync_after_exit", "syncs"),
+        [(True, True, True), (False, True, False), (True, False, False), (False, False, False)],
+    )
+    def test_a_games_exit_is_followed_by_a_sync_only_with_both_switches_on(
+        self, tmp_path, save_sync_enabled, sync_after_exit, syncs
+    ):
+        svc, _ = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = save_sync_enabled
+        svc._config.settings["sync_after_exit"] = sync_after_exit
+
+        assert svc.syncs_after_exit() is syncs
+
     @pytest.mark.asyncio
     async def test_auto_registers_device(self, tmp_path):
         svc, _ = make_service(tmp_path)

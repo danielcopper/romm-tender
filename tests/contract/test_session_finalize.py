@@ -19,7 +19,13 @@ time (both clocks) and ``advance_wall`` for suspend (wall only, monotonic frozen
 
 from __future__ import annotations
 
+import pytest
+
+from ._harness import hold_migration_pending, hold_update_in_progress
 from ._seed import seed_rom
+
+_UPDATE_TOAST = "Tender is installing an update — saves sync with the next sync that runs"
+_MIGRATION_TOAST = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
 
 
 async def test_finalize_excludes_suspend_via_monotonic(harness):
@@ -182,3 +188,58 @@ async def test_finalize_sync_payload_carries_counts_not_toast_keys(harness):
     # The directional copy is rendered frontend-side now — no backend toast strings.
     assert "toast_title" not in sync
     assert "toast_body" not in sync
+
+
+_SWITCHED_OFF = pytest.mark.parametrize(
+    ("save_sync_enabled", "sync_after_exit"),
+    [(False, True), (True, False)],
+    ids=["save sync off", "sync after exit off"],
+)
+_HOLDERS = pytest.mark.parametrize(
+    "hold", [hold_update_in_progress, hold_migration_pending], ids=["an update", "a pending migration"]
+)
+
+
+@_SWITCHED_OFF
+@_HOLDERS
+async def test_a_sync_switched_off_is_not_toasted_while_it_would_have_been_held_off(
+    harness, save_sync_enabled, sync_after_exit, hold
+):
+    seed_rom(harness, 1)
+    harness.settings["save_sync_enabled"] = save_sync_enabled
+    harness.settings["sync_after_exit"] = sync_after_exit
+    hold(harness)
+    await harness.endpoints.record_session_start(1)
+    harness.clock.advance(60)
+
+    result = await harness.endpoints.finalize_game_session(1)
+
+    sync = result["sync"]
+    assert (sync["success"], sync["synced"]) == (True, 0)
+    assert (sync["failure_toast"], sync["conflicts_toast"]) == (None, None)
+
+
+async def test_a_pending_migration_is_toasted_with_the_migration_sentence(harness):
+    seed_rom(harness, 1)
+    harness.settings["save_sync_enabled"] = True
+    hold_migration_pending(harness)
+    await harness.endpoints.record_session_start(1)
+    harness.clock.advance(60)
+
+    result = await harness.endpoints.finalize_game_session(1)
+
+    assert result["sync"]["success"] is False
+    assert result["sync"]["failure_toast"] == _MIGRATION_TOAST
+
+
+async def test_an_update_and_a_pending_migration_are_toasted_as_the_update(harness):
+    seed_rom(harness, 1)
+    harness.settings["save_sync_enabled"] = True
+    hold_update_in_progress(harness)
+    hold_migration_pending(harness)
+    await harness.endpoints.record_session_start(1)
+    harness.clock.advance(60)
+
+    result = await harness.endpoints.finalize_game_session(1)
+
+    assert result["sync"]["failure_toast"] == _UPDATE_TOAST

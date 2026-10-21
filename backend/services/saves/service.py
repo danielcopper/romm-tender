@@ -297,6 +297,10 @@ class SaveService:
         """Upload changed saves after game exit."""
         return await self._sync_engine.post_exit_sync(rom_id)
 
+    def syncs_after_exit(self) -> bool:
+        """Whether a game's exit is followed by a sync: save sync and sync after exit both switched on."""
+        return self._sync_engine.syncs_after_exit()
+
     async def sync_rom_saves(self, rom_id: int) -> dict[str, Any]:
         """Bidirectional sync for a single ROM (manual trigger from game detail)."""
         async with self._rules.hold("sync_rom_saves", update=True, migration=True, prune=True):
