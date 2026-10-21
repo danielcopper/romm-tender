@@ -23,6 +23,14 @@ export interface TenderFolderDrive {
   free_bytes: number;
 }
 
+/** The drive the place in use lies on, connected or not. */
+export interface TenderFolderPlaceDrive {
+  kind: TenderFolderDriveKind;
+  name: string;
+  mount_point: string;
+  connected: boolean;
+}
+
 /** The answer of `get_tender_folder` and of the writes beside it. */
 export interface TenderFolderState {
   /** The chosen place, the folder `Tender` lies in. */
@@ -37,6 +45,8 @@ export interface TenderFolderState {
   unreachable: TenderFolderCondition | null;
   /** The other folders something is recorded under, as the stores gave them. */
   elsewhere: string[];
+  /** The drive the place in use lies on, named by what was stored with the choice; `null` for a place on no drive. */
+  drive: TenderFolderPlaceDrive | null;
   /** The space free on the internal storage, the default place's. */
   home_free_bytes: number;
   /** Where drives are mounted, `/run/media/<user>`. */

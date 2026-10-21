@@ -7,7 +7,7 @@ import {
   forgetTitle,
   placeRefusalSentence,
   tenderNamedQuestion,
-  useParentButton,
+  parentButton,
 } from "./tenderFolderWording";
 
 function refused(fields: Partial<TenderPlaceRefusal>): TenderPlaceRefusal {
@@ -44,7 +44,7 @@ describe("Tender folder wording", () => {
       "Tender keeps its files in a folder named Tender inside the place you choose, so this would make " +
         "/sd/Tender/Tender. Use /sd instead?",
     );
-    expect(useParentButton("/sd")).toBe("Use /sd");
+    expect(parentButton("/sd")).toBe("Use /sd");
   });
 
   describe("a refused choice", () => {

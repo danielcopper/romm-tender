@@ -13,10 +13,6 @@ export const pendingEdits: { url?: string } = {};
 
 interface TextInputModalProps {
   label: string;
-  /** The field's own label, where it says more than the title; the title otherwise. */
-  fieldLabel?: string;
-  /** A line under the field, such as an example of what to enter. */
-  description?: string;
   value: string;
   field?: "url";
   bIsPassword?: boolean;
@@ -26,8 +22,6 @@ interface TextInputModalProps {
 
 export const TextInputModal: FC<TextInputModalProps> = ({
   label,
-  fieldLabel,
-  description,
   value: initial,
   field,
   bIsPassword,
@@ -54,8 +48,7 @@ export const TextInputModal: FC<TextInputModalProps> = ({
     >
       <TextField
         focusOnMount={true}
-        label={fieldLabel ?? label}
-        {...(description !== undefined ? { description } : {})}
+        label={label}
         value={value}
         {...(bIsPassword !== undefined ? { bIsPassword } : {})}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}

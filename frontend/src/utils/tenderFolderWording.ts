@@ -9,8 +9,8 @@
 import type {
   EndpointFailure,
   TenderFolderCondition,
-  TenderFolderDrive,
   TenderFolderDriveKind,
+  TenderFolderPlaceDrive,
   TenderFolderState,
   TenderPlaceRefusal,
 } from "../types";
@@ -62,7 +62,7 @@ export function tenderNamedQuestion(place: string, parent: string): string {
   );
 }
 
-export function useParentButton(parent: string): string {
+export function parentButton(parent: string): string {
   return `Use ${parent}`;
 }
 
@@ -81,8 +81,9 @@ export const DEFAULT_TAG = "Default";
 export const IN_USE_BADGE = "In use";
 export const ANOTHER_FOLDER = "Another folder…";
 const ANOTHER_FOLDER_IN_USE = "Another folder";
-export const ANOTHER_FOLDER_LINE = "Type a path, for example a folder on a drive below";
+export const ANOTHER_FOLDER_LINE = "Type a path, for example a folder on one of the drives above";
 export const ANOTHER_FOLDER_FIELD = "Tender puts its folder named Tender inside the place you enter.";
+export const NOT_CONNECTED = "Not connected";
 export const NO_DRIVE_NOTE = "Insert an SD card or connect a drive to keep Tender's folder there.";
 
 /** The example under the "Another folder…" field, with the drives root this machine mounts drives in. */
@@ -91,19 +92,24 @@ export function anotherFolderExample(drivesRoot: string): string {
 }
 
 /** What kind of drive a tile names, before the drive's own name. */
-export function driveKind(drive: TenderFolderDrive): string {
+export function driveKind(drive: { kind: TenderFolderDriveKind }): string {
   return DRIVE_KINDS[drive.kind];
+}
+
+/** The drive whose tile is the place in use — the drive's root is the place — connected or not; `null` otherwise. */
+export function driveInUse(state: TenderFolderState): TenderFolderPlaceDrive | null {
+  return !state.default && state.drive !== null && state.drive.mount_point === state.place ? state.drive : null;
 }
 
 /** The place in use, as the status line names it: the internal storage, a drive by kind and name, or another folder. */
 export function inUseLabel(state: TenderFolderState): string {
   if (state.default) return `In use: ${INTERNAL_KIND}`;
-  const drive = state.drives.find((candidate) => candidate.mount_point === state.place);
-  return drive === undefined ? `In use: ${ANOTHER_FOLDER_IN_USE}` : `In use: ${driveKind(drive)} · ${drive.name}`;
+  const drive = driveInUse(state);
+  return drive === null ? `In use: ${ANOTHER_FOLDER_IN_USE}` : `In use: ${driveKind(drive)} · ${drive.name}`;
 }
 
 const CONDITION_PILLS: Record<TenderFolderCondition, string> = {
-  drive_not_mounted: "Not connected",
+  drive_not_mounted: NOT_CONNECTED,
   folder_missing: "Missing",
   folder_not_writable: "Not writable",
 };
@@ -115,12 +121,8 @@ export function conditionPill(condition: TenderFolderCondition | null): string {
 
 /** The toast after a switch: the new place by the name its tile carries, or its folder where no tile names it. */
 export function switchedToast(state: TenderFolderState): string {
-  const drive = state.drives.find((candidate) => candidate.mount_point === state.place);
-  const label = state.default
-    ? INTERNAL_NAME
-    : drive === undefined
-      ? state.folder
-      : `${driveKind(drive)} · ${drive.name}`;
+  const drive = driveInUse(state);
+  const label = state.default ? INTERNAL_NAME : drive === null ? state.folder : `${driveKind(drive)} · ${drive.name}`;
   return `Tender's folder is now on ${label}.`;
 }
 

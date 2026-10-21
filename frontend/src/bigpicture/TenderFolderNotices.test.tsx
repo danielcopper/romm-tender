@@ -14,7 +14,7 @@ function view(state: Partial<NonNullable<TenderFolderView["state"]>>, refusal: s
     refusal,
     chooseDefault: vi.fn(),
     chooseDrive: vi.fn(),
-    chooseTyped: vi.fn(),
+    acceptTyped: vi.fn(),
     switchToRecorded: vi.fn(),
     forget: vi.fn(),
   };

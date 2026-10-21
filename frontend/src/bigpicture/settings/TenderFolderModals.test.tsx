@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { showModal } from "@decky/ui";
 import type { ReactElement } from "react";
-import { showCreateMissingModal, showForgetRecordedModal, showTenderNamedModal } from "./TenderFolderModals";
+import { showForgetRecordedModal } from "./TenderFolderModals";
 
 interface ConfirmModalProps {
   strTitle?: string;
@@ -21,7 +21,7 @@ function lastProps(): ConfirmModalProps {
   return el.props;
 }
 
-describe("the confirmations around Tender's folder", () => {
+describe("the confirmation around Tender's folder", () => {
   beforeEach(() => {
     vi.mocked(showModal).mockClear();
   });
@@ -40,33 +40,5 @@ describe("the confirmations around Tender's folder", () => {
     const kept = showForgetRecordedModal("/sd/Tender");
     lastProps().onCancel?.();
     await expect(kept).resolves.toBe(false);
-  });
-
-  it("asks before creating missing folders, with Create and Cancel", async () => {
-    const created = showCreateMissingModal("/home/deck/Games", "/home/deck", "Games");
-    const props = lastProps();
-    expect(props.strDescription).toBe(
-      "/home/deck/Games does not exist yet; only /home/deck does. Create Games/ there?",
-    );
-    expect([props.strOKButtonText, props.strCancelButtonText]).toEqual(["Create", "Cancel"]);
-    props.onCancel?.();
-    await expect(created).resolves.toBe(false);
-  });
-
-  it("asks about a place named Tender: its parent, as typed, or nothing at all", async () => {
-    const parent = showTenderNamedModal("/sd/Tender", "/sd");
-    const props = lastProps();
-    expect(props.strOKButtonText).toBe("Use /sd");
-    expect(props.strMiddleButtonText).toBe("Keep as typed");
-    props.onOK?.();
-    await expect(parent).resolves.toBe("parent");
-
-    const typed = showTenderNamedModal("/sd/Tender", "/sd");
-    lastProps().onMiddleButton?.();
-    await expect(typed).resolves.toBe("typed");
-
-    const nothing = showTenderNamedModal("/sd/Tender", "/sd");
-    lastProps().onCancel?.();
-    await expect(nothing).resolves.toBe("cancel");
   });
 });

@@ -1087,10 +1087,10 @@ sense — Tender lists them from the folder and keeps no record of them.
 ### Tender's folder
 
 `Tender/`, the one folder Tender keeps its own files in, inside a **place** the user chooses: no choice is the internal
-default, the home folder (`~/Tender`); a choice holds the place and the **mount point** it lay on, stored in
-`settings.json` under `tender_folder` (`domain/tender_folder.py`). Its subfolders belong to the stores that write them —
-`recovery/` today. Whenever Tender creates `Tender/`, it writes `.tender-folder` into it, holding the id Tender keeps in
-`kv_config`.
+default, the home folder (`~/Tender`); a choice holds the place, the **mount point** it lay on and, for a place on a
+drive, that drive's kind and name, stored in `settings.json` under `tender_folder` (`domain/tender_folder.py`). Its
+subfolders belong to the stores that write them — `recovery/` today. Whenever Tender creates `Tender/`, it writes
+`.tender-folder` into it, holding the id Tender keeps in `kv_config`.
 
 Something **recorded under** a folder is what a store keeps a path of there — a download, a firmware file, a save; each
 store answers for itself which folders it holds records under, and forgets its records under one when the user asks

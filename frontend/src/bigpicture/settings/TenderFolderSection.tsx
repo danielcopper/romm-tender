@@ -20,24 +20,25 @@ import type { TenderFolderState } from "../../types";
 import type { TenderFolderView } from "../useTenderFolder";
 import {
   ANOTHER_FOLDER,
-  ANOTHER_FOLDER_FIELD,
   ANOTHER_FOLDER_LINE,
   DEFAULT_TAG,
   INTERNAL_FOLDER,
   INTERNAL_KIND,
   INTERNAL_NAME,
   IN_USE_BADGE,
+  NOT_CONNECTED,
   NO_DRIVE_NOTE,
   TENDER_FOLDER_SECTION,
-  anotherFolderExample,
   conditionPill,
+  driveInUse,
   driveKind,
   freeLine,
   inUseLabel,
 } from "../../utils/tenderFolderWording";
 import { AMBER, GREEN, MUTED, SELECTION_ACCENT, useFocusWithin } from "../layout/pane";
 import { WarningCard } from "../WarningCard";
-import { TextInputModal } from "./TextInputModal";
+import { checkTenderPlace, chooseTenderPlace } from "../../api/backend";
+import { AnotherFolderModal } from "./AnotherFolderModal";
 
 // The section's own palette, a tile's fill at rest and under focus, and the
 // line under the status line.
@@ -57,6 +58,8 @@ interface Tile {
   freeBytes: number;
   isDefault: boolean;
   inUse: boolean;
+  /** A drive in use that is not connected: greyed, "Not connected" for its free space. */
+  notConnected: boolean;
   choose: () => void;
 }
 
@@ -88,6 +91,7 @@ function tilesOf(state: TenderFolderState, folder: TenderFolderView): Tile[] {
     freeBytes: state.home_free_bytes,
     isDefault: true,
     inUse: state.default,
+    notConnected: false,
     choose: folder.chooseDefault,
   };
   const drives = state.drives.map((drive): Tile => ({
@@ -98,8 +102,23 @@ function tilesOf(state: TenderFolderState, folder: TenderFolderView): Tile[] {
     freeBytes: drive.free_bytes,
     isDefault: false,
     inUse: !state.default && state.place === drive.mount_point,
+    notConnected: false,
     choose: () => folder.chooseDrive(drive.mount_point),
   }));
+  const gone = driveInUse(state);
+  if (gone !== null && !state.drives.some((drive) => drive.mount_point === gone.mount_point)) {
+    drives.push({
+      key: gone.mount_point,
+      kind: driveKind(gone),
+      name: gone.name,
+      folder: state.folder,
+      freeBytes: 0,
+      isDefault: false,
+      inUse: true,
+      notConnected: true,
+      choose: () => undefined,
+    });
+  }
   return [internal, ...drives];
 }
 
@@ -127,12 +146,13 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
         border: `2px solid ${tile.inUse ? SELECTION_ACCENT : "transparent"}`,
         background: tile.inUse ? TILE_IN_USE : TILE,
         color: TEXT,
-        opacity: busy ? 0.6 : 1,
+        opacity: busy || tile.notConnected ? 0.6 : 1,
         ...focusLook(focused),
       }}
     >
       <div
         data-testid={`tender-folder-tile-${tile.key}`}
+        data-not-connected={tile.notConnected ? "true" : undefined}
         data-in-use={tile.inUse ? "true" : undefined}
         style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}
       >
@@ -187,7 +207,9 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
         )}
         <span style={{ fontWeight: 600, fontSize: "17px" }}>{tile.name}</span>
         <Path path={tile.folder} />
-        <span style={{ fontSize: "13px", color: MUTED }}>{freeLine(tile.freeBytes)}</span>
+        <span style={{ fontSize: "13px", color: MUTED }}>
+          {tile.notConnected ? NOT_CONNECTED : freeLine(tile.freeBytes)}
+        </span>
       </div>
     </Focusable>
   );
@@ -284,12 +306,11 @@ export const TenderFolderSection: FC<{ folder: TenderFolderView }> = ({ folder }
   const { state, busy, refusal } = folder;
   const askTyped = (drivesRoot: string) =>
     showModal(
-      <TextInputModal
-        label={ANOTHER_FOLDER}
-        fieldLabel={ANOTHER_FOLDER_FIELD}
-        description={anotherFolderExample(drivesRoot)}
-        value=""
-        onSubmit={folder.chooseTyped}
+      <AnotherFolderModal
+        drivesRoot={drivesRoot}
+        check={checkTenderPlace}
+        choose={chooseTenderPlace}
+        onAccepted={folder.acceptTyped}
       />,
     );
   return (

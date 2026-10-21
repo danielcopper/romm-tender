@@ -37,7 +37,7 @@ function view(state: Partial<TenderFolderState> = {}, overrides: Partial<TenderF
     refusal: null,
     chooseDefault: vi.fn(),
     chooseDrive: vi.fn(),
-    chooseTyped: vi.fn(),
+    acceptTyped: vi.fn(),
     switchToRecorded: vi.fn(),
     forget: vi.fn(),
     ...overrides,
@@ -47,17 +47,6 @@ function view(state: Partial<TenderFolderState> = {}, overrides: Partial<TenderF
 /** The controller's A press on *el*, the way Steam delivers it to the stop that holds it. */
 function press(el: Element): void {
   fireEvent(el, new CustomEvent("decky-button-down", { detail: { button: 1 }, bubbles: true }));
-}
-
-function lastModal(): ReactElement<{
-  label: string;
-  fieldLabel?: string;
-  description?: string;
-  value: string;
-  onSubmit: (v: string) => void;
-}> {
-  const calls = vi.mocked(showModal).mock.calls;
-  return calls[calls.length - 1]?.[0] as never;
 }
 
 describe("TenderFolderSection", () => {
@@ -85,7 +74,14 @@ describe("TenderFolderSection", () => {
 
   it("names a drive in use by its kind and name, and another place as another folder", () => {
     const onSd = render(
-      <TenderFolderSection folder={view({ default: false, place: SD.mount_point, folder: SD.folder })} />,
+      <TenderFolderSection
+        folder={view({
+          default: false,
+          place: SD.mount_point,
+          folder: SD.folder,
+          drive: { kind: "sd_card", name: "Emulation", mount_point: SD.mount_point, connected: true },
+        })}
+      />,
     );
     expect(onSd.getByText("In use: SD card · Emulation")).toBeInTheDocument();
     onSd.unmount();
@@ -151,20 +147,43 @@ describe("TenderFolderSection", () => {
     expect(getByText("Insert an SD card or connect a drive to keep Tender's folder there.")).toBeInTheDocument();
   });
 
-  it("another folder opens an empty text field with an example under it, and the typed place is chosen", () => {
+  it("another folder opens its window with the drives root for the example, and hands it the place accepted", () => {
     const folder = view();
     const { getByText } = render(<TenderFolderSection folder={folder} />);
 
-    expect(getByText("Type a path, for example a folder on a drive below")).toBeInTheDocument();
+    expect(getByText("Type a path, for example a folder on one of the drives above")).toBeInTheDocument();
     press(getByText("Another folder…"));
 
-    const modal = lastModal();
-    expect(modal.props.label).toBe("Another folder…");
-    expect(modal.props.value).toBe("");
-    expect(modal.props.fieldLabel).toBe("Tender puts its folder named Tender inside the place you enter.");
-    expect(modal.props.description).toBe("For example ~/Games or /run/media/deck/Archive");
-    modal.props.onSubmit("~/Games");
-    expect(folder.chooseTyped).toHaveBeenCalledWith("~/Games");
+    const calls = vi.mocked(showModal).mock.calls;
+    const modal = calls[calls.length - 1]?.[0] as ReactElement<{ drivesRoot: string; onAccepted: unknown }>;
+    expect(modal.props.drivesRoot).toBe("/run/media/deck");
+    expect(modal.props.onAccepted).toBe(folder.acceptTyped);
+  });
+
+  it("keeps the tile of a drive in use that is not connected: greyed, outlined, Not connected, and dead", () => {
+    const sd = "/run/media/deck/Emulation";
+    const folder = view({
+      default: false,
+      place: sd,
+      folder: `${sd}/Tender`,
+      condition: "drive_not_mounted",
+      drives: [],
+      drive: { kind: "sd_card", name: "Emulation", mount_point: sd, connected: false },
+    });
+    const { getByTestId, getByText } = render(<TenderFolderSection folder={folder} />);
+
+    expect(getByText("In use: SD card · Emulation")).toBeInTheDocument();
+    expect(getByTestId("tender-folder-pill")).toHaveTextContent("Not connected");
+    const tile = getByTestId(`tender-folder-tile-${sd}`);
+    expect(tile).toHaveAttribute("data-in-use", "true");
+    expect(tile).toHaveAttribute("data-not-connected", "true");
+    expect(tile).toHaveTextContent("SD card");
+    expect(tile).toHaveTextContent("Emulation");
+    expect(tile).toHaveTextContent("Not connected");
+    expect(tile).not.toHaveTextContent("free");
+    expect((tile.parentElement as HTMLElement).style.opacity).toBe("0.6");
+    press(tile);
+    expect(folder.chooseDrive).not.toHaveBeenCalled();
   });
 
   it("nothing can be pressed while a change is in flight", () => {
@@ -222,7 +241,7 @@ describe("TenderFolderSection", () => {
     const { getByText } = render(<TenderFolderSection folder={view()} />);
     const row = getByText("Another folder…").closest("[data-activate]") as HTMLElement;
 
-    expect(row).toHaveTextContent("Type a path, for example a folder on a drive below");
+    expect(row).toHaveTextContent("Type a path, for example a folder on one of the drives above");
     expect(row).toHaveTextContent("›");
   });
 

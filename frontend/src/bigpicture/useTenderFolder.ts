@@ -8,7 +8,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  checkTenderPlace,
   chooseTenderPlace,
   forgetTenderFolderRecords,
   getTenderFolder,
@@ -20,7 +19,7 @@ import type { TenderFolderForgetRefusal, TenderFolderRefusal, TenderFolderState,
 import { detach } from "../utils/detach";
 import { placeRefusalSentence, switchedToast } from "../utils/tenderFolderWording";
 import { showToast } from "../utils/toast";
-import { showCreateMissingModal, showForgetRecordedModal, showTenderNamedModal } from "./settings/TenderFolderModals";
+import { showForgetRecordedModal } from "./settings/TenderFolderModals";
 
 export interface TenderFolderView {
   /** `undefined` while the read is in flight, `null` where it failed. */
@@ -31,7 +30,8 @@ export interface TenderFolderView {
   refusal: string | null;
   chooseDefault: () => void;
   chooseDrive: (mountPoint: string) => void;
-  chooseTyped: (text: string) => void;
+  /** A typed place the "Another folder…" window had accepted: the state it answered, confirmed with the toast. */
+  acceptTyped: (state: TenderFolderState) => void;
   switchToRecorded: (folder: string) => void;
   forget: (folder: string) => void;
 }
@@ -85,38 +85,17 @@ export function useTenderFolder(): TenderFolderView {
     );
   };
 
-  /** The questions a typed place is asked before it is chosen; `null` where the user chose nothing.
-   *  The place is chosen as typed, so a refusal names it the way the user wrote it. */
-  const chooseAfterAsking = async (text: string): Promise<Answer | null> => {
-    const asks = await checkTenderPlace(text);
-    if (isEndpointFailure(asks)) return asks;
-    let typed = text;
-    let place = asks.place;
-    let missing = asks;
-    if (asks.tender_parent !== null) {
-      const answer = await showTenderNamedModal(asks.place, asks.tender_parent);
-      if (answer === "cancel") return null;
-      if (answer === "parent") {
-        const parent = await checkTenderPlace(asks.tender_parent);
-        if (isEndpointFailure(parent)) return parent;
-        typed = asks.tender_parent;
-        place = parent.place;
-        missing = parent;
-      }
-    }
-    if (missing.missing !== null && !(await showCreateMissingModal(place, missing.existing, missing.missing))) {
-      return null;
-    }
-    return chooseTenderPlace(typed);
-  };
-
   return {
     state,
     busy,
     refusal,
     chooseDefault: () => run(() => chooseTenderPlace(null), true),
     chooseDrive: (mountPoint) => run(() => chooseTenderPlace(mountPoint), true),
-    chooseTyped: (text) => run(() => chooseAfterAsking(text), true),
+    acceptTyped: (accepted) => {
+      setRefusal(null);
+      setState(accepted);
+      showToast(switchedToast(accepted));
+    },
     switchToRecorded: (folder) => run(() => switchToRecordedTenderFolder(folder), true),
     forget: (folder) =>
       run(async () => ((await showForgetRecordedModal(folder)) ? forgetTenderFolderRecords(folder) : null)),

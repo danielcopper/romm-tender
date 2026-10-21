@@ -1,18 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import * as backend from "../api/backend";
-import type { TenderFolderState, TenderPlaceAsks } from "../types";
+import type { TenderFolderState } from "../types";
 import { TENDER_FOLDER_AT_HOME } from "../test-utils/tenderFolder";
-import { showCreateMissingModal, showForgetRecordedModal, showTenderNamedModal } from "./settings/TenderFolderModals";
+import { showForgetRecordedModal } from "./settings/TenderFolderModals";
 import { showToast } from "../utils/toast";
 import { useTenderFolder } from "./useTenderFolder";
 
 vi.mock("../utils/toast", () => ({ showToast: vi.fn() }));
 
 vi.mock("./settings/TenderFolderModals", () => ({
-  showCreateMissingModal: vi.fn(),
   showForgetRecordedModal: vi.fn(),
-  showTenderNamedModal: vi.fn(),
 }));
 
 const ON_SD: TenderFolderState = {
@@ -20,6 +18,7 @@ const ON_SD: TenderFolderState = {
   place: "/run/media/deck/SD",
   folder: "/run/media/deck/SD/Tender",
   default: false,
+  drive: { kind: "sd_card", name: "Emulation", mount_point: "/run/media/deck/SD", connected: true },
   drives: [
     {
       name: "Emulation",
@@ -30,10 +29,6 @@ const ON_SD: TenderFolderState = {
     },
   ],
 };
-
-function asks(place: string, overrides: Partial<TenderPlaceAsks> = {}): TenderPlaceAsks {
-  return { place, folder: `${place}/Tender`, tender_parent: null, existing: place, missing: null, ...overrides };
-}
 
 async function mounted() {
   const hook = renderHook(() => useTenderFolder());
@@ -88,93 +83,6 @@ describe("useTenderFolder", () => {
     expect(hook.result.current.state).toEqual(TENDER_FOLDER_AT_HOME);
   });
 
-  describe("a typed place", () => {
-    it("that exists is chosen without a question", async () => {
-      vi.mocked(backend.checkTenderPlace).mockResolvedValue(asks("/home/deck/Games"));
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseTyped("~/Games"));
-
-      await waitFor(() => expect(backend.chooseTenderPlace).toHaveBeenCalledWith("~/Games"));
-      expect(showTenderNamedModal).not.toHaveBeenCalled();
-      expect(showCreateMissingModal).not.toHaveBeenCalled();
-    });
-
-    it("whose folders are missing is chosen only once Create is pressed", async () => {
-      vi.mocked(backend.checkTenderPlace).mockResolvedValue(
-        asks("/home/deck/Games", { existing: "/home/deck", missing: "Games" }),
-      );
-      vi.mocked(showCreateMissingModal).mockResolvedValue(false);
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseTyped("~/Games"));
-
-      await waitFor(() => expect(hook.result.current.busy).toBe(false));
-      expect(showCreateMissingModal).toHaveBeenCalledWith("/home/deck/Games", "/home/deck", "Games");
-      expect(backend.chooseTenderPlace).not.toHaveBeenCalled();
-
-      vi.mocked(showCreateMissingModal).mockResolvedValue(true);
-      act(() => hook.result.current.chooseTyped("~/Games"));
-      await waitFor(() => expect(backend.chooseTenderPlace).toHaveBeenCalledWith("~/Games"));
-    });
-
-    it("named Tender is replaced by its parent when asked to, which is checked again", async () => {
-      vi.mocked(backend.checkTenderPlace).mockImplementation(async (text) =>
-        text === "/sd/Tender" ? asks("/sd/Tender", { tender_parent: "/sd" }) : asks("/sd"),
-      );
-      vi.mocked(showTenderNamedModal).mockResolvedValue("parent");
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseTyped("/sd/Tender"));
-
-      await waitFor(() => expect(backend.chooseTenderPlace).toHaveBeenCalledWith("/sd"));
-      expect(backend.checkTenderPlace).toHaveBeenLastCalledWith("/sd");
-    });
-
-    it("named Tender is kept as typed when asked to", async () => {
-      vi.mocked(backend.checkTenderPlace).mockResolvedValue(asks("/sd/Tender", { tender_parent: "/sd" }));
-      vi.mocked(showTenderNamedModal).mockResolvedValue("typed");
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseTyped("/sd/Tender"));
-
-      await waitFor(() => expect(backend.chooseTenderPlace).toHaveBeenCalledWith("/sd/Tender"));
-    });
-
-    it("named Tender chooses nothing when the question is dismissed", async () => {
-      vi.mocked(backend.checkTenderPlace).mockResolvedValue(asks("/sd/Tender", { tender_parent: "/sd" }));
-      vi.mocked(showTenderNamedModal).mockResolvedValue("cancel");
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseTyped("/sd/Tender"));
-
-      await waitFor(() => expect(hook.result.current.busy).toBe(false));
-      expect(backend.chooseTenderPlace).not.toHaveBeenCalled();
-    });
-
-    it("that is refused when checked is shown with its sentence and chooses nothing", async () => {
-      vi.mocked(backend.checkTenderPlace).mockResolvedValue({
-        success: false,
-        reason: "place_in_rom_folder",
-        message: "fallback",
-        path: "/r/roms/Tender",
-        source: "emudeck",
-        folder: "/r/roms",
-        system: null,
-      });
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseTyped("/r/roms"));
-
-      await waitFor(() =>
-        expect(hook.result.current.refusal).toBe(
-          "/r/roms/Tender lies inside EmuDeck's ROM folder (/r/roms). Choose a place outside it.",
-        ),
-      );
-      expect(backend.chooseTenderPlace).not.toHaveBeenCalled();
-    });
-  });
-
   describe("the toast after a switch", () => {
     it("names a drive by its kind and name", async () => {
       const hook = await mounted();
@@ -193,19 +101,32 @@ describe("useTenderFolder", () => {
       await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on This device."));
     });
 
-    it("names another folder by its path", async () => {
-      vi.mocked(backend.checkTenderPlace).mockResolvedValue(asks("/home/deck/Games"));
-      vi.mocked(backend.chooseTenderPlace).mockResolvedValue({
+    it("names another folder by its path, once the window accepted it", async () => {
+      const accepted = {
         ...TENDER_FOLDER_AT_HOME,
         place: "/home/deck/Games",
         folder: "/home/deck/Games/Tender",
         default: false,
+      };
+      const hook = await mounted();
+
+      act(() => hook.result.current.acceptTyped(accepted));
+
+      expect(hook.result.current.state).toEqual(accepted);
+      expect(showToast).toHaveBeenCalledWith("Tender's folder is now on /home/deck/Games/Tender.");
+    });
+
+    it("names a drive that is gone by what was stored with the choice", async () => {
+      vi.mocked(backend.chooseTenderPlace).mockResolvedValue({
+        ...ON_SD,
+        drives: [],
+        drive: { kind: "sd_card", name: "Emulation", mount_point: "/run/media/deck/SD", connected: false },
       });
       const hook = await mounted();
 
-      act(() => hook.result.current.chooseTyped("~/Games"));
+      act(() => hook.result.current.chooseDrive("/run/media/deck/SD"));
 
-      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on /home/deck/Games/Tender."));
+      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on SD card · Emulation."));
     });
 
     it("is not raised for a refused choice or for forgetting", async () => {

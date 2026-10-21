@@ -362,12 +362,19 @@ it does nothing.
 - **Internal storage**, marked **Default**, puts the folder back in your home folder, `~/Tender`.
 - Each writable drive mounted under `/run/media/<user>/` gets a tile named by its kind and its name — **SD card**, **USB
   drive**, or **Drive** for any other — and puts the folder at that drive's root. Tender tells the kind from the device
-  behind the mount. With no drive connected, a line says to insert an SD card or connect a drive.
+  behind the mount, and keeps the kind and name with your choice. With no drive connected, a line says to insert an SD
+  card or connect a drive.
 - Every tile shows the folder it would use and the space free there.
-- **Another folder…** opens an empty text field, with an example under it, and takes a path you type, starting with `/`
-  or `~`. Tender puts its folder `Tender/` inside it. Where the last folder you typed is itself named Tender, it asks
-  whether you meant the folder above it; where folders of the path do not exist yet, it names them and asks before
-  creating them. A path on a drive that is not connected is refused.
+- When the place in use is a drive that is not connected, its tile stays, greyed and outlined, with **Not connected** in
+  place of the free space, and the line at the top still names it by the kind and name kept with your choice.
+- **Another folder…**, with the line "Type a path, for example a folder on one of the drives above", opens one window
+  that stays open until a place is accepted. Its text field opens empty, with an example under it, and takes a path you
+  type, starting with `/` or `~`; Tender puts its folder `Tender/` inside it. After OK, a refusal is shown under the
+  field with your text kept for correcting. Where the last folder you typed is itself named Tender, the window asks
+  whether you meant the folder above it, and where folders of the path do not exist yet it names them and asks before
+  creating them — both questions in the same window, with their own buttons. Changing the text drops a shown question or
+  refusal. A path on a drive that is not connected is refused. An accepted place closes the window; Cancel closes it
+  with nothing chosen.
 
 A place whose `Tender/` would be the folder in use is answered as already Tender's folder, and so is a typed path that
 names the folder in use itself, such as `~/Tender` while it lies there; one whose `Tender/` would lie inside the folder
