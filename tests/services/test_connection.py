@@ -41,10 +41,15 @@ if TYPE_CHECKING:
 
 _MIN_VERSION = (5, 3, 0)
 
-# The one sentence an address carrying a user name or password is answered with, wherever it is met.
+# The sentences a RomM URL with a user name or password is answered with: entered (a sign-in) and stored (the check).
 _ADDRESS_WITH_USERINFO = (
-    "Remove the user name and password from the RomM URL — Tender cannot sign in through it. "
+    "Tender cannot sign in through a user name and password in the RomM URL — leave them out. "
     "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers."
+)
+_STORED_ADDRESS_WITH_USERINFO = (
+    "Your saved RomM URL holds a user name and password, which Tender cannot sign in through. "
+    "Remove them from the RomM URL, then sign in to RomM under RomM Account; a login for a proxy in front of RomM goes "
+    "into Custom headers."
 )
 _ADDRESSES_WITH_USERINFO = [
     "https://user:fake-pw-41@romm.local",
@@ -172,7 +177,7 @@ class TestTestConnectionBadPath:
         coro = service.test_connection()
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(coro)
-        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
+        assert (refused.value.message, refused.value.details) == (_STORED_ADDRESS_WITH_USERINFO, {})
         romm_api.heartbeat.assert_not_called()
         romm_api.list_platforms.assert_not_called()
 

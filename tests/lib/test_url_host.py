@@ -3,7 +3,8 @@
 import pytest
 
 from lib.url_host import (
-    ADDRESS_WITH_USERINFO_MESSAGE,
+    ENTERED_ADDRESS_WITH_USERINFO_MESSAGE,
+    STORED_ADDRESS_WITH_USERINFO_MESSAGE,
     carries_userinfo,
     is_origin_change,
     is_valid_server_url,
@@ -261,6 +262,7 @@ class TestUserinfo:
         assert without_userinfo(url) == url
 
 
-def test_the_refusal_keeps_the_words_the_connection_row_matches():
+@pytest.mark.parametrize("sentence", [ENTERED_ADDRESS_WITH_USERINFO_MESSAGE, STORED_ADDRESS_WITH_USERINFO_MESSAGE])
+def test_the_refusal_keeps_the_words_the_connection_row_matches(sentence):
     """``connectionFailureLabel`` (``frontend/src/bigpicture/MainPage.tsx``) names this refusal by these words."""
-    assert "user name and password" in ADDRESS_WITH_USERINFO_MESSAGE
+    assert "user name and password" in sentence

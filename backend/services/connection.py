@@ -35,7 +35,8 @@ from lib.errors import (
     VersionUnsupported,
 )
 from lib.url_host import (
-    ADDRESS_WITH_USERINFO_MESSAGE,
+    ENTERED_ADDRESS_WITH_USERINFO_MESSAGE,
+    STORED_ADDRESS_WITH_USERINFO_MESSAGE,
     carries_userinfo,
     is_origin_change,
     is_valid_server_url,
@@ -109,7 +110,7 @@ def _entered_address(romm_url: str) -> str:
         raise NotConfigured(_NO_SERVER_URL_MESSAGE)
     trimmed = romm_url.strip()
     if carries_userinfo(trimmed):
-        raise NotConfigured(ADDRESS_WITH_USERINFO_MESSAGE)
+        raise NotConfigured(ENTERED_ADDRESS_WITH_USERINFO_MESSAGE)
     if not is_valid_server_url(trimmed):
         raise NotConfigured(_INVALID_URL_MESSAGE)
     return trimmed
@@ -186,7 +187,7 @@ class ConnectionService:
         if not self._settings.get("romm_url"):
             raise NotConfigured(_NO_SERVER_URL_MESSAGE)
         if carries_userinfo(self._settings["romm_url"]):
-            raise NotConfigured(ADDRESS_WITH_USERINFO_MESSAGE)
+            raise NotConfigured(STORED_ADDRESS_WITH_USERINFO_MESSAGE)
         if not self._settings.get("romm_api_token"):
             raise NotConfigured("Not signed in — sign in to RomM first")
 

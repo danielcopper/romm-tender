@@ -18,9 +18,9 @@ from lib.errors import NotConfigured, Refused
 from lib.steam_input_apply import SteamInputApply
 from services.settings import SettingsService, SettingsServiceConfig
 
-# The one sentence an address carrying a user name or password is answered with, wherever it is met.
+# The sentence a RomM URL entered with a user name or password is refused with.
 _ADDRESS_WITH_USERINFO = (
-    "Remove the user name and password from the RomM URL — Tender cannot sign in through it. "
+    "Tender cannot sign in through a user name and password in the RomM URL — leave them out. "
     "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers."
 )
 _ADDRESSES_WITH_USERINFO = [
