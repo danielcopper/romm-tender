@@ -43,8 +43,8 @@ _MIN_VERSION = (5, 3, 0)
 
 # The one sentence an address carrying a user name or password is answered with, wherever it is met.
 _ADDRESS_WITH_USERINFO = (
-    "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; "
-    "use Sign in under RomM Account instead."
+    "Remove the user name and password from the RomM URL — Tender cannot sign in through it. "
+    "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers."
 )
 _ADDRESSES_WITH_USERINFO = [
     "https://user:fake-pw-41@romm.local",

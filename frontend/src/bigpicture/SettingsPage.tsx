@@ -140,8 +140,9 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const [selectedSection, setSelectedSection] = useState<SettingsSection>(section ?? SETTINGS_SECTIONS[0]);
   // Connection state
   const [url, setUrl] = useState("");
-  // The URL the backend holds, which the field goes back to when it refuses a save.
-  const storedUrl = useRef("");
+  // The URL the backend holds, which the field goes back to when it refuses a
+  // save; null until the settings have loaded.
+  const storedUrl = useRef<string | null>(null);
   const [hasToken, setHasToken] = useState(false);
   const [status, setStatus] = useState("");
   const [allowInsecureSsl, setAllowInsecureSsl] = useState(false);
@@ -355,8 +356,9 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       const result = await saveServerUrl(trimmed, allowInsecureSsl);
       if (result.success) {
         storedUrl.current = trimmed;
+        setStatus("");
       } else {
-        setUrl(storedUrl.current);
+        if (storedUrl.current !== null) setUrl(storedUrl.current);
         setStatus(result.message);
       }
     } catch {
@@ -386,9 +388,15 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const handleAllowInsecureSslChange = (val: boolean) => {
     setAllowInsecureSsl(val);
     // Auto-save the URL with the new SSL setting
-    saveServerUrl(url, val).catch(() => {
-      setStatus("Failed to save settings");
-    });
+    saveServerUrl(url, val)
+      .then((result) => {
+        if (result.success) return;
+        setAllowInsecureSsl(!val);
+        setStatus(result.message);
+      })
+      .catch(() => {
+        setStatus("Failed to save settings");
+      });
   };
   // The connect handlers return their result to the ConnectModal, which owns
   // closing (on success) and error display (on failure). The bottom status line

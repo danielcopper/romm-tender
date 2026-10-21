@@ -7,9 +7,10 @@ URL into that canonical key and answers whether two URLs name the same server.
 ``https://h`` and ``http://h`` are deliberately distinct origins: a downgrade to
 plaintext is a different (and hostile) destination, not the same one.
 
-Anything that needs to decide "is this URL the same server as that one?" or
-"is this a usable http(s) server URL?" belongs here. Stdlib-only (``urllib``);
-no I/O, no network — purely lexical normalization.
+Anything that needs to decide "is this URL the same server as that one?",
+"is this a usable http(s) server URL?" or "does this URL carry a user name or
+password?" belongs here. Stdlib-only (``urllib``); no I/O, no network — purely
+lexical.
 """
 
 from __future__ import annotations
@@ -89,22 +90,24 @@ def is_origin_change(old: str | None, new: str | None) -> bool:
 def is_valid_server_url(url: str) -> bool:
     """Return True iff *url* (after stripping surrounding whitespace) names an http(s) origin.
 
-    The validation guard for user-entered server URLs: a value is valid when it
-    carries an ``http`` / ``https`` scheme and a host. Path / port / query are
+    One of the two checks on a user-entered server URL, :func:`carries_userinfo`
+    the other: a value is valid when it carries an ``http`` / ``https`` scheme
+    and a host. Path / port / query are
     allowed (they are dropped by :func:`normalize_origin`); a scheme-less,
     hostless, or non-http(s) value is rejected.
     """
     return normalize_origin(url.strip()) is not None
 
 
-# urllib takes no credentials from an address: ``http.client`` reads the
-# ``user:password@host`` authority as a host with a non-numeric port and raises
-# ``InvalidURL`` before any request leaves. The panel's Connection row tells this
-# refusal apart by "user name and password" (``connectionFailureLabel`` in
+# urllib takes no credentials from an address, so none reaches RomM. With a
+# password and no port, ``http.client`` reads the password as a non-numeric port
+# and raises ``InvalidURL``; with a port, or a user name alone, it looks the whole
+# ``user…@host`` up as a host name, which fails. The panel's Connection row tells
+# this refusal apart by "user name and password" (``connectionFailureLabel`` in
 # ``frontend/src/bigpicture/MainPage.tsx``), so those words stay in the sentence.
 ADDRESS_WITH_USERINFO_MESSAGE = (
-    "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; "
-    "use Sign in under RomM Account instead."
+    "Remove the user name and password from the RomM URL — Tender cannot sign in through it. "
+    "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers."
 )
 
 
@@ -113,7 +116,9 @@ def _userinfo_end(url: str) -> tuple[int, int] | None:
 
     Read off the text the way ``urllib.parse.urlsplit`` bounds the authority —
     after ``//``, up to the first ``/``, ``?`` or ``#`` — but without parsing,
-    so an address ``urlsplit`` refuses is still read.
+    so an address ``urlsplit`` refuses is still read. A password holding an
+    unescaped ``/``, ``?`` or ``#`` ends the authority early, as it does for
+    ``urlsplit``, and is not recognised as one.
     """
     start = url.find("//")
     if start == -1:

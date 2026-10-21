@@ -104,7 +104,7 @@ _SIGNED_OUT_MESSAGE = (
 
 
 def _entered_address(romm_url: str) -> str:
-    """*romm_url* trimmed; refuses a blank one, one carrying a user name or password, and one not http(s)."""
+    """*romm_url* trimmed; refuses an empty one, one carrying a user name or password, and one not http(s)."""
     if not romm_url:
         raise NotConfigured(_NO_SERVER_URL_MESSAGE)
     trimmed = romm_url.strip()
@@ -175,9 +175,9 @@ class ConnectionService:
         Raises ``NotConfigured`` when the server URL is unset or carries a user
         name or password — before any request — or no token has been minted
         yet, and ``VersionUnsupported`` (carrying ``romm_version``) for a server
-        below the minimum; a RomM error from the heartbeat or the
-        platform listing propagates as it is. On success ``romm_version``
-        carries the detected server version when the heartbeat exposed one.
+        below the minimum; a RomM error from the heartbeat or the platform
+        listing propagates as it is. On success ``romm_version`` carries the
+        detected server version when the heartbeat exposed one.
         """
         async with self._rules.hold("test_connection", prune=True):
             return await self._test_connection()
@@ -241,11 +241,10 @@ class ConnectionService:
         (best-effort) — it is bound to its minting origin and would otherwise
         404 against the new server's negotiate. Raises ``NotConfigured`` for a
         missing or invalid URL or one carrying a user name or password,
-        ``VersionUnsupported`` as :meth:`test_connection`
-        does, ``AuthFailed`` when RomM answers the mint with a 403,
-        ``ServerUnreachable`` when RomM answers no usable token, and ``Refused``
-        with ``save_failed`` when the settings file cannot be written; a RomM
-        error propagates as it is.
+        ``VersionUnsupported`` as :meth:`test_connection` does, ``AuthFailed``
+        when RomM answers the mint with a 403, ``ServerUnreachable`` when RomM
+        answers no usable token, and ``Refused`` with ``save_failed`` when the
+        settings file cannot be written; a RomM error propagates as it is.
         """
         async with self._rules.hold("connect_with_credentials", prune=True):
             return await self._establish_token(romm_url, username, password, allow_insecure_ssl)

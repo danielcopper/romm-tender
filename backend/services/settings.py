@@ -150,12 +150,12 @@ class SettingsService:
         """Persist the trimmed server URL and optional SSL flag.
 
         Refuses a blank or non-http(s) URL, and one carrying a user name or
-        password, with ``NotConfigured`` without writing anything, and a settings file that cannot be written with
-        ``save_failed`` and its cause, giving the previous URL and SSL flag
-        back to the live settings so memory and file agree. Credentials and
-        tokens are never touched here — minting and storing the Client API
-        Token is ``ConnectionService``'s job. ``allow_insecure_ssl=None`` leaves
-        the SSL flag unchanged.
+        password, with ``NotConfigured`` without writing anything, and a
+        settings file that cannot be written with ``save_failed`` and its
+        cause, giving the previous URL and SSL flag back to the live settings so
+        memory and file agree. Credentials and tokens are never touched here —
+        minting and storing the Client API Token is ``ConnectionService``'s job.
+        ``allow_insecure_ssl=None`` leaves the SSL flag unchanged.
 
         This path deliberately does not re-stamp the stored token's origin, so
         pointing the URL at a different origin leaves the token's origin

@@ -3,6 +3,7 @@
 import pytest
 
 from lib.url_host import (
+    ADDRESS_WITH_USERINFO_MESSAGE,
     carries_userinfo,
     is_origin_change,
     is_valid_server_url,
@@ -258,3 +259,8 @@ class TestUserinfo:
     def test_an_address_without_one_is_left_as_it_is(self, url):
         assert carries_userinfo(url) is False
         assert without_userinfo(url) == url
+
+
+def test_the_refusal_keeps_the_words_the_connection_row_matches():
+    """``connectionFailureLabel`` (``frontend/src/bigpicture/MainPage.tsx``) names this refusal by these words."""
+    assert "user name and password" in ADDRESS_WITH_USERINFO_MESSAGE
