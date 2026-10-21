@@ -1,12 +1,12 @@
-"""Unit-of-Work Protocols — the transactional seam over the fourteen repositories.
+"""Unit-of-Work Protocols — the transactional seam over the sixteen repositories.
 
 A Unit of Work is the atomic boundary services work inside: open it, touch any
-of the fourteen repositories, and on a clean exit every change commits as one
+of the sixteen repositories, and on a clean exit every change commits as one
 transaction; on an exception everything rolls back. Services depend on these
 Protocols, never on the concrete ``SqliteUnitOfWork`` — the composition root
 wires the factory.
 
-``UnitOfWork`` exposes the fourteen repositories as typed properties. ``UnitOfWorkFactory``
+``UnitOfWork`` exposes the sixteen repositories as typed properties. ``UnitOfWorkFactory``
 is the call-shaped seam services hold to open a fresh unit per operation; the
 concrete factory (``functools.partial(SqliteUnitOfWork, db_path)``) structurally
 satisfies it. The concrete ``SqliteUnitOfWork`` returns concrete
@@ -29,6 +29,8 @@ if TYPE_CHECKING:
         BiosFileRepository,
         CollectionSyncStateRepository,
         FirmwareCacheRepository,
+        FirmwareLinkRepository,
+        FirmwareStoreRepository,
         KvConfigRepository,
         PlatformSyncStateRepository,
         PlaytimeRepository,
@@ -41,13 +43,13 @@ if TYPE_CHECKING:
 
 
 class UnitOfWork(Protocol):
-    """Atomic transaction boundary exposing the fourteen repositories.
+    """Atomic transaction boundary exposing the sixteen repositories.
 
     Used as a synchronous context manager: a clean ``__exit__`` commits, an
     exceptional one rolls back. The repositories share the unit's open
     connection, so writes across several of them are one transaction.
 
-    The fourteen repositories are read-only properties (not mutable attributes) so
+    The sixteen repositories are read-only properties (not mutable attributes) so
     they are covariant: a concrete unit may expose a concrete ``SqliteXxxRepository``
     that satisfies the repository Protocol without being exactly it. A mutable
     attribute would be invariant and reject the concrete adapter types.
@@ -73,6 +75,10 @@ class UnitOfWork(Protocol):
     def bios_files(self) -> BiosFileRepository: ...
     @property
     def firmware_cache(self) -> FirmwareCacheRepository: ...
+    @property
+    def firmware_store(self) -> FirmwareStoreRepository: ...
+    @property
+    def firmware_links(self) -> FirmwareLinkRepository: ...
     @property
     def sync_runs(self) -> SyncRunRepository: ...
     @property

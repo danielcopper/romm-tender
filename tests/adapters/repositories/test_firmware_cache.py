@@ -27,6 +27,16 @@ class TestRoundTrip:
 
         assert uow.firmware_cache.get("psx", "bios.bin") == entry
 
+    def test_the_checksum_romm_states_is_kept(self, uow: SqliteUnitOfWork):
+        entry = FirmwareCacheEntry.cached(
+            id=7, name="bios.bin", platform_slug="psx", file_size_bytes=1, cached_at=1.0, md5_hash="abc"
+        )
+        uow.firmware_cache.replace_all([entry])
+
+        loaded = uow.firmware_cache.get("psx", "bios.bin")
+        assert loaded is not None
+        assert loaded.md5_hash == "abc"
+
     def test_null_id_preserved(self, uow: SqliteUnitOfWork):
         uow.firmware_cache.replace_all([_entry("psx", "legacy.bin", fw_id=None)])
         loaded = uow.firmware_cache.get("psx", "legacy.bin")

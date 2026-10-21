@@ -2369,3 +2369,59 @@ class Test034ClearFirmwareCacheFiledByFolder:
 
         assert _user_version(db_path) == 33
         assert count == 1
+
+
+class Test035AddFirmwareStore:
+    """035 — the firmware store and its link records, and the cached listing's checksums (#2191)."""
+
+    def test_a_cached_row_without_a_checksum_is_gone_and_the_column_is_there(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 34)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO firmware_cache (id, name, platform_slug, file_size_bytes, cached_at) "
+                "VALUES (1, 'scph5501.bin', 'psx', 524288, 1000.0)"
+            )
+        finally:
+            conn.close()
+
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path)
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM firmware_cache").fetchone()[0]
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(firmware_cache)")}
+        finally:
+            conn.close()
+        assert count == 0
+        assert "md5_hash" in columns
+
+    def test_the_store_and_link_tables_start_empty(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path)
+        try:
+            counts = [
+                conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                for table in ("firmware_store", "firmware_links")
+            ]
+        finally:
+            conn.close()
+        assert counts == [0, 0]
+
+    def test_a_store_file_without_a_checksum_is_refused(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO firmware_store (platform_slug, file_name, folder, md5, size, downloaded_at) "
+                    "VALUES ('psx', 'scph5501.bin', '/home/deck/Tender', '', 1, 'now')"
+                )
+        finally:
+            conn.close()

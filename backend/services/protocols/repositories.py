@@ -15,8 +15,9 @@ The Protocols match the aggregate roots settled in ADR-0003 — ``Rom``,
 completion stamp, ADR-0023), its per-collection sibling ``CollectionSyncState``,
 ``AnsweredSaveDirectory`` (the save directory the resolver last answered per ROM,
 ADR-0041), ``ArtworkSlotOutcome`` (what was last found for one of a ROM's
-artwork slots), ``ArtworkSlotChoice`` (the image a user chose for one) and the
-``kv_config`` key-value surface.
+artwork slots), ``ArtworkSlotChoice`` (the image a user chose for one),
+``StoredFirmware`` and ``FirmwareLink`` (a file in Tender's firmware store, and a
+link Tender placed to one) and the ``kv_config`` key-value surface.
 ``SyncSettings``/``Platform``/``Device`` are NOT repositories — ADR-0003 dropped
 those aggregates.
 
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
     from domain.bios_file import BiosFile
     from domain.collection_sync_state import CollectionSyncState
     from domain.firmware_cache import FirmwareCacheEntry
+    from domain.firmware_store import FirmwareLink, StoredFirmware
     from domain.platform_sync_state import PlatformSyncState
     from domain.playtime import PendingSessionRow, Playtime
     from domain.rom import Rom
@@ -386,6 +388,53 @@ class FirmwareCacheRepository(Protocol):
 
     def get_cache_epoch(self) -> float | None:
         """Return the cache's last-refresh timestamp, or ``None`` when empty. (firmware/listing.py TTL check)"""
+        ...
+
+
+class FirmwareStoreRepository(Protocol):
+    """Persistence seam for the ``StoredFirmware`` aggregate (a file in Tender's firmware store).
+
+    Identity is the composite ``(platform_slug, file_name)``.
+    """
+
+    def get(self, platform_slug: str, file_name: str) -> StoredFirmware | None:
+        """Return the store file for the composite key, or ``None``."""
+        ...
+
+    def save(self, stored: StoredFirmware) -> None:
+        """Upsert *stored*. (firmware/store.py, after a download or a takeover)"""
+        ...
+
+    def delete(self, platform_slug: str, file_name: str) -> None:
+        """Remove the store file's record for the composite key. Idempotent."""
+        ...
+
+    def iter_all(self) -> Iterator[StoredFirmware]:
+        """Iterate every store file."""
+        ...
+
+    def get_folders(self) -> frozenset[str]:
+        """Every Tender folder a store file is recorded under, in one query. (the folder rule's question)"""
+        ...
+
+
+class FirmwareLinkRepository(Protocol):
+    """Persistence seam for the ``FirmwareLink`` aggregate (a link Tender placed). Identity is the link's place."""
+
+    def get(self, place: str) -> FirmwareLink | None:
+        """Return the record of the link at *place*, or ``None``."""
+        ...
+
+    def save(self, link: FirmwareLink) -> None:
+        """Upsert *link* under its place."""
+        ...
+
+    def delete(self, place: str) -> None:
+        """Remove the record of the link at *place*. Idempotent."""
+        ...
+
+    def iter_all(self) -> Iterator[FirmwareLink]:
+        """Iterate every link record."""
         ...
 
 

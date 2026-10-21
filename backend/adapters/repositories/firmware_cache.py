@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterator
 
-_COLUMNS = "platform_slug, name, id, file_size_bytes, cached_at"
+_COLUMNS = "platform_slug, name, id, file_size_bytes, cached_at, md5_hash"
 
 
 def _row_to_entry(row: sqlite3.Row) -> FirmwareCacheEntry:
@@ -26,6 +26,7 @@ def _row_to_entry(row: sqlite3.Row) -> FirmwareCacheEntry:
         platform_slug=row["platform_slug"],
         file_size_bytes=row["file_size_bytes"],
         cached_at=row["cached_at"],
+        md5_hash=row["md5_hash"],
     )
 
 
@@ -46,7 +47,7 @@ class SqliteFirmwareCacheRepository(BaseRepository):
     def replace_all(self, entries: list[FirmwareCacheEntry]) -> None:
         self._conn.execute("DELETE FROM firmware_cache")
         self._conn.executemany(
-            f"INSERT OR REPLACE INTO firmware_cache ({_COLUMNS}) VALUES (?, ?, ?, ?, ?)",
+            f"INSERT OR REPLACE INTO firmware_cache ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)",
             [
                 (
                     entry.platform_slug,
@@ -54,6 +55,7 @@ class SqliteFirmwareCacheRepository(BaseRepository):
                     entry.id,
                     entry.file_size_bytes,
                     entry.cached_at,
+                    entry.md5_hash,
                 )
                 for entry in entries
             ],
