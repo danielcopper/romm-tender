@@ -395,3 +395,13 @@ class TestTheNamedRefusals:
 
         assert isinstance(refused, NamedRefused)
         assert (refused.reason, refused.message, refused.details) == (reason, "Not now.", {"romm_version": "4.5.0"})
+
+
+class TestARommErrorsUrlCarriesNoLogin:
+    def test_the_user_name_and_password_are_taken_out(self):
+        error = RommApiError("Download stalled", url="https://user:fake-pw-88@romm.local/api/roms/1/content/x.zip")
+
+        assert error.url == "https://romm.local/api/roms/1/content/x.zip"
+
+    def test_no_url_stays_none(self):
+        assert RommApiError("no url").url is None

@@ -35,7 +35,7 @@ from adapters.steamgriddb import SteamGridDbAdapter
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, SlotOutcome
 from domain.rom import Rom
-from lib.errors import Refused, SgdbApiError, SgdbRateLimitedError, SteamGridDirMissingError
+from lib.errors import Refused, SgdbApiError, SgdbKeyUnsendableError, SgdbRateLimitedError, SteamGridDirMissingError
 from lib.prune_conflicts import PruneConflicts
 from models.shortcut_artwork import SlotAnswer, WrittenIcon
 from services.library import LibraryService, LibraryServiceConfig
@@ -730,6 +730,18 @@ class TestSearchSgdbGames:
             "auth_failed",
             "SteamGridDB refused the API key — check it in Settings",
         )
+
+    @pytest.mark.asyncio
+    async def test_a_key_the_adapter_cannot_send_refuses_as_an_invalid_key(self, steamgrid, fake_steamgrid_db_api):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        steamgrid.service._loop = asyncio.get_running_loop()
+        fake_steamgrid_db_api.request_side_effect = SgdbKeyUnsendableError()
+        searching = steamgrid.service.search_sgdb_games("mario")
+
+        with pytest.raises(Refused) as refused:
+            await searching
+
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
 
     @pytest.mark.asyncio
     async def test_a_server_error_names_its_status(self, steamgrid, fake_steamgrid_db_api):
