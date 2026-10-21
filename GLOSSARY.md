@@ -1205,7 +1205,10 @@ it, whoever put it there — the icon's when the shortcut's icon path is neither
 **logo icon**, and, in the grid directory, its file is there — and a filled slot is left alone except by **Refresh
 Artwork**, the SteamGridDB picker and a version switch. A **slot outcome** is what was last found for a ROM's hero, wide
 grid, logo or icon — `set`, `none` or `refused` (`ArtworkSlotOutcome`). A **slot choice** is the SteamGridDB image a
-user chose for one of a ROM's slots (`ArtworkSlotChoice`); a slot without one is automatic. Detail:
+user chose for one of a ROM's slots (`ArtworkSlotChoice`); a slot without one is automatic. A slot is **set in Steam**
+when its file in the grid directory is not Tender's — another extension, or a `.png` whose hash is not the one Tender
+set — or, for the icon, when the shortcut's icon path is not Tender's file; neither the shortcut artwork job nor the
+RomM cover refresh replaces such a slot. Detail:
 [Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork). _Avoid_: plain "slot", which
 means a **Save-sync slot** or a **Conditional slot**.
 

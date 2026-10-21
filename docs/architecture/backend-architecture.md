@@ -530,27 +530,33 @@ and a path change). Two compare layers run per unit, both in `ArtworkService`:
   cover download): for every BOUND fetched ROM whose stored fingerprint differs — delta-skipped ROMs included — it
   re-downloads the cache file (atomic tmp+rename), republishes the grid `{app_id}p.png` copy, persists the new
   fingerprint in a small write UoW (an observed server fact, deliberately NOT ack-coupled like
-  `applied_launch_options`), and collects `{rom_id, app_id}`. The pass scans against the unit's bound-row registry
-  projection (`LocalLibraryReader.do_read_apply_registry`, which carries `cover_source`) — the same read the group
-  collapse diffs against, so it opens no per-ROM DB lookups. That list rides the unit's **first** `sync_apply_unit`
-  chunk as `cover_refreshes`, clipped to the session-budget headroom left after the chunk's own projected cost (each
-  refresh ≈ one transient cover, `COVER_TRANSIENT_KB`) — clipped, never pausing the run: the grid files are already
-  updated, a Steam restart shows the rest. The frontend re-applies each entry via `SetCustomArtworkForApp` at the 50 ms
-  cadence before the chunk ack — without that push the tile stays stale in-session, since `rt_custom_image_mtime` only
-  bumps through `SetCustomArtworkForApp` or a client restart.
-- **The preview-side count** (`sync_preview` → `domain/cover_refresh.py::count_cover_refreshes`): `classify_roms` is
-  deliberately cover-blind (ADR-0025), so a cover-only server change yields an empty shortcut delta — and the QAM's
-  preview flow used to short-circuit on "no changes", meaning the apply (and with it the invalidation pass) never ran
-  and the fingerprint stayed stale forever. The preview therefore counts the fingerprint mismatches itself, with the
-  SAME pure kernel the apply pass scans by (`scan_cover_refresh_candidates` — shared via `domain/cover_refresh.py`, so
-  preview count and apply set cannot diverge), as an in-memory compare of the fetched union (platform and collection
-  units alike) against the registry projection the classify already read — no extra DB pass, no downloads, no writes.
-  The result rides the summary as the additive `cover_refresh_count` (absent/0 tolerated by old consumers); the frontend
-  treats a cover-only preview (all diffs zero, count > 0) as apply-able, showing "No shortcut changes — N cover updates"
-  with the normal Apply/Cancel confirm. NULL-fingerprint rows are not counted: their adopt-vs-download fork needs a
-  cache-file check the preview must not perform, and the adopt is invisible to the user. The wholesale platform-skip
-  gate needs no cover awareness — a cover change bumps the ROM's `updated_at`, which already forces the fetch; a skipped
-  platform's registry-reconstructed thin ROMs carry no cover fields and count 0 by construction.
+  `applied_launch_options`), and collects `{rom_id, app_id}`. A changed cover that is **set in Steam**
+  (`_covers_set_in_steam_io`, the rule under "Game page artwork" in
+  [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#game-page-artwork)) is skipped with its cache and its
+  fingerprint as they are, so RomM's change stays pending until the slot is Tender's again
+  ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D9). The pass scans against the unit's bound-row
+  registry projection (`LocalLibraryReader.do_read_apply_registry`, which carries `cover_source`) — the same read the
+  group collapse diffs against, so it opens no per-ROM DB lookups. That list rides the unit's **first**
+  `sync_apply_unit` chunk as `cover_refreshes`, clipped to the session-budget headroom left after the chunk's own
+  projected cost (each refresh ≈ one transient cover, `COVER_TRANSIENT_KB`) — clipped, never pausing the run: the grid
+  files are already updated, a Steam restart shows the rest. The frontend re-applies each entry via
+  `SetCustomArtworkForApp` at the 50 ms cadence before the chunk ack — without that push the tile stays stale
+  in-session, since `rt_custom_image_mtime` only bumps through `SetCustomArtworkForApp` or a client restart.
+- **The preview-side count** (`sync_preview` → `CoverPreparer.count_cover_refreshes` →
+  `ArtworkService.count_cover_refreshes`): `classify_roms` is deliberately cover-blind (ADR-0025), so a cover-only
+  server change yields an empty shortcut delta — and the QAM's preview flow used to short-circuit on "no changes",
+  meaning the apply (and with it the invalidation pass) never ran and the fingerprint stayed stale forever. The preview
+  therefore counts the fingerprint mismatches itself, with the SAME pure kernel the apply pass scans by
+  (`scan_cover_refresh_candidates` — shared via `domain/cover_refresh.py`), as an in-memory compare of the fetched union
+  (platform and collection units alike) against the registry projection the classify already read, and leaves out the
+  covers set in Steam through the same read the pass makes — the grid file and the cover cache of each changed cover —
+  so preview count and apply set cannot diverge. No extra DB pass, no downloads, no writes. The result rides the summary
+  as the additive `cover_refresh_count` (absent/0 tolerated by old consumers); the frontend treats a cover-only preview
+  (all diffs zero, count > 0) as apply-able, showing "No shortcut changes — N cover updates" with the normal
+  Apply/Cancel confirm. NULL-fingerprint rows are not counted: their adopt-vs-download fork needs a cache-file check the
+  preview must not perform, and the adopt is invisible to the user. The wholesale platform-skip gate needs no cover
+  awareness — a cover change bumps the ROM's `updated_at`, which already forces the fetch; a skipped platform's
+  registry-reconstructed thin ROMs carry no cover fields and count 0 by construction.
 - **The empty-unit chunk vehicle**: a cover-only unit has an empty apply delta, but `build_unit_chunks` yields exactly
   one empty chunk for it (ADR-0023's empty-unit round-trip), so the `cover_refreshes` list still rides a
   `sync_apply_unit` frame with `shortcuts: []`; the frontend processes the refreshes and acks the empty chunk, and the
@@ -2933,7 +2939,7 @@ and `models` included). Aggregate roots and the enforcement that keeps them hone
 | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sync_action.py`                                             | The `SyncAction` union (`Skip` / `Upload` / `Download` / `Conflict`) the whole vertical dispatches on and the compiled core answers in. The decisions themselves are made in the core, not here. See [Save File Sync Architecture](save-file-sync-architecture.md).                                                                                                                                                                                                                                                                |
 | `sync_diff.py`                                               | ROM classification and platform/collection diff computation for the sync preview                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `cover_refresh.py`                                           | cover-fingerprint compare kernel (#1386) — `scan_cover_refresh_candidates` / `count_cover_refreshes`, shared by the apply-path invalidation pass and the preview's cover-work count so the two can never diverge                                                                                                                                                                                                                                                                                                                   |
+| `cover_refresh.py`                                           | cover-fingerprint compare kernel (#1386) — `scan_cover_refresh_candidates`, shared by the apply-path invalidation pass and the preview's cover-work count so the two can never diverge                                                                                                                                                                                                                                                                                                                                             |
 | `preview_delta.py`                                           | `PreviewDelta` shape for the sync preview (the staged answer included) plus `is_expired` / `preview_expires_at`, the one expression of its TTL                                                                                                                                                                                                                                                                                                                                                                                     |
 | `work_unit.py`                                               | `WorkUnit` — the per-unit sync work item                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `rom_save_sync_state.py`                                     | `RomSaveSyncState` aggregate + `FileSyncState` value object — per-ROM save-sync state, backed by `rom_save_sync_states` + `rom_save_files`                                                                                                                                                                                                                                                                                                                                                                                         |

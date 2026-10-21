@@ -632,6 +632,13 @@ The key properties:
   logged and never fails the shortcut — the shortcut is already created, and the backend's commit-time grid write is the
   durability net.
 
+A cover RomM changed is refreshed by the sync's invalidation pass, unless the cover is set in Steam
+([Game page artwork](#game-page-artwork)): then its cache and its `cover_source` fingerprint stay as they are, so RomM's
+change stays pending and the first sync after the cover stops being set in Steam fetches it, and the preview's
+`cover_refresh_count` leaves it out by the same reading of the grid file and the cover cache, downloading nothing
+([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D9; the pass itself is in
+[Backend Architecture](backend-architecture.md)).
+
 The backend also writes each `{app_id}p.png` grid file at commit (`SyncReporter._finalize_cover_path` →
 `ArtworkService.finalize_cover_path`). That copy costs no renderer heap and is the durability net: it lands the grid
 file even if a per-item API call failed, so a residual gray tile resolves the next time the game's page is opened or on
@@ -687,6 +694,22 @@ links followed, named exactly the slot's name plus one extension: `<appid>` for 
 there is not documented beyond PNG and JPEG, and missing an image set by hand would put a second one beside it. Nothing
 else counts: not `<appid>p`, the cover; not a link that leads nowhere; not a file named by the 64-bit game id that other
 tools write. `SteamConfigAdapter.grid_file_names` lists the regular files; the rule reads the names.
+
+**Set in Steam** (`domain/artwork_slot.py`, `is_set_in_steam`; `domain/shortcut_icon.py`, `is_icon_set_in_steam`). A
+slot is set in Steam when Steam's grid directory holds a file for it that is not Tender's
+([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D4, D10). Tender hands Steam every image as PNG, and
+measured on the device, every image it set sits in the grid directory with exactly the bytes and hash it recorded, while
+an image set through Steam's own "Set custom artwork" is kept under the slot's name with the source file's extension —
+`<appid>_hero.jpg`, `<appid>_logo.jpg`, `<appid>p.jpg` — beside Tender's `.png`, and is the one Steam shows. So a file
+filling the slot under any extension but `png` is not Tender's, and neither is a `<stem>.png` whose hash differs from
+what Tender set: the slot's recorded `set` hash, else Tender's cached copy — for the cover, its cover cache file. Where
+there is nothing to compare with, only another extension counts, and the `.png` is Tender's, so a slot whose cache was
+pruned keeps being kept current; a PNG set through Steam overwrites Tender's file under the same name, so such a PNG
+whose reference is also gone is replaced. The icon is set in Steam when the shortcut's `icon` path is neither empty, a
+stand-in nor Tender's `<appid>_icon.png` in the grid directory. The shortcut artwork job never fills such a slot: it
+fills only slots that are not filled, and a file under any extension fills one. The RomM cover refresh leaves a cover
+set in Steam alone ([Artwork file naming](#artwork-file-naming)). Whether Tender's next `SetCustomArtworkForApp`
+displaces a hand-set `.jpg` is not measured.
 
 **One slot at a time.** For each slot the frontend asks `get_sgdb_slot_artwork(rom_id, app_id, slot)`, which answers
 `skip` for a filled slot or one a record rules out, `none` when SteamGridDB's list is empty or it does not know the game
