@@ -13,6 +13,7 @@ import type { SaveStatus, SaveSlotSummary, SaveFileStatus, LastKnownSlots } from
 import type { SlotPanel } from "./saves/SlotPanel";
 import { installDomEventListenerSpy, uninstallDomEventListenerSpy } from "../test-utils/dom-event-listener-spy";
 import { switchSlotFailureMessage } from "../utils/saveSlotWording";
+import { LOCAL_CALL_LIMIT_MS } from "../utils/launchGate";
 
 // showModal from the global @decky/ui mock receives the <NewSlotModal> element.
 // Tests pull `props.onSubmit` off the captured element to drive the new-slot flow.
@@ -854,6 +855,9 @@ describe("SavesTab", () => {
   });
 
   describe("stranded-version banner (#1298)", () => {
+    const UNCHECKED_COPY =
+      "Tender couldn't check whether version \"Game (USA)\" has saves that haven't been synced to RomM — " +
+      "switch back to sync them.";
     const STRANDED_COPY =
       'Version "Game (USA)" has saves that haven\'t been synced to RomM — switch back to sync them.';
 
@@ -943,6 +947,44 @@ describe("SavesTab", () => {
             "switch back to sync them.",
         ),
       );
+    });
+
+    it("says Tender couldn't check a version whose check call was rejected", async () => {
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+        vi.mocked(backend.checkLocalDrift).mockRejectedValue(new Error("connection lost"));
+
+        const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+        await waitFor(() => expect(container.textContent).toContain(UNCHECKED_COPY));
+        expect(logWarnSpy).toHaveBeenCalledWith(expect.stringContaining("local-save check failed for rom 5"));
+      } finally {
+        logWarnSpy.mockRestore();
+      }
+    });
+
+    it("says Tender couldn't check a version whose check got no answer in time", async () => {
+      vi.useFakeTimers();
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+        vi.mocked(backend.checkLocalDrift).mockReturnValue(new Promise(() => {}));
+
+        const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(LOCAL_CALL_LIMIT_MS - 1);
+        });
+        expect(container.textContent).not.toContain("synced to RomM");
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1);
+        });
+
+        expect(container.textContent).toContain(UNCHECKED_COPY);
+      } finally {
+        logWarnSpy.mockRestore();
+        vi.useRealTimers();
+      }
     });
 
     it("hides the banner for a drifted save the verdict does not hold (save sync off)", async () => {

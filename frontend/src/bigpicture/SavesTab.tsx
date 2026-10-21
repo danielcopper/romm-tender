@@ -24,6 +24,8 @@ import { ConnectingIndicator } from "./saves/ConnectingIndicator";
 import { renderSaveFileRow } from "./saves/SaveFileRow";
 import { useCopyToSlot } from "./saves/useCopyToSlot";
 import { detach } from "../utils/detach";
+import { LOCAL_CALL_LIMIT_MS } from "../utils/launchGate";
+import { withTimeout } from "../utils/withTimeout";
 import { announceSaveSync } from "../utils/saveSyncEvents";
 import { switchSlotFailureMessage } from "../utils/saveSlotWording";
 
@@ -38,6 +40,16 @@ function strandedBannerText({ name, stranding }: StrandedVersion): string {
       ? `Tender couldn't check whether version "${name}" has saves that haven't been synced to RomM`
       : `Version "${name}" has saves that haven't been synced to RomM`;
   return `${what} — switch back to sync them.`;
+}
+
+/** The local-save check's verdict for `romId`; a call that rejects or gets no answer in time could not check. */
+async function strandingOf(romId: number): Promise<SaveStranding> {
+  try {
+    return (await withTimeout(checkLocalDrift(romId), LOCAL_CALL_LIMIT_MS)).stranding;
+  } catch (e) {
+    logWarn(`SavesTab: local-save check failed for rom ${romId}: ${e}`);
+    return "unchecked";
+  }
 }
 
 interface SavesTabProps {
@@ -121,7 +133,7 @@ export const SavesTab: FC<SavesTabProps> = ({
         // saves), and surface the first one the verdict holds for.
         let stranded: StrandedVersion | null = null;
         for (const v of inactiveInstalled) {
-          const { stranding } = await checkLocalDrift(v.rom_id);
+          const stranding = await strandingOf(v.rom_id);
           if (isCancelled()) return;
           if (stranding !== "none") {
             stranded = { name: v.label || v.name || String(v.rom_id), stranding };
