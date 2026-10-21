@@ -349,8 +349,20 @@ class Endpoints:
         return await self._services.firmware_service.download_required_firmware(platform_slug, emulator)
 
     @route
-    async def download_platform_firmware_file(self, platform_slug, file_name, emulator):
-        return await self._services.firmware_service.download_platform_firmware_file(platform_slug, file_name, emulator)
+    async def download_platform_firmware_file(self, platform_slug, file_name):
+        return await self._services.firmware_service.download_platform_firmware_file(platform_slug, file_name)
+
+    @route
+    async def update_bios_links(self, platform_slug, rom_id):
+        return await self._services.firmware_service.update_bios_links(platform_slug, rom_id)
+
+    @route
+    async def replace_bios_file(self, platform_slug, place):
+        return await self._services.firmware_service.replace_bios_file(platform_slug, place)
+
+    @route
+    async def identify_library_firmware(self, md5):
+        return await self._services.firmware_service.identify_library_firmware(md5)
 
     @route
     async def check_platform_bios(self, platform_slug):
@@ -369,10 +381,6 @@ class Endpoints:
     @route
     async def delete_bios_file(self, platform_slug, file_name):
         return await self._services.firmware_service.delete_bios_file(platform_slug, file_name)
-
-    @route
-    async def delete_bios_folder(self, platform_slug, folder_path):
-        return await self._services.firmware_service.delete_bios_folder(platform_slug, folder_path)
 
     # ── Sync delegation to LibraryService ─────────────────────
 

@@ -1,16 +1,22 @@
-"""Removing the BIOS files Tender itself downloaded — and only those.
+"""Removing the BIOS files Tender itself put on the machine — and only those.
 
-Authority to delete comes from having placed the file, and a ``downloaded_bios``
-record is the only evidence of that, so the records are this module's whole
-input: it iterates them, unlinks the path each one holds, and prunes the row.
-Nothing here consults a status listing, a file's existence, or what the library
-currently offers.
+Two kinds of file are Tender's to remove. A file in its firmware store is
+removed with every link of Tender's to it (:meth:`FirmwareStore.do_remove`). A
+file Tender downloaded into an emulator source's folder before the store
+existed is removed at the path its ``downloaded_bios`` record holds, and only
+there: having written the file is the authority, and the record is the only
+evidence of it, so nothing here consults a status listing, a file's existence
+elsewhere, or what the library currently offers.
 
-Three buttons reach it — the platform-wide delete, a file row's Delete, a
-declared folder's Delete — and they share ONE removal loop, differing only in
-which records they select. A second copy of that loop is what the register's
-BIOS-delete rule warns about: the copies would drift silently, and this is the
-loop that once destroyed a user's file.
+A row's Delete and the platform-wide Delete share the ONE removal below, and
+differ only in which names they select: a second copy of the loop is what the
+register's BIOS-delete rule warns about, since the copies would drift silently,
+and this is the loop that once destroyed a user's file.
+
+A Delete is never refused because a place cannot be reached. A link under a
+root the resolver only assumed — or under none it could judge — stays where it
+is, keeps its record, and the answer names it; so does an older download
+outside the BIOS folder RetroDECK names now, or while it names none.
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.retrodeck_folders import FolderRefused
 from lib.partial_failure import PartialFailure
+from lib.path_safety import is_inside_folder
 
 if TYPE_CHECKING:
     import asyncio
@@ -27,6 +34,7 @@ if TYPE_CHECKING:
 
     from domain.bios_file import BiosFile
     from services.firmware.listing import FirmwareListing
+    from services.firmware.store import FirmwareStore
     from services.protocols import FirmwareFileStore, RetroDeckFolders, UnitOfWorkFactory
 
 
@@ -34,13 +42,15 @@ if TYPE_CHECKING:
 class PlatformBiosDeleterConfig:
     """Frozen wiring bundle handed to ``PlatformBiosDeleter.__init__``.
 
-    Holds the listing peer whose cache a removal invalidates, the file store
-    the unlinks go through, RetroDECK's folders, which say whether any may
-    run, the Unit-of-Work factory the records are read and pruned through, and
-    runtime infrastructure.
+    Holds the listing peer whose cache a removal invalidates, the store peer
+    that removes store files and their links, the file store an older download
+    is removed through, RetroDECK's folders, whose BIOS folder bounds the
+    removal of an older download, the Unit-of-Work factory the older records
+    are read and pruned through, and runtime infrastructure.
     """
 
     listing: FirmwareListing
+    store: FirmwareStore
     firmware_file_store: FirmwareFileStore
     retrodeck_folders: RetroDeckFolders
     uow_factory: UnitOfWorkFactory
@@ -56,198 +66,88 @@ class FirmwareDeletionIncomplete(PartialFailure):
 
 
 class PlatformBiosDeleter:
-    """The platform-wide BIOS delete — Tender's own downloads for one platform."""
+    """Tender's own BIOS files for one platform — the store's and the older downloads — and their removal."""
 
     def __init__(self, *, config: PlatformBiosDeleterConfig) -> None:
         self._listing = config.listing
-        self._firmware_file_store = config.firmware_file_store
+        self._store = config.store
+        self._files = config.firmware_file_store
         self._retrodeck_folders = config.retrodeck_folders
         self._uow_factory = config.uow_factory
         self._loop = config.loop
         self._logger = config.logger
 
-    def _delete_recorded_io(self, platform_slug, selects=None) -> tuple[int, list[str]]:
-        """Remove Tender's own downloads for *platform_slug*, filtered by *selects*.
+    def _delete_io(
+        self, platform_slug: str, names: frozenset[str] | None
+    ) -> tuple[int, list[dict[str, str | None]], list[str]]:
+        """Remove *platform_slug*'s store files and older downloads named in *names* — every one for ``None``.
 
-        The one removal loop, and deliberately the only one: three buttons reach
-        it — the platform-wide delete, a file row's Delete, a declared folder's
-        Delete — and they differ only in **which records they select**, never in
-        what a removal is. A second copy of this loop is what the register warns
-        about, because a divergence between the copies would be silent and this
-        is the loop that once destroyed a user's file.
+        The one removal, deliberately: both buttons reach it, and they differ
+        only in which names they select. Runs in an executor; the older records
+        are read in one short UoW before any file is touched and the rows they
+        leave behind dropped in one after it (ADR-0006). An older download
+        whose file is already gone is not a deletion and not an error — its
+        record is dropped and nothing is counted.
 
-        Runs in an executor. Every filesystem removal happens outside any
-        transaction: the records are read in one short UoW before the loop and
-        the rows they leave behind are dropped in one after it (ADR-0006).
-
-        The download records are the whole input: a ``downloaded_bios`` row is
-        written in the download path and nowhere else, so it is the only
-        evidence Tender put the file there — and having put it there is what
-        authorises removing it. A status row's ``downloaded`` proves nothing of
-        the sort: it is ``os.path.exists``, equally true of firmware RetroDECK
-        ships with its own components (``dolphin-emu/Sys/codehandler.bin`` is
-        one) and of a file the user placed by hand under a name the server
-        happens to share. Neither can be fetched back, so neither is ours to
-        delete.
-
-        The row also says WHERE, and that is why the status rows are not
-        consulted for the path either. ``BiosFile.file_path`` is where the
-        download actually wrote the file (kept current by the home migration's
-        ``relocate``), while a status row's ``local_path`` is recomputed from
-        today's placement — and placements move with every emu-atlas bump. A
-        file fetched while nothing declared it landed flat in the BIOS root; let
-        the resolver later declare a subdirectory for it and the recomputed path
-        names whatever now sits there instead, which for ``codehandler.bin`` is
-        RetroDECK's own copy. Unlinking the recorded path can reach nothing but
-        what Tender wrote.
-
-        ``on_server`` is deliberately not part of the test. It describes what
-        the library holds *now*, not who wrote the file: a firmware file removed
-        from RomM after we downloaded it flips to ``on_server: False``, and
-        refusing that row would strand our own download with nothing in the UI
-        able to clean it up.
-
-        *selects* is a predicate over records this platform already owns, so
-        the worst a wrong one can do is act on that whole set — never on a file
-        Tender did not place. ``None`` selects all of them, which is the
-        platform-wide button; the folder button guards its own degenerate path
-        so that "a folder's files" cannot quietly become "the platform's".
-
-        A record whose file is already gone is not a deletion and not an error —
-        the row is dropped and nothing is counted.
-
-        Raises RetroDECK's folder refusal where the resolver only assumed its
-        BIOS folder, or where a question about its roots failed: then nothing is
-        removed in it, whatever a record says.
+        Answers what was removed, what stays and why, and what could not be
+        removed.
         """
-        refused = self._retrodeck_folders.bios_folder()
-        if isinstance(refused, FolderRefused):
-            raise refused
-        deleted = 0
-        errors: list[str] = []
+        outcome = self._store.do_remove(platform_slug, names)
+        deleted, kept, errors = outcome.deleted, list(outcome.kept), list(outcome.errors)
+        bound = self._retrodeck_folders.bios_folder()
         pruned: list[tuple[str, str]] = []
-        for record in self._recorded_bios_files(platform_slug):
-            if selects is not None and not selects(record):
+        for record in self._older_downloads(platform_slug):
+            if names is not None and record.file_name not in names:
                 continue
-            if self._firmware_file_store.exists(record.file_path):
+            if bound is None or isinstance(bound, FolderRefused) or not is_inside_folder(record.file_path, bound):
+                kept.append({"place": record.file_path, "folder": bound if isinstance(bound, str) else None})
+                continue
+            if self._files.exists(record.file_path):
                 try:
-                    self._firmware_file_store.remove_file(record.file_path)
+                    self._files.remove_file(record.file_path)
                 except OSError as e:
                     self._logger.warning(f"Failed to remove BIOS file {record.file_name}: {e}")
                     errors.append(f"{record.file_name}: {e}")
                     continue
                 deleted += 1
             pruned.append((record.platform_slug, record.file_name))
-
         if pruned:
-            self._prune_bios_records(pruned)
+            with self._uow_factory() as uow:
+                for slug, file_name in pruned:
+                    uow.bios_files.delete(slug, file_name)
+        return deleted, kept, errors
 
-        return deleted, errors
-
-    def _recorded_bios_files(self, platform_slug) -> list[BiosFile]:
-        """Tender's own download records for *platform_slug*.
-
-        Each record is kept whole rather than reduced to a name: the delete
-        needs its ``file_path`` to unlink and its ``platform_slug`` to address
-        the row again. One short read UoW, closed before any file I/O.
-        """
+    def _older_downloads(self, platform_slug: str) -> list[BiosFile]:
+        """The download records of files Tender wrote into a source's folder before the store, for *platform_slug*."""
         with self._uow_factory() as uow:
             return list(uow.bios_files.iter_by_platform(platform_slug))
 
-    def _prune_bios_records(self, keys) -> None:
-        """Delete the ``BiosFile`` records named by the ``(slug, file_name)`` *keys*.
-
-        One short write UoW, after the file I/O it follows. A key reaches here
-        for a row whose file was removed AND for one whose file was already
-        gone; only a row whose removal *failed* is left standing.
-        """
-        with self._uow_factory() as uow:
-            for slug, file_name in keys:
-                uow.bios_files.delete(slug, file_name)
-
-    async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any] | FirmwareDeletionIncomplete:
-        """Delete the BIOS files Tender downloaded inside *folder_path*.
-
-        The folder row's twin of :meth:`delete_bios_file`, and the same
-        :meth:`_delete_recorded_io` again under a containment predicate. A
-        declared folder has no name a record could carry, so its files are
-        matched by being written underneath it — a filter over this platform's
-        own records, which narrows and can never widen. The folder itself is
-        never removed: the emulator lists it, and it is not ours.
-
-        This is deliberately not the same rule as the download side's: a folder
-        is never offered as a DOWNLOAD, because there is no file to fetch into a
-        name the emulator lists. That says nothing about the files already
-        inside it.
-        """
-        # A degenerate path would make the predicate "/" and select every
-        # absolute recorded path — still only this platform's own downloads, but
-        # the platform-wide set rather than a folder's, which is not what the
-        # button offered. Unreachable from the UI (a folder row with no
-        # `local_path` is stamped `deletable_count: 0`), refused here so the
-        # narrowing claim holds for whoever calls it next.
-        root = folder_path.rstrip("/")
-        if not root:
-            return {"success": True, "deleted_count": 0, "message": "Nothing to delete in this folder"}
-        prefix = f"{root}/"
-        deleted, errors = await self._loop.run_in_executor(
-            None, self._delete_recorded_io, platform_slug, lambda record: record.file_path.startswith(prefix)
-        )
-        self._listing.invalidate()
-
-        if errors:
-            return FirmwareDeletionIncomplete(
-                reason="delete_incomplete",
-                message=f"Could not delete every file: {errors[0]}",
-                deleted_count=deleted,
-            )
-        if deleted == 0:
-            return {"success": True, "deleted_count": 0, "message": "Nothing to delete in this folder"}
-        return {"success": True, "deleted_count": deleted, "message": f"Deleted {deleted} BIOS file(s)"}
-
     async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any] | FirmwareDeletionIncomplete:
-        """Delete one BIOS file Tender downloaded, by name.
+        """Delete one BIOS file of Tender's — the store file, or an older download — by its name in RomM.
 
-        The per-row twin of :meth:`delete_platform_bios`, running the same
-        :meth:`_delete_recorded_io` under a name predicate rather than a copy of
-        it: a ``downloaded_bios`` record is the only evidence Tender placed
-        the file, and a row with no record removes nothing and says so. A caller
-        cannot widen this into a presence-based delete by passing a different
-        name.
+        A name Tender holds nothing under removes nothing and says so; a caller
+        cannot widen this into a presence-based delete by passing another name.
         """
-        deleted, errors = await self._loop.run_in_executor(
-            None, self._delete_recorded_io, platform_slug, lambda record: record.file_name == file_name
+        deleted, kept, errors = await self._loop.run_in_executor(
+            None, self._delete_io, platform_slug, frozenset({file_name})
         )
         self._listing.invalidate()
-
         if errors:
             return FirmwareDeletionIncomplete(
-                reason="delete_incomplete",
-                message=f"Could not delete {errors[0]}",
-                deleted_count=deleted,
+                reason="delete_incomplete", message=f"Could not delete {errors[0]}", deleted_count=deleted
             )
-        if deleted == 0:
-            return {"success": True, "deleted_count": 0, "message": f"Nothing to delete for {file_name}"}
-        return {"success": True, "deleted_count": deleted, "message": f"Deleted {file_name}"}
+        message = f"Deleted {file_name}" if deleted else f"Nothing to delete for {file_name}"
+        return {"success": True, "deleted_count": deleted, "message": message, "kept": kept}
 
     async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
-        """Delete the BIOS files Tender downloaded for a platform.
-
-        Scoped to Tender's own downloads, never to everything sitting in the
-        platform's BIOS locations — see :meth:`_delete_recorded_io`. The
-        download records are the only input: a status listing would re-introduce
-        the library as a gate, and our own download is deletable long after RomM
-        stops offering it (the case that used to hide the button entirely).
-        """
-        deleted, errors = await self._loop.run_in_executor(None, self._delete_recorded_io, platform_slug)
+        """Delete every BIOS file of Tender's for a platform, and every link of Tender's to them."""
+        deleted, kept, errors = await self._loop.run_in_executor(None, self._delete_io, platform_slug, None)
         self._listing.invalidate()
-
         if errors:
             return FirmwareDeletionIncomplete(
                 reason="delete_incomplete",
                 message=f"Deleted {deleted} file(s), {len(errors)} error(s)",
                 deleted_count=deleted,
             )
-        if deleted == 0:
-            return {"success": True, "deleted_count": 0, "message": "No BIOS files for this platform"}
-        return {"success": True, "deleted_count": deleted, "message": f"Deleted {deleted} BIOS file(s)"}
+        message = f"Deleted {deleted} BIOS file(s)" if deleted else "No BIOS files for this platform"
+        return {"success": True, "deleted_count": deleted, "message": message, "kept": kept}

@@ -12,8 +12,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.bios_status import collect_firmware_status, game_region_level, region_decides
+from domain.bios_status import game_region_level, region_decides
 from domain.firmware_wants import LOCATING_UNESTABLISHED
+from services.firmware.rows import required_folders
 
 if TYPE_CHECKING:
     from domain.bios_status import BiosFileEntry
@@ -34,7 +35,9 @@ class EmulatorAnswer:
     (:func:`domain.bios_status.region_decides`), and ``groups`` the verdicts
     over those groups a surface words — narrowed to a game's regions where the
     caller had one, in which case ``game_level`` is the level that region gives
-    (:func:`domain.bios_status.game_region_level`).
+    (:func:`domain.bios_status.game_region_level`). ``folders`` are the
+    verdicts over the folders the emulator requires and lists, each one
+    requirement in the counts.
     """
 
     complete: bool
@@ -42,6 +45,7 @@ class EmulatorAnswer:
     region_decides: bool
     groups: tuple[GroupVerdict, ...]
     game_level: str | None = None
+    folders: tuple[bool | None, ...] = ()
 
 
 def emulator_answer(
@@ -56,6 +60,7 @@ def emulator_answer(
         region_decides=region_decides(verdict, stated),
         groups=groups,
         game_level=game_region_level(verdict, stated, groups),
+        folders=required_folders(catalogue, identity),
     )
 
 
@@ -124,7 +129,7 @@ def emulator_tabs(
     launching: str | None,
     launching_label: str | None,
     options: list[EmulatorOption],
-    others: dict[str, list[dict[str, Any]]],
+    others: dict[str, list[BiosFileEntry]],
 ) -> list[dict[str, Any]]:
     """One entry per emulator the resolver answered for, the launching one first.
 
@@ -177,7 +182,7 @@ def emulator_tabs(
                 "launching": False,
                 "requirements_met": verdict_of(emulator),
                 "installed": emulator not in not_installed,
-                "rows": _emulator_rows(catalogue, emulator, items),
+                "rows": sorted((row_payload(entry) for entry in items), key=lambda row: row["declared_path"].lower()),
             }
         )
     return tabs
@@ -192,18 +197,6 @@ def _labels_by_emulator(options: list[EmulatorOption]) -> dict[str, list[str]]:
             if option.label not in names:
                 names.append(option.label)
     return labels
-
-
-def _emulator_rows(catalogue: FirmwareCatalogue, emulator: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One emulator's rows, judged by that emulator's own placements, in the order of their declared paths."""
-    placements: dict[str, Any] = {}
-    for placement in catalogue.placements:
-        if placement.emulator == emulator:
-            placements.setdefault(placement.file_name, placement)
-    entries = collect_firmware_status(
-        items, placements, catalogue.reading_complete_for(emulator), emulator, catalogue.groups
-    )
-    return sorted((row_payload(entry) for entry in entries), key=lambda row: row["declared_path"].lower())
 
 
 def row_payload(entry: BiosFileEntry) -> dict[str, Any]:

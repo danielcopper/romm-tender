@@ -182,6 +182,18 @@ class BiosFileEntry:
     # a library file no emulator claims. A surface shows a row with its own
     # emulator, and an unclaimed one in the library's own section.
     declared_by: str | None = None
+    # Tender's own facts about the row (:mod:`domain.firmware_rows`): the
+    # library file that fills it, this platform's store copy that does, what
+    # lies at its place, why no link may go there, and whether "Replace…" is
+    # offered. ``in_folder`` is the folder declaration a row stands in, for one
+    # file inside the folder an emulator lists.
+    library: dict[str, Any] | None = None
+    store_file: str | None = None
+    link: str | None = None
+    linked_for: str | None = None
+    place_refusal: dict[str, Any] | None = None
+    replace_offered: bool = False
+    in_folder: str | None = None
 
 
 @dataclass(frozen=True)
@@ -470,7 +482,9 @@ def collect_firmware_status(
     )
 
 
-def count_required(files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = ()) -> tuple[int, int]:
+def count_required(
+    files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = (), folders: tuple[bool | None, ...] = ()
+) -> tuple[int, int]:
     """``(required, of those met)`` for the emulator the game will launch with.
 
     Each of its one-of *groups* is ONE requirement here, met only where every
@@ -488,13 +502,19 @@ def count_required(files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict,
     in place only where the resolver judges it met, so a wrong image
     or one it could not compare is in the first number and not the second. A
     row nothing could judge is :func:`count_required_withheld`'s.
+
+    *folders* are the verdicts over the folders the emulator requires and
+    lists. A folder is ONE requirement whatever it holds, and its files are
+    rows of their own that count for nothing here.
     """
     required = [f for f in files if f.required_by_active]
-    met = sum(1 for group in groups if group.state == GROUP_MET)
-    return len(required) + len(groups), sum(1 for f in required if f.satisfied) + met
+    met = sum(1 for group in groups if group.state == GROUP_MET) + sum(1 for folder in folders if folder is True)
+    return len(required) + len(groups) + len(folders), sum(1 for f in required if f.satisfied) + met
 
 
-def count_required_withheld(files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = ()) -> int:
+def count_required_withheld(
+    files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = (), folders: tuple[bool | None, ...] = ()
+) -> int:
     """How many of the launching emulator's requirements nothing could judge.
 
     The third number beside :func:`count_required`'s two, and the one that keeps
@@ -504,7 +524,8 @@ def count_required_withheld(files: tuple[BiosFileEntry, ...], groups: tuple[Grou
     established. A group whose state is ``unknown`` is one such requirement.
     """
     withheld_groups = sum(1 for group in groups if group.state == GROUP_UNKNOWN)
-    return sum(1 for f in files if f.required_by_active and f.satisfied is None) + withheld_groups
+    withheld_folders = sum(1 for folder in folders if folder is None)
+    return sum(1 for f in files if f.required_by_active and f.satisfied is None) + withheld_groups + withheld_folders
 
 
 def region_decides(verdict: CoreFirmwareVerdict | None, groups: Iterable[FirmwareGroup]) -> bool:

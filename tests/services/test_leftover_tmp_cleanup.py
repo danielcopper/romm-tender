@@ -7,15 +7,17 @@ from fakes.fake_download_file_store import FakeDownloadFileStore
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 
 from adapters.download_file import DownloadFileAdapter
+from adapters.tender_folder import TenderFolderAdapter
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 
 
-def _service(logger, retrodeck_folders, file_store=None) -> LeftoverTmpCleanupService:
+def _service(logger, retrodeck_folders, file_store=None, *, home=None) -> LeftoverTmpCleanupService:
     return LeftoverTmpCleanupService(
         config=LeftoverTmpCleanupServiceConfig(
             logger=logger,
             download_file_store=file_store if file_store is not None else DownloadFileAdapter(),
             retrodeck_folders=retrodeck_folders,
+            tender_folder=TenderFolderAdapter(settings={}, user_home=str(home or "/nonexistent-home")),
         )
     )
 
@@ -67,16 +69,27 @@ class TestCleanupLeftoverTmpFiles:
         assert bin_file.exists()
         assert cue_file.exists()
 
-    def test_removes_bios_tmp(self, logger, tmp_path):
-        service = _service(logger, _paths_under(tmp_path))
+    def test_removes_a_bios_tmp_from_the_firmware_store(self, logger, tmp_path):
+        service = _service(logger, _paths_under(tmp_path), home=tmp_path)
 
-        bios_dir = tmp_path / "retrodeck" / "bios" / "dc"
-        bios_dir.mkdir(parents=True)
-        tmp_file = bios_dir / "dc_boot.bin.tmp"
+        store_dir = tmp_path / "Tender" / "bios" / "dc"
+        store_dir.mkdir(parents=True)
+        tmp_file = store_dir / "dc_boot.bin.tmp"
         tmp_file.write_text("partial bios")
 
         service.cleanup_leftover_tmp_files()
         assert not tmp_file.exists()
+
+    def test_leaves_a_tmp_in_retrodecks_bios_folder_which_no_download_writes_into(self, logger, tmp_path):
+        service = _service(logger, _paths_under(tmp_path), home=tmp_path)
+
+        bios_dir = tmp_path / "retrodeck" / "bios" / "dc"
+        bios_dir.mkdir(parents=True)
+        tmp_file = bios_dir / "dc_boot.bin.tmp"
+        tmp_file.write_text("someone else's partial")
+
+        service.cleanup_leftover_tmp_files()
+        assert tmp_file.exists()
 
     def test_no_roms_dir_no_crash(self, logger, tmp_path):
         service = _service(logger, _paths_under(tmp_path))

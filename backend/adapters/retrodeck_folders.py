@@ -20,9 +20,9 @@ is refused as outside it.
 
 **A download creates a folder only below a root that exists.** A system's ROM
 folder that is not there yet is created by the download, as ES-DE would create
-it, and so is a BIOS folder inside RetroDECK's own folder; a root that is not
-there — a drive or an SD card that is out — is never created, because the folder
-would land on internal storage and the drive would hide it once it is back.
+it; a root that is not there — a drive or an SD card that is out — is never
+created, because the folder would land on internal storage and the drive would
+hide it once it is back.
 
 **A root the resolver only assumed is used for nothing.** Which root may be
 used is :mod:`domain.source_roots`'s rule; each question here asks it about the
@@ -50,11 +50,9 @@ from _vendor.atlas import HEALTH_ISSUE_ROOT_MISSING
 from adapters.emulator_sources import source_roots
 from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import (
-    BIOS_DOWNLOAD,
     GAME_DOWNLOAD,
     FolderRefused,
     MoveRoots,
-    bios_folder_missing,
     finding_refusal,
     no_rom_folder,
     no_rom_root,
@@ -136,26 +134,6 @@ class RetroDeckFoldersAdapter:
         if os.path.isdir(folder) or (_inside(folder, root) and os.path.isdir(root)):
             return folder
         return rom_root_missing(root if _inside(folder, root) else folder)
-
-    def bios_download_folder(self) -> str | FolderRefused:
-        """Where a BIOS download lands — or why none may.
-
-        A BIOS folder that is not there yet is created only inside a home the
-        resolver read, never inside one it assumed.
-        """
-        retrodeck = self._for_download(BIOS_DOWNLOAD)
-        if isinstance(retrodeck, FolderRefused):
-            return retrodeck
-        bios = _root(retrodeck.roots, ROOT_BIOS)
-        if bios is None:
-            return unanswered_refusal()
-        if isinstance(bios, FolderRefused):
-            return bios
-        folder, home = os.path.realpath(bios), _root(retrodeck.roots, ROOT_INSTALLATION)
-        inside_home = isinstance(home, str) and _inside(folder, os.path.realpath(home)) and os.path.isdir(home)
-        if os.path.isdir(folder) or inside_home:
-            return folder
-        return bios_folder_missing(folder)
 
     def rom_root(self) -> str | FolderRefused:
         """RetroDECK's ROM root — or why a removal of installed content may not go ahead at all."""

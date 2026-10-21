@@ -62,12 +62,6 @@ class FakeRetroDeckFolders:
         declared = system and os.sep not in system and system not in {".", ".."}
         return self.system_dirs.get(system, os.path.join(self.roms, system) if self.roms and declared else "")
 
-    def bios_download_folder(self) -> str | FolderRefused:
-        refused = self.refusal or self.download_refusal
-        if refused is not None:
-            return refused
-        return self.bios
-
     def rom_root(self) -> str | FolderRefused:
         return self.refusal or self.roms or no_rom_root()
 

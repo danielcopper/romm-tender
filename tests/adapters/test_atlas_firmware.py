@@ -27,15 +27,21 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_CANDIDATE,
+    CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE,
+    CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
     CAVEAT_FIRMWARE_IDENTITY_NOT_COMPARABLE,
+    CAVEAT_FIRMWARE_IMAGE_CONTRADICTED,
     CAVEAT_FIRMWARE_IMAGE_IDENTIFIED,
     CAVEAT_FIRMWARE_IMAGE_UNLISTED,
     CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
     CAVEAT_FIRMWARE_PATH_OBSTRUCTED,
     CAVEAT_FIRMWARE_SCAN_INCOMPLETE,
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
+    CAVEAT_FIRMWARE_UNREADABLE,
     HEALTH_ISSUE_NOT_SET_UP,
 )
+from _vendor.atlas import IDENTITY_ARCHIVE as ATLAS_IDENTITY_ARCHIVE
+from _vendor.atlas import IDENTITY_FILE as ATLAS_IDENTITY_FILE
 from _vendor.atlas import LOCATING_BY_NAME as ATLAS_LOCATING_BY_NAME
 from _vendor.atlas import LOCATING_BY_NAME_THEN_CONTENT as ATLAS_LOCATING_BY_NAME_THEN_CONTENT
 from _vendor.atlas import LOCATING_UNESTABLISHED as ATLAS_LOCATING_UNESTABLISHED
@@ -55,17 +61,25 @@ from _vendor.atlas.firmware import (
     FirmwareAlternatives,
     FirmwareAnswer,
     FirmwareChecked,
+    FirmwareIdentity,
     FirmwareNeed,
     FirmwareRequirement,
     RefusedDeclaration,
     SuppliedBy,
+    load_hashes,
 )
 from _vendor.atlas.firmware import DECLARED_DIRECTORY as ATLAS_DECLARED_DIRECTORY
 from _vendor.atlas.firmware import DECLARED_FILE as ATLAS_DECLARED_FILE
+from _vendor.atlas.installations import InstallationRoot, RootProvenance, RootsAnswer
 from _vendor.atlas.machine import KIND_DIRECTORY, KIND_FILE, KIND_INACCESSIBLE, KIND_MISSING, PathKind
 from _vendor.atlas.placement import Caveat
 
-from adapters.atlas_firmware import _BIOS_CHOICE_SETTING, AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
+from adapters.atlas_firmware import (
+    _BIOS_CHOICE_SETTING,
+    AtlasFirmwareAdapter,
+    AtlasFirmwareIdentifier,
+    AtlasPlatformFirmwareAdapter,
+)
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.firmware_wants import (
     CAVEAT_PATH_INACCESSIBLE,
@@ -75,15 +89,19 @@ from domain.firmware_wants import (
     CHECKED_UNRECOGNISED,
     DECLARED_DIRECTORY,
     DECLARED_FILE,
+    IDENTITY_ARCHIVE,
+    IDENTITY_FILE,
     LOCATING_BY_NAME,
     LOCATING_BY_NAME_THEN_CONTENT,
     LOCATING_UNESTABLISHED,
     SYSTEM_FIRMWARE_STATES,
     WANTED_UNKNOWN,
     FirmwareWant,
+    FolderFile,
     MissingConfiguredImage,
     classify_wanted,
 )
+from domain.source_roots import ROOT_BIOS
 
 if TYPE_CHECKING:
     from types import EllipsisType
@@ -433,13 +451,8 @@ class TestPlacements:
 
         assert adapter().placements[0].checked is None
 
-    def test_a_declaration_with_no_location_under_the_root_carries_no_byte_answer(self, adapter, monkeypatch):
-        """The destination half goes silent together, and this is part of it.
-
-        A standalone emulator's own XDG tree holding the file says nothing about
-        the BIOS root the caller writes to, so the reading is dropped rather than
-        travelling on to describe a place the caller will never look at.
-        """
+    def test_a_declaration_with_no_location_under_the_root_keeps_its_byte_answer(self, adapter, monkeypatch):
+        """What became of the bytes is about the place the emulator opens, inside the root or outside it."""
         answer = _answer(
             _core(
                 requirements=(
@@ -456,7 +469,7 @@ class TestPlacements:
 
         placement = adapter().placements[0]
         assert placement.relative_path is None
-        assert placement.checked is None
+        assert placement.checked == "verified"
 
     def test_an_entry_the_resolver_could_not_identify_still_owns_its_file(self, adapter, monkeypatch):
         """EmuDeck's ``n3ds`` rows: a launch atlas classifies standalone and cannot name.
@@ -671,13 +684,8 @@ class TestDestinationReadings:
 
         assert placement.supplied_by == "RetroDECK"
 
-    def test_a_reading_at_a_destination_we_cannot_honour_does_not_travel(self, adapter, monkeypatch):
-        """An emulator keeping its firmware in its own tree: that file is not Tender's.
-
-        With no location to honour the caller places the file by its own flat
-        default, and what was read in the emulator's XDG tree says nothing
-        about the BIOS root.
-        """
+    def test_a_reading_at_a_place_outside_the_root_travels_with_that_place(self, adapter, monkeypatch):
+        """An emulator keeping its firmware in its own folder: Tender links there, so what was read there stands."""
         placement = self._placement(
             adapter,
             monkeypatch,
@@ -691,10 +699,9 @@ class TestDestinationReadings:
         )
 
         assert placement.relative_path is None
-        assert placement.present is None
-        assert placement.folder is None
-        assert placement.caveats == ()
-        assert placement.supplied_by is None
+        assert placement.place == "/home/deck/.local/share/melonDS/bios7.bin"
+        assert placement.present is True
+        assert placement.supplied_by is not None
 
     def test_no_stated_provenance_claims_nothing(self, adapter, monkeypatch):
         placement = self._placement(adapter, monkeypatch, _requirement(found=KIND_FILE, checked="unchecked"))
@@ -2286,3 +2293,259 @@ class TestEachPlacementIsOneEmulatorsRequirement:
         assert adapter().groups[0].satisfied is True
         _detect(monkeypatch, _detecting(_Installation(_answer(_core(requirements=(mixed,))))))
         assert adapter().groups[0].satisfied is None
+
+
+def _roots_answer(*roots: tuple[str, str, RootProvenance]) -> RootsAnswer:
+    return RootsAnswer(tuple(InstallationRoot(name, path, provenance, None) for name, path, provenance in roots))
+
+
+class _SourceInstallation(_Installation):
+    """An installation that also answers its roots and what a piece of content is."""
+
+    def __init__(
+        self,
+        answer: FirmwareAnswer | Exception,
+        *,
+        kind: str = "retrodeck",
+        roots: Any = None,
+        known_as: tuple[str, ...] | Exception = (),
+    ) -> None:
+        super().__init__(answer, kind=kind)
+        self._roots = roots
+        self._known_as = known_as
+
+    def roots(self) -> Any:
+        if self._roots is None:
+            raise RuntimeError("no roots asked of this double")
+        return self._roots
+
+    def identify_firmware(self, *, md5: str | None = None, sha1: str | None = None, size: int | None = None) -> Any:
+        if isinstance(self._known_as, Exception):
+            raise self._known_as
+        known_as = self._known_as
+
+        class _Identification:
+            pass
+
+        identification = _Identification()
+        identification.known_as = known_as  # type: ignore[attr-defined]
+        return identification
+
+
+class TestThePlaceALinkGoesTo:
+    """Where Tender's link for a requirement goes, and what the resolver pins for its bytes."""
+
+    def test_a_declared_place_that_is_a_link_out_of_the_root_is_the_link_not_its_target(
+        self, platform_adapter, monkeypatch
+    ):
+        place, target = f"{_ROOT}/gba_bios.bin", "/home/deck/Tender/bios/gba/gba_bios.bin"
+        linked = Caveat(
+            CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+            "linked out",
+            {"core_so": "mgba_libretro.so", "declared": "gba_bios.bin", "link": place, "target": target},
+        )
+        requirement = _requirement(path=target, found=KIND_FILE, checked="verified")
+        _detect(monkeypatch, _detecting(_Installation(_answer(_core(requirements=(requirement,), caveats=(linked,))))))
+
+        placement = platform_adapter("gba").placements[0]
+
+        assert placement.place == place
+        assert placement.relative_path == "gba_bios.bin"
+        assert placement.checked == "verified"
+
+    def test_a_place_outside_the_root_is_still_a_place(self, platform_adapter, monkeypatch):
+        cemu = "/home/deck/.var/app/net.retrodeck.retrodeck/data/Cemu/keys.txt"
+        requirement = _requirement(core_so=None, file_name="keys.txt", path=cemu, declared="Cemu/keys.txt")
+        core = _core(core_so=None, emulator="CEMU", declaration="packaged", requirements=(requirement,))
+        _detect(monkeypatch, _detecting(_Installation(_answer(core))))
+
+        placement = platform_adapter("wiiu").placements[0]
+
+        assert placement.place == cemu
+        assert placement.relative_path is None
+        assert (placement.identity_md5, placement.identity_kind) == (None, None)
+
+    def test_the_checksum_the_table_pins_rides_with_the_placement(self, platform_adapter, monkeypatch):
+        pinned = FirmwareIdentity(md5="A" * 32, sha1="b" * 40, size=16384, kind="archive", archive_reason="romset")
+        requirement = replace(_requirement(file_name="neogeo.zip"), identity=pinned)
+        _detect(monkeypatch, _detecting(_Installation(_answer(_core(requirements=(requirement,))))))
+
+        placement = platform_adapter("neogeo").placements[0]
+
+        assert (placement.identity_md5, placement.identity_kind) == ("a" * 32, IDENTITY_ARCHIVE)
+
+    def test_the_identity_kinds_are_the_resolvers(self):
+        assert (IDENTITY_FILE, IDENTITY_ARCHIVE) == (ATLAS_IDENTITY_FILE, ATLAS_IDENTITY_ARCHIVE)
+
+
+class TestWhatAFolderDeclarationHolds:
+    """LRPS2's ``pcsx2/bios``: the images the table recognises for it, and the resolver's word on each file in it."""
+
+    _FOLDER = f"{_ROOT}/pcsx2/bios"
+
+    def _folder_requirement(self) -> FirmwareRequirement:
+        return _requirement(
+            core_so="pcsx2_libretro.so",
+            file_name="bios",
+            path=self._FOLDER,
+            declared="pcsx2/bios",
+            declared_kind=ATLAS_DECLARED_DIRECTORY,
+            found=KIND_DIRECTORY,
+            checked="unknown",
+            contents_satisfied=True,
+        )
+
+    def _placement(self, platform_adapter, monkeypatch, *answer_caveats: Caveat, core_caveats=()):
+        core = _core(core_so="pcsx2_libretro.so", requirements=(self._folder_requirement(),), caveats=core_caveats)
+        _detect(monkeypatch, _detecting(_Installation(_answer(core, caveats=answer_caveats))))
+        return platform_adapter("ps2").placements[0]
+
+    def test_recognises_the_images_the_table_files_under_the_folder(self, platform_adapter, monkeypatch):
+        placement = self._placement(platform_adapter, monkeypatch)
+
+        table = load_hashes()
+        filed = {table.get(name).md5.lower() for name in table.names() if name.startswith("pcsx2/bios/")}
+        assert filed
+        assert placement.folder_md5s == frozenset(filed)
+
+    def test_states_each_file_by_the_resolvers_own_verdict(self, platform_adapter, monkeypatch):
+        mine, ours, odd, unread = (f"{self._FOLDER}/{name}" for name in ("mine.bin", "ours.bin", "odd.bin", "x.bin"))
+        target = "/home/deck/Tender/bios/ps2/ours.bin"
+        placement = self._placement(
+            platform_adapter,
+            monkeypatch,
+            Caveat(CAVEAT_FIRMWARE_IMAGE_UNLISTED, "image", {"path": mine, "md5": "AB", "description": "Europe"}),
+            Caveat(CAVEAT_FIRMWARE_IMAGE_IDENTIFIED, "image", {"path": ours, "md5": "cd", "image": "x"}),
+            Caveat(CAVEAT_FIRMWARE_IMAGE_CONTRADICTED, "disagree", {"path": odd, "md5": "ef"}),
+            Caveat(CAVEAT_FIRMWARE_UNREADABLE, "unread", {"path": unread}),
+            core_caveats=(
+                Caveat(
+                    CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+                    "linked",
+                    {"core_so": "pcsx2_libretro.so", "link": ours, "target": target},
+                ),
+            ),
+        )
+
+        assert placement.folder_files == (
+            FolderFile(path=mine, satisfied=True, md5="ab", description="Europe"),
+            FolderFile(path=odd, satisfied=None, md5="ef"),
+            FolderFile(path=ours, satisfied=True, target=target, md5="cd"),
+            FolderFile(path=unread, satisfied=None),
+        )
+
+    def test_a_folder_holding_no_image_names_each_file_it_rejected(self, platform_adapter, monkeypatch):
+        junk = f"{self._FOLDER}/junk.bin"
+        placement = self._placement(
+            platform_adapter,
+            monkeypatch,
+            Caveat(
+                CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE,
+                "no image",
+                {"dir": self._FOLDER, "paths": [junk], "core_so": "pcsx2_libretro.so"},
+            ),
+        )
+
+        assert placement.folder_files == (FolderFile(path=junk, satisfied=False),)
+
+    def test_a_file_declaration_carries_neither(self, platform_adapter, monkeypatch):
+        _detect(monkeypatch, _detecting(_Installation(_answer(_core(requirements=(_requirement(),))))))
+
+        placement = platform_adapter("gba").placements[0]
+
+        assert (placement.folder_md5s, placement.folder_files) == (frozenset(), ())
+
+
+class TestTheSourceAndItsRoots:
+    def test_the_catalogue_names_its_source_and_resolves_its_roots(self, platform_adapter, monkeypatch, tmp_path):
+        real = tmp_path / "real-bios"
+        real.mkdir()
+        (tmp_path / "bios").symlink_to(real)
+        roots = _roots_answer((ROOT_BIOS, str(tmp_path / "bios"), "assumed"))
+        _detect(
+            monkeypatch, _detecting(_SourceInstallation(_answer(_core(requirements=(_requirement(),))), roots=roots))
+        )
+
+        catalogue = platform_adapter("gba")
+
+        assert catalogue.source == "retrodeck"
+        assert catalogue.roots is not None
+        bios = catalogue.roots.root(ROOT_BIOS)
+        assert (bios.path, bios.assumed) == (str(real), True)
+
+    def test_roots_that_could_not_be_asked_are_none(self, platform_adapter, monkeypatch):
+        _detect(monkeypatch, _detecting(_Installation(_answer(_core(requirements=(_requirement(),))))))
+
+        assert platform_adapter("gba").roots is None
+
+
+class TestEverySourceItIsPlacedIn:
+    def test_reads_each_enabled_source_and_leaves_out_a_switched_off_one(self, traces, monkeypatch):
+        retrodeck = _Installation(_answer(_core(requirements=(_requirement(),))))
+        emudeck = _Installation(_answer(_core(requirements=(_requirement(),))), kind="emudeck")
+        _detect(monkeypatch, _detecting(retrodeck, emudeck))
+        adapter = AtlasPlatformFirmwareAdapter(
+            sources=_sources(traces, {"emulator_sources_off": ["emudeck"]}), log_debug=traces.append
+        )
+
+        catalogues = adapter.every_source("gba")
+
+        assert [catalogue.source for catalogue in catalogues] == ["retrodeck"]
+        assert emudeck.asked_for is None
+
+    def test_a_sealed_catalogue_is_left_out(self, traces, monkeypatch):
+        sealed = Caveat(CAVEAT_EMULATOR_CATALOGUE_SEALED, "sealed", {})
+        retrodeck = _Installation(_answer(_core(requirements=(_requirement(),))))
+        emudeck = _Installation(_answer(_core(requirements=(_requirement(),)), caveats=(sealed,)), kind="emudeck")
+        _detect(monkeypatch, _detecting(retrodeck, emudeck))
+        adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        assert [catalogue.source for catalogue in adapter.every_source("gba")] == ["retrodeck"]
+
+    def test_a_source_that_raised_is_left_out(self, traces, monkeypatch):
+        retrodeck = _Installation(RuntimeError("boom"))
+        _detect(monkeypatch, _detecting(retrodeck))
+        adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        assert adapter.every_source("gba") == ()
+
+
+class TestIdentifyingContent:
+    def _identifier(self, traces) -> AtlasFirmwareIdentifier:
+        return AtlasFirmwareIdentifier(sources=_sources(traces), log_debug=traces.append)
+
+    def test_answers_every_name_the_resolver_knows_the_bytes_under(self, traces, monkeypatch):
+        installation = _SourceInstallation(_answer(), known_as=("dmg_boot.bin", "gb_bios.bin"))
+        _detect(monkeypatch, _detecting(installation))
+
+        assert self._identifier(traces)("0" * 32) == ("dmg_boot.bin", "gb_bios.bin")
+
+    def test_unknown_bytes_are_known_under_no_name(self, traces, monkeypatch):
+        _detect(monkeypatch, _detecting(_SourceInstallation(_answer(), known_as=())))
+
+        assert self._identifier(traces)("0" * 32) == ()
+
+    def test_nothing_established_is_none(self, traces, monkeypatch):
+        _detect(monkeypatch, _detecting(_SourceInstallation(_answer(), known_as=RuntimeError("boom"))))
+        assert self._identifier(traces)("0" * 32) is None
+
+        _detect(monkeypatch, _detecting())
+        assert self._identifier(traces)("0" * 32) is None
+
+
+class TestEverySourcesRoots:
+    def test_names_each_detected_source_switched_on_or_off(self, traces, monkeypatch, tmp_path):
+        roots = _roots_answer((ROOT_BIOS, str(tmp_path), "read"))
+        retrodeck = _SourceInstallation(_answer(), roots=roots)
+        emudeck = _Installation(_answer(), kind="emudeck")
+        _detect(monkeypatch, _detecting(retrodeck, emudeck))
+        adapter = AtlasPlatformFirmwareAdapter(
+            sources=_sources(traces, {"emulator_sources_off": ["retrodeck"]}), log_debug=traces.append
+        )
+
+        answered = adapter.source_roots()
+
+        assert set(answered) == {"retrodeck", "emudeck"}
+        assert answered["retrodeck"] is not None
+        assert answered["retrodeck"].root(ROOT_BIOS).path == str(tmp_path)
+        assert answered["emudeck"] is None

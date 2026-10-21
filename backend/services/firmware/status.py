@@ -33,7 +33,6 @@ from typing import TYPE_CHECKING, Any
 
 from domain.bios_status import (
     classify_content_search,
-    collect_firmware_status,
     compute_bios_label,
     compute_bios_level,
     count_required,
@@ -43,7 +42,7 @@ from domain.bios_status import (
 )
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.firmware_groups import console_regions_of, judge_groups
-from domain.firmware_wants import DECLARED_DIRECTORY
+from domain.firmware_rows import library_file
 from services.firmware.emulator_answers import (
     EMULATOR_FIELDS,
     EmulatorAnswer,
@@ -52,12 +51,14 @@ from services.firmware.emulator_answers import (
     emulator_tabs,
     row_payload,
 )
+from services.firmware.rows import RowInputs, library_rows, requirement_rows
 
 if TYPE_CHECKING:
     import asyncio
     import logging
 
     from domain.bios_file import BiosFile
+    from domain.bios_status import BiosFileEntry
     from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.firmware_groups import GroupVerdict
     from domain.firmware_wants import FirmwareCatalogue
@@ -65,6 +66,7 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
+    from services.firmware.store import FirmwareStore
     from services.protocols import (
         CoreInfoProvider,
         FirmwareFileStore,
@@ -78,14 +80,16 @@ if TYPE_CHECKING:
 class FirmwareStatusReaderConfig:
     """Frozen wiring bundle handed to ``FirmwareStatusReader.__init__``.
 
-    Holds the two peer sub-services the answers are built from — the platform's
-    demand and the RomM listing — plus the ES-DE core reads, the slug/system
-    mapping, the per-platform emulator override, the file store the delete
-    count probes through, the Unit-of-Work factory, and runtime infrastructure.
+    Holds the three peer sub-services the answers are built from — the
+    platform's demand, the RomM listing and the firmware store — plus the
+    ES-DE core reads, the slug/system mapping, the per-platform emulator
+    override, the file store every place is looked at through, the
+    Unit-of-Work factory, and runtime infrastructure.
     """
 
     demand: FirmwareDemand
     listing: FirmwareListing
+    store: FirmwareStore
     core_info: CoreInfoProvider
     platform_systems: PlatformSystems
     platform_core_reader: PlatformCoreReader
@@ -101,6 +105,7 @@ class FirmwareStatusReader:
     def __init__(self, *, config: FirmwareStatusReaderConfig) -> None:
         self._demand = config.demand
         self._listing = config.listing
+        self._store = config.store
         self._core_info = config.core_info
         self._platform_systems = config.platform_systems
         self._platform_core_reader = config.platform_core_reader
@@ -111,80 +116,43 @@ class FirmwareStatusReader:
 
     # ── Rows and aggregates ──────────────────────────────────
 
-    def _platform_demand(
-        self, system: str | None, server_rows: list[dict[str, Any]], in_library: set[str], emulator: str | None
-    ) -> tuple[FirmwareCatalogue, list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    def _platform_rows(
+        self, system: str | None, platform_slug: str, firmware_list: list[dict[str, Any]], emulator: str | None
+    ) -> tuple[FirmwareCatalogue, list[BiosFileEntry], dict[str, list[BiosFileEntry]]]:
         """One platform's demand and its whole row set, in one worker hop. Blocking.
 
-        The reading, the destination each server row resolves to under it, the
-        presence answer that follows, and the rows for files the emulators want
-        that the library does not hold — every one of them a disk read, and all
-        of them behind one catalogue so a row and the verdict over it can never
-        come from two readings.
-
-        A server row whose ``file_name`` fails the path-safety check cannot be on
-        disk, so it is dropped rather than crashing the query (logged in
-        ``FirmwareDemand.safe_dest_path``). Where no BIOS download may land
-        (``FirmwareDemand.status_root``) every row is kept, with no
-        ``local_path``: the resolver's answers stand, and a row only Tender's
-        own probe could answer is left without a verdict.
-
-        Each row is *emulator*'s own requirement wherever it declares the file
-        (:meth:`FirmwareCatalogue.placements_for`), so its place, presence and
-        verdict are the launching emulator's.
+        The reading, Tender's records and a look at every place a row names —
+        all behind one catalogue so a row and the verdict over it can never
+        come from two readings. The rows are *emulator*'s requirements
+        (:meth:`FirmwareCatalogue.placements_for`, so a row's place and verdict
+        are the launching emulator's wherever it declares the file), then the
+        library section (:func:`~services.firmware.rows.library_rows`).
 
         The third answer is every OTHER emulator's own requirements, keyed by
-        identity — the items each one's entry is built from (:func:`emulator_tabs`),
-        each at that emulator's place and read in the same hop.
+        identity — each one's entry (:func:`emulator_tabs`) at that emulator's
+        own places, read in the same hop.
         """
         catalogue = self._demand.platform_catalogue(system)
-        placements = catalogue.placements_for(emulator)
-        bios_base = self._demand.status_root()
-        rows: list[dict[str, Any]] = []
-        for row in server_rows:
-            placement = placements.get(row["file_name"])
-            dest = None if bios_base is None else self._demand.safe_dest_path(row, placement, bios_base)
-            if bios_base is not None and dest is None:
-                continue
-            rows.append({**row, "local_path": dest, "downloaded": self._demand.is_downloaded(placement, dest)})
-        rows.extend(
-            _overview_row(item) for item in self._demand.wanted_beyond_server(placements, in_library, bios_base)
+        records = self._store.do_read_records()
+        inputs = RowInputs(
+            catalogue=catalogue,
+            platform_slug=platform_slug,
+            library=tuple(library_file(fw) for fw in firmware_list),
+            copies=tuple(self._store.do_copies(records, platform_slug)),
+            owned=self._store.do_owned(records),
+            files=self._firmware_file_store,
         )
+        placements = catalogue.placements_for(emulator)
+        rows = requirement_rows(inputs, (placements[name] for name in sorted(placements)), emulator)
+        rows.extend(library_rows(inputs, emulator))
         others = {
-            other: self._own_items(catalogue, other, in_library, bios_base)
+            other: requirement_rows(
+                inputs, (placement for placement in catalogue.placements if placement.emulator == other), other
+            )
             for other in catalogue.emulator_verdicts
             if other != emulator
         }
         return catalogue, rows, others
-
-    def _own_items(
-        self, catalogue: FirmwareCatalogue, emulator: str, in_library: set[str], bios_base: str | None
-    ) -> list[dict[str, Any]]:
-        """*emulator*'s own requirements as status items, at its own places. Blocking.
-
-        Nothing is folded across emulators: each item is this emulator's
-        placement of the name, with its presence read where it opens
-        the file. A placement whose destination fails the path-safety check is
-        dropped, as a server row's is.
-        """
-        items: list[dict[str, Any]] = []
-        for placement in catalogue.placements:
-            if placement.emulator != emulator:
-                continue
-            dest: str | None = None
-            if bios_base is not None:
-                dest = self._demand.safe_dest_path({"file_name": placement.file_name}, placement, bios_base)
-                if dest is None:
-                    continue
-            items.append(
-                {
-                    "file_name": placement.file_name,
-                    "downloaded": self._demand.is_downloaded(placement, dest),
-                    "dest": dest,
-                    "on_server": placement.file_name in in_library,
-                }
-            )
-        return items
 
     async def _emulator_options(self, platform: PlatformSystem) -> dict[str, Any]:
         """The emulator options for *platform*'s system, or the unavailable answer where it has none."""
@@ -269,7 +237,7 @@ class FirmwareStatusReader:
         server_count = len(on_server)
         local_count = sum(1 for f in on_server if f.downloaded)
         established = [f for f in on_server if f.satisfied is not None]
-        required_count, required_downloaded = count_required(files, groups)
+        required_count, required_downloaded = count_required(files, groups, answer.folders)
         known_count, unknown_count = count_wanted(files)
 
         result = {
@@ -281,7 +249,7 @@ class FirmwareStatusReader:
             "ratio_local_count": sum(1 for f in established if f.downloaded),
             "required_count": required_count,
             "required_downloaded": required_downloaded,
-            "required_withheld": count_required_withheld(files, groups),
+            "required_withheld": count_required_withheld(files, groups, answer.folders),
             "unknown_count": unknown_count,
             "known_count": known_count,
             "one_of_groups": [_group_payload(group) for group in groups],
@@ -329,26 +297,6 @@ class FirmwareStatusReader:
 
     # ── The whole-library overview ───────────────────────────
 
-    @staticmethod
-    def _server_files(firmware_list, platform_slug: str) -> list[dict[str, Any]]:
-        """The listing's own rows for one platform, in the server's own fields.
-
-        Where each file goes and whether it is there are answers about ONE
-        platform's emulators, so they are filled in by :meth:`_platform_demand`
-        once that platform's reading is in hand.
-        """
-        return [
-            {
-                "id": fw.get("id"),
-                "file_name": fw.get("file_name", ""),
-                "size": fw.get("file_size_bytes", 0),
-                "md5": fw.get("md5_hash", ""),
-                "on_server": True,
-            }
-            for fw in firmware_list
-            if fw["platform_slug"] == platform_slug
-        ]
-
     def _read_synced_slugs(self) -> set[str]:
         """The platforms the firmware page calls synced: those with a ROM still bound to a Steam shortcut.
 
@@ -363,93 +311,55 @@ class FirmwareStatusReader:
     def _stamp_deletable(self, plat: dict[str, Any], platform_slug: str, records: list[BiosFile]) -> None:
         """Stamp what a delete would take — per row, and for the platform.
 
-        One pass over the download records and one probe each, so every answer
-        on the pane comes from the same set. The platform count and the rows are
-        not the same NUMBER, and are not meant to be: the count is drawn from
-        the download records, while a row exists only where something declares
-        the file or the library offers it — a download RomM has since dropped
-        and no core declares raises the count with no row to show it, and only
-        the platform-wide button can reach it.
-
-        The delete is authorised by the record and unlinks the path that record
-        holds, so this is exactly that set: recorded paths of the platform's
-        records that are still on disk, counted as distinct PATHS because two
-        records naming one file are one unlink.
-
-        **A row's count is answered two ways, because a row is one of two
-        things.** A declared FILE matches a record by name — the row knows its
-        file name and not our record. A declared FOLDER has no name a record
-        could carry, so it counts the distinct files our records name
-        *underneath* it: the emulator lists that folder and whatever we
-        downloaded into it is ours to remove, which is a rule about files and is
-        independent of the separate rule that a folder is never offered as a
-        download. Distinct for the reason the platform count is — a row's number
-        is what its button promises to unlink. The folder path is used to NARROW
-        the record set and never to widen it, so a destination that has since
-        moved can only offer fewer files, never something Tender did not
-        place.
-
-        None of this is ``downloaded``, and none of it may be replaced by that:
-        it is ``os.path.exists`` at the row's own destination, equally true of
-        firmware the emulator shipped with. ``local_count`` is a third set again
-        — the library's progress ratio, which includes files Tender never
-        placed and drops our own downloads once RomM stops listing them; used
-        for the button it was wrong in both directions.
+        Two kinds of Tender's own files are deletable, and only those: a file
+        in this platform's store folder, and a file Tender downloaded into an
+        emulator source's folder before the store existed, which its download
+        record names at the path it was written to. A row's Delete takes the
+        store file that fills it, or the older download of the library file
+        that does, by the name both carry, which is the file's name in RomM —
+        ``delete_name``. The platform count is the distinct paths of both kinds
+        still on disk. Nothing here is ``downloaded``: that is the resolver's
+        presence at the row's place, equally true of a file the user placed.
         """
         mine = [record for record in records if record.platform_slug == platform_slug]
         present = [record for record in mine if self._firmware_file_store.exists(record.file_path)]
-        plat["deletable_count"] = len({record.file_path for record in present})
-
-        names = {record.file_name for record in present}
+        older = {record.file_name for record in present}
+        stored = set(plat.get("store_files", ()))
+        plat["deletable_count"] = len({record.file_path for record in present}) + len(stored)
         tab_rows = [row for tab in plat.get("emulator_tabs", []) for row in tab.get("rows", [])]
         for f in [*plat["files"], *tab_rows]:
-            if f.get("declared_kind") == DECLARED_DIRECTORY:
-                root = (f.get("local_path") or "").rstrip("/")
-                f["deletable_count"] = (
-                    len({record.file_path for record in present if record.file_path.startswith(f"{root}/")})
-                    if root
-                    else 0
-                )
-            else:
-                f["deletable_count"] = 1 if f["file_name"] in names else 0
+            library = f.get("library") or {}
+            name = f.get("store_file") or (library.get("file_name") if library.get("file_name") in older else None)
+            f["delete_name"] = name
+            f["deletable_count"] = 1 if name is not None else 0
 
     async def _enrich_platform(
-        self,
-        plat: dict[str, Any],
-        synced_slugs,
-        in_library: set[str],
-        records: list[BiosFile],
+        self, plat: dict[str, Any], synced_slugs, firmware_list, records: list[BiosFile]
     ) -> None:
-        """Add emulator info, wants, and game-installed flags to one platform entry.
+        """Add emulator info, the rows and the aggregates to one platform entry.
 
         The core read seams key by the resolved RetroDECK ``system`` (ADR-0010
         §2), so each entry's RomM platform slug is normalized before the
         ``get_emulator_options`` call; ``has_games`` and the library's files stay
         on the RomM slug (their own vocabulary). ``active_core`` and
         ``active_core_label`` are the two projections of ONE pick
-        (:meth:`_platform_emulator`) — the per-platform override
-        (``platform_cores``) when set and still resolvable, else the es_systems
-        default, else, where nothing is bakeable, the emulator RetroDECK
-        declares first — so the pane cannot name one emulator and judge by
-        another.
-        ``active_core`` carries that pick's IDENTITY, which stands for a
-        standalone emulator as much as for a libretro core; it is ``None`` only
-        where the pick could not be made or the resolver could not identify it,
-        and then no row is its requirement and the answer reads as not
-        established. The
+        (:meth:`_platform_emulator`), so the pane cannot name one emulator and
+        judge by another; ``active_core`` is ``None`` only where the pick could
+        not be made or the resolver could not identify it, and then no row is
+        its requirement and the answer reads as not established. The
         ``emulators`` list is the full classified picker payload and
         ``emulator_data_available`` flags whether the answering emulator source
         gave an emulator list, with ``emulator_data_reason`` and
         ``emulator_source`` saying why not and which source answered.
 
+        ``store_only`` says why a download here lands in the store and nowhere
+        else: ``unsupported`` for a launching emulator the resolver does not
+        cover, ``no_source`` for a platform no emulator source answers for.
+
         **The demand is read per platform**, because a standalone emulator's
         declarations belong to a platform only by way of the emulators ES-DE
-        offers for it. That is the cost of answering at all for a platform whose
-        emulators are all standalone, and it is why this runs one platform at a
-        time. *in_library* is the whole listing's file names rather than this
-        platform's slice — see :meth:`FirmwareDemand.wanted_beyond_server` — and
-        *records* is every BIOS download row, sliced to this platform by
-        :meth:`_stamp_deletable`.
+        offers for it. *firmware_list* is the whole library rather than this
+        platform's slice: a file fills a requirement wherever RomM files it.
         """
         slug = plat["platform_slug"]
         platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, slug)
@@ -464,41 +374,16 @@ class FirmwareStatusReader:
         plat["emulator_data_reason"] = options["reason"]
         plat["emulator_source"] = options["source"]
         plat["platform_system"] = platform.payload()
-        catalogue, rows, others = await self._loop.run_in_executor(
-            None, self._platform_demand, system, plat["files"], in_library, identity
+        catalogue, files, others = await self._loop.run_in_executor(
+            None, self._platform_rows, system, slug, firmware_list, identity
         )
-        plat["files"] = rows
-        placements = catalogue.placements_for(identity)
-        complete = catalogue.reading_complete_for(identity)
-        files = collect_firmware_status(
-            [
-                {
-                    "file_name": f["file_name"],
-                    "downloaded": f["downloaded"],
-                    "dest": f["local_path"],
-                    "on_server": f["on_server"],
-                }
-                for f in plat["files"]
-            ],
-            placements,
-            complete,
-            identity,
-            catalogue.groups,
+        plat["files"] = sorted(
+            (_overview_payload(entry) for entry in files),
+            key=lambda f: (f.get("declared_path") or f.get("file_name", "")).lower(),
         )
-        plat["files"] = [{**raw, **_wanted_fields(entry)} for raw, entry in zip(plat["files"], files, strict=True)]
-        # Alphabetical, and only here: the two halves arrive in their own
-        # orders — the library's listing, then the rows it does not hold,
-        # appended — so a file Tender downloaded sat below one the
-        # library still offers for no reason a reader could see. Sorted
-        # AFTER the merge, because the zip above is positional and because
-        # `declared_path` only exists once `_wanted_fields` has run.
-        #
-        # The key is what the row DISPLAYS: `declared_path` is the folder
-        # prefix and the name together (`dolphin-emu/Sys/codehandler.bin`),
-        # and the bare name where nothing declared a subdirectory. Folded to
-        # lower case, because a corpus that mixes `BS-X.bin` with
-        # `sgb_boot.bin` reads as unsorted under a case-sensitive one.
-        plat["files"].sort(key=lambda f: (f.get("declared_path") or f.get("file_name", "")).lower())
+        plat["store_files"] = sorted({entry.store_file for entry in files if entry.store_file is not None})
+        plat["store_only"] = _store_only(system, catalogue, identity)
+        plat["backup_root"] = self._store.backup_root()
         plat["has_games"] = slug in synced_slugs
         plat["all_downloaded"] = all(f["downloaded"] for f in plat["files"])
         plat["emulator_tabs"] = emulator_tabs(
@@ -506,7 +391,7 @@ class FirmwareStatusReader:
         )
         self._stamp_deletable(plat, slug, records)
         answer = emulator_answer(catalogue, identity, judge_groups(catalogue.groups_for(identity)))
-        self._set_platform_bios_aggregates(plat, slug, files, answer)
+        self._set_platform_bios_aggregates(plat, slug, tuple(files), answer)
 
     def _set_platform_bios_aggregates(self, plat: dict[str, Any], slug: str, files, answer: EmulatorAnswer) -> None:
         """Stamp the per-platform BIOS aggregates onto a ``get_platform_firmware_status`` entry.
@@ -575,12 +460,8 @@ class FirmwareStatusReader:
         # and the count must see them where they now are.
         synced_slugs, records = await self._loop.run_in_executor(None, self._read_status_inputs)
 
-        plat: dict[str, Any] = {
-            "platform_slug": platform_slug,
-            "files": self._server_files(firmware_list, platform_slug),
-        }
-        in_library = {fw.get("file_name", "") for fw in firmware_list}
-        await self._enrich_platform(plat, synced_slugs, in_library, records)
+        plat: dict[str, Any] = {"platform_slug": platform_slug}
+        await self._enrich_platform(plat, synced_slugs, firmware_list, records)
         return {"success": True, "platform": plat}
 
     def _read_status_inputs(self) -> tuple[set[str], list[BiosFile]]:
@@ -655,30 +536,10 @@ class FirmwareStatusReader:
             self._logger.warning(f"Answering BIOS status without the server listing: {e}")
             firmware_list = []
 
-        server_names = dict.fromkeys(
-            fw.get("file_name", "") for fw in firmware_list if fw["platform_slug"] == platform_slug
-        )
-        server_rows = [{"file_name": name, "on_server": True} for name in server_names]
         catalogue, rows, others = await self._loop.run_in_executor(
-            None,
-            self._platform_demand,
-            system,
-            server_rows,
-            {fw.get("file_name", "") for fw in firmware_list},
-            identity,
+            None, self._platform_rows, system, platform_slug, firmware_list, identity
         )
-        items = [
-            {
-                "file_name": r["file_name"],
-                "downloaded": r["downloaded"],
-                "dest": r["local_path"],
-                "on_server": r["on_server"],
-            }
-            for r in rows
-        ]
-        placements = catalogue.placements_for(identity)
-        complete = catalogue.reading_complete_for(identity)
-        files = collect_firmware_status(items, placements, complete, identity, catalogue.groups)
+        files = tuple(rows)
         groups = judge_groups(catalogue.groups_for(identity), console_regions_of(rom_regions))
         answer = emulator_answer(catalogue, identity, groups)
 
@@ -687,31 +548,45 @@ class FirmwareStatusReader:
             return {"needs_bios": False} if met is True else {"needs_bios": False, "bios_status_unknown": True}
 
         payload = self._bios_payload(files, platform_slug, answer, pick)
+        payload["store_only"] = _store_only(system, catalogue, identity)
+        payload["backup_root"] = self._store.backup_root()
         payload["emulator_tabs"] = emulator_tabs(
             catalogue, identity, pick.label if pick is not None else None, options["options"], others
         )
         return payload
 
 
-def _overview_row(item: dict[str, Any]) -> dict[str, Any]:
-    """The overview row for a file the library does not hold.
+def _overview_payload(entry: BiosFileEntry) -> dict[str, Any]:
+    """One overview row: the row itself, and the library file behind it in the server's own fields.
 
-    ``on_server: False`` is the load-bearing field: every download affordance
-    filters on it (``frontend/src/bigpicture/library/PlatformDetail.tsx``), and
-    so do the platform detail's own progress totals. ``id`` is ``None`` as an
-    honest absence — there is no server record to name — and no consumer reads
-    it, so filling it in with a placeholder would withhold nothing but would
-    make a row that cannot be fetched look fetchable to the next reader.
+    ``id``, ``size`` and ``md5`` are the library file's that fills the row, and
+    ``None``, 0 and ``""`` where none does — there is no server record to name,
+    and a placeholder would make a row that cannot be fetched look fetchable.
     """
+    library = entry.library or {}
     return {
-        "id": None,
-        "file_name": item["file_name"],
-        "size": 0,
-        "md5": "",
-        "local_path": item["dest"],
-        "downloaded": item["downloaded"],
-        "on_server": False,
+        **row_payload(entry),
+        "id": library.get("firmware_id"),
+        "size": library.get("size", 0),
+        "md5": library.get("md5", ""),
     }
+
+
+def _store_only(system: str | None, catalogue: FirmwareCatalogue, emulator: str | None) -> str | None:
+    """Why a download here lands in the store and is linked nowhere, or ``None`` where it may be linked.
+
+    ``no_source`` where no emulator source answers for the platform;
+    ``unsupported`` where the resolver does not cover the launching emulator —
+    it states it so, or a reading that happened holds no entry for it.
+    """
+    if system is None:
+        return "no_source"
+    if not catalogue.resolved or emulator is None:
+        return None
+    verdict = catalogue.verdict_for(emulator)
+    if verdict is None or verdict.declaration == "unsupported":
+        return "unsupported"
+    return None
 
 
 def _group_payload(group: GroupVerdict) -> dict[str, Any]:
@@ -728,30 +603,4 @@ def _group_payload(group: GroupVerdict) -> dict[str, Any]:
             {"file_name": option.file_name, "regions": list(option.regions), "satisfied": option.satisfied}
             for option in group.options
         ],
-    }
-
-
-def _wanted_fields(entry) -> dict[str, Any]:
-    """The overview projection of one classified file.
-
-    The overview's rows keep the server's own fields (id, size, md5) and gain
-    only what the machine answered, so the two vocabularies stay separable.
-    """
-    return {
-        "declared_path": entry.declared_path,
-        "description": entry.description,
-        "wanted": entry.wanted,
-        "required_by_active": entry.required_by_active,
-        "used_by_active": entry.used_by_active,
-        "one_of": entry.one_of,
-        "fetch_for_required": entry.fetch_for_required,
-        "supplied_by": entry.supplied_by,
-        "satisfied": entry.satisfied,
-        "declared_kind": entry.declared_kind,
-        "declaration": entry.declaration,
-        "caveats": entry.caveats,
-        "images": entry.images,
-        "checked": entry.checked,
-        "missing_configured_image": entry.missing_configured_image,
-        "declared_by": entry.declared_by,
     }

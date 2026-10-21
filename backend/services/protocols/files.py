@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager
 
+    from domain.firmware_places import PlaceLook
     from domain.prune import BundleReadmeContext
     from domain.tender_folder import Drive, TenderPlace
     from domain.update_install import UpdateAttemptRecord
@@ -439,12 +440,13 @@ class AdoptionMoveStore(Protocol):
 class FirmwareFileStore(Protocol):
     """Filesystem seam for firmware/BIOS file operations.
 
-    Owns the raw POSIX calls FirmwareService uses to manage firmware
-    downloads under the RetroDECK BIOS directory: existence probes,
-    atomic temp-file lifecycle, parent-directory creation, MD5 hashing
-    of downloaded payloads, and BIOS registry JSON reads. Path
-    construction, registry lookups, and download orchestration remain a
-    service concern; this Protocol exposes only the I/O seams.
+    Owns the raw POSIX calls FirmwareService uses to manage Tender's firmware
+    store and its links: existence probes, atomic temp-file lifecycle,
+    parent-directory creation, MD5 hashing of downloaded payloads, looking at
+    a place without following a link there, placing and removing a link, and
+    moving a replaced file aside. Path construction, which link goes where,
+    and download orchestration remain a service concern; this Protocol
+    exposes only the I/O seams.
 
     Implementations are synchronous — services that call from an async
     context offload via ``loop.run_in_executor``.
@@ -472,6 +474,26 @@ class FirmwareFileStore(Protocol):
 
     def read_bytes(self, path: str) -> bytes:
         """Return the contents of *path* as raw bytes."""
+        ...
+
+    def look(self, path: str) -> PlaceLook:
+        """What lies at *path* itself, a link not followed, and whether the folder it lies in is there."""
+        ...
+
+    def symlink(self, target: str, place: str) -> None:
+        """Create a symlink at *place* naming *target*; raises ``FileExistsError`` where anything lies there."""
+        ...
+
+    def remove_link(self, place: str) -> None:
+        """Remove the symlink at *place*; a place that holds no symlink is left as it is."""
+        ...
+
+    def move_aside(self, src: str, dst: str) -> None:
+        """Move the file or link at *src* to *dst*, creating *dst*'s folders; a link moves as itself."""
+        ...
+
+    def is_file(self, path: str) -> bool:
+        """Whether *path* is a regular file, a link not followed."""
         ...
 
 

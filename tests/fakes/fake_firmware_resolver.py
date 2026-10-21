@@ -15,6 +15,7 @@ from domain.firmware_wants import (
     FirmwareOption,
     FirmwarePlacement,
     FirmwareWant,
+    FolderFile,
     FolderVerdict,
     MissingConfiguredImage,
 )
@@ -22,6 +23,8 @@ from domain.firmware_wants import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import EllipsisType
+
+    from domain.source_roots import SourceRoots
 
 
 class FakeFirmwareResolver:
@@ -70,6 +73,12 @@ class FakeFirmwareResolver:
     ``None``, else ``True``), unless a test pins it with :meth:`record_system`.
     An emulator in ``unread_emulators`` answers ``None``; one the fake never
     heard of has no entry at all, which is an emulator missing from the answer.
+
+    A placement's ``place`` is the declared location joined under
+    ``bios_root``, unless :meth:`declare` names one. ``source`` and ``roots``
+    are what the catalogue says it was read from; :meth:`every_source` answers
+    this one catalogue followed by each of ``other_sources``, a test's further
+    emulator sources, and :meth:`source_roots` every source's roots.
     """
 
     def __init__(
@@ -81,8 +90,13 @@ class FakeFirmwareResolver:
         caveats: tuple[str, ...] = (),
         bios_root: str | None = None,
         present_probe: Callable[[str], bool] = os.path.exists,
+        source: str | None = "retrodeck",
+        roots: SourceRoots | None = None,
     ) -> None:
         self.placements: list[FirmwarePlacement] = list(placements or [])
+        self.source = source
+        self.roots = roots
+        self.other_sources: list[FakeFirmwareResolver] = []
         # What :meth:`declare` pinned as each placement's verdict, by its index.
         self._declared_satisfied: dict[tuple[str, str | None, int], bool | None | EllipsisType] = {}
         self.unread_emulators = unread_emulators
@@ -169,6 +183,11 @@ class FakeFirmwareResolver:
         checked: str | None = None,
         missing_configured_image: MissingConfiguredImage | None = None,
         satisfied: bool | None | EllipsisType = ...,
+        place: str | None = None,
+        identity_md5: str | None = None,
+        identity_kind: str | None = None,
+        folder_md5s: frozenset[str] = frozenset(),
+        folder_files: tuple[FolderFile, ...] = (),
     ) -> FirmwarePlacement:
         """State that some emulators ask for *file_name*, and return the placement.
 
@@ -216,6 +235,11 @@ class FakeFirmwareResolver:
                     supplied_by=supplied_by,
                     checked=checked,
                     missing_configured_image=missing_configured_image,
+                    place=place,
+                    identity_md5=identity_md5,
+                    identity_kind=identity_kind,
+                    folder_md5s=folder_md5s,
+                    folder_files=folder_files,
                 )
             )
         return self.placements[-len(owners)]
@@ -236,6 +260,11 @@ class FakeFirmwareResolver:
         supplied_by: str | None,
         checked: str | None,
         missing_configured_image: MissingConfiguredImage | None,
+        place: str | None,
+        identity_md5: str | None,
+        identity_kind: str | None,
+        folder_md5s: frozenset[str],
+        folder_files: tuple[FolderFile, ...],
     ) -> FirmwarePlacement:
         """One emulator's placement as :meth:`declare` states it."""
         return FirmwarePlacement(
@@ -254,6 +283,11 @@ class FakeFirmwareResolver:
             checked=checked,
             missing_configured_image=missing_configured_image,
             emulator=owner,
+            place=place,
+            identity_md5=identity_md5,
+            identity_kind=identity_kind,
+            folder_md5s=folder_md5s,
+            folder_files=folder_files,
         )
 
     def _read(self, index: int, placement: FirmwarePlacement) -> FirmwarePlacement:
@@ -263,12 +297,15 @@ class FakeFirmwareResolver:
         fields only, and a field-by-field copy silently drops whatever the
         placement grows next.
         """
+        place = placement.place
+        if place is None and self.bios_root and placement.relative_path is not None:
+            place = os.path.join(self.bios_root, placement.destination)
         present = placement.present
-        if present is None and self.bios_root:
-            present = self.present_probe(os.path.join(self.bios_root, placement.destination))
+        if present is None and place is not None:
+            present = self.present_probe(place)
         pinned = self._declared_satisfied.get((placement.file_name, placement.emulator, index), ...)
         satisfied = _verdict_over(placement, present) if pinned is ... else pinned
-        return replace(placement, present=present, satisfied=satisfied)
+        return replace(placement, present=present, satisfied=satisfied, place=place)
 
     def _verdicts(self, placements: tuple[FirmwarePlacement, ...]) -> dict[str, CoreFirmwareVerdict]:
         """Every emulator the fake knows of, with the verdict the resolver would fold for it."""
@@ -331,7 +368,20 @@ class FakeFirmwareResolver:
             caveats=self.caveats,
             emulator_verdicts=self._verdicts(placements) if self.resolved else {},
             groups=tuple(self.groups),
+            source=self.source if self.resolved else None,
+            roots=self.roots if self.resolved else None,
         )
+
+    def every_source(self, system: str) -> tuple[FirmwareCatalogue, ...]:
+        """This catalogue and each further source's, leaving out a reading that did not happen."""
+        catalogues = (self(system), *(other(system) for other in self.other_sources))
+        return tuple(catalogue for catalogue in catalogues if catalogue.resolved)
+
+    def source_roots(self) -> dict[str, SourceRoots | None]:
+        """Every source's roots by kind."""
+        return {
+            resolver.source: resolver.roots for resolver in (self, *self.other_sources) if resolver.source is not None
+        }
 
 
 # What comparing the bytes established, where it settles the verdict either way.

@@ -1,10 +1,9 @@
 """Filesystem adapter for firmware/BIOS file operations.
 
-Owns the raw POSIX calls used by FirmwareService to manage firmware
-downloads under the RetroDECK BIOS directory. Path construction,
-registry lookups, and download orchestration remain a service concern;
-this adapter exposes only the I/O seams declared by
-``services.protocols.FirmwareFileStore``.
+Owns the raw POSIX calls used by FirmwareService to manage Tender's firmware
+store and the links into emulator sources. Path construction, which link goes
+where, and download orchestration remain a service concern; this adapter
+exposes only the I/O seams declared by ``services.protocols.FirmwareFileStore``.
 """
 
 from __future__ import annotations
@@ -13,6 +12,10 @@ import contextlib
 import hashlib
 import os
 import pathlib
+import shutil
+import stat
+
+from domain.firmware_places import PlaceLook
 
 _MD5_CHUNK_SIZE = 8192
 
@@ -59,3 +62,36 @@ class FirmwareFileAdapter:
     def read_bytes(self, path: str) -> bytes:
         """Return the contents of *path* as raw bytes."""
         return pathlib.Path(path).read_bytes()
+
+    def look(self, path: str) -> PlaceLook:
+        """What lies at *path* itself, a link not followed, and whether the folder it lies in is there."""
+        try:
+            mode = os.lstat(path).st_mode
+        except FileNotFoundError:
+            return PlaceLook(lexists=False, folder_exists=os.path.isdir(os.path.dirname(path)))
+        target = None
+        if stat.S_ISLNK(mode):
+            named = os.readlink(path)
+            target = named if os.path.isabs(named) else os.path.normpath(os.path.join(os.path.dirname(path), named))
+        return PlaceLook(lexists=True, link_target=target, is_dir=stat.S_ISDIR(mode))
+
+    def symlink(self, target: str, place: str) -> None:
+        """Create a symlink at *place* naming *target*; raises ``FileExistsError`` where anything lies there."""
+        os.symlink(target, place)
+
+    def remove_link(self, place: str) -> None:
+        """Remove the symlink at *place*; a place that holds no symlink is left as it is."""
+        if os.path.islink(place):
+            os.unlink(place)
+
+    def move_aside(self, src: str, dst: str) -> None:
+        """Move the file or link at *src* to *dst*, creating *dst*'s folders; a link moves as itself."""
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.move(src, dst)
+
+    def is_file(self, path: str) -> bool:
+        """Whether *path* is a regular file, a link not followed."""
+        try:
+            return stat.S_ISREG(os.lstat(path).st_mode)
+        except FileNotFoundError:
+            return False

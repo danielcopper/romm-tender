@@ -1,15 +1,18 @@
 """FirmwareService façade.
 
-Owns the public use cases the endpoints call (the whole-library
-overview, the per-platform BIOS check, the download entry points, the delete)
-and composes the sub-services behind it. Implementation lives in those
-modules: :class:`FirmwareListing` for what the RomM library holds and its
-cache, :class:`FirmwareRefiling` for moving older entries to their platform,
-:class:`FirmwareDemand` for what the installed emulators want and where each
-file goes, :class:`FirmwareStatusReader` for every status-bearing answer,
-:class:`FirmwareDownloader` for fetching, :class:`PlatformBiosDeleter` for
-removing what was fetched. The façade itself only wires the pieces together and
-delegates.
+Owns the public use cases the endpoints call (the whole-library overview, the
+per-platform BIOS check, the downloads, bringing a platform's links up to date,
+a replacement, what a library file is, the deletes) and composes the
+sub-services behind it. Implementation lives in those modules:
+:class:`FirmwareListing` for what the RomM library holds and its cache,
+:class:`FirmwareRefiling` for moving older entries to their platform,
+:class:`FirmwareDemand` for what the installed emulators want,
+:class:`FirmwareStore` for Tender's firmware store and its links,
+:class:`FirmwareStatusReader` for every status-bearing answer,
+:class:`FirmwareDownloader` for fetching, :class:`FirmwareReplacer` for
+"Replace…", :class:`PlatformBiosDeleter` for removing what Tender put there.
+The façade itself only wires the pieces together, checks each use case's
+conflict rules and delegates.
 """
 
 from __future__ import annotations
@@ -17,11 +20,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from lib.errors import Refused
 from services.firmware.deletion import FirmwareDeletionIncomplete, PlatformBiosDeleter, PlatformBiosDeleterConfig
 from services.firmware.demand import FirmwareDemand, FirmwareDemandConfig
 from services.firmware.downloads import FirmwareDownloader, FirmwareDownloaderConfig
 from services.firmware.listing import FirmwareListing, FirmwareListingConfig
 from services.firmware.refiling import FirmwareRefiling, FirmwareRefilingConfig
+from services.firmware.replacement import FirmwareReplacer, FirmwareReplacerConfig
 from services.firmware.status import FirmwareStatusReader, FirmwareStatusReaderConfig
 
 if TYPE_CHECKING:
@@ -30,14 +35,15 @@ if TYPE_CHECKING:
 
     from domain.emulator_commands import LaunchingEmulator
     from domain.rom_install import RomInstall
+    from services.firmware.store import FirmwareStore
     from services.protocols import (
         ActiveCoreReader,
         Clock,
         ConflictRules,
         CoreInfoProvider,
         FirmwareFileStore,
+        FirmwareIdentityProvider,
         FirmwarePlatformResolver,
-        FirmwareResolver,
         PlatformCoreReader,
         PlatformSystems,
         RetroDeckFolders,
@@ -52,11 +58,12 @@ class FirmwareServiceConfig:
     """Frozen wiring bundle handed to ``FirmwareService.__init__``.
 
     Holds the API adapter, runtime infrastructure, Protocol-typed file
-    adapters, the SQLite Unit-of-Work factory, the live settings dict and its
-    persister, and the provider callables the firmware subsystem needs at
-    construction time. Decomposes the ctor
-    so a new dependency does not push past the S107 parameter-count
-    limit.
+    adapters, the resolver seams (the per-platform demand and the
+    identification of a piece of content), Tender's firmware store — built
+    before this service, because Tender's folder asks it what is recorded
+    under a folder — the SQLite Unit-of-Work factory, the live settings dict
+    and its persister, and the provider callables the firmware subsystem needs
+    at construction time.
     """
 
     romm_api: RommFirmwareApi
@@ -64,8 +71,9 @@ class FirmwareServiceConfig:
     logger: logging.Logger
     clock: Clock
     firmware_file_store: FirmwareFileStore
-    firmware_resolver: FirmwareResolver
     platform_firmware_resolver: FirmwarePlatformResolver
+    firmware_identifier: FirmwareIdentityProvider
+    store: FirmwareStore
     retrodeck_folders: RetroDeckFolders
     core_info: CoreInfoProvider
     platform_systems: PlatformSystems
@@ -78,11 +86,13 @@ class FirmwareServiceConfig:
 
 
 class FirmwareService:
-    """BIOS/firmware management: what is wanted, what is here, downloads, deletion.
+    """BIOS/firmware management: what is wanted, what is here, the store and its links, and removal.
 
-    Each download and delete an endpoint calls checks that endpoint's conflict
-    rules here, under its name, and raises the rule's refusal when one
-    holds (GLOSSARY.md → Conflict rules); the sub-services check none.
+    Each use case an endpoint calls that writes into Tender's folder or an
+    emulator source checks its conflict rules here, under its name, and raises
+    the rule's refusal when one holds (GLOSSARY.md → Conflict rules); the
+    sub-services check none. Each names the folder rule: the store lies in
+    Tender's folder and every link points into it.
     """
 
     def __init__(
@@ -92,6 +102,8 @@ class FirmwareService:
     ) -> None:
         self._config = config
         self._rules = config.conflict_rules
+        self._identifier = config.firmware_identifier
+        self._store = config.store
 
         # Sub-service: the RomM listing and its cache. Constructed first —
         # every other sub-service either reads the listing or invalidates it,
@@ -114,24 +126,15 @@ class FirmwareService:
             )
         )
 
-        # Sub-service: the machine's demand. The single owner of both resolver
-        # seams and of the BIOS root, so a file's destination and its presence
-        # are derived once and read the same way by the status surfaces and the
-        # download paths alike.
         self._demand = FirmwareDemand(
-            config=FirmwareDemandConfig(
-                firmware_resolver=config.firmware_resolver,
-                platform_firmware_resolver=config.platform_firmware_resolver,
-                retrodeck_folders=config.retrodeck_folders,
-                firmware_file_store=config.firmware_file_store,
-                logger=config.logger,
-            )
+            config=FirmwareDemandConfig(platform_firmware_resolver=config.platform_firmware_resolver)
         )
 
         self._status = FirmwareStatusReader(
             config=FirmwareStatusReaderConfig(
                 demand=self._demand,
                 listing=self._listing,
+                store=config.store,
                 core_info=config.core_info,
                 platform_systems=config.platform_systems,
                 platform_core_reader=config.platform_core_reader,
@@ -144,16 +147,27 @@ class FirmwareService:
 
         self._downloads = FirmwareDownloader(
             config=FirmwareDownloaderConfig(
-                romm_api=config.romm_api,
                 listing=self._listing,
                 demand=self._demand,
+                store=config.store,
                 core_info=config.core_info,
                 platform_systems=config.platform_systems,
                 platform_core_reader=config.platform_core_reader,
                 active_core=config.active_core,
                 firmware_file_store=config.firmware_file_store,
-                clock=config.clock,
                 uow_factory=config.uow_factory,
+                loop=config.loop,
+                logger=config.logger,
+            )
+        )
+
+        self._replacer = FirmwareReplacer(
+            config=FirmwareReplacerConfig(
+                listing=self._listing,
+                demand=self._demand,
+                store=config.store,
+                platform_systems=config.platform_systems,
+                firmware_file_store=config.firmware_file_store,
                 loop=config.loop,
                 logger=config.logger,
             )
@@ -162,6 +176,7 @@ class FirmwareService:
         self._deletion = PlatformBiosDeleter(
             config=PlatformBiosDeleterConfig(
                 listing=self._listing,
+                store=config.store,
                 firmware_file_store=config.firmware_file_store,
                 retrodeck_folders=config.retrodeck_folders,
                 uow_factory=config.uow_factory,
@@ -200,42 +215,61 @@ class FirmwareService:
         """
         return await self._status.check_platform_bios(platform_slug, launching_emulator, rom_regions, install)
 
-    async def download_firmware(self, firmware_id) -> dict[str, Any]:
-        """Download one firmware file by its RomM id."""
-        with self._downloads.downloading():
-            return await self._downloads.download_firmware(firmware_id)
+    async def identify_library_firmware(self, md5: object) -> dict[str, Any]:
+        """Every name the resolver knows the content *md5* under; ``known_as`` ``None`` where nothing could be asked.
+
+        Asked only about the library files a page lists as asked for by no
+        emulator, after the page is shown. Refuses ``invalid_value`` for
+        anything but a checksum's hex digits.
+        """
+        if not isinstance(md5, str) or not md5 or any(c not in "0123456789abcdefABCDEF" for c in md5):
+            raise Refused("invalid_value", f"{md5!r} is not an MD5 checksum")
+        known_as = await self._config.loop.run_in_executor(None, self._identifier, md5.lower())
+        return {"success": True, "known_as": list(known_as) if known_as is not None else None}
 
     async def download_all_firmware(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
-        """Download all firmware the library holds for a platform; for *rom_id*'s recorded system where it is given."""
-        async with self._rules.hold("download_all_firmware", update=True, migration=True):
+        """Download every firmware file RomM lists for a platform into the store, and link it."""
+        async with self._rules.hold("download_all_firmware", update=True, folder=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_all_firmware(platform_slug, rom_id)
 
-    async def download_platform_firmware_file(
-        self, platform_slug, file_name, emulator: str | None = None
-    ) -> dict[str, Any]:
-        """Download the one firmware file the library holds for a platform under that name, for *emulator*."""
-        async with self._rules.hold("download_platform_firmware_file", update=True, migration=True):
+    async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
+        """Download one library file into a platform's store folder by its name in RomM, and link it."""
+        async with self._rules.hold("download_platform_firmware_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_platform_firmware_file(platform_slug, file_name, emulator)
+                return await self._downloads.download_platform_firmware_file(platform_slug, file_name)
 
     async def download_required_firmware(self, platform_slug, emulator: str | None = None) -> dict[str, Any]:
         """Download only the firmware *emulator* — the platform's pick without one — will not run without."""
-        async with self._rules.hold("download_required_firmware", update=True, migration=True):
+        async with self._rules.hold("download_required_firmware", update=True, folder=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_required_firmware(platform_slug, emulator)
 
+    async def update_bios_links(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
+        """Bring a platform's links up to date in every enabled source, for *rom_id*'s recorded system where given.
+
+        Places every link an emulator of the platform wants from the store
+        where the name is free, puts back a link of Tender's that points at
+        nothing where a store copy exists, removes it where none does, and
+        downloads nothing.
+        """
+        async with self._rules.hold("update_bios_links", update=True, folder=True, migration=True):
+            system = await self._downloads.platform_system(platform_slug, rom_id)
+            outcome = await self._config.loop.run_in_executor(None, self._store.do_update_links, platform_slug, system)
+            return {"success": True, **outcome.payload()}
+
+    async def replace_bios_file(self, platform_slug, place) -> dict[str, Any]:
+        """Replace the wrong file at *place* with Tender's proven-right copy; the old file goes to the backup folder."""
+        async with self._rules.hold("replace_bios_file", update=True, folder=True, migration=True):
+            with self._downloads.downloading():
+                return await self._replacer.replace_bios_file(platform_slug, place)
+
     async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
-        """Delete the BIOS files Tender downloaded for a platform."""
-        async with self._rules.hold("delete_platform_bios", update=True, migration=True):
+        """Delete every BIOS file Tender put on the machine for a platform, and its links."""
+        async with self._rules.hold("delete_platform_bios", update=True, folder=True, migration=True):
             return await self._deletion.delete_platform_bios(platform_slug)
 
     async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any] | FirmwareDeletionIncomplete:
-        """Delete one BIOS file Tender downloaded for a platform."""
-        async with self._rules.hold("delete_bios_file", update=True, migration=True):
+        """Delete one BIOS file Tender put on the machine for a platform, by its name in RomM, and its links."""
+        async with self._rules.hold("delete_bios_file", update=True, folder=True, migration=True):
             return await self._deletion.delete_bios_file(platform_slug, file_name)
-
-    async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any] | FirmwareDeletionIncomplete:
-        """Delete the BIOS files Tender downloaded inside a declared folder."""
-        async with self._rules.hold("delete_bios_folder", update=True, migration=True):
-            return await self._deletion.delete_bios_folder(platform_slug, folder_path)

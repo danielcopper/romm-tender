@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
     from domain.savestate_location import NoSavestates, SavestateLocation
     from domain.shortcut_data import EmulatorInvocation
+    from domain.source_roots import SourceRoots
     from domain.tender_folder import SourceRomFolders
 
 
@@ -124,14 +125,33 @@ class FirmwarePlatformResolver(Protocol):
     :class:`FirmwareResolver`.
     """
 
-    def __call__(self, system: str) -> FirmwareCatalogue: ...
+    def __call__(self, system: str) -> FirmwareCatalogue:
+        """*system*'s demand in the emulator source that answers for it."""
+        ...
+
+    def every_source(self, system: str) -> tuple[FirmwareCatalogue, ...]:
+        """*system*'s demand in each enabled source whose answer could be read, in the user's order."""
+        ...
+
+    def source_roots(self) -> dict[str, SourceRoots | None]:
+        """Every detected source's roots, switched on or off, by kind; ``None`` where they could not be asked."""
+        ...
+
+
+class FirmwareIdentityProvider(Protocol):
+    """Ask what a piece of firmware content is, by its MD5 — the resolver's identification, about 0.25 s a file.
+
+    Answers every name the resolver knows the content under, empty where it
+    does not know it, and ``None`` where nothing could be asked.
+    """
+
+    def __call__(self, md5: str) -> tuple[str, ...] | None: ...
 
 
 class RetroDeckFolders(Protocol):
     """RetroDECK's folders, each the resolver's answer — or the refusal that stands in for one.
 
-    A download asks :meth:`download_folder` or :meth:`bios_download_folder`,
-    which refuse unless RetroDECK is detected and switched on, the resolver
+    A download asks :meth:`download_folder`, which refuses unless RetroDECK is detected and switched on, the resolver
     did more than assume the root the folder lies in, the home RetroDECK's
     settings name is not missing, and the folder can be created below a root
     that exists. A removal of a game's installed content is bounded by its
@@ -151,8 +171,6 @@ class RetroDeckFolders(Protocol):
     """
 
     def download_folder(self, system: str) -> str | FolderRefused: ...
-
-    def bios_download_folder(self) -> str | FolderRefused: ...
 
     def rom_root(self) -> str | FolderRefused: ...
 

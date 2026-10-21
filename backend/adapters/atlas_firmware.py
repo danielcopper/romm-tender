@@ -78,21 +78,26 @@ from _vendor.atlas import (
     CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
+    CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE,
+    CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
     CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS,
+    CAVEAT_FIRMWARE_IMAGE_CONTRADICTED,
     CAVEAT_FIRMWARE_IMAGE_IDENTIFIED,
     CAVEAT_FIRMWARE_IMAGE_UNLISTED,
     CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
     CAVEAT_FIRMWARE_SCAN_INCOMPLETE,
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
+    CAVEAT_FIRMWARE_UNREADABLE,
     CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
     REASON_REGION_DECIDED_BY_DISC,
 )
 
-# Neither name is in emu-atlas's ``__all__``; whether they are public API is
-# emu-atlas#555's question.
-from _vendor.atlas.firmware import core_short_name, declared_directory_of
+# None of these names is in emu-atlas's ``__all__``; whether they are public
+# API is emu-atlas#555's question.
+from _vendor.atlas.firmware import core_short_name, declared_directory_of, load_hashes
 
 from adapters.atlas_identity import emulator_identity
+from adapters.emulator_sources import source_roots
 from domain.firmware_wants import (
     DECLARED_DIRECTORY,
     DECLARED_FILE,
@@ -108,15 +113,17 @@ from domain.firmware_wants import (
     FirmwareOption,
     FirmwarePlacement,
     FirmwareWant,
+    FolderFile,
     FolderVerdict,
     MissingConfiguredImage,
     RefusedDeclaration,
 )
+from domain.source_roots import SourceRoot, SourceRoots
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from adapters.emulator_sources import EmulatorSourcesAdapter
+    from adapters.emulator_sources import DetectedSourcesReading, EmulatorSourcesAdapter
 
 # The declaration state in which an emulator stated what it wants off its own
 # installation — a libretro ``.info`` read from the machine.
@@ -185,45 +192,145 @@ class AtlasFirmwareAdapter:
             return _unresolved()
 
     def _read_catalogue(self) -> FirmwareCatalogue:
-        installation = _installation(self._sources, self._log_debug)
+        reading = self._sources.read()
+        installation = _installation(reading, self._log_debug)
         if installation is None:
             return _unresolved()
         answer = installation.firmware_inventory()
         self._log_debug(f"[firmware] machine: {_trace(answer)}")
-        return _catalogue(answer)
+        return _catalogue(answer, reading.answering_kind, None, _FolderIdentities())
 
 
 class AtlasPlatformFirmwareAdapter:
-    """Reads what one system's emulators want, verified, live off the machine."""
+    """Reads what one system's emulators want, verified, live off the machine — in the answering source or in each."""
+
+    def __init__(self, *, sources: EmulatorSourcesAdapter, log_debug: Callable[[str], None]) -> None:
+        self._sources = sources
+        self._log_debug = log_debug
+        self._folders = _FolderIdentities()
+
+    def __call__(self, system: str) -> FirmwareCatalogue:
+        """*system*'s firmware demand in the source that answers for it, or an empty unresolved catalogue."""
+        reading = self._sources.read()
+        kind = reading.answering_kind
+        installation = _installation(reading, self._log_debug)
+        if kind is None or installation is None:
+            return _unresolved()
+        return self._read(system, kind, installation)
+
+    def every_source(self, system: str) -> tuple[FirmwareCatalogue, ...]:
+        """*system*'s firmware demand in each enabled source, in the user's order; a source not read is left out.
+
+        A sealed catalogue (EmuDeck's) reads as nothing established
+        (:func:`_catalogue`), so it is left out with the rest.
+        """
+        reading = self._sources.read()
+        catalogues: list[FirmwareCatalogue] = []
+        for source in reading.sources:
+            installation = reading.installation(source.kind)
+            if not source.enabled or installation is None:
+                continue
+            catalogue = self._read(system, source.kind, installation)
+            if catalogue.resolved:
+                catalogues.append(catalogue)
+        return tuple(catalogues)
+
+    def source_roots(self) -> dict[str, SourceRoots | None]:
+        """Every detected source's roots, switched on or off, by kind; ``None`` where they could not be asked."""
+        reading = self._sources.read()
+        return {
+            source.kind: _roots(installation)
+            for source in reading.sources
+            if (installation := reading.installation(source.kind)) is not None
+        }
+
+    def _read(self, system: str, kind: str, installation: Any) -> FirmwareCatalogue:
+        try:
+            answer = installation.firmware_for_system(system, verify=True)
+            self._log_debug(f"[firmware] {kind} {system}: {_trace(answer)}")
+            return _catalogue(answer, kind, _roots(installation), self._folders)
+        except Exception as exc:
+            self._log_debug(f"[firmware] resolver failed for {system} in {kind}, answering unresolved: {exc!r}")
+            return _unresolved()
+
+
+class AtlasFirmwareIdentifier:
+    """Asks the answering source's resolver what a piece of content is, by its MD5."""
 
     def __init__(self, *, sources: EmulatorSourcesAdapter, log_debug: Callable[[str], None]) -> None:
         self._sources = sources
         self._log_debug = log_debug
 
-    def __call__(self, system: str) -> FirmwareCatalogue:
-        """*system*'s firmware demand, or an empty unresolved catalogue."""
+    def __call__(self, md5: str) -> tuple[str, ...] | None:
+        """Every name the resolver knows the content *md5* under — empty where it does not know it.
+
+        ``None`` where no source answers or the question raised: nothing was
+        established, which is not "not recognised".
+        """
         try:
-            return self._read_catalogue(system)
+            installation = _installation(self._sources.read(), self._log_debug)
+            if installation is None:
+                return None
+            answer = installation.identify_firmware(md5=md5)
         except Exception as exc:
-            self._log_debug(f"[firmware] resolver failed for {system}, answering unresolved: {exc!r}")
-            return _unresolved()
-
-    def _read_catalogue(self, system: str) -> FirmwareCatalogue:
-        installation = _installation(self._sources, self._log_debug)
-        if installation is None:
-            return _unresolved()
-        answer = installation.firmware_for_system(system, verify=True)
-        self._log_debug(f"[firmware] {system}: {_trace(answer)}")
-        return _catalogue(answer)
+            self._log_debug(f"[firmware] identifying {md5} failed: {exc!r}")
+            return None
+        return tuple(answer.known_as)
 
 
-def _installation(sources: EmulatorSourcesAdapter, log_debug: Callable[[str], None]) -> Any | None:
-    """The answering source's installation from a fresh reading, or ``None`` where no source answers."""
-    reading = sources.read()
+def _installation(reading: DetectedSourcesReading, log_debug: Callable[[str], None]) -> Any | None:
+    """The answering source's installation from *reading*, or ``None`` where no source answers."""
     installation = reading.answering_installation()
     if installation is None:
         log_debug(f"[firmware] no emulator source answers ({reading.no_answer_reason()})")
     return installation
+
+
+def _roots(installation: Any) -> SourceRoots | None:
+    """The source's roots, each path with its links resolved as the resolver resolves a place; ``None`` where unasked.
+
+    A place the resolver names is resolved, so a root compared with it has to
+    be too: on a machine where ``/home`` is a link, an unresolved root would lie
+    above no place at all.
+    """
+    try:
+        roots = source_roots(installation.roots())
+    except Exception:
+        return None
+    return SourceRoots(
+        roots=tuple(
+            SourceRoot(
+                name=root.name,
+                path=os.path.realpath(root.path) if root.path is not None else None,
+                provenance=root.provenance,
+                settings_file=root.settings_file,
+            )
+            for root in roots.roots
+        ),
+        findings=roots.findings,
+    )
+
+
+class _FolderIdentities:
+    """The checksums the packaged table files under each declared folder's prefix, read once per adapter.
+
+    The table is packaged data that changes only with the vendored resolver, so
+    reading it once is no cached answer about the machine.
+    """
+
+    def __init__(self) -> None:
+        self._by_prefix: dict[str, frozenset[str]] | None = None
+
+    def under(self, prefix: str) -> frozenset[str]:
+        if self._by_prefix is None:
+            table = load_hashes()
+            by_prefix: dict[str, set[str]] = {}
+            for name in table.names():
+                entry = table.get(name)
+                if entry is not None and "/" in name:
+                    by_prefix.setdefault(name.rsplit("/", 1)[0] + "/", set()).add(entry.md5.lower())
+            self._by_prefix = {key: frozenset(values) for key, values in by_prefix.items()}
+        return self._by_prefix.get(prefix, frozenset())
 
 
 def _unresolved() -> FirmwareCatalogue:
@@ -231,8 +338,10 @@ def _unresolved() -> FirmwareCatalogue:
     return FirmwareCatalogue(placements=(), unread_emulators=frozenset(), resolved=False)
 
 
-def _catalogue(answer: Any) -> FirmwareCatalogue:
-    """One resolver answer in Tender's own vocabulary.
+def _catalogue(
+    answer: Any, source: str | None, roots: SourceRoots | None, folders: _FolderIdentities
+) -> FirmwareCatalogue:
+    """One resolver answer in Tender's own vocabulary, with the source it came from and that source's roots.
 
     An answer beside a sealed emulator catalogue (EmuDeck's) is built from the
     overlay entries the resolver could read, an incomplete list that would look
@@ -247,12 +356,14 @@ def _catalogue(answer: Any) -> FirmwareCatalogue:
             caveats=_caveat_codes(answer),
         )
     return FirmwareCatalogue(
-        placements=_placements(answer),
+        placements=_placements(answer, folders),
         unread_emulators=_unread_emulators(answer),
         resolved=True,
         caveats=_caveat_codes(answer),
         emulator_verdicts=_emulator_verdicts(answer),
         groups=_groups(answer),
+        source=source,
+        roots=roots,
     )
 
 
@@ -558,15 +669,15 @@ def _unstated_regions(caveats: list[Any]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(named))
 
 
-def _declared_location(requirement: Any, root: str) -> str | None:
-    """The location the emulator declared, or ``None`` when nothing under *root* honours it.
+def _declared_location(requirement: Any, place: str, root: str) -> str | None:
+    """The location the emulator declared below *root*, or ``None`` when the place lies outside it.
 
     Two fields of one requirement answer two different questions, and only the
     first belongs here. ``declared`` is the string the emulator spelled and the
-    name it will open; ``path`` is where that lands once the kernel has followed
-    every symlink, which is what says whether the destination is inside the root
-    Tender owns. Reconstructing the declaration from ``path`` instead —
-    ``relpath(path, root)`` — agrees with it only while no link re-roots the
+    name it will open; *place* is where that is once the kernel has followed
+    every link on the way to it, which is what says whether it lies inside the
+    root. Reconstructing the declaration from the place instead —
+    ``relpath(place, root)`` — agrees with it only while no link re-roots the
     way: RetroDECK points ``<bios>/pcsx2/bios`` back at ``<bios>``, so LRPS2's
     ``pcsx2/bios`` collapses onto the root and comes back as ``.``.
 
@@ -582,16 +693,14 @@ def _declared_location(requirement: Any, root: str) -> str | None:
     the one its ``.info`` spells in ``declared`` (``scph5501.bin``), and that
     second one is where an image belongs.
 
-    ``None`` where there is no location below the root to honour, so the caller
-    falls back to its own flat layout. Three shapes reach it. A resolved
-    destination outside the root — a standalone emulator's own XDG tree. A
-    declaration that is absent, absolute, or climbs out of the root, which names
-    a place the caller cannot express as a segment under a root that is its to
-    own. And a declaration that normalises to ``.``, which is the root itself:
-    that is not a location under it, and a caller joining it would place every
-    file of that name at the directory rather than in it.
+    ``None`` where there is no location below the root to state. Three shapes
+    reach it. A place outside the root — a standalone emulator's own folder,
+    which is still a place (:attr:`FirmwarePlacement.place`). A declaration
+    that is absent, absolute, or climbs out of the root. And a declaration that
+    normalises to ``.``, which is the root itself rather than a location under
+    it.
     """
-    relative = os.path.relpath(requirement.path, root)
+    relative = os.path.relpath(place, root)
     if relative == os.pardir or relative.startswith(os.pardir + os.sep):
         return None
     declared = requirement.declared
@@ -612,7 +721,7 @@ def _a_file_in_a_declared_folder(requirement: Any) -> bool:
     return declared_directory_of(requirement.core_so.removesuffix(".so"), requirement.declared) is not None
 
 
-def _placements(answer: Any) -> tuple[FirmwarePlacement, ...]:
+def _placements(answer: Any, folders: _FolderIdentities) -> tuple[FirmwarePlacement, ...]:
     """One placement per emulator and declared file name — each emulator's own requirement.
 
     Two emulators routinely want the same name — gambatte and SameBoy both ask
@@ -643,8 +752,30 @@ def _placements(answer: Any) -> tuple[FirmwarePlacement, ...]:
             if identity in seen:
                 continue
             seen.add(identity)
-            placements.append(_placement_for(file_name, core, requirement, wants, answer.root, at_path, in_dir))
+            placements.append(
+                _placement_for(
+                    file_name, core, requirement, wants, answer.root, (at_path, in_dir), _links_out(core), folders
+                )
+            )
     return tuple(sorted(placements, key=lambda placement: placement.file_name))
+
+
+def _links_out(core: Any) -> dict[str, str]:
+    """Each place of *core*'s that is a link leading out of the firmware root, by what it leads to.
+
+    The resolver states a declared file reached through such a link under its
+    target (``path``) and names the link beside it, on the entry
+    (``firmware-file-linked-outside-root``); so does a file a folder listing
+    kept. Keyed by the target, which is what the requirement carries.
+    """
+    links: dict[str, str] = {}
+    for caveat in core.caveats:
+        if caveat.code != CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT:
+            continue
+        link, target = caveat.data.get("link"), caveat.data.get("target")
+        if isinstance(link, str) and isinstance(target, str):
+            links.setdefault(target, link)
+    return links
 
 
 def _wants(pairs: list[Any]) -> tuple[FirmwareWant, ...]:
@@ -693,63 +824,89 @@ def _placement_for(
     requirement: Any,
     wants: tuple[FirmwareWant, ...],
     root: str,
-    at_path: dict[str, tuple[Any, ...]],
-    in_dir: dict[str, tuple[Any, ...]],
+    caveats: tuple[dict[str, tuple[Any, ...]], dict[str, tuple[Any, ...]]],
+    links_out: dict[str, str],
+    folders: _FolderIdentities,
 ) -> FirmwarePlacement:
     """One emulator's row for one name: where it opens the file, and what was read there.
 
     ``wants`` is every emulator under the name, because that is what the name
-    is keyed on. Everything about the DESTINATION comes from this emulator's
-    requirement alone, and so does the verdict.
-
-    With no location to honour the destination half goes silent together, which
-    is the early return: a standalone emulator's own XDG tree holding the file
-    says nothing about the BIOS root the caller will write to, so the reading is
-    dropped rather than travelling on to describe somewhere else. What survives
-    is the declaration — its kind is what the emulator OPENS, not what is there,
-    and its ``declaration`` state says which register the description is written
-    in — and the verdict, which is about the place the emulator opens wherever
-    that is.
-
-    ``checked`` goes with the destination half: it is what became of the bytes
-    AT that place, so carrying it past the early return would describe a read of
-    somewhere else.
+    is keyed on. Everything about the PLACE comes from this emulator's
+    requirement alone, and so does the verdict. The place is the link where the
+    declared place is a link leading out of the firmware root — the resolver
+    then states the requirement at the link's target and judges the bytes there
+    — and the requirement's own path otherwise, inside the root or outside it.
     """
+    at_path, in_dir = caveats
     directory = requirement.declared_kind == DECLARED_DIRECTORY
-    declared_kind = DECLARED_DIRECTORY if directory else DECLARED_FILE
     identity = emulator_identity(core)
-    location = _declared_location(requirement, root)
-    if location is None:
-        return FirmwarePlacement(
-            file_name=file_name,
-            relative_path=None,
-            description=requirement.description,
-            wants=wants,
-            declared_kind=declared_kind,
-            declaration=core.declaration,
-            emulator=identity,
-            satisfied=requirement.satisfied,
-        )
-
+    place: str = links_out.get(requirement.path) or requirement.path
     speaking = _speaking_for(at_path, in_dir, requirement, _names_of(core))
-    folder = _folder_verdict(requirement, speaking) if directory else None
     supplied = requirement.supplied_by
+    pinned = requirement.identity
     return FirmwarePlacement(
         file_name=file_name,
-        relative_path=location,
+        relative_path=_declared_location(requirement, place, root),
         description=requirement.description,
         wants=wants,
         present=requirement.present,
-        declared_kind=declared_kind,
+        declared_kind=DECLARED_DIRECTORY if directory else DECLARED_FILE,
         declaration=core.declaration,
         caveats=tuple(dict.fromkeys(caveat.code for caveat in speaking)),
-        folder=folder,
+        folder=_folder_verdict(requirement, speaking) if directory else None,
         supplied_by=supplied.label if supplied is not None else None,
         checked=requirement.checked,
         missing_configured_image=_missing_configured_image(core, speaking),
         emulator=identity,
         satisfied=requirement.satisfied,
+        place=place,
+        identity_md5=pinned.md5.lower() if pinned is not None else None,
+        identity_kind=pinned.kind if pinned is not None else None,
+        folder_md5s=_folder_md5s(core, requirement, folders) if directory else frozenset(),
+        folder_files=_folder_files(speaking, links_out) if directory else (),
     )
+
+
+def _folder_md5s(core: Any, requirement: Any, folders: _FolderIdentities) -> frozenset[str]:
+    """The checksums the packaged table files under the folder *requirement* declares — the images it recognises."""
+    if core.core_so is None:
+        return frozenset()
+    row = declared_directory_of(core.core_so.removesuffix(".so"), requirement.declared)
+    return folders.under(row.identities) if row is not None else frozenset()
+
+
+def _folder_files(speaking: tuple[Any, ...], links_out: dict[str, str]) -> tuple[FolderFile, ...]:
+    """What the resolver stated about each file it read inside a declared folder, in its own verdicts.
+
+    An image the emulator's own test accepts is met; a file whose two reads
+    disagree, or whose read did not come back, is not established; a file the
+    read rejected is named only where the folder holds no image at all, and is
+    not met. A rejected file beside an image gets no statement, and so no entry:
+    the resolver says it is nobody's.
+    """
+    files: dict[str, FolderFile] = {}
+    targets = {link: target for target, link in links_out.items()}
+
+    def add(path: Any, satisfied: bool | None, data: dict[str, Any]) -> None:
+        if isinstance(path, str) and path not in files:
+            md5, description = data.get("md5"), data.get("description")
+            files[path] = FolderFile(
+                path=path,
+                satisfied=satisfied,
+                target=targets.get(path),
+                md5=md5.lower() if isinstance(md5, str) and md5 else None,
+                description=description if isinstance(description, str) and description else None,
+            )
+
+    for caveat in speaking:
+        if caveat.code in _IDENTIFIED_IMAGE_CODES:
+            add(caveat.data.get("path"), True, caveat.data)
+        elif caveat.code in (CAVEAT_FIRMWARE_IMAGE_CONTRADICTED, CAVEAT_FIRMWARE_UNREADABLE):
+            add(caveat.data.get("path"), None, caveat.data)
+        elif caveat.code == CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE:
+            for path in caveat.data.get("paths") or ():
+                add(path, False, {})
+    return tuple(sorted(files.values(), key=lambda file: file.path))
 
 
 def _missing_configured_image(core: Any, speaking: tuple[Any, ...]) -> MissingConfiguredImage | None:

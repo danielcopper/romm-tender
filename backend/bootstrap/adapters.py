@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
-from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
+from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasFirmwareIdentifier, AtlasPlatformFirmwareAdapter
 from adapters.atlas_platforms import AtlasPlatformSystemsAdapter
 from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
 from adapters.atlas_zstd import register_zstd_codec
@@ -94,6 +94,7 @@ if TYPE_CHECKING:
         EmulatorSourcesReader,
         EventEmitter,
         FirmwareFileStore,
+        FirmwareIdentityProvider,
         FirmwarePlatformResolver,
         FirmwareResolver,
         GameProcessControl,
@@ -171,6 +172,7 @@ class AdapterBundle:
     firmware_file_store: FirmwareFileStore
     firmware_resolver: FirmwareResolver
     platform_firmware_resolver: FirmwarePlatformResolver
+    firmware_identifier: FirmwareIdentityProvider
     migration_file_store: MigrationFileStore
     rom_file_store: RomFileStore
     save_file_store: SaveFileStore
@@ -479,6 +481,7 @@ def bootstrap(
     retrodeck_folders = RetroDeckFoldersAdapter(sources=emulator_sources, log_debug=debug_logger)
     firmware_resolver = AtlasFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
     platform_firmware_resolver = AtlasPlatformFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
+    firmware_identifier = AtlasFirmwareIdentifier(sources=emulator_sources, log_debug=debug_logger)
     emulator_catalogue = AtlasCatalogueAdapter(
         sources=emulator_sources,
         emulator_installed=es_find_rules.command_emulator_installed,
@@ -499,6 +502,7 @@ def bootstrap(
         firmware_file_store=firmware_file_store,
         firmware_resolver=firmware_resolver,
         platform_firmware_resolver=platform_firmware_resolver,
+        firmware_identifier=firmware_identifier,
         migration_file_store=migration_file_store,
         rom_file_store=rom_file_store,
         save_file_store=save_file_store,

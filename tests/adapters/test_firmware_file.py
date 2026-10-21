@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 
 import pytest
 
 from adapters.firmware_file import FirmwareFileAdapter
+from domain.firmware_places import PlaceLook
 
 
 @pytest.fixture
@@ -135,3 +137,78 @@ class TestReadBytes:
     def test_missing_raises(self, fw_files, tmp_path):
         with pytest.raises(FileNotFoundError):
             fw_files.read_bytes(str(tmp_path / "missing.bin"))
+
+
+class TestLookingAtAPlace:
+    def test_nothing_there_says_whether_its_folder_is(self, fw_files, tmp_path):
+        assert fw_files.look(str(tmp_path / "x.bin")) == PlaceLook(lexists=False, folder_exists=True)
+        assert fw_files.look(str(tmp_path / "missing" / "x.bin")) == PlaceLook(lexists=False, folder_exists=False)
+
+    def test_a_link_is_not_followed_and_names_its_target(self, fw_files, tmp_path):
+        place = tmp_path / "x.bin"
+        place.symlink_to(tmp_path / "gone.bin")
+
+        assert fw_files.look(str(place)) == PlaceLook(lexists=True, link_target=str(tmp_path / "gone.bin"))
+
+    def test_a_relative_link_names_its_target_absolute(self, fw_files, tmp_path):
+        (tmp_path / "store").mkdir()
+        place = tmp_path / "x.bin"
+        place.symlink_to("store/y.bin")
+
+        assert fw_files.look(str(place)).link_target == str(tmp_path / "store" / "y.bin")
+
+    def test_a_file_and_a_folder(self, fw_files, tmp_path):
+        (tmp_path / "f.bin").write_bytes(b"x")
+        (tmp_path / "d").mkdir()
+
+        assert fw_files.look(str(tmp_path / "f.bin")) == PlaceLook(lexists=True)
+        assert fw_files.look(str(tmp_path / "d")) == PlaceLook(lexists=True, is_dir=True)
+
+
+class TestLinks:
+    def test_a_link_is_placed_where_the_name_is_free_and_never_over_anything(self, fw_files, tmp_path):
+        target = tmp_path / "store.bin"
+        target.write_bytes(b"x")
+        taken = tmp_path / "taken.bin"
+        taken.write_bytes(b"mine")
+
+        fw_files.symlink(str(target), str(tmp_path / "free.bin"))
+        with pytest.raises(FileExistsError):
+            fw_files.symlink(str(target), str(taken))
+
+        assert os.readlink(tmp_path / "free.bin") == str(target)
+        assert taken.read_bytes() == b"mine"
+
+    def test_removing_a_link_leaves_its_target_and_a_file_alone(self, fw_files, tmp_path):
+        target = tmp_path / "store.bin"
+        target.write_bytes(b"x")
+        link = tmp_path / "link.bin"
+        link.symlink_to(target)
+        plain = tmp_path / "plain.bin"
+        plain.write_bytes(b"y")
+
+        fw_files.remove_link(str(link))
+        fw_files.remove_link(str(plain))
+
+        assert not link.is_symlink()
+        assert target.exists()
+        assert plain.read_bytes() == b"y"
+
+    def test_moving_aside_creates_the_folders_and_moves_a_link_as_itself(self, fw_files, tmp_path):
+        (tmp_path / "f.bin").write_bytes(b"wrong")
+        (tmp_path / "l.bin").symlink_to(tmp_path / "elsewhere.bin")
+
+        fw_files.move_aside(str(tmp_path / "f.bin"), str(tmp_path / "backup" / "a" / "f.bin"))
+        fw_files.move_aside(str(tmp_path / "l.bin"), str(tmp_path / "backup" / "a" / "l.bin"))
+
+        assert (tmp_path / "backup" / "a" / "f.bin").read_bytes() == b"wrong"
+        assert os.readlink(tmp_path / "backup" / "a" / "l.bin") == str(tmp_path / "elsewhere.bin")
+        assert not (tmp_path / "f.bin").exists()
+
+    def test_is_file_is_a_regular_file_not_followed(self, fw_files, tmp_path):
+        (tmp_path / "f.bin").write_bytes(b"x")
+        (tmp_path / "l.bin").symlink_to(tmp_path / "f.bin")
+
+        assert fw_files.is_file(str(tmp_path / "f.bin")) is True
+        assert fw_files.is_file(str(tmp_path / "l.bin")) is False
+        assert fw_files.is_file(str(tmp_path / "none.bin")) is False
