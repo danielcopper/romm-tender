@@ -279,7 +279,8 @@ export const ConnectModal: FC<ConnectModalProps> = ({ closeModal, onConnect, onC
     // Consume the event so Steam's ModalRoot cannot fire its own default
     // confirm/close on an incomplete field — regardless of whether we submit.
     // (On the Deck, R2/OSK-Enter on the empty token field otherwise closed the
-    // modal even though this handler correctly no-ops when canSubmit is false.)
+    // modal even though this handler correctly no-ops when canSubmit is false;
+    // why Steam closes it: ValidatingModalShell's `dialogOKSubmits`.)
     e.preventDefault();
     e.stopPropagation();
     if (canSubmit) void submit();
@@ -337,7 +338,8 @@ export const ConnectModal: FC<ConnectModalProps> = ({ closeModal, onConnect, onC
           {/* The token field is the only input in this mode and, unwrapped, is a
                 direct child of the modal body. On the Deck, R2/OSK-Enter on the
                 empty field closes the ModalRoot even though handleCompletingKeyDown
-                no-ops (canSubmit false). The pairing boxes' <Focusable> wrapper is
+                no-ops (canSubmit false); why Steam closes it: ValidatingModalShell's
+                `dialogOKSubmits`. The pairing boxes' <Focusable> wrapper is
                 the one structure proven not to close on an incomplete field, so the
                 token field is wrapped the same way. flow-children is irrelevant for
                 a single field, so it is omitted. */}

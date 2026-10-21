@@ -57,7 +57,8 @@ export const TextInputModal: FC<TextInputModalProps> = ({
         // path, so close here too — handleOK is shared so the two never drift.
         // Gated on canSubmit so an empty/whitespace field is a no-op on Enter,
         // matching the disabled OK button (on the Deck, R2/Enter would otherwise
-        // confirm an empty value and close the modal).
+        // confirm an empty value and close the modal; why Steam does that:
+        // ValidatingModalShell's `dialogOKSubmits`).
         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
           if (e.key === "Enter" && canSubmit) {
             handleOK();
