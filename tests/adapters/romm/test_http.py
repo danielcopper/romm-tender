@@ -2728,7 +2728,7 @@ class TestAnAnswerThatCannotBeReadKeepsItsText:
         assert str(err) == f"Unexpected error: {type(exc).__name__}"
 
 
-class TestAContentLengthThatIsNotANumber:
+class TestAContentLengthThatIsNoLength:
     """An announced length that does not parse, or is not positive, counts as no length, as a missing one does."""
 
     @pytest.mark.parametrize(
