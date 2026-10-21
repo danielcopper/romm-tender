@@ -1,8 +1,12 @@
 /**
- * Pure formatters and selectors for the SettingsPage UI. Anything that takes
- * inputs and returns outputs without touching component state or React
- * belongs here; rendering helpers live alongside their sections.
+ * Pure formatters and selectors for the SettingsPage UI, and the messages more
+ * than one of its parts shows. Anything that takes inputs and returns outputs
+ * without touching component state or React belongs here; rendering helpers
+ * live alongside their sections.
  */
+
+/** A save of a setting that could not reach the backend. */
+export const SAVE_FAILED = "Failed to save settings";
 
 /** Format a relative time string (e.g. "5m ago", "2h ago") from an ISO string */
 export function formatRelativeTime(isoStr: string | null): string {

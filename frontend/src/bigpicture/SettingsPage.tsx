@@ -71,7 +71,7 @@ import { WidePage } from "./layout/WidePage";
 import { ListDetail, type ListDetailItem } from "./layout/ListDetail";
 import { ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "./layout/pane";
 import { ConnectionSection } from "./settings/ConnectionSection";
-import { SAVE_FAILED } from "./settings/RommUrlModal";
+import { SAVE_FAILED } from "./settings/helpers";
 import { SteamGridDBSection } from "./settings/SteamGridDBSection";
 import { SgdbKeySaveRefused } from "./settings/SgdbApiKeyModal";
 import { SaveSyncSection } from "./settings/SaveSyncSection";

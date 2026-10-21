@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import * as backend from "../../api/backend";
 import { RommUrlModal } from "./RommUrlModal";
 
@@ -132,12 +132,28 @@ describe("RommUrlModal", () => {
     window.ok();
 
     fireEvent.click(window.getByText("Cancel"));
-    answer(REFUSED);
-    await Promise.resolve();
-    await Promise.resolve();
+    await act(async () => {
+      answer(REFUSED);
+    });
 
     expect(window.closeModal).toHaveBeenCalledTimes(1);
     expect(window.queryByTestId("romm-url-refusal")).toBeNull();
+  });
+
+  it("a save that fails after Cancel shows nothing in the window", async () => {
+    const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    let fail: (error: Error) => void = () => undefined;
+    const window = open(() => new Promise((_resolve, reject) => (fail = reject)));
+    window.ok();
+
+    fireEvent.click(window.getByText("Cancel"));
+    await act(async () => {
+      fail(new TypeError("unreachable"));
+    });
+
+    expect(window.closeModal).toHaveBeenCalledTimes(1);
+    expect(window.queryByTestId("romm-url-refusal")).toBeNull();
+    logSpy.mockRestore();
   });
 
   it("a save that goes through after Cancel does not close the window a second time", async () => {

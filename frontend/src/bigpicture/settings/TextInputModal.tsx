@@ -22,8 +22,8 @@ export const TextInputModal: FC<TextInputModalProps> = ({
   onSubmit,
 }) => {
   const [value, setValue] = useState(initial);
-  // The value this modal edits (the Default Save Slot) must be non-empty, so a
-  // whitespace-only value never counts as a submit.
+  // Every value this modal edits must be non-empty, so a whitespace-only value
+  // never counts as a submit.
   const canSubmit = value.trim() !== "";
   const handleOK = () => {
     onSubmit(value);

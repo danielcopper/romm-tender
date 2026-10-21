@@ -13,10 +13,10 @@ import { ChangeEvent, FC, useRef, useState } from "react";
 import { TextField } from "@decky/ui";
 import { logError } from "../../api/backend";
 import { AMBER } from "../layout/pane";
+import { SAVE_FAILED } from "./helpers";
 import { ValidatingModalShell } from "./ValidatingModalShell";
 
 const ROMM_URL = "RomM URL";
-export const SAVE_FAILED = "Failed to save settings";
 
 interface RommUrlModalProps {
   closeModal?: () => void;
@@ -73,7 +73,8 @@ export const RommUrlModal: FC<RommUrlModalProps> = ({ closeModal, value, save })
       onSubmit={() => {
         if (canSubmit) void submit();
       }}
-      // Enter in the field and R2 do what OK does: only a stored URL closes the window.
+      // Enter in the field and R2 do what OK does: they close the window only on a
+      // stored URL. Cancel and B close it at once.
       dialogOKSubmits={true}
     >
       <TextField
