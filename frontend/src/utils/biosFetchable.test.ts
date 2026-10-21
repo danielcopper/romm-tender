@@ -5,7 +5,7 @@
 // the game page would leave off a row it could have pointed at.
 
 import { describe, it, expect } from "vitest";
-import { isFetchable } from "./biosFetchable";
+import { downloadName, isFetchable } from "./biosFetchable";
 
 /** A row the library holds and the user has not got yet — fetchable, and the
  *  baseline each case below takes one fact away from. */
@@ -51,5 +51,42 @@ describe("isFetchable", () => {
     // Only `"directory"` is excluded, so a payload carrying no `declared_kind`
     // is treated as the file it almost always is rather than withheld.
     expect(isFetchable({ on_server: true, downloaded: false })).toBe(true);
+  });
+});
+
+describe("isFetchable over the firmware store", () => {
+  const library = {
+    firmware_id: 1,
+    file_name: "sega_101.bin",
+    platform_slug: "saturn",
+    matched: "content" as const,
+    md5: "abc",
+    size: 1,
+    no_checksum: false,
+  };
+  const free = { downloaded: false, library, store_file: null, link: "free" as const, place_refusal: null };
+
+  it("offers a library file the store does not hold yet", () => {
+    expect(isFetchable(free)).toBe(true);
+  });
+
+  it("offers one whose place another platform's copy serves, into this platform's own folder", () => {
+    expect(isFetchable({ ...free, downloaded: true, link: "linked_elsewhere" })).toBe(true);
+  });
+
+  it("refuses a row no library file fills, one the store holds, and one RomM states no checksum for", () => {
+    expect(isFetchable({ ...free, library: null })).toBe(false);
+    expect(isFetchable({ ...free, store_file: "sega_101.bin" })).toBe(false);
+    expect(isFetchable({ ...free, library: { ...library, no_checksum: true } })).toBe(false);
+  });
+
+  it("refuses a place something not Tender's lies at, and one the resolver could not look at", () => {
+    expect(isFetchable({ ...free, link: "occupied" })).toBe(false);
+    expect(isFetchable({ ...free, place_refusal: { reason: "unreadable", folder: null } })).toBe(false);
+  });
+
+  it("names a download by the library file, which may not be the row's name", () => {
+    expect(downloadName({ file_name: "saturn_bios.bin", library })).toBe("sega_101.bin");
+    expect(downloadName({ file_name: "saturn_bios.bin" })).toBe("saturn_bios.bin");
   });
 });

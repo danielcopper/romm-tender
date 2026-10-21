@@ -30,7 +30,6 @@ import {
   countPlatformSaves,
   debugLog,
   deleteBiosFile as deleteBiosFileCall,
-  deleteBiosFolder as deleteBiosFolderCall,
   deletePlatformBios,
   deletePlatformSaves,
   downloadAllFirmware,
@@ -43,19 +42,24 @@ import {
   getSystemCoreInfo,
   logWarn,
   removePlatformShortcuts,
+  replaceBiosFile,
   reportRemovalResults,
   savePlatformSync,
   setAllPlatformsSync,
   setSystemCore,
+  updateBiosLinks,
 } from "../../api/backend";
 import type { BiosDeleteResult } from "../../api/backend";
 import type {
+  BiosLinkFailure,
   EndpointFailure,
   FirmwareDownloadResult,
   FirmwarePlatformExt,
   PlatformSyncSetting,
   SystemCoreInfo,
 } from "../../types";
+import type { RowAttempt } from "../../utils/biosPlaceWords";
+import { placedSentence } from "../../utils/biosPlaceWords";
 import { detach } from "../../utils/detach";
 import { emulatorName } from "../../utils/emulatorEntries";
 import { batchConfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
@@ -263,11 +267,18 @@ export interface PlatformsPageState {
   /** The shown emulator's required files, where that emulator opens them. */
   downloadRequired: (slug: string, emulator: string | null) => void;
   downloadAll: (slug: string) => void;
-  /** One row's file, where the shown emulator opens it. */
-  downloadOne: (slug: string, fileName: string, emulator: string | null) => void;
+  /** One library file, by its name in RomM, into the platform's store folder and linked. */
+  downloadOne: (slug: string, fileName: string) => void;
+  /** "Replace…" on the row whose place is *place*, once the user confirmed it. */
+  replaceBios: (slug: string, place: string) => void;
+  /**
+   * What the latest attempt on this page did to one row — a link that could
+   * not be placed at *place*, the file replaced there, a download of *fileName*
+   * that arrived damaged. Kept until the page is left, never recorded.
+   */
+  attemptFor: (slug: string, place: string | null, fileName: string | null) => RowAttempt;
   deleteBios: (slug: string) => void;
   deleteBiosFile: (slug: string, fileName: string) => void;
-  deleteBiosFolder: (slug: string, folderPath: string) => void;
   removeShortcuts: (row: PlatformRow) => void;
   deleteSaves: (row: PlatformRow) => void;
 }
@@ -312,6 +323,11 @@ export function usePlatformsPage(): PlatformsPageState {
   const [serverOffline, setServerOffline] = useState(false);
   const [downloadPending, setDownloadPending] = useState<string | null>(null);
   const [downloadFailed, setDownloadFailed] = useState<string | null>(null);
+  // What the latest attempt did to a row, by `slug|place:…` and `slug|file:…`.
+  const [attempts, setAttempts] = useState<Record<string, RowAttempt>>({});
+  // The platforms whose links were brought up to date on this visit; each is
+  // asked once, after its answer is shown.
+  const linksUpdated = useRef<Set<string>>(new Set());
   // Cleared on unmount, so a page left during the window cannot set state on a
   // gone component. A plain timer is the right tool here: the injected-clock
   // rule is scoped to `backend/services/**`, and this file's siblings
@@ -698,6 +714,59 @@ export function usePlatformsPage(): PlatformsPageState {
     setStatus((prev) => (prev?.slug === slug && prev.scope === "core" ? null : prev));
   }, []);
 
+  /** Keep what the latest attempt did to each row it touched, replacing what an earlier one said. */
+  const noteLinkFailures = useCallback((slug: string, failures: readonly BiosLinkFailure[] | undefined) => {
+    setAttempts((prev) => {
+      const next: Record<string, RowAttempt> = {};
+      for (const [key, attempt] of Object.entries(prev)) {
+        if (!key.startsWith(`${slug}|`)) {
+          next[key] = attempt;
+          continue;
+        }
+        const { linkFailure: _replaced, ...rest } = attempt;
+        next[key] = rest;
+      }
+      for (const failure of failures ?? []) {
+        const key = `${slug}|place:${failure.place}`;
+        next[key] = { ...next[key], linkFailure: failure.reason };
+      }
+      return next;
+    });
+  }, []);
+
+  /**
+   * Bring *slug*'s links up to date, and read the platform again where that
+   * changed anything. Downloads nothing. A refusal — Tender's folder that
+   * cannot be reached, a conflict — is left to the notice that already says
+   * so; this runs on its own, without a press.
+   */
+  const updateLinks = useCallback(
+    async (slug: string) => {
+      try {
+        const result = await updateBiosLinks(slug, null);
+        if (!alive.current || !result.success) return;
+        noteLinkFailures(slug, result.link_failures);
+        const said = placedSentence(result);
+        if (said !== null) setStatus({ slug, scope: "bios", text: said });
+        if (result.placed + result.removed > 0) {
+          await readPlatform(slug);
+          announceBiosChange(slug);
+        }
+      } catch (e) {
+        logWarn(`Failed to bring the BIOS links for ${slug} up to date: ${e}`);
+      }
+    },
+    [noteLinkFailures, readPlatform],
+  );
+
+  // A platform's links are brought up to date the first time its pane is shown
+  // with an answer on this visit — after the page stands, never as part of it.
+  useEffect(() => {
+    if (selectedSlug === null || !(selectedSlug in firmware) || linksUpdated.current.has(selectedSlug)) return;
+    linksUpdated.current.add(selectedSlug);
+    detach(updateLinks(selectedSlug));
+  }, [firmware, selectedSlug, updateLinks]);
+
   const changeCore = useCallback(
     (slug: string, pickedLabel: string) => {
       const answer = cores[slug];
@@ -738,8 +807,10 @@ export function usePlatformsPage(): PlatformsPageState {
             );
             clearCoreLine(slug);
             reloadCore(slug);
-            // A different core wants different BIOS files, so the table
-            // below the picker is stale until this platform is read again.
+            // A different core wants different BIOS files, at other places: its
+            // links are placed from the store, nothing is downloaded, and the
+            // table below the picker is stale until this platform is read again.
+            await updateLinks(slug);
             await readPlatform(slug);
             globalThis.dispatchEvent(
               new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_slug: slug } }),
@@ -762,7 +833,7 @@ export function usePlatformsPage(): PlatformsPageState {
         })(),
       );
     },
-    [clearCoreLine, cores, readPlatform, reloadCore],
+    [clearCoreLine, cores, readPlatform, reloadCore, updateLinks],
   );
 
   /** Hold the pressed button on a red `Failed` for a moment before everything
@@ -794,10 +865,13 @@ export function usePlatformsPage(): PlatformsPageState {
             // file it tried failed is a failure to the reader, whatever the
             // answer's `success` says.
             if (result.success) {
+              noteLinkFailures(slug, result.link_failures);
               await readPlatform(slug);
-              if (result.downloaded > 0) announceBiosChange(slug);
+              if (result.downloaded > 0 || (result.placed ?? 0) > 0) announceBiosChange(slug);
               const failed = result.failed ?? [];
+              const placed = placedSentence(result);
               if (failed.length > 0) setStatus({ slug, scope: "bios", text: result.message });
+              else if (placed !== null) setStatus({ slug, scope: "bios", text: placed });
               if (failed.length > 0 && result.downloaded === 0) {
                 reportFailure(pending);
                 return;
@@ -805,6 +879,12 @@ export function usePlatformsPage(): PlatformsPageState {
               setDownloadPending(null);
               setBusySlug(null);
               return;
+            }
+            if (result.reason === "bios_download_damaged") {
+              setAttempts((prev) => ({
+                ...prev,
+                [`${slug}|file:${pending}`]: { ...prev[`${slug}|file:${pending}`], damaged: true },
+              }));
             }
             setStatus({ slug, scope: "bios", text: result.message });
             reportFailure(pending);
@@ -815,7 +895,7 @@ export function usePlatformsPage(): PlatformsPageState {
         })(),
       );
     },
-    [readPlatform, reportFailure],
+    [noteLinkFailures, readPlatform, reportFailure],
   );
 
   const downloadRequired = useCallback(
@@ -828,9 +908,57 @@ export function usePlatformsPage(): PlatformsPageState {
     [runDownload],
   );
   const downloadOne = useCallback(
-    (slug: string, fileName: string, emulator: string | null) =>
-      runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName, emulator)),
+    (slug: string, fileName: string) => {
+      setAttempts((prev) => {
+        const key = `${slug}|file:${fileName}`;
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName));
+    },
     [runDownload],
+  );
+
+  const replaceBios = useCallback(
+    (slug: string, place: string) => {
+      setBusySlug(slug);
+      setStatus(null);
+      detach(
+        (async () => {
+          try {
+            const result = await replaceBiosFile(slug, place);
+            if (!result.success) {
+              setStatus({ slug, scope: "bios", text: result.message });
+              return;
+            }
+            noteLinkFailures(slug, result.link_failures);
+            setAttempts((prev) => ({
+              ...prev,
+              [`${slug}|place:${place}`]: { ...prev[`${slug}|place:${place}`], replacedTo: result.backup_path },
+            }));
+            const placed = placedSentence(result);
+            if (placed !== null) setStatus({ slug, scope: "bios", text: placed });
+            await readPlatform(slug);
+            announceBiosChange(slug);
+          } catch (e) {
+            setStatus({ slug, scope: "bios", text: `Failed to replace the file: ${e}` });
+          } finally {
+            setBusySlug(null);
+          }
+        })(),
+      );
+    },
+    [noteLinkFailures, readPlatform],
+  );
+
+  const attemptFor = useCallback(
+    (slug: string, place: string | null, fileName: string | null): RowAttempt => ({
+      ...(fileName !== null ? attempts[`${slug}|file:${fileName}`] : undefined),
+      ...(place !== null ? attempts[`${slug}|place:${place}`] : undefined),
+    }),
+    [attempts],
   );
 
   const deleteBios = useCallback(
@@ -859,11 +987,9 @@ export function usePlatformsPage(): PlatformsPageState {
     [readPlatform],
   );
 
-  /** One row's Delete, whichever end it addresses: the same success and failure
-   *  handling for a file and for a folder's recorded contents. A success is
-   *  said by the rows coming back re-read; only a failure gets a line, and a
-   *  `delete_incomplete` gets both, because it may have removed files or
-   *  dropped records before the file it stopped on. */
+  /** One row's Delete. A success is said by the rows coming back re-read; only
+   *  a failure gets a line, and a `delete_incomplete` gets both, because it may
+   *  have removed files or dropped records before the file it stopped on. */
   const runRowDelete = useCallback(
     (slug: string, work: () => Promise<BiosDeleteResult>, what: string) => {
       setBusySlug(slug);
@@ -891,13 +1017,6 @@ export function usePlatformsPage(): PlatformsPageState {
   const deleteBiosFile = useCallback(
     (slug: string, fileName: string) => {
       runRowDelete(slug, () => deleteBiosFileCall(slug, fileName), fileName);
-    },
-    [runRowDelete],
-  );
-
-  const deleteBiosFolder = useCallback(
-    (slug: string, folderPath: string) => {
-      runRowDelete(slug, () => deleteBiosFolderCall(slug, folderPath), "these files");
     },
     [runRowDelete],
   );
@@ -1013,9 +1132,10 @@ export function usePlatformsPage(): PlatformsPageState {
     downloadRequired,
     downloadAll,
     downloadOne,
+    replaceBios,
+    attemptFor,
     deleteBios,
     deleteBiosFile,
-    deleteBiosFolder,
     removeShortcuts,
     deleteSaves,
   };

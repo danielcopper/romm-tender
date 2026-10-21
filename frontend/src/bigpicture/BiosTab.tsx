@@ -38,11 +38,13 @@ import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
 import { needWords, type GroupLineTone } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
+import { biosPlaceLines, libraryRowLines, storeOnlySentence, type Identification } from "../utils/biosPlaceWords";
 import { biosSummary, groupBlocks } from "../utils/biosSummary";
 import { emulatorClause } from "../utils/emulatorClause";
 import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../utils/biosTabs";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { ENTRY_FOCUS_DELAY_MS, firstBodyStop, placeEntryFocus } from "../utils/entryFocus";
+import { useIdentifications } from "../utils/firmwareIdentifications";
 import { EmulatorSelector, SHOWN_ENTRY_ATTR } from "./EmulatorSelector";
 import { section } from "./panelSection";
 
@@ -96,6 +98,12 @@ function buildBiosHeader(
   platformName: string | null,
 ): ReactElement[] {
   const heldRatio = biosHeldRatio(bios);
+  // Why a download for this game lands in Tender's firmware store and is linked nowhere.
+  const storeOnly = storeOnlySentence(
+    bios.store_only,
+    bios.active_core_label ?? coreInfo?.active_core_label ?? null,
+    platformName ?? "this platform",
+  );
 
   const biosColor = biosColorForLevel(biosLevel);
   const biosLabel = `${biosSummary(bios, bios.files ?? [], biosLevel, platformName).sentence}${heldRatio}`;
@@ -123,6 +131,17 @@ function buildBiosHeader(
       <span className="romm-status-dot" style={{ backgroundColor: biosColor }} />
       <span className="romm-panel-value">{biosLabel}</span>
     </div>,
+    ...(storeOnly === null
+      ? []
+      : [
+          <div
+            key="bios-store-only"
+            data-testid="bios-store-only"
+            style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "12px", marginTop: "4px" }}
+          >
+            {storeOnly}
+          </div>,
+        ]),
   ];
 }
 
@@ -328,7 +347,12 @@ function rowBelongsOnThisPage(file: BiosFileStatus): boolean {
  * shown, and each of its rows says, as its need, whether nothing asks for the
  * file or nothing could be asked.
  */
-function buildBiosFileList(bios: BiosStatus, tab: EmulatorTab | null, launchingLabel: string | null): ReactElement[] {
+function buildBiosFileList(
+  bios: BiosStatus,
+  tab: EmulatorTab | null,
+  launchingLabel: string | null,
+  identifications: Readonly<Record<string, Identification>>,
+): ReactElement[] {
   const files = bios.files ?? [];
   const otherTab = tab !== null && !tab.launching;
   const missingRegions = new Set(otherTab ? [] : (bios.one_of_groups ?? []).flatMap((group) => group.missing));
@@ -339,8 +363,17 @@ function buildBiosFileList(bios: BiosStatus, tab: EmulatorTab | null, launchingL
   const emulatorName = tab !== null ? tabLabel(tab) : launchingLabel;
   const libraryFiles = files.filter(isUnclaimedLibraryRow);
 
-  const fileRow = (f: BiosFileStatus, named: string | null) => {
-    const { note, lines } = biosFileNote(f, named);
+  const fileRow = (f: BiosFileStatus, named: string | null, library = false) => {
+    const words = biosFileNote(f, named);
+    const note = words.note;
+    // What Tender's own part in the row is: its store copy, the link at its
+    // place — or, in the library's section, what the file's content is.
+    const lines = [
+      ...words.lines,
+      ...(library
+        ? libraryRowLines(f, f.library ? identifications[f.library.md5] : undefined)
+        : biosPlaceLines(f, named)),
+    ];
     // The row is headed by the file the emulator DECLARED — `declared_path`, not
     // `file_name`, which is only its basename: a `dc/dc_boot.bin` row would
     // otherwise head itself `dc_boot.bin` and a declared folder `bios`, taking
@@ -412,7 +445,7 @@ function buildBiosFileList(bios: BiosStatus, tab: EmulatorTab | null, launchingL
       <div key="library-heading" className="romm-panel-section-title" style={SUBHEADING_STYLE}>
         In your RomM library, asked for by no emulator here
       </div>,
-      ...libraryFiles.map((f) => fileRow(f, launchingLabel)),
+      ...libraryFiles.map((f) => fileRow(f, launchingLabel, true)),
     );
   }
 
@@ -425,6 +458,13 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
   const [tabKey, setTabKey] = useState<string | null>(null);
   const part = useRef<HTMLDivElement>(null);
   const [steppedFromList, setSteppedFromList] = useState(false);
+  // What the resolver knows each library file's content as, asked after the
+  // page is shown, one file at a time.
+  const identifications = useIdentifications(
+    (biosStatus?.files ?? []).flatMap((file) =>
+      isUnclaimedLibraryRow(file) && file.library?.md5 ? [file.library.md5] : [],
+    ),
+  );
   // A step that leaves the list with no row for focus to stay on puts it on the
   // carousel's shown entry rather than letting Steam reset it to the top of the
   // page. The list is one focus stop, so focus on it otherwise stays.
@@ -476,6 +516,7 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
     biosStatus,
     tab,
     biosStatus.active_core_label ?? coreInfo?.active_core_label ?? null,
+    identifications,
   );
 
   // The selector and the list sit below the header, outside its section: a

@@ -18,7 +18,9 @@ import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spin
 import { FaMicrochip } from "react-icons/fa";
 import type { BiosFileStatus, FirmwarePlatformExt, SystemCoreInfo } from "../../types";
 import { biosColorForLevel } from "../../utils/biosColor";
-import { fetchedAsRequired, isFetchable } from "../../utils/biosFetchable";
+import { downloadName, fetchedAsRequired, isFetchable } from "../../utils/biosFetchable";
+import { DOWNLOAD_DAMAGED, biosPlaceLines, libraryRowLines, storeOnlySentence } from "../../utils/biosPlaceWords";
+import { useIdentifications } from "../../utils/firmwareIdentifications";
 import { biosFileDescription, biosFileNote, contentsWords } from "../../utils/biosFileNote";
 import { needWords, unmetWord } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
@@ -398,10 +400,11 @@ const CONTENTS_CELL = {
   overflowWrap: "break-word",
 } as const;
 
-const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; emulator: string | null }> = ({
+const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; emulator: string | null; placeLines: string[] }> = ({
   file,
   action,
   emulator,
+  placeLines,
 }) => {
   const { note, lines, fromLibrary } = biosFileNote(file, emulator);
   // What the resolver's check found at the row's place, in words —
@@ -416,7 +419,7 @@ const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; emulator: string 
   // every row. Everything else moves under the row rather than into the cell.
   // A note the Contents cell already says — a wrong image — is not said twice.
   const rowNote = note && note !== contents ? [note] : [];
-  const rowLines = fromLibrary ? [] : [...rowNote, ...lines];
+  const rowLines = [...(fromLibrary ? [] : [...rowNote, ...lines]), ...placeLines];
   return (
     // The row is a focus stop only while it has nothing to press: an action cell
     // holds a button that is already a stop, and a second one on the wrapper
@@ -690,38 +693,29 @@ function downloadLabel(
 }
 
 /**
- * A BIOS row's one action: fetch it, or remove the copy we fetched — or
- * nothing, which is a `null` the row needs in order to wrap itself in a
- * `Focusable`.
+ * A BIOS row's one action: fetch it, replace what lies at its place, or remove
+ * the copy Tender holds — or nothing, which is a `null` the row needs in order
+ * to wrap itself in a `Focusable`.
  *
- * The two buttons are alternatives in every state the pane can show, so one
- * narrow column carries both. They are not mutually exclusive by construction,
- * though: a file downloaded before an emu-atlas bump moved its placement is
- * absent at the new destination (so fetchable) and present at the recorded one
- * (so deletable). Download wins there, which is the useful half — the file the
- * core will look for is the one that is missing.
+ * The buttons are alternatives in every state the pane can show, so one narrow
+ * column carries them. Download wins where a row is both fetchable and
+ * deletable — the file the emulator will look for is the one that is missing.
+ * "Replace…" is the backend's decision alone (`replace_offered`), and its
+ * confirmation names the exact path and where the old file goes.
  *
- * **The delete's condition is `deletable_count` and nothing else.** That field
- * says how many of Tender's own downloads a delete here would take, which
- * is the whole authority; `downloaded` is `os.path.exists` and is equally true
- * of `dolphin-emu/Sys/codehandler.bin`, which RetroDECK ships, no library can
- * hand back, and which sits one row above a real download on the GameCube pane.
- * The unlink itself re-reads the records and takes the path each one holds, so
- * this button cannot widen what it removes.
- *
- * A declared FOLDER offers it too, and that is a different rule from the one
- * that keeps a folder out of the downloads: there is no file to FETCH into a
- * name the emulator lists, but the files already inside it are ours wherever a
- * record names them. Its button carries the count and its delete is addressed
- * by the folder rather than by a file name, because no record carries the
- * folder's name.
+ * **The delete's condition is `delete_name` and nothing else.** It names
+ * Tender's own store file, or an older download of the library file that
+ * fills the row, which is the whole authority; `downloaded` is the resolver's
+ * presence at the row's place and is equally true of a file the user placed.
+ * The removal itself re-reads the records and takes only Tender's own files
+ * and links, so this button cannot widen what it removes.
  */
 function rowAction(
   row: PlatformRow,
   state: PlatformsPageState,
   file: BiosTableRow,
   fetchable: Set<string>,
-  emulator: string | null,
+  backupRoot: string | null,
   focus: BiosFocus,
   key: string,
 ): ReactNode | null {
@@ -733,6 +727,7 @@ function rowAction(
   // nothing.
   const disabled = busy && focus.pressed !== key;
   if (fetchable.has(file.file_name) && !state.serverOffline) {
+    const name = downloadName(file);
     return (
       <DialogButton
         style={ROW_BUTTON}
@@ -740,29 +735,54 @@ function rowAction(
         onClick={() => {
           if (busy) return;
           focus.mark(key);
-          state.downloadOne(row.slug, file.file_name, emulator);
+          state.downloadOne(row.slug, name);
         }}
       >
-        {downloadLabel(row, state, file.file_name, "Download", 11, disabled)}
+        {downloadLabel(row, state, name, "Download", 11, disabled)}
       </DialogButton>
     );
   }
-  const count = file.deletable_count ?? 0;
-  if (count === 0) return null;
-  const folder = file.declared_kind === "directory";
+  if (file.replace_offered && file.local_path) {
+    const place = file.local_path;
+    const confirmReplace = () => {
+      if (busy) return;
+      focus.hold(key);
+      showModal(
+        <ConfirmModal
+          strTitle={`Replace ${file.file_name}?`}
+          strDescription={`The file at ${place} goes to ${backupRoot ?? "the backup folder"}, and Tender's copy is linked in its place.`}
+          strOKButtonText="Replace"
+          strCancelButtonText="Cancel"
+          onOK={() => {
+            focus.mark(key);
+            state.replaceBios(row.slug, place);
+            focus.refocus(key);
+          }}
+          onCancel={() => focus.refocus(key)}
+        />,
+      );
+    };
+    return (
+      <DialogButton style={ROW_BUTTON} disabled={disabled} onClick={confirmReplace}>
+        Replace…
+      </DialogButton>
+    );
+  }
+  // A row from a payload that states no `delete_name` is deleted by its own name.
+  const name = file.delete_name === undefined ? file.file_name : file.delete_name;
+  if (name === null || (file.deletable_count ?? 0) === 0) return null;
   const confirm = () => {
     if (busy) return;
     focus.hold(key);
     showModal(
       <ConfirmModal
-        strTitle={folder ? `Delete ${count} file(s) in ${file.file_name}?` : `Delete ${file.file_name}?`}
-        strDescription="This deletes only what Tender downloaded, at the places it wrote them. Files your emulator came with, or that you put there yourself, are never touched — and a folder the emulator lists is never removed. Games that need them won't launch until you download them again."
+        strTitle={`Delete ${name}?`}
+        strDescription="Tender removes it from its firmware store and every link to it. Files you placed yourself stay."
         strOKButtonText="Delete"
         strCancelButtonText="Cancel"
         onOK={() => {
           focus.mark(key);
-          if (folder) state.deleteBiosFolder(row.slug, file.local_path);
-          else state.deleteBiosFile(row.slug, file.file_name);
+          state.deleteBiosFile(row.slug, name);
           focus.refocus(key);
         }}
         onCancel={() => focus.refocus(key)}
@@ -771,7 +791,7 @@ function rowAction(
   };
   return (
     <DialogButton style={ROW_BUTTON} disabled={disabled} onClick={confirm}>
-      {redWhileEnabled(folder ? `Delete (${count})` : "Delete", disabled)}
+      {redWhileEnabled("Delete", disabled)}
     </DialogButton>
   );
 }
@@ -805,6 +825,13 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   );
   const { slot, attachRoot } = focus;
   const libraryRows = files.filter(isUnclaimedLibraryRow);
+  // What the resolver knows each library file's content as, asked after the
+  // page is shown, one file at a time.
+  const identifications = useIdentifications(
+    libraryRows.flatMap((file) => (file.library?.md5 ? [file.library.md5] : [])),
+  );
+  const backupRoot = firmware.backup_root ?? null;
+  const platformName = (slug: string) => state.rows.get(slug)?.name ?? slug;
   const otherTab = tab !== null && !tab.launching;
   // The emulator a download from this table is for: the shown one's identity on
   // another emulator's view, the platform's own pick (`null`) on the launching
@@ -845,6 +872,8 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // emulator it DID read is not this. It decides one extra LINE only — what the
   // pane offers to fetch is a separate question with a separate input, below.
   const nothingEstablished = firmware.bios_level === "unknown" && firmware.emulator_read === false;
+  // Why a download here lands in Tender's firmware store and is linked nowhere.
+  const storeOnly = storeOnlySentence(firmware.store_only, firmware.active_core_label ?? null, row.name);
 
   // The download affordances key off what is missing AND fetchable, and read
   // the VERDICT nowhere — not `bios_level`, not `required_withheld`. They are
@@ -886,7 +915,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
     showModal(
       <ConfirmModal
         strTitle={`Delete Tender's BIOS downloads for ${row.name}?`}
-        strDescription="This deletes only the BIOS files Tender downloaded for this system. Files your emulator came with, or that you put there yourself, are left where they are. Games that need the deleted files won't launch until you download them again."
+        strDescription={`Tender removes every BIOS file it downloaded for ${row.name} and every link to them. Files you placed yourself stay.`}
         strOKButtonText="Delete"
         strCancelButtonText="Cancel"
         onOK={() => {
@@ -918,6 +947,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
           by hand still works. Not under the sentence that no BIOS is chosen in
           the emulator's settings: there the setting is what is
           missing, and placing a file changes nothing. */}
+      {storeOnly !== null && <Muted fontSize={NOTE_FONT}>{storeOnly}</Muted>}
       {nothingEstablished && !saysNoBiosChosen(summary) && (
         <Muted fontSize={NOTE_FONT}>You can still put BIOS files in your BIOS folder by hand.</Muted>
       )}
@@ -934,8 +964,14 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
             file={file}
             // Every emulator's rows offer their download and their delete; a
             // download lands where the SHOWN emulator opens the file.
-            action={rowAction(row, state, file, fetchable, shownEmulator, focus, tableKey(file.file_name))}
+            action={rowAction(row, state, file, fetchable, backupRoot, focus, tableKey(file.file_name))}
             emulator={shownLabel ?? firmware.active_core_label ?? null}
+            placeLines={biosPlaceLines(
+              file,
+              shownLabel ?? firmware.active_core_label ?? null,
+              state.attemptFor(row.slug, file.local_path, downloadName(file)),
+              platformName,
+            )}
           />
         </div>
       ))}
@@ -1010,8 +1046,12 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
             <div key={file.file_name} ref={slot(libraryKey(file.file_name))}>
               <BiosFileRow
                 file={file}
-                action={rowAction(row, state, file, libraryFetchable, null, focus, libraryKey(file.file_name))}
+                action={rowAction(row, state, file, libraryFetchable, backupRoot, focus, libraryKey(file.file_name))}
                 emulator={firmware.active_core_label ?? null}
+                placeLines={[
+                  ...libraryRowLines(file, file.library ? identifications[file.library.md5] : undefined),
+                  ...(state.attemptFor(row.slug, null, downloadName(file)).damaged ? [DOWNLOAD_DAMAGED] : []),
+                ]}
               />
             </div>
           ))}
