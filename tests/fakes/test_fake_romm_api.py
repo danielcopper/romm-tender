@@ -69,19 +69,48 @@ class TestFailOnNext:
         api = FakeRommApi()
         api.fail_on_next(ValueError("on next"))
         with pytest.raises(ValueError, match="on next"):
-            api.list_firmware()
+            api.list_platforms()
+
+
+class TestFirmwareOnThePlatformList:
+    """``list_platforms`` carries each platform's firmware inline, as RomM's ``/api/platforms`` does."""
+
+    def test_a_platform_carries_the_firmware_its_id_is_the_platform_id_of(self) -> None:
+        api = FakeRommApi()
+        api.platforms = [{"id": 1, "slug": "psx"}, {"id": 2, "slug": "gba"}]
+        api.firmware_files = [
+            {"id": 10, "file_name": "scph5501.bin", "platform_id": 1},
+            {"id": 20, "file_name": "gba_bios.bin", "platform_id": 2},
+        ]
+
+        listed = {p["slug"]: [f["file_name"] for f in p["firmware"]] for p in api.list_platforms()}
+
+        assert listed == {"psx": ["scph5501.bin"], "gba": ["gba_bios.bin"]}
+
+    def test_seeding_firmware_adds_its_platform_once(self) -> None:
+        api = FakeRommApi()
+        api.seed_firmware("dc", {"id": 1, "file_name": "dc_boot.bin"})
+        api.seed_firmware("dc", {"id": 2, "file_name": "dc_flash.bin"})
+
+        [platform] = api.list_platforms()
+
+        assert platform["slug"] == "dc"
+        assert [(f["file_name"], f["platform_id"]) for f in platform["firmware"]] == [
+            ("dc_boot.bin", platform["id"]),
+            ("dc_flash.bin", platform["id"]),
+        ]
 
 
 class TestPerMethodSideEffects:
     """Per-method ``*_side_effect`` attrs raise on every call until cleared."""
 
-    def test_list_firmware_side_effect_fires_every_call(self) -> None:
+    def test_list_platforms_side_effect_fires_every_call(self) -> None:
         api = FakeRommApi()
-        api.list_firmware_side_effect = OSError("offline")
+        api.list_platforms_side_effect = OSError("offline")
         with pytest.raises(OSError, match="offline"):
-            api.list_firmware()
+            api.list_platforms()
         with pytest.raises(OSError, match="offline"):
-            api.list_firmware()
+            api.list_platforms()
 
     def test_heartbeat_side_effect(self) -> None:
         api = FakeRommApi()

@@ -140,7 +140,6 @@ class FakeRommApi:
         self._fail_on_next: Exception | None = None
         self.heartbeat_side_effect: Exception | None = None
         self.list_platforms_side_effect: Exception | None = None
-        self.list_firmware_side_effect: Exception | None = None
         self.get_firmware_side_effect: Exception | None = None
         self.download_firmware_side_effect: Exception | None = None
         self.get_rom_side_effect: Exception | None = None
@@ -274,9 +273,33 @@ class FakeRommApi:
     # ------------------------------------------------------------------
 
     def list_platforms(self) -> list[dict[str, Any]]:
+        """Every seeded platform, carrying as ``firmware`` the ``firmware_files`` its ``id`` is the ``platform_id`` of.
+
+        RomM's ``/api/platforms`` answers each platform with its firmware
+        inline; a platform no seeded file belongs to is answered as seeded.
+        """
         self._log("list_platforms")
         self._check_fail(self.list_platforms_side_effect)
-        return [dict(p) for p in self.platforms]
+        return [self._with_firmware(p) for p in self.platforms]
+
+    def _with_firmware(self, platform: dict[str, Any]) -> dict[str, Any]:
+        files = [dict(f) for f in self.firmware_files if f.get("platform_id") == platform.get("id")]
+        if not files:
+            return dict(platform)
+        return {**platform, "firmware": [*platform.get("firmware", []), *files]}
+
+    def seed_firmware(self, platform_slug: str, *files: dict[str, Any]) -> None:
+        """Seed *files* as firmware of the platform *platform_slug*, adding that platform where none is seeded.
+
+        Each file gets the platform's ``id`` as its ``platform_id``, the way
+        RomM states a firmware file's platform.
+        """
+        platform = next((p for p in self.platforms if p.get("slug") == platform_slug), None)
+        if platform is None:
+            platform_id = max((p.get("id", 0) for p in self.platforms), default=0) + 1
+            platform = {"id": platform_id, "slug": platform_slug, "fs_slug": platform_slug, "name": platform_slug}
+            self.platforms.append(platform)
+        self.firmware_files.extend({**f, "platform_id": platform["id"]} for f in files)
 
     # ------------------------------------------------------------------
     # RommRomReader
@@ -519,11 +542,6 @@ class FakeRommApi:
     # ------------------------------------------------------------------
     # RommFirmwareApi
     # ------------------------------------------------------------------
-
-    def list_firmware(self) -> list[dict[str, Any]]:
-        self._log("list_firmware")
-        self._check_fail(self.list_firmware_side_effect)
-        return [dict(f) for f in self.firmware_files]
 
     def get_firmware(self, firmware_id: int) -> dict[str, Any]:
         self._log("get_firmware", (firmware_id,))

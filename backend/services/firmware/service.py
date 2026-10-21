@@ -2,10 +2,11 @@
 
 Owns the public use cases the endpoints call (the whole-library
 overview, the per-platform BIOS check, the download entry points, the delete)
-and composes the four sub-services behind it. Implementation lives in those
+and composes the sub-services behind it. Implementation lives in those
 modules: :class:`FirmwareListing` for what the RomM library holds and its
-cache, :class:`FirmwareDemand` for what the installed emulators want and where
-each file goes, :class:`FirmwareStatusReader` for every status-bearing answer,
+cache, :class:`FirmwareRefiling` for moving older entries to their platform,
+:class:`FirmwareDemand` for what the installed emulators want and where each
+file goes, :class:`FirmwareStatusReader` for every status-bearing answer,
 :class:`FirmwareDownloader` for fetching, :class:`PlatformBiosDeleter` for
 removing what was fetched. The façade itself only wires the pieces together and
 delegates.
@@ -20,6 +21,7 @@ from services.firmware.deletion import FirmwareDeletionIncomplete, PlatformBiosD
 from services.firmware.demand import FirmwareDemand, FirmwareDemandConfig
 from services.firmware.downloads import FirmwareDownloader, FirmwareDownloaderConfig
 from services.firmware.listing import FirmwareListing, FirmwareListingConfig
+from services.firmware.refiling import FirmwareRefiling, FirmwareRefilingConfig
 from services.firmware.status import FirmwareStatusReader, FirmwareStatusReaderConfig
 
 if TYPE_CHECKING:
@@ -40,6 +42,7 @@ if TYPE_CHECKING:
         PlatformSystems,
         RetroDeckFolders,
         RommFirmwareApi,
+        SettingsPersister,
         UnitOfWorkFactory,
     )
 
@@ -49,8 +52,9 @@ class FirmwareServiceConfig:
     """Frozen wiring bundle handed to ``FirmwareService.__init__``.
 
     Holds the API adapter, runtime infrastructure, Protocol-typed file
-    adapters, the SQLite Unit-of-Work factory, and the provider callables
-    the firmware subsystem needs at construction time. Decomposes the ctor
+    adapters, the SQLite Unit-of-Work factory, the live settings dict and its
+    persister, and the provider callables the firmware subsystem needs at
+    construction time. Decomposes the ctor
     so a new dependency does not push past the S107 parameter-count
     limit.
     """
@@ -69,6 +73,8 @@ class FirmwareServiceConfig:
     active_core: ActiveCoreReader
     uow_factory: UnitOfWorkFactory
     conflict_rules: ConflictRules
+    settings: dict[str, Any]
+    settings_persister: SettingsPersister
 
 
 class FirmwareService:
@@ -97,6 +103,14 @@ class FirmwareService:
                 logger=config.logger,
                 clock=config.clock,
                 uow_factory=config.uow_factory,
+                refiling=FirmwareRefiling(
+                    config=FirmwareRefilingConfig(
+                        uow_factory=config.uow_factory,
+                        settings=config.settings,
+                        settings_persister=config.settings_persister,
+                        logger=config.logger,
+                    )
+                ),
             )
         )
 

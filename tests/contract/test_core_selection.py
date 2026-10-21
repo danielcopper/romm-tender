@@ -43,7 +43,6 @@ _GBA_FIRMWARE = [
     {
         "id": 1,
         "file_name": "gba_bios.bin",
-        "file_path": "bios/gba/gba_bios.bin",
         "file_size_bytes": 100,
         "md5_hash": "",
     }
@@ -264,7 +263,7 @@ async def test_the_firmware_overview_reads_no_platform(harness):
     """
     seed_es_systems(harness)
     seed_rom(harness, 6, platform_slug="gba")
-    harness.romm.firmware_files = list(_GBA_FIRMWARE)
+    harness.romm.seed_firmware("gba", *_GBA_FIRMWARE)
 
     result = await harness.endpoints.get_firmware_status()
 
@@ -283,7 +282,7 @@ async def test_a_platforms_answer_carries_its_classified_emulators(harness):
     """Every platform the page lists has the classified emulator list with its answer."""
     seed_es_systems(harness)
     seed_rom(harness, 7, platform_slug="gba")  # bound → has_games
-    harness.romm.firmware_files = list(_GBA_FIRMWARE)
+    harness.romm.seed_firmware("gba", *_GBA_FIRMWARE)
 
     gba = await _platform_answer(harness, "gba")
 
@@ -304,7 +303,7 @@ async def test_a_platforms_answer_flags_unavailable_emulator_data(harness):
     no emulator.
     """
     seed_rom(harness, 8, platform_slug="gba")
-    harness.romm.firmware_files = list(_GBA_FIRMWARE)
+    harness.romm.seed_firmware("gba", *_GBA_FIRMWARE)
 
     gba = await _platform_answer(harness, "gba")
 

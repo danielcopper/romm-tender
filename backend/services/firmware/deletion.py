@@ -18,7 +18,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain import firmware_paths
 from domain.retrodeck_folders import FolderRefused
 from lib.partial_failure import PartialFailure
 
@@ -115,10 +114,7 @@ class PlatformBiosDeleter:
         so that "a folder's files" cannot quietly become "the platform's".
 
         A record whose file is already gone is not a deletion and not an error —
-        the row is dropped and nothing is counted. That is also what makes two
-        rows for one file name under different firmware slugs harmless: they
-        name one path, the first unlink takes it, and the second prunes its row
-        over an absence.
+        the row is dropped and nothing is counted.
 
         Raises RetroDECK's folder refusal where the resolver only assumed its
         BIOS folder, or where a question about its roots failed: then nothing is
@@ -151,18 +147,12 @@ class PlatformBiosDeleter:
     def _recorded_bios_files(self, platform_slug) -> list[BiosFile]:
         """Tender's own download records for *platform_slug*.
 
-        The BIOS rows are keyed by the firmware-directory slug stored at download
-        time, which may differ from the platform slug (e.g. ``psx`` → ``ps``), so
-        every candidate spelling is read. Each record is kept whole rather than
-        reduced to a name: the delete needs its ``file_path`` to unlink and its
-        ``platform_slug`` to address the row again. One short read UoW, closed
-        before any file I/O.
+        Each record is kept whole rather than reduced to a name: the delete
+        needs its ``file_path`` to unlink and its ``platform_slug`` to address
+        the row again. One short read UoW, closed before any file I/O.
         """
-        records: list[BiosFile] = []
         with self._uow_factory() as uow:
-            for slug in firmware_paths.resolve_firmware_slugs(platform_slug):
-                records.extend(uow.bios_files.iter_by_platform(slug))
-        return records
+            return list(uow.bios_files.iter_by_platform(platform_slug))
 
     def _prune_bios_records(self, keys) -> None:
         """Delete the ``BiosFile`` records named by the ``(slug, file_name)`` *keys*.

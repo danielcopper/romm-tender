@@ -1,9 +1,10 @@
 """BiosFile — one downloaded BIOS/firmware file Tender tracks on disk.
 
 Identified by ``(platform_slug, file_name)`` — a bare filename is unsafe because
-two platforms can ship same-named BIOS. ``firmware_id`` is nullable metadata
-from RomM, not part of the identity. Tracked so migrations can move the file
-when the RetroDECK home path changes.
+two platforms can ship same-named BIOS. ``platform_slug`` is the RomM platform
+the file was downloaded for (``domain/firmware_platforms.py``). ``firmware_id``
+is nullable metadata from RomM, not part of the identity. Tracked so migrations
+can move the file when the RetroDECK home path changes.
 """
 
 from __future__ import annotations
@@ -40,6 +41,16 @@ class BiosFile:
             file_path=file_path,
             downloaded_at=downloaded_at,
             firmware_id=firmware_id,
+        )
+
+    def refiled_under(self, platform_slug: str) -> BiosFile:
+        """This record filed under *platform_slug* instead — a new identity, so a new record."""
+        return BiosFile.mark_downloaded(
+            platform_slug=platform_slug,
+            file_name=self.file_name,
+            file_path=self.file_path,
+            downloaded_at=self.downloaded_at,
+            firmware_id=self.firmware_id,
         )
 
     def relocate(self, new_path: str) -> None:

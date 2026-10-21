@@ -85,10 +85,10 @@ class RommDeviceApi(Protocol):
 class RommFirmwareApi(Protocol):
     """RomM firmware/BIOS API surface."""
 
-    def list_firmware(self) -> list[dict[str, Any]]:
-        """Fetch all available firmware/BIOS files from the server.
+    def list_platforms(self) -> list[dict[str, Any]]:
+        """Fetch every platform with the firmware files RomM holds for it.
 
-        Returns a list of firmware dicts from /api/firmware.
+        Returns /api/platforms, each platform carrying its files as ``firmware``.
         """
         ...
 

@@ -1383,6 +1383,8 @@ def _dispatcher_over_firmware(
             active_core=FakeActiveCoreResolver(),
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
+            settings={},
+            settings_persister=FakeSettingsPersister(),
         )
     )
     endpoints = Endpoints(_make_application(_make_services_bundle(firmware_service=service)), HostStatus())
@@ -1442,7 +1444,7 @@ class TestTheFirmwareAnswersOnTheWire:
 
     async def test_a_romm_error_reading_the_library_answers_its_classified_reason(self):
         romm_api = FakeRommApi()
-        romm_api.list_firmware_side_effect = RommConnectionError("connection refused")
+        romm_api.list_platforms_side_effect = RommConnectionError("connection refused")
         dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
 
         message = json.loads(await dispatcher.dispatch(1, "download_all_firmware", ["dc", None]))

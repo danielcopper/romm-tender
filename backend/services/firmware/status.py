@@ -31,7 +31,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain import firmware_paths
 from domain.bios_status import (
     classify_content_search,
     collect_firmware_status,
@@ -332,16 +331,7 @@ class FirmwareStatusReader:
 
     @staticmethod
     def _server_files(firmware_list, platform_slug: str) -> list[dict[str, Any]]:
-        """The listing's own rows for one key, in the server's own fields.
-
-        *platform_slug* is the RomM platform slug the page lists, matched
-        EXACTLY against the firmware directory a listed file sits under, never
-        through :func:`firmware_paths.resolve_firmware_slugs`. What that costs:
-        a library that files a platform's firmware under a directory named
-        otherwise than the platform's slug does not reach that platform's rows —
-        the pane shows the emulator's own rows and verdict, without the library
-        files. The per-game check (:meth:`check_platform_bios`) does resolve the
-        spellings.
+        """The listing's own rows for one platform, in the server's own fields.
 
         Where each file goes and whether it is there are answers about ONE
         platform's emulators, so they are filled in by :meth:`_platform_demand`
@@ -356,7 +346,7 @@ class FirmwareStatusReader:
                 "on_server": True,
             }
             for fw in firmware_list
-            if (firmware_paths.parse_firmware_slug(fw.get("file_path", "")) or "unknown") == platform_slug
+            if fw["platform_slug"] == platform_slug
         ]
 
     def _read_synced_slugs(self) -> set[str]:
@@ -382,9 +372,9 @@ class FirmwareStatusReader:
         the platform-wide button can reach it.
 
         The delete is authorised by the record and unlinks the path that record
-        holds, so this is exactly that set: recorded paths under one of the
-        platform's firmware slugs that are still on disk, counted as distinct
-        PATHS because two records naming one file are one unlink.
+        holds, so this is exactly that set: recorded paths of the platform's
+        records that are still on disk, counted as distinct PATHS because two
+        records naming one file are one unlink.
 
         **A row's count is answered two ways, because a row is one of two
         things.** A declared FILE matches a record by name — the row knows its
@@ -406,8 +396,7 @@ class FirmwareStatusReader:
         placed and drops our own downloads once RomM stops listing them; used
         for the button it was wrong in both directions.
         """
-        slugs = set(firmware_paths.resolve_firmware_slugs(platform_slug))
-        mine = [record for record in records if record.platform_slug in slugs]
+        mine = [record for record in records if record.platform_slug == platform_slug]
         present = [record for record in mine if self._firmware_file_store.exists(record.file_path)]
         plat["deletable_count"] = len({record.file_path for record in present})
 
@@ -434,9 +423,9 @@ class FirmwareStatusReader:
         """Add emulator info, wants, and game-installed flags to one platform entry.
 
         The core read seams key by the resolved RetroDECK ``system`` (ADR-0010
-        §2), so each entry's raw RomM/BIOS-folder slug is normalized before the
-        ``get_emulator_options`` call; ``has_games`` and the BIOS-folder file
-        lookups stay on the raw slug (their own vocabulary). ``active_core`` and
+        §2), so each entry's RomM platform slug is normalized before the
+        ``get_emulator_options`` call; ``has_games`` and the library's files stay
+        on the RomM slug (their own vocabulary). ``active_core`` and
         ``active_core_label`` are the two projections of ONE pick
         (:meth:`_platform_emulator`) — the per-platform override
         (``platform_cores``) when set and still resolvable, else the es_systems
@@ -577,12 +566,14 @@ class FirmwareStatusReader:
         happen is the answer that nothing could be established — the verdict
         tells the two apart, and dropping either would leave the page to guess.
         """
-        synced_slugs, records = await self._loop.run_in_executor(None, self._read_status_inputs)
         try:
             firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
         except Exception as e:
             self._logger.warning(f"Answering for {platform_slug} without the server listing: {e}")
             firmware_list = []
+        # After the listing: a fresh read moves older records to their platform,
+        # and the count must see them where they now are.
+        synced_slugs, records = await self._loop.run_in_executor(None, self._read_status_inputs)
 
         plat: dict[str, Any] = {
             "platform_slug": platform_slug,
@@ -654,7 +645,6 @@ class FirmwareStatusReader:
         """
         platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, platform_slug, install)
         system = platform.taken
-        fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
         options = await self._emulator_options(platform)
         pick = self._resolve_launching_emulator(platform_slug, options, launching_emulator)
         identity = pick.emulator if pick is not None else None
@@ -665,13 +655,8 @@ class FirmwareStatusReader:
             self._logger.warning(f"Answering BIOS status without the server listing: {e}")
             firmware_list = []
 
-        # A platform can read two firmware folders (``psx`` reads ``psx`` and
-        # ``ps``), and RomM may list one name in both. A row carries nothing but
-        # the name, so the copies are the same row and the first is kept.
         server_names = dict.fromkeys(
-            fw.get("file_name", "")
-            for fw in firmware_list
-            if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs
+            fw.get("file_name", "") for fw in firmware_list if fw["platform_slug"] == platform_slug
         )
         server_rows = [{"file_name": name, "on_server": True} for name in server_names]
         catalogue, rows, others = await self._loop.run_in_executor(

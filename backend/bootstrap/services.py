@@ -575,6 +575,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             active_core=active_core_resolver,
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
         ),
     )
 

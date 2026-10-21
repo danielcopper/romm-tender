@@ -295,9 +295,6 @@ class RommApiAdapter:
 
     # ── Firmware / BIOS ───────────────────────────────────────────────
 
-    def list_firmware(self) -> list[dict[str, Any]]:
-        return self._client.request("/api/firmware")
-
     def get_firmware(self, firmware_id: int) -> dict[str, Any]:
         return self._client.request(f"/api/firmware/{firmware_id}")
 

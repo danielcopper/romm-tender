@@ -27,14 +27,12 @@ _DC_FIRMWARE = [
     {
         "id": 1,
         "file_name": "dc_boot.bin",
-        "file_path": "bios/dc/dc_boot.bin",
         "file_size_bytes": 8,
         "md5_hash": "",
     },
     {
         "id": 2,
         "file_name": "dc_flash.bin",
-        "file_path": "bios/dc/dc_flash.bin",
         "file_size_bytes": 8,
         "md5_hash": "",
     },
@@ -42,7 +40,7 @@ _DC_FIRMWARE = [
 
 
 async def test_downloads_the_named_file_and_records_it(harness):
-    harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
+    harness.romm.seed_firmware("dc", *(dict(f) for f in _DC_FIRMWARE))
     harness.romm.download_payloads["firmware:1:dc_boot.bin"] = b"bootbios"
 
     result = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin", None)
@@ -60,7 +58,7 @@ async def test_downloads_the_named_file_and_records_it(harness):
 
 
 async def test_a_second_press_finds_the_file_already_here(harness):
-    harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
+    harness.romm.seed_firmware("dc", *(dict(f) for f in _DC_FIRMWARE))
     harness.romm.download_payloads["firmware:1:dc_boot.bin"] = b"bootbios"
 
     assert (await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin", None))["downloaded"] == 1
@@ -72,7 +70,7 @@ async def test_a_second_press_finds_the_file_already_here(harness):
 
 
 async def test_a_name_outside_the_platform_is_refused(harness):
-    harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
+    harness.romm.seed_firmware("dc", *(dict(f) for f in _DC_FIRMWARE))
 
     result = await harness.endpoints.download_platform_firmware_file("n64", "dc_boot.bin", None)
 
@@ -85,7 +83,7 @@ async def test_a_name_outside_the_platform_is_refused(harness):
 
 
 async def test_an_unreachable_server_reports_its_own_reason(harness):
-    harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
+    harness.romm.seed_firmware("dc", *(dict(f) for f in _DC_FIRMWARE))
     harness.romm.download_firmware_side_effect = RommConnectionError("Connection reset")
 
     result = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin", None)

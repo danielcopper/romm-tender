@@ -25,12 +25,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from domain.platform_system import PLATFORM_IDS_KEY, PlatformIds, encode_platform_ids
+
 from ._seed import seed_es_systems, seed_rom
 
 _FIRMWARE = [
-    {"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin", "file_size_bytes": 8, "md5_hash": "a"},
-    {"id": 2, "file_name": "dc_flash.bin", "file_path": "bios/dc/dc_flash.bin", "file_size_bytes": 4, "md5_hash": ""},
-    {"id": 3, "file_name": "gba_bios.bin", "file_path": "bios/gba/gba_bios.bin", "file_size_bytes": 16, "md5_hash": ""},
+    ("dc", {"id": 1, "file_name": "dc_boot.bin", "file_size_bytes": 8, "md5_hash": "a"}),
+    ("dc", {"id": 2, "file_name": "dc_flash.bin", "file_size_bytes": 4, "md5_hash": ""}),
+    ("gba", {"id": 3, "file_name": "gba_bios.bin", "file_size_bytes": 16, "md5_hash": ""}),
 ]
 
 # Every key the whole-page answer carried per platform, at a5777746: the entry's
@@ -149,8 +151,9 @@ async def test_the_two_calls_compose_the_whole_page_answer(harness):
     """The overview plus per-platform answers rebuild the payload the page renders."""
     seed_es_systems(harness)
     seed_rom(harness, 1, platform_slug="gba")  # bound → has_games
-    harness.romm.firmware_files = [dict(f) for f in _FIRMWARE]
     _list_platforms(harness, "dc", "gba", "n64")
+    for platform_slug, row in _FIRMWARE:
+        harness.romm.seed_firmware(platform_slug, dict(row))
 
     overview, entries = await _compose(harness)
 
@@ -186,11 +189,16 @@ async def test_the_listing_is_fetched_once_for_the_whole_walk(harness):
     platform would put a network call between every row and the next.
     """
     seed_es_systems(harness)
-    harness.romm.firmware_files = [dict(f) for f in _FIRMWARE]
     _list_platforms(harness, "dc", "gba")
+    for platform_slug, row in _FIRMWARE:
+        harness.romm.seed_firmware(platform_slug, dict(row))
+    # The platforms' ids were kept by an earlier reading, so the platform list
+    # is read by the page's own list and by the firmware listing alone.
+    with harness.uow_factory() as uow:
+        uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({"dc": PlatformIds(), "gba": PlatformIds()}))
 
     _, entries = await _compose(harness)
 
     assert len(entries) == 2
-    fetches = [call for call in harness.romm.call_log if call[0] == "list_firmware"]
-    assert len(fetches) == 1
+    fetches = [call for call in harness.romm.call_log if call[0] == "list_platforms"]
+    assert len(fetches) == 2

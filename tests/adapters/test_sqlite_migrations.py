@@ -87,8 +87,8 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 029_add_rom_delivered_through + 030_add_rom_gone_from_romm
 # + 031_add_platform_skip_fetch_start_and_checksum
 # + 032_add_collection_skip_fetch_start_and_checksum
-# + 033_add_artwork_slot_choices).
-_SHIPPED_VERSION = 33
+# + 033_add_artwork_slot_choices + 034_clear_firmware_cache_filed_by_folder).
+_SHIPPED_VERSION = 34
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -2329,3 +2329,43 @@ class Test033AddArtworkSlotChoices:
                 conn.execute("INSERT INTO artwork_slot_choices VALUES (9, 'logo', 4242, 2.5)")
         finally:
             conn.close()
+
+
+class Test034ClearFirmwareCacheFiledByFolder:
+    """034 — empties firmware_cache, whose rows carried a server folder name as their platform (#2191 D1)."""
+
+    _ROW = (
+        "INSERT INTO firmware_cache (id, name, platform_slug, file_size_bytes, cached_at) "
+        "VALUES (1, 'scph5501.bin', 'ps', 524288, 1000.0)"
+    )
+
+    def test_a_cached_row_is_gone_after_the_migration(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 33)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(self._ROW)
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM firmware_cache").fetchone()[0]
+        finally:
+            conn.close()
+        assert count == 0
+
+    def test_the_rows_stay_until_033(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 33)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(self._ROW)
+            count = conn.execute("SELECT COUNT(*) FROM firmware_cache").fetchone()[0]
+        finally:
+            conn.close()
+
+        assert _user_version(db_path) == 33
+        assert count == 1

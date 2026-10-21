@@ -106,9 +106,7 @@ def _seed_what_a_press_would_touch(harness) -> list[str]:
         "platform_fs_slug": "gba",
         "platform_name": "GBA",
     }
-    harness.romm.firmware_files = [
-        {"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin", "file_size_bytes": 1, "md5_hash": ""}
-    ]
+    harness.romm.seed_firmware("dc", {"id": 1, "file_name": "dc_boot.bin", "file_size_bytes": 1, "md5_hash": ""})
     return [installed, leftover, bios, bios_leftover]
 
 

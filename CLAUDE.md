@@ -988,13 +988,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   Forget deletes no file and refuses while the file or folder exists
   (`tests/services/test_startup_healing.py::TestReportMissingInstalls`, `tests/contract/test_missing_download.py`).
   Prompt-only: a new path that deletes `rom_installs` rows is one the user starts
-- **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
-  and only at the path that record holds** — test + prompt-only —
-  `tests/services/test_firmware.py::TestDeletePlatformBios`, `::TestDeleteOneBiosFile` and
-  `TestGetFirmwareStatusDeletableCount`; prompt-only: a delete iterates the records, never a status list, and is never
-  authorised by `downloaded` or `on_server`; `deletable_count` (per platform and per row, distinct paths) counts records
-  still on disk and alone gates the Delete offer, and a folder row's counts the distinct recorded files beneath it; the
-  three buttons share `PlatformBiosDeleter._delete_recorded_io`, never a copy of it
+- **A BIOS file is deleted only where a `downloaded_bios` record filed under the platform names it, and only at the path
+  that record holds** — test + prompt-only — `tests/services/test_firmware.py::TestDeletePlatformBios`,
+  `::TestDeleteOneBiosFile` and `TestGetFirmwareStatusDeletableCount`; prompt-only: a delete iterates the records, never
+  a status list, and is never authorised by `downloaded` or `on_server`; `deletable_count` (per platform and per row,
+  distinct paths) counts records still on disk and alone gates the Delete offer, and a folder row's counts the distinct
+  recorded files beneath it; the three buttons share `PlatformBiosDeleter._delete_recorded_io`, never a copy of it
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

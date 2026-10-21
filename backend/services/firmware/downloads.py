@@ -15,7 +15,6 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain import firmware_paths
 from domain.bios_file import BiosFile
 from domain.emulator_commands import resolve_firmware_option
 from domain.firmware_groups import fetched_as_required
@@ -105,15 +104,16 @@ class FirmwareDownloader:
         finally:
             self._calls_in_flight -= 1
 
-    def _download_firmware_post_io(self, fw, firmware_id, dest, tmp_path):
+    def _download_firmware_post_io(self, fw, platform_slug, firmware_id, dest, tmp_path):
         """Sync worker for download_firmware — file rename, hash verification, DB persist.
 
         Runs in an executor. The filesystem work (rename, checksum) happens
         outside any transaction; only the ``BiosFile`` upsert is wrapped in a
         short write UoW (ADR-0006).
 
-        Returns ``md5_match``. Firmware RomM describes in a way the
-        ``BiosFile`` invariants reject (empty slug/file_name) refuses with
+        Returns ``md5_match``. The record is filed under *platform_slug*, the
+        platform the listing places the file on. Firmware RomM describes in a
+        way the ``BiosFile`` invariants reject (an empty file name) refuses with
         ``invalid_firmware``, once the renamed file is removed and with nothing
         persisted.
         """
@@ -126,16 +126,15 @@ class FirmwareDownloader:
 
         try:
             bios_file = BiosFile.mark_downloaded(
-                platform_slug=firmware_paths.parse_firmware_slug(fw.get("file_path", "")),
+                platform_slug=platform_slug,
                 file_name=file_name,
                 file_path=dest,
                 downloaded_at=self._clock.now().isoformat(),
                 firmware_id=firmware_id,
             )
         except ValueError as e:
-            # Malformed RomM firmware (e.g. file_path with no parseable slug):
-            # the aggregate's invariant rejects it. Drop the renamed file so we
-            # don't leave it untracked.
+            # Malformed RomM firmware: the aggregate's invariant rejects it. Drop
+            # the renamed file so we don't leave it untracked.
             self._firmware_file_store.remove_file(dest)
             self._logger.error(f"Failed to persist firmware {file_name}: Invalid firmware metadata: {e}")
             raise Refused("invalid_firmware", f"Invalid firmware metadata: {e}") from e
@@ -171,6 +170,7 @@ class FirmwareDownloader:
         """
         firmware_id = int(firmware_id)
         fw = await self._loop.run_in_executor(None, self._romm_api.get_firmware, firmware_id)
+        platform_slug = await self._loop.run_in_executor(None, self._platform_of, firmware_id)
 
         file_name = fw.get("file_name", "")
         try:
@@ -195,34 +195,36 @@ class FirmwareDownloader:
             raise
 
         md5_match = await self._loop.run_in_executor(
-            None, self._download_firmware_post_io, fw, firmware_id, dest, tmp_path
+            None, self._download_firmware_post_io, fw, platform_slug, firmware_id, dest, tmp_path
         )
 
         self._listing.invalidate()
         self._logger.info(f"Firmware downloaded: {file_name} -> {dest}")
         return {"success": True, "file_path": dest, "md5_match": md5_match}
 
+    def _platform_of(self, firmware_id: int) -> str:
+        """The platform the library files *firmware_id* on; refuses ``not_in_library`` where it holds no such file.
+
+        A RomM error reading the listing propagates as it was raised.
+        """
+        for fw in self._listing.get_firmware_list():
+            if fw.get("id") == firmware_id:
+                return fw["platform_slug"]
+        self._logger.warning(f"Firmware {firmware_id} is not in the RomM library's listing")
+        raise Refused("not_in_library", f"Firmware {firmware_id} is not in your RomM library")
+
     async def _platform_firmware_rows(self, platform_slug) -> list[dict[str, Any]]:
-        """The library rows filed under *platform_slug*.
+        """The library rows of *platform_slug*.
 
         The three download entry points ask the same two questions first — what
-        does the library hold, and which of it is this platform's — and the
-        second is not a plain slug match: ``psx`` is filed under ``psx`` and
-        ``ps`` both. Answering it in one place is what keeps a button from
-        fetching a set the button beside it would not.
+        does the library hold, and which of it is this platform's — and answer
+        them here, so a button never fetches a set the button beside it would
+        not.
 
         A listing that could not be read propagates as it was raised.
         """
         firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
-
-        fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
-        # One row per name, the first listed: RomM may list a name in both of a
-        # platform's folders, and every copy lands at the same destination.
-        rows: dict[str, dict[str, Any]] = {}
-        for fw in firmware_list:
-            if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs:
-                rows.setdefault(fw.get("file_name", ""), fw)
-        return list(rows.values())
+        return [fw for fw in firmware_list if fw["platform_slug"] == platform_slug]
 
     async def download_all_firmware(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
         """Download all firmware for a given platform slug.

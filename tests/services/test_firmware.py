@@ -169,6 +169,8 @@ def _make_firmware_service(
             active_core=active_core if active_core is not None else FakeActiveCoreResolver(),
             uow_factory=uow_factory if uow_factory is not None else FakeUnitOfWorkFactory(),
             conflict_rules=conflict_rules if conflict_rules is not None else _make_conflict_rules(),
+            settings={},
+            settings_persister=FakeSettingsPersister(),
         ),
     )
 
@@ -270,11 +272,30 @@ def _resolver_reads(fw: FirmwareService, bios_dir) -> None:
     _resolver(fw).bios_root = str(bios_dir)
 
 
+def _platforms(firmware_list: list[dict[str, Any]], folders: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """RomM's platform list carrying *firmware_list*, each row on the platform its ``platform_slug`` names.
+
+    A row states its platform the way RomM does, by the platform's ``id`` as
+    ``platform_id``; ``platform_slug`` is only how a test names it. A platform's
+    server folder (``fs_slug``) is its slug unless *folders* names another.
+    """
+    folders = folders or {}
+    platforms: dict[str, dict[str, Any]] = {}
+    for row in firmware_list:
+        fields = {key: value for key, value in row.items() if key != "platform_slug"}
+        slug = row["platform_slug"]
+        platform = platforms.setdefault(
+            slug, {"id": len(platforms) + 1, "slug": slug, "fs_slug": folders.get(slug, slug), "firmware": []}
+        )
+        platform["firmware"].append({**fields, "platform_id": platform["id"]})
+    return list(platforms.values())
+
+
 def _stub_listing(fw: FirmwareService, firmware_list: list[dict[str, Any]]) -> None:
-    """Answer ``list_firmware`` with *firmware_list* on the service's API stub."""
+    """Answer ``list_platforms`` with the platforms carrying *firmware_list* on the service's API stub."""
     api = fw._config.romm_api
     assert isinstance(api, MagicMock)
-    api.list_firmware.return_value = firmware_list
+    api.list_platforms.return_value = _platforms(firmware_list)
 
 
 _TEST_CORE = "testcore_libretro"
@@ -422,7 +443,7 @@ class TestFirmwareDestPath:
         """A server file no emulator asks for has no stated layout — flat in the root."""
         bios = os.path.join(str(tmp_path), "retrodeck", "bios")
         fw._demand._retrodeck_folders = FakeRetroDeckFolders(bios=bios)
-        firmware = {"file_name": "bios.bin", "file_path": "bios/n64/bios.bin"}
+        firmware = {"file_name": "bios.bin", "platform_slug": "n64"}
         dest = fw._demand.dest_path(firmware, None)
         assert dest == os.path.join(str(tmp_path), "retrodeck", "bios", "bios.bin")
 
@@ -433,7 +454,7 @@ class TestFirmwareDestPath:
         )
         bios = os.path.join(str(tmp_path), "retrodeck", "bios")
         fw._demand._retrodeck_folders = FakeRetroDeckFolders(bios=bios)
-        firmware = {"file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}
+        firmware = {"file_name": "dc_boot.bin", "platform_slug": "dc"}
         dest = fw._demand.dest_path(firmware, placement)
         assert dest == os.path.join(str(tmp_path), "retrodeck", "bios", "dc", "dc_boot.bin")
 
@@ -441,7 +462,7 @@ class TestFirmwareDestPath:
         placement = _resolver(fw).declare("scph5501.bin", required_by=[_id("mednafen_psx_libretro")])
         bios = os.path.join(str(tmp_path), "retrodeck", "bios")
         with patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=bios)):
-            firmware = {"file_name": "scph5501.bin", "file_path": "bios/ps/scph5501.bin"}
+            firmware = {"file_name": "scph5501.bin", "platform_slug": "ps"}
             dest = fw._demand.dest_path(firmware, placement)
             assert dest == os.path.join(str(tmp_path), "retrodeck", "bios", "scph5501.bin")
 
@@ -456,7 +477,7 @@ class TestFirmwareDestPath:
         placement = _resolver(fw).declare("bios7.bin", required_by=[_id("melonds_libretro")], relative_path=None)
         bios = os.path.join(str(tmp_path), "retrodeck", "bios")
         with patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=bios)):
-            firmware = {"file_name": "bios7.bin", "file_path": "bios/nds/bios7.bin"}
+            firmware = {"file_name": "bios7.bin", "platform_slug": "nds"}
             dest = fw._demand.dest_path(firmware, placement)
             assert dest == os.path.join(bios, "bios7.bin")
 
@@ -464,7 +485,7 @@ class TestFirmwareDestPath:
         """The base directory is the BIOS folder a download lands in, wherever RetroDECK names it."""
         sd_bios = "/run/media/deck/Emulation/retrodeck/bios"
         with patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=sd_bios)):
-            firmware = {"file_name": "fw.bin", "file_path": "bios/saturn/fw.bin"}
+            firmware = {"file_name": "fw.bin", "platform_slug": "saturn"}
             dest = fw._demand.dest_path(firmware, None)
             assert dest == os.path.join(sd_bios, "fw.bin")
 
@@ -525,7 +546,7 @@ class TestPresenceComesFromTheReading:
         _inline_executor(fw)
         _stub_listing(
             fw,
-            [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin", "file_size_bytes": 8}],
+            [{"id": 1, "file_name": "dc_boot.bin", "platform_slug": "dc", "file_size_bytes": 8}],
         )
         return fw
 
@@ -613,7 +634,7 @@ class TestWhereNoBiosDownloadMayLand:
     _ROW: ClassVar[dict[str, Any]] = {
         "id": 1,
         "file_name": "dc_boot.bin",
-        "file_path": "bios/dc/dc_boot.bin",
+        "platform_slug": "dc",
         "file_size_bytes": 8,
     }
 
@@ -666,7 +687,7 @@ class TestWhereNoBiosDownloadMayLand:
         fw = self._service(firmware, tmp_path, resolver, self._switched_off(tmp_path))
         _stub_listing(
             fw,
-            [dict(self._ROW), {**self._ROW, "id": 2, "file_name": "dc_flash.bin", "file_path": "bios/dc/dc_flash.bin"}],
+            [dict(self._ROW), {**self._ROW, "id": 2, "file_name": "dc_flash.bin", "platform_slug": "dc"}],
         )
 
         result = await fw.check_platform_bios("dc")
@@ -836,14 +857,14 @@ class TestTheOverviewRowsAreAlphabetical:
                 {
                     "id": 1,
                     "file_name": "sgb_boot.bin",
-                    "file_path": "bios/gc/sgb_boot.bin",
+                    "platform_slug": "gc",
                     "file_size_bytes": 8,
                     "md5_hash": "",
                 },
                 {
                     "id": 2,
                     "file_name": "SGB1.sfc",
-                    "file_path": "bios/gc/SGB1.sfc",
+                    "platform_slug": "gc",
                     "file_size_bytes": 8,
                     "md5_hash": "",
                 },
@@ -1043,7 +1064,7 @@ class TestWhatBecameOfARowsBytes:
         )
         _set_loop(fw, asyncio.get_running_loop())
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=[]):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms([])):
             result = await fw.get_platform_firmware_status("psx")
 
         row = next(row for row in result["platform"]["files"] if row["file_name"] == "scph1001.bin")
@@ -1329,8 +1350,8 @@ class TestTheOverviewSaysOnlyWhetherTheListingCouldBeRead:
 
         with patch.object(
             firmware.romm_api,
-            "list_firmware",
-            return_value=[{"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1}],
+            "list_platforms",
+            return_value=_platforms([{"id": 1, "file_name": "a.bin", "platform_slug": "dc", "file_size_bytes": 1}]),
         ):
             result = await fw.get_firmware_status()
 
@@ -1350,8 +1371,8 @@ class TestTheOverviewSaysOnlyWhetherTheListingCouldBeRead:
 
         with patch.object(
             firmware.romm_api,
-            "list_firmware",
-            return_value=[{"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1}],
+            "list_platforms",
+            return_value=_platforms([{"id": 1, "file_name": "a.bin", "platform_slug": "dc", "file_size_bytes": 1}]),
         ):
             await fw.get_firmware_status()
 
@@ -1365,7 +1386,7 @@ class TestTheOverviewSaysOnlyWhetherTheListingCouldBeRead:
         _seed_rom(firmware.uow, rom_id=44, platform_slug="nes", app_id=1)
         fw = self._service(firmware)
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await fw.get_firmware_status()
 
         assert result == {"success": True, "server_offline": True}
@@ -1404,8 +1425,10 @@ class TestOnePlatformsOwnEntry:
 
         with patch.object(
             firmware.romm_api,
-            "list_firmware",
-            return_value=[{"id": 1, "file_name": "req1.bin", "file_path": "bios/dc/req1.bin", "file_size_bytes": 100}],
+            "list_platforms",
+            return_value=_platforms(
+                [{"id": 1, "file_name": "req1.bin", "platform_slug": "dc", "file_size_bytes": 100}]
+            ),
         ):
             result = await fw.get_platform_firmware_status("dc")
 
@@ -1425,11 +1448,13 @@ class TestOnePlatformsOwnEntry:
 
         with patch.object(
             firmware.romm_api,
-            "list_firmware",
-            return_value=[
-                {"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1},
-                {"id": 2, "file_name": "b.bin", "file_path": "bios/psx/b.bin", "file_size_bytes": 1},
-            ],
+            "list_platforms",
+            return_value=_platforms(
+                [
+                    {"id": 1, "file_name": "a.bin", "platform_slug": "dc", "file_size_bytes": 1},
+                    {"id": 2, "file_name": "b.bin", "platform_slug": "psx", "file_size_bytes": 1},
+                ]
+            ),
         ):
             await fw.get_platform_firmware_status("dc")
 
@@ -1446,11 +1471,13 @@ class TestOnePlatformsOwnEntry:
             patch.object(firmware.uow.roms, "iter_all", side_effect=AssertionError("read every ROM row")),
             patch.object(
                 firmware.romm_api,
-                "list_firmware",
-                return_value=[
-                    {"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1},
-                    {"id": 2, "file_name": "b.bin", "file_path": "bios/psx/b.bin", "file_size_bytes": 1},
-                ],
+                "list_platforms",
+                return_value=_platforms(
+                    [
+                        {"id": 1, "file_name": "a.bin", "platform_slug": "dc", "file_size_bytes": 1},
+                        {"id": 2, "file_name": "b.bin", "platform_slug": "psx", "file_size_bytes": 1},
+                    ]
+                ),
             ),
         ):
             dc = await fw.get_platform_firmware_status("dc")
@@ -1466,11 +1493,13 @@ class TestOnePlatformsOwnEntry:
 
         with patch.object(
             firmware.romm_api,
-            "list_firmware",
-            return_value=[
-                {"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1},
-                {"id": 2, "file_name": "b.bin", "file_path": "bios/psx/b.bin", "file_size_bytes": 1},
-            ],
+            "list_platforms",
+            return_value=_platforms(
+                [
+                    {"id": 1, "file_name": "a.bin", "platform_slug": "dc", "file_size_bytes": 1},
+                    {"id": 2, "file_name": "b.bin", "platform_slug": "psx", "file_size_bytes": 1},
+                ]
+            ),
         ):
             result = await fw.get_platform_firmware_status("dc")
 
@@ -1488,7 +1517,7 @@ class TestOnePlatformsOwnEntry:
         resolver.describe_emulator(_id(_TEST_CORE))
         fw = self._service(firmware, firmware_resolver=resolver, core_info=_test_core_info())
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=[]):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms([])):
             result = await fw.get_platform_firmware_status("nes")
 
         entry = result["platform"]
@@ -1511,8 +1540,8 @@ class TestOnePlatformsOwnEntry:
 
         with patch.object(
             firmware.romm_api,
-            "list_firmware",
-            return_value=[{"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1}],
+            "list_platforms",
+            return_value=_platforms([{"id": 1, "file_name": "a.bin", "platform_slug": "dc", "file_size_bytes": 1}]),
         ):
             result = await fw.get_platform_firmware_status("ps2")
 
@@ -1530,7 +1559,7 @@ class TestOnePlatformsOwnEntry:
             firmware, firmware_resolver=FakeFirmwareResolver(resolved=False), core_info=_test_core_info()
         )
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=[]):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms([])):
             result = await fw.get_platform_firmware_status("nes")
 
         entry = result["platform"]
@@ -1551,7 +1580,7 @@ class TestOnePlatformsOwnEntry:
             firmware, firmware_resolver=FakeFirmwareResolver(), core_info=FakeCoreInfoProvider(options=[])
         )
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await fw.get_platform_firmware_status("ps3")
 
         assert result["platform"]["files"] == []
@@ -1570,10 +1599,10 @@ class TestOnePlatformsOwnEntry:
 
         with patch.object(
             firmware.romm_api,
-            "list_firmware",
-            return_value=[
-                {"id": 1, "file_name": "../escape.bin", "file_path": "bios/dc/../escape.bin", "file_size_bytes": 1}
-            ],
+            "list_platforms",
+            return_value=_platforms(
+                [{"id": 1, "file_name": "../escape.bin", "platform_slug": "dc", "file_size_bytes": 1}]
+            ),
         ):
             result = await fw.get_platform_firmware_status("dc")
 
@@ -1588,21 +1617,21 @@ class TestGetFirmwareStatus:
             {
                 "id": 1,
                 "file_name": "bios_dc.bin",
-                "file_path": "bios/dc/bios_dc.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 2048,
                 "md5_hash": "abc123",
             },
             {
                 "id": 2,
                 "file_name": "flash_dc.bin",
-                "file_path": "bios/dc/flash_dc.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 1024,
                 "md5_hash": "def456",
             },
             {
                 "id": 3,
                 "file_name": "scph.bin",
-                "file_path": "bios/ps2/scph.bin",
+                "platform_slug": "ps2",
                 "file_size_bytes": 4096,
                 "md5_hash": "",
             },
@@ -1622,9 +1651,9 @@ class TestGetFirmwareStatus:
     async def test_enrich_resolves_system_for_cores_keeps_raw_slug_for_platform(self, tmp_path):
         """Per-platform core reads get the NORMALIZED system; entry slug stays raw.
 
-        ``_enrich_platform`` keys ``platform_slug`` / ``has_games`` /
-        BIOS-folder file lookups on the raw RomM/BIOS-folder slug (ADR-0010 §4)
-        but must feed the resolved RetroDECK system to the ``get_active_core`` /
+        ``_enrich_platform`` keys ``platform_slug`` / ``has_games`` / the
+        library's files on the RomM platform slug (ADR-0010 §4) but must feed
+        the resolved RetroDECK system to the ``get_active_core`` /
         ``get_emulator_options`` seams (ADR-0010 §2).
         """
         from tests.fakes.fake_core_info_provider import libretro_option
@@ -1640,7 +1669,7 @@ class TestGetFirmwareStatus:
             {
                 "id": 1,
                 "file_name": "bios_dc.bin",
-                "file_path": "bios/dc/bios_dc.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
@@ -1695,7 +1724,7 @@ class TestGetFirmwareStatus:
             {
                 "id": 1,
                 "file_name": "ppsspp.bin",
-                "file_path": "bios/psp/ppsspp.bin",
+                "platform_slug": "psp",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
@@ -1738,9 +1767,9 @@ class TestGetFirmwareStatus:
         - ``gba``: no ROM rows at all -> False.
         """
         firmware_list = [
-            {"id": 1, "file_name": "bios_dc.bin", "file_path": "bios/dc/bios_dc.bin", "file_size_bytes": 100},
-            {"id": 2, "file_name": "scph.bin", "file_path": "bios/ps2/scph.bin", "file_size_bytes": 200},
-            {"id": 3, "file_name": "gba_bios.bin", "file_path": "bios/gba/gba_bios.bin", "file_size_bytes": 300},
+            {"id": 1, "file_name": "bios_dc.bin", "platform_slug": "dc", "file_size_bytes": 100},
+            {"id": 2, "file_name": "scph.bin", "platform_slug": "ps2", "file_size_bytes": 200},
+            {"id": 3, "file_name": "gba_bios.bin", "platform_slug": "gba", "file_size_bytes": 300},
         ]
         # A real loop so the executor-run reads hit the shared fake UoW.
         _set_loop(fw, asyncio.get_running_loop())
@@ -1748,7 +1777,7 @@ class TestGetFirmwareStatus:
         _seed_rom(firmware.uow, rom_id=42, platform_slug="dc", app_id=1)
         _seed_rom(firmware.uow, rom_id=43, platform_slug="ps2", app_id=None)
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)):
             result = await _entries(fw, "dc", "ps2", "gba")
 
         dc_plat = result["dc"]
@@ -1769,7 +1798,7 @@ class TestGetFirmwareStatus:
             {
                 "id": 1,
                 "file_name": "bios_dc.bin",
-                "file_path": "bios/dc/bios_dc.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
@@ -1786,7 +1815,7 @@ class TestGetFirmwareStatus:
     async def test_handles_api_error_with_offline_fallback(self, firmware, fw):
         _set_loop(fw, asyncio.get_running_loop())
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("Connection refused")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("Connection refused")):
             result = await fw.get_firmware_status()
 
         assert result == {"success": True, "server_offline": True}
@@ -1830,7 +1859,7 @@ class TestGetFirmwareStatusBiosAggregates:
             {
                 "id": i + 1,
                 "file_name": name,
-                "file_path": f"bios/dc/{name}",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             }
@@ -1845,7 +1874,7 @@ class TestGetFirmwareStatusBiosAggregates:
             (bios_dir / name).write_bytes(b"\x00" * 100)
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = firmware_list
+        romm_api.list_platforms.return_value = _platforms(firmware_list)
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=_dc_resolver(),
@@ -1922,15 +1951,17 @@ class TestGetFirmwareStatusBiosAggregates:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "vita.bin",
-                "file_path": "bios/psvita/vita.bin",
-                "file_size_bytes": 100,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "vita.bin",
+                    "platform_slug": "psvita",
+                    "file_size_bytes": 100,
+                    "md5_hash": "",
+                },
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=FakeFirmwareResolver(unread_emulators=frozenset({_id("vita_libretro")})),
@@ -1956,15 +1987,17 @@ class TestGetFirmwareStatusBiosAggregates:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "stray.bin",
-                "file_path": "bios/snes/stray.bin",
-                "file_size_bytes": 100,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "stray.bin",
+                    "platform_slug": "snes",
+                    "file_size_bytes": 100,
+                    "md5_hash": "",
+                },
+            ]
+        )
         resolver = FakeFirmwareResolver()
         resolver.describe_emulator(_id("snes9x_libretro"))
         fw = _make_firmware_service(
@@ -1993,9 +2026,11 @@ class TestGetFirmwareStatusBiosAggregates:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 1, "file_name": "held.bin", "file_path": "bios/snes/held.bin", "file_size_bytes": 1, "md5_hash": ""},
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {"id": 1, "file_name": "held.bin", "platform_slug": "snes", "file_size_bytes": 1, "md5_hash": ""},
+            ]
+        )
         resolver = FakeFirmwareResolver()
         resolver.declare("held.bin", optional_for=[_id("snes9x_libretro")])
         for name in ("absent1.bin", "absent2.bin"):
@@ -2029,7 +2064,7 @@ class TestGetFirmwareStatusBiosAggregates:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = []
+        romm_api.list_platforms.return_value = _platforms([])
         resolver = FakeFirmwareResolver()
         resolver.declare("lynxboot.img", required_by=[_id("handy_libretro")], description="Boot ROM")
         fw = _make_firmware_service(
@@ -2065,15 +2100,17 @@ class TestGetFirmwareStatusBiosAggregates:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "bios.gg",
-                "file_path": "bios/gamegear/bios.gg",
-                "file_size_bytes": 1,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "bios.gg",
+                    "platform_slug": "gamegear",
+                    "file_size_bytes": 1,
+                    "md5_hash": "",
+                },
+            ]
+        )
         resolver = FakeFirmwareResolver()
         resolver.declare("bios.gg", optional_for=[_id("genesis_plus_gx_libretro")], description="Game Gear BIOS")
         fw = _make_firmware_service(
@@ -2102,11 +2139,13 @@ class TestGetFirmwareStatusBiosAggregates:
         readings could disagree about the same file on one page.
         """
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1, "md5_hash": ""},
-            {"id": 2, "file_name": "b.bin", "file_path": "bios/psx/b.bin", "file_size_bytes": 1, "md5_hash": ""},
-            {"id": 3, "file_name": "c.bin", "file_path": "bios/gba/c.bin", "file_size_bytes": 1, "md5_hash": ""},
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {"id": 1, "file_name": "a.bin", "platform_slug": "dc", "file_size_bytes": 1, "md5_hash": ""},
+                {"id": 2, "file_name": "b.bin", "platform_slug": "psx", "file_size_bytes": 1, "md5_hash": ""},
+                {"id": 3, "file_name": "c.bin", "platform_slug": "gba", "file_size_bytes": 1, "md5_hash": ""},
+            ]
+        )
         resolver = FakeFirmwareResolver()
         fw = _make_firmware_service(romm_api=romm_api, firmware_resolver=resolver)
         _inline_executor(fw)
@@ -2137,7 +2176,7 @@ class TestGetFirmwareStatusBiosAggregates:
         )
         _set_loop(fw, asyncio.get_running_loop())
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             overview = await fw.get_firmware_status()
             result = await _entries(fw, "dc")
 
@@ -2169,7 +2208,7 @@ class TestGetFirmwareStatusBiosAggregates:
         )
         _set_loop(fw, asyncio.get_running_loop())
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await _entries(fw, "nes")
 
         assert result["nes"]["files"] == []
@@ -2195,7 +2234,7 @@ class TestGetFirmwareStatusBiosAggregates:
         )
         _set_loop(fw, asyncio.get_running_loop())
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await _entries(fw, "ps3")
 
         ps3 = result["ps3"]
@@ -2218,11 +2257,11 @@ class TestGetFirmwareStatusBiosAggregates:
         (tmp_path / "retrodeck" / "evil.bin").write_bytes(b"\x00" * 100)
 
         firmware_list = [
-            {"id": 1, "file_name": "good.bin", "file_path": "bios/dc/good.bin", "file_size_bytes": 1, "md5_hash": ""},
+            {"id": 1, "file_name": "good.bin", "platform_slug": "dc", "file_size_bytes": 1, "md5_hash": ""},
             {
                 "id": 2,
                 "file_name": "../evil.bin",
-                "file_path": "bios/dc/../evil.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 1,
                 "md5_hash": "",
             },
@@ -2239,7 +2278,7 @@ class TestGetFirmwareStatusBiosAggregates:
         fw._config.firmware_file_store.exists = _tracking_exists
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
             result = await _entries(fw, "dc")
@@ -2309,18 +2348,18 @@ class TestGetFirmwareStatusDeletableCount:
         _stub_listing(
             fw,
             [
-                {"id": 7, "file_name": "IPL.bin", "file_path": "bios/gc/IPL.bin", "file_size_bytes": 8, "md5_hash": ""},
+                {"id": 7, "file_name": "IPL.bin", "platform_slug": "gc", "file_size_bytes": 8, "md5_hash": ""},
                 {
                     "id": 8,
                     "file_name": "card.bin",
-                    "file_path": "bios/gc/card.bin",
+                    "platform_slug": "gc",
                     "file_size_bytes": 8,
                     "md5_hash": "",
                 },
                 {
                     "id": 9,
                     "file_name": "ours.bin",
-                    "file_path": "bios/gc/ours.bin",
+                    "platform_slug": "gc",
                     "file_size_bytes": 8,
                     "md5_hash": "",
                 },
@@ -2385,7 +2424,7 @@ class TestGetFirmwareStatusDeletableCount:
         )
         _stub_listing(
             fw,
-            [{"id": 7, "file_name": "IPL.bin", "file_path": "bios/gc/IPL.bin", "file_size_bytes": 8, "md5_hash": ""}],
+            [{"id": 7, "file_name": "IPL.bin", "platform_slug": "gc", "file_size_bytes": 8, "md5_hash": ""}],
         )
 
         result = await _entries(fw, "gc")
@@ -2408,15 +2447,17 @@ class TestCheckPlatformBiosUnknown:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "vita.bin",
-                "file_path": "bios/psvita/vita.bin",
-                "file_size_bytes": 100,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "vita.bin",
+                    "platform_slug": "psvita",
+                    "file_size_bytes": 100,
+                    "md5_hash": "",
+                },
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=FakeFirmwareResolver(unread_emulators=frozenset({_id("vita_libretro")})),
@@ -2443,9 +2484,9 @@ class TestCheckPlatformBiosUnknown:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 1, "file_name": "stray.bin", "file_path": "bios/snes/stray.bin", "file_size_bytes": 100}
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [{"id": 1, "file_name": "stray.bin", "platform_slug": "snes", "file_size_bytes": 100}]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=FakeFirmwareResolver(),
@@ -2472,15 +2513,17 @@ class TestCheckPlatformBiosUnknown:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "stray.bin",
-                "file_path": "bios/snes/stray.bin",
-                "file_size_bytes": 100,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "stray.bin",
+                    "platform_slug": "snes",
+                    "file_size_bytes": 100,
+                    "md5_hash": "",
+                },
+            ]
+        )
         resolver = FakeFirmwareResolver(unread_emulators=frozenset({_id("amiarcadia_libretro")}))
         resolver.describe_emulator(_id("snes9x_libretro"))
         fw = _make_firmware_service(
@@ -2507,15 +2550,17 @@ class TestCheckPlatformBiosUnknown:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "stray.bin",
-                "file_path": "bios/arcadia/stray.bin",
-                "file_size_bytes": 100,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "stray.bin",
+                    "platform_slug": "arcadia",
+                    "file_size_bytes": 100,
+                    "md5_hash": "",
+                },
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=FakeFirmwareResolver(unread_emulators=frozenset({_id("amiarcadia_libretro")})),
@@ -2540,9 +2585,11 @@ class TestCheckPlatformBiosUnknown:
         nothing could answer for it.
         """
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 1, "file_name": "stray.bin", "file_path": "bios/snes/stray.bin", "file_size_bytes": 100},
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {"id": 1, "file_name": "stray.bin", "platform_slug": "snes", "file_size_bytes": 100},
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=FakeFirmwareResolver(unread_emulators=frozenset({_id("snes9x_libretro")})),
@@ -2569,15 +2616,17 @@ class TestCheckPlatformBiosUnknown:
     async def test_an_unreadable_emulator_list_leaves_the_scope_unestablished(self, tmp_path):
         """No ``es_systems.xml`` → the scope itself is unknown, so nothing is ruled out."""
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "stray.bin",
-                "file_path": "bios/snes/stray.bin",
-                "file_size_bytes": 100,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "stray.bin",
+                    "platform_slug": "snes",
+                    "file_size_bytes": 100,
+                    "md5_hash": "",
+                },
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=FakeFirmwareResolver(),
@@ -2594,15 +2643,17 @@ class TestCheckPlatformBiosUnknown:
     async def test_a_resolver_that_could_not_answer_never_reads_as_needing_none(self, tmp_path):
         """The adapter's failure shape must not clear a real requirement."""
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "stray.bin",
-                "file_path": "bios/snes/stray.bin",
-                "file_size_bytes": 100,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "stray.bin",
+                    "platform_slug": "snes",
+                    "file_size_bytes": 100,
+                    "md5_hash": "",
+                },
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=FakeFirmwareResolver(resolved=False),
@@ -2618,10 +2669,12 @@ class TestCheckPlatformBiosUnknown:
     async def test_answered_platform_threads_known_count_and_is_not_unknown(self, tmp_path):
         """A platform with declared files ships known_count > 0 and keeps its level."""
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 1, "file_name": "req1.bin", "file_path": "bios/dc/req1.bin", "file_size_bytes": 100, "md5_hash": ""},
-            {"id": 2, "file_name": "opt1.bin", "file_path": "bios/dc/opt1.bin", "file_size_bytes": 100, "md5_hash": ""},
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {"id": 1, "file_name": "req1.bin", "platform_slug": "dc", "file_size_bytes": 100, "md5_hash": ""},
+                {"id": 2, "file_name": "opt1.bin", "platform_slug": "dc", "file_size_bytes": 100, "md5_hash": ""},
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=_dc_resolver(),
@@ -2666,16 +2719,18 @@ def _psx_service(
     reference device reports for every core in this state.
     """
     romm_api = MagicMock()
-    romm_api.list_firmware.return_value = [
-        {
-            "id": index,
-            "file_name": name,
-            "file_path": f"bios/ps/{name}",
-            "file_size_bytes": 100,
-            "md5_hash": "",
-        }
-        for index, name in enumerate(_PSX_IMAGES, start=1)
-    ]
+    romm_api.list_platforms.return_value = _platforms(
+        [
+            {
+                "id": index,
+                "file_name": name,
+                "platform_slug": "psx",
+                "file_size_bytes": 100,
+                "md5_hash": "",
+            }
+            for index, name in enumerate(_PSX_IMAGES, start=1)
+        ]
+    )
     resolver = FakeFirmwareResolver(bios_root=str(bios_dir) if bios_dir is not None else None)
     for name in _PSX_IMAGES:
         resolver.declare(name, optional_for=[_id(core_so)], present=(name == held) or None)
@@ -2771,7 +2826,7 @@ class TestTheConsolesOwnFirmwareDemand:
     async def test_a_demand_nothing_could_settle_declines_rather_than_clearing(self):
         """No row to read the disjunction off — grey, and never "nothing required"."""
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = []
+        romm_api.list_platforms.return_value = _platforms([])
         resolver = FakeFirmwareResolver()
         resolver.record_system(
             _id(_PSX_CORE), system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=None
@@ -2822,10 +2877,12 @@ def _one_of_service(*, launching: str = _BEETLE, present: tuple[str, ...] = ()) 
     every region, in place.
     """
     romm_api = MagicMock()
-    romm_api.list_firmware.return_value = [
-        {"id": index, "file_name": name, "file_path": f"bios/psx/{name}", "file_size_bytes": 100, "md5_hash": ""}
-        for index, (name, _) in enumerate(_BEETLE_OPTIONS, start=1)
-    ]
+    romm_api.list_platforms.return_value = _platforms(
+        [
+            {"id": index, "file_name": name, "platform_slug": "psx", "file_size_bytes": 100, "md5_hash": ""}
+            for index, (name, _) in enumerate(_BEETLE_OPTIONS, start=1)
+        ]
+    )
     resolver = FakeFirmwareResolver()
     for name, _ in _BEETLE_OPTIONS:
         resolver.declare(name, optional_for=[_id(_BEETLE), _id(_PSX_CORE)], present=name in present)
@@ -3017,22 +3074,21 @@ def _psx_platform_service(
     *grouped* has SwanStation state a one-of group over the three images with
     only the NTSC-U one in place — the answer a group moves with the pick.
 
-    The listing is filed under ``bios/psx/`` so the platform's entry is keyed by
-    the same slug the game page asks about. A RomM firmware directory named
-    differently from the platform slug puts the two on different keys, which is
-    a separate defect and not what these tests are about.
+    The listing files the images on ``psx``, the slug the game page asks about.
     """
     romm_api = MagicMock()
-    romm_api.list_firmware.return_value = [
-        {
-            "id": index,
-            "file_name": name,
-            "file_path": f"bios/psx/{name}",
-            "file_size_bytes": 100,
-            "md5_hash": "",
-        }
-        for index, name in enumerate(_PSX_IMAGES, start=1)
-    ]
+    romm_api.list_platforms.return_value = _platforms(
+        [
+            {
+                "id": index,
+                "file_name": name,
+                "platform_slug": "psx",
+                "file_size_bytes": 100,
+                "md5_hash": "",
+            }
+            for index, name in enumerate(_PSX_IMAGES, start=1)
+        ]
+    )
     resolver = FakeFirmwareResolver()
     for name in _PSX_IMAGES:
         resolver.declare(name, optional_for=[_id(_PSX_CORE), _id(_PSX_ALTERNATIVE_CORE)])
@@ -3637,10 +3693,10 @@ class TestDownloadFirmware:
         fw_detail = {
             "id": 10,
             "file_name": "bios.bin",
-            "file_path": "bios/n64/bios.bin",
             "file_size_bytes": len(content),
             "md5_hash": expected_md5,
         }
+        _stub_listing(fw, [{**fw_detail, "platform_slug": "n64"}])
 
         bios_dir = tmp_path / "bios"
         bios_dir.mkdir()
@@ -3661,8 +3717,8 @@ class TestDownloadFirmware:
         assert result["success"] is True
         assert result["md5_match"] is True
         assert os.path.exists(result["file_path"])
-        # Verify BIOS record persisted via the Unit of Work. n64/bios.bin parses
-        # to firmware slug "n64".
+        # Verify BIOS record persisted via the Unit of Work, under the platform
+        # the listing states for the file.
         record = firmware.uow.bios_files.get("n64", "bios.bin")
         assert record is not None
         assert record.firmware_id == 10
@@ -3680,10 +3736,10 @@ class TestDownloadFirmware:
         fw_detail = {
             "id": 10,
             "file_name": "../evil.desktop",
-            "file_path": "bios/n64/evil.desktop",
             "file_size_bytes": 10,
             "md5_hash": "",
         }
+        _stub_listing(fw, [{**fw_detail, "platform_slug": "n64"}])
 
         fw._demand._retrodeck_folders = FakeRetroDeckFolders(bios=str(bios_dir))
         _set_loop(fw, asyncio.get_running_loop())
@@ -3777,14 +3833,14 @@ class TestDownloadAllFirmware:
             {
                 "id": 1,
                 "file_name": "existing.bin",
-                "file_path": "bios/dc/existing.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 50,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "missing.bin",
-                "file_path": "bios/dc/missing.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
@@ -3799,7 +3855,7 @@ class TestDownloadAllFirmware:
             return {"success": True}
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_firmware),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -3811,17 +3867,18 @@ class TestDownloadAllFirmware:
         assert 1 not in download_called_ids
 
     @pytest.mark.asyncio
-    async def test_a_name_listed_under_both_psx_folders_is_attempted_once(self, firmware, fw, tmp_path):
-        """``psx`` reads two firmware folders; both copies land at one destination.
+    async def test_a_file_of_another_platform_under_the_same_name_is_not_fetched(self, firmware, fw, tmp_path):
+        """A platform's download fetches only the files RomM states for it.
 
-        A failed first download leaves that destination empty, which is when a
-        second copy of the name would be fetched again and reported twice.
+        ``ps`` here is a platform of its own, not a second folder of ``psx``:
+        its copy of the name is never this platform's, even where the first
+        download failed and left the destination empty.
         """
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
         firmware_list = [
-            {"id": 1, "file_name": "scph5501.bin", "file_path": "bios/psx/scph5501.bin", "file_size_bytes": 1},
-            {"id": 2, "file_name": "scph5501.bin", "file_path": "bios/ps/scph5501.bin", "file_size_bytes": 1},
+            {"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx", "file_size_bytes": 1},
+            {"id": 2, "file_name": "scph5501.bin", "platform_slug": "ps", "file_size_bytes": 1},
         ]
         _set_loop(fw, asyncio.get_running_loop())
         download_called_ids = []
@@ -3831,7 +3888,7 @@ class TestDownloadAllFirmware:
             raise Refused("bios_download_failed", "scph5501.bin could not be downloaded")
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)),
             patch.object(fw._downloads, "_download_one", side_effect=failing_download),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -3850,9 +3907,7 @@ class TestDownloadAllFirmware:
         """
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
-        firmware_list = [
-            {"id": 3, "file_name": "bios", "file_path": "bios/ps2/bios", "file_size_bytes": 0, "md5_hash": ""}
-        ]
+        firmware_list = [{"id": 3, "file_name": "bios", "platform_slug": "ps2", "file_size_bytes": 0, "md5_hash": ""}]
         resolver = _resolver(fw)
         resolver.declare(
             "bios",
@@ -3870,7 +3925,7 @@ class TestDownloadAllFirmware:
             return {"success": True}
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_firmware),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -3900,7 +3955,7 @@ class TestAPlaceThatCouldNotBeLookedAt:
             caveats=("firmware-path-inaccessible",),
         )
         _set_loop(fw, asyncio.get_running_loop())
-        listing = [{"id": 3, "file_name": "saturn_bios.bin", "file_path": "bios/saturn/saturn_bios.bin"}]
+        listing = [{"id": 3, "file_name": "saturn_bios.bin", "platform_slug": "saturn"}]
         return bios_dir, listing
 
     @pytest.mark.asyncio
@@ -3913,7 +3968,7 @@ class TestAPlaceThatCouldNotBeLookedAt:
             return {"success": True}
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=listing),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(listing)),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -3930,7 +3985,7 @@ class TestAPlaceThatCouldNotBeLookedAt:
             raise AssertionError(f"an unreadable place must not be downloaded into, but {fw_id} was requested")
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=listing),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(listing)),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -3950,21 +4005,21 @@ class TestDownloadPlatformFirmwareFile:
             {
                 "id": 1,
                 "file_name": "existing.bin",
-                "file_path": "bios/dc/existing.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 50,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "missing.bin",
-                "file_path": "bios/dc/missing.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
             {
                 "id": 3,
                 "file_name": "missing.bin",
-                "file_path": "bios/n64/missing.bin",
+                "platform_slug": "n64",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
@@ -3982,7 +4037,7 @@ class TestDownloadPlatformFirmwareFile:
             return {"success": True, "file_path": "/bios/dc/missing.bin", "md5_match": None}
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=self._listing()),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._listing())),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -4004,7 +4059,7 @@ class TestDownloadPlatformFirmwareFile:
             raise AssertionError(f"nothing to fetch, but firmware {fw_id} was requested")
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=self._listing()),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._listing())),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -4024,7 +4079,7 @@ class TestDownloadPlatformFirmwareFile:
             raise AssertionError(f"nothing to fetch, but firmware {fw_id} was requested")
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=self._listing()),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._listing())),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -4046,7 +4101,7 @@ class TestDownloadPlatformFirmwareFile:
             raise ServerUnreachable("RomM is unreachable")
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=self._listing()),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._listing())),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -4069,9 +4124,7 @@ class TestDownloadPlatformFirmwareFile:
         """
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
-        firmware_list = [
-            {"id": 3, "file_name": "bios", "file_path": "bios/ps2/bios", "file_size_bytes": 0, "md5_hash": ""}
-        ]
+        firmware_list = [{"id": 3, "file_name": "bios", "platform_slug": "ps2", "file_size_bytes": 0, "md5_hash": ""}]
         _resolver(fw).declare(
             "bios",
             required_by=[_id("pcsx2_libretro")],
@@ -4086,7 +4139,7 @@ class TestDownloadPlatformFirmwareFile:
             raise AssertionError(f"a folder declaration must not be fetched, but firmware {fw_id} was requested")
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -4100,7 +4153,7 @@ class TestDownloadPlatformFirmwareFile:
     async def test_a_failed_listing_fetch_propagates(self, firmware, fw):
         _set_loop(fw, asyncio.get_running_loop())
         fw._listing._firmware_cache = None
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=OSError("Connection reset")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=OSError("Connection reset")):
             download = fw.download_platform_firmware_file("dc", "missing.bin")
             with pytest.raises(OSError, match="Connection reset"):
                 await download
@@ -4389,10 +4442,10 @@ class TestDeletePlatformBios:
         _set_loop(fw, asyncio.get_running_loop())
         _declare(fw, ("scph5501.bin", "PS1 US BIOS", True), ("scph5502.bin", "PS1 EU BIOS", True))
 
-        # The downloaded file has a BiosFile record to prune (firmware slug "ps").
+        # The downloaded file has a BiosFile record to prune (filed under "psx").
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="ps",
+                platform_slug="psx",
                 file_name="scph5501.bin",
                 file_path=str(bios_dir / "scph5501.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4404,19 +4457,19 @@ class TestDeletePlatformBios:
             {
                 "id": 1,
                 "file_name": "scph5501.bin",
-                "file_path": "bios/ps/scph5501.bin",
+                "platform_slug": "psx",
                 "file_size_bytes": 512,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "scph5502.bin",
-                "file_path": "bios/ps/scph5502.bin",
+                "platform_slug": "psx",
                 "file_size_bytes": 512,
                 "md5_hash": "",
             },
         ]
-        with patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)):
             # Precondition: files really are dicts, not BiosFileEntry objects —
             # subscripting a string key would raise on a BiosFileEntry instance.
             status: dict[str, Any] = await fw.check_platform_bios("psx")
@@ -4431,8 +4484,8 @@ class TestDeletePlatformBios:
         assert result["deleted_count"] == 1
         # (a) the downloaded file is removed via the firmware file store...
         assert str(bios_dir / "scph5501.bin") not in store.files
-        # ...and its BiosFile record is pruned (matched under firmware slug "ps").
-        assert firmware.uow.bios_files.get("ps", "scph5501.bin") is None
+        # ...and its BiosFile record is pruned.
+        assert firmware.uow.bios_files.get("psx", "scph5501.bin") is None
 
     @staticmethod
     def _gamecube_service(firmware, tmp_path):
@@ -4475,7 +4528,7 @@ class TestDeletePlatformBios:
             {
                 "id": 7,
                 "file_name": "IPL.bin",
-                "file_path": "bios/gc/IPL.bin",
+                "platform_slug": "gc",
                 "file_size_bytes": 8,
                 "md5_hash": "",
             },
@@ -4507,7 +4560,7 @@ class TestDeletePlatformBios:
         fw, store, shipped, ipl = self._gamecube_service(firmware, tmp_path)
         self._record_download(firmware, "IPL.bin", ipl)
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=self._gamecube_listing()):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._gamecube_listing())):
             status: dict[str, Any] = await fw.check_platform_bios("gc")
             # Precondition: the shipped file reaches the delete looking deletable.
             row = next(f for f in status["files"] if f["file_name"] == "codehandler.bin")
@@ -4533,7 +4586,7 @@ class TestDeletePlatformBios:
         """
         fw, store, shipped, ipl = self._gamecube_service(firmware, tmp_path)
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=self._gamecube_listing()):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._gamecube_listing())):
             status: dict[str, Any] = await fw.check_platform_bios("gc")
             row = next(f for f in status["files"] if f["file_name"] == "IPL.bin")
             assert row["downloaded"] is True
@@ -4561,7 +4614,7 @@ class TestDeletePlatformBios:
         fw, store, shipped, ipl = self._gamecube_service(firmware, tmp_path)
         self._record_download(firmware, "IPL.bin", ipl)
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=[]):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms([])):
             status: dict[str, Any] = await fw.check_platform_bios("gc")
             # Both rows now come off the machine's demand, not the listing.
             assert {f["file_name"]: f["on_server"] for f in status["files"]} == {
@@ -4595,7 +4648,7 @@ class TestDeletePlatformBios:
         store.files[flat] = b"\x00" * 8
         self._record_download(firmware, "codehandler.bin", flat)
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=self._gamecube_listing()):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._gamecube_listing())):
             status: dict[str, Any] = await fw.check_platform_bios("gc")
             # Precondition: today's placement puts the row on the shipped copy.
             row = next(f for f in status["files"] if f["file_name"] == "codehandler.bin")
@@ -4622,7 +4675,7 @@ class TestDeletePlatformBios:
         self._record_download(firmware, "IPL.bin", ipl)
         del store.files[ipl]
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=self._gamecube_listing()):
+        with patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._gamecube_listing())):
             result = await fw.delete_platform_bios("gc")
 
         assert isinstance(result, dict)
@@ -4632,12 +4685,12 @@ class TestDeletePlatformBios:
         assert shipped in store.files
 
     @pytest.mark.asyncio
-    async def test_two_records_for_one_file_are_one_deletion(self, firmware, tmp_path):
-        """A platform holding the same file under two firmware slugs deletes it once.
+    async def test_a_record_under_the_platform_s_old_folder_name_is_deleted_once_with_it(self, firmware, tmp_path):
+        """A record filed under the server folder ``ps`` names the file ``psx`` records too.
 
-        ``psx`` reads both ``psx`` and ``ps``. Two rows naming one path is one
-        unlink: the first takes the file, the second finds it gone and prunes
-        over the absence, so neither the count nor the error list doubles.
+        The first read of the listing drops it as the duplicate it is, so the
+        platform's delete takes the file once and leaves no record behind under
+        either name.
         """
         bios_dir = tmp_path / "bios"
         path = os.path.join(str(bios_dir), "scph5501.bin")
@@ -4661,7 +4714,9 @@ class TestDeletePlatformBios:
                 )
             )
 
-        with patch.object(firmware.romm_api, "list_firmware", return_value=[]):
+        listing = _platforms([{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"})
+        with patch.object(firmware.romm_api, "list_platforms", return_value=listing):
+            await fw.get_platform_firmware_status("psx")
             result = await fw.delete_platform_bios("psx")
 
         assert isinstance(result, dict)
@@ -4680,21 +4735,21 @@ class TestCheckPlatformBiosRequired:
             {
                 "id": 1,
                 "file_name": "required1.bin",
-                "file_path": "bios/dc/required1.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "required2.bin",
-                "file_path": "bios/dc/required2.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 200,
                 "md5_hash": "",
             },
             {
                 "id": 3,
                 "file_name": "optional1.bin",
-                "file_path": "bios/dc/optional1.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 300,
                 "md5_hash": "",
             },
@@ -4721,12 +4776,12 @@ class TestCheckPlatformBiosRequired:
         assert result["bios_level"] == "missing"
 
     @pytest.mark.asyncio
-    async def test_a_name_listed_under_both_psx_folders_is_one_row(self, fw):
-        """``psx`` reads two firmware folders; a name RomM lists in both is one file, counted once."""
+    async def test_only_the_files_romm_states_for_the_platform_are_its_library_rows(self, fw):
+        """A file belongs to the platform RomM states for it, never to one whose name its folder resembles."""
         firmware_list = [
-            {"id": 1, "file_name": "scph5501.bin", "file_path": "bios/psx/scph5501.bin", "file_size_bytes": 1},
-            {"id": 2, "file_name": "scph5501.bin", "file_path": "bios/ps/scph5501.bin", "file_size_bytes": 1},
-            {"id": 3, "file_name": "scph5502.bin", "file_path": "bios/ps/scph5502.bin", "file_size_bytes": 1},
+            {"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx", "file_size_bytes": 1},
+            {"id": 2, "file_name": "scph5501.bin", "platform_slug": "ps", "file_size_bytes": 1},
+            {"id": 3, "file_name": "scph5502.bin", "platform_slug": "ps", "file_size_bytes": 1},
         ]
         _declare(fw, ("scph5501.bin", "PS1 BIOS (US)", True), ("scph5502.bin", "PS1 BIOS (EU)", False))
         _stub_listing(fw, firmware_list)
@@ -4734,8 +4789,8 @@ class TestCheckPlatformBiosRequired:
 
         result = await fw.check_platform_bios("psx")
 
-        assert (result["server_count"], result["required_count"]) == (2, 1)
-        assert [f["file_name"] for f in result["files"]] == ["scph5501.bin", "scph5502.bin"]
+        assert (result["server_count"], result["required_count"]) == (1, 1)
+        assert [f["file_name"] for f in result["files"] if f["on_server"]] == ["scph5501.bin"]
 
     @pytest.mark.asyncio
     async def test_all_required_downloaded(self, fw, tmp_path):
@@ -4752,21 +4807,21 @@ class TestCheckPlatformBiosRequired:
             {
                 "id": 1,
                 "file_name": "required1.bin",
-                "file_path": "bios/dc/required1.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "required2.bin",
-                "file_path": "bios/dc/required2.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 200,
                 "md5_hash": "",
             },
             {
                 "id": 3,
                 "file_name": "optional1.bin",
-                "file_path": "bios/dc/optional1.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 300,
                 "md5_hash": "",
             },
@@ -4807,14 +4862,14 @@ class TestCheckPlatformBiosRequired:
             {
                 "id": 1,
                 "file_name": "required1.bin",
-                "file_path": "bios/dc/required1.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "required2.bin",
-                "file_path": "bios/dc/required2.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 200,
                 "md5_hash": "",
             },
@@ -4837,7 +4892,7 @@ class TestCheckPlatformBiosRequired:
     async def test_per_file_required_and_description(self, fw, tmp_path):
         """Individual files carry the declaring core's required flag and description."""
         firmware_list = [
-            {"id": 1, "file_name": "bios.bin", "file_path": "bios/dc/bios.bin", "file_size_bytes": 100, "md5_hash": ""},
+            {"id": 1, "file_name": "bios.bin", "platform_slug": "dc", "file_size_bytes": 100, "md5_hash": ""},
         ]
 
         _declare(fw, ("bios.bin", "Dreamcast BIOS", True))
@@ -4864,21 +4919,21 @@ class TestCheckPlatformBiosRequired:
             {
                 "id": 1,
                 "file_name": "known.bin",
-                "file_path": "bios/dc/known.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "mystery.bin",
-                "file_path": "bios/dc/mystery.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 200,
                 "md5_hash": "",
             },
             {
                 "id": 3,
                 "file_name": "alien.bin",
-                "file_path": "bios/dc/alien.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 300,
                 "md5_hash": "",
             },
@@ -4911,16 +4966,18 @@ class TestCheckPlatformBiosRequired:
         from tests.fakes.fake_core_info_provider import libretro_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 1, "file_name": "known.bin", "file_path": "bios/dc/known.bin", "file_size_bytes": 1, "md5_hash": ""},
-            {
-                "id": 2,
-                "file_name": "mystery.bin",
-                "file_path": "bios/dc/mystery.bin",
-                "file_size_bytes": 1,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {"id": 1, "file_name": "known.bin", "platform_slug": "dc", "file_size_bytes": 1, "md5_hash": ""},
+                {
+                    "id": 2,
+                    "file_name": "mystery.bin",
+                    "platform_slug": "dc",
+                    "file_size_bytes": 1,
+                    "md5_hash": "",
+                },
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             core_info=FakeCoreInfoProvider(options=[libretro_option("flycast_libretro", "Flycast")]),
@@ -4951,9 +5008,11 @@ class TestCheckPlatformBiosRequired:
         from tests.fakes.fake_core_info_provider import standalone_option
 
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 1, "file_name": "PS3UPDAT.PUP", "file_path": "bios/ps3/PS3UPDAT.PUP", "file_size_bytes": 1},
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {"id": 1, "file_name": "PS3UPDAT.PUP", "platform_slug": "ps3", "file_size_bytes": 1},
+            ]
+        )
         fw = _make_firmware_service(
             romm_api=romm_api,
             core_info=FakeCoreInfoProvider(options=[standalone_option("%EMULATOR_RPCS3% %ROM%", "RPCS3")]),
@@ -4970,10 +5029,10 @@ class TestCheckPlatformBiosRequired:
 
 
 class TestCheckPlatformBiosSlugNormalization:
-    """check_platform_bios resolves slug→system for the active-core INPUT, keeps raw slug for BIOS.
+    """check_platform_bios resolves slug→system for the active-core INPUT, keeps the RomM slug for BIOS.
 
-    The firmware ``file_path`` and bios registry are keyed on the raw RomM
-    platform slug (BIOS-folder vocabulary, ADR-0010 §4). The active-core read used
+    The library's firmware and the download records are keyed on the RomM
+    platform slug (ADR-0010 §4). The active-core read used
     to filter the firmware list must instead receive the resolved RetroDECK system.
     The method no longer reads ``get_available_cores`` — core info is served via the
     dedicated ``get_platform_core_info`` path (#923).
@@ -5001,7 +5060,7 @@ class TestCheckPlatformBiosSlugNormalization:
             {
                 "id": 1,
                 "file_name": "boot.bin",
-                "file_path": f"bios/{slug}/boot.bin",
+                "platform_slug": slug,
                 "file_size_bytes": 512,
                 "md5_hash": "",
             },
@@ -5013,7 +5072,7 @@ class TestCheckPlatformBiosSlugNormalization:
 
         result = await fw.check_platform_bios(slug)
 
-        # RAW slug matched the firmware file_path, so a file is found.
+        # The RomM slug matched the file's platform, so a file is found.
         assert result["needs_bios"] is True
         assert result["server_count"] == 1
         # The core read seam received the NORMALIZED system.
@@ -5078,7 +5137,7 @@ class TestCheckPlatformBiosNoCoreFields:
         _resolver(fw).describe_emulator(_id("genesisplusgx_libretro"))
         _set_loop(fw, asyncio.get_running_loop())
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await fw.check_platform_bios("sms")
 
         # No emulator wants anything and the whole scope was read, so "needs
@@ -5104,7 +5163,7 @@ class TestCheckPlatformBiosNoCoreFields:
             {
                 "id": 1,
                 "file_name": "gba_bios.bin",
-                "file_path": "bios/gba/gba_bios.bin",
+                "platform_slug": "gba",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
@@ -5135,14 +5194,14 @@ class TestDownloadRequiredFirmware:
             {
                 "id": 1,
                 "file_name": "required.bin",
-                "file_path": "bios/dc/required.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "optional.bin",
-                "file_path": "bios/dc/optional.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 200,
                 "md5_hash": "",
             },
@@ -5160,7 +5219,7 @@ class TestDownloadRequiredFirmware:
             return {"success": True}
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_firmware),
         ):
             result = await fw.download_required_firmware("dc")
@@ -5180,7 +5239,7 @@ class TestDownloadRequiredFirmware:
         """
         fw = _make_firmware_service(core_info=FakeCoreInfoProvider(active_core=("flycast_libretro", "Flycast")))
         _resolver(fw).declare("boot.bin", required_by=[_id("flycast_libretro")])
-        _stub_listing(fw, [{"id": 1, "file_name": "boot.bin", "file_path": "bios/dc/boot.bin", "md5_hash": ""}])
+        _stub_listing(fw, [{"id": 1, "file_name": "boot.bin", "platform_slug": "dc", "md5_hash": ""}])
         _inline_executor(fw)
 
         with patch.object(fw._downloads, "_download_one") as fetch:
@@ -5202,15 +5261,17 @@ class TestDownloadRequiredFirmware:
         the platform resolves to decides the whole answer.
         """
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {
-                "id": 1,
-                "file_name": "gba_bios.bin",
-                "file_path": "bios/gba/gba_bios.bin",
-                "file_size_bytes": 100,
-                "md5_hash": "",
-            },
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [
+                {
+                    "id": 1,
+                    "file_name": "gba_bios.bin",
+                    "platform_slug": "gba",
+                    "file_size_bytes": 100,
+                    "md5_hash": "",
+                },
+            ]
+        )
         resolver = FakeFirmwareResolver()
         resolver.declare(
             "gba_bios.bin",
@@ -5259,9 +5320,9 @@ class TestDownloadRequiredFirmware:
         counted on the button and fetched by it.
         """
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 1, "file_name": "gba_bios.bin", "file_path": "bios/gba/gba_bios.bin", "file_size_bytes": 100}
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [{"id": 1, "file_name": "gba_bios.bin", "platform_slug": "gba", "file_size_bytes": 100}]
+        )
         resolver = FakeFirmwareResolver()
         resolver.declare(
             "gba_bios.bin",
@@ -5333,8 +5394,8 @@ class TestDownloadRequiredFirmware:
     async def test_resolves_system_for_active_core_keeps_raw_slug_for_filter(self):
         """Active-core read gets the NORMALIZED system; the firmware filter stays raw.
 
-        ``download_required_firmware`` keys the firmware-slug filter on the raw
-        RomM/BIOS-folder slug (ADR-0010 §4) but must resolve the slug to a
+        ``download_required_firmware`` keys the library filter on the RomM
+        platform slug (ADR-0010 §4) but must resolve the slug to a
         RetroDECK system before reading the platform's emulators (ADR-0010 §2) so
         the per-core required flags use the correct active core.
         """
@@ -5348,7 +5409,7 @@ class TestDownloadRequiredFirmware:
             {
                 "id": 1,
                 "file_name": "boot.bin",
-                "file_path": "bios/dc/boot.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
@@ -5368,7 +5429,7 @@ class TestDownloadRequiredFirmware:
         with patch.object(fw._downloads, "_download_one", side_effect=fake_download_firmware):
             result = await fw.download_required_firmware("dc")
 
-        # RAW slug matched the firmware file_path filter, so the file is considered.
+        # The RomM slug matched the file's platform, so the file is considered.
         # The per-core required flag (keyed on the active core from the NORMALIZED
         # system) marked it required, so it was downloaded.
         assert result["downloaded"] == 1
@@ -5391,14 +5452,14 @@ class TestDownloadRequiredFirmware:
             {
                 "id": 1,
                 "file_name": "existing.bin",
-                "file_path": "bios/dc/existing.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 100,
                 "md5_hash": "",
             },
             {
                 "id": 2,
                 "file_name": "missing.bin",
-                "file_path": "bios/dc/missing.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 200,
                 "md5_hash": "",
             },
@@ -5415,7 +5476,7 @@ class TestDownloadRequiredFirmware:
             return {"success": True}
 
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(firmware_list)),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_firmware),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
@@ -5451,7 +5512,7 @@ class TestCheckPlatformBiosOffline:
         )
         _set_loop(fw, asyncio.get_running_loop())
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await fw.check_platform_bios("dc")
 
         assert result["needs_bios"] is True
@@ -5472,7 +5533,7 @@ class TestCheckPlatformBiosOffline:
         """
         _resolver(fw).describe_emulator(_id(_TEST_CORE))
         with (
-            patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")),
+            patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
         ):
             result = await fw.check_platform_bios("n64")
@@ -5495,7 +5556,7 @@ class TestCheckPlatformBiosOffline:
         )
         _set_loop(fw, asyncio.get_running_loop())
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await fw.check_platform_bios("n64")
 
         assert result == {"needs_bios": False, "bios_status_unknown": True}
@@ -5507,7 +5568,7 @@ class TestCheckPlatformBiosOffline:
             {
                 "id": 1,
                 "file_name": "scph5501.bin",
-                "file_path": "bios/ps/scph5501.bin",
+                "platform_slug": "psx",
                 "file_size_bytes": 512,
                 "md5_hash": "",
             },
@@ -5515,7 +5576,7 @@ class TestCheckPlatformBiosOffline:
         fw._listing._firmware_cache_epoch = fw._config.clock.time()
         _declare(fw, ("scph5501.bin", "PS1 US BIOS", True))
 
-        with patch.object(firmware.romm_api, "list_firmware", side_effect=Exception("offline")):
+        with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await fw.check_platform_bios("psx")
 
         assert result["needs_bios"] is True
@@ -5531,7 +5592,7 @@ class TestCheckPlatformBiosOffline:
         """
         _resolver(fw).describe_emulator(_id(_TEST_CORE))
         with (
-            patch.object(firmware.romm_api, "list_firmware", return_value=[]),
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms([])),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
         ):
             result = await fw.check_platform_bios("n64")
@@ -5574,7 +5635,7 @@ class TestPerCoreFiltering:
             {
                 "id": i + 1,
                 "file_name": name,
-                "file_path": f"bios/gba/{name}",
+                "platform_slug": "gba",
                 "file_size_bytes": 100 * (i + 1),
                 "md5_hash": "",
             }
@@ -5592,7 +5653,7 @@ class TestPerCoreFiltering:
         bakeable for, which is an empty list rather than a named emulator.
         """
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = self._gba_firmware()
+        romm_api.list_platforms.return_value = _platforms(self._gba_firmware())
         core_so, label = active_core
         options = [libretro_option(core_so, label)] if core_so is not None and label is not None else []
         fw = _make_firmware_service(
@@ -5722,7 +5783,7 @@ class TestCheckPlatformBiosPreResolvedCore:
         filter and that ``get_active_core`` is NOT consulted when a core is supplied.
         """
         firmware_list = [
-            {"id": 1, "file_name": "gba_bios.bin", "file_path": "bios/gba/gba_bios.bin", "md5_hash": ""},
+            {"id": 1, "file_name": "gba_bios.bin", "platform_slug": "gba", "md5_hash": ""},
         ]
         self._gba_two_core_service(fw, firmware_list)
         # System default = mGBA (optional). The per-game override should win.
@@ -5745,7 +5806,7 @@ class TestCheckPlatformBiosPreResolvedCore:
         opposite of the override case, locking in the result-flip.
         """
         firmware_list = [
-            {"id": 1, "file_name": "gba_bios.bin", "file_path": "bios/gba/gba_bios.bin", "md5_hash": ""},
+            {"id": 1, "file_name": "gba_bios.bin", "platform_slug": "gba", "md5_hash": ""},
         ]
         self._gba_two_core_service(fw, firmware_list)
         _set_platform_emulator(fw, "mgba_libretro", "mGBA")
@@ -5774,22 +5835,22 @@ class TestDownloadFirmwareErrors:
             await download
 
     @pytest.mark.asyncio
-    async def test_malformed_file_path_refuses_and_persists_nothing(self, firmware, fw, tmp_path):
-        """A firmware whose file_path yields an empty slug fails the BiosFile invariant.
+    async def test_a_file_listed_without_a_platform_refuses_and_persists_nothing(self, firmware, fw, tmp_path):
+        """A listed file with an empty platform fails the BiosFile invariant.
 
-        The service catches the aggregate's ValueError, removes the renamed
-        file, persists no record and refuses with ``invalid_firmware``.
+        The listing never files a file on no platform, so this is the guard
+        behind it: the service catches the aggregate's ValueError, removes the
+        renamed file, persists no record and refuses with ``invalid_firmware``.
         """
         content = b"firmware bytes"
-        # file_path has a single segment → parse_firmware_slug returns "" →
-        # BiosFile.mark_downloaded raises ValueError("platform_slug ... required").
         fw_detail = {
             "id": 7,
             "file_name": "orphan.bin",
-            "file_path": "orphan.bin",
             "file_size_bytes": len(content),
             "md5_hash": "",
         }
+        fw._listing._firmware_cache = [{**fw_detail, "platform_slug": ""}]
+        fw._listing._firmware_cache_epoch = fw._config.clock.time()
 
         bios_dir = tmp_path / "bios"
         bios_dir.mkdir()
@@ -5813,7 +5874,7 @@ class TestDownloadFirmwareErrors:
         assert "Invalid firmware metadata" in refused.value.message
         # The renamed/downloaded file was cleaned up — nothing left dangling.
         assert not os.path.exists(os.path.join(str(bios_dir), "orphan.bin"))
-        # No BiosFile record persisted (empty slug key would be ("", "orphan.bin")).
+        # No BiosFile record persisted (its key would be ("", "orphan.bin")).
         assert firmware.uow.bios_files.get("", "orphan.bin") is None
         assert list(firmware.uow.bios_files.iter_all()) == []
 
@@ -5831,13 +5892,12 @@ class TestASingleDownloadThatFails:
     _FW: ClassVar[dict[str, Any]] = {
         "id": 4,
         "file_name": "dc_boot.bin",
-        "file_path": "bios/dc/dc_boot.bin",
         "md5_hash": "",
     }
     _TMP = "/fake/bios/dc_boot.bin.tmp"
 
     def _service(self, fake_romm_api, store: FakeFirmwareFileStore) -> FirmwareService:
-        fake_romm_api.firmware_files = [dict(self._FW)]
+        fake_romm_api.seed_firmware("dc", dict(self._FW))
         fw = _make_firmware_service(
             romm_api=fake_romm_api,
             firmware_file_store=store,
@@ -5945,7 +6005,7 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
         _stub_listing(
             fw,
             [
-                {"id": n, "file_name": f"{name}.bin", "file_path": f"bios/dc/{name}.bin", "md5_hash": ""}
+                {"id": n, "file_name": f"{name}.bin", "platform_slug": "dc", "md5_hash": ""}
                 for n, name in enumerate(self._NAMES, start=1)
             ],
         )
@@ -6025,6 +6085,177 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
 # ── Firmware list cache tests ─────────────────────────────
 
 
+class TestThePlatformRommStatesForAFile:
+    """A library file belongs to the platform RomM states for it (``platform_id``), whatever folder holds it."""
+
+    # RomM's firmware structure ``bios_from_user/{platform}``: every platform's
+    # files sit below one folder, and the folder names no platform.
+    _FROM_USER: ClassVar[list[dict[str, Any]]] = [
+        {"id": 1, "file_name": "scph5501.bin", "file_path": "bios_from_user/psx", "platform_slug": "psx"},
+        {"id": 2, "file_name": "gba_bios.bin", "file_path": "bios_from_user/gba", "platform_slug": "gba"},
+    ]
+
+    @pytest.mark.asyncio
+    async def test_with_firmware_under_bios_from_user_every_platform_finds_its_files(self, fw):
+        _stub_listing(fw, self._FROM_USER)
+        _inline_executor(fw)
+
+        entries = await _entries(fw, "psx", "gba")
+
+        assert [f["file_name"] for f in entries["psx"]["files"] if f["on_server"]] == ["scph5501.bin"]
+        assert [f["file_name"] for f in entries["gba"]["files"] if f["on_server"]] == ["gba_bios.bin"]
+
+    @pytest.mark.asyncio
+    async def test_with_firmware_under_bios_from_user_download_bios_fetches_the_platform_s_files(self, fw, tmp_path):
+        _stub_listing(fw, self._FROM_USER)
+        _set_loop(fw, asyncio.get_running_loop())
+        fetched: list[int] = []
+
+        async def fake_download_one(fw_id, _placements):
+            fetched.append(fw_id)
+            return {"success": True}
+
+        with (
+            patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
+            patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
+        ):
+            result = await fw.download_all_firmware("psx")
+
+        assert (result["downloaded"], fetched) == (1, [1])
+
+    @pytest.mark.asyncio
+    async def test_a_platform_whose_server_folder_differs_from_its_slug_keeps_its_rows(self, fw):
+        api = fw._config.romm_api
+        assert isinstance(api, MagicMock)
+        api.list_platforms.return_value = _platforms(
+            [{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"}
+        )
+        _inline_executor(fw)
+
+        entries = await _entries(fw, "psx")
+
+        assert [f["file_name"] for f in entries["psx"]["files"] if f["on_server"]] == ["scph5501.bin"]
+
+    @pytest.mark.asyncio
+    async def test_a_platform_whose_server_folder_differs_from_its_slug_downloads_and_deletes(self, firmware, tmp_path):
+        """The record a download writes is filed under the platform, so the platform's delete finds it."""
+        bios_dir = tmp_path / "bios"
+        bios_dir.mkdir()
+        fw = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            retrodeck_folders=FakeRetroDeckFolders(bios=str(bios_dir)),
+            core_info=_test_core_info(),
+        )
+        _set_loop(fw, asyncio.get_running_loop())
+        row = {"id": 1, "file_name": "scph5501.bin", "md5_hash": "", "file_size_bytes": 4}
+        firmware.romm_api.list_platforms.return_value = _platforms(
+            [{**row, "platform_slug": "psx"}], folders={"psx": "ps"}
+        )
+        firmware.romm_api.get_firmware.return_value = dict(row)
+
+        def write(_firmware_id, _file_name, dest):
+            with open(dest, "wb") as f:
+                f.write(b"bios")
+
+        firmware.romm_api.download_firmware.side_effect = write
+
+        downloaded = await fw.download_platform_firmware_file("psx", "scph5501.bin")
+        recorded = firmware.uow.bios_files.get("psx", "scph5501.bin")
+        deleted = await fw.delete_bios_file("psx", "scph5501.bin")
+
+        assert downloaded["downloaded"] == 1
+        assert recorded is not None
+        assert isinstance(deleted, dict)
+        assert deleted["deleted_count"] == 1
+        assert not (bios_dir / "scph5501.bin").exists()
+        assert list(firmware.uow.bios_files.iter_all()) == []
+
+    @pytest.mark.asyncio
+    async def test_a_record_filed_under_the_server_folder_name_is_deleted_with_its_platform(self, firmware, tmp_path):
+        bios_dir = tmp_path / "bios"
+        bios_dir.mkdir()
+        (bios_dir / "scph5501.bin").write_bytes(b"bios")
+        fw = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            retrodeck_folders=FakeRetroDeckFolders(bios=str(bios_dir)),
+            core_info=_test_core_info(),
+        )
+        _set_loop(fw, asyncio.get_running_loop())
+        firmware.uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_slug="ps",
+                file_name="scph5501.bin",
+                file_path=str(bios_dir / "scph5501.bin"),
+                downloaded_at="2026-01-01T00:00:00+00:00",
+                firmware_id=1,
+            )
+        )
+        firmware.romm_api.list_platforms.return_value = _platforms(
+            [{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"}
+        )
+
+        entry = (await fw.get_platform_firmware_status("psx"))["platform"]
+        deleted = await fw.delete_platform_bios("psx")
+
+        assert entry["deletable_count"] == 1
+        assert isinstance(deleted, dict)
+        assert deleted["deleted_count"] == 1
+        assert not (bios_dir / "scph5501.bin").exists()
+
+
+class TestTheListingMovesOlderEntries:
+    """A fresh read of the listing moves Tender's older entries; a cached read and a failed move cost nothing."""
+
+    def _service(self, uow: FakeUnitOfWork) -> FirmwareService:
+        api = MagicMock()
+        api.list_platforms.return_value = _platforms(
+            [{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"}
+        )
+        uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_slug="ps",
+                file_name="scph5501.bin",
+                file_path="/bios/scph5501.bin",
+                downloaded_at="2026-01-01T00:00:00+00:00",
+                firmware_id=1,
+            )
+        )
+        return _make_firmware_service(romm_api=api, uow_factory=FakeUnitOfWorkFactory(uow))
+
+    def test_a_fresh_read_moves_a_record_to_its_platform(self):
+        uow = FakeUnitOfWork()
+        fw = self._service(uow)
+
+        fw._listing.get_firmware_list()
+
+        assert [(r.platform_slug, r.file_name) for r in uow.bios_files.iter_all()] == [("psx", "scph5501.bin")]
+
+    def test_a_cached_read_moves_nothing(self):
+        uow = FakeUnitOfWork()
+        fw = self._service(uow)
+        fw._listing._firmware_cache = []
+        fw._listing._firmware_cache_epoch = fw._config.clock.time()
+
+        fw._listing.get_firmware_list()
+
+        assert [(r.platform_slug, r.file_name) for r in uow.bios_files.iter_all()] == [("ps", "scph5501.bin")]
+
+    def test_a_move_that_fails_costs_nothing_of_the_listing(self, caplog):
+        uow = FakeUnitOfWork()
+        fw = self._service(uow)
+
+        with (
+            patch.object(uow.bios_files, "iter_all", side_effect=OSError("db locked")),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = fw._listing.get_firmware_list()
+
+        assert [row["file_name"] for row in result] == ["scph5501.bin"]
+        assert "Failed to move older BIOS records and picks to their platforms" in caplog.text
+
+
 class TestFirmwareListCache:
     """Tests for _get_firmware_list caching behaviour."""
 
@@ -6034,35 +6265,35 @@ class TestFirmwareListCache:
     def test_firmware_list_cached(self):
         """Second call returns cached data without hitting the API again."""
         api = MagicMock()
-        api.list_firmware.return_value = [{"id": 1, "file_name": "bios.bin"}]
+        api.list_platforms.return_value = _platforms([{"id": 1, "file_name": "bios.bin", "platform_slug": "dc"}])
         fw = self._make_service(api)
 
         result1 = fw._listing.get_firmware_list()
         result2 = fw._listing.get_firmware_list()
 
-        assert result1 == [{"id": 1, "file_name": "bios.bin"}]
+        assert result1 == [{"id": 1, "file_name": "bios.bin", "platform_id": 1, "platform_slug": "dc"}]
         assert result2 == result1
-        assert api.list_firmware.call_count == 1
+        assert api.list_platforms.call_count == 1
 
     def test_firmware_cache_ttl_expired(self):
         """After TTL expires, _get_firmware_list re-fetches from the API."""
         api = MagicMock()
-        api.list_firmware.side_effect = [
-            [{"id": 1}],
-            [{"id": 1}, {"id": 2}],
+        api.list_platforms.side_effect = [
+            _platforms([{"id": 1, "platform_slug": "dc"}]),
+            _platforms([{"id": 1, "platform_slug": "dc"}, {"id": 2, "platform_slug": "dc"}]),
         ]
         fw = self._make_service(api)
 
         result1 = fw._listing.get_firmware_list()
         assert len(result1) == 1
-        assert api.list_firmware.call_count == 1
+        assert api.list_platforms.call_count == 1
 
         # Simulate TTL expiry by backdating the wall-clock cache epoch
         fw._listing._firmware_cache_epoch = fw._config.clock.time() - 3601
 
         result2 = fw._listing.get_firmware_list()
         assert len(result2) == 2
-        assert api.list_firmware.call_count == 2
+        assert api.list_platforms.call_count == 2
 
     def test_firmware_cache_ttl_uses_wall_clock_across_restart(self):
         """Cache restored from the DB with stale ``cached_at`` must re-fetch.
@@ -6085,16 +6316,16 @@ class TestFirmwareListCache:
         )
 
         api = MagicMock()
-        api.list_firmware.return_value = [{"id": 2, "file_name": "fresh.bin"}]
+        api.list_platforms.return_value = _platforms([{"id": 2, "file_name": "fresh.bin", "platform_slug": "dc"}])
         fw = _make_firmware_service(romm_api=api, uow_factory=FakeUnitOfWorkFactory(uow), clock=clock)
 
-        # The restored in-memory cache is reconstructed from the thin aggregate:
-        # synthetic file_path round-trips through parse_firmware_slug, md5 dropped.
+        # The restored in-memory cache is reconstructed from the thin aggregate,
+        # its platform kept and its md5 dropped.
         assert fw._listing._firmware_cache == [
             {
                 "id": 1,
                 "file_name": "bios.bin",
-                "file_path": "bios/dc/bios.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 2048,
                 "md5_hash": "",
             }
@@ -6103,31 +6334,31 @@ class TestFirmwareListCache:
 
         result = fw._listing.get_firmware_list()
 
-        assert result == [{"id": 2, "file_name": "fresh.bin"}]
-        assert api.list_firmware.call_count == 1
+        assert result == [{"id": 2, "file_name": "fresh.bin", "platform_id": 1, "platform_slug": "dc"}]
+        assert api.list_platforms.call_count == 1
 
     def test_firmware_cache_invalidate(self):
         """Explicit invalidation triggers a re-fetch on next call."""
         api = MagicMock()
-        api.list_firmware.side_effect = [
-            [{"id": 1}],
-            [{"id": 1}, {"id": 2}],
+        api.list_platforms.side_effect = [
+            _platforms([{"id": 1, "platform_slug": "dc"}]),
+            _platforms([{"id": 1, "platform_slug": "dc"}, {"id": 2, "platform_slug": "dc"}]),
         ]
         fw = self._make_service(api)
 
         fw._listing.get_firmware_list()
-        assert api.list_firmware.call_count == 1
+        assert api.list_platforms.call_count == 1
 
         fw.invalidate_firmware_cache()
         result = fw._listing.get_firmware_list()
         assert len(result) == 2
-        assert api.list_firmware.call_count == 2
+        assert api.list_platforms.call_count == 2
 
     def test_firmware_cache_fallback_on_error(self):
         """HTTP error returns stale cached data instead of raising."""
         api = MagicMock()
-        api.list_firmware.side_effect = [
-            [{"id": 1, "file_name": "bios.bin"}],
+        api.list_platforms.side_effect = [
+            _platforms([{"id": 1, "file_name": "bios.bin", "platform_slug": "dc"}]),
             Exception("connection refused"),
         ]
         fw = self._make_service(api)
@@ -6141,12 +6372,12 @@ class TestFirmwareListCache:
 
         result2 = fw._listing.get_firmware_list()
         assert result2 == result1  # Falls back to stale cache
-        assert api.list_firmware.call_count == 2
+        assert api.list_platforms.call_count == 2
 
     def test_firmware_cache_error_no_cache_raises(self):
         """HTTP error with no prior cache re-raises so callers can detect offline."""
         api = MagicMock()
-        api.list_firmware.side_effect = Exception("connection refused")
+        api.list_platforms.side_effect = Exception("connection refused")
         fw = self._make_service(api)
 
         with pytest.raises(Exception, match="connection refused"):
@@ -6170,12 +6401,12 @@ class TestFirmwareCachePersistence:
 
         fw = _make_firmware_service(uow_factory=FakeUnitOfWorkFactory(uow))
 
-        # Reconstructed thin dict: synthetic file_path, md5 dropped.
+        # Reconstructed thin dict: the file's platform kept, md5 dropped.
         assert fw._listing._firmware_cache == [
             {
                 "id": 1,
                 "file_name": "bios.bin",
-                "file_path": "bios/dc/bios.bin",
+                "platform_slug": "dc",
                 "file_size_bytes": 512,
                 "md5_hash": "",
             }
@@ -6196,15 +6427,15 @@ class TestFirmwareCachePersistence:
 
     def test_cache_persisted_after_http_fetch(self, firmware, fw):
         """Firmware cache written to the DB after a successful HTTP fetch."""
-        firmware_list = [{"id": 1, "file_name": "bios.bin", "file_path": "bios/dc/bios.bin", "file_size_bytes": 512}]
+        firmware_list = [{"id": 1, "file_name": "bios.bin", "platform_slug": "dc", "file_size_bytes": 512}]
         _stub_listing(fw, firmware_list)
         fw._listing._firmware_cache = None  # Force refetch
 
         result = fw._listing.get_firmware_list()
 
-        assert result == firmware_list
+        assert result == [{**firmware_list[0], "platform_id": 1}]
         assert firmware.uow.firmware_cache.replace_count == 1
-        # The thin aggregate carries the parsed slug ("dc") and name.
+        # The thin aggregate carries the file's platform ("dc") and name.
         stored = firmware.uow.firmware_cache.get("dc", "bios.bin")
         assert stored is not None
         assert stored.id == 1
@@ -6227,15 +6458,15 @@ class TestFirmwareCachePersistence:
 
     def test_persist_failure_does_not_crash_fetch(self, firmware, fw):
         """A DB write failure during fetch doesn't break the return value."""
-        firmware_list = [{"id": 1, "file_name": "bios.bin", "file_path": "bios/dc/bios.bin", "file_size_bytes": 512}]
+        firmware_list = [{"id": 1, "file_name": "bios.bin", "platform_slug": "dc", "file_size_bytes": 512}]
         _stub_listing(fw, firmware_list)
         fw._listing._firmware_cache = None
 
         with patch.object(firmware.uow.firmware_cache, "replace_all", side_effect=OSError("disk full")):
             result = fw._listing.get_firmware_list()
 
-        assert result == firmware_list
-        assert fw._listing._firmware_cache == firmware_list
+        assert result == [{**firmware_list[0], "platform_id": 1}]
+        assert fw._listing._firmware_cache == result
 
 
 class TestDeletePlatformBiosIOLogsWarnings:
@@ -6384,7 +6615,7 @@ class TestBadPathFirmwareUseCases:
 
     @pytest.mark.asyncio
     async def test_download_all_firmware_propagates_a_failed_list_fetch(self, fake_romm_api, caplog):
-        """An initial ``list_firmware`` failure propagates before anything is fetched."""
+        """An initial listing failure propagates before anything is fetched."""
         import logging
 
         fw = self._build_service(fake_romm_api)
@@ -6401,7 +6632,7 @@ class TestBadPathFirmwareUseCases:
 
     @pytest.mark.asyncio
     async def test_download_required_firmware_propagates_a_failed_list_fetch(self, fake_romm_api, caplog):
-        """An initial ``list_firmware`` failure propagates before anything is fetched."""
+        """An initial listing failure propagates before anything is fetched."""
         import logging
 
         fw = self._build_service(fake_romm_api)
@@ -6532,7 +6763,7 @@ class TestThePlatformsSystem:
         resolver = FakeFirmwareResolver()
         platform = PlatformSystem(NO_SYSTEM, "dc", "Dreamcast", source=RETRODECK_SOURCE)
         fw, core_info = self._service(firmware, FakePlatformSystems(answers={"dc": platform}), resolver)
-        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "platform_slug": "dc"}])
 
         answer = (await fw.get_platform_firmware_status("dc"))["platform"]
 
@@ -6550,7 +6781,7 @@ class TestThePlatformsSystem:
     async def test_a_downloaded_games_bios_download_places_for_its_recorded_system(self, firmware, tmp_path):
         resolver = FakeFirmwareResolver()
         fw, _ = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
-        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "platform_slug": "dc"}])
         with firmware.uow:
             firmware.uow.roms.save(
                 Rom(
@@ -6585,7 +6816,7 @@ class TestThePlatformsSystem:
     async def test_the_platform_pages_bios_download_follows_the_current_system(self, firmware, tmp_path):
         resolver = FakeFirmwareResolver()
         fw, _ = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
-        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "platform_slug": "dc"}])
 
         with (
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
@@ -6603,7 +6834,7 @@ class TestThePlatformsSystem:
         resolver = FakeFirmwareResolver()
         platform = PlatformSystem(state, "dc", "Dreamcast", system="dreamcast", source=RETRODECK_SOURCE)
         fw, _ = self._service(firmware, FakePlatformSystems(answers={"dc": platform}), resolver)
-        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "platform_slug": "dc"}])
 
         with (
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
@@ -6647,9 +6878,9 @@ class TestEachEmulatorsOwnPlace:
         (bios_dir / "kronos").mkdir(parents=True)
         (bios_dir / "kronos" / "saturn_bios.bin").write_bytes(b"\x00" * 8)
         romm_api = MagicMock()
-        romm_api.list_firmware.return_value = [
-            {"id": 7, "file_name": "saturn_bios.bin", "file_path": "bios/saturn/saturn_bios.bin", "file_size_bytes": 8}
-        ]
+        romm_api.list_platforms.return_value = _platforms(
+            [{"id": 7, "file_name": "saturn_bios.bin", "platform_slug": "saturn", "file_size_bytes": 8}]
+        )
         resolver = FakeFirmwareResolver()
         declarations = [(_KRONOS, "kronos/saturn_bios.bin"), (_YABASANSHIRO, "saturn_bios.bin")]
         for core, place in declarations if kronos_first else reversed(declarations):
