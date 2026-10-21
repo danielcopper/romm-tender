@@ -1036,7 +1036,10 @@ class TestFinalizeMigrationGate:
         assert post.calls == []
         assert result.sync.offline is False
         assert result.sync.success is False
-        assert result.sync.failure_toast == "Failed to sync saves after exit"
+        assert (
+            result.sync.failure_toast
+            == "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
+        )
         # Playtime + migration refresh still ran.
         assert result.total_seconds == 3600
         assert migration.refresh_calls == 1

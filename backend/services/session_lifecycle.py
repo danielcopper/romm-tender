@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
 from lib.background_tasks import BackgroundTasks
+from lib.conflict_rules import MIGRATION_MESSAGE
 from lib.errors import DeviceSyncDisabled, Refused, RommApiError, SyncBusy, classify_error, romm_error_log_level
 
 if TYPE_CHECKING:
@@ -326,7 +327,8 @@ class SessionLifecycleService:
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
         While an update is being installed or a RetroDECK migration is pending
         the post-exit sync does not run, the log says which held it off, and
-        the verdict is the failed-sync one; for an update its toast says so.
+        the verdict is the failed-sync one, toasted with what held it off: the
+        update's own body, or the sentence every migration refusal answers with.
         The ``finalize_game_session`` use case checks neither rule, so this is
         the first check either meets on the way to that sync. A refusal the
         sync raises is toasted from its reason and message — as offline when
@@ -336,7 +338,7 @@ class SessionLifecycleService:
         if self._update_in_progress():
             return self._skipped_sync(rom_id, "an update is being installed", _TOAST_BODY_UPDATING)
         if self._migration_reader.is_retrodeck_migration_pending():
-            return self._skipped_sync(rom_id, "a RetroDECK migration is pending", _TOAST_BODY_FAILED)
+            return self._skipped_sync(rom_id, "a RetroDECK migration is pending", MIGRATION_MESSAGE)
 
         try:
             result = await self._post_exit_sync.post_exit_sync(rom_id)
