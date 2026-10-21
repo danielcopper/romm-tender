@@ -31,6 +31,7 @@ from lib.errors import (
     RommReportedServerError,
     RommServerError,
     RommUnprocessableEntityError,
+    TokenUnsendableError,
     classify_error,
 )
 from lib.list_result import ErrorCode
@@ -343,6 +344,23 @@ class TestKnownUnreachableFastPath:
         verdict would mark the server unreachable on a routine conflict.
         """
         self._failing_ladder(adapter, exc)
+
+        fn = MagicMock(side_effect=RommConnectionError("refused"))
+        with patch("time.sleep"), pytest.raises(RommConnectionError):
+            adapter.with_retry(fn, base_delay=0)
+        assert fn.call_count == 3
+
+    def test_a_token_no_header_can_carry_never_marks_romm_unreachable(self):
+        """The token is refused before any request, so nothing was learned about the server."""
+        adapter = RommHttpAdapter(
+            {"romm_url": "http://romm.local", "romm_api_token": "rmm_fake\r\nX-Injected: 1"},
+            logging.getLogger("test"),
+            "romm-tender/9.9.9",
+            log_debug=lambda _msg: None,
+        )
+        with patch("urllib.request.urlopen") as urlopen, patch("time.sleep"), pytest.raises(TokenUnsendableError):
+            adapter.request("/api/roms")
+        urlopen.assert_not_called()
 
         fn = MagicMock(side_effect=RommConnectionError("refused"))
         with patch("time.sleep"), pytest.raises(RommConnectionError):

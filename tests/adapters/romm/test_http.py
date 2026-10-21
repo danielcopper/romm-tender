@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import ssl
+import traceback
 import urllib.error
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -2563,11 +2564,26 @@ _ANSWERED_FAILURES = {
 }
 
 
-class TestNoCredentialReachesAnErrorOrALog:
-    """No token, custom header value or address password in an error's text, ``classify_error``'s message or a log.
+# The public methods of ``RommHttpAdapter`` that send no request.
+_NOT_REQUEST_METHODS = frozenset(
+    {"auth_header", "is_retryable", "on_retry", "ssl_context", "translate_http_error", "with_retry"}
+)
 
-    Each request method fails every way: answered by RomM or a proxy, unreachable,
-    timed out, and refused by ``http.client`` before it is sent.
+
+def test_every_public_request_method_is_in_the_sentinel_list():
+    """A new public method of ``RommHttpAdapter`` is a request method the sentinel tests call, or named as none."""
+    public = {name for name in vars(RommHttpAdapter) if not name.startswith("_")}
+
+    assert public - _NOT_REQUEST_METHODS == set(_REQUEST_METHODS)
+
+
+class TestNoCredentialReachesAnErrorOrALog:
+    """No token, custom header value or address password in an error, ``classify_error``'s message or a log.
+
+    The error is read as its text, its ``url`` and its whole traceback, the chain
+    included. Each request method fails every way: answered by RomM or a proxy,
+    unreachable, timed out, and refused by ``urllib`` or ``http.client`` before
+    it is sent.
     """
 
     @pytest.fixture
@@ -2595,6 +2611,7 @@ class TestNoCredentialReachesAnErrorOrALog:
         seen = {
             "error text": str(err),
             "error url": str(getattr(err, "url", "")),
+            "traceback": "".join(traceback.format_exception(err)),
             "classify_error message": message,
             "log": caplog.text,
             "log_debug": str(log_debug.call_args_list),
@@ -2626,6 +2643,19 @@ class TestNoCredentialReachesAnErrorOrALog:
         self._assert_no_sentinel(err, caplog, log_debug)
 
     @pytest.mark.parametrize("name", _REQUEST_METHODS)
+    def test_a_scheme_less_address_with_a_password_carries_none(self, secrets_http, caplog, tmp_path, name):
+        """``urllib.request.Request`` itself refuses an address without a scheme, naming all of it."""
+        adapter, settings, log_debug = secrets_http
+        settings["romm_url"] = f"//user:{_ADDRESS_PASSWORD}@romm.local"
+
+        with patch("urllib.request.urlopen") as urlopen:
+            err = self._failure(name, adapter, tmp_path)
+
+        if name != "download_external":
+            urlopen.assert_not_called()
+        self._assert_no_sentinel(err, caplog, log_debug)
+
+    @pytest.mark.parametrize("name", _REQUEST_METHODS)
     def test_a_token_with_a_line_break_carries_none(self, secrets_http, caplog, tmp_path, name):
         adapter, settings, log_debug = secrets_http
         settings["romm_url"] = "https://romm.local"
@@ -2640,7 +2670,7 @@ class TestNoCredentialReachesAnErrorOrALog:
         self._assert_no_sentinel(err, caplog, log_debug)
 
     def test_a_request_that_cannot_be_built_is_answered_with_the_exception_type_and_its_reason(self, secrets_http):
-        """The reason a request ``http.client`` refused answered before stays; only its text changes."""
+        """A request ``http.client`` refused to build keeps the reason it was answered with; only its text changes."""
         adapter, _settings, _log_debug = secrets_http
 
         with pytest.raises(RommApiError) as caught:
@@ -2648,3 +2678,49 @@ class TestNoCredentialReachesAnErrorOrALog:
 
         assert str(caught.value) == "Unexpected error: InvalidURL"
         assert classify_error(caught.value) == (ErrorCode.SERVER_UNREACHABLE.value, "Unexpected error: InvalidURL")
+
+    def test_a_request_that_cannot_be_built_is_raised_without_its_cause(self, secrets_http):
+        adapter, _settings, _log_debug = secrets_http
+
+        with pytest.raises(RommApiError) as caught:
+            adapter.request_once("/api/heartbeat", timeout=3)
+
+        assert caught.value.__cause__ is None
+        assert caught.value.__suppress_context__ is True
+
+
+class TestAnAnswerThatCannotBeReadKeepsItsText:
+    """Only a request that could not be built loses its exception text; an answer that could not be read keeps it."""
+
+    @pytest.mark.parametrize(
+        ("body", "text"),
+        [
+            pytest.param(b"<html>not json</html>", "Expecting value: line 1 column 1 (char 0)", id="not-json"),
+            pytest.param(b"\xff\xfe", "'utf-8' codec can't decode byte 0xff in position 0", id="not-utf-8"),
+        ],
+    )
+    def test_the_reason_it_could_not_be_read_is_kept(self, romm_http, body, text):
+        _configure_server(romm_http.settings)
+
+        with (
+            patch("urllib.request.urlopen", return_value=_make_resp(200, {}, body)),
+            pytest.raises(RommApiError) as caught,
+        ):
+            romm_http.adapter.request_once("/api/heartbeat", timeout=3)
+
+        assert str(caught.value).startswith("Unexpected error: ")
+        assert text in str(caught.value)
+        assert caught.value.__cause__ is not None
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            pytest.param(http.client.InvalidURL("nonnumeric port: 'fake-pw@romm.local'"), id="invalid-url"),
+            pytest.param(ValueError("Invalid header value b'Bearer fake'"), id="value-error"),
+            pytest.param(UnicodeEncodeError("latin-1", "fake\u2019", 4, 5, "ordinal not in range(256)"), id="encode"),
+        ],
+    )
+    def test_a_request_that_cannot_be_built_keeps_only_its_type(self, exc):
+        err = RommHttpAdapter._translate_unwrapped(exc, "/api", "GET")
+
+        assert str(err) == f"Unexpected error: {type(exc).__name__}"
