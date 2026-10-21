@@ -41,6 +41,17 @@ if TYPE_CHECKING:
 
 _MIN_VERSION = (5, 3, 0)
 
+# The one sentence an address carrying a user name or password is answered with, wherever it is met.
+_ADDRESS_WITH_USERINFO = (
+    "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; "
+    "use Sign in under RomM Account instead."
+)
+_ADDRESSES_WITH_USERINFO = [
+    "https://user:fake-pw-41@romm.local",
+    "https://user@romm.local",
+    "http://:fake-pw-41@romm.local:8080/romm",
+]
+
 
 @pytest.fixture
 def event_loop():
@@ -151,6 +162,18 @@ class TestTestConnectionBadPath:
             event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.heartbeat.assert_not_called()
+
+    @pytest.mark.parametrize("stored", _ADDRESSES_WITH_USERINFO)
+    def test_a_stored_address_with_a_user_name_or_password_is_answered_before_any_request(
+        self, event_loop, romm_api, logger, stored
+    ):
+        settings = {"romm_url": stored, "romm_api_token": "rmm_fake"}
+        service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        with pytest.raises(NotConfigured) as refused:
+            event_loop.run_until_complete(service.test_connection())
+        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
+        romm_api.heartbeat.assert_not_called()
+        romm_api.list_platforms.assert_not_called()
 
     def test_unset_url_key_is_refused_with_config_error(self, event_loop, romm_api, logger):
         """``romm_url`` absent from settings dict → config_error."""
@@ -914,6 +937,19 @@ class TestEstablishTokenBadPath:
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.mint_client_token.assert_not_called()
 
+    @pytest.mark.parametrize("address", _ADDRESSES_WITH_USERINFO)
+    def test_an_address_with_a_user_name_or_password_is_refused_without_probing(
+        self, event_loop, romm_api, logger, address
+    ):
+        settings: dict[str, Any] = {}
+        service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        with pytest.raises(NotConfigured) as refused:
+            event_loop.run_until_complete(service.establish_token(address, "u", "p"))
+        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
+        assert "romm_url" not in settings
+        romm_api.heartbeat.assert_not_called()
+        romm_api.mint_client_token.assert_not_called()
+
     @pytest.mark.parametrize("bad_url", ["romm.local", "ftp://romm.local", "   ", "https://"])
     def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
         """A scheme-less / non-http(s) / hostless URL is rejected before any network call (#1015)."""
@@ -1125,6 +1161,19 @@ class TestEstablishUserTokenBadPath:
             event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.heartbeat.assert_not_called()
+
+    @pytest.mark.parametrize("address", _ADDRESSES_WITH_USERINFO)
+    def test_an_address_with_a_user_name_or_password_is_refused_without_probing(
+        self, event_loop, romm_api, logger, address
+    ):
+        settings: dict[str, Any] = {}
+        service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        with pytest.raises(NotConfigured) as refused:
+            event_loop.run_until_complete(service.establish_user_token(address, "rmm_x"))
+        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
+        assert "romm_url" not in settings
+        romm_api.heartbeat.assert_not_called()
+        romm_api.get_current_user.assert_not_called()
 
     @pytest.mark.parametrize("bad_url", ["romm.local", "ftp://romm.local", "   ", "https://"])
     def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
@@ -1639,6 +1688,19 @@ class TestEstablishPairedTokenBadPath:
             event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.heartbeat.assert_not_called()
+
+    @pytest.mark.parametrize("address", _ADDRESSES_WITH_USERINFO)
+    def test_an_address_with_a_user_name_or_password_is_refused_without_probing(
+        self, event_loop, romm_api, logger, address
+    ):
+        settings: dict[str, Any] = {}
+        service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        with pytest.raises(NotConfigured) as refused:
+            event_loop.run_until_complete(service.establish_paired_token(address, "ABCD2345"))
+        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
+        assert "romm_url" not in settings
+        romm_api.heartbeat.assert_not_called()
+        romm_api.exchange_pairing_code.assert_not_called()
 
     @pytest.mark.parametrize("bad_url", ["romm.local", "ftp://romm.local", "   ", "https://"])
     def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):

@@ -18,6 +18,17 @@ from lib.errors import NotConfigured, Refused
 from lib.steam_input_apply import SteamInputApply
 from services.settings import SettingsService, SettingsServiceConfig
 
+# The one sentence an address carrying a user name or password is answered with, wherever it is met.
+_ADDRESS_WITH_USERINFO = (
+    "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; "
+    "use Sign in under RomM Account instead."
+)
+_ADDRESSES_WITH_USERINFO = [
+    "https://user:fake-pw-41@romm.local",
+    "https://user@romm.local",
+    "http://:fake-pw-41@romm.local:8080/romm",
+]
+
 
 @pytest.fixture
 def settings() -> dict[str, Any]:
@@ -206,6 +217,16 @@ class TestSaveServerUrl:
         with pytest.raises(NotConfigured) as refused:
             await service.save_server_url(bad_url)
         assert (refused.value.message, refused.value.details) == ("Enter a valid http(s):// server URL", {})
+        assert "romm_url" not in settings
+        settings_persister.save_settings.assert_not_called()
+
+    @pytest.mark.parametrize("address", _ADDRESSES_WITH_USERINFO)
+    async def test_an_address_with_a_user_name_or_password_is_refused_without_writing(
+        self, service, settings, settings_persister, address
+    ):
+        with pytest.raises(NotConfigured) as refused:
+            await service.save_server_url(f"  {address} ")
+        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
         assert "romm_url" not in settings
         settings_persister.save_settings.assert_not_called()
 

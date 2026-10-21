@@ -26,7 +26,7 @@ from domain.custom_headers import (
 from domain.sibling_resolution import AUTO_REGION
 from lib.errors import NotConfigured, Refused
 from lib.steam_input_apply import SteamInputApply
-from lib.url_host import is_valid_server_url
+from lib.url_host import ADDRESS_WITH_USERINFO_MESSAGE, carries_userinfo, is_valid_server_url
 
 if TYPE_CHECKING:
     from services.protocols import ConflictRules, SettingsPersister, SteamConfigStore, UnitOfWorkFactory
@@ -149,8 +149,8 @@ class SettingsService:
     async def save_server_url(self, romm_url: str, allow_insecure_ssl: bool | None = None) -> dict[str, Any]:
         """Persist the trimmed server URL and optional SSL flag.
 
-        Refuses a blank or non-http(s) URL with ``NotConfigured`` without
-        writing anything, and a settings file that cannot be written with
+        Refuses a blank or non-http(s) URL, and one carrying a user name or
+        password, with ``NotConfigured`` without writing anything, and a settings file that cannot be written with
         ``save_failed`` and its cause, giving the previous URL and SSL flag
         back to the live settings so memory and file agree. Credentials and
         tokens are never touched here — minting and storing the Client API
@@ -168,6 +168,8 @@ class SettingsService:
 
     def _save_server_url(self, romm_url: str, allow_insecure_ssl: bool | None = None) -> dict[str, Any]:
         trimmed = romm_url.strip()
+        if carries_userinfo(trimmed):
+            raise NotConfigured(ADDRESS_WITH_USERINFO_MESSAGE)
         if not is_valid_server_url(trimmed):
             raise NotConfigured("Enter a valid http(s):// server URL")
         previous = {key: self._settings[key] for key in _SERVER_URL_KEYS if key in self._settings}
