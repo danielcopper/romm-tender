@@ -403,16 +403,18 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     return result;
   };
   const handleAllowInsecureSslChange = (val: boolean) => {
+    const before = allowInsecureSsl;
     setAllowInsecureSsl(val);
     // Auto-save the URL with the new SSL setting
     saveServerUrl(url, val)
       .then((result) => {
         if (result.success) {
           storedSsl.current = val;
+          setAllowInsecureSsl(val);
           clearSaveStatus();
           return;
         }
-        setAllowInsecureSsl(storedSsl.current ?? !val);
+        setAllowInsecureSsl(storedSsl.current ?? before);
         showSaveStatus(result.message);
       })
       .catch(() => {

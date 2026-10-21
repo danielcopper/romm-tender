@@ -923,6 +923,102 @@ describe("SettingsPage", () => {
       expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("Connected!");
     });
 
+    it("an SSL change accepted after an accepted URL save leaves the switch at the SSL change's flag", async () => {
+      let acceptUrl: (value: { success: boolean; message: string }) => void = () => {};
+      let acceptSsl: (value: { success: boolean; message: string }) => void = () => {};
+      vi.mocked(backend.saveServerUrl).mockReturnValueOnce(
+        new Promise((resolve) => {
+          acceptUrl = resolve;
+        }),
+      );
+      vi.mocked(backend.saveServerUrl).mockReturnValueOnce(
+        new Promise((resolve) => {
+          acceptSsl = resolve;
+        }),
+      );
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
+        await Promise.resolve();
+      });
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(true);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        acceptUrl({ success: true, message: "" });
+        await Promise.resolve();
+      });
+      await act(async () => {
+        acceptSsl({ success: true, message: "" });
+        await Promise.resolve();
+      });
+
+      expect(capturedConnection[capturedConnection.length - 1]?.allowInsecureSsl).toBe(true);
+    });
+
+    it("two SSL changes refused before the settings have loaded, the later first, end where the switch first stood", async () => {
+      vi.mocked(backend.getSettings).mockReturnValue(new Promise(() => {}));
+      const refuse: Array<(value: { success: boolean; reason: "config_error"; message: string }) => void> = [];
+      vi.mocked(backend.saveServerUrl).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            refuse.push(resolve);
+          }),
+      );
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(true);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(false);
+        await Promise.resolve();
+      });
+      for (const index of [1, 0]) {
+        await act(async () => {
+          refuse[index]?.({ success: false, reason: "config_error", message: "Enter a valid http(s):// server URL" });
+          await Promise.resolve();
+        });
+      }
+
+      expect(capturedConnection[capturedConnection.length - 1]?.allowInsecureSsl).toBe(false);
+    });
+
+    it("each SSL change refused before the settings have loaded goes back to where the switch stood before it", async () => {
+      vi.mocked(backend.getSettings).mockReturnValue(new Promise(() => {}));
+      const refuse: Array<(value: { success: boolean; reason: "config_error"; message: string }) => void> = [];
+      vi.mocked(backend.saveServerUrl).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            refuse.push(resolve);
+          }),
+      );
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(true);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(false);
+        await Promise.resolve();
+      });
+      for (const index of [0, 1]) {
+        await act(async () => {
+          refuse[index]?.({ success: false, reason: "config_error", message: "Enter a valid http(s):// server URL" });
+          await Promise.resolve();
+        });
+      }
+
+      expect(capturedConnection[capturedConnection.length - 1]?.allowInsecureSsl).toBe(true);
+    });
+
     it("handleAllowInsecureSslChange forwards the URL + new flag to saveServerUrl", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: true, message: "" });
       renderPage();

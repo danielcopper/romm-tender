@@ -2255,12 +2255,12 @@ shortcuts** refuses a second press while a run is in flight — the guard is in 
 button, because a disabled control still reports a press on the device, and the button says which state it is in.
 
 A save of the RomM URL the backend refuses — from its modal, or from the **Allow Insecure SSL** switch, which saves the
-URL again — puts the refusal's message on the section's status line and gives back what is stored: the URL row the URL
-the backend holds (once the settings have loaded; before that the attempt stays), the switch the flag the backend holds
-(before the settings have loaded, the position it had). An accepted URL save puts the switch at the flag it sent. The
-next save of either that the backend accepts clears the line, but only of a message such a save put there: what loading
-the settings or signing in said stays. A save that fails in transport says _Failed to save settings_ and leaves the
-attempt where it was typed.
+URL again — puts the refusal's message on the section's status line and gives back what is stored: the URL row shows the
+URL the backend holds (once the settings have loaded; before that the attempt stays), and the switch goes back to the
+stored flag, or, where none is known, to where it stood before the press. An accepted save of either puts the switch at
+the flag it sent. The next accepted save clears the line, but only of a message such a save put there: what loading the
+settings or signing in said stays. A save that fails in transport says _Failed to save settings_ and leaves the attempt
+where it was typed.
 
 ## Data Management
 
