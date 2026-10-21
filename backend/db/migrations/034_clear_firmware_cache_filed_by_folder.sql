@@ -8,7 +8,8 @@
 --     name read out of a file's path (the segment after bios/, or the path's
 --     first segment otherwise); it is now the platform RomM states for the file
 --     (domain/firmware_platforms.py). A row of the old kind would answer for
---     the wrong platform until the cache's hour ran out. With the table empty,
+--     the wrong platform until the cache's hour ran out, and after that too
+--     whenever the server could not be read. With the table empty,
 --     the first listing read asks the server, and the first read that reaches
 --     it also moves Tender's older download records and per-platform emulator
 --     overrides (services/firmware/refiling.py).

@@ -161,11 +161,11 @@ class FirmwareDownloader:
         """Fetch, place and record one firmware file against a pre-read demand index.
 
         The index is a parameter rather than a per-call read so a batch pays for
-        the machine-wide question once instead of once per file. So is
-        *platform_slug*, the platform the listing row the caller picked files the
-        file on: every download invalidates the listing, and a batch that looked
-        each file's platform up again would read the server's platform list once
-        per file. ``None`` looks it up (:meth:`_platform_of`).
+        the machine-wide question once instead of once per file. *platform_slug*
+        is a parameter for the same reason: it is the platform on the caller's
+        listing row, and since every download invalidates the listing, looking
+        it up per file would read the server's platform list once per file.
+        ``None`` looks it up (:meth:`_platform_of`).
 
         A RomM error propagates unlogged: whoever answers it logs it. Every
         refusal raised here is logged here. Where this device cannot create the

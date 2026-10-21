@@ -53,10 +53,10 @@ A standalone emulator has **no** libretro `.so`, so the read-path projection rep
 Tender owns two **deviations** from the RetroDECK default core. Each stores only the deviation as a core LABEL; absence
 means "follow the default."
 
-| Scope            | Stored where                                                  | Applies to              | Written by                 |
-| ---------------- | ------------------------------------------------------------- | ----------------------- | -------------------------- |
-| **Per-game**     | Tender's database — `roms.emulator_override` (nullable LABEL) | one ROM (by `rom_id`)   | Tender (`pin`/`clear`)     |
-| **Per-platform** | `settings.json` — `platform_cores` map (`{slug: label}`)      | every ROM on a platform | Tender (`set_system_core`) |
+| Scope            | Stored where                                                  | Applies to              | Written by                                                                                                                     |
+| ---------------- | ------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Per-game**     | Tender's database — `roms.emulator_override` (nullable LABEL) | one ROM (by `rom_id`)   | Tender (`pin`/`clear`)                                                                                                         |
+| **Per-platform** | `settings.json` — `platform_cores` map (`{slug: label}`)      | every ROM on a platform | Tender (`set_system_core`; the firmware listing's refiling moves an override filed under a server folder name to its platform) |
 
 Both overrides are Tender's own state and live in Tender's own stores. Neither is written into ES-DE's `gamelist.xml` —
 Tender **never writes that file**. It still **reads** the RetroDECK/ES-DE configuration it does not own (the live

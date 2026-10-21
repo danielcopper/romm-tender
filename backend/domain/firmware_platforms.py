@@ -80,9 +80,9 @@ def refiled_record_platform(
     A record already under a listed platform's slug stays: it was filed by its
     platform and is not judged again. Any other is moved to the platform of the
     library file its ``firmware_id`` names, as long as that file still carries
-    the record's *file_name* — RomM keeps a file's id when it scans it again,
-    but a file removed from the library and added back comes back under a new
-    id, which may then name another file. A record whose file the library no
+    the record's *file_name*: the stored id is the RomM database's, and once
+    Tender talks to another server, or the server's database was set up anew,
+    the same id may name another file. A record whose file the library no
     longer holds is moved by its folder name (:func:`folder_platforms`).
     """
     listed = list(platforms)

@@ -29,6 +29,7 @@ _PLATFORMS: list[dict[str, Any]] = [
         "firmware": [{"id": 30, "file_name": "neogeo.zip", "platform_id": 3}],
     },
     {"id": 4, "slug": "arcade", "fs_slug": "arcade", "firmware": []},
+    {"id": 5, "slug": "segacd", "fs_slug": "scd", "firmware": []},
 ]
 
 
@@ -184,12 +185,13 @@ class TestPerPlatformEmulatorOverrides:
         assert live == {"psx": "SwanStation", "gba": "mGBA"}
 
     def test_a_save_that_fails_gives_every_move_back_and_raises(self):
-        harness = _Harness(overrides={"ps": "SwanStation", "gba": "mGBA"}, persister=_FailingPersister())
+        overrides = {"ps": "SwanStation", "scd": "Genesis Plus GX", "gba": "mGBA"}
+        harness = _Harness(overrides=overrides, persister=_FailingPersister())
 
         with pytest.raises(OSError, match="disk full"):
             harness.refile()
 
-        assert harness.settings["platform_cores"] == {"ps": "SwanStation", "gba": "mGBA"}
+        assert harness.settings["platform_cores"] == overrides
 
     def test_running_again_saves_nothing(self):
         harness = _Harness(overrides={"ps": "SwanStation"})

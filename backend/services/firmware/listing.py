@@ -51,7 +51,7 @@ class FirmwareListingConfig:
 
 
 class FirmwareListing:
-    """The RomM firmware listing and its cache — the subsystem's only reader of the library's firmware."""
+    """The RomM firmware listing and its cache — the firmware subsystem's only reader of RomM's platform list."""
 
     def __init__(self, *, config: FirmwareListingConfig) -> None:
         self._romm_api = config.romm_api
