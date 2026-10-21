@@ -160,12 +160,11 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number | 
       };
 
       // SGDB types 1-3 (hero / logo / wide grid) map 1:1 to Steam capsule assetTypes 1-3.
-      // The wide grid, the logo and the icon are recorded as the fill path
-      // records them; the hero is not. The awaits are sequential by design, one
-      // image at a time; S9382 is raised on the slot's await line, so its
-      // NOSONAR stays there.
-      const customArt: Array<[answer: SgdbArtwork, assetType: number, slot: RecordedSlot | null]> = [
-        [results[0], 1, null],
+      // Each is recorded as the fill path records it. The awaits are sequential
+      // by design, one image at a time; S9382 is raised on the slot's await
+      // line, so its NOSONAR stays there.
+      const customArt: Array<[answer: SgdbArtwork, assetType: number, slot: RecordedSlot]> = [
+        [results[0], 1, "hero"],
         [results[1], 2, "logo"],
         [results[2], 3, "grid"],
       ];
@@ -212,31 +211,31 @@ function leaseOf(answer: SgdbSlotArtwork): string | undefined {
 }
 
 /** The slots whose outcome the game page reports. */
-type RecordedSlot = "grid" | "logo" | "icon";
+type RecordedSlot = SgdbArtworkSlot;
 
 /** The slots the shortcut artwork job hands the frontend to set; it sets the icons it wrote itself. */
-type JobSlot = Exclude<RecordedSlot, "icon">;
+type JobSlot = "grid" | "logo";
 
 /** What the backend answered with an image, passed back when what Steam made of it is reported. */
 type SlotRecord = { sgdb_id?: number | null; image_id?: number | null; sha256?: string | null };
 
 /**
  * Set one image of the replacing apply through *write* and record what Steam
- * made of it, for a slot the backend records; a refusal is recorded and then rethrown.
+ * made of it; a refusal is recorded and then rethrown.
  */
 async function setReplacedSlot(
   romId: number,
-  slot: RecordedSlot | null,
+  slot: RecordedSlot,
   answer: SlotRecord,
   write: () => unknown,
 ): Promise<void> {
   try {
     await write();
   } catch (e) {
-    if (slot) await reportReplacedSlot(romId, slot, "refused", answer);
+    await reportReplacedSlot(romId, slot, "refused", answer);
     throw e;
   }
-  if (slot) await reportReplacedSlot(romId, slot, "set", answer);
+  await reportReplacedSlot(romId, slot, "set", answer);
 }
 
 /** Report what Steam made of an image the replacing apply set, as the fill path reports it. */
@@ -302,7 +301,7 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
     );
     if (outcome === "set") applied++;
     // prettier-ignore
-    if (outcome !== null && slot !== "hero") await reportSlotOutcome(romId, slot, outcome, answer); // NOSONAR(typescript:S9382)
+    if (outcome !== null) await reportSlotOutcome(romId, slot, outcome, answer); // NOSONAR(typescript:S9382)
   }
 
   return applied + Number(await fillIcon(romId, appId, superseded, leaseOwner, admission));

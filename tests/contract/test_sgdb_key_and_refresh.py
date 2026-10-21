@@ -70,7 +70,7 @@ async def test_refresh_replaces_each_cached_image_with_the_new_download(harness)
     assert answer == {"success": True}
     assert _held(harness) == {
         f"{_ROM_ID}_grid_803.png": b"new grid",
-        f"{_ROM_ID}_hero.png": b"new hero",
+        f"{_ROM_ID}_hero_801.png": b"new hero",
         f"{_ROM_ID}_icon_804.png": b"new icon",
         f"{_ROM_ID}_logo_802.png": b"new logo",
     }

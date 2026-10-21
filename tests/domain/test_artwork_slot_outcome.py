@@ -51,9 +51,16 @@ class TestTheConstructors:
 
         assert (record.slot, record.outcome) == (ArtworkSlot.ICON, SlotOutcome.SET)
 
-    def test_the_hero_has_no_outcome(self):
-        with pytest.raises(ValueError, match="hero"):
-            ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.HERO, sgdb_id=7, recorded_at=NOW)
+    def test_the_hero_records_an_outcome(self):
+        record = ArtworkSlotOutcome.record_set(
+            rom_id=1, slot=ArtworkSlot.HERO, sgdb_id=7, image_id=12, image_sha256="ab", recorded_at=NOW
+        )
+
+        assert (record.slot, record.outcome) == (ArtworkSlot.HERO, SlotOutcome.SET)
+
+    def test_the_cover_has_no_outcome(self):
+        with pytest.raises(ValueError, match="cover"):
+            ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.COVER, sgdb_id=7, recorded_at=NOW)
 
 
 class TestNoneAndRefusedRuleTheSlotOutForAWeek:

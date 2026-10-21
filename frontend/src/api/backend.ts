@@ -521,9 +521,9 @@ export const cleanupOrphanedGridImages = endpoint<
 >("cleanup_orphaned_grid_images");
 /**
  * One SteamGridDB hero, logo or wide grid for a ROM, from the artwork cache
- * first. A wide grid or logo also carries SteamGridDB's image id, the hash of
- * its bytes and the ROM's SteamGridDB id, which `reportSgdbSlotArtwork` records
- * once Steam has taken it or refused it. The icon (asset type 4) is refused:
+ * first. An image also carries SteamGridDB's image id, the hash of its bytes
+ * and the ROM's SteamGridDB id, which `reportSgdbSlotArtwork` records once
+ * Steam has taken it or refused it. The icon (asset type 4) is refused:
  * it is fetched through `getSgdbSlotArtwork` and written by `saveShortcutIcon`.
  */
 export const getSgdbArtworkBase64 = endpoint<
@@ -547,8 +547,8 @@ export type SgdbSlotArtwork =
   | {
       status: "image";
       base64: string;
-      /** SteamGridDB's image id; `null` for the hero, whose outcome is not recorded. */
-      image_id: number | null;
+      /** SteamGridDB's image id. */
+      image_id: number;
       sha256: string;
       /** The ROM's SteamGridDB id; `null` for an image a manual pick left in the cache of a ROM with none stored. */
       sgdb_id: number | null;
@@ -569,11 +569,11 @@ export const getSgdbSlotArtwork = endpoint<
 >("get_sgdb_slot_artwork");
 
 /**
- * Report what Steam made of a wide grid or logo the fetch served (`SetCustomArtworkForApp`), or of an icon the
+ * Report what Steam made of a wide grid, logo or hero the fetch served (`SetCustomArtworkForApp`), or of an icon the
  * backend wrote (`SetShortcutIcon`), passing what the backend answered back.
  */
 export const reportSgdbSlotArtwork = endpoint<
-  [number, "grid" | "logo" | "icon", "set" | "refused", number | null, number | null, string | null],
+  [number, SgdbArtworkSlot, "set" | "refused", number | null, number | null, string | null],
   { success: boolean }
 >("report_sgdb_slot_artwork");
 

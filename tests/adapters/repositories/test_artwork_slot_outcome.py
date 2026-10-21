@@ -47,6 +47,13 @@ class TestRoundTrip:
 
         assert uow.artwork_slot_outcomes.get(5, ArtworkSlot.LOGO) == record
 
+    def test_the_hero_reads_back_equal(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+
+        uow.artwork_slot_outcomes.save(_set(slot=ArtworkSlot.HERO))
+
+        assert uow.artwork_slot_outcomes.get(5, ArtworkSlot.HERO) == _set(slot=ArtworkSlot.HERO)
+
     def test_each_slot_has_its_own_row(self, uow: SqliteUnitOfWork):
         _seed_rom(uow, 5)
         uow.artwork_slot_outcomes.save(_set(slot=ArtworkSlot.WIDE_GRID))

@@ -63,15 +63,12 @@ _ASSET_TYPE_QUERY: dict[str, str] = {
 _WIDE_GRID_SIZES: tuple[tuple[int, int], ...] = ((920, 430), (460, 215))
 _LOGO_WIDTHS = range(640, 2048 + 1)
 
-# The asset types whose cache file carries the SteamGridDB image id in its name.
-_ID_NAMED_ASSET_TYPES = frozenset({"grid", "logo", "icon"})
-
 
 @dataclass(frozen=True, slots=True)
 class SgdbCandidate:
     """One image SteamGridDB lists for an asset: its id, where it is, and its stated size."""
 
-    image_id: int | None
+    image_id: int
     url: str
     width: int | None
     height: int | None
@@ -93,14 +90,13 @@ def sgdb_endpoint_path(asset_type: str, sgdb_game_id: int) -> str | None:
 def choose_candidate(asset_type: str, data: object) -> SgdbCandidate | None:
     """Choose the image to use among *data*, an asset response's ``data`` list, by stated size.
 
-    A candidate is an entry with a non-empty ``url``; for the wide grid, the
-    logo and the icon it also needs an integer ``id``, which names its cache
-    file. The wide grid prefers 920x430, then 460x215; the logo prefers the
-    first candidate between 640 and 2048 pixels wide. Either falls back to the
-    first candidate, and every other asset type takes the first. ``None`` when
-    *data* holds no candidate.
+    A candidate is an entry with a non-empty ``url`` and an integer ``id``,
+    which names its cache file. The wide grid prefers 920x430, then 460x215;
+    the logo prefers the first candidate between 640 and 2048 pixels wide.
+    Either falls back to the first candidate, and every other asset type takes
+    the first. ``None`` when *data* holds no candidate.
     """
-    candidates = _candidates(data, needs_id=named_by_image_id(asset_type))
+    candidates = _candidates(data)
     if not candidates:
         return None
     preferred = None
@@ -123,7 +119,7 @@ def _preferred_logo(candidates: list[SgdbCandidate]) -> SgdbCandidate | None:
     return next((candidate for candidate in candidates if candidate.width in _LOGO_WIDTHS), None)
 
 
-def _candidates(data: object, *, needs_id: bool) -> list[SgdbCandidate]:
+def _candidates(data: object) -> list[SgdbCandidate]:
     if not isinstance(data, list):
         return []
     candidates: list[SgdbCandidate] = []
@@ -132,7 +128,7 @@ def _candidates(data: object, *, needs_id: bool) -> list[SgdbCandidate]:
             continue
         url = entry.get("url")
         image_id = _int_or_none(entry.get("id"))
-        if not isinstance(url, str) or not url or (needs_id and image_id is None):
+        if not isinstance(url, str) or not url or image_id is None:
             continue
         width, height = _int_or_none(entry.get("width")), _int_or_none(entry.get("height"))
         candidates.append(SgdbCandidate(image_id=image_id, url=url, width=width, height=height))
@@ -143,21 +139,13 @@ def _int_or_none(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def named_by_image_id(asset_type: str) -> bool:
-    """Whether *asset_type*'s cache file carries the SteamGridDB image id in its name."""
-    return asset_type in _ID_NAMED_ASSET_TYPES
-
-
 def cached_artwork_name(rom_id: int, asset_type: str, image_id: int | None) -> str:
     """The artwork cache's file name for *rom_id*'s *asset_type*.
 
-    A wide grid's, a logo's and an icon's name carries the SteamGridDB image id
-    it was downloaded as (``{rom_id}_grid_{image_id}.png``), so what the cache
-    holds is known as long as the file is there. A hero's name carries none.
-    Raises ``ValueError`` for a wide grid, logo or icon without an image id.
+    The name carries the SteamGridDB image id it was downloaded as
+    (``{rom_id}_grid_{image_id}.png``), so what the cache holds is known as
+    long as the file is there. Raises ``ValueError`` without an image id.
     """
-    if not named_by_image_id(asset_type):
-        return f"{rom_id}_{asset_type}.png"
     if image_id is None:
         raise ValueError(f"a cached {asset_type} is named by its image id")
     return f"{rom_id}_{asset_type}_{image_id}.png"
@@ -166,11 +154,9 @@ def cached_artwork_name(rom_id: int, asset_type: str, image_id: int | None) -> s
 def cached_image_id(name: str, rom_id: int, asset_type: str) -> int | None:
     """The SteamGridDB image id *name* says it caches for *rom_id*'s *asset_type*, else ``None``.
 
-    Only the wide grid's, the logo's and the icon's names carry one, so a hero,
-    and one of those three named without an id, answer ``None``.
+    ``None`` for a name without one, which a cache an older release wrote may
+    still hold.
     """
-    if not named_by_image_id(asset_type):
-        return None
     match = re.fullmatch(rf"{rom_id}_{asset_type}_(\d+)\.png", name)
     return int(match.group(1)) if match else None
 
@@ -180,15 +166,15 @@ def is_cached_artwork(name: str, rom_id: int, asset_type: str) -> bool:
     return name == f"{rom_id}_{asset_type}.png" or cached_image_id(name, rom_id, asset_type) is not None
 
 
-_ID_NAMED_CACHE_FILE = re.compile(rf"(\d+)_({'|'.join(sorted(_ID_NAMED_ASSET_TYPES))})(?:_\d+)?\.png")
+_CACHE_FILE = re.compile(rf"(\d+)_({'|'.join(sorted(_ASSET_TYPE_TO_ENDPOINT))})(?:_\d+)?\.png")
 
 
 def cached_slot_of(name: str) -> tuple[int, str] | None:
-    """The ROM and asset type whose wide grid, logo or icon *name* caches, else ``None``.
+    """The ROM and asset type whose image *name* caches, else ``None``.
 
     Counts the same names :func:`is_cached_artwork` does.
     """
-    match = _ID_NAMED_CACHE_FILE.fullmatch(name)
+    match = _CACHE_FILE.fullmatch(name)
     if match is None:
         return None
     rom_id, asset_type = int(match.group(1)), match.group(2)

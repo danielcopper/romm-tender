@@ -1,4 +1,4 @@
-"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo or shortcut icon.
+"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo, hero or shortcut icon.
 
 ``set`` (an image was set, with SteamGridDB's image id and a hash of the bytes),
 ``none`` (SteamGridDB has no candidate) or ``refused`` (Steam's
@@ -39,7 +39,7 @@ class SlotOutcome(StrEnum):
 
 @cosmic_aggregate
 class ArtworkSlotOutcome:
-    """What was last found for one ROM's wide grid, logo or shortcut icon."""
+    """What was last found for one ROM's wide grid, logo, hero or shortcut icon."""
 
     rom_id: int
     slot: ArtworkSlot

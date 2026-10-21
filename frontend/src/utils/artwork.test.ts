@@ -339,7 +339,7 @@ describe("isArtworkApplyInFlight", () => {
 });
 
 describe("fillEmptyArtwork", () => {
-  const image = (base64: string, imageId: number | null, token?: string): backend.SgdbSlotArtwork => ({
+  const image = (base64: string, imageId: number, token?: string): backend.SgdbSlotArtwork => ({
     status: "image",
     base64,
     image_id: imageId,
@@ -402,12 +402,13 @@ describe("fillEmptyArtwork", () => {
     expect(backend.reportSgdbSlotArtwork).not.toHaveBeenCalled();
   });
 
-  it("reports a set wide grid and logo with the fetch's own answer, and no hero", async () => {
-    answerSlots({ hero: image("HH==", null), logo: image("LL==", 5), grid: image("GG==", 12) });
+  it("reports a set hero, logo and wide grid with the fetch's own answer", async () => {
+    answerSlots({ hero: image("HH==", 7), logo: image("LL==", 5), grid: image("GG==", 12) });
 
     await fillEmptyArtwork(42, 5000);
 
     expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([
+      [42, "hero", "set", 9999, 7, "sha-HH=="],
       [42, "logo", "set", 9999, 5, "sha-LL=="],
       [42, "grid", "set", 9999, 12, "sha-GG=="],
     ]);
@@ -427,7 +428,7 @@ describe("fillEmptyArtwork", () => {
 
   it("fetches the next slot only once the image before it is set", async () => {
     const write = deferred<void>();
-    answerSlots({ hero: image("HH==", null), logo: image("LL==", 5) });
+    answerSlots({ hero: image("HH==", 7), logo: image("LL==", 5) });
     vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockImplementationOnce(() => write.promise);
 
     const filling = fillEmptyArtwork(42, 5000);
@@ -487,7 +488,7 @@ describe("fillEmptyArtwork", () => {
 
     const filling = fillEmptyArtwork(42, 5000);
     await applyArtwork(42, 5000);
-    slow.resolve(image("OLD=", null));
+    slow.resolve(image("OLD=", 7));
 
     await expect(filling).resolves.toBe(0);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mock.calls.some((c) => c[1] === "OLD=")).toBe(false);
@@ -534,16 +535,17 @@ describe("applyArtwork records the wide grid and the logo it set", () => {
     });
     vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
     vi.mocked(backend.getSgdbArtworkBase64)
-      .mockResolvedValueOnce({ base64: "HH==", no_api_key: false })
+      .mockResolvedValueOnce(replaced("HH==", 7))
       .mockResolvedValueOnce(replaced("LL==", 5))
       .mockResolvedValueOnce(replaced("GG==", 12));
     vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
   });
 
-  it("reports each as set under the ROM it was applied for, with its image id and hash, and no hero", async () => {
+  it("reports each as set under the ROM it was applied for, with its image id and hash", async () => {
     await expect(applyArtwork(42, 5000)).resolves.toBe(3);
 
     expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([
+      [42, "hero", "set", 9999, 7, "sha-HH=="],
       [42, "logo", "set", 9999, 5, "sha-LL=="],
       [42, "grid", "set", 9999, 12, "sha-GG=="],
     ]);
@@ -556,7 +558,10 @@ describe("applyArtwork records the wide grid and the logo it set", () => {
 
     await expect(applyArtwork(42, 5000)).rejects.toThrow("Steam refused");
 
-    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([[42, "logo", "refused", 9999, 5, "sha-LL=="]]);
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([
+      [42, "hero", "set", 9999, 7, "sha-HH=="],
+      [42, "logo", "refused", 9999, 5, "sha-LL=="],
+    ]);
   });
 
   it("goes on when a report fails", async () => {

@@ -111,14 +111,27 @@ async def test_an_unknown_slot_answers_the_failure_shape(harness, grid):
     assert answer == {"success": False, "reason": "invalid_payload", "message": "Unknown artwork slot: banner"}
 
 
-async def test_a_hero_report_answers_the_failure_shape(harness, grid):
-    answer = await harness.endpoints.report_sgdb_slot_artwork(_ROM_ID, "hero", "set", 9999, None, "ab")
+async def test_a_cover_report_answers_the_failure_shape(harness, grid):
+    answer = await harness.endpoints.report_sgdb_slot_artwork(_ROM_ID, "cover", "set", 9999, 12, "ab")
 
     assert answer == {
         "success": False,
         "reason": "invalid_payload",
-        "message": "No outcome is recorded for the hero slot",
+        "message": "The cover slot is not filled from SteamGridDB",
     }
+
+
+async def test_the_heros_report_is_recorded_in_the_real_table(harness, grid):
+    report = await harness.endpoints.report_sgdb_slot_artwork(_ROM_ID, "hero", "set", 9999, 7, "ef" * 32)
+
+    assert report == {"success": True}
+    recorded = _outcome(harness, ArtworkSlot.HERO)
+    assert (recorded.outcome, recorded.sgdb_id, recorded.image_id, recorded.image_sha256) == (
+        SlotOutcome.SET,
+        9999,
+        7,
+        "ef" * 32,
+    )
 
 
 async def test_the_jobs_icon_report_is_recorded_in_the_real_table(harness, grid):
