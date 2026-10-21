@@ -2,14 +2,15 @@
  * The body of the game detail panel's active tab.
  *
  * Only the pane the user is looking at is created. That is load-bearing for
- * SAVES: `SavesTab` fetches on mount, so building it for a tab nobody opened
- * would fire those requests on every game page.
+ * SAVES and ARTWORK: both fetch on mount, so building them for a tab nobody
+ * opened would fire those requests on every game page.
  *
  * The ACHIEVEMENTS and BIOS panes are not built here — the panel mounts them for
  * every ROM and they decide themselves whether to render.
  */
 
 import type { ReactElement } from "react";
+import { ArtworkTab } from "./ArtworkTab";
 import { GameInfoTab } from "./GameInfoTab";
 import { SavesTab } from "./SavesTab";
 import { SlotSetupWizard } from "./SlotSetupWizard";
@@ -40,6 +41,11 @@ export function buildTabContent({ appId, binding, state }: TabContentContext): R
         installedRom={state.installedRom}
       />
     );
+  }
+
+  if (state.activeTab === "artwork") {
+    // Keyed by the ROM, so a version switch builds the pane for the version now showing.
+    return <ArtworkTab key={`tab-artwork-${romId}`} appId={appId} romId={romId} romName={state.romName} />;
   }
 
   if (state.activeTab !== "saves") return null;

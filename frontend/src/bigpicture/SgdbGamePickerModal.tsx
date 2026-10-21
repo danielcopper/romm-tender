@@ -1,12 +1,13 @@
 /**
- * SgdbGamePickerModal — the manual resolution surface for the SGDB artwork
- * cascade. Opened by RomMPlaySection's "Refresh Artwork" action when the
- * resolution answers `needs_pick`.
+ * SgdbGamePickerModal — where the user chooses the SteamGridDB game a ROM's
+ * artwork comes from, opened by the ARTWORK tab's "Choose game…" / "Change
+ * game…" (#2381 D3). Before a change that discards the images the user chose,
+ * it says so in one sentence (D12).
  *
  * A search field (prefilled with the ROM name) lets the user search SGDB and
  * pick any result. Selecting a result applies that game via applySgdbGameId,
- * re-runs the artwork apply for the appId, then reports what the apply answered
- * and closes.
+ * re-runs the artwork apply for the slots on automatic, then reports what the
+ * apply answered and closes.
  *
  * Wrapped in Steam's focus-managed ConfirmModal (same pattern as
  * TextInputModal / NewSlotModal) so the on-screen keyboard and d-pad / left
@@ -27,7 +28,8 @@ import {
   type EndpointFailure,
   type SgdbCandidate,
 } from "../api/backend";
-import { applyArtwork } from "../utils/artwork";
+import { applyAutomaticArtwork } from "../utils/artwork";
+import { GAME_CHANGE_DISCARDS_CHOICES } from "../utils/artworkTabWording";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
 import { scrollToTop, scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
@@ -38,7 +40,9 @@ export interface SgdbGamePickerModalProps {
   romName: string;
   /** Initial candidate list from the resolution cascade. */
   candidates?: SgdbCandidate[];
-  /** Reports what applyArtwork answered: the count of images applied, -1 for no API key, or its refusal. */
+  /** The ROM has images the user chose, which the change discards (#2381 D12). */
+  discardsChoices?: boolean;
+  /** Reports what the apply answered: the count of images applied, -1 for no API key, or its refusal. */
   onApplied: (applied: number | EndpointFailure) => void;
   /** Injected by showModal. */
   closeModal?: () => void;
@@ -101,6 +105,7 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
   appId,
   romName,
   candidates,
+  discardsChoices,
   onApplied,
   closeModal,
 }) => {
@@ -149,8 +154,8 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
         showToast(result.message);
         return;
       }
-      const applied = await applyArtwork(romId, appId).catch((e): number => {
-        detach(debugLog(`SgdbGamePickerModal: applyArtwork rejected: ${e}`));
+      const applied = await applyAutomaticArtwork(romId, appId).catch((e): number => {
+        detach(debugLog(`SgdbGamePickerModal: applyAutomaticArtwork rejected: ${e}`));
         return 0;
       });
       showToast(artworkApplyMessage(applied));
@@ -191,6 +196,9 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
         <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>
           No SteamGridDB match was found automatically — search by name and pick the right game.
         </div>
+        {discardsChoices ? (
+          <div style={{ fontSize: "12px", color: "#ffb74d" }}>{GAME_CHANGE_DISCARDS_CHOICES}</div>
+        ) : null}
 
         <Focusable flow-children="row" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <div style={{ flex: 1 }}>

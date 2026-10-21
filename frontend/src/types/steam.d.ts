@@ -131,6 +131,13 @@ declare var collectionStore: {
 declare var appStore: {
   GetAppOverviewByAppID(appId: number): SteamAppOverview | null;
   allApps: SteamAppOverview[];
+  // The URLs Steam tries for a shortcut's custom images, `.jpg` before `.png`,
+  // each with `?v=<rt_custom_image_mtime>`, relative to steamloopback.host
+  // (measured, Desktop Mode, 2026-10-21). Candidates, not files: a URL may 404.
+  GetCustomVerticalCapsuleURLs?(overview: SteamAppOverview): string[];
+  GetCustomLandcapeImageURLs?(overview: SteamAppOverview): string[];
+  GetCustomHeroImageURLs?(overview: SteamAppOverview): string[];
+  GetCustomLogoImageURLs?(overview: SteamAppOverview): string[];
 };
 
 // `SteamUIStore` — a Steam SP global, genuinely absent (hence `undefined`) or

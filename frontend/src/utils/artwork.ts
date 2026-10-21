@@ -10,12 +10,16 @@
  */
 
 import {
+  getArtworkBase64,
+  getArtworkSlots,
   getSgdbArtworkBase64,
   getSgdbSlotArtwork,
   isEndpointFailure,
   reportSgdbSlotArtwork,
   saveShortcutIcon,
   debugLog,
+  type ArtworkSlotImage,
+  type ArtworkTabSlot,
   type EndpointFailure,
   type SavedShortcutIcon,
   type SgdbArtworkSlot,
@@ -73,7 +77,29 @@ async function saveIcon(romId: number, appId: number, signal: AbortSignal): Prom
  *  when no SGDB API key is configured, or the refusal of an image's fetch, in
  *  which case nothing is applied. */
 export async function applyArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
-  return whileInFlight(appId, () => applySgdbArtwork(romId, appId));
+  return whileInFlight(appId, () => applySgdbArtwork(romId, appId, ALL_SGDB_SLOTS));
+}
+
+/** The four slots Tender fills from SteamGridDB. */
+const ALL_SGDB_SLOTS: ReadonlySet<RecordedSlot> = new Set(["hero", "logo", "grid", "icon"]);
+
+/**
+ * `applyArtwork` for the slots on automatic alone: a slot the user chose and one set in Steam stay, as Refresh Artwork
+ * and a change of SteamGridDB game leave them. The slots' state is read first; where it cannot be read, nothing is
+ * applied and the read's failure is answered.
+ */
+export async function applyAutomaticArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
+  const read = await getArtworkSlots(romId, appId).catch((e): EndpointFailure => {
+    detach(debugLog(`applyAutomaticArtwork: the slots of appId ${appId} could not be read: ${e}`));
+    return { success: false, reason: "server_unreachable", message: "The artwork slots could not be read" };
+  });
+  if (isEndpointFailure(read)) return read;
+  const automatic = new Set(
+    read.slots
+      .filter((row) => row.state === "automatic" && row.slot !== "cover")
+      .map((row) => row.slot as RecordedSlot),
+  );
+  return whileInFlight(appId, () => applySgdbArtwork(romId, appId, automatic));
 }
 
 /** Give the shortcut SteamGridDB's hero, logo and wide grid where Steam's grid
@@ -110,20 +136,26 @@ function watchGeneration(appId: number): () => boolean {
   return () => (artworkGenerations.get(appId) ?? 0) !== generation;
 }
 
-async function applySgdbArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
+async function applySgdbArtwork(
+  romId: number,
+  appId: number,
+  slots: ReadonlySet<RecordedSlot>,
+): Promise<number | EndpointFailure> {
   const leaseOwner = `artwork:${appId}`;
   mountPruneLeaseOwner(leaseOwner);
   const admission = capturePruneLeaseAdmission(leaseOwner);
   const superseded = claimGeneration(appId);
 
   const refusals: EndpointFailure[] = [];
-  const fetchArtwork = async (assetType: number): Promise<SgdbArtwork> => {
+  const fetchArtwork = async (assetType: number, slot: RecordedSlot): Promise<SgdbArtwork> => {
+    if (!slots.has(slot)) return NO_IMAGE;
     const answer = await getSgdbArtworkBase64(romId, assetType).catch(() => NO_IMAGE);
     if (!isEndpointFailure(answer)) return answer;
     refusals.push(answer);
     return NO_IMAGE;
   };
   const fetchIcon = async (): Promise<SgdbSlotArtwork> => {
+    if (!slots.has("icon")) return { status: "skip" };
     const answer = await getSgdbSlotArtwork(romId, appId, "icon", true).catch((e): SgdbSlotArtwork => {
       detach(debugLog(`applyArtwork: icon fetch for appId ${appId} rejected: ${e}`));
       return { status: "failed" };
@@ -133,7 +165,7 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number | 
     return { status: "failed" };
   };
   const [results, icon] = await Promise.all([
-    Promise.all([fetchArtwork(1), fetchArtwork(2), fetchArtwork(3)]),
+    Promise.all([fetchArtwork(1, "hero"), fetchArtwork(2, "logo"), fetchArtwork(3, "grid")]),
     fetchIcon(),
   ]);
 
@@ -213,6 +245,9 @@ function leaseOf(answer: SgdbSlotArtwork): string | undefined {
 /** The slots whose outcome the game page reports. */
 type RecordedSlot = SgdbArtworkSlot;
 
+/** The slots whose outcome the ARTWORK tab reports: the four above, and a cover chosen from SteamGridDB. */
+type ReportedSlot = RecordedSlot | "cover";
+
 /** The slots the shortcut artwork job hands the frontend to set; it sets the icons it wrote itself. */
 type JobSlot = "grid" | "logo";
 
@@ -225,7 +260,7 @@ type SlotRecord = { sgdb_id?: number | null; image_id?: number | null; sha256?: 
  */
 async function setReplacedSlot(
   romId: number,
-  slot: RecordedSlot,
+  slot: ReportedSlot,
   answer: SlotRecord,
   write: () => unknown,
 ): Promise<void> {
@@ -241,7 +276,7 @@ async function setReplacedSlot(
 /** Report what Steam made of an image the replacing apply set, as the fill path reports it. */
 async function reportReplacedSlot(
   romId: number,
-  slot: RecordedSlot,
+  slot: ReportedSlot,
   outcome: "set" | "refused",
   answer: SlotRecord,
 ): Promise<void> {
@@ -431,6 +466,73 @@ export async function setJobSlotArtwork(
   );
   if (outcome !== null) await reportSlotOutcome(romId, slot, outcome, answer);
   return outcome === "set";
+}
+
+/** Steam's asset type for each slot `SetCustomArtworkForApp` writes; the icon goes through `SetShortcutIcon`. */
+export const STEAM_ASSET_TYPES: Readonly<Record<Exclude<ArtworkTabSlot, "icon">, number>> = {
+  cover: 0,
+  hero: 1,
+  logo: 2,
+  grid: 3,
+};
+
+/**
+ * Remove the image set through Steam for *appId*'s slot *assetType* before Tender sets its own (#2381 D13): Steam
+ * shows a `.jpg` before a `.png` (D14), so Tender's image would not show while Steam's stays. What Steam's call
+ * removes is measured on the device; if it leaves the hand-set file, this is the one place that changes.
+ */
+export async function removeImageSetInSteam(appId: number, assetType: number): Promise<void> {
+  await SteamClient.Apps.ClearCustomArtworkForApp(appId, assetType);
+}
+
+/** What setting an image from the ARTWORK tab came to. */
+export type TabSlotOutcome = "set" | "refused" | "none" | "left";
+
+/**
+ * Set the image the ARTWORK tab's pick or "Automatic" answered for *slot*, under the answer's lease and the
+ * newest-apply-wins guard, and report what Steam made of it. *replaceSetInSteam* removes the image set through Steam
+ * first — only after the user confirmed it, and never for the icon, which is repointed and whose file stays. `none`
+ * where there was nothing to set, `left` where the apply was cancelled or overtaken.
+ */
+export async function applyTabSlotImage(
+  romId: number,
+  appId: number,
+  slot: ArtworkTabSlot,
+  answer: ArtworkSlotImage,
+  replaceSetInSteam: boolean,
+): Promise<TabSlotOutcome> {
+  if (answer.status === "none") return "none";
+  const leaseOwner = `artwork:${appId}`;
+  mountPruneLeaseOwner(leaseOwner);
+  const admission = capturePruneLeaseAdmission(leaseOwner);
+  const superseded = claimGeneration(appId);
+  return whileInFlight(appId, () =>
+    withPruneLeases(
+      [answer.prune_lease_token],
+      "Artwork apply",
+      async (signal): Promise<TabSlotOutcome> => {
+        if (isPruneLeaseCancelled(signal) || superseded()) return "left";
+        if (answer.status === "ready" || slot === "icon") {
+          return (await setReplacedIcon(romId, appId, signal)) ? "set" : "refused";
+        }
+        const image = answer.status === "cover" ? await getArtworkBase64(romId) : answer;
+        if (!image.base64) return "refused";
+        if (isPruneLeaseCancelled(signal) || superseded()) return "left";
+        const assetType = STEAM_ASSET_TYPES[slot];
+        if (replaceSetInSteam) await removeImageSetInSteam(appId, assetType);
+        const base64 = image.base64;
+        const write = () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType);
+        if (answer.status === "cover") {
+          await write();
+          return "set";
+        }
+        await setReplacedSlot(romId, slot, answer, write);
+        return "set";
+      },
+      leaseOwner,
+      admission,
+    ),
+  );
 }
 
 export async function cancelArtworkApply(appId: number): Promise<void> {

@@ -27,6 +27,7 @@ export const PanelTabBar: FC<PanelTabBarProps> = ({ activeTab, hasAchievements, 
     { id: "achievements", label: "ACHIEVEMENTS", visible: hasAchievements },
     { id: "saves", label: "SAVES", visible: hasSaves },
     { id: "bios", label: "BIOS", visible: hasBios },
+    { id: "artwork", label: "ARTWORK", visible: true },
   ];
 
   return (

@@ -1,0 +1,218 @@
+/**
+ * ArtworkTab — the ARTWORK pane of the RomM game detail panel (#2381 D2, D3).
+ *
+ * The ROM's SteamGridDB game on top — RomM's, the user's choice, or none yet — and the shortcut's five slots under it,
+ * each a row that can take focus: Steam's own copy of its image (D14), its name, where the image comes from and its
+ * state. Pressing a row opens the picker; what the user picks is downloaded, recorded and set here, under the
+ * artwork lease and the newest-apply-wins guard (`utils/artwork`). Without a SteamGridDB game the rows that need one
+ * say so and the cover's says it comes from RomM; "Choose game…" / "Change game…" opens the game picker.
+ */
+
+import { FC, useEffect, useState } from "react";
+import { DialogButton, Focusable, showModal } from "@decky/ui";
+import {
+  chooseArtworkSlotImage,
+  isEndpointFailure,
+  setArtworkSlotAutomatic,
+  debugLog,
+  type ArtworkSlotRow,
+  type ArtworkSlots,
+  type ArtworkTabSlot,
+} from "../api/backend";
+import { applyTabSlotImage, type TabSlotOutcome } from "../utils/artwork";
+import { loadArtworkSlots, useArtworkSlots } from "../utils/artworkSlotsStore";
+import { slotThumbnailUrls } from "../utils/artworkThumbs";
+import { SLOT_NAMES, SOURCE_LINES, STATE_CHIPS, gameLine } from "../utils/artworkTabWording";
+import { detach } from "../utils/detach";
+import { scrollFocusedToCenter } from "../utils/scrollHelpers";
+import { showToast } from "../utils/toast";
+import { showArtworkPicker, type ArtworkPick } from "./ArtworkPickerModal";
+import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
+
+interface ArtworkTabProps {
+  appId: number;
+  romId: number;
+  romName: string;
+}
+
+/** Each slot's thumbnail box, in the slot's own aspect. */
+const THUMB_SIZES: Readonly<Record<ArtworkTabSlot, { width: number; height: number }>> = {
+  cover: { width: 48, height: 72 },
+  grid: { width: 120, height: 56 },
+  hero: { width: 150, height: 48 },
+  logo: { width: 120, height: 52 },
+  icon: { width: 48, height: 48 },
+};
+
+const OUTCOME_TOASTS: Readonly<Record<Exclude<TabSlotOutcome, "left">, string>> = {
+  set: "Artwork updated",
+  refused: "Steam did not take the image",
+  none: "SteamGridDB has no image for this slot",
+};
+
+/** Steam's copy of a slot's image: the first URL that loads, else a placeholder box. */
+const SlotThumb: FC<{ urls: string[]; slot: ArtworkTabSlot }> = ({ urls, slot }) => {
+  const [failed, setFailed] = useState(0);
+  const size = THUMB_SIZES[slot];
+  const url = urls[failed];
+  const box = { width: `${size.width}px`, height: `${size.height}px`, borderRadius: "3px", flexShrink: 0 };
+  if (!url)
+    return <div className="romm-artwork-thumb-empty" style={{ ...box, background: "rgba(255,255,255,0.08)" }} />;
+  return (
+    <img
+      src={url}
+      alt=""
+      onError={() => setFailed((n) => n + 1)}
+      style={{ ...box, objectFit: slot === "logo" ? "contain" : "cover" }}
+    />
+  );
+};
+
+/** Whether a press on *row* opens the picker: a SteamGridDB game and a key are needed to list candidates. */
+function canPick(slots: ArtworkSlots): boolean {
+  return slots.has_api_key && slots.game.sgdb_id !== null;
+}
+
+export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
+  const held = useArtworkSlots(appId, romId);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // The tab always reads afresh on opening: an image set through Steam since
+    // the last read changes a row's state, and only the read sees it.
+    detach(loadArtworkSlots(appId, romId));
+  }, [appId, romId]);
+
+  const slots = held?.slots ?? null;
+
+  const setPicked = async (row: ArtworkSlotRow, pick: ArtworkPick, replaceSetInSteam: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const answer = await (pick.kind === "automatic"
+        ? setArtworkSlotAutomatic(romId, row.slot)
+        : chooseArtworkSlotImage(romId, row.slot, pick.imageId));
+      if (isEndpointFailure(answer)) {
+        showToast(answer.message);
+        return;
+      }
+      const outcome = await applyTabSlotImage(romId, appId, row.slot, answer, replaceSetInSteam);
+      if (outcome !== "left") showToast(OUTCOME_TOASTS[outcome]);
+      if (row.slot === "cover") {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "cover_refreshed", rom_id: romId } }),
+        );
+      }
+    } catch (e) {
+      detach(debugLog(`ArtworkTab: setting the ${row.slot} failed: ${e}`));
+      showToast("The image could not be set");
+    } finally {
+      setBusy(false);
+      detach(loadArtworkSlots(appId, romId));
+    }
+  };
+
+  const openPicker = (row: ArtworkSlotRow) => {
+    if (!slots || !canPick(slots) || busy) return;
+    showArtworkPicker({
+      romId,
+      row,
+      gameName: slots.game.name ?? `#${slots.game.sgdb_id}`,
+      onPick: (pick, replaceSetInSteam) => {
+        detach(setPicked(row, pick, replaceSetInSteam));
+      },
+    });
+  };
+
+  const openGamePicker = (current: ArtworkSlots) => {
+    const coverWasChosen = current.slots.some((row) => row.slot === "cover" && row.state === "chosen");
+    showModal(
+      <SgdbGamePickerModalContent
+        romId={romId}
+        appId={appId}
+        romName={romName}
+        discardsChoices={current.slots.some((row) => row.state === "chosen")}
+        onApplied={() => {
+          // The backend reloaded RomM's cover in place of a chosen one; it is
+          // set back to automatic here once more so Steam shows it in this session.
+          if (coverWasChosen) {
+            const cover = current.slots.find((row) => row.slot === "cover");
+            if (cover) detach(setPicked({ ...cover, state: "automatic" }, { kind: "automatic" }, false));
+            return;
+          }
+          detach(loadArtworkSlots(appId, romId));
+        }}
+      />,
+    );
+  };
+
+  if (!slots) {
+    return (
+      <div className="romm-panel-loading" style={{ padding: "12px 0" }}>
+        {held?.failure ?? "Loading artwork…"}
+      </div>
+    );
+  }
+
+  const line = gameLine(slots.game);
+  return (
+    <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <Focusable
+        flow-children="right"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          padding: "8px",
+          borderRadius: "4px",
+          background: line.notice ? "rgba(255, 170, 0, 0.12)" : "transparent",
+        }}
+      >
+        <DialogButton
+          onFocus={scrollFocusedToCenter}
+          style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", padding: 0 }}
+        >
+          <div style={{ fontSize: "14px", color: line.notice ? "#ffb74d" : "#fff" }}>{line.text}</div>
+          {line.explanation && (
+            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{line.explanation}</div>
+          )}
+        </DialogButton>
+        {line.button && slots.has_api_key && (
+          <DialogButton onClick={() => openGamePicker(slots)} style={{ width: "auto", minWidth: "140px" }}>
+            {line.button}
+          </DialogButton>
+        )}
+      </Focusable>
+      {slots.slots.map((row) => (
+        <DialogButton
+          key={row.slot}
+          className="romm-artwork-row"
+          onClick={() => openPicker(row)}
+          onFocus={scrollFocusedToCenter}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            textAlign: "left",
+            padding: "8px",
+            background: "transparent",
+          }}
+        >
+          <SlotThumb
+            key={slotThumbnailUrls(appId, row).join("|")}
+            urls={slotThumbnailUrls(appId, row)}
+            slot={row.slot}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "14px", color: "#fff" }}>{SLOT_NAMES[row.slot]}</div>
+            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{SOURCE_LINES[row.source]}</div>
+          </div>
+          <div className={`romm-artwork-chip romm-artwork-chip-${row.state}`} style={{ fontSize: "11px" }}>
+            {STATE_CHIPS[row.state]}
+          </div>
+          {canPick(slots) && <div style={{ fontSize: "12px", color: "#1a9fff" }}>Choose…</div>}
+        </DialogButton>
+      ))}
+    </Focusable>
+  );
+};

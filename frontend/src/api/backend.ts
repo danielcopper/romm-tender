@@ -587,11 +587,11 @@ export const getSgdbSlotArtwork = endpoint<
 >("get_sgdb_slot_artwork");
 
 /**
- * Report what Steam made of a wide grid, logo or hero the fetch served (`SetCustomArtworkForApp`), or of an icon the
- * backend wrote (`SetShortcutIcon`), passing what the backend answered back.
+ * Report what Steam made of a wide grid, logo or hero the fetch served (`SetCustomArtworkForApp`), of an icon the
+ * backend wrote (`SetShortcutIcon`), or of a cover chosen from SteamGridDB, passing what the backend answered back.
  */
 export const reportSgdbSlotArtwork = endpoint<
-  [number, SgdbArtworkSlot, "set" | "refused", number | null, number | null, string | null],
+  [number, SgdbArtworkSlot | "cover", "set" | "refused", number | null, number | null, string | null],
   { success: boolean }
 >("report_sgdb_slot_artwork");
 
