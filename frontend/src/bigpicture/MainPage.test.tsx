@@ -759,6 +759,15 @@ describe("MainPage", () => {
       expect(container.textContent).toContain(label);
     });
 
+    it("a stored RomM URL with a user name or password is named as such", () => {
+      const message =
+        "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; use Sign in under RomM Account instead.";
+      const { container } = render(
+        <ConnectionIndicator connected={false} failure={{ reason: "config_error", message }} />,
+      );
+      expect(container.textContent).toContain("Remove login from RomM URL");
+    });
+
     it("falls back to 'Not connected' when no failure detail is present", () => {
       const { container } = render(<ConnectionIndicator connected={false} failure={null} />);
       expect(container.textContent).toContain("Not connected");

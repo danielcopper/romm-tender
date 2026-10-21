@@ -646,6 +646,46 @@ describe("SettingsPage", () => {
       expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://romm.local");
     });
 
+    it("a save the backend refuses shows its message and puts the stored URL back in the field", async () => {
+      const sentence =
+        "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; " +
+        "use Sign in under RomM Account instead.";
+      vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: false, reason: "config_error", message: sentence });
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://user:fake-pw@romm.local");
+        await Promise.resolve();
+      });
+
+      const conn = capturedConnection[capturedConnection.length - 1];
+      expect(conn?.status).toBe(sentence);
+      expect(conn?.url).toBe("https://romm.local");
+    });
+
+    it("a refused save puts back the URL the last accepted save stored", async () => {
+      vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({ success: true, message: "" });
+      vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({
+        success: false,
+        reason: "config_error",
+        message: "Enter a valid http(s):// server URL",
+      });
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
+        await Promise.resolve();
+      });
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://refused.url");
+        await Promise.resolve();
+      });
+
+      expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://saved.url");
+    });
+
     it("handleAllowInsecureSslChange forwards the URL + new flag to saveServerUrl", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: true, message: "" });
       renderPage();

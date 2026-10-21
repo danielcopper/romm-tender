@@ -42,7 +42,7 @@ interface MainPageProps {
 }
 
 /** The connection-row label for a failed probe, mapped from the backend's
- *  `{reason, message}`. The two `config_error` sub-cases are split by message
+ *  `{reason, message}`. The three `config_error` sub-cases are split by message
  *  text (the slug is shared). Anything unclassified falls back to the generic
  *  "Not connected". `version_error` is included for completeness even though a
  *  version failure short-circuits the whole panel to the VersionErrorCard. */
@@ -57,6 +57,7 @@ function connectionFailureLabel(failure: ConnectionFailure | null | undefined): 
     case "version_error":
       return "Unsupported RomM version";
     case "config_error":
+      if (/user name and password/i.test(message)) return "Remove login from RomM URL";
       if (/server url/i.test(message)) return "No server URL";
       if (/not signed in/i.test(message)) return "Not signed in";
       return "Not connected";

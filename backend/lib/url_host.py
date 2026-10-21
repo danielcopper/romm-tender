@@ -99,7 +99,9 @@ def is_valid_server_url(url: str) -> bool:
 
 # urllib takes no credentials from an address: ``http.client`` reads the
 # ``user:password@host`` authority as a host with a non-numeric port and raises
-# ``InvalidURL`` before any request leaves.
+# ``InvalidURL`` before any request leaves. The panel's Connection row tells this
+# refusal apart by "user name and password" (``connectionFailureLabel`` in
+# ``frontend/src/bigpicture/MainPage.tsx``), so those words stay in the sentence.
 ADDRESS_WITH_USERINFO_MESSAGE = (
     "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; "
     "use Sign in under RomM Account instead."

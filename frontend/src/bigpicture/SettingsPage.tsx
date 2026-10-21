@@ -10,7 +10,7 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Settings.
  */
 
-import { useState, useEffect, FC, type ReactNode } from "react";
+import { useState, useEffect, useRef, FC, type ReactNode } from "react";
 import { ConfirmModal, Field, showModal } from "@decky/ui";
 import { showToast } from "../utils/toast";
 import {
@@ -140,6 +140,8 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const [selectedSection, setSelectedSection] = useState<SettingsSection>(section ?? SETTINGS_SECTIONS[0]);
   // Connection state
   const [url, setUrl] = useState("");
+  // The URL the backend holds, which the field goes back to when it refuses a save.
+  const storedUrl = useRef("");
   const [hasToken, setHasToken] = useState(false);
   const [status, setStatus] = useState("");
   const [allowInsecureSsl, setAllowInsecureSsl] = useState(false);
@@ -200,6 +202,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     getSettings()
       .then((s) => {
         // Apply any pending edits that survived a remount, fall back to backend values
+        storedUrl.current = s.romm_url;
         setUrl(pendingEdits.url ?? s.romm_url);
         setHasToken(s.has_token);
         setAllowInsecureSsl(s.romm_allow_insecure_ssl);
@@ -349,7 +352,13 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         setStatus(INVALID_URL_MESSAGE);
         return;
       }
-      await saveServerUrl(trimmed, allowInsecureSsl);
+      const result = await saveServerUrl(trimmed, allowInsecureSsl);
+      if (result.success) {
+        storedUrl.current = trimmed;
+      } else {
+        setUrl(storedUrl.current);
+        setStatus(result.message);
+      }
     } catch {
       setStatus("Failed to save settings");
     } finally {
