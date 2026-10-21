@@ -140,11 +140,15 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const [selectedSection, setSelectedSection] = useState<SettingsSection>(section ?? SETTINGS_SECTIONS[0]);
   // Connection state
   const [url, setUrl] = useState("");
-  // The URL the backend holds, which the field goes back to when it refuses a
-  // save; null until the settings have loaded.
+  // The URL and SSL flag the backend holds, which the field and the switch go
+  // back to when it refuses a save; null until the settings have loaded.
   const storedUrl = useRef<string | null>(null);
+  const storedSsl = useRef<boolean | null>(null);
   const [hasToken, setHasToken] = useState(false);
   const [status, setStatus] = useState("");
+  // What the URL save last put on the status line, the one message an accepted
+  // save may clear: the line also carries what loading and signing in said.
+  const saveStatus = useRef<string | null>(null);
   const [allowInsecureSsl, setAllowInsecureSsl] = useState(false);
   // Names only — a configured header's value is a proxy credential the backend
   // never sends back (#1822).
@@ -204,6 +208,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       .then((s) => {
         // Apply any pending edits that survived a remount, fall back to backend values
         storedUrl.current = s.romm_url;
+        storedSsl.current = s.romm_allow_insecure_ssl;
         setUrl(pendingEdits.url ?? s.romm_url);
         setHasToken(s.has_token);
         setAllowInsecureSsl(s.romm_allow_insecure_ssl);
@@ -345,24 +350,34 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const saveSyncEnabled = saveSyncSettings?.save_sync_enabled ?? false;
 
   // --- Connection handlers wired into ConnectionSection ---
+  const showSaveStatus = (message: string) => {
+    saveStatus.current = message;
+    setStatus(message);
+  };
+  const clearSaveStatus = () => {
+    const shown = saveStatus.current;
+    saveStatus.current = null;
+    if (shown !== null) setStatus((current) => (current === shown ? "" : current));
+  };
   const handleUrlChange = async (value: string) => {
     const trimmed = trimServerUrl(value);
     setUrl(trimmed);
     try {
       if (!isValidServerUrl(trimmed)) {
-        setStatus(INVALID_URL_MESSAGE);
+        showSaveStatus(INVALID_URL_MESSAGE);
         return;
       }
       const result = await saveServerUrl(trimmed, allowInsecureSsl);
       if (result.success) {
         storedUrl.current = trimmed;
-        setStatus("");
+        storedSsl.current = allowInsecureSsl;
+        clearSaveStatus();
       } else {
         if (storedUrl.current !== null) setUrl(storedUrl.current);
-        setStatus(result.message);
+        showSaveStatus(result.message);
       }
     } catch {
-      setStatus("Failed to save settings");
+      showSaveStatus("Failed to save settings");
     } finally {
       // The pending value exists to carry an edit across the remount closing
       // the modal can cause, not to outlive the attempt: left behind, a value
@@ -390,12 +405,16 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     // Auto-save the URL with the new SSL setting
     saveServerUrl(url, val)
       .then((result) => {
-        if (result.success) return;
-        setAllowInsecureSsl(!val);
-        setStatus(result.message);
+        if (result.success) {
+          storedSsl.current = val;
+          clearSaveStatus();
+          return;
+        }
+        if (storedSsl.current !== null) setAllowInsecureSsl(storedSsl.current);
+        showSaveStatus(result.message);
       })
       .catch(() => {
-        setStatus("Failed to save settings");
+        showSaveStatus("Failed to save settings");
       });
   };
   // The connect handlers return their result to the ConnectModal, which owns
