@@ -24,11 +24,19 @@ import { showContextMenu, showModal } from "@decky/ui";
 import { LibraryPage } from "../LibraryPage";
 import { BiosTab } from "../BiosTab";
 import * as backend from "../../api/backend";
+import { toaster } from "../../api/host";
 import { removeShortcut, setLaunchOptionsConfirmed } from "../../utils/steamShortcuts";
 import { clearPlatformCollection } from "../../utils/collections";
 import { setSyncProgress } from "../../utils/syncProgress";
 import { biosColorForLevel } from "../../utils/biosColor";
-import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo, WireReason } from "../../types";
+import type {
+  BiosLinkResult,
+  CoreInfo,
+  FirmwarePlatformExt,
+  PlatformSyncSetting,
+  SystemCoreInfo,
+  WireReason,
+} from "../../types";
 import { NOTE_FONT, SECONDARY_FONT } from "../layout/pane";
 
 // `scrollFocusedToCenter` is the game page tab's, not this page's: one test
@@ -5015,6 +5023,82 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Readiness unknown");
       expect(container.textContent).toContain("One file mGBA opens by name could not be checked");
       expect(buttonByText(container, "Download required for mGBA (1)")).toBeTruthy();
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // Bringing a platform's BIOS links up to date
+  // ------------------------------------------------------------------
+  describe("bringing BIOS links up to date", () => {
+    const linked = (overrides: Partial<BiosLinkResult> = {}): BiosLinkResult => ({
+      success: true,
+      placed: 0,
+      left_in_place: 0,
+      removed: 0,
+      link_failures: [],
+      ...overrides,
+    });
+
+    const reads = (slug: string) =>
+      vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.filter(([asked]) => asked === slug).length;
+
+    it("asks once the pane has its answer, and reads the platform again where that placed a link", async () => {
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked({ placed: 1 }));
+      render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await flushAsync();
+
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("gba", null);
+      expect(reads("gba")).toBe(2);
+    });
+
+    it("downloads nothing, and reads nothing again where no link changed", async () => {
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked());
+      render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await flushAsync();
+
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledOnce();
+      expect(reads("gba")).toBe(1);
+      expect(vi.mocked(backend.downloadAllFirmware)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.downloadRequiredFirmware)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).not.toHaveBeenCalled();
+    });
+
+    it("says in the status line what was left in place, and raises no toast", async () => {
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked({ placed: 3, left_in_place: 1 }));
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await flushAsync();
+
+      expect(within(container).getByTestId("status-bios").textContent).toBe(
+        "3 placed, 1 left in place: another file lies there",
+      );
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+    });
+
+    it("brings the links up to date again once the emulator is switched", async () => {
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked());
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await act(async () => {
+        fireEvent.click(coreButton(container)!);
+        await Promise.resolve();
+      });
+      await pickFromCoreMenu("VBA Next");
+      await flushAsync();
+      await flushAsync();
+
+      expect(vi.mocked(backend.updateBiosLinks).mock.calls).toEqual([
+        ["gba", null],
+        ["gba", null],
+      ]);
+      const [switched] = vi.mocked(backend.setSystemCore).mock.invocationCallOrder;
+      const [, afterSwitch] = vi.mocked(backend.updateBiosLinks).mock.invocationCallOrder;
+      expect(afterSwitch).toBeGreaterThan(switched ?? Infinity);
+      expect(vi.mocked(backend.downloadAllFirmware)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.downloadRequiredFirmware)).not.toHaveBeenCalled();
     });
   });
 

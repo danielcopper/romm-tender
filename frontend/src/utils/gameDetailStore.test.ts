@@ -2159,4 +2159,65 @@ describe("gameDetailStore", () => {
       expect(getGameDetail(nextAppId).saveSyncLabel).toBe("");
     });
   });
+
+  describe("bringing the BIOS links up to date", () => {
+    const linked = (placed: number) => ({
+      success: true as const,
+      placed,
+      left_in_place: 0,
+      removed: 0,
+      link_failures: [],
+    });
+
+    it("asks after the first load, and reads the BIOS answer again where that placed a link", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked(1));
+      subscribe(nextAppId);
+      await flush();
+      await flush();
+
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("snes", 42);
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(42);
+      const [asked] = vi.mocked(backend.updateBiosLinks).mock.invocationCallOrder;
+      const [loaded] = vi.mocked(cachedStore.getCachedGameDetail).mock.invocationCallOrder;
+      expect(asked).toBeGreaterThan(loaded ?? Infinity);
+    });
+
+    it("reads nothing again where no link changed", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked(0));
+      subscribe(nextAppId);
+      await flush();
+      await flush();
+
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledOnce();
+      expect(vi.mocked(backend.getBiosStatus)).not.toHaveBeenCalled();
+    });
+
+    it("after an emulator switch, places the new emulator's links before the requirement is read again", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked(0));
+      subscribe(nextAppId);
+      await flush();
+      await flush();
+      vi.mocked(backend.updateBiosLinks).mockClear();
+      vi.mocked(backend.getBiosStatus).mockClear();
+      const update = deferred<ReturnType<typeof linked>>();
+      vi.mocked(backend.updateBiosLinks).mockReturnValue(update.promise);
+
+      let done: Promise<void> = Promise.resolve();
+      await act(async () => {
+        done = refreshCoreAndBios(nextAppId);
+        await Promise.resolve();
+      });
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("snes", 42);
+      expect(vi.mocked(backend.getBiosStatus)).not.toHaveBeenCalled();
+
+      await act(async () => {
+        update.resolve(linked(1));
+        await done;
+      });
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(42);
+    });
+  });
 });
