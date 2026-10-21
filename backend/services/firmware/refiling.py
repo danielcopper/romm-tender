@@ -69,7 +69,9 @@ class FirmwareRefiling:
         record's delete authority is lost.
         """
         with self._uow_factory() as uow:
-            for record in list(uow.bios_files.iter_all()):
+            # Read whole first: iter_all yields from a live cursor over the table this loop deletes from and saves to.
+            records = list(uow.bios_files.iter_all())
+            for record in records:
                 target = refiled_record_platform(
                     record.platform_slug, record.file_name, record.firmware_id, rows, platforms
                 )
