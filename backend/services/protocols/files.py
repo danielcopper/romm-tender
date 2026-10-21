@@ -156,6 +156,10 @@ class CoverArtFileStore(Protocol):
         """Return the contents of *path* as raw bytes."""
         ...
 
+    def file_size(self, path: str) -> int:
+        """Return the size of the file *path* in bytes, links followed."""
+        ...
+
     def write_text_atomic(self, path: str, content: str) -> None:
         """Atomically write *content* to *path* as UTF-8 text.
 

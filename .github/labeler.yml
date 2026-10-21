@@ -55,7 +55,7 @@ area:artwork:
   - changed-files:
       - any-glob-to-any-file:
           - 'backend/services/steamgrid.py'
-          - 'backend/services/artwork.py'
+          - 'backend/services/artwork/**'
           - 'backend/adapters/cover_art_file_store.py'
           - 'backend/adapters/sgdb_artwork_cache.py'
           - 'backend/adapters/steamgriddb.py'

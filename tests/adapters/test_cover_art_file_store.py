@@ -113,3 +113,17 @@ class TestReadBytes:
     def test_missing_raises(self, store, tmp_path):
         with pytest.raises(FileNotFoundError):
             store.read_bytes(str(tmp_path / "missing.png"))
+
+
+class TestFileSize:
+    def test_the_files_bytes_through_a_link(self, store, tmp_path):
+        target = tmp_path / "a.png"
+        target.write_bytes(b"12345")
+        link = tmp_path / "link.png"
+        link.symlink_to(target)
+
+        assert store.file_size(str(link)) == 5
+
+    def test_missing_raises(self, store, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            store.file_size(str(tmp_path / "missing.png"))

@@ -370,7 +370,8 @@ class ArtworkService:
 
         A changed cover that is set in Steam (:meth:`_covers_set_in_steam_io`)
         is skipped: its cache and its fingerprint stay as they are, so RomM's
-        change stays pending until the slot is Tender's again.
+        change stays pending (what becomes of it: docs/architecture/backend-architecture.md,
+        "Cover-cache invalidation").
 
         Returns the refreshed ``[{"rom_id", "app_id"}]`` list — the shortcuts
         whose Steam tile the frontend must re-apply via

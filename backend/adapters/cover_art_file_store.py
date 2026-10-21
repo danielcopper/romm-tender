@@ -56,6 +56,10 @@ class CoverArtFileStoreAdapter:
         """Return the contents of *path* as raw bytes."""
         return pathlib.Path(path).read_bytes()
 
+    def file_size(self, path: str) -> int:
+        """Return the size of the file *path* in bytes, links followed."""
+        return os.path.getsize(path)
+
     def write_text_atomic(self, path: str, content: str) -> None:
         """Atomically write *content* to *path* as UTF-8 text.
 

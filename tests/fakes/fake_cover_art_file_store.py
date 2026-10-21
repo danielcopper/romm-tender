@@ -40,6 +40,8 @@ class FakeCoverArtFileStore:
         self.rename_failures: set[str] = set()
         # Source paths that should raise OSError on copy_file (same pattern).
         self.copy_failures: set[str] = set()
+        # Every path read_bytes read, in order.
+        self.read_paths: list[str] = []
 
     def exists(self, path: str) -> bool:
         return path in self.files or self.is_dir(path)
@@ -86,7 +88,13 @@ class FakeCoverArtFileStore:
     def read_bytes(self, path: str) -> bytes:
         if path not in self.files:
             raise FileNotFoundError(path)
+        self.read_paths.append(path)
         return self.files[path]
+
+    def file_size(self, path: str) -> int:
+        if path not in self.files:
+            raise FileNotFoundError(path)
+        return len(self.files[path])
 
     def write_text_atomic(self, path: str, content: str) -> None:
         self.files[path] = content.encode("utf-8")

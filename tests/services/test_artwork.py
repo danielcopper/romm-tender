@@ -2548,3 +2548,13 @@ class TestACoverSetInSteamIsLeftAlone:
         assert (paths, applied) == ({}, {})
         romm_api.download_cover.assert_not_called()
         assert file_store.files[_cache(cover_cache_dir, 42)] == b"tenders"
+
+    @pytest.mark.asyncio
+    async def test_a_png_of_another_size_is_set_in_steam_without_reading_either_file(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir, cached=b"tenders")
+        self._lay_down(steam_config, file_store, grid, {"99999p.png": b"a longer png set by hand"})
+
+        assert await self._count(artwork_service, uow) == 0
+        assert file_store.read_paths == []

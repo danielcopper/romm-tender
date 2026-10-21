@@ -53,17 +53,38 @@ def covers_set_in_steam(
     set_in_steam: set[int] = set()
     for rom_id, app_id in covers:
         png = final_filename(app_id)
-        png_sha256 = _sha256_of(file_store, os.path.join(grid, png), logger) if png in file_names else None
-        outcome = recorded[rom_id]
-        if outcome is not None and outcome.outcome is SlotOutcome.SET:
-            tenders_sha256 = outcome.image_sha256
-        elif png_sha256 is not None:
-            tenders_sha256 = _sha256_of(file_store, os.path.join(cover_cache_dir, cache_filename(rom_id)), logger)
-        else:
-            tenders_sha256 = None
+        png_sha256 = tenders_sha256 = None
+        if png in file_names:
+            png_path = os.path.join(grid, png)
+            outcome = recorded[rom_id]
+            if outcome is not None and outcome.outcome is SlotOutcome.SET:
+                png_sha256, tenders_sha256 = _sha256_of(file_store, png_path, logger), outcome.image_sha256
+            else:
+                cache_path = os.path.join(cover_cache_dir, cache_filename(rom_id))
+                sizes = _size_of(file_store, png_path, logger), _size_of(file_store, cache_path, logger)
+                if None not in sizes and sizes[0] != sizes[1]:
+                    set_in_steam.add(rom_id)
+                    continue
+                if None not in sizes:
+                    png_sha256 = _sha256_of(file_store, png_path, logger)
+                    tenders_sha256 = _sha256_of(file_store, cache_path, logger)
         if is_set_in_steam(file_names, app_id, ArtworkSlot.COVER, png_sha256=png_sha256, tenders_sha256=tenders_sha256):
             set_in_steam.add(rom_id)
     return set_in_steam
+
+
+def _size_of(file_store: CoverArtFileStore, path: str, logger: logging.Logger) -> int | None:
+    """The size of *path* in bytes; ``None`` where it is missing or cannot be read, and a failed read is logged.
+
+    Files of two sizes cannot hold the same bytes, so comparing sizes first spares hashing both.
+    """
+    if not file_store.exists(path):
+        return None
+    try:
+        return file_store.file_size(path)
+    except OSError as e:
+        logger.warning(f"Could not read the size of {path} to tell whether its cover is set in Steam: {e}")
+        return None
 
 
 def _sha256_of(file_store: CoverArtFileStore, path: str, logger: logging.Logger) -> str | None:
