@@ -94,7 +94,7 @@ class TestSettingASlotBackToAutomatic:
 
         uow.artwork_slot_choices.delete_slot(5, ArtworkSlot.LOGO)
 
-        assert uow.artwork_slot_choices.list_for_rom(5) == []
+        assert uow.artwork_slot_choices.get_all_for_rom(5) == []
 
     def test_deleting_a_roms_choices_leaves_another_roms(self, uow: SqliteUnitOfWork):
         _seed_rom(uow, 5)
@@ -104,8 +104,8 @@ class TestSettingASlotBackToAutomatic:
 
         uow.artwork_slot_choices.delete_for_rom(5)
 
-        assert uow.artwork_slot_choices.list_for_rom(5) == []
-        assert uow.artwork_slot_choices.list_for_rom(6) == [_choice(rom_id=6)]
+        assert uow.artwork_slot_choices.get_all_for_rom(5) == []
+        assert uow.artwork_slot_choices.get_all_for_rom(6) == [_choice(rom_id=6)]
 
 
 class TestListForRom:
@@ -116,7 +116,7 @@ class TestListForRom:
             uow.artwork_slot_choices.save(_choice(slot=slot))
         uow.artwork_slot_choices.save(_choice(rom_id=6))
 
-        listed = uow.artwork_slot_choices.list_for_rom(5)
+        listed = uow.artwork_slot_choices.get_all_for_rom(5)
 
         assert sorted(listed, key=lambda choice: choice.slot.value) == [
             _choice(slot=ArtworkSlot.COVER),

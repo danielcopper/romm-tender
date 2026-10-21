@@ -44,7 +44,7 @@ class SqliteArtworkSlotChoiceRepository(BaseRepository):
             (choice.rom_id, choice.slot.value, choice.image_id, choice.chosen_at),
         )
 
-    def list_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
+    def get_all_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
         rows = self._conn.execute(f"SELECT {_COLUMNS} FROM artwork_slot_choices WHERE rom_id = ?", (rom_id,))
         return [_row_to_choice(row) for row in rows.fetchall()]
 

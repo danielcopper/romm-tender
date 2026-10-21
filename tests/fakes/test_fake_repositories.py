@@ -773,11 +773,11 @@ class TestFakeArtworkSlotChoiceRepository:
         repo.save(self._choice(2, ArtworkSlot.HERO))
 
         repo.delete_slot(1, ArtworkSlot.HERO)
-        assert repo.list_for_rom(1) == [self._choice(1, ArtworkSlot.WIDE_GRID)]
+        assert repo.get_all_for_rom(1) == [self._choice(1, ArtworkSlot.WIDE_GRID)]
 
         repo.delete_for_rom(1)
-        assert repo.list_for_rom(1) == []
-        assert repo.list_for_rom(2) == [self._choice(2, ArtworkSlot.HERO)]
+        assert repo.get_all_for_rom(1) == []
+        assert repo.get_all_for_rom(2) == [self._choice(2, ArtworkSlot.HERO)]
 
     def test_an_orphan_row_aborts_the_commit(self):
         uow = FakeUnitOfWork()

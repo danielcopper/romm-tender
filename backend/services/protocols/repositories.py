@@ -337,7 +337,7 @@ class ArtworkSlotChoiceRepository(Protocol):
         """Upsert *choice* under its ``(rom_id, slot)``."""
         ...
 
-    def list_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
+    def get_all_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
         """Every slot choice of *rom_id*, in no particular order."""
         ...
 

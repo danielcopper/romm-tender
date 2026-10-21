@@ -28,7 +28,7 @@ class FakeArtworkSlotChoiceRepository:
         self.save_count += 1
         self._choices.setdefault(choice.rom_id, {})[choice.slot] = copy.deepcopy(choice)
 
-    def list_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
+    def get_all_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
         return [copy.deepcopy(choice) for choice in self._choices.get(rom_id, {}).values()]
 
     def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:

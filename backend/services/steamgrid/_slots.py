@@ -169,7 +169,7 @@ class ArtworkSlots:
 
     def _views_io(self, rom_id: int, app_id: int, grid: _GridState, *, has_game: bool) -> list[SlotView]:
         with self._uow_factory() as uow:
-            choices = {choice.slot: choice for choice in uow.artwork_slot_choices.list_for_rom(rom_id)}
+            choices = {choice.slot: choice for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
             recorded = {slot: uow.artwork_slot_outcomes.get(rom_id, slot) for slot in RECORDED_SLOTS}
         return [
             self._view_io(rom_id, app_id, slot, grid, choices.get(slot), recorded.get(slot), has_game=has_game)
@@ -370,7 +370,7 @@ class ArtworkSlots:
     def forget_choices_io(self, rom_id: int) -> set[ArtworkSlot]:
         """Drop every choice of *rom_id*, answering the slots that had one."""
         with self._uow_factory() as uow:
-            chosen = {choice.slot for choice in uow.artwork_slot_choices.list_for_rom(rom_id)}
+            chosen = {choice.slot for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
             uow.artwork_slot_choices.delete_for_rom(rom_id)
         return chosen
 
