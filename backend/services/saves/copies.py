@@ -26,7 +26,7 @@ from domain.save_answer import (
 from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
 from lib.errors import RommApiError, RommConflictError, RommNotFoundError, classify_error, with_system_text
-from services.saves._helpers import local_save_target
+from services.saves._helpers import local_save_target, newest_server_saves_by_target
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
 
@@ -136,6 +136,51 @@ class SaveCopyService:
         )
         return match.get("id") if match is not None else None
 
+    def _adopt_target_head_as_baseline(
+        self,
+        save_state: RomSaveSyncState,
+        server_saves: list[dict[str, Any]],
+        target_slot: str,
+        canonical: str,
+        rom_name: str,
+        save_names: tuple[str, ...],
+    ) -> None:
+        """Record the target slot's newest save for *canonical* as the file's baseline.
+
+        After an upload that failed, so the next sync reads the copy on disk as
+        a change against the save the target slot holds; what that sync then
+        does is the copy section of ``docs/architecture/save-file-sync-architecture.md``.
+        A slot with no such save keeps the baseline the download recorded. So
+        does a head without a ``content_hash``: no hash of its content is known,
+        and one made up to differ from the copy would claim a sync that never
+        happened.
+        """
+        in_slot = [s for s in server_saves if save_in_slot(s, target_slot)]
+        head = newest_server_saves_by_target(in_slot, rom_name, known_names=save_names).get(canonical)
+        if head is None:
+            return
+        head_hash = head.get("content_hash")
+        if not head_hash or not head.get("id"):
+            self._logger.warning(
+                "_copy_save_to_slot_io: newest save %r in slot %r carries no content_hash; "
+                "the copy is uploaded only with its next change",
+                head.get("id"),
+                target_slot,
+            )
+            return
+        previous = save_state.files.get(canonical)
+        save_state.adopt_baseline(
+            canonical,
+            tracked_save_id=int(head["id"]),
+            last_sync_hash=head_hash,
+            last_sync_server_hash=head_hash,
+            last_sync_at=previous.last_sync_at if previous else "",
+            last_sync_server_updated_at=head.get("updated_at") or "",
+            last_sync_server_save_id=int(head["id"]),
+            last_sync_server_size=head.get("file_size_bytes"),
+            last_sync_local_size=head.get("file_size_bytes"),
+        )
+
     # ------------------------------------------------------------------
     # Copy-to-slot API
     # ------------------------------------------------------------------
@@ -164,7 +209,6 @@ class SaveCopyService:
         2. Download the chosen save's content onto the canonical local file
            (quarantines the current local file first, #965). Where this device
            cannot write it, the copy is ``copy_failed``; a RomM error raises on.
-           Either way the active slot is the one the copy started from.
         3. Make the target the ROM's active/confirmed slot
            (:meth:`RomSaveSyncState.confirm_slot`) — the upload resolves its slot
            purely from ``active_slot`` (``_resolve_upload_slot``), so this must
@@ -174,7 +218,9 @@ class SaveCopyService:
            backstop guards a busy target). A 409 is ``target_slot_busy`` (the
            target has newer changes from another device — resolve it first); any
            other upload error is ``upload_failed``: the copy is complete on this
-           device, the target stays active, and the next sync uploads it.
+           device, the target stays active, and
+           :meth:`_adopt_target_head_as_baseline` makes the next sync see the
+           copy as a change to upload.
 
         The source save is never touched. Mutates *save_state* in memory; the
         caller owns the write UoW.
@@ -243,6 +289,7 @@ class SaveCopyService:
                 save_id,
                 e,
             )
+            self._adopt_target_head_as_baseline(save_state, server_saves, target_slot, canonical, rom_name, save_names)
             return {"status": "upload_failed", "message": str(e)}
 
         return {"status": "ok"}

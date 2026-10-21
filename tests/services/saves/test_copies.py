@@ -7,6 +7,7 @@ deleted. A distinctive target name (never the default "autosave" fallback)
 is used throughout so the tests prove the target value actually flows.
 """
 
+import hashlib
 from typing import Any
 
 import pytest
@@ -16,6 +17,7 @@ from domain.save_answer import save_shape_message, unestablished_answer
 from lib.errors import DeviceWriteError, RommNotFoundError, RommRateLimitedError, RommTimeoutError
 from tests.services.saves._helpers import (
     _create_save,
+    _do_sync,
     _enable_sync_with_device,
     _file_md5,
     _install_rom,
@@ -182,6 +184,104 @@ class TestCopySaveToSlotHappyPaths:
         assert _require_save_state(svc, 42).active_slot == TARGET
         # A brand-new save id appeared for the copy (the source was not mutated in place).
         assert set(fake.saves) - before_ids
+
+
+class TestAnUploadThatFailsAfterTheDownload:
+    """``upload_failed`` leaves the copy on this device, and the next sync is what uploads it."""
+
+    COPIED = b"C" * 1024
+    HEAD = b"H" * 1024
+
+    def _a_copy_whose_upload_fails_once(self, tmp_path, monkeypatch, *, target_head: dict[str, Any] | None):
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path, content=b"current-slot-bytes")
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        _setup_configured(svc, tmp_path, active_slot="autosave", tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = _tracked_save(100, slot="autosave")
+        fake.saves[10] = _server_save(save_id=10, rom_id=42, slot=None, updated_at="2026-02-01T10:00:00Z")
+        fake.set_server_save_content(10, self.COPIED)
+        if target_head is not None:
+            fake.saves[target_head["id"]] = target_head
+            fake.set_server_save_content(target_head["id"], self.HEAD)
+        working_upload = fake.upload_save
+        failures = [RuntimeError("server 500")]
+
+        def upload_failing_once(*args, **kwargs):
+            if failures:
+                raise failures.pop()
+            return working_upload(*args, **kwargs)
+
+        monkeypatch.setattr(fake, "upload_save", upload_failing_once)
+        return svc, fake
+
+    def _target_head(self) -> dict[str, Any]:
+        head = _server_save(save_id=200, rom_id=42, slot=TARGET, updated_at="2026-03-01T10:00:00Z")
+        head["content_hash"] = hashlib.md5(self.HEAD).hexdigest()
+        return head
+
+    @pytest.mark.asyncio
+    async def test_the_next_sync_uploads_a_copy_into_an_existing_slot(self, tmp_path, monkeypatch):
+        svc, fake = self._a_copy_whose_upload_fails_once(tmp_path, monkeypatch, target_head=self._target_head())
+        fake.stage_device_sync(200, "device-1", "2026-03-01T10:00:00Z")
+
+        assert (await svc.copy_save_to_slot(42, 10, TARGET))["status"] == "upload_failed"
+        _uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert (errors, conflicts) == ([], [])
+        new_ids = [i for i, s in fake.saves.items() if s.get("slot") == TARGET and i != 200]
+        assert len(new_ids) == 1
+        assert fake._save_content[new_ids[0]] == self.COPIED
+        assert 200 in fake.saves
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == new_ids[0]
+
+    @pytest.mark.asyncio
+    async def test_a_copy_far_smaller_than_the_target_head_makes_the_next_sync_a_conflict(self, tmp_path, monkeypatch):
+        svc, fake = self._a_copy_whose_upload_fails_once(tmp_path, monkeypatch, target_head=self._target_head())
+        fake.stage_device_sync(200, "device-1", "2026-03-01T10:00:00Z")
+        fake.set_server_save_content(10, b"C" * 10)
+
+        assert (await svc.copy_save_to_slot(42, 10, TARGET))["status"] == "upload_failed"
+        _uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert errors == []
+        assert [c["server_save_id"] for c in conflicts] == [200]
+        assert [i for i, s in fake.saves.items() if s.get("slot") == TARGET] == [200]
+
+    @pytest.mark.asyncio
+    async def test_the_next_sync_uploads_a_copy_into_a_new_slot(self, tmp_path, monkeypatch):
+        svc, fake = self._a_copy_whose_upload_fails_once(tmp_path, monkeypatch, target_head=None)
+
+        assert (await svc.copy_save_to_slot(42, 10, TARGET))["status"] == "upload_failed"
+        _uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert (errors, conflicts) == ([], [])
+        new_ids = [i for i, s in fake.saves.items() if s.get("slot") == TARGET]
+        assert len(new_ids) == 1
+        assert fake._save_content[new_ids[0]] == self.COPIED
+
+    @pytest.mark.asyncio
+    async def test_a_target_head_this_device_never_synced_makes_the_next_sync_a_conflict(self, tmp_path, monkeypatch):
+        svc, fake = self._a_copy_whose_upload_fails_once(tmp_path, monkeypatch, target_head=self._target_head())
+
+        assert (await svc.copy_save_to_slot(42, 10, TARGET))["status"] == "upload_failed"
+        _uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert errors == []
+        assert [c["server_save_id"] for c in conflicts] == [200]
+        assert [i for i, s in fake.saves.items() if s.get("slot") == TARGET] == [200]
+        assert (tmp_path / "saves" / "gba" / "pokemon.srm").read_bytes() == self.COPIED
+
+    @pytest.mark.asyncio
+    async def test_a_target_head_without_a_content_hash_keeps_the_download_s_baseline(self, tmp_path, monkeypatch):
+        head = self._target_head()
+        del head["content_hash"]
+        svc, fake = self._a_copy_whose_upload_fails_once(tmp_path, monkeypatch, target_head=head)
+        fake.stage_device_sync(200, "device-1", "2026-03-01T10:00:00Z")
+
+        assert (await svc.copy_save_to_slot(42, 10, TARGET))["status"] == "upload_failed"
+
+        baseline = _require_save_state(svc, 42).files["pokemon.srm"]
+        assert (baseline.tracked_save_id, baseline.last_sync_hash) == (10, hashlib.md5(self.COPIED).hexdigest())
 
 
 class TestCopySaveToSlotDedup:
