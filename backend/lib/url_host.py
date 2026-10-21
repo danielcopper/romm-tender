@@ -92,9 +92,9 @@ def is_valid_server_url(url: str) -> bool:
 
     One of the two checks on a user-entered server URL, :func:`carries_userinfo`
     the other: a value is valid when it carries an ``http`` / ``https`` scheme
-    and a host. Path / port / query are
-    allowed (they are dropped by :func:`normalize_origin`); a scheme-less,
-    hostless, or non-http(s) value is rejected.
+    and a host. Path / port / query are allowed (they are dropped by
+    :func:`normalize_origin`); a scheme-less, hostless, or non-http(s) value is
+    rejected.
     """
     return normalize_origin(url.strip()) is not None
 

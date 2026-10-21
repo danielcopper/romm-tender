@@ -1861,8 +1861,8 @@ request to such an address reaches RomM; why is the comment at `ADDRESS_WITH_USE
 `carries_userinfo` beside it decides it, and that sentence is the one every refusal carries, as `config_error`: when the
 URL is saved (`SettingsService.save_server_url`), at each of the three sign-ins, and at `test_connection` for a stored
 one, before any request. The panel's Connection row names it _Remove login from RomM URL_. A stored one is not refused
-anywhere else: a sync, a download or any other request still goes out to it and fails, with errors that carry no login
-(below, "what an error's text carries").
+anywhere else: a sync, a download or any other request to it is still attempted and fails, with errors that carry no
+login (below, "what an error's text carries").
 
 **A stored token no HTTP header can carry is refused before it is used.** `auth_header()` raises `TokenUnsendableError`
 for a token holding a CR, an LF or a character past latin-1 (`domain/header_value.py`, the same rule the SteamGridDB key
