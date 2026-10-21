@@ -145,7 +145,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const storedSsl = useRef<boolean | null>(null);
   const [hasToken, setHasToken] = useState(false);
   // `warns` marks a refusal or a failure: ConnectionSection's `statusWarns`.
-  const [status, setStatusLine] = useState<{ text: string; warns: boolean }>(NO_STATUS);
+  const [statusLine, setStatusLine] = useState<{ text: string; warns: boolean }>(NO_STATUS);
   const setStatus = (text: string, warns = false) => setStatusLine({ text, warns });
   // What the SSL switch's save last put on the status line, the one message an
   // accepted save may clear: the line also carries what loading and signing in said.
@@ -682,8 +682,8 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
               url={url}
               hasToken={hasToken}
               allowInsecureSsl={allowInsecureSsl}
-              status={status.text}
-              statusWarns={status.warns}
+              status={statusLine.text}
+              statusWarns={statusLine.warns}
               customHeaderNames={customHeaderNames}
               onSaveUrl={handleSaveUrl}
               onSaveCustomHeaders={handleSaveCustomHeaders}
