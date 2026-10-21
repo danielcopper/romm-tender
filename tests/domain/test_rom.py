@@ -208,6 +208,16 @@ class TestAssignSgdbId:
         assert rom.sgdb_id == 7
 
 
+class TestChooseSgdbGame:
+    def test_records_the_choice_beside_romms_id(self):
+        rom = _make_rom()
+        rom.assign_sgdb_id(7)
+
+        rom.choose_sgdb_game(9)
+
+        assert (rom.sgdb_id, rom.chosen_sgdb_id) == (7, 9)
+
+
 class TestAssignRaId:
     def test_sets_ra_id(self):
         rom = _make_rom()

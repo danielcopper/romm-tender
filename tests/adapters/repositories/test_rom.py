@@ -763,6 +763,52 @@ class TestAppliedLaunchOptions:
         assert loaded.name == "Renamed Game"
 
 
+class TestChosenSgdbId:
+    """The SteamGridDB game the user chose — written only by its own path, never by the sync UPSERT."""
+
+    def test_round_trips_via_get(self, uow: SqliteUnitOfWork):
+        uow.roms.save(_rom(1))
+        uow.roms.set_chosen_sgdb_id(1, 5555)
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert loaded.chosen_sgdb_id == 5555
+
+    def test_defaults_to_none_and_clears_to_none(self, uow: SqliteUnitOfWork):
+        uow.roms.save(_rom(1))
+        before = uow.roms.get(1)
+        uow.roms.set_chosen_sgdb_id(1, 5555)
+        uow.roms.set_chosen_sgdb_id(1, None)
+
+        after = uow.roms.get(1)
+        assert before is not None and after is not None
+        assert (before.chosen_sgdb_id, after.chosen_sgdb_id) == (None, None)
+
+    def test_a_resync_leaves_it_alone_and_writes_romms_id(self, uow: SqliteUnitOfWork):
+        rom_id = 1
+        uow.roms.save(_rom(rom_id, app_id=100))
+        uow.roms.set_chosen_sgdb_id(rom_id, 5555)
+
+        resynced = _rom(rom_id, app_id=200)
+        resynced.assign_sgdb_id(7777)
+        assert resynced.chosen_sgdb_id is None
+        uow.roms.save(resynced)
+
+        loaded = uow.roms.get(rom_id)
+        assert loaded is not None
+        assert (loaded.chosen_sgdb_id, loaded.sgdb_id, loaded.shortcut_app_id) == (5555, 7777, 200)
+
+    def test_a_save_of_a_rom_carrying_a_choice_does_not_write_it(self, uow: SqliteUnitOfWork):
+        rom = _rom(1)
+        rom.choose_sgdb_game(5555)
+
+        uow.roms.save(rom)
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert loaded.chosen_sgdb_id is None
+
+
 def _seed_children(uow: SqliteUnitOfWork, rom_id: int) -> None:
     """Seed a row in all five ``ON DELETE CASCADE`` children of ``roms``.
 

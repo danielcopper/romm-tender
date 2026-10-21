@@ -65,10 +65,13 @@ _SYNC_COLUMNS = (
 )
 
 # Read set: the synced columns plus the pin-only emulator_override, selected_disc,
-# and applied_launch_options (the recorded applied launch command, #1383). Like the
-# two pins, applied_launch_options is read here but written only by its own set_*()
-# method, never by save(), so a re-sync never wipes the recorded value.
-_SELECT_COLUMNS = ", ".join((*_SYNC_COLUMNS, "emulator_override", "selected_disc", "applied_launch_options"))
+# applied_launch_options (the recorded applied launch command, #1383) and
+# chosen_sgdb_id (the SteamGridDB game the user chose). Like the two pins, the
+# last two are read here but written only by their own set_*() method, never by
+# save(), so a re-sync never wipes them.
+_SELECT_COLUMNS = ", ".join(
+    (*_SYNC_COLUMNS, "emulator_override", "selected_disc", "applied_launch_options", "chosen_sgdb_id")
+)
 _INSERT_COLUMNS = ", ".join(_SYNC_COLUMNS)
 _INSERT_PLACEHOLDERS = ", ".join("?" for _ in _SYNC_COLUMNS)
 # Every sync column except the rom_id primary key is overwritten on conflict.
@@ -90,6 +93,7 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
         cover_source=row["cover_source"],
         igdb_id=row["igdb_id"],
         sgdb_id=row["sgdb_id"],
+        chosen_sgdb_id=row["chosen_sgdb_id"],
         ra_id=row["ra_id"],
         emulator_override=row["emulator_override"],
         selected_disc=row["selected_disc"],
@@ -230,6 +234,18 @@ class SqliteRomRepository(BaseRepository):
         self._conn.execute(
             "UPDATE roms SET applied_launch_options = ? WHERE rom_id = ?",
             (launch_options, rom_id),
+        )
+
+    def set_chosen_sgdb_id(self, rom_id: int, sgdb_id: int | None) -> None:
+        """Write (or clear) the SteamGridDB game the user chose for ``rom_id``.
+
+        ``sgdb_id`` is the chosen game's id, or ``None`` to store SQL NULL. This
+        is the only write path for the column — the sync UPSERT in :meth:`save`
+        never touches it.
+        """
+        self._conn.execute(
+            "UPDATE roms SET chosen_sgdb_id = ? WHERE rom_id = ?",
+            (sgdb_id, rom_id),
         )
 
     def clear_all_applied_launch_options(self) -> None:

@@ -52,6 +52,7 @@ class Rom:
     cover_source: str | None = None
     igdb_id: int | None = None
     sgdb_id: int | None = None
+    chosen_sgdb_id: int | None = None
     ra_id: int | None = None
     emulator_override: str | None = None
     selected_disc: str | None = None
@@ -200,6 +201,16 @@ class Rom:
     def assign_sgdb_id(self, sgdb_id: int) -> None:
         """Stamp the resolved SteamGridDB id."""
         self.sgdb_id = sgdb_id
+
+    def choose_sgdb_game(self, sgdb_id: int) -> None:
+        """Record the SteamGridDB game the user chose for this ROM.
+
+        Kept beside ``sgdb_id``, RomM's id, which wins where both exist
+        (:func:`domain.sgdb_artwork.effective_sgdb_id`). Like the pins it is
+        excluded from the sync UPSERT and written only through its own
+        ``set_chosen_sgdb_id``, so a re-sync never wipes it.
+        """
+        self.chosen_sgdb_id = sgdb_id
 
     def assign_ra_id(self, ra_id: int) -> None:
         """Stamp the resolved RetroAchievements id."""

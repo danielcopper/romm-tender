@@ -14,8 +14,9 @@ The Protocols match the aggregate roots settled in ADR-0003 — ``Rom``,
 ``FirmwareCacheEntry``, ``SyncRun`` — plus ``PlatformSyncState`` (the per-platform
 completion stamp, ADR-0023), its per-collection sibling ``CollectionSyncState``,
 ``AnsweredSaveDirectory`` (the save directory the resolver last answered per ROM,
-ADR-0041), ``ArtworkSlotOutcome`` (what was last found for a ROM's wide grid or
-logo) and the ``kv_config`` key-value surface.
+ADR-0041), ``ArtworkSlotOutcome`` (what was last found for one of a ROM's
+artwork slots), ``ArtworkSlotChoice`` (the image a user chose for one) and the
+``kv_config`` key-value surface.
 ``SyncSettings``/``Platform``/``Device`` are NOT repositories — ADR-0003 dropped
 those aggregates.
 
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
     from domain.answered_save_directory import AnsweredSaveDirectory
     from domain.artwork_slot import ArtworkSlot
+    from domain.artwork_slot_choice import ArtworkSlotChoice
     from domain.artwork_slot_outcome import ArtworkSlotOutcome
     from domain.bios_file import BiosFile
     from domain.collection_sync_state import CollectionSyncState
@@ -131,6 +133,14 @@ class RomRepository(Protocol):
         The only write path for ``applied_launch_options``; the sync upsert in
         :meth:`save` never touches it, so a re-sync of an unchanged (un-re-acked)
         row preserves the recorded value the delta apply reads back.
+        """
+        ...
+
+    def set_chosen_sgdb_id(self, rom_id: int, sgdb_id: int | None) -> None:
+        """Store (or clear with ``None``) the SteamGridDB game the user chose for *rom_id*.
+
+        The only write path for ``chosen_sgdb_id``; the sync upsert in
+        :meth:`save` never touches it, so a re-sync preserves the choice.
         """
         ...
 
@@ -290,7 +300,7 @@ class AnsweredSaveDirectoryRepository(Protocol):
 
 
 class ArtworkSlotOutcomeRepository(Protocol):
-    """Persistence seam for the ``ArtworkSlotOutcome`` aggregate (per-ROM wide grid, logo and icon outcomes).
+    """Persistence seam for the ``ArtworkSlotOutcome`` aggregate (per-ROM wide grid, logo, hero and icon outcomes).
 
     Keyed by ``(rom_id, slot)``. (steamgrid.py, the one reader and writer)
     """
@@ -305,6 +315,21 @@ class ArtworkSlotOutcomeRepository(Protocol):
 
     def delete_for_rom(self, rom_id: int) -> None:
         """Drop every slot's record of *rom_id*. A no-op when none exists."""
+        ...
+
+
+class ArtworkSlotChoiceRepository(Protocol):
+    """Persistence seam for the ``ArtworkSlotChoice`` aggregate (the image a user chose per ROM and slot).
+
+    Keyed by ``(rom_id, slot)``; no row is a slot on automatic.
+    """
+
+    def get(self, rom_id: int, slot: ArtworkSlot) -> ArtworkSlotChoice | None:
+        """Return the image chosen for *rom_id*'s *slot*, or ``None`` when the slot is automatic."""
+        ...
+
+    def save(self, choice: ArtworkSlotChoice) -> None:
+        """Upsert *choice* under its ``(rom_id, slot)``."""
         ...
 
 

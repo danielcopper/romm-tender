@@ -86,13 +86,15 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 027_add_artwork_slot_outcomes + 028_widen_artwork_slot_outcomes_to_the_icon
 # + 029_add_rom_delivered_through + 030_add_rom_gone_from_romm
 # + 031_add_platform_skip_fetch_start_and_checksum
-# + 032_add_collection_skip_fetch_start_and_checksum).
-_SHIPPED_VERSION = 32
+# + 032_add_collection_skip_fetch_start_and_checksum
+# + 033_add_artwork_slot_choices).
+_SHIPPED_VERSION = 33
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
-# 024's answered save directories and 027's artwork slot outcomes, with 018
-# renaming the save-sync scalar table rom_save_states -> rom_save_sync_states.
+# 024's answered save directories, 027's artwork slot outcomes and 033's artwork
+# slot choices, with 018 renaming the save-sync scalar table rom_save_states ->
+# rom_save_sync_states.
 _SHIPPED_TABLES = (_V1_TABLES - {"rom_save_states"}) | {
     "rom_save_sync_states",
     "rom_playtime_sessions",
@@ -100,6 +102,7 @@ _SHIPPED_TABLES = (_V1_TABLES - {"rom_save_states"}) | {
     "collection_sync_state",
     "answered_save_directories",
     "artwork_slot_outcomes",
+    "artwork_slot_choices",
 }
 
 
@@ -1920,12 +1923,12 @@ class Test028WidenArtworkSlotOutcomesToTheIcon:
     @pytest.mark.parametrize(
         ("slot", "outcome", "image_id", "image_sha256"),
         [
-            ("hero", "none", None, None),
+            ("banner", "none", None, None),
             ("icon", "lost", None, None),
             ("icon", "set", None, "ab"),
             ("icon", "none", 11, None),
         ],
-        ids=["the-hero", "an-unknown-outcome", "a-set-without-its-id", "a-none-with-an-id"],
+        ids=["an-unknown-slot", "an-unknown-outcome", "a-set-without-its-id", "a-none-with-an-id"],
     )
     def test_every_other_check_still_holds(self, tmp_path: Path, slot, outcome, image_id, image_sha256):
         db_path = str(tmp_path / "romm_sync.db")
@@ -2186,3 +2189,143 @@ class Test032AddCollectionSkipFetchStartAndChecksum:
         finally:
             conn.close()
         assert row == ("2026-10-01T09:00:00", "2026-10-15T10:00:00+00:00", 2, "[10, 11]", None, None)
+
+
+class Test033AddArtworkSlotChoices:
+    """033 — widens the slot CHECK with 'hero' and 'cover', adds artwork_slot_choices and roms.chosen_sgdb_id."""
+
+    def test_every_outcome_recorded_before_it_survives(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 32)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            _insert_slot_outcome(conn, 1, "grid", "set")
+            _insert_slot_outcome(conn, 1, "icon", "refused")
+            _insert_slot_outcome(conn, 1, "logo", "none")
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute("SELECT * FROM artwork_slot_outcomes ORDER BY slot").fetchall()
+        finally:
+            conn.close()
+        assert rows == [
+            (1, "grid", "set", 7, 1.5, 11, "ab"),
+            (1, "icon", "refused", 7, 1.5, None, None),
+            (1, "logo", "none", 7, 1.5, None, None),
+        ]
+
+    @pytest.mark.parametrize("slot", ["hero", "cover"])
+    def test_the_hero_and_the_cover_are_refused_before_it(self, tmp_path: Path, slot: str):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 32)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            with pytest.raises(sqlite3.IntegrityError):
+                _insert_slot_outcome(conn, 1, slot, "none")
+        finally:
+            conn.close()
+
+    @pytest.mark.parametrize("slot", ["hero", "cover"])
+    @pytest.mark.parametrize("outcome", ["set", "none", "refused"])
+    def test_the_hero_and_the_cover_are_recorded_after_it(self, tmp_path: Path, slot: str, outcome: str):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            _insert_slot_outcome(conn, 1, slot, outcome)
+            recorded = conn.execute("SELECT slot, outcome FROM artwork_slot_outcomes").fetchall()
+        finally:
+            conn.close()
+        assert recorded == [(slot, outcome)]
+
+    def test_neither_new_home_exists_before_it(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 32)))
+
+        assert _user_version(db_path) == 32
+        assert "artwork_slot_choices" not in _tables(db_path)
+        assert "chosen_sgdb_id" not in _columns(db_path, "roms")
+
+    def test_an_existing_rom_has_no_chosen_game_across_it(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 32)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            conn.execute("UPDATE roms SET sgdb_id = 55 WHERE rom_id = 1")
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute("SELECT sgdb_id, chosen_sgdb_id FROM roms WHERE rom_id = 1").fetchone()
+        finally:
+            conn.close()
+        assert row == (55, None)
+
+    @pytest.mark.parametrize("slot", ["grid", "logo", "icon", "hero", "cover"])
+    def test_a_choice_is_kept_for_each_of_the_five_slots(self, tmp_path: Path, slot: str):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            conn.execute("INSERT INTO artwork_slot_choices VALUES (1, ?, 4242, 2.5)", (slot,))
+            stored = conn.execute("SELECT * FROM artwork_slot_choices").fetchall()
+        finally:
+            conn.close()
+        assert stored == [(1, slot, 4242, 2.5)]
+
+    @pytest.mark.parametrize(
+        ("slot", "image_id"),
+        [("banner", 4242), ("logo", None), ("logo", "large")],
+        ids=["an-unknown-slot", "no-image-id", "an-image-id-that-is-text"],
+    )
+    def test_a_choice_without_its_slot_or_image_is_refused(self, tmp_path: Path, slot, image_id):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute("INSERT INTO artwork_slot_choices VALUES (1, ?, ?, 2.5)", (slot, image_id))
+        finally:
+            conn.close()
+
+    def test_a_choice_and_its_outcome_go_with_their_rom(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+            _insert_rom(conn, 1, 100)
+            _insert_slot_outcome(conn, 1, "hero", "none")
+            conn.execute("INSERT INTO artwork_slot_choices VALUES (1, 'cover', 4242, 2.5)")
+            conn.execute("DELETE FROM roms WHERE rom_id = 1")
+            left = (
+                conn.execute("SELECT COUNT(*) FROM artwork_slot_outcomes").fetchone(),
+                conn.execute("SELECT COUNT(*) FROM artwork_slot_choices").fetchone(),
+            )
+        finally:
+            conn.close()
+        assert left == ((0,), (0,))
+
+    def test_a_choice_for_no_rom_is_refused(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute("INSERT INTO artwork_slot_choices VALUES (9, 'logo', 4242, 2.5)")
+        finally:
+            conn.close()

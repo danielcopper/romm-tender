@@ -14,6 +14,7 @@ import pytest
 
 from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.artwork_slot import ArtworkSlot
+from domain.artwork_slot_choice import ArtworkSlotChoice
 from domain.artwork_slot_outcome import ArtworkSlotOutcome
 from domain.bios_file import BiosFile
 from domain.collection_sync_state import CollectionSyncState
@@ -26,6 +27,7 @@ from domain.rom_metadata import RomMetadata
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.sync_run import SyncRun
 from fakes.fake_answered_save_directory_repository import FakeAnsweredSaveDirectoryRepository
+from fakes.fake_artwork_slot_choice_repository import FakeArtworkSlotChoiceRepository
 from fakes.fake_artwork_slot_outcome_repository import FakeArtworkSlotOutcomeRepository
 from fakes.fake_bios_file_repository import FakeBiosFileRepository
 from fakes.fake_collection_sync_state_repository import FakeCollectionSyncStateRepository
@@ -43,6 +45,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 if TYPE_CHECKING:
     from services.protocols import (
         AnsweredSaveDirectoryRepository,
+        ArtworkSlotChoiceRepository,
         ArtworkSlotOutcomeRepository,
         BiosFileRepository,
         FirmwareCacheRepository,
@@ -153,6 +156,17 @@ class TestFakeRomRepository:
         reloaded = repo.get(1)
         assert reloaded is not None
         assert reloaded.cover_path is None
+
+    def test_a_chosen_game_survives_a_resync(self):
+        repo = FakeRomRepository()
+        repo.save(_rom(1))
+        repo.set_chosen_sgdb_id(1, 5555)
+
+        repo.save(_rom(1))
+
+        loaded = repo.get(1)
+        assert loaded is not None
+        assert loaded.chosen_sgdb_id == 5555
 
     def test_bound_platform_slugs_leave_out_unbound_and_empty_slug_rows(self):
         repo = FakeRomRepository()
@@ -721,3 +735,48 @@ class TestFakeArtworkSlotOutcomeRepository:
             uow.artwork_slot_outcomes.save(record)
             raise boom
         assert uow.artwork_slot_outcomes.get(42, ArtworkSlot.LOGO) is None
+
+
+class TestFakeArtworkSlotChoiceRepository:
+    @staticmethod
+    def _choice(rom_id: int, slot: ArtworkSlot, image_id: int = 4242) -> ArtworkSlotChoice:
+        return ArtworkSlotChoice(rom_id=rom_id, slot=slot, image_id=image_id, chosen_at=1.0)
+
+    def test_it_satisfies_its_protocol(self):
+        repo: ArtworkSlotChoiceRepository = FakeArtworkSlotChoiceRepository()
+        assert repo is not None
+
+    def test_round_trip_per_slot_and_a_second_save_replaces(self):
+        repo = FakeArtworkSlotChoiceRepository()
+        repo.save(self._choice(1, ArtworkSlot.WIDE_GRID))
+        repo.save(self._choice(1, ArtworkSlot.HERO, image_id=1))
+        repo.save(self._choice(1, ArtworkSlot.HERO, image_id=2))
+
+        assert repo.get(1, ArtworkSlot.WIDE_GRID) == self._choice(1, ArtworkSlot.WIDE_GRID)
+        assert repo.get(1, ArtworkSlot.HERO) == self._choice(1, ArtworkSlot.HERO, image_id=2)
+        assert repo.get(1, ArtworkSlot.LOGO) is None
+
+    def test_an_orphan_row_aborts_the_commit(self):
+        uow = FakeUnitOfWork()
+        with pytest.raises(sqlite3.IntegrityError, match="artwork_slot_choices"), uow:
+            uow.artwork_slot_choices.save(self._choice(42, ArtworkSlot.LOGO))
+        assert uow.artwork_slot_choices.get(42, ArtworkSlot.LOGO) is None
+
+    def test_the_rows_go_with_their_rom(self):
+        uow = FakeUnitOfWork()
+        with uow:
+            uow.roms.save(_rom(42))
+            uow.artwork_slot_choices.save(self._choice(42, ArtworkSlot.LOGO))
+        with uow:
+            uow.roms.delete(42)
+        assert uow.artwork_slot_choices.get(42, ArtworkSlot.LOGO) is None
+
+    def test_a_failed_block_rolls_its_rows_back(self):
+        uow = FakeUnitOfWork()
+        with uow:
+            uow.roms.save(_rom(42))
+        boom = RuntimeError("boom")
+        with pytest.raises(RuntimeError), uow:
+            uow.artwork_slot_choices.save(self._choice(42, ArtworkSlot.LOGO))
+            raise boom
+        assert uow.artwork_slot_choices.get(42, ArtworkSlot.LOGO) is None
