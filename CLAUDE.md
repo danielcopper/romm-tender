@@ -575,7 +575,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   named like a read (`get_or_create`) passes the gate
 - **An emitted `sync_progress` frame stops a run (`running: False`) only with a terminal stage, and a terminal stage is
   only ever emitted with the run stopped** — test — `tests/services/library/test_terminal_frame_contract.py` (all of
-  `backend/services`, `services/artwork.py` included; a helper-assembled frame or an aliased emitter slips past it)
+  `backend/services`, `services/artwork/service.py` included; a helper-assembled frame or an aliased emitter slips past
+  it)
 - **The KIND of run a `sync_progress` frame belongs to is stated on it (`runKind`), never inferred from it — and a frame
   that states none is rendered as neither of the two answers** — test + prompt-only — `tests/services/library/`'s
   `test_sync_orchestrator.py::TestRunKindOnTheWire` and `test_state.py::TestRunKind`,

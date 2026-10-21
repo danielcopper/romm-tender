@@ -2149,7 +2149,27 @@ class TestAChosenGameIsTheRomsSteamGridDbGame:
 
 
 class TestAPickWithoutAStoredId:
-    """A ROM with no SteamGridDB id stored: the per-slot fetch serves what a pick put into the cache."""
+    """A ROM with no SteamGridDB game: the per-slot fetch serves what the cache holds.
+
+    Such a cache is what a pick an older release made left, since a pick now stores its game; the tests that pick
+    through ``apply_sgdb_game_id`` therefore exercise a stored game, and the rest seed the cache with none stored.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_image_cached_without_a_game_is_served_without_a_request(
+        self, steamgrid, uow, home, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+        _grid_dir(home)
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "grid", 803)] = b"picked grid"
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "grid")
+
+        await steamgrid.prune_conflicts.release_lease(answer.pop("prune_lease_token"))
+        assert (answer["status"], answer["image_id"], answer["sgdb_id"]) == ("image", 803, None)
+        assert base64.b64decode(answer["base64"]) == b"picked grid"
+        assert fake_steamgrid_db_api.requested_paths == []
 
     @pytest.mark.asyncio
     async def test_the_picked_icon_is_served_to_the_replacing_fetch_and_written(

@@ -388,8 +388,8 @@ Format: **invariant** — tier — enforced by.
   behavioural test would have to provoke one at a time, but a frame assembled by a helper it cannot follow, or emitted
   through an aliased callable, slips past it; its own scope tests pin the producers and the root it reaches, so a
   narrowing fails rather than shrinking the rule in silence. Frame producers are not confined to `services/library/`:
-  `services/artwork.py` emits through an injected `emit_progress`). The QAM panel derives "a run is in flight" from
-  `running` and keys the run's end — the status line, the live-ETA teardown, Main's stats re-read, the Sync page's
+  `services/artwork/service.py` emits through an injected `emit_progress`). The QAM panel derives "a run is in flight"
+  from `running` and keys the run's end — the status line, the live-ETA teardown, Main's stats re-read, the Sync page's
   three, the failure toast, and the Sync page's failure line — on the stage, so a stopping frame with a non-terminal
   stage would collapse the in-progress rows while ending nothing. The panel cannot defend against it: a bare
   `running: false` is exactly what the Sync page's own retraction of an optimistic start looks like. Since #1814 the
@@ -942,7 +942,7 @@ Format: **invariant** — tier — enforced by.
   settle. **Listing them changes nothing at their call sites**: each service reaches its reading through
   `run_in_executor` as a bound method, which is this checker's documented blind spot, so the entries are a statement of
   the rule rather than an enforcement of it. They are also not the store's only real I/O — `grid_dir()` is called from
-  `services/artwork.py` (six sites), `services/shortcut_removal.py` and `services/library/reporter.py`,
+  `services/artwork/` (seven sites), `services/shortcut_removal.py` and `services/library/reporter.py`,
   `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
   `services/library/reporter.py`, `write_shortcut_icon()` from `services/steamgrid.py`, and `ensure_grid_file()` from
   `services/shortcut_artwork.py` — those are unlisted, and their being unlisted is a gap, not a judgement),

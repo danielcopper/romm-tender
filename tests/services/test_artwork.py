@@ -2529,3 +2529,22 @@ class TestACoverSetInSteamIsLeftAlone:
         romm_api.download_cover.side_effect = _writing_download(file_store, b"fresh cover")
 
         assert await self._refresh(artwork_service, uow) == [{"rom_id": 42, "app_id": 99999}]
+
+    @pytest.mark.asyncio
+    async def test_the_apply_download_leaves_it_out(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir)
+        self._lay_down(steam_config, file_store, grid, {"99999p.jpg": b"hand-set"})
+        applied: dict[int, str] = {}
+
+        paths = await artwork_service.download_artwork(
+            [{"id": 42, "name": "Game", "path_cover_large": self._NEW}],
+            emit_progress=_noop_emit_progress,
+            is_cancelling=_not_cancelling,
+            applied_sources=applied,
+        )
+
+        assert (paths, applied) == ({}, {})
+        romm_api.download_cover.assert_not_called()
+        assert file_store.files[_cache(cover_cache_dir, 42)] == b"tenders"

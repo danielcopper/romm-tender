@@ -16,7 +16,7 @@ provoke. It reaches three producer shapes across ``backend/services``, all
 three of which exist today:
 
 * a call to the orchestrator's ``emit_progress``, which the reporter reaches
-  through its injected ``_emit_progress`` and ``services/artwork.py`` through an
+  through its injected ``_emit_progress`` and ``services/artwork/service.py`` through an
   ``emit_progress`` callable passed in per operation;
 * a direct write of the frame to ``sync_progress``, which the cancelled finalize
   and the error path use because they build the snapshot themselves;
@@ -68,7 +68,7 @@ _KNOWN_PRODUCERS = frozenset(
     {
         "services/library/sync_orchestrator.py",
         "services/library/reporter.py",
-        "services/artwork.py",
+        "services/artwork/service.py",
     }
 )
 
@@ -213,7 +213,7 @@ class TestTerminalFrameContract:
 
     def test_a_frame_keeps_the_run_running_unless_it_says_otherwise(self):
         # An omitted ``running`` is what every mid-run frame passes — including the
-        # cover frames in services/artwork.py, which never name it — so the default
+        # cover frames in services/artwork/service.py, which never name it — so the default
         # decides what a caller that leaves it out emits.
         default = _parameter_default(_emit_progress_definition(), "running")
         assert isinstance(default, ast.Constant), f"``running``'s default is not a literal: {default}"

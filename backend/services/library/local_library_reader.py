@@ -48,7 +48,7 @@ touch the same tables through the same repositories:
 
 The projections' *shapes* are a contract with :mod:`domain.sync_diff`: an entry
 here is what ``classify_roms`` / ``collapse_sibling_groups`` read, and
-``services/artwork.py``'s invalidation pass scans the same dicts for
+``services/artwork/service.py``'s invalidation pass scans the same dicts for
 ``cover_source``. Changing a key is changing that contract, not this file.
 """
 

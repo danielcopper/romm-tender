@@ -37,7 +37,6 @@ falls back to a plain download, unchanged.
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -55,11 +54,10 @@ from domain.artwork_paths import (
     staging_filename,
     with_tmp_suffix,
 )
-from domain.artwork_slot import ArtworkSlot, is_set_in_steam
-from domain.artwork_slot_outcome import SlotOutcome
 from domain.cover_refresh import cover_ts_only_change, scan_cover_refresh_candidates
 from domain.sync_stage import SyncStage
 from lib.errors import Refused, RommNotFoundError, with_system_text
+from services.artwork._cover_set_in_steam import covers_set_in_steam
 
 
 @dataclass(frozen=True)
@@ -87,7 +85,7 @@ _COVER_PROGRESS_INTERVAL = 50
 if TYPE_CHECKING:
     import asyncio
     import logging
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Collection
 
     from models.state import ShortcutRegistryEntry
     from services.protocols import (
@@ -201,6 +199,11 @@ class ArtworkService:
         fingerprint even for fallback covers — the caller keys its own
         derivation off it. Absent/unread, ``download_artwork`` behaves as before.
 
+        A bound ROM whose cover is set in Steam is left out of both: nothing
+        is downloaded for it, and with no cache path the commit copies nothing
+        over its ``{app_id}p.png`` and adopts no new ``cover_source``, so a
+        cover change RomM made stays pending.
+
         Progress is narrated under the ``fetching`` stage with the ``covers``
         sub-stage (this runs in the per-unit prep phase, before the shortcuts
         are applied) as "Preparing covers for <label>", throttled to the
@@ -215,6 +218,7 @@ class ArtworkService:
             return cover_paths
 
         self._cover_art_file_store.make_dirs(self._cover_cache_dir)
+        set_in_steam = await self._loop.run_in_executor(None, self._bound_covers_set_in_steam_io, all_roms)
         total = len(all_roms)
         cover_target = f"Preparing covers for {label}" if label else "Preparing covers"
 
@@ -235,7 +239,7 @@ class ArtworkService:
                 )
 
             cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
-            if not cover_url:
+            if not cover_url or rom["id"] in set_in_steam:
                 continue
 
             rom_id = rom["id"]
@@ -429,53 +433,32 @@ class ArtworkService:
     async def _without_covers_set_in_steam(self, changed: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
         if not changed:
             return []
-        set_in_steam = await self._loop.run_in_executor(None, self._covers_set_in_steam_io, changed)
+        covers = [(rom_id, app_id) for rom_id, app_id, _ in changed]
+        set_in_steam = await self._loop.run_in_executor(None, self._covers_set_in_steam_io, covers)
         if set_in_steam:
             self._logger.info(f"Cover refresh: {len(set_in_steam)} changed cover(s) set in Steam are left alone")
         return [entry for entry in changed if entry[0] not in set_in_steam]
 
-    def _covers_set_in_steam_io(self, changed: list[tuple[int, int, str]]) -> set[int]:
-        """The ROMs among *changed* whose cover in Steam's grid directory is not Tender's.
+    def _covers_set_in_steam_io(self, covers: Collection[tuple[int, int]]) -> set[int]:
+        """The ROMs among *covers*, ``(rom_id, app_id)`` pairs, whose cover is set in Steam."""
+        return covers_set_in_steam(
+            covers,
+            steam_config=self._steam_config,
+            file_store=self._cover_art_file_store,
+            uow_factory=self._uow_factory,
+            cover_cache_dir=self._cover_cache_dir,
+            logger=self._logger,
+        )
 
-        Judged by :func:`domain.artwork_slot.is_set_in_steam` against what
-        Tender set for the cover: its recorded hash where a ``set`` outcome is
-        recorded, else its cover cache copy. Where the grid directory cannot be
-        found or listed, no cover is recognised as set in Steam.
-        """
-        grid = self._steam_config.grid_dir()
-        try:
-            file_names = self._steam_config.grid_file_names()
-        except OSError as e:
-            self._logger.warning(f"Cover refresh: could not list Steam's grid directory: {e}")
-            return set()
-        if not grid or file_names is None:
-            return set()
+    def _bound_covers_set_in_steam_io(self, all_roms: list[dict[str, Any]]) -> set[int]:
+        """The ROMs among *all_roms* bound to a shortcut whose cover is set in Steam."""
         with self._uow_factory() as uow:
-            recorded = {rom_id: uow.artwork_slot_outcomes.get(rom_id, ArtworkSlot.COVER) for rom_id, _, _ in changed}
-        set_in_steam: set[int] = set()
-        for rom_id, app_id, _ in changed:
-            png = final_filename(app_id)
-            png_sha256 = self._sha256_of(os.path.join(grid, png)) if png in file_names else None
-            outcome = recorded[rom_id]
-            if outcome is not None and outcome.outcome is SlotOutcome.SET:
-                tenders_sha256 = outcome.image_sha256
-            else:
-                tenders_sha256 = self._sha256_of(self._cache_path(rom_id)) if png_sha256 is not None else None
-            if is_set_in_steam(
-                file_names, app_id, ArtworkSlot.COVER, png_sha256=png_sha256, tenders_sha256=tenders_sha256
-            ):
-                set_in_steam.add(rom_id)
-        return set_in_steam
-
-    def _sha256_of(self, path: str) -> str | None:
-        """The SHA-256 of *path*'s bytes, or ``None`` where it is missing or cannot be read, which is logged."""
-        if not self._cover_art_file_store.exists(path):
-            return None
-        try:
-            return hashlib.sha256(self._cover_art_file_store.read_bytes(path)).hexdigest()
-        except OSError as e:
-            self._logger.warning(f"Cover refresh: could not read {path}: {e}")
-            return None
+            bound = [
+                (rom.rom_id, rom.shortcut_app_id)
+                for raw in all_roms
+                if "id" in raw and (rom := uow.roms.get(int(raw["id"]))) is not None and rom.shortcut_app_id is not None
+            ]
+        return self._covers_set_in_steam_io(bound)
 
     def _scan_cover_refresh_candidates(
         self, all_roms: list[dict[str, Any]], registry: dict[str, dict[str, Any]]

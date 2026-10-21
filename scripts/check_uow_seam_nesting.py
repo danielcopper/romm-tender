@@ -241,7 +241,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # BOUND METHOD, the blind spot documented above, so these entries catch
         # nothing today and are here for the call site that writes one plainly.
         # The store's other I/O is unlisted and that is a gap rather than a
-        # judgement: grid_dir() is called from services/artwork.py (six sites),
+        # judgement: grid_dir() is called from services/artwork/ (seven sites),
         # services/shortcut_removal.py and services/library/reporter.py,
         # set_steam_input_config() from services/settings.py,
         # services/shortcut_removal.py and services/library/reporter.py,
