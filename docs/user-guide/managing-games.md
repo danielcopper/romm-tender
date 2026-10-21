@@ -130,16 +130,24 @@ Switching **never deletes anything.** ROM files already on disk stay put, and sa
 switch. What happens depends on whether the version you're leaving is downloaded and whether its saves are synced:
 
 - **Not downloaded, or downloaded with all saves already synced** — the switch is instant. If the version you switch
-  _to_ is on disk it's playable right away (Play stays Play); if it isn't, the button becomes **Download**.
+  _to_ is on disk it's playable right away (Play stays Play); if it isn't, the button becomes **Download**. With save
+  sync turned off nothing is synced, so there is nothing to warn about either and the switch is instant as well.
 - **Switching back to a version still on disk** — instant and playable immediately, with no re-download.
-- **Leaving a downloaded version whose saves were never uploaded** — a dialog warns you first. It offers **Sync now &
-  switch** (uploads the saves, then switches), **Switch anyway** (the saves stay on disk but stop syncing until you
-  switch back to that version), and **Cancel**. When RomM is unreachable the saves can't be uploaded, so the dialog
-  drops the sync option and offers only **Switch anyway** and **Cancel**, explaining why.
+- **Leaving a downloaded version whose saves haven't been synced to RomM** — saves that were never uploaded, or that
+  changed since their last sync — a dialog warns you first. It offers **Sync now & switch** (uploads the saves, then
+  switches), **Switch anyway** (the saves stay on disk but stop syncing until you switch back to that version), and
+  **Cancel**. When RomM is unreachable the saves can't be uploaded, so the dialog drops the sync option and offers only
+  **Switch anyway** and **Cancel**, explaining why. The same goes for a version that is no longer available on RomM: its
+  saves can't be uploaded there, so only **Switch anyway** and **Cancel** are offered, and the saves stay on this
+  device.
+- **Leaving a downloaded version whose saves Tender couldn't check** — a save file it can't read, for instance — the
+  same dialog warns you, and says that Tender couldn't check whether the saves have been synced rather than that they
+  weren't.
 
 When you leave a downloaded version with unsynced saves behind, the **Saves** tab shows a reminder banner ("switch back
-to sync them") so those saves aren't forgotten. It does not recommend switching back to a version positively confirmed
-as no longer available on RomM; it skips that retained row and continues checking any later live versions.
+to sync them") so those saves aren't forgotten; where Tender couldn't check that version's saves, the banner says so. It
+does not recommend switching back to a version positively confirmed as no longer available on RomM; it skips that
+retained row and continues checking any later live versions.
 
 While a download of the game is running, switching is blocked with a short message — cancel the running download first.
 

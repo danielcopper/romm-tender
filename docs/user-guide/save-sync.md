@@ -42,10 +42,17 @@ warns you before you leave such a version and shows a reminder banner on the **S
 (see [Managing Games → Versions](managing-games.md#versions)). Nothing is lost — the saves just don't sync while their
 version is inactive.
 
+- **With save sync off** neither the warning nor the banner appears: nothing is being synced, so nothing is left behind
+  by a switch.
+- **Where Tender couldn't check** whether a version's saves have been synced — a save file it can't read, for instance —
+  it warns all the same, and says that it couldn't check.
+- **A version no longer available on RomM** can't receive its saves any more, so the warning offers only **Switch
+  anyway** and **Cancel**; the saves stay on this device.
+
 The reminder never tells you to switch back to a retained version that the current version-list check positively
 confirmed is [no longer available on RomM](managing-games.md#the-switch-version-control). Such a row may still keep its
-local files and saves, but it cannot be selected; the Saves tab skips it and continues looking for drift on later live
-inactive versions.
+local files and saves, but it cannot be selected; the Saves tab skips it and continues looking for unsynced saves on
+later live inactive versions.
 
 ## Important: Use Your Own RomM Account
 

@@ -908,7 +908,9 @@ live reading the caller already took, before the caller looks at any local file:
   are after a sort flip;
 - by the two deletes and the two reads that count local saves — `delete_local_saves`, `delete_platform_saves`,
   `count_platform_saves` and `get_save_status` (for an installed ROM) — so a delete after a sort flip takes the old
-  folder's files too, and nothing is carried back in by the next path that follows.
+  folder's files too, and nothing is carried back in by the next path that follows;
+- by the local-save check, `check_local_drift` (for an installed ROM), so the version switch, the removed-game cleanup
+  and the Saves tab's reminder do not find the new directory empty while the saves still lie in the old one.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
 once save sync is on again, for a game whose directory was recorded. It does nothing while an update of Tender is being
@@ -1550,7 +1552,8 @@ The Play button's path:
    the sync moved something, the per-direction completion toast above reports it (uploaded / downloaded / both); a
    failure's classified message appears in the dialog instead.
 8. Offline: `check_local_drift`. A local save that changed since the last sync asks Start Anyway / Retry connection /
-   Cancel; Retry runs the check again from the start.
+   Cancel; Retry runs the check again from the start. Only the answer's `drifted` counts here: a save with no recorded
+   sync has nothing a later sync could overwrite, and a check that could not read counts as no change.
 9. Re-confirm: `get_rom_relaunch_options`, bounded at 3 s, heals the shortcut's launch options. A timeout stops the
    launch and the button returns to Play. A start chosen in the dialog after a check that got no answer skips this step.
 10. `SteamClient.Apps.RunGame`, with the button on "Launching...".

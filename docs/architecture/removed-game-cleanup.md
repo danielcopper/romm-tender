@@ -480,7 +480,9 @@ Save **states** are entirely untouched and remain unsupported. Extending save-st
 contract before purge is allowed to remove state files.
 
 A whole game whose bound version has unsynced saves is removed only once its recovery bundle sealed. With recovery
-disabled or failed, the group is skipped instead.
+disabled or failed, the group is skipped instead. Unsynced is the local-save check's stranding verdict: a save changed
+since its last recorded sync, a save with none recorded, or a check that could not read — that last case is skipped with
+a message saying Tender couldn't check — and never while save sync is off.
 
 ## Steam-side outcomes
 
