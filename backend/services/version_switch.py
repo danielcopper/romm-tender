@@ -23,8 +23,8 @@ switching to an uninstalled version returns the empty placeholder (ADR-0009).
 The group is resolved by ``sibling_group_key`` over the migration-010 index;
 the server view comes from ``get_rom_simple(bound).sibling_roms``. Server I/O
 and the relaunch resolver run outside the Unit of Work (ADR-0006) — read/close,
-then fetch/resolve, then a short write UoW. The liveness request narrows the race but cannot transact with
-RomM and SQLite as one unit.
+then fetch/resolve, then a short write UoW. The liveness request narrows the
+race but cannot transact with RomM and SQLite as one unit.
 """
 
 from __future__ import annotations

@@ -493,9 +493,9 @@ class StatusService:
         prediction, never followed).
 
         Never raises: any internal error (a file vanished mid-hash, a failed
-        read of the save state, …) is logged and answers neither fact, and a
-        reading that failed — also where it had already found a file with no
-        recorded sync — for the verdict.
+        read of the save state, …) is logged and answers neither fact, and the
+        verdict is taken over a reading that failed — also where the reading
+        had already found a file with no recorded sync.
         """
         rom_id = int(rom_id)
         save_sync_on = save_sync_enabled(self._settings)

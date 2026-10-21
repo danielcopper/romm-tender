@@ -21,8 +21,8 @@ import { logError } from "../api/backend";
 import { TimeoutError } from "./withTimeout";
 
 /**
- * The limit on a launch-check call that does not read or sync the server's
- * saves: the reads on this machine, and the reachability probe, whose own
+ * The limit on a backend call that does not read or sync the server's saves:
+ * a read that stays on this machine, or the reachability probe, whose own
  * heartbeat gives up after about 3 s.
  */
 export const LOCAL_CALL_LIMIT_MS = 5000;
