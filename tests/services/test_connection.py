@@ -41,11 +41,7 @@ if TYPE_CHECKING:
 
 _MIN_VERSION = (5, 3, 0)
 
-# The sentences a RomM URL with a user name or password is answered with: entered (a sign-in) and stored (the check).
-_ADDRESS_WITH_USERINFO = (
-    "Tender cannot sign in through a user name and password in the RomM URL — leave them out. "
-    "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers."
-)
+# The sentence a saved RomM URL with a user name or password is answered with, by a sign-in and by the check.
 _STORED_ADDRESS_WITH_USERINFO = (
     "Your saved RomM URL holds a user name and password, which Tender cannot sign in through. "
     "Remove them from the RomM URL, then sign in to RomM under RomM Account; a login for a proxy in front of RomM goes "
@@ -952,7 +948,7 @@ class TestEstablishTokenBadPath:
         coro = service.establish_token(address, "u", "p")
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(coro)
-        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
+        assert (refused.value.message, refused.value.details) == (_STORED_ADDRESS_WITH_USERINFO, {})
         assert "romm_url" not in settings
         romm_api.heartbeat.assert_not_called()
         romm_api.mint_client_token.assert_not_called()
@@ -1178,7 +1174,7 @@ class TestEstablishUserTokenBadPath:
         coro = service.establish_user_token(address, "rmm_x")
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(coro)
-        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
+        assert (refused.value.message, refused.value.details) == (_STORED_ADDRESS_WITH_USERINFO, {})
         assert "romm_url" not in settings
         romm_api.heartbeat.assert_not_called()
         romm_api.get_current_user.assert_not_called()
@@ -1706,7 +1702,7 @@ class TestEstablishPairedTokenBadPath:
         coro = service.establish_paired_token(address, "ABCD2345")
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(coro)
-        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
+        assert (refused.value.message, refused.value.details) == (_STORED_ADDRESS_WITH_USERINFO, {})
         assert "romm_url" not in settings
         romm_api.heartbeat.assert_not_called()
         romm_api.exchange_pairing_code.assert_not_called()

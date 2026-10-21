@@ -761,8 +761,9 @@ describe("MainPage", () => {
 
     it("a stored RomM URL with a user name or password is named as such", () => {
       const message =
-        "Remove the user name and password from the RomM URL — Tender cannot sign in through it. " +
-        "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers.";
+        "Your saved RomM URL holds a user name and password, which Tender cannot sign in through. " +
+        "Remove them from the RomM URL, then sign in to RomM under RomM Account; " +
+        "a login for a proxy in front of RomM goes into Custom headers.";
       const { container } = render(
         <ConnectionIndicator connected={false} failure={{ reason: "config_error", message }} />,
       );

@@ -35,7 +35,6 @@ from lib.errors import (
     VersionUnsupported,
 )
 from lib.url_host import (
-    ENTERED_ADDRESS_WITH_USERINFO_MESSAGE,
     STORED_ADDRESS_WITH_USERINFO_MESSAGE,
     carries_userinfo,
     is_origin_change,
@@ -104,13 +103,17 @@ _SIGNED_OUT_MESSAGE = (
 )
 
 
-def _entered_address(romm_url: str) -> str:
-    """*romm_url* trimmed; refuses an empty one, one carrying a user name or password, and one not http(s)."""
+def _sign_in_address(romm_url: str) -> str:
+    """*romm_url* trimmed; refuses an empty one, one carrying a user name or password, and one not http(s).
+
+    The panel signs in with the RomM URL it holds saved, so a login in it is
+    answered as a saved URL's.
+    """
     if not romm_url:
         raise NotConfigured(_NO_SERVER_URL_MESSAGE)
     trimmed = romm_url.strip()
     if carries_userinfo(trimmed):
-        raise NotConfigured(ENTERED_ADDRESS_WITH_USERINFO_MESSAGE)
+        raise NotConfigured(STORED_ADDRESS_WITH_USERINFO_MESSAGE)
     if not is_valid_server_url(trimmed):
         raise NotConfigured(_INVALID_URL_MESSAGE)
     return trimmed
@@ -257,7 +260,7 @@ class ConnectionService:
         password: str,
         allow_insecure_ssl: bool | None = None,
     ) -> dict[str, Any]:
-        trimmed = _entered_address(romm_url)
+        trimmed = _sign_in_address(romm_url)
 
         snapshot = self._snapshot_auth_state()
         old_token_id = snapshot["romm_api_token_id"]
@@ -367,7 +370,7 @@ class ConnectionService:
         token: str,
         allow_insecure_ssl: bool | None = None,
     ) -> dict[str, Any]:
-        trimmed = _entered_address(romm_url)
+        trimmed = _sign_in_address(romm_url)
         trimmed_token = token.strip()
         if not trimmed_token:
             raise NotConfigured("Enter your RomM API token")
@@ -444,7 +447,7 @@ class ConnectionService:
         code: str,
         allow_insecure_ssl: bool | None = None,
     ) -> dict[str, Any]:
-        trimmed = _entered_address(romm_url)
+        trimmed = _sign_in_address(romm_url)
         normalized_code = _normalize_pairing_code(code)
         if not normalized_code:
             raise NotConfigured(_ENTER_PAIRING_CODE_MESSAGE)

@@ -105,9 +105,6 @@ def is_valid_server_url(url: str) -> bool:
 # ``user…@host`` up as a host name, which fails. The panel's Connection row tells
 # this refusal apart by "user name and password" (``connectionFailureLabel`` in
 # ``frontend/src/bigpicture/MainPage.tsx``), so those words stay in both sentences.
-#
-# The entered one answers a save of the RomM URL and the three sign-ins; the
-# stored one answers the connection check, for a URL saved before it was refused.
 ENTERED_ADDRESS_WITH_USERINFO_MESSAGE = (
     "Tender cannot sign in through a user name and password in the RomM URL — leave them out. "
     "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers."
