@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, waitFor } from "@testing-library/react";
+import * as backend from "../../api/backend";
 import { RommUrlModal } from "./RommUrlModal";
 
 type Answer = { success: boolean; message: string };
@@ -107,6 +108,49 @@ describe("RommUrlModal", () => {
     await Promise.resolve();
 
     expect(window.save).not.toHaveBeenCalled();
+    expect(window.closeModal).not.toHaveBeenCalled();
+  });
+
+  it("a save that throws is shown as one that could not reach the backend, and logged without its text", async () => {
+    const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    const window = open(async () => {
+      throw new TypeError("token=fake-token-77");
+    });
+
+    window.ok();
+
+    expect(await window.findByTestId("romm-url-refusal")).toHaveTextContent("Failed to save settings");
+    expect(logSpy).toHaveBeenCalledWith("Failed to save the RomM URL: TypeError");
+    expect(logSpy.mock.calls.join(" ")).not.toContain("fake-token-77");
+    expect(window.closeModal).not.toHaveBeenCalled();
+    logSpy.mockRestore();
+  });
+
+  it("Cancel while a save is in flight closes the window, and the answer that follows reaches nothing", async () => {
+    let answer: (value: Answer) => void = () => undefined;
+    const window = open(() => new Promise((resolve) => (answer = resolve)));
+    window.ok();
+
+    fireEvent.click(window.getByText("Cancel"));
+    answer(REFUSED);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(window.closeModal).toHaveBeenCalledTimes(1);
+    expect(window.queryByTestId("romm-url-refusal")).toBeNull();
+  });
+
+  it("a save that goes through after Cancel does not close the window a second time", async () => {
+    let answer: (value: Answer) => void = () => undefined;
+    const window = open(() => new Promise((resolve) => (answer = resolve)));
+    window.ok();
+
+    fireEvent.click(window.getByText("Cancel"));
+    answer(ACCEPTED);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(window.closeModal).toHaveBeenCalledTimes(1);
   });
 
   it("Cancel closes the window with nothing saved", () => {

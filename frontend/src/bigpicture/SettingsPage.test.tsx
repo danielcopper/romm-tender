@@ -362,6 +362,65 @@ describe("SettingsPage", () => {
     });
   });
 
+  describe("the status line's tone", () => {
+    const signedIn = () =>
+      vi.mocked(backend.getSettings).mockResolvedValue({
+        ...defaultSettings(),
+        has_token: true,
+      });
+    const signOut = async () => {
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onSignOut();
+        await Promise.resolve();
+      });
+    };
+
+    it("shows a load failure as a warning", async () => {
+      vi.mocked(backend.getSettings).mockRejectedValue(new Error("boom"));
+      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      renderPage();
+      await flushAsync();
+      logSpy.mockRestore();
+
+      const conn = capturedConnection[capturedConnection.length - 1];
+      expect(conn?.status).toBe("Failed to load settings");
+      expect(conn?.statusWarns).toBe(true);
+    });
+
+    it("shows a sign-out the backend refused as a warning", async () => {
+      signedIn();
+      vi.mocked(backend.signOut).mockResolvedValue({ success: false, message: "Could not save settings." });
+      renderPage();
+      await flushAsync();
+
+      await signOut();
+
+      expect(capturedConnection[capturedConnection.length - 1]?.statusWarns).toBe(true);
+    });
+
+    it("shows a sign-out that failed in transport as a warning", async () => {
+      signedIn();
+      vi.mocked(backend.signOut).mockRejectedValue(new Error("net"));
+      renderPage();
+      await flushAsync();
+
+      await signOut();
+
+      expect(capturedConnection[capturedConnection.length - 1]?.statusWarns).toBe(true);
+    });
+
+    it("shows a sign-out that went through plain", async () => {
+      signedIn();
+      vi.mocked(backend.signOut).mockResolvedValue({ success: true, message: "Signed out." });
+      renderPage();
+      await flushAsync();
+
+      await signOut();
+
+      expect(capturedConnection[capturedConnection.length - 1]?.statusWarns).toBe(false);
+    });
+  });
+
   describe("initial mount — getSaveSyncSettings", () => {
     beforeEach(() => {
       openOn = "save-sync";

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { createElement } from "react";
-import { TextInputModal, pendingEdits } from "./TextInputModal";
+import { TextInputModal } from "./TextInputModal";
 
 // Override the global @decky/ui stub: capture ConfirmModal props (onOK,
 // bDisableBackgroundDismiss, closeModal, strTitle) — the global passthrough
@@ -47,7 +47,6 @@ function reset() {
   for (const k of Object.keys(captured) as Array<keyof typeof captured>) {
     delete captured[k];
   }
-  delete pendingEdits.url;
 }
 
 describe("TextInputModal", () => {
@@ -174,30 +173,5 @@ describe("TextInputModal", () => {
   it("works without closeModal", () => {
     render(<TextInputModal label="x" value="" onSubmit={vi.fn()} />);
     expect(captured.closeModal).toBeUndefined();
-  });
-
-  describe("pendingEdits persistence", () => {
-    it("writes the current value to pendingEdits[field] when field='url'", () => {
-      render(<TextInputModal label="URL" value="" field="url" onSubmit={vi.fn()} />);
-      const input = document.querySelector("input") as HTMLInputElement;
-      fireEvent.change(input, { target: { value: "http://romm.local" } });
-      captured.onOK?.();
-      expect(pendingEdits.url).toBe("http://romm.local");
-    });
-
-    it("does NOT touch pendingEdits when field is omitted", () => {
-      render(<TextInputModal label="x" value="" onSubmit={vi.fn()} />);
-      const input = document.querySelector("input") as HTMLInputElement;
-      fireEvent.change(input, { target: { value: "nope" } });
-      captured.onOK?.();
-      expect(pendingEdits.url).toBeUndefined();
-    });
-
-    it("still calls onSubmit when field is set (pendingEdits write does not short-circuit)", () => {
-      const onSubmit = vi.fn();
-      render(<TextInputModal label="x" value="" field="url" onSubmit={onSubmit} />);
-      captured.onOK?.();
-      expect(onSubmit).toHaveBeenCalledWith("");
-    });
   });
 });

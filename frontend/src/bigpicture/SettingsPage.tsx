@@ -71,6 +71,7 @@ import { WidePage } from "./layout/WidePage";
 import { ListDetail, type ListDetailItem } from "./layout/ListDetail";
 import { ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "./layout/pane";
 import { ConnectionSection } from "./settings/ConnectionSection";
+import { SAVE_FAILED } from "./settings/RommUrlModal";
 import { SteamGridDBSection } from "./settings/SteamGridDBSection";
 import { SgdbKeySaveRefused } from "./settings/SgdbApiKeyModal";
 import { SaveSyncSection } from "./settings/SaveSyncSection";
@@ -143,7 +144,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   // refuses a save; null until the settings have loaded.
   const storedSsl = useRef<boolean | null>(null);
   const [hasToken, setHasToken] = useState(false);
-  // `warns` marks a refusal or a failure, which the line shows in amber.
+  // `warns` marks a refusal or a failure: ConnectionSection's `statusWarns`.
   const [status, setStatusLine] = useState<{ text: string; warns: boolean }>(NO_STATUS);
   const setStatus = (text: string, warns = false) => setStatusLine({ text, warns });
   // What the SSL switch's save last put on the status line, the one message an
@@ -206,7 +207,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   useEffect(() => {
     getSettings()
       .then((s) => {
-        // Apply any pending edits that survived a remount, fall back to backend values
         storedSsl.current = s.romm_allow_insecure_ssl;
         setUrl(s.romm_url);
         setHasToken(s.has_token);
@@ -374,7 +374,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       }
       return result;
     } catch {
-      return { success: false, message: "Failed to save settings" };
+      return { success: false, message: SAVE_FAILED };
     }
   };
   // The modal owns closing (on success) and error display (on failure), so the
@@ -407,7 +407,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         showSaveStatus(result.message);
       })
       .catch(() => {
-        showSaveStatus("Failed to save settings");
+        showSaveStatus(SAVE_FAILED);
       });
   };
   // The connect handlers return their result to the ConnectModal, which owns

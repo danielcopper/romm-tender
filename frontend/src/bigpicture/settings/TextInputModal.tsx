@@ -1,20 +1,14 @@
 /**
- * Reusable text-input confirmation modal for SettingsPage edit flows.
- * Persists in-flight edits to module-level `pendingEdits` so that the value
- * entered into the URL field survives a QAM remount triggered by closing
- * the modal.
+ * Reusable text-input confirmation modal for SettingsPage edit flows: OK, or
+ * Enter in the field, hands the typed value to `onSubmit` and closes it.
  */
 
 import { useState, FC, ChangeEvent, KeyboardEvent } from "react";
 import { ConfirmModal, TextField } from "@decky/ui";
 
-/** Module-level state survives component remounts (modal close can remount QAM) */
-export const pendingEdits: { url?: string } = {};
-
 interface TextInputModalProps {
   label: string;
   value: string;
-  field?: "url";
   bIsPassword?: boolean;
   closeModal?: () => void;
   onSubmit: (value: string) => void;
@@ -23,19 +17,15 @@ interface TextInputModalProps {
 export const TextInputModal: FC<TextInputModalProps> = ({
   label,
   value: initial,
-  field,
   bIsPassword,
   closeModal,
   onSubmit,
 }) => {
   const [value, setValue] = useState(initial);
-  // Every field this modal edits (SteamGridDB API key, RomM URL, Default Save
-  // Slot) must be non-empty, so a whitespace-only value never counts as a submit.
+  // The value this modal edits (the Default Save Slot) must be non-empty, so a
+  // whitespace-only value never counts as a submit.
   const canSubmit = value.trim() !== "";
   const handleOK = () => {
-    if (field) {
-      pendingEdits[field] = value;
-    }
     onSubmit(value);
   };
   return (

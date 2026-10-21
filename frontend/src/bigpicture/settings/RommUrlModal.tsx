@@ -4,8 +4,9 @@
  * could not reach the backend — is shown under the field in amber with the
  * text kept for correcting. Editing the text drops a shown refusal, and a
  * refusal that arrives after an edit is dropped too. A save that went through
- * closes the window even then, because the URL is stored. Cancel closes it with
- * nothing saved. The save is the caller's, passed in.
+ * closes the window even then, because the URL is stored. Cancel and B close it
+ * without waiting for a save in flight, whose answer then reaches nothing in
+ * the window. The save is the caller's, passed in.
  */
 
 import { ChangeEvent, FC, useRef, useState } from "react";
@@ -15,6 +16,7 @@ import { AMBER } from "../layout/pane";
 import { ValidatingModalShell } from "./ValidatingModalShell";
 
 const ROMM_URL = "RomM URL";
+export const SAVE_FAILED = "Failed to save settings";
 
 interface RommUrlModalProps {
   closeModal?: () => void;
@@ -31,6 +33,12 @@ export const RommUrlModal: FC<RommUrlModalProps> = ({ closeModal, value, save })
   const [busy, setBusy] = useState(false);
   // The field's text as it stands now, read when an answer arrives.
   const current = useRef(value);
+  // Set once the window is closed, so an answer that arrives later does nothing.
+  const closed = useRef(false);
+  const close = () => {
+    closed.current = true;
+    closeModal?.();
+  };
 
   const canSubmit = text.trim() !== "" && !busy;
 
@@ -39,21 +47,24 @@ export const RommUrlModal: FC<RommUrlModalProps> = ({ closeModal, value, save })
     setBusy(true);
     try {
       const answer = await save(asked);
+      if (closed.current) return;
       if (answer.success) {
-        closeModal?.();
+        close();
         return;
       }
       if (current.current === asked) setRefusal(answer.message);
     } catch (e) {
-      logError(`Failed to save the RomM URL: ${e}`);
+      // The type alone: the text of a failed request can carry what it was sent with.
+      logError(`Failed to save the RomM URL: ${e instanceof Error ? e.name : typeof e}`);
+      if (!closed.current && current.current === asked) setRefusal(SAVE_FAILED);
     } finally {
-      setBusy(false);
+      if (!closed.current) setBusy(false);
     }
   };
 
   return (
     <ValidatingModalShell
-      {...(closeModal === undefined ? {} : { closeModal })}
+      closeModal={close}
       title={ROMM_URL}
       error={null}
       errorTestId="romm-url-error"
