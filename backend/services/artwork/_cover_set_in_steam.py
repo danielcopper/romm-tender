@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from domain.artwork_paths import cache_filename, final_filename
 from domain.artwork_slot import ArtworkSlot, is_set_in_steam
-from domain.artwork_slot_outcome import SlotOutcome
+from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
 
 if TYPE_CHECKING:
     import logging
@@ -50,27 +50,52 @@ def covers_set_in_steam(
         return set()
     with uow_factory() as uow:
         recorded = {rom_id: uow.artwork_slot_outcomes.get(rom_id, ArtworkSlot.COVER) for rom_id, _ in covers}
-    set_in_steam: set[int] = set()
-    for rom_id, app_id in covers:
-        png = final_filename(app_id)
-        png_sha256 = tenders_sha256 = None
-        if png in file_names:
-            png_path = os.path.join(grid, png)
-            outcome = recorded[rom_id]
-            if outcome is not None and outcome.outcome is SlotOutcome.SET:
-                png_sha256, tenders_sha256 = _sha256_of(file_store, png_path, logger), outcome.image_sha256
-            else:
-                cache_path = os.path.join(cover_cache_dir, cache_filename(rom_id))
-                sizes = _size_of(file_store, png_path, logger), _size_of(file_store, cache_path, logger)
-                if None not in sizes and sizes[0] != sizes[1]:
-                    set_in_steam.add(rom_id)
-                    continue
-                if None not in sizes:
-                    png_sha256 = _sha256_of(file_store, png_path, logger)
-                    tenders_sha256 = _sha256_of(file_store, cache_path, logger)
-        if is_set_in_steam(file_names, app_id, ArtworkSlot.COVER, png_sha256=png_sha256, tenders_sha256=tenders_sha256):
-            set_in_steam.add(rom_id)
-    return set_in_steam
+    return {
+        rom_id
+        for rom_id, app_id in covers
+        if _is_cover_set_in_steam(
+            rom_id,
+            app_id,
+            recorded[rom_id],
+            grid=grid,
+            file_names=file_names,
+            file_store=file_store,
+            cover_cache_dir=cover_cache_dir,
+            logger=logger,
+        )
+    }
+
+
+def _is_cover_set_in_steam(
+    rom_id: int,
+    app_id: int,
+    outcome: ArtworkSlotOutcome | None,
+    *,
+    grid: str,
+    file_names: frozenset[str],
+    file_store: CoverArtFileStore,
+    cover_cache_dir: str,
+    logger: logging.Logger,
+) -> bool:
+    """Whether *app_id*'s cover in *grid*, whose listing is *file_names*, is not Tender's cover for *rom_id*.
+
+    *outcome* is the cover outcome recorded for *rom_id*, ``None`` where none is.
+    """
+    png = final_filename(app_id)
+    png_sha256 = tenders_sha256 = None
+    if png in file_names:
+        png_path = os.path.join(grid, png)
+        if outcome is not None and outcome.outcome is SlotOutcome.SET:
+            png_sha256, tenders_sha256 = _sha256_of(file_store, png_path, logger), outcome.image_sha256
+        else:
+            cache_path = os.path.join(cover_cache_dir, cache_filename(rom_id))
+            sizes = _size_of(file_store, png_path, logger), _size_of(file_store, cache_path, logger)
+            if None not in sizes and sizes[0] != sizes[1]:
+                return True
+            if None not in sizes:
+                png_sha256 = _sha256_of(file_store, png_path, logger)
+                tenders_sha256 = _sha256_of(file_store, cache_path, logger)
+    return is_set_in_steam(file_names, app_id, ArtworkSlot.COVER, png_sha256=png_sha256, tenders_sha256=tenders_sha256)
 
 
 def _size_of(file_store: CoverArtFileStore, path: str, logger: logging.Logger) -> int | None:
