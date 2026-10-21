@@ -547,10 +547,9 @@ export type SgdbSlotArtwork =
   | {
       status: "image";
       base64: string;
-      /** SteamGridDB's image id. */
       image_id: number;
       sha256: string;
-      /** The ROM's SteamGridDB id; `null` for an image a manual pick left in the cache of a ROM with none stored. */
+      /** The SteamGridDB game the image was found under; `null` for one the cache holds for a ROM with no game. */
       sgdb_id: number | null;
       prune_lease_token?: string;
     }

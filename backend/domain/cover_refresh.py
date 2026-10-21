@@ -6,9 +6,9 @@ ROMs into fingerprint-changed covers (re-download + in-session tile refresh)
 and NULL-fingerprint candidates (the pre-fingerprint upgrade path, whose
 adopt-vs-download fork needs a cache-file existence check the caller performs).
 Both the apply-path invalidation pass and the preview's cover-work count run
-this kernel and then leave out the covers set in Steam through the same read
-(``ArtworkService._covers_set_in_steam_io``), so the number the preview shows
-is by construction the set the apply pass refreshes. Pure compute — no I/O, no
+this kernel, and then leave out the covers set in Steam by the same read, so
+the number the preview shows is the set the apply pass refreshes while Steam's
+grid directory does not change between the two. Pure compute — no I/O, no
 state; anything that reads the DB, checks files, or downloads belongs in the
 calling service.
 """

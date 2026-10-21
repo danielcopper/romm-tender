@@ -424,8 +424,9 @@ class ArtworkService:
 
         The changed covers of the kernel the pass scans by
         (:func:`domain.cover_refresh.scan_cover_refresh_candidates`), less the
-        ones set in Steam, read the same way the pass reads them. It reads
-        files and downloads and writes nothing.
+        ones set in Steam, read the same way the pass reads them. It reads the
+        grid directory, the cover cache and the recorded outcomes; it downloads
+        and writes nothing.
         """
         changed = scan_cover_refresh_candidates(all_roms, registry).changed
         return len(await self._without_covers_set_in_steam(changed))

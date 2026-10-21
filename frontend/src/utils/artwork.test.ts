@@ -516,7 +516,7 @@ describe("fillEmptyArtwork", () => {
   });
 });
 
-describe("applyArtwork records the wide grid and the logo it set", () => {
+describe("applyArtwork records the hero, the wide grid and the logo it set", () => {
   const replaced = (base64: string, imageId: number) => ({
     base64,
     no_api_key: false,

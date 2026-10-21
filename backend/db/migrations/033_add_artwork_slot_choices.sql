@@ -17,8 +17,9 @@
 --     RomM gives no SteamGridDB id. The sync never writes it; it writes only
 --     RomM's id, to `sgdb_id`, which wins where both exist.
 --
--- How each is read is "Game page artwork" in
--- docs/architecture/steam-non-steam-shortcuts.md. Both new homes go with their
+-- How the hero's record and chosen_sgdb_id are read is "Game page artwork" in
+-- docs/architecture/steam-non-steam-shortcuts.md; nothing reads a choice yet.
+-- Both new homes go with their
 -- `roms` row. `chosen_at` is REAL Unix-epoch seconds, as `recorded_at` is.
 -- Created empty and NULL: nothing was chosen before this migration.
 --

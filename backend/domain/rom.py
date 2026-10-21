@@ -206,9 +206,8 @@ class Rom:
         """Record the SteamGridDB game the user chose for this ROM.
 
         Kept beside ``sgdb_id``, RomM's id, which wins where both exist
-        (:func:`domain.sgdb_artwork.effective_sgdb_id`). Like the pins it is
-        excluded from the sync UPSERT and written only through its own
-        ``set_chosen_sgdb_id``, so a re-sync never wipes it.
+        (:func:`domain.sgdb_artwork.effective_sgdb_id`); written only through
+        ``set_chosen_sgdb_id``.
         """
         self.chosen_sgdb_id = sgdb_id
 

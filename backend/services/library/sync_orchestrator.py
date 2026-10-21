@@ -411,10 +411,8 @@ class SyncOrchestrator:
             disabled_count = count_disabled_platform_removals(stale, registry, platform_name_set)
             # Cover-only work (#1386): count the bound fetched ROMs whose server
             # cover fingerprint changed and whose cover is not set in Steam, by
-            # the SAME rule the apply-path invalidation pass refreshes by — the
-            # fetch compared against the registry projection already read above,
-            # and the grid file read for each changed cover (no extra DB pass,
-            # no downloads; the preview stays side-effect-free). Runs over the
+            # the SAME rule the apply-path invalidation pass refreshes by (what
+            # it reads: ArtworkService.count_cover_refreshes). Runs over the
             # raw union (platform + collection units alike), not the collapsed
             # delta: covers are per-ROM, cover-blind classify_roms (ADR-0025)
             # stays untouched, and without this an empty shortcut delta would

@@ -1,11 +1,11 @@
 """The five slots of a shortcut's artwork, and when Steam's grid directory already fills one.
 
 Owns the slot vocabulary the per-slot fetch, its record and a user's choices
-share, and the rule that decides a wide grid, logo or hero is taken: a slot
-that already has an image is left alone, whoever set it
+share, the rule that decides a wide grid, logo or hero is taken — a slot that
+already has an image is left alone, whoever set it — and the rule that decides
+a slot's image in the grid directory is set in Steam rather than Tender's
 (docs/architecture/steam-non-steam-shortcuts.md, "Game page artwork"). The
-icon's rule reads ``shortcuts.vdf`` instead, and is
-:func:`domain.shortcut_icon.is_icon_filled`.
+icon's rules read ``shortcuts.vdf`` instead, and are in ``domain.shortcut_icon``.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class ArtworkSlot(StrEnum):
 
 
 # The slots whose outcome is recorded: the four Tender fills from SteamGridDB.
-# The cover's record holds no outcome until a cover can be chosen from there.
+# No outcome is recorded for the cover.
 RECORDED_SLOTS: frozenset[ArtworkSlot] = frozenset(
     {ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO, ArtworkSlot.HERO, ArtworkSlot.ICON}
 )
@@ -61,8 +61,9 @@ def is_slot_filled(file_names: Iterable[str], app_id: int, slot: ArtworkSlot) ->
 
     A file fills it when its name is exactly the slot's name — ``<appid>`` for
     the wide grid, ``<appid>_logo``, ``<appid>_hero`` — plus one extension, any
-    but ``.json``. The cover (``<appid>p``) and a file named by the 64-bit game
-    id never match. Why any extension counts is under "When a slot is filled"
+    but ``.json``. The cover's file (``<appid>p``) does not fill the wide grid,
+    the logo or the hero, and a file named by the 64-bit game id fills nothing.
+    Why any extension counts is under "When a slot is filled"
     in docs/architecture/steam-non-steam-shortcuts.md.
     """
     return bool(_slot_extensions(file_names, app_id, slot))
@@ -80,11 +81,11 @@ def is_set_in_steam(
 
     *file_names* are the directory's regular files, as :func:`is_slot_filled`
     reads them. A file filling the slot under any extension but ``png`` is not
-    Tender's: Steam keeps an image set through its own "Set custom artwork"
-    under the source file's extension. The ``<stem>.png`` is not Tender's when
-    *png_sha256*, the hash of its bytes, differs from *tenders_sha256*, the
-    hash of what Tender set — the slot's recorded hash, else Tender's cached
-    copy. Where either hash is ``None`` there is nothing to compare, and the
+    Tender's (why: "Set in Steam" in
+    docs/architecture/steam-non-steam-shortcuts.md). The ``<stem>.png`` is not
+    Tender's when *png_sha256*, the hash of its bytes, differs from
+    *tenders_sha256*, the hash of what Tender set — the slot's recorded hash,
+    else Tender's cached copy. Where either hash is ``None`` there is nothing to compare, and the
     ``.png`` is taken as Tender's. Raises ``ValueError`` for the icon, which is
     judged by its path (:func:`domain.shortcut_icon.is_icon_set_in_steam`).
     """

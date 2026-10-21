@@ -67,7 +67,7 @@ def covers_set_in_steam(
 
 
 def _sha256_of(file_store: CoverArtFileStore, path: str, logger: logging.Logger) -> str | None:
-    """The SHA-256 of *path*'s bytes; ``None`` where the file is missing, or cannot be read, which *logger* records."""
+    """The SHA-256 of *path*'s bytes; ``None`` where it is missing or cannot be read, and a failed read is logged."""
     if not file_store.exists(path):
         return None
     try:
