@@ -67,6 +67,7 @@ def _planner(
     *,
     active_downloads: set[int] | None = None,
     drifted: bool = False,
+    drift_answer: dict[str, Any] | None = None,
 ) -> tuple[GroupPlanner, _FakeLiveness]:
     uow = FakeUnitOfWork()
     with uow:
@@ -75,8 +76,14 @@ def _planner(
     liveness = _FakeLiveness(statuses)
 
     async def drift_probe(rom_id: int) -> dict[str, Any]:
-        del rom_id
-        return {"drifted": drifted}
+        if drift_answer is not None:
+            return {"rom_id": rom_id, **drift_answer}
+        return {
+            "rom_id": rom_id,
+            "drifted": drifted,
+            "only_here": False,
+            "stranding": "unsynced" if drifted else "none",
+        }
 
     planner = GroupPlanner(
         config=GroupPlannerConfig(
@@ -181,6 +188,56 @@ class TestRefusals:
         result, _ = await _plan(rows, {1: "vanished"}, drifted=True, options=_options(create_recovery_bundle=False))
         assert not isinstance(result, GroupPlan)
         assert result["reason"] == "unsynced_saves"
+
+    async def test_a_save_with_no_recorded_sync_refuses_the_group_without_a_bundle(self):
+        rows = [_rom(1, app_id=0x8001)]
+        result, _ = await _plan(
+            rows,
+            {1: "vanished"},
+            drift_answer={"drifted": False, "only_here": True, "stranding": "unsynced"},
+            options=_options(create_recovery_bundle=False),
+        )
+        assert not isinstance(result, GroupPlan)
+        assert (result["reason"], result["message"]) == (
+            "unsynced_saves",
+            "Unsynced saves require a sealed recovery bundle before changing this shortcut.",
+        )
+
+    async def test_a_check_that_could_not_read_refuses_the_group_saying_so(self):
+        rows = [_rom(1, app_id=0x8001)]
+        result, _ = await _plan(
+            rows,
+            {1: "vanished"},
+            drift_answer={"drifted": False, "only_here": False, "stranding": "unchecked"},
+            options=_options(create_recovery_bundle=False),
+        )
+        assert not isinstance(result, GroupPlan)
+        assert (result["reason"], result["message"]) == (
+            "unsynced_saves",
+            "Tender couldn't check whether this game's saves have been synced to RomM; "
+            "a sealed recovery bundle is required before changing this shortcut.",
+        )
+
+    async def test_a_save_with_no_recorded_sync_plans_once_a_bundle_is_chosen(self):
+        rows = [_rom(1, app_id=0x8001)]
+        plan, _ = await _plan(
+            rows,
+            {1: "vanished"},
+            drift_answer={"drifted": False, "only_here": True, "stranding": "unsynced"},
+        )
+        assert isinstance(plan, GroupPlan)
+        assert plan.drifted is True
+
+    async def test_a_drifted_save_with_save_sync_off_leaves_the_group_free(self):
+        rows = [_rom(1, app_id=0x8001)]
+        plan, _ = await _plan(
+            rows,
+            {1: "vanished"},
+            drift_answer={"drifted": True, "only_here": False, "stranding": "none"},
+            options=_options(create_recovery_bundle=False),
+        )
+        assert isinstance(plan, GroupPlan)
+        assert plan.drifted is False
 
 
 class TestAGameShownAsGoneEntirely:

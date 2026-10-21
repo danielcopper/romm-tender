@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.prune import selected_prune_ids
+from domain.save_stranding import STRANDING_NONE, STRANDING_UNCHECKED
 from services.prune.liveness import UNCONFIRMED_REASON
 
 if TYPE_CHECKING:
@@ -66,6 +67,13 @@ class _GroupLiveness:
             uncertain_ids=group_ids - vanished_ids - live_ids,
             fully_dead=bool(group_ids) and group_ids <= vanished_ids,
         )
+
+
+_UNSYNCED_SAVES_MESSAGE = "Unsynced saves require a sealed recovery bundle before changing this shortcut."
+_UNCHECKED_SAVES_MESSAGE = (
+    "Tender couldn't check whether this game's saves have been synced to RomM; "
+    "a sealed recovery bundle is required before changing this shortcut."
+)
 
 
 @dataclass(frozen=True)
@@ -258,18 +266,24 @@ class GroupPlanner:
         whole_game_action: bool,
         options: PruneOptions,
     ) -> tuple[bool, dict[str, Any] | None]:
-        """Ask whether the shortcut this run would change still holds unsynced saves."""
+        """Ask whether the shortcut this run would change still holds saves it would strand.
+
+        A save changed since its last recorded sync, one with no recorded sync,
+        and a check that could not read all hold it; each answers its own
+        message.
+        """
         if bound_row is None or bound_row.rom_id not in proof.vanished_ids:
             return False, None
         if not whole_game_action:
             return False, None
-        drifted = bool((await self._drift_probe(bound_row.rom_id)).get("drifted"))
+        stranding = (await self._drift_probe(bound_row.rom_id))["stranding"]
+        drifted = stranding != STRANDING_NONE
         if drifted and not options.create_recovery_bundle:
             return drifted, self._results.group_result(
                 rows,
                 "skipped",
                 "unsynced_saves",
-                "Unsynced saves require a sealed recovery bundle before changing this shortcut.",
+                _UNCHECKED_SAVES_MESSAGE if stranding == STRANDING_UNCHECKED else _UNSYNCED_SAVES_MESSAGE,
             )
         return drifted, None
 

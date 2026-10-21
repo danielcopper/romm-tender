@@ -17,13 +17,19 @@ from __future__ import annotations
 
 import hashlib
 import os
+from typing import TYPE_CHECKING, cast
 
+from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import RomSaveSyncState
+from domain.save_answer import SaveAnswer, SaveComponent
 from lib.errors import RommNotFoundError
 
-from ._seed import seed_group_member
+from ._seed import enable_save_sync, seed_group_member
+
+if TYPE_CHECKING:
+    from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 _GROUP = "igdb:100:57"
 _APP_ID = 42
@@ -485,6 +491,7 @@ async def test_switch_version_blocked_by_active_download(harness):
 
 async def test_switch_version_downloaded_synced_is_free(harness):
     """A downloaded, synced bound version switches away freely (no #1298 block)."""
+    enable_save_sync(harness)
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID, installed=True, file_name="game.gba")
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     # Baseline matches on-disk content → no drift → free switch.
@@ -513,6 +520,7 @@ async def test_switch_version_switch_back_returns_launch_options(harness):
 
 async def test_switch_version_unsynced_saves_online_soft_blocks(harness):
     """Unsynced bound saves + reachable server → discriminated soft-block shape."""
+    enable_save_sync(harness)
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID, installed=True, file_name="game.gba")
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
@@ -534,6 +542,7 @@ async def test_switch_version_unsynced_saves_online_soft_blocks(harness):
 
 async def test_switch_version_unsynced_saves_offline_soft_blocks(harness):
     """Unsynced bound saves + unreachable server → soft-block, server_reachable False."""
+    enable_save_sync(harness)
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID, installed=True, file_name="game.gba")
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
@@ -547,6 +556,7 @@ async def test_switch_version_unsynced_saves_offline_soft_blocks(harness):
 
 async def test_switch_version_switch_anyway_overrides_online(harness):
     """allow_stranded switches despite unsynced saves (server reachable)."""
+    enable_save_sync(harness)
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID, installed=True, file_name="game.gba")
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
@@ -560,6 +570,7 @@ async def test_switch_version_switch_anyway_overrides_online(harness):
 
 async def test_switch_version_switch_anyway_overrides_offline(harness):
     """allow_stranded skips save drift while target-probe uncertainty fails open."""
+    enable_save_sync(harness)
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID, installed=True, file_name="game.gba")
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
@@ -574,6 +585,7 @@ async def test_switch_version_switch_anyway_overrides_offline(harness):
 
 async def test_switch_version_sync_then_retry_succeeds(harness):
     """After the drift is synced away, the previously-blocked switch succeeds."""
+    enable_save_sync(harness)
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID, installed=True, file_name="game.gba")
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
@@ -587,6 +599,128 @@ async def test_switch_version_sync_then_retry_succeeds(harness):
     assert retried["success"] is True
     assert retried["rom_id"] == 2
     assert [args[0] for name, args, _kwargs in harness.romm.call_log if name == "get_rom_once"] == [2]
+
+
+def _seed_bound_save(harness, *, content: bytes = _DRIFT_CONTENT) -> str:
+    """Put the bound version's save file on disk, with no sync recorded for it; return its path."""
+    saves_dir = os.path.join(harness.saves_root, "gba")
+    os.makedirs(saves_dir, exist_ok=True)
+    path = os.path.join(saves_dir, "game.srm")
+    with open(path, "wb") as fh:
+        fh.write(content)
+    return path
+
+
+def _seed_two_versions(harness) -> None:
+    seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID, installed=True, file_name="game.gba")
+    seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
+
+
+async def test_switch_version_a_save_of_a_rom_with_no_save_state_soft_blocks(harness):
+    """A save never synced — the ROM has no save state at all — exists only here: the switch warns."""
+    enable_save_sync(harness)
+    _seed_two_versions(harness)
+    _seed_bound_save(harness)
+
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
+
+    assert result["success"] is False
+    assert result["reason"] == "unsynced_saves"
+    assert result["stranding"] == "unsynced"
+    assert result["unsynced_rom_id"] == 1
+    with harness.uow_factory() as uow:
+        assert uow.roms.get(1).shortcut_app_id == _APP_ID
+
+
+async def test_switch_version_a_save_its_save_state_has_no_entry_for_soft_blocks(harness):
+    """A save state that records another file only: the unrecorded save still holds the switch."""
+    enable_save_sync(harness)
+    _seed_two_versions(harness)
+    _seed_bound_save(harness)
+    state = RomSaveSyncState()
+    state.adopt_baseline("game.rtc", tracked_save_id=1, last_sync_hash="rtc-baseline")
+    with harness.uow_factory() as uow:
+        uow.rom_save_sync_states.save(1, state)
+
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
+
+    assert result["reason"] == "unsynced_saves"
+    assert result["stranding"] == "unsynced"
+
+
+async def test_switch_version_a_never_synced_save_with_save_sync_off_is_free(harness):
+    """Save sync off: nothing is synced, so nothing is stranded and the switch goes through."""
+    _seed_two_versions(harness)
+    _seed_bound_save(harness)
+
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
+
+    assert result["success"] is True
+    assert result["rom_id"] == 2
+
+
+async def test_switch_version_a_drifted_save_with_save_sync_off_is_free(harness):
+    """Save sync off: a save changed since its recorded sync holds no switch either."""
+    _seed_two_versions(harness)
+    _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
+
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
+
+    assert result["success"] is True
+    assert result["rom_id"] == 2
+
+
+async def test_switch_version_a_save_that_cannot_be_read_soft_blocks_as_unchecked(harness, monkeypatch):
+    """A recorded save the check cannot hash: the switch warns that Tender could not check."""
+    enable_save_sync(harness)
+    _seed_two_versions(harness)
+    _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
+
+    def _unreadable(path: str) -> str:
+        raise PermissionError(path)
+
+    monkeypatch.setattr(harness.app.services.save_sync_service._status._save_file_store, "content_hash", _unreadable)
+
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
+
+    assert result["reason"] == "unsynced_saves"
+    assert result["stranding"] == "unchecked"
+
+
+async def test_switch_version_follows_a_moved_save_directory_and_warns_for_a_save_found_there(harness):
+    """The emulator's save directory moved: the check carries the save over first and the switch warns."""
+    enable_save_sync(harness)
+    _seed_two_versions(harness)
+    old_saves = os.path.join(harness.saves_root, "gba")
+    new_saves = os.path.join(harness.saves_root, "gba", "mGBA")
+    _seed_bound_save(harness, content=b"never uploaded")
+    with harness.uow_factory() as uow:
+        uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=1, directory=old_saves))
+    save_locations = cast("FakeSaveLocationReader", harness.app.services.save_sync_service._rom_info._save_locations)
+    save_locations.answer_with("gba", _moved_answer(new_saves))
+
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
+
+    assert result["reason"] == "unsynced_saves"
+    assert result["stranding"] == "unsynced"
+    with open(os.path.join(new_saves, "game.srm"), "rb") as fh:
+        assert fh.read() == b"never uploaded"
+
+
+def _moved_answer(directory: str) -> SaveAnswer:
+    return SaveAnswer(
+        state="per_game_files",
+        unestablished=None,
+        emulator="mGBA",
+        directory=directory,
+        backing_directory=None,
+        granularity="per-game-file",
+        needs=(),
+        components=(SaveComponent(name="game.srm", directory=directory, role="battery", granularity=None),),
+        caveats=(),
+        content_installed=True,
+        root_kind="savefile_directory",
+    )
 
 
 async def test_switch_version_unbuildable_target_failure_shape(harness):

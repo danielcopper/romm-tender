@@ -15,6 +15,7 @@ from domain.save_status_builders import (
     resolve_chosen_server,
     status_from_action,
 )
+from domain.save_stranding import stranding_verdict
 from domain.sync_action import Conflict, Skip
 from lib.errors import classify_error
 from services.saves._local_changes import changed_since_last_sync
@@ -468,39 +469,82 @@ class StatusService:
         }
 
     async def check_local_drift(self, rom_id: int) -> dict[str, Any]:
-        """Report whether the ROM's local save files changed since their last sync.
+        """Report how the ROM's local save files stand against their last recorded sync.
 
-        Purely local: it finds the save files the way a sync does, hashes the
-        files that have a recorded hash, until one differs from it, and never
+        Purely local: it finds the save files the way a sync does and never
         asks the server, so it answers while the server is unreachable. Answers
-        ``{"drifted": bool, "rom_id": int}``: ``drifted`` is ``True`` when any
-        such file's content differs. A file with no recorded hash is not drift —
-        there is no synced content for it to differ from — and a ROM that is not
-        installed or has no save files on disk answers ``drifted: False``. Takes
-        no sync lock: it only reads.
+        ``{"rom_id", "drifted", "only_here", "stranding"}``, two facts and the
+        verdict the stranding callers read:
+
+        - ``drifted``: a file's content differs from its recorded hash. Hashing
+          stops at the first one that does. A file with no recorded hash is not
+          drift, and an unknown is never drift — the one field the offline
+          launch reads, so its warning comes only for a change it can prove.
+        - ``only_here``: save sync is on and a file has no recorded sync — the
+          ROM has no save state, or its save state has no entry for that file.
+          RomM is not asked, so a save it already holds that Tender has not
+          recorded counts too.
+        - ``stranding``: :func:`stranding_verdict` over the two, ``unchecked``
+          where the reading failed and ``none`` while save sync is off.
+
+        A ROM that is not installed or has no save files on disk has neither
+        fact. A moved save directory is followed first, under the ROM's
+        ``rom_lock`` since the follow moves files, so the check looks where the
+        saves are now (for an installed ROM; an uninstalled one's answer is a
+        prediction, never followed).
 
         Never raises: any internal error (a file vanished mid-hash, a failed
-        read of the save state, …) is logged and answers ``drifted: False`` — an
-        unknown is never reported as drift, at the cost of a check that could
-        not read passing as clean.
+        read of the save state, …) is logged and answers neither fact, with
+        ``stranding`` ``unchecked`` — also where the reading had already found a
+        file with no recorded sync before it failed.
         """
         rom_id = int(rom_id)
+        save_sync_on = save_sync_enabled(self._settings)
         try:
-            return await self._loop.run_in_executor(None, self._check_local_drift_io, rom_id)
+            async with self._sync_engine.rom_lock(rom_id):
+                save_answer = await self._loop.run_in_executor(None, self._rom_info.save_answer, rom_id)
+                if save_answer.content_installed:
+                    await self._sync_engine.follow_save_directory(rom_id, save_answer)
+                drifted, unrecorded = await self._loop.run_in_executor(
+                    None, self._check_local_drift_io, rom_id, save_answer
+                )
         except Exception as e:
             self._logger.warning(f"Local drift check failed for rom_id={rom_id}: {e}")
-            return {"drifted": False, "rom_id": rom_id}
+            return _local_drift_answer(rom_id, save_sync_on=save_sync_on, checked=False)
+        return _local_drift_answer(
+            rom_id, save_sync_on=save_sync_on, checked=True, drifted=drifted, only_here=unrecorded
+        )
 
-    def _check_local_drift_io(self, rom_id: int) -> dict[str, Any]:
-        """Synchronous worker of :meth:`check_local_drift`; raises what it meets."""
-        local_files = self._rom_info.find_save_files(rom_id)
+    def _check_local_drift_io(self, rom_id: int, save_answer: SaveAnswer) -> tuple[bool, bool]:
+        """Synchronous worker of :meth:`check_local_drift`; raises what it meets.
+
+        Answers ``(drifted, unrecorded)``: whether a file changed since its
+        recorded sync, and whether a file has no recorded sync at all, whatever
+        the save-sync setting.
+        """
+        local_files = self._rom_info.find_save_files(rom_id, save_answer=save_answer)
         if not local_files:
-            return {"drifted": False, "rom_id": rom_id}
+            return False, False
         save_state = read_save_state(self._uow_factory, rom_id)
-        if save_state is None:
-            return {"drifted": False, "rom_id": rom_id}
-        changed = changed_since_last_sync(local_files, save_state.files, self._save_file_store)
-        return {"drifted": next(changed, None) is not None, "rom_id": rom_id}
+        recorded = save_state.files if save_state is not None else {}
+        unrecorded = any(local_file["filename"] not in recorded for local_file in local_files)
+        changed = changed_since_last_sync(local_files, recorded, self._save_file_store)
+        return next(changed, None) is not None, unrecorded
+
+
+def _local_drift_answer(
+    rom_id: int, *, save_sync_on: bool, checked: bool, drifted: bool = False, only_here: bool = False
+) -> dict[str, Any]:
+    """The wire answer of :meth:`StatusService.check_local_drift`; *only_here* counts only with save sync on."""
+    only_here = save_sync_on and only_here
+    return {
+        "rom_id": rom_id,
+        "drifted": drifted,
+        "only_here": only_here,
+        "stranding": stranding_verdict(
+            save_sync_on=save_sync_on, checked=checked, drifted=drifted, only_here=only_here
+        ),
+    }
 
 
 def _outcome_server_sort_key(outcome: MatrixOutcome) -> float:

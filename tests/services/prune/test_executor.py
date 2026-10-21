@@ -83,7 +83,7 @@ def _executor(rows: list[Rom], settings: dict[str, Any], emitted: list[tuple[str
 
     async def drift_probe(rom_id: int) -> dict[str, Any]:
         del rom_id
-        return {"drifted": False}
+        return {"drifted": False, "only_here": False, "stranding": "none"}
 
     return PruneExecutor(
         config=PruneExecutorConfig(

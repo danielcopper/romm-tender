@@ -336,7 +336,11 @@ async def harness() -> Harness:
     installed_remover = FakeInstalledFilesRemover()
 
     async def drift(rom_id: int) -> dict[str, Any]:
-        return {"drifted": rom_id in drifted}
+        return {
+            "drifted": rom_id in drifted,
+            "only_here": False,
+            "stranding": "unsynced" if rom_id in drifted else "none",
+        }
 
     clock = FakeClock()
     conflicts = PruneConflicts(

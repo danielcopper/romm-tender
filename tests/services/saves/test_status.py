@@ -1264,7 +1264,7 @@ class TestCheckLocalDrift:
 
         result = await svc.check_local_drift(99)
 
-        assert result == {"drifted": False, "rom_id": 99}
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 99}
         assert store.hashed == []
 
     @pytest.mark.asyncio
@@ -1278,7 +1278,7 @@ class TestCheckLocalDrift:
 
         result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": False, "rom_id": 42}
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
         assert store.hashed == [str(save)]
 
     @pytest.mark.asyncio
@@ -1291,7 +1291,7 @@ class TestCheckLocalDrift:
 
         result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": True, "rom_id": 42}
+        assert result == {"drifted": True, "only_here": False, "stranding": "none", "rom_id": 42}
 
     @pytest.mark.asyncio
     async def test_missing_baseline_key_is_not_drift(self, tmp_path):
@@ -1304,7 +1304,7 @@ class TestCheckLocalDrift:
 
         result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": False, "rom_id": 42}
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
         assert store.hashed == []
 
     @pytest.mark.asyncio
@@ -1318,7 +1318,7 @@ class TestCheckLocalDrift:
         with caplog.at_level("WARNING", logger="test"):
             result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": False, "rom_id": 42}
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
         assert store.hashed == []
         assert [r for r in caplog.records if r.levelname == "WARNING"] == []
 
@@ -1333,7 +1333,7 @@ class TestCheckLocalDrift:
 
         result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": True, "rom_id": 42}
+        assert result == {"drifted": True, "only_here": False, "stranding": "none", "rom_id": 42}
 
     @pytest.mark.asyncio
     async def test_internal_error_during_enumeration_is_not_drifted(self, tmp_path, monkeypatch, caplog):
@@ -1348,7 +1348,7 @@ class TestCheckLocalDrift:
         with caplog.at_level("WARNING", logger="test"):
             result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": False, "rom_id": 42}
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
         warnings = [r for r in caplog.records if r.levelname == "WARNING"]
         assert len(warnings) == 1
         assert "rom_id=42" in warnings[0].getMessage()
@@ -1364,7 +1364,7 @@ class TestCheckLocalDrift:
 
         result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": False, "rom_id": 42}
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
         assert store.hashed != []
 
     @pytest.mark.asyncio
@@ -1387,7 +1387,7 @@ class TestCheckLocalDrift:
 
         result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": True, "rom_id": 42}
+        assert result == {"drifted": True, "only_here": False, "stranding": "none", "rom_id": 42}
         assert store.hashed == [str(srm)]
 
     @pytest.mark.asyncio
@@ -1405,7 +1405,170 @@ class TestCheckLocalDrift:
         with caplog.at_level("WARNING", logger="test"):
             result = await svc.check_local_drift(42)
 
-        assert result == {"drifted": False, "rom_id": 42}
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
         warnings = [r for r in caplog.records if r.levelname == "WARNING"]
         assert len(warnings) == 1
         assert "rom_id=42" in warnings[0].getMessage()
+
+
+class TestCheckLocalDriftWithSaveSyncOn:
+    """The two facts the check reports apart, and the stranding verdict the switch, cleanup and Saves tab read."""
+
+    @pytest.mark.asyncio
+    async def test_a_save_of_a_rom_with_no_save_state_exists_only_here(self, tmp_path):
+        """No save state at all → only_here, stranding unsynced; never drift, so the offline launch stays quiet."""
+        store = _RecordingSaveFileStore()
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "only_here": True, "stranding": "unsynced", "rom_id": 42}
+        assert store.hashed == []
+
+    @pytest.mark.asyncio
+    async def test_a_save_its_save_state_has_no_entry_for_exists_only_here(self, tmp_path):
+        """A save state that records another file only → only_here for the unrecorded one."""
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.rtc": "rtc-base"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "only_here": True, "stranding": "unsynced", "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_a_save_changed_since_its_last_sync_is_drift_and_unsynced(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.srm": "hash-of-other-bytes"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": True, "only_here": False, "stranding": "unsynced", "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_a_save_matching_its_last_sync_strands_nothing(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save = _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.srm": _file_md5(save)})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_no_save_on_disk_strands_nothing(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_a_file_that_cannot_be_hashed_is_unchecked_and_never_drift(self, tmp_path):
+        store = _RecordingSaveFileStore(hash_raises=OSError("file vanished"))
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.srm": "hash-A"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "only_here": False, "stranding": "unchecked", "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_a_failed_read_of_the_save_state_is_unchecked_and_never_drift(self, tmp_path, monkeypatch):
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+
+        def _boom():
+            raise RuntimeError("uow boom")
+
+        monkeypatch.setattr(svc._status, "_uow_factory", _boom)
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "only_here": False, "stranding": "unchecked", "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_a_failed_save_answer_is_unchecked(self, tmp_path, monkeypatch):
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+
+        def _boom(_rom_id):
+            raise RuntimeError("resolver boom")
+
+        monkeypatch.setattr(svc._rom_info, "save_answer", _boom)
+
+        result = await svc.check_local_drift(42)
+
+        assert result["stranding"] == "unchecked"
+        assert result["drifted"] is False
+
+    @pytest.mark.asyncio
+    async def test_the_check_waits_for_the_roms_sync_lock(self, tmp_path):
+        """It may move files (following a moved directory), so it never runs beside another holder of the lock."""
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+
+        async with svc._sync_engine.rom_lock(42):
+            check = asyncio.ensure_future(svc.check_local_drift(42))
+            await asyncio.sleep(0.05)
+            assert not check.done()
+        result = await check
+
+        assert result["stranding"] == "unsynced"
+
+
+class TestCheckLocalDriftWithSaveSyncOff:
+    """With save sync off no stranding gate warns; the offline launch's ``drifted`` is read as before."""
+
+    @pytest.mark.asyncio
+    async def test_a_save_with_no_recorded_sync_strands_nothing(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_a_changed_save_is_still_drift_but_strands_nothing(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.srm": "hash-of-other-bytes"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": True, "only_here": False, "stranding": "none", "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_a_check_that_could_not_read_strands_nothing(self, tmp_path):
+        store = _RecordingSaveFileStore(hash_raises=OSError("file vanished"))
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.srm": "hash-A"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}

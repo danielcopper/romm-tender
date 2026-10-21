@@ -268,9 +268,10 @@ class SaveService:
         return self._status.check_core_change(rom_id)
 
     async def check_local_drift(self, rom_id: int) -> dict[str, Any]:
-        """Report whether the ROM's local save files changed since their last sync (``{drifted, rom_id}``).
+        """Report how the ROM's local save files stand against their last recorded sync.
 
-        Satisfies the ``SaveDriftProbeFn`` seam.
+        Answers ``{rom_id, drifted, only_here, stranding}``. Satisfies the
+        ``SaveDriftProbeFn`` seam.
         """
         return await self._status.check_local_drift(rom_id)
 

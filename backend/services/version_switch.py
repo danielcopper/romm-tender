@@ -14,13 +14,14 @@ A version switch is a pure binding move: the shortcut's name and appId stay
 sticky (ADR-0021 §2) and no save state migrates (ADR-0021 §4). Switching a
 *downloaded* game keeps its existing files in place — the switch never deletes
 or transfers saves — but a switch *away* from a downloaded version whose local
-saves drift from their sync baseline is soft-blocked so the user can sync first
-(#1298); an explicit ``allow_stranded`` override honours "switch anyway". A
-switch back onto a still-installed version re-bakes that install's full Steam
-``launch_options`` (the frontend writes it onto the shortcut); switching to an
-uninstalled version returns the empty placeholder (ADR-0009). The group is
-resolved by ``sibling_group_key`` over the migration-010 index; the server view
-comes from ``get_rom_simple(bound).sibling_roms``. Server I/O and the relaunch resolver
+saves changed since their last recorded sync, or have none recorded, is
+soft-blocked so the user can sync first; an explicit ``allow_stranded``
+override honours "switch anyway". A switch back onto a still-installed version
+re-bakes that install's full Steam ``launch_options`` (the frontend writes it
+onto the shortcut); switching to an uninstalled version returns the empty
+placeholder (ADR-0009). The group is resolved by ``sibling_group_key`` over
+the migration-010 index; the server view comes from
+``get_rom_simple(bound).sibling_roms``. Server I/O and the relaunch resolver
 run outside the Unit of Work (ADR-0006) — read/close, then fetch/resolve, then a
 short write UoW. The liveness request narrows the race but cannot transact with
 RomM and SQLite as one unit.
@@ -36,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 from domain.main_sibling import main_sibling_flag
 from domain.rom import Rom
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
+from domain.save_stranding import STRANDING_NONE
 from domain.shortcut_data import extract_version_metadata
 from domain.sibling_group import compute_sibling_group_key, target_in_sibling_group
 from domain.sibling_resolution import AUTO_REGION, fs_name_stem, resolve_group_representative
@@ -70,7 +72,7 @@ class VersionVanished(NamedRefused):
 
 
 class UnsyncedSaves(NamedRefused):
-    """The bound version holds saves that drift from their baseline, and the user has not said to switch anyway."""
+    """The bound version holds saves that may exist nowhere else, and the user has not said to switch anyway."""
 
     reason = "unsynced_saves"
 
@@ -84,7 +86,7 @@ class VersionSwitchServiceConfig:
     RomM ROM reader (the live ``sibling_roms`` view + per-sibling detail), and the
     live settings dict (read for ``preferred_region`` when ranking the default).
     ``drift_probe`` reports whether the currently-bound version's local saves
-    diverge from their baseline (the save-stranding gate); ``reachability_probe``
+    would be stranded (the save-stranding gate); ``reachability_probe``
     supplies the ``server_reachable`` hint on that refusal; ``relaunch_resolver``
     re-bakes a switched-onto install's full launch command; ``active_downloads``
     reports the rom ids currently downloading so a switch is refused while any
@@ -611,10 +613,12 @@ class VersionSwitchService:
         A pure binding move (ADR-0021 §2/§4): the target row is bound to the
         group's ``app_id`` and the repository's collision-unbind clears the old
         representative. Switching away from a *downloaded* version whose local
-        saves drift is soft-blocked (:class:`UnsyncedSaves`) so the user can sync
-        first — the refusal carries ``server_reachable`` (from the reachability
-        probe), ``unsynced_rom_id``, and ``unsynced_version_name`` so the frontend
-        modal can offer "Sync now & switch" / "Switch anyway" / "Cancel".
+        saves would be stranded is soft-blocked (:class:`UnsyncedSaves`) so the
+        user can sync first — the refusal carries ``stranding`` (``unsynced``, or
+        ``unchecked`` where the check could not read), ``server_reachable`` (from
+        the reachability probe), ``unsynced_rom_id``, and
+        ``unsynced_version_name`` so the frontend modal can offer "Sync now &
+        switch" / "Switch anyway" / "Cancel".
         ``allow_stranded`` is the "Switch anyway" override for the save-stranding
         gate only. The local target still receives a short, single-attempt exact-id
         liveness probe; only a typed 404 refuses it, while uncertainty fails open so
@@ -737,26 +741,29 @@ class VersionSwitchService:
         return False
 
     async def _refuse_stranding_saves(self, ctx: _SwitchContext, allow_stranded: bool) -> None:
-        """Soft-block the switch when the bound version has un-uploaded save drift.
+        """Soft-block the switch when the bound version holds saves it would strand.
 
         Only fires when the currently-bound version is downloaded and
         ``allow_stranded`` is unset — otherwise there is nothing to strand, or the
-        user chose "Switch anyway". The drift probe is a purely-local content-hash
-        read (its own short-lived read, run before any write UoW opens — the
+        user chose "Switch anyway". The drift probe is a purely-local read (its
+        own short-lived reads, run before any write UoW opens — the
         rom_save_sync_states baseline it reads must not be touched while this service's
-        write UoW is open). The reachability probe is fired only on the blocking
+        write UoW is open), and its ``stranding`` verdict decides: a save changed
+        since its last recorded sync or with none recorded, or a check that
+        could not read. The reachability probe is fired only on the blocking
         branch so the free switch paths (synced saves, uninstalled, offline
         override) make no server contact. Raises :class:`UnsyncedSaves`, or
         returns to let the switch proceed.
         """
         if allow_stranded or not ctx.bound_installed:
             return
-        drift = await self._drift_probe(ctx.bound_rom_id)
-        if not drift.get("drifted"):
+        stranding = (await self._drift_probe(ctx.bound_rom_id))["stranding"]
+        if stranding == STRANDING_NONE:
             return
         reachable = await self._reachability_probe()
         raise UnsyncedSaves(
             "Unsynced saves on the current version.",
+            stranding=stranding,
             server_reachable=bool(reachable.get("online")),
             unsynced_rom_id=ctx.bound_rom_id,
             unsynced_version_name=ctx.bound_label,

@@ -726,6 +726,61 @@ class TestTheSecondaryWritePathsFollowFirst:
         assert _recorded(svc) == str(old)
 
 
+class TestTheLocalSaveCheckFollowsFirst:
+    """``check_local_drift`` carries a moved directory's files before it looks, as every other reader does."""
+
+    @pytest.mark.asyncio
+    async def test_a_never_synced_save_left_in_the_old_folder_is_found_in_the_new_one(self, tmp_path, dirs):
+        # Without the follow the check looks in the new folder, finds nothing,
+        # and every gate lets the shortcut move over a save that exists only here.
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        _create_save(tmp_path, content=b"never uploaded")
+        _seed_answer(svc, _answer(str(new)))
+
+        result = await svc.check_local_drift(_ROM)
+
+        assert result == {"drifted": False, "only_here": True, "stranding": "unsynced", "rom_id": _ROM}
+        assert (new / "pokemon.srm").read_bytes() == b"never uploaded"
+        assert _recorded(svc) == str(new)
+
+    @pytest.mark.asyncio
+    async def test_a_change_left_in_the_old_folder_is_still_drift(self, tmp_path, dirs):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        state = RomSaveSyncState()
+        state.adopt_baseline("pokemon.srm", tracked_save_id=1, last_sync_hash="hash-of-the-synced-save")
+        _seed_save_state(svc, _ROM, state)
+        _record(svc, str(old))
+        _create_save(tmp_path, content=b"played since the last sync")
+        _seed_answer(svc, _answer(str(new)))
+
+        result = await svc.check_local_drift(_ROM)
+
+        assert result == {"drifted": True, "only_here": False, "stranding": "unsynced", "rom_id": _ROM}
+        assert (new / "pokemon.srm").exists()
+
+    @pytest.mark.asyncio
+    async def test_nothing_is_followed_while_save_sync_is_off(self, tmp_path, dirs):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+        _seed_answer(svc, _answer(str(new)))
+
+        result = await svc.check_local_drift(_ROM)
+
+        assert result["stranding"] == "none"
+        assert save.read_bytes() == b"progress"
+        assert _recorded(svc) == str(old)
+
+
 class TestAFailedFollowDoesNotStopTheSync:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(

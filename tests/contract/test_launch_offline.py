@@ -51,7 +51,7 @@ async def test_check_local_drift_not_installed_shape(harness):
     """Not installed → {"drifted": False, "rom_id"} (no local files to probe)."""
     result = await harness.endpoints.check_local_drift(99)
 
-    assert result == {"drifted": False, "rom_id": 99}
+    assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 99}
 
 
 async def test_check_local_drift_matching_hash_not_drifted(harness):
@@ -68,7 +68,7 @@ async def test_check_local_drift_matching_hash_not_drifted(harness):
 
     result = await harness.endpoints.check_local_drift(1)
 
-    assert result == {"drifted": False, "rom_id": 1}
+    assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 1}
 
 
 async def test_check_local_drift_changed_content_drifted(harness):
@@ -81,7 +81,7 @@ async def test_check_local_drift_changed_content_drifted(harness):
 
     result = await harness.endpoints.check_local_drift(2)
 
-    assert result == {"drifted": True, "rom_id": 2}
+    assert result == {"drifted": True, "only_here": False, "stranding": "none", "rom_id": 2}
 
 
 # ── probe_reachability ────────────────────────────────────────────────────
