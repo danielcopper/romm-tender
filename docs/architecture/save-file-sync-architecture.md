@@ -884,6 +884,33 @@ answers differently for a different game file, and three of the rows a table lik
 The per-state picture, and which systems land where on a stock RetroDECK, is in
 [Save sync coverage](save-sync-coverage.md).
 
+## The Local-Save Check
+
+`check_local_drift` (`StatusService`, `services/saves/status/service.py`) reads a ROM's save files against their
+recorded syncs without asking the server, so it answers while RomM is unreachable. It reports two facts apart, and one
+verdict over them:
+
+- `drifted` — a save's content differs from its last recorded sync (`last_sync_hash`). A save with no recorded sync is
+  not drift, and neither is a reading that failed.
+- `only_here` — save sync is on and a save a sync carries (no configuration file, no savestate, nothing under a save
+  answer the sync refuses) has no recorded sync: the ROM has no save state, or its save state has no entry for that
+  file. RomM is not asked, so a save RomM already holds that Tender has not recorded counts too, and "Sync now & switch"
+  then only records it.
+- `stranding` — `domain/save_stranding.py::stranding_verdict`: `none` while save sync is off, whatever the reading
+  found; otherwise `unchecked` where the reading failed (a save file that cannot be hashed, a failed read of the save
+  state, any other error), `unsynced` where either fact holds, and `none` where neither does.
+
+Two kinds of caller read different fields, because "nothing recorded" answers their questions in opposite ways. Play
+while RomM is unreachable ([Pre-launch sync](#pre-launch-sync), step 8) asks whether a later sync could overwrite a
+local change, and reads `drifted` alone: a save with no recorded sync has nothing to overwrite, and an unknown counts as
+no change, since a false warning there is worse than none. The version switch, the removed-game cleanup and the Saves
+tab's reminder ask whether a save exists anywhere but here, and read `stranding` alone; each words `unchecked` as Tender
+not having been able to check rather than as saves never uploaded. On the Saves tab a check call that rejects, or gets
+no answer within `LOCAL_CALL_LIMIT_MS`, counts as `unchecked` too.
+
+The check follows a moved save directory first ([below](#following-a-moved-save-directory)), and so holds the ROM's
+`rom_lock` and waits for any other holder of it.
+
 ## Following a Moved Save Directory
 
 RetroArch does not move existing saves when its sort settings change, so after a change the files sit where the old
@@ -909,8 +936,9 @@ live reading the caller already took, before the caller looks at any local file:
 - by the two deletes and the two reads that count local saves — `delete_local_saves`, `delete_platform_saves`,
   `count_platform_saves` and `get_save_status` (for an installed ROM) — so a delete after a sort flip takes the old
   folder's files too, and nothing is carried back in by the next path that follows;
-- by the local-save check, `check_local_drift` (for an installed ROM), so the version switch, the removed-game cleanup
-  and the Saves tab's reminder do not find the new directory empty while the saves still lie in the old one.
+- by [the local-save check](#the-local-save-check), `check_local_drift` (for an installed ROM), so the version switch,
+  the removed-game cleanup and the Saves tab's reminder do not find the new directory empty while the saves still lie in
+  the old one.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
 once save sync is on again, for a game whose directory was recorded. It does nothing while an update of Tender is being
@@ -1136,12 +1164,12 @@ and `confirm_slot_choice`'s migration lists, downloads and uploads, all under th
 `SaveCopyService.copy_save_to_slot`, `VersionsService.rollback_to_version`, the removed-game cleanup
 (`PruneSaveSupport.lock_prune_roms`, one lock for each ROM its save inventory names, taken in ascending id order),
 deleting a ROM's or a platform's local saves and counting a platform's (`SaveService._delete_saves_for_roms`,
-`SaveService.count_platform_saves`), and the passes that record each installed ROM's save directory
-(`SyncEngine._record_each_installed_rom`) — the count and the record passes hold it for the directory follow, not for a
-write of the save state; following a moved save directory (`SyncEngine.follow_save_directory`) runs inside the lock of
-whichever holder calls it. Different rom_ids have independent locks, so cross-game concurrency (e.g. Sync All Saves
-running concurrently with a resolve on one specific rom) is unaffected. The lock is created lazily on first access
-(`SyncEngine.rom_lock(rom_id)`).
+`SaveService.count_platform_saves`), the passes that record each installed ROM's save directory
+(`SyncEngine._record_each_installed_rom`), and the local-save check (`StatusService.check_local_drift`) — the count, the
+record passes and the check hold it for the directory follow, not for a write of the save state; following a moved save
+directory (`SyncEngine.follow_save_directory`) runs inside the lock of whichever holder calls it. Different rom_ids have
+independent locks, so cross-game concurrency (e.g. Sync All Saves running concurrently with a resolve on one specific
+rom) is unaffected. The lock is created lazily on first access (`SyncEngine.rom_lock(rom_id)`).
 
 The lock is **not reentrant** (plain `asyncio.Lock`), so a critical section must never call a peer that re-acquires the
 same lock. `switch_slot` is the live instance: its tail `get_save_status` re-takes `rom_lock(rom_id)`, so the lock is
@@ -1507,12 +1535,12 @@ handling Steam's start and stop notifications (see [Post-exit sync](#post-exit-s
 delay. A step's own fallback answers a call that **failed** — a launch-target read that throws lets the launch through,
 a probe that throws counts as offline — but never one that got **no answer**: that ends the check in the "Save Sync
 Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can expire on a
-slow RomM while Tender itself is fine, which is why the dialog does not blame either. "Launch Anyway" starts the game on
-the local save without re-confirming the launch options, because that re-confirm asks the same backend and its own
-timeout stops a start; "Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start still
-cancelled. An answer that arrives after the dialog appeared starts nothing more. The one exception is
-`check_start_source`, whose every unanswered case — no answer, a failed call, a failed detection — asks a question of
-its own instead of opening that dialog
+slow RomM while Tender itself is fine, and `check_local_drift`'s while another holder keeps the game's `rom_lock` (step
+8 below), which is why the dialog does not blame either. "Launch Anyway" starts the game on the local save without
+re-confirming the launch options, because that re-confirm asks the same backend and its own timeout stops a start;
+"Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start still cancelled. An answer that
+arrives after the dialog appeared starts nothing more. The one exception is `check_start_source`, whose every unanswered
+case — no answer, a failed call, a failed detection — asks a question of its own instead of opening that dialog
 ([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)). A wait on the user's answer
 in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits
 for `resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
@@ -1552,8 +1580,11 @@ The Play button's path:
    the sync moved something, the per-direction completion toast above reports it (uploaded / downloaded / both); a
    failure's classified message appears in the dialog instead.
 8. Offline: `check_local_drift`. A local save that changed since the last sync asks Start Anyway / Retry connection /
-   Cancel; Retry runs the check again from the start. Only the answer's `drifted` counts here: a save with no recorded
-   sync has nothing a later sync could overwrite, and a check that could not read counts as no change.
+   Cancel; Retry runs the check again from the start. Only the answer's `drifted` counts here
+   ([The Local-Save Check](#the-local-save-check)). The check holds the ROM's `rom_lock` for the directory follow, so it
+   waits while another holder — a sync of the same game, say — keeps the lock; held past `LOCAL_CALL_LIMIT_MS`, Play
+   gets the "Save Sync Unavailable" dialog ("Couldn't check your saves in time", Launch Anyway offered) instead of
+   starting at once.
 9. Re-confirm: `get_rom_relaunch_options`, bounded at 3 s, heals the shortcut's launch options. A timeout stops the
    launch and the button returns to Play. A start chosen in the dialog after a check that got no answer skips this step.
 10. `SteamClient.Apps.RunGame`, with the button on "Launching...".

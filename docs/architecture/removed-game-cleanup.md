@@ -479,10 +479,10 @@ cleanup to move.
 Save **states** are entirely untouched and remain unsupported. Extending save-state support must extend this recovery
 contract before purge is allowed to remove state files.
 
-A whole game whose bound version has unsynced saves is removed only once its recovery bundle sealed. With recovery
-disabled or failed, the group is skipped instead. Unsynced is the local-save check's stranding verdict: a save changed
-since its last recorded sync, a save with none recorded, or a check that could not read — that last case is skipped with
-a message saying Tender couldn't check — and never while save sync is off.
+A whole game whose bound version has unsynced saves — the local-save check's stranding verdict
+([Save File Sync Architecture](save-file-sync-architecture.md#the-local-save-check)) — is removed only once its recovery
+bundle sealed. With recovery disabled or failed, the group is skipped instead. Where no bundle was chosen and the check
+could not read, the skip's message says that Tender couldn't check whether the saves have been synced.
 
 ## Steam-side outcomes
 

@@ -138,8 +138,7 @@ switch. What happens depends on whether the version you're leaving is downloaded
   switches), **Switch anyway** (the saves stay on disk but stop syncing until you switch back to that version), and
   **Cancel**. When RomM is unreachable the saves can't be uploaded, so the dialog drops the sync option and offers only
   **Switch anyway** and **Cancel**, explaining why. The same goes for a version that is no longer available on RomM: its
-  saves can't be uploaded there, so only **Switch anyway** and **Cancel** are offered, and the saves stay on this
-  device.
+  saves can't be uploaded there, so only **Switch anyway** and **Cancel** are offered, and the saves stay on disk.
 - **Leaving a downloaded version whose saves Tender couldn't check** — a save file it can't read, for instance — the
   same dialog warns you, and says that Tender couldn't check whether the saves have been synced rather than that they
   weren't.
