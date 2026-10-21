@@ -25,6 +25,7 @@ from domain.tender_folder import (
     FOLDER_NAME,
     FOLDER_NOT_WRITABLE,
     PLACE_SETTING,
+    already_current,
     current_folder_refusal,
     drive_below,
     drive_not_mounted,
@@ -36,6 +37,7 @@ from domain.tender_folder import (
     shown_folder,
     shown_place,
     sources_unreadable,
+    tender_parent,
     typed_place,
     unreachable_message,
     unreachable_state,
@@ -122,8 +124,9 @@ class TenderFolderService:
         ``{"place", "folder", "tender_parent", "existing", "missing"}``
         (:class:`domain.tender_folder.PlaceAsks`). Refuses
         ``place_not_absolute``, ``place_drive_not_mounted``,
-        ``sources_unreadable``, ``place_in_rom_folder`` and
-        ``place_above_rom_folder``.
+        ``place_is_current_folder``, ``place_in_current_folder``,
+        ``place_above_current_folder``, ``sources_unreadable``,
+        ``place_in_rom_folder`` and ``place_above_rom_folder``.
         """
         text = _typed(path)
         return await self._loop.run_in_executor(None, self._check_io, text)
@@ -298,7 +301,12 @@ class TenderFolderService:
             raise drive_not_mounted(drive)
         folder = self._store.resolved(os.path.join(place, FOLDER_NAME))
         current = self._store.place().folder
-        nested = current_folder_refusal(folder, self._store.resolved(current), shown_folder(text), current)
+        resolved_current = self._store.resolved(current)
+        # A typed path that names the current folder itself means that folder,
+        # not a Tender folder inside it.
+        if tender_parent(place) is not None and self._store.resolved(place) == resolved_current:
+            raise already_current(current)
+        nested = current_folder_refusal(folder, resolved_current, shown_folder(text), current)
         if nested is not None:
             raise nested
         folders = self._sources.rom_folders()

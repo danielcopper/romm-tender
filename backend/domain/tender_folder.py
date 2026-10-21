@@ -262,6 +262,11 @@ def rom_folder_refusal(folder: str, sources: Iterable[SourceRomFolders], shown: 
     return None
 
 
+def already_current(current_shown: str) -> DomainRefused:
+    """The answer to a place whose folder is Tender's current folder, *current_shown* as the settings name it."""
+    return DomainRefused(PLACE_IS_CURRENT_FOLDER, f"{current_shown} is already Tender's folder.", folder=current_shown)
+
+
 def current_folder_refusal(folder: str, current: str, shown: str, current_shown: str) -> DomainRefused | None:
     """Why *folder* may not be Tender's folder because of Tender's *current* folder, or ``None``.
 
@@ -271,9 +276,7 @@ def current_folder_refusal(folder: str, current: str, shown: str, current_shown:
     it, or holding it, is refused.
     """
     if folder == current:
-        return DomainRefused(
-            PLACE_IS_CURRENT_FOLDER, f"{current_shown} is already Tender's folder.", folder=current_shown
-        )
+        return already_current(current_shown)
     if inside(folder, current):
         return DomainRefused(
             PLACE_IN_CURRENT_FOLDER,

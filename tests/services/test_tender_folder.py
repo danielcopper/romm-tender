@@ -375,16 +375,30 @@ class TestTheCurrentFolderRule:
         assert refused.value.reason == "place_is_current_folder"
         assert refused.value.message == f"{rig.home / 'Tender'} is already Tender's folder."
 
-    async def test_tender_typed_while_the_folder_is_the_default_is_refused_before_any_question(self, tmp_path):
+    @pytest.mark.parametrize("typed", ["~/Tender", "~/Tender/"])
+    async def test_the_current_folder_typed_by_its_own_name_is_already_tenders_folder_before_any_question(
+        self, tmp_path, typed
+    ):
         rig = _Rig(tmp_path, sources=None)
         (rig.home / "Tender").mkdir()
 
         with pytest.raises(DomainRefused) as refused:
-            await rig.service.check_tender_place("~/Tender")
+            await rig.service.check_tender_place(typed)
+
+        assert refused.value.reason == "place_is_current_folder"
+        assert refused.value.message == f"{rig.home / 'Tender'} is already Tender's folder."
+
+    async def test_a_place_inside_the_current_folder_is_refused_before_any_question(self, tmp_path):
+        rig = _Rig(tmp_path, sources=None)
+        (rig.home / "Tender" / "Games").mkdir(parents=True)
+
+        with pytest.raises(DomainRefused) as refused:
+            await rig.service.check_tender_place("~/Tender/Games")
 
         assert refused.value.reason == "place_in_current_folder"
         assert refused.value.message == (
-            f"~/Tender/Tender lies inside Tender's current folder ({rig.home / 'Tender'}). Choose a place outside it."
+            f"~/Tender/Games/Tender lies inside Tender's current folder ({rig.home / 'Tender'}). "
+            "Choose a place outside it."
         )
 
     async def test_a_place_whose_folder_would_hold_the_current_one_is_refused_and_nothing_switches(self, tmp_path):
