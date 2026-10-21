@@ -3,9 +3,9 @@
  * the settings section and Main's notices make to it — a tile's choice, a
  * switch to a recorded folder, forgetting one — and the state the "Another
  * folder…" window hands over once it has chosen a typed place itself. Each
- * answers the state as it now stands, which replaces the one held, and every
- * switch that took effect is confirmed with a toast; a refusal keeps the state
- * and holds the sentence it is shown with until the next change.
+ * answers the state as it now stands, which replaces the one held; a refusal
+ * keeps the state and holds the sentence it is shown with until the next
+ * change.
  */
 
 import { useEffect, useState } from "react";
@@ -19,8 +19,7 @@ import {
 } from "../api/backend";
 import type { TenderFolderForgetRefusal, TenderFolderRefusal, TenderFolderState, TenderPlaceRefusal } from "../types";
 import { detach } from "../utils/detach";
-import { placeRefusalSentence, switchedToast } from "../utils/tenderFolderWording";
-import { showToast } from "../utils/toast";
+import { placeRefusalSentence } from "../utils/tenderFolderWording";
 import { showForgetRecordedModal } from "./settings/TenderFolderModals";
 
 export interface TenderFolderView {
@@ -32,7 +31,7 @@ export interface TenderFolderView {
   refusal: string | null;
   chooseDefault: () => void;
   chooseDrive: (mountPoint: string) => void;
-  /** A typed place the "Another folder…" window had accepted: the state it answered, confirmed with the toast. */
+  /** A typed place the "Another folder…" window had accepted: the state it answered. */
   acceptTyped: (state: TenderFolderState) => void;
   switchToRecorded: (folder: string) => void;
   forget: (folder: string) => void;
@@ -62,8 +61,8 @@ export function useTenderFolder(): TenderFolderView {
     };
   }, []);
 
-  /** Run *change*; a *switches* change that is answered with a state says so in a toast. */
-  const run = (change: () => Promise<Answer | null>, switches = false) => {
+  /** Run *change*: its state replaces the one held, its refusal is held to be shown. */
+  const run = (change: () => Promise<Answer | null>) => {
     if (busy) return;
     setBusy(true);
     detach(
@@ -76,7 +75,6 @@ export function useTenderFolder(): TenderFolderView {
           } else {
             setRefusal(null);
             setState(answer);
-            if (switches) showToast(switchedToast(answer));
           }
         } catch (e) {
           logError(`Failed to change Tender's folder: ${e}`);
@@ -91,14 +89,13 @@ export function useTenderFolder(): TenderFolderView {
     state,
     busy,
     refusal,
-    chooseDefault: () => run(() => chooseTenderPlace(null), true),
-    chooseDrive: (mountPoint) => run(() => chooseTenderPlace(mountPoint), true),
+    chooseDefault: () => run(() => chooseTenderPlace(null)),
+    chooseDrive: (mountPoint) => run(() => chooseTenderPlace(mountPoint)),
     acceptTyped: (accepted) => {
       setRefusal(null);
       setState(accepted);
-      showToast(switchedToast(accepted));
     },
-    switchToRecorded: (folder) => run(() => switchToRecordedTenderFolder(folder), true),
+    switchToRecorded: (folder) => run(() => switchToRecordedTenderFolder(folder)),
     forget: (folder) =>
       run(async () => ((await showForgetRecordedModal(folder)) ? forgetTenderFolderRecords(folder) : null)),
   };

@@ -75,7 +75,6 @@ const DRIVE_KINDS: Record<TenderFolderDriveKind, string> = {
 };
 
 export const INTERNAL_KIND = "Internal storage";
-export const INTERNAL_NAME = "This device";
 export const INTERNAL_FOLDER = "~/Tender";
 export const DEFAULT_TAG = "Default";
 export const IN_USE_BADGE = "In use";
@@ -117,13 +116,6 @@ const CONDITION_PILLS: Record<TenderFolderCondition, string> = {
 /** The pill beside the place in use: reachable, or why its folder cannot be used. */
 export function conditionPill(condition: TenderFolderCondition | null): string {
   return condition === null ? "Reachable" : CONDITION_PILLS[condition];
-}
-
-/** The toast after a switch: the new place by the name its tile carries, or its folder where no tile names it. */
-export function switchedToast(state: TenderFolderState): string {
-  const drive = driveInUse(state);
-  const label = state.default ? INTERNAL_NAME : drive === null ? state.folder : `${driveKind(drive)} · ${drive.name}`;
-  return `Tender's folder is now on ${label}.`;
 }
 
 export function freeLine(bytes: number): string {

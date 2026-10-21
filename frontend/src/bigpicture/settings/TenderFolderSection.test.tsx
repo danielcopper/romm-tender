@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, within } from "@testing-library/react";
 import { showModal } from "@decky/ui";
 import type { ReactElement } from "react";
 import type { TenderFolderDrive, TenderFolderState } from "../../types";
@@ -94,12 +94,11 @@ describe("TenderFolderSection", () => {
     expect(elsewhere.getByText("In use: Another folder")).toBeInTheDocument();
   });
 
-  it("offers one tile per place, two to a row: the internal storage marked Default, then each drive by kind", () => {
+  it("offers one tile per place, two to a row: the internal storage tagged Default, then each drive by kind", () => {
     const { getByTestId, container } = render(<TenderFolderSection folder={view({ drives: [SD, USB, NVME] })} />);
 
     const internal = getByTestId("tender-folder-tile-internal");
     expect(internal).toHaveTextContent("Internal storage");
-    expect(internal).toHaveTextContent("This device");
     expect(internal).toHaveTextContent("Default");
     expect(internal).toHaveTextContent("~/Tender");
     expect(internal).toHaveTextContent("41.00 GB free");
@@ -243,17 +242,63 @@ describe("TenderFolderSection", () => {
     expect((tile.firstElementChild as HTMLElement).style.whiteSpace).toBe("nowrap");
   });
 
-  it("on the tile in use, the Default tag wraps to a line of its own rather than run under the badge", () => {
-    const { getByTestId } = render(<TenderFolderSection folder={view()} />);
-    const kindLine = getByTestId("tender-folder-tile-internal").firstElementChild as HTMLElement;
-    const kind = kindLine.firstElementChild as HTMLElement;
+  it("a tile opens with its kind, keeping room for the badge, and carries no name line", () => {
+    const { getByTestId } = render(<TenderFolderSection folder={view({ drives: [SD] })} />);
+    const internal = getByTestId("tender-folder-tile-internal");
+    const kind = internal.firstElementChild as HTMLElement;
+    const sd = getByTestId(`tender-folder-tile-${SD.mount_point}`);
 
-    expect(kindLine.style.flexWrap).toBe("wrap");
-    expect(kindLine.style.paddingRight).toBe("56px");
-    expect(kindLine).toHaveTextContent("Default");
-    expect(kind).toHaveTextContent("Internal storage");
-    expect(kind.style.overflow).toBe("hidden");
+    expect(kind).toHaveTextContent(/^Internal storage$/);
+    expect(kind.style.paddingRight).toBe("64px");
     expect(kind.style.textOverflow).toBe("ellipsis");
+    expect(internal).not.toHaveTextContent("This device");
+    // Kind, tag, folder, free space — and nothing between the tag and the folder.
+    expect([...sd.children].map((line) => line.textContent)).toEqual([
+      "SD card",
+      "Emulation",
+      SD.folder,
+      "460.00 GB free",
+    ]);
+  });
+
+  it("tags the internal tile Default in green and a drive's tile with its name in violet", () => {
+    const { getByTestId } = render(<TenderFolderSection folder={view({ drives: [SD] })} />);
+    const internalTag = within(getByTestId("tender-folder-tile-internal")).getByTestId("tender-folder-tag");
+    const sdTag = within(getByTestId(`tender-folder-tile-${SD.mount_point}`)).getByTestId("tender-folder-tag");
+
+    expect(internalTag).toHaveTextContent(/^Default$/);
+    expect(internalTag).toHaveAttribute("data-tag", "default");
+    expect(internalTag.style.color).toBe("#5ba32b");
+    expect(sdTag).toHaveTextContent(/^Emulation$/);
+    expect(sdTag).toHaveAttribute("data-tag", "drive");
+    expect(sdTag.style.color).toBe("#a48fd4");
+  });
+
+  it("the free space, and a drive's Not connected in its place, sit at the foot of the tile on its right", () => {
+    const sd = "/run/media/deck/Emulation";
+    const { getByTestId } = render(
+      <TenderFolderSection
+        folder={view({
+          default: false,
+          place: sd,
+          folder: `${sd}/Tender`,
+          condition: "drive_not_mounted",
+          drives: [USB],
+          drive: { kind: "sd_card", name: "Emulation", mount_point: sd, connected: false },
+        })}
+      />,
+    );
+    const footOf = (key: string) => getByTestId(`tender-folder-tile-${key}`).lastElementChild as HTMLElement;
+
+    for (const [key, text] of [
+      ["internal", "41.00 GB free"],
+      [USB.mount_point, "free"],
+      [sd, "Not connected"],
+    ] as const) {
+      expect(footOf(key)).toHaveTextContent(text);
+      expect(footOf(key).style.marginTop).toBe("auto");
+      expect(footOf(key).style.alignSelf).toBe("flex-end");
+    }
   });
 
   it("a path may break only after a slash", () => {

@@ -1,8 +1,8 @@
 /**
  * Tender folder — where Tender keeps its own files: a status line naming the
  * place in use, its state and its folder; one tile per place, two to a row —
- * the internal storage, marked Default, and each writable drive by its kind and
- * name — the place in use outlined; and "Another folder…". Choosing switches
+ * the internal storage, tagged Default, and each writable drive by its kind,
+ * tagged with its name — the place in use outlined; and "Another folder…". Choosing switches
  * the place and nothing else. The parent owns the folder's state and the
  * changes a tile makes; "Another folder…" opens its window, which checks and
  * chooses a typed place through the backend itself and hands the parent the
@@ -26,7 +26,6 @@ import {
   DEFAULT_TAG,
   INTERNAL_FOLDER,
   INTERNAL_KIND,
-  INTERNAL_NAME,
   IN_USE_BADGE,
   NOT_CONNECTED,
   NO_DRIVE_NOTE,
@@ -37,7 +36,7 @@ import {
   freeLine,
   inUseLabel,
 } from "../../utils/tenderFolderWording";
-import { AMBER, GREEN, MUTED, SELECTION_ACCENT, useFocusWithin } from "../layout/pane";
+import { AMBER, GREEN, MUTED, SELECTION_ACCENT, VIOLET, useFocusWithin } from "../layout/pane";
 import { WarningCard } from "../WarningCard";
 import { checkTenderPlace, chooseTenderPlace } from "../../api/backend";
 import { AnotherFolderModal } from "./AnotherFolderModal";
@@ -50,12 +49,19 @@ const TILE_IN_USE = "#24364a";
 const DIVIDER = "#2a323d";
 const TEXT = "#dfe3e8";
 
+// The tag under a tile's kind: green for the default place, violet for a
+// drive's name — neither blue, which the In use badge and outline are. Each
+// fill is its colour at about a fifth of its strength.
+const TAG_DEFAULT = { color: GREEN, background: `${GREEN}2e` } as const;
+const TAG_DRIVE = { color: VIOLET, background: `${VIOLET}33` } as const;
+
 const MONO: CSSProperties = { fontFamily: "monospace", fontSize: "12px", color: MUTED };
 
 interface Tile {
   key: string;
   kind: string;
-  name: string;
+  /** The tag under the kind: Default on the internal tile, the drive's own name on a drive's. */
+  tag: string;
   folder: string;
   /** `null` where the space free is not known: a drive in use the drives list does not carry. */
   freeBytes: number | null;
@@ -89,7 +95,7 @@ function tilesOf(state: TenderFolderState, folder: TenderFolderView): Tile[] {
   const internal: Tile = {
     key: "internal",
     kind: INTERNAL_KIND,
-    name: INTERNAL_NAME,
+    tag: DEFAULT_TAG,
     folder: INTERNAL_FOLDER,
     freeBytes: state.home_free_bytes,
     isDefault: true,
@@ -100,7 +106,7 @@ function tilesOf(state: TenderFolderState, folder: TenderFolderView): Tile[] {
   const drives = state.drives.map((drive): Tile => ({
     key: drive.mount_point,
     kind: driveKind(drive),
-    name: drive.name,
+    tag: drive.name,
     folder: drive.folder,
     freeBytes: drive.free_bytes,
     isDefault: false,
@@ -116,7 +122,7 @@ function tilesOf(state: TenderFolderState, folder: TenderFolderView): Tile[] {
     drives.push({
       key: unlisted.mount_point,
       kind: driveKind(unlisted),
-      name: unlisted.name,
+      tag: unlisted.name,
       folder: state.folder,
       freeBytes: null,
       isDefault: false,
@@ -146,6 +152,9 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
       style={{
         flex: "1 1 0",
         minWidth: 0,
+        // The tile fills its row's height, so its free line can sit at the bottom.
+        display: "flex",
+        flexDirection: "column",
         position: "relative",
         boxSizing: "border-box",
         padding: "14px 16px",
@@ -161,44 +170,20 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
         data-testid={`tender-folder-tile-${tile.key}`}
         data-not-connected={tile.notConnected ? "true" : undefined}
         data-in-use={tile.inUse ? "true" : undefined}
-        style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}
+        style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", gap: "6px", minWidth: 0 }}
       >
         <span
           style={{
-            display: "flex",
-            // The Default tag moves to a line of its own where it does not fit
-            // beside the kind, rather than running past the room kept for the badge.
-            flexWrap: "wrap",
-            gap: "4px 8px",
-            alignItems: "center",
-            whiteSpace: "nowrap",
-            fontSize: "11px",
             fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: MUTED,
-            // Room for the badge in the corner, so nothing on this line runs under it.
-            paddingRight: tile.inUse ? "56px" : 0,
+            fontSize: "16px",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            // Room for the badge in the corner, so the kind never runs under it.
+            paddingRight: tile.inUse ? "64px" : 0,
           }}
         >
-          <span style={{ minWidth: 0, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {tile.kind}
-          </span>
-          {tile.isDefault && (
-            <span
-              style={{
-                fontSize: "10px",
-                fontWeight: 400,
-                letterSpacing: "0.06em",
-                textTransform: "none",
-                padding: "1px 6px",
-                border: `1px solid ${DIVIDER}`,
-                borderRadius: "3px",
-              }}
-            >
-              {DEFAULT_TAG}
-            </span>
-          )}
+          {tile.kind}
         </span>
         {tile.inUse && (
           <span
@@ -217,9 +202,30 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
             {IN_USE_BADGE}
           </span>
         )}
-        <span style={{ fontWeight: 600, fontSize: "17px" }}>{tile.name}</span>
+        <span style={{ display: "flex", minWidth: 0 }}>
+          <span
+            data-testid="tender-folder-tag"
+            data-tag={tile.isDefault ? "default" : "drive"}
+            style={{
+              ...(tile.isDefault ? TAG_DEFAULT : TAG_DRIVE),
+              fontSize: "12px",
+              fontWeight: 600,
+              padding: "2px 9px",
+              borderRadius: "999px",
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {tile.tag}
+          </span>
+        </span>
         <Path path={tile.folder} />
-        {free !== null && <span style={{ fontSize: "13px", color: MUTED }}>{free}</span>}
+        {/* At the foot of the tile and to its right, so the tiles of a row line up whatever their heights. */}
+        {free !== null && (
+          <span style={{ marginTop: "auto", alignSelf: "flex-end", fontSize: "13px", color: MUTED }}>{free}</span>
+        )}
       </div>
     </Focusable>
   );

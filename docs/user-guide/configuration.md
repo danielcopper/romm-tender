@@ -359,12 +359,12 @@ used: **Not connected**, **Missing** or **Not writable**; the folder itself is u
 Below it, one tile per place, two to a row; the tile of the place in use is outlined and marked **In use**, and pressing
 it does nothing.
 
-- **Internal storage**, marked **Default**, puts the folder back in your home folder, `~/Tender`.
-- Each writable drive mounted under `/run/media/<user>/` gets a tile named by its kind and its name — **SD card**, **USB
-  drive**, or **Drive** for any other — and puts the folder at that drive's root. Tender tells the kind from the device
-  behind the mount, and keeps the kind and name with your choice. With no drive connected, a line says to insert an SD
-  card or connect a drive.
-- Every tile shows the folder it would use and the space free there.
+- **Internal storage**, tagged **Default**, puts the folder back in your home folder, `~/Tender`.
+- Each writable drive mounted under `/run/media/<user>/` gets a tile headed by its kind — **SD card**, **USB drive**, or
+  **Drive** for any other — and tagged with its name, and puts the folder at that drive's root. Tender tells the kind
+  from the device behind the mount, and keeps the kind and name with your choice. With no drive connected, a line says
+  to insert an SD card or connect a drive.
+- Every tile shows the folder it would use and, at its foot, the space free there.
 - When the place in use is a drive that is not connected, its tile stays, greyed and outlined, with **Not connected** in
   place of the free space, and the line at the top still names it by the kind and name kept with your choice.
 - **Another folder…**, with the line "Type a path, for example a folder on one of the drives above", opens one window
@@ -378,8 +378,7 @@ it does nothing.
 
 A place whose `Tender/` would be the folder in use is answered as already Tender's folder, and so is a typed path that
 names the folder in use itself, such as `~/Tender` while it lies there; one whose `Tender/` would lie inside the folder
-in use, or hold it, is refused — all before any question. After a switch, a short message names the new place:
-**Tender's folder is now on This device.**, on the drive by its kind and name, or on the folder.
+in use, or hold it, is refused — all before any question.
 
 A place is refused where `Tender/` would lie inside an emulator source's ROM folder or inside the folder a source keeps
 a system's games in — also where that folder is a link to another drive — or would hold a ROM folder. So is a place

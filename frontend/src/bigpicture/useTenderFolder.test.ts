@@ -83,70 +83,44 @@ describe("useTenderFolder", () => {
     expect(hook.result.current.state).toEqual(TENDER_FOLDER_AT_HOME);
   });
 
-  describe("the toast after a switch", () => {
-    it("names a drive by its kind and name", async () => {
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseDrive("/run/media/deck/SD"));
-
-      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on SD card · Emulation."));
+  it("a typed place the window accepted becomes the state held, and the last refusal goes", async () => {
+    vi.mocked(backend.chooseTenderPlace).mockResolvedValue({
+      success: false,
+      reason: "place_not_writable",
+      message: "/locked cannot be written to.",
     });
+    const accepted = {
+      ...TENDER_FOLDER_AT_HOME,
+      place: "/home/deck/Games",
+      folder: "/home/deck/Games/Tender",
+      default: false,
+    };
+    const hook = await mounted();
+    act(() => hook.result.current.chooseDrive("/locked"));
+    await waitFor(() => expect(hook.result.current.refusal).toBe("/locked cannot be written to."));
 
-    it("names the internal storage as this device", async () => {
-      vi.mocked(backend.chooseTenderPlace).mockResolvedValue(TENDER_FOLDER_AT_HOME);
-      const hook = await mounted();
+    act(() => hook.result.current.acceptTyped(accepted));
 
-      act(() => hook.result.current.chooseDefault());
+    expect(hook.result.current.state).toEqual(accepted);
+    expect(hook.result.current.refusal).toBeNull();
+  });
 
-      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on This device."));
-    });
+  it("no switch raises a toast: a tile, the default, a recorded folder or a typed place", async () => {
+    vi.mocked(backend.switchToRecordedTenderFolder).mockResolvedValue(ON_SD);
+    const hook = await mounted();
 
-    it("names another folder by its path, once the window accepted it", async () => {
-      const accepted = {
-        ...TENDER_FOLDER_AT_HOME,
-        place: "/home/deck/Games",
-        folder: "/home/deck/Games/Tender",
-        default: false,
-      };
-      const hook = await mounted();
+    act(() => hook.result.current.chooseDrive("/run/media/deck/SD"));
+    await waitFor(() => expect(hook.result.current.state).toEqual(ON_SD));
+    await waitFor(() => expect(hook.result.current.busy).toBe(false));
+    vi.mocked(backend.chooseTenderPlace).mockResolvedValue(TENDER_FOLDER_AT_HOME);
+    act(() => hook.result.current.chooseDefault());
+    await waitFor(() => expect(hook.result.current.state).toEqual(TENDER_FOLDER_AT_HOME));
+    await waitFor(() => expect(hook.result.current.busy).toBe(false));
+    act(() => hook.result.current.switchToRecorded("/run/media/deck/SD/Tender"));
+    await waitFor(() => expect(hook.result.current.state).toEqual(ON_SD));
+    act(() => hook.result.current.acceptTyped(TENDER_FOLDER_AT_HOME));
 
-      act(() => hook.result.current.acceptTyped(accepted));
-
-      expect(hook.result.current.state).toEqual(accepted);
-      expect(showToast).toHaveBeenCalledWith("Tender's folder is now on /home/deck/Games/Tender.");
-    });
-
-    it("names a drive that is gone by what was stored with the choice", async () => {
-      vi.mocked(backend.chooseTenderPlace).mockResolvedValue({
-        ...ON_SD,
-        drives: [],
-        drive: { kind: "sd_card", name: "Emulation", mount_point: "/run/media/deck/SD", connected: false },
-      });
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseDrive("/run/media/deck/SD"));
-
-      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Tender's folder is now on SD card · Emulation."));
-    });
-
-    it("is not raised for a refused choice or for forgetting", async () => {
-      vi.mocked(backend.chooseTenderPlace).mockResolvedValue({
-        success: false,
-        reason: "place_not_writable",
-        message: "/locked cannot be written to.",
-      });
-      vi.mocked(backend.forgetTenderFolderRecords).mockResolvedValue(TENDER_FOLDER_AT_HOME);
-      vi.mocked(showForgetRecordedModal).mockResolvedValue(true);
-      const hook = await mounted();
-
-      act(() => hook.result.current.chooseDrive("/locked"));
-      await waitFor(() => expect(hook.result.current.refusal).toBe("/locked cannot be written to."));
-      act(() => hook.result.current.forget("/sd/Tender"));
-      await waitFor(() => expect(backend.forgetTenderFolderRecords).toHaveBeenCalled());
-      await waitFor(() => expect(hook.result.current.busy).toBe(false));
-
-      expect(showToast).not.toHaveBeenCalled();
-    });
+    expect(showToast).not.toHaveBeenCalled();
   });
 
   it("forgets only after the confirmation", async () => {
