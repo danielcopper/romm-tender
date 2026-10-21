@@ -9,13 +9,14 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_conflict_rules
+from _factories import _make_conflict_rules, _refused_by_conflict_rule
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
 from domain.artwork_paths import cover_meta_filename
 from domain.artwork_slot import ArtworkSlot
+from domain.artwork_slot_choice import ArtworkSlotChoice
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
 from domain.cover_refresh import scan_cover_refresh_candidates
 from domain.rom import Rom
@@ -2558,3 +2559,120 @@ class TestACoverSetInSteamIsLeftAlone:
 
         assert await self._count(artwork_service, uow) == 0
         assert file_store.read_paths == []
+
+
+class TestACoverTheUserChoseIsLeftAlone:
+    """The RomM cover refresh, its preview count and the apply's cover download leave a chosen cover alone (D1)."""
+
+    _OLD = "/cover/big.png?ts=2026-01-01 00:00:00"
+    _NEW = "/cover/big.png?ts=2026-07-11 12:00:00"
+
+    @pytest.fixture
+    def grid(self, steam_config, file_store, tmp_path):
+        grid_dir = str(tmp_path / "grid")
+        steam_config.grid_dir.return_value = grid_dir
+        file_store.files[os.path.join(grid_dir, "99999p.png")] = b"chosen from steamgriddb"
+        steam_config.grid_file_names.return_value = frozenset({"99999p.png"})
+        return grid_dir
+
+    def _seed(self, uow, file_store, cover_cache_dir, *, chosen: bool):
+        file_store.files[_cache(cover_cache_dir, 42)] = b"tenders"
+        _seed_rom(uow, 42, app_id=99999, cover_source=self._OLD)
+        with uow:
+            uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_set(
+                    rom_id=42,
+                    slot=ArtworkSlot.COVER,
+                    sgdb_id=7,
+                    image_id=12,
+                    image_sha256=hashlib.sha256(b"chosen from steamgriddb").hexdigest(),
+                    recorded_at=1.0,
+                )
+            )
+            if chosen:
+                uow.artwork_slot_choices.save(
+                    ArtworkSlotChoice(rom_id=42, slot=ArtworkSlot.COVER, image_id=12, chosen_at=1.0)
+                )
+
+    def _fetched(self):
+        return [{"id": 42, "name": "Game", "path_cover_large": self._NEW}]
+
+    @pytest.mark.asyncio
+    async def test_the_refresh_and_its_count_skip_it(
+        self, artwork_service, uow, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir, chosen=True)
+
+        count = await artwork_service.count_cover_refreshes(self._fetched(), _registry(uow))
+        refreshed = await artwork_service.refresh_changed_covers(
+            self._fetched(), _registry(uow), emit_progress=_noop_emit_progress, is_cancelling=_not_cancelling
+        )
+
+        assert (count, refreshed) == (0, [])
+        romm_api.download_cover.assert_not_called()
+        assert file_store.files[os.path.join(grid, "99999p.png")] == b"chosen from steamgriddb"
+        with uow:
+            assert uow.roms.get(42).cover_source == self._OLD
+
+    @pytest.mark.asyncio
+    async def test_the_apply_download_leaves_it_out(
+        self, artwork_service, uow, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir, chosen=True)
+
+        paths = await artwork_service.download_artwork(
+            self._fetched(), emit_progress=_noop_emit_progress, is_cancelling=_not_cancelling
+        )
+
+        assert paths == {}
+        romm_api.download_cover.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_the_same_cover_without_a_choice_follows_romm(
+        self, artwork_service, uow, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir, chosen=False)
+        romm_api.download_cover.side_effect = _writing_download(file_store, b"fresh cover")
+
+        refreshed = await artwork_service.refresh_changed_covers(
+            self._fetched(), _registry(uow), emit_progress=_noop_emit_progress, is_cancelling=_not_cancelling
+        )
+
+        assert refreshed == [{"rom_id": 42, "app_id": 99999}]
+
+
+class TestTheCoverSlotReader:
+    @pytest.mark.parametrize(
+        ("files", "set_in_steam"),
+        [({"99999p.png": b"tenders"}, False), ({"99999p.png": b"tenders", "99999p.jpg": b"hand-set"}, True)],
+        ids=["tenders", "a-jpg-beside-it"],
+    )
+    def test_it_tells_a_cover_set_in_steam(
+        self, artwork_service, uow, steam_config, file_store, cover_cache_dir, tmp_path, files, set_in_steam
+    ):
+        grid = str(tmp_path / "grid")
+        steam_config.grid_dir.return_value = grid
+        for name, data in files.items():
+            file_store.files[os.path.join(grid, name)] = data
+        steam_config.grid_file_names.return_value = frozenset(files)
+        file_store.files[_cache(cover_cache_dir, 42)] = b"tenders"
+        _seed_rom(uow, 42, app_id=99999)
+
+        assert artwork_service.is_cover_set_in_steam(42, 99999) is set_in_steam
+
+    @pytest.mark.asyncio
+    async def test_the_unchecked_refresh_runs_where_the_rules_refuse_the_checked_one(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, tmp_path
+    ):
+        steam_config.grid_dir.return_value = str(tmp_path / "grid")
+        _seed_rom(uow, 42, app_id=99999)
+        romm_api.get_rom.return_value = {"id": 42, "path_cover_large": "/cover/big.png"}
+        romm_api.download_cover.side_effect = _writing_download(file_store, b"fresh cover")
+        artwork_service._rules = _make_conflict_rules(update_in_progress=True)
+
+        with _refused_by_conflict_rule("blocked_by_update"):
+            await artwork_service.refresh_cover(42)
+        result = await artwork_service.refresh_cover_unchecked(42)
+
+        assert result["success"] is True
+        assert file_store.files[_cache(cover_cache_dir, 42)] == b"fresh cover"

@@ -56,6 +56,7 @@ from domain.artwork_paths import (
     staging_filename,
     with_tmp_suffix,
 )
+from domain.artwork_slot import ArtworkSlot
 from domain.cover_refresh import cover_ts_only_change, scan_cover_refresh_candidates
 from domain.sync_stage import SyncStage
 from lib.errors import Refused, RommNotFoundError, with_system_text
@@ -207,8 +208,8 @@ class ArtworkService:
         fingerprint even for fallback covers — the caller keys its own
         derivation off it. Absent/unread, ``download_artwork`` behaves as before.
 
-        A bound ROM whose cover is set in Steam is left out of both: nothing
-        is downloaded for it, and with no cache path the commit copies nothing
+        A bound ROM whose cover is set in Steam, or chosen by the user, is left
+        out of both: nothing is downloaded for it, and with no cache path the commit copies nothing
         over its ``{app_id}p.png`` and adopts no new ``cover_source``, so a
         cover change RomM made stays pending.
 
@@ -226,7 +227,7 @@ class ArtworkService:
             return cover_paths
 
         self._cover_art_file_store.make_dirs(self._cover_cache_dir)
-        set_in_steam = await self._loop.run_in_executor(None, self._bound_covers_set_in_steam_io, all_roms)
+        left_alone = await self._loop.run_in_executor(None, self._bound_covers_left_alone_io, all_roms)
         total = len(all_roms)
         cover_target = f"Preparing covers for {label}" if label else "Preparing covers"
 
@@ -246,7 +247,7 @@ class ArtworkService:
                     sub_stage="covers",
                 )
 
-            prepared = await self._prepare_cover(rom, grid, set_in_steam)
+            prepared = await self._prepare_cover(rom, grid, left_alone)
             if prepared is None:
                 continue
             cover_paths[rom["id"]], applied_source = prepared
@@ -255,15 +256,15 @@ class ArtworkService:
 
         return cover_paths
 
-    async def _prepare_cover(self, rom: dict[str, Any], grid: str, set_in_steam: set[int]) -> tuple[str, str] | None:
+    async def _prepare_cover(self, rom: dict[str, Any], grid: str, left_alone: set[int]) -> tuple[str, str] | None:
         """Ready *rom*'s cover in the cache, returning ``(cache_path, applied_source)``.
 
         ``applied_source`` is the cover source the cache bytes came from.
-        ``None`` where *rom* has no cover, its ID is among *set_in_steam*, or
+        ``None`` where *rom* has no cover, its ID is among *left_alone*, or
         the download failed, which is logged.
         """
         cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
-        if not cover_url or rom["id"] in set_in_steam:
+        if not cover_url or rom["id"] in left_alone:
             return None
 
         rom_id = rom["id"]
@@ -386,8 +387,8 @@ class ArtworkService:
         the apply's group collapse diffs against, so the pass opens no extra
         per-ROM DB lookups of its own.
 
-        A changed cover that is set in Steam (:meth:`_covers_set_in_steam_io`)
-        is skipped: its cache and its fingerprint stay as they are, so RomM's
+        A changed cover that is set in Steam, or that the user chose
+        (:meth:`_covers_left_alone_io`), is skipped: its cache and its fingerprint stay as they are, so RomM's
         change stays pending (what becomes of it: docs/architecture/backend-architecture.md,
         "Cover-cache invalidation").
 
@@ -404,7 +405,7 @@ class ArtworkService:
         )
         if adoptions:
             await self._loop.run_in_executor(None, self._adopt_cover_sources_io, adoptions)
-        changed = await self._without_covers_set_in_steam(changed)
+        changed = await self._without_covers_left_alone(changed)
         if not changed:
             return []
 
@@ -443,21 +444,32 @@ class ArtworkService:
 
         The changed covers of the kernel the pass scans by
         (:func:`domain.cover_refresh.scan_cover_refresh_candidates`), less the
-        ones set in Steam, read the same way the pass reads them. It reads the
-        grid directory, the cover cache and the recorded outcomes; it downloads
-        and writes nothing.
+        ones set in Steam or chosen by the user, read the same way the pass
+        reads them. It reads the grid directory, the cover cache, the recorded
+        outcomes and the choices; it downloads and writes nothing.
         """
         changed = scan_cover_refresh_candidates(all_roms, registry).changed
-        return len(await self._without_covers_set_in_steam(changed))
+        return len(await self._without_covers_left_alone(changed))
 
-    async def _without_covers_set_in_steam(self, changed: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
+    async def _without_covers_left_alone(self, changed: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
         if not changed:
             return []
         covers = [(rom_id, app_id) for rom_id, app_id, _ in changed]
-        set_in_steam = await self._loop.run_in_executor(None, self._covers_set_in_steam_io, covers)
-        if set_in_steam:
-            self._logger.info(f"Cover refresh: {len(set_in_steam)} changed cover(s) set in Steam are left alone")
-        return [entry for entry in changed if entry[0] not in set_in_steam]
+        left_alone = await self._loop.run_in_executor(None, self._covers_left_alone_io, covers)
+        if left_alone:
+            self._logger.info(
+                f"Cover refresh: {len(left_alone)} changed cover(s) set in Steam or chosen by the user are left alone"
+            )
+        return [entry for entry in changed if entry[0] not in left_alone]
+
+    def _covers_left_alone_io(self, covers: Collection[tuple[int, int]]) -> set[int]:
+        """The ROMs among *covers*, ``(rom_id, app_id)`` pairs, whose cover the sync leaves alone.
+
+        A cover set in Steam, and one the user chose from SteamGridDB, which
+        the RomM cover refresh leaves alone until the slot is set back to
+        automatic.
+        """
+        return self._covers_set_in_steam_io(covers) | self._chosen_covers_io([rom_id for rom_id, _ in covers])
 
     def _covers_set_in_steam_io(self, covers: Collection[tuple[int, int]]) -> set[int]:
         """The ROMs among *covers*, ``(rom_id, app_id)`` pairs, whose cover is set in Steam."""
@@ -470,15 +482,26 @@ class ArtworkService:
             logger=self._logger,
         )
 
-    def _bound_covers_set_in_steam_io(self, all_roms: list[dict[str, Any]]) -> set[int]:
-        """The ROMs among *all_roms* bound to a shortcut whose cover is set in Steam."""
+    def _chosen_covers_io(self, rom_ids: Collection[int]) -> set[int]:
+        """The ROMs among *rom_ids* whose cover the user chose, in one short read UoW."""
+        if not rom_ids:
+            return set()
+        with self._uow_factory() as uow:
+            return {rom_id for rom_id in rom_ids if uow.artwork_slot_choices.get(rom_id, ArtworkSlot.COVER) is not None}
+
+    def _bound_covers_left_alone_io(self, all_roms: list[dict[str, Any]]) -> set[int]:
+        """The ROMs among *all_roms* bound to a shortcut whose cover the sync leaves alone."""
         with self._uow_factory() as uow:
             bound = [
                 (rom.rom_id, rom.shortcut_app_id)
                 for raw in all_roms
                 if "id" in raw and (rom := uow.roms.get(int(raw["id"]))) is not None and rom.shortcut_app_id is not None
             ]
-        return self._covers_set_in_steam_io(bound)
+        return self._covers_left_alone_io(bound)
+
+    def is_cover_set_in_steam(self, rom_id: int, app_id: int) -> bool:
+        """Implements ``services.protocols.CoverSlotReader.is_cover_set_in_steam``."""
+        return int(rom_id) in self._covers_set_in_steam_io([(int(rom_id), int(app_id))])
 
     def _scan_cover_refresh_candidates(
         self, all_roms: list[dict[str, Any]], registry: dict[str, dict[str, Any]]
@@ -896,44 +919,49 @@ class ArtworkService:
         propagates.
         """
         async with self._rules.hold("refresh_cover_artwork", update=True, migration=True, prune=True):
-            app_id = await self._loop.run_in_executor(None, self._read_bound_app_id, rom_id)
-            if app_id is None:
-                raise Refused("not_synced", "ROM is not synced to Steam")
+            return await self.refresh_cover_unchecked(rom_id)
 
-            grid = self._steam_config.grid_dir()
-            if not grid:
-                raise Refused("no_grid_dir", "Steam grid directory not found")
+    async def refresh_cover_unchecked(self, rom_id: int) -> dict[str, Any]:
+        """:meth:`refresh_cover` without its conflict rules, for a use case that checked its own.
 
-            rom = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
-            if not rom:
-                raise Refused("not_found", "Could not fetch ROM from server")
+        Implements ``services.protocols.CoverSlotReader.refresh_cover_unchecked``.
+        """
+        app_id = await self._loop.run_in_executor(None, self._read_bound_app_id, rom_id)
+        if app_id is None:
+            raise Refused("not_synced", "ROM is not synced to Steam")
 
-            cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
-            if not cover_url:
-                raise Refused("no_cover", "ROM has no cover artwork")
+        grid = self._steam_config.grid_dir()
+        if not grid:
+            raise Refused("no_grid_dir", "Steam grid directory not found")
 
-            cache_path = self._cache_path(rom_id)
-            self._cover_art_file_store.make_dirs(self._cover_cache_dir)
-            try:
-                # A manual repair forces a fresh download (stored_source=None never
-                # matches, so it never revalidates), but still seeds the validator.
-                result = await self._loop.run_in_executor(
-                    None, self._fetch_and_record_cover, rom_id, cover_url, cache_path, rom.get("url_cover"), None
-                )
-            except OSError as e:
-                self._logger.warning(f"refresh_cover: failed to save the cover for rom {rom_id}: {e}")
-                raise Refused(
-                    "download_failed", with_system_text("The cover could not be saved on this device", e)
-                ) from e
+        rom = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
+        if not rom:
+            raise Refused("not_found", "Could not fetch ROM from server")
 
-            self.finalize_cover_path(grid, cache_path, app_id, str(rom_id))
-            await self._loop.run_in_executor(None, self._persist_cover_path, rom_id, cache_path, result.applied_source)
+        cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
+        if not cover_url:
+            raise Refused("no_cover", "ROM has no cover artwork")
 
-            return {
-                "success": True,
-                "message": "Cover refreshed",
-                "cover_path": cache_path,
-            }
+        cache_path = self._cache_path(rom_id)
+        self._cover_art_file_store.make_dirs(self._cover_cache_dir)
+        try:
+            # A manual repair forces a fresh download (stored_source=None never
+            # matches, so it never revalidates), but still seeds the validator.
+            result = await self._loop.run_in_executor(
+                None, self._fetch_and_record_cover, rom_id, cover_url, cache_path, rom.get("url_cover"), None
+            )
+        except OSError as e:
+            self._logger.warning(f"refresh_cover: failed to save the cover for rom {rom_id}: {e}")
+            raise Refused("download_failed", with_system_text("The cover could not be saved on this device", e)) from e
+
+        self.finalize_cover_path(grid, cache_path, app_id, str(rom_id))
+        await self._loop.run_in_executor(None, self._persist_cover_path, rom_id, cache_path, result.applied_source)
+
+        return {
+            "success": True,
+            "message": "Cover refreshed",
+            "cover_path": cache_path,
+        }
 
     def _read_bound_app_id(self, rom_id: int) -> int | None:
         """Return the ROM's ``shortcut_app_id``, or ``None`` when unsynced/unbound."""

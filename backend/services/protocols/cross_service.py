@@ -539,6 +539,26 @@ class ArtworkManager(Protocol):
     def remove_artwork_files(self, grid: str, rom_id: str | int, entry: ShortcutRegistryEntry) -> None: ...
 
 
+class CoverSlotReader(Protocol):
+    """The cover slot as the game page's ARTWORK tab needs it from the cover's owner.
+
+    Implemented by ``ArtworkService``, which owns the RomM cover, its cache and
+    its grid copy; consumed by ``SteamGridService`` for the cover's row and for
+    setting the cover back to automatic.
+    """
+
+    def is_cover_set_in_steam(self, rom_id: int, app_id: int) -> bool:
+        """Whether *app_id*'s cover in Steam's grid directory is not Tender's cover for *rom_id* (sync, reads files)."""
+        ...
+
+    async def refresh_cover_unchecked(self, rom_id: int) -> dict[str, Any]:
+        """Reload *rom_id*'s RomM cover into the cache and the grid copy, without the caller's conflict rules.
+
+        Refuses as ``ArtworkService.refresh_cover`` does.
+        """
+        ...
+
+
 class ArtworkRemover(Protocol):
     """Delete the on-disk artwork files associated with a registry entry.
 
