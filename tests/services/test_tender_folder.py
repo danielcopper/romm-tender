@@ -323,28 +323,35 @@ class TestCheckingATypedPlace:
 
     async def test_a_place_on_a_drive_that_is_not_connected_is_refused_saying_so(self, tmp_path):
         rig = _Rig(tmp_path)
+        place = str(rig.media / "SD" / "Games")
 
         with pytest.raises(DomainRefused) as refused:
-            await rig.service.check_tender_place(str(rig.media / "SD" / "Games"))
+            await rig.service.check_tender_place(place)
 
         assert refused.value.reason == "place_drive_not_mounted"
         assert refused.value.message == "The drive SD is not connected."
 
     async def test_a_relative_path_is_refused(self, tmp_path):
+        service = _Rig(tmp_path).service
+
         with pytest.raises(DomainRefused) as refused:
-            await _Rig(tmp_path).service.check_tender_place("Games")
+            await service.check_tender_place("Games")
 
         assert refused.value.reason == "place_not_absolute"
 
     async def test_a_value_that_is_no_path_is_refused(self, tmp_path):
+        service = _Rig(tmp_path).service
+
         with pytest.raises(Refused) as refused:
-            await _Rig(tmp_path).service.check_tender_place(42)
+            await service.check_tender_place(42)
 
         assert refused.value.reason == "invalid_value"
 
     async def test_a_place_while_the_sources_cannot_be_read_is_refused(self, tmp_path):
+        service = _Rig(tmp_path, sources=None).service
+
         with pytest.raises(DomainRefused) as refused:
-            await _Rig(tmp_path, sources=None).service.check_tender_place("~/Games")
+            await service.check_tender_place("~/Games")
 
         assert refused.value.reason == "sources_unreadable"
         assert refused.value.message == "Tender could not read the emulator sources, so it cannot check this place."

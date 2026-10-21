@@ -134,9 +134,10 @@ def test_a_seal_never_creates_tenders_folder(tmp_path):
     """Creating the folder is its owner's, who writes its id file with it; a seal finds it or fails."""
     folder = tmp_path / "Tender"
     adapter = RecoveryBundleAdapter(folder=lambda: str(folder), version="1.2.3")
+    snapshot, readme = _snapshot(), _readme_context()
 
     with pytest.raises(FileNotFoundError):
-        adapter.seal_bundle("TestGame_2026-07-24_nofold", _snapshot(), [], _readme_context(), "none\n")
+        adapter.seal_bundle("TestGame_2026-07-24_nofold", snapshot, [], readme, "none\n")
 
     assert not folder.exists()
 
