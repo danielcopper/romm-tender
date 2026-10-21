@@ -2600,8 +2600,8 @@ class TestNoCredentialReachesAnErrorOrALog:
         return adapter, settings, log_debug
 
     @staticmethod
-    def _failure(name: str, adapter: RommHttpAdapter, tmp_path) -> Exception:
-        with patch("adapters.romm.retry.time.sleep"), pytest.raises(Exception) as caught:
+    def _failure(name: str, adapter: RommHttpAdapter, tmp_path) -> RommApiError:
+        with patch("adapters.romm.retry.time.sleep"), pytest.raises(RommApiError) as caught:
             _call_request_method(name, adapter, tmp_path)
         return caught.value
 

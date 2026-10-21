@@ -294,6 +294,13 @@ def _refused_message(exc: RommApiError) -> str:
     return f"RomM or a proxy in front of it refused the request ({answer})"
 
 
+def _unsent_token_message(exc: TokenHostMismatchError | TokenUnsendableError) -> str:
+    """:func:`classify_error`'s message for a stored token refused before it is sent."""
+    if isinstance(exc, TokenUnsendableError):
+        return "Your saved RomM login cannot be used. Sign in again to continue."
+    return "Your saved RomM login is for a different server. Sign in again to continue."
+
+
 def classify_error(exc):
     """Return ``(reason, user_friendly_message)`` for an exception.
 
@@ -336,10 +343,8 @@ def classify_error(exc):
         return ErrorCode.NOT_FOUND.value, "Resource not found on server"
     if isinstance(exc, RommUnsupportedError):
         return ErrorCode.UNSUPPORTED.value, f"This feature requires RomM {exc.min_version} or newer"
-    if isinstance(exc, TokenHostMismatchError):
-        return "config_error", "Your saved RomM login is for a different server. Sign in again to continue."
-    if isinstance(exc, TokenUnsendableError):
-        return "config_error", "Your saved RomM login cannot be used. Sign in again to continue."
+    if isinstance(exc, TokenHostMismatchError | TokenUnsendableError):
+        return "config_error", _unsent_token_message(exc)
     if isinstance(exc, RommSyncDisabledError):
         return (
             "device_sync_disabled",

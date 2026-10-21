@@ -16,7 +16,7 @@ import uuid
 import zlib
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, NoReturn
 
 from adapters.romm.retry import RetryLadder, RetryListener
 from domain.custom_headers import stored_custom_headers
@@ -420,15 +420,20 @@ class RommHttpAdapter:
             return RommApiError(f"Unexpected error: {type(exc).__name__}", url=url, method=method)
         return RommApiError(f"Unexpected error: {exc}", url=url, method=method)
 
-    @staticmethod
-    def _shown_cause(exc: Exception) -> Exception | None:
-        """The cause a translated error is raised from: *exc*, or ``None`` for a request that could not be built.
+    def _raise_translated(
+        self, exc: Exception, url: str, method: str = "GET", *, asset_route: bool = False, romm_origin: bool = True
+    ) -> NoReturn:
+        """Raise :meth:`translate_http_error`'s answer for *exc*, chained to *exc*.
 
-        Raising ``from None`` keeps the refused request material out of every
-        traceback of the translated error; Python still sets ``__context__``,
-        which the traceback suppresses.
+        A request that could not be built is raised ``from None`` instead, which
+        keeps the refused request material out of every traceback of the
+        translated error; Python still sets ``__context__``, which the
+        traceback suppresses.
         """
-        return None if _could_not_be_built(exc) else exc
+        error = self.translate_http_error(exc, url, method, asset_route=asset_route, romm_origin=romm_origin)
+        if _could_not_be_built(exc):
+            raise error from None
+        raise error from exc
 
     def translate_http_error(
         self, exc: Exception, url: str, method: str = "GET", *, asset_route: bool = False, romm_origin: bool = True
@@ -578,7 +583,7 @@ class RommHttpAdapter:
             except RommApiError:
                 raise
             except Exception as exc:
-                raise self.translate_http_error(exc, url, "GET") from self._shown_cause(exc)
+                self._raise_translated(exc, url, "GET")
 
         return _do_request
 
@@ -765,7 +770,7 @@ class RommHttpAdapter:
                 # Asset-level 404: a byte fetch answers about a FILE, never about an
                 # entity, so this 404 is never deletion-authority grade and keeps the
                 # plain status mapping. Do not unify it with the API routes' proof.
-                raise self.translate_http_error(exc, url, "GET", asset_route=True) from self._shown_cause(exc)
+                self._raise_translated(exc, url, "GET", asset_route=True)
 
         return self.with_retry(_do_download)
 
@@ -825,11 +830,11 @@ class RommHttpAdapter:
                 # entity, so this 404 is never deletion-authority grade and keeps the
                 # plain status mapping — which is what arms the ``url_cover`` fallback
                 # on a static-mount cover miss. Do not unify it with the API routes.
-                raise self.translate_http_error(exc, url, "GET", asset_route=True) from self._shown_cause(exc)
+                self._raise_translated(exc, url, "GET", asset_route=True)
             except (RommApiError, DeviceWriteError):
                 raise
             except Exception as exc:
-                raise self.translate_http_error(exc, url, "GET") from self._shown_cause(exc)
+                self._raise_translated(exc, url, "GET")
 
         return self.with_retry(_do_conditional)
 
@@ -895,9 +900,7 @@ class RommHttpAdapter:
                 # entity — and this one is a third-party CDN, which has no entity
                 # layer at all. Never deletion-authority grade; keeps the plain
                 # status mapping. Do not unify it with the API routes.
-                raise self.translate_http_error(
-                    exc, encoded_url, "GET", asset_route=True, romm_origin=False
-                ) from self._shown_cause(exc)
+                self._raise_translated(exc, encoded_url, "GET", asset_route=True, romm_origin=False)
 
         return self._retry.enter(_do_download, (), {}, romm_origin=False)
 
@@ -947,7 +950,7 @@ class RommHttpAdapter:
                 # carries the per-device sync-disabled detail, #1489).
                 raise self._translate_with_detail(exc, url, method) from exc
             except Exception as exc:
-                raise self.translate_http_error(exc, url, method) from self._shown_cause(exc)
+                self._raise_translated(exc, url, method)
 
         return self.with_retry(_do_json_request)
 
@@ -987,7 +990,7 @@ class RommHttpAdapter:
         except RommApiError:
             raise
         except Exception as exc:
-            raise self.translate_http_error(exc, url, method) from self._shown_cause(exc)
+            self._raise_translated(exc, url, method)
 
     # Intentionally skips with_retry: a public single-use credential (the pairing
     # code) must not be replayed — a retry burns the one-time code and the
@@ -1017,7 +1020,7 @@ class RommHttpAdapter:
         except urllib.error.HTTPError as exc:
             raise self._translate_with_detail(exc, url, "POST") from exc
         except Exception as exc:
-            raise self.translate_http_error(exc, url, "POST") from self._shown_cause(exc)
+            self._raise_translated(exc, url, "POST")
 
     # Intentionally skips with_retry: token mint/delete are not idempotent
     # and must not be retried (a duplicate mint would orphan a token).
@@ -1055,4 +1058,4 @@ class RommHttpAdapter:
         except RommApiError:
             raise
         except Exception as exc:
-            raise self.translate_http_error(exc, url, method) from self._shown_cause(exc)
+            self._raise_translated(exc, url, method)

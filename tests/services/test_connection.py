@@ -169,8 +169,9 @@ class TestTestConnectionBadPath:
     ):
         settings = {"romm_url": stored, "romm_api_token": "rmm_fake"}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
         romm_api.heartbeat.assert_not_called()
         romm_api.list_platforms.assert_not_called()
@@ -943,8 +944,9 @@ class TestEstablishTokenBadPath:
     ):
         settings: dict[str, Any] = {}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token(address, "u", "p")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_token(address, "u", "p"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
         assert "romm_url" not in settings
         romm_api.heartbeat.assert_not_called()
@@ -1168,8 +1170,9 @@ class TestEstablishUserTokenBadPath:
     ):
         settings: dict[str, Any] = {}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_user_token(address, "rmm_x")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_user_token(address, "rmm_x"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
         assert "romm_url" not in settings
         romm_api.heartbeat.assert_not_called()
@@ -1695,8 +1698,9 @@ class TestEstablishPairedTokenBadPath:
     ):
         settings: dict[str, Any] = {}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token(address, "ABCD2345")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_paired_token(address, "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
         assert "romm_url" not in settings
         romm_api.heartbeat.assert_not_called()
