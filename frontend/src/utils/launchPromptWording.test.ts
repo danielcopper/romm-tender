@@ -20,16 +20,29 @@ describe("fallbackLaunchDescription", () => {
 
 describe("unsyncedSavesDescription", () => {
   it("names the version and that its saves stay on disk", () => {
-    expect(unsyncedSavesDescription("USA", true)).toBe(
-      '"USA" has save changes that were never uploaded to RomM. They stay on disk, but won\'t sync until you ' +
-        "switch back.",
+    expect(unsyncedSavesDescription({ versionName: "USA", stranding: "unsynced", noSync: null })).toBe(
+      "\"USA\" has saves that haven't been synced to RomM. They stay on disk, but won't sync until you switch back.",
     );
   });
 
   it("says why nothing is synced first while RomM is unreachable", () => {
-    expect(unsyncedSavesDescription("USA", false)).toBe(
-      '"USA" has save changes that were never uploaded, and RomM is not reachable right now — so they can\'t be ' +
+    expect(unsyncedSavesDescription({ versionName: "USA", stranding: "unsynced", noSync: "unreachable" })).toBe(
+      "\"USA\" has saves that haven't been synced to RomM. RomM is not reachable right now, so they can't be " +
         "synced first. They stay on disk, but won't sync until you switch back.",
+    );
+  });
+
+  it("says Tender couldn't check where the check could not read", () => {
+    expect(unsyncedSavesDescription({ versionName: "USA", stranding: "unchecked", noSync: null })).toBe(
+      "Tender couldn't check whether \"USA\" has saves that haven't been synced to RomM. They stay on disk, but " +
+        "won't sync until you switch back.",
+    );
+  });
+
+  it("says the saves can't be uploaded where the version is gone from RomM", () => {
+    expect(unsyncedSavesDescription({ versionName: "USA", stranding: "unsynced", noSync: "version_gone" })).toBe(
+      '"USA" has saves that haven\'t been synced to RomM. This version is no longer available on RomM, so its ' +
+        "saves can't be uploaded. They stay on this device.",
     );
   });
 });

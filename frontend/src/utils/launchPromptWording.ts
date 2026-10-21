@@ -49,23 +49,36 @@ export function fallbackLaunchDescription(message?: string): string {
   return `${reason} — launch with local saves?`;
 }
 
-// ── Unsynced saves: switching away from a version whose saves were never uploaded ──
+// ── Unsynced saves: switching away from a version whose saves haven't been synced to RomM ──
 
 export const UNSYNCED_SAVES_TITLE = "Unsynced saves";
 
-/**
- * Unreachable, the sentence says why the saves cannot be synced first, since
- * the prompt then offers no sync.
- */
-export function unsyncedSavesDescription(versionName: string, serverReachable: boolean): string {
-  return serverReachable
-    ? `"${versionName}" has save changes that were never uploaded to RomM. They stay on disk, but won't sync until ` +
-        "you switch back."
-    : `"${versionName}" has save changes that were never uploaded, and RomM is not reachable right now — so they ` +
-        "can't be synced first. They stay on disk, but won't sync until you switch back.";
+export interface UnsyncedSavesDescriptionArgs {
+  versionName: string;
+  /** `unchecked`: the check could not read, so the sentence says Tender couldn't check. */
+  stranding: "unsynced" | "unchecked";
+  /** Why the prompt offers no sync first, or `null` when it offers one. */
+  noSync: "unreachable" | "version_gone" | null;
 }
 
-/** Offered only while RomM is reachable. */
+/**
+ * A save changed since its last sync and one never synced are one case to the
+ * user, since what they can do about either is the same. Where the prompt
+ * offers no sync, the sentence says why.
+ */
+export function unsyncedSavesDescription({ versionName, stranding, noSync }: UnsyncedSavesDescriptionArgs): string {
+  const what =
+    stranding === "unchecked"
+      ? `Tender couldn't check whether "${versionName}" has saves that haven't been synced to RomM.`
+      : `"${versionName}" has saves that haven't been synced to RomM.`;
+  if (noSync === "version_gone") {
+    return `${what} This version is no longer available on RomM, so its saves can't be uploaded. They stay on this device.`;
+  }
+  const why = noSync === "unreachable" ? " RomM is not reachable right now, so they can't be synced first." : "";
+  return `${what}${why} They stay on disk, but won't sync until you switch back.`;
+}
+
+/** Offered only while RomM is reachable and still has the version being left. */
 export const SYNC_AND_SWITCH_LABEL = "Sync now & switch";
 
 export const SWITCH_ANYWAY_LABEL = "Switch anyway";

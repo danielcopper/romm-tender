@@ -231,6 +231,7 @@ describe("executeVersionSwitch", () => {
       success: false,
       reason: "unsynced_saves",
       message: "Unsynced saves",
+      stranding: "unsynced",
       unsynced_rom_id: 1,
       unsynced_version_name: "Game (USA)",
       server_reachable: true,
@@ -255,6 +256,7 @@ describe("executeVersionSwitch", () => {
         success: false,
         reason: "unsynced_saves",
         message: "Unsynced saves",
+        stranding: "unsynced",
         unsynced_rom_id: 1,
         unsynced_version_name: "Game (USA)",
         server_reachable: true,
@@ -286,6 +288,7 @@ describe("executeVersionSwitch", () => {
         success: false,
         reason: "unsynced_saves",
         message: "Unsynced saves",
+        stranding: "unsynced",
         unsynced_rom_id: 1,
         unsynced_version_name: "Game (USA)",
         server_reachable: true,
@@ -321,6 +324,7 @@ describe("executeVersionSwitch", () => {
       success: false,
       reason: "unsynced_saves",
       message: "Unsynced saves",
+      stranding: "unsynced",
       unsynced_rom_id: 1,
       unsynced_version_name: "Game (USA)",
       server_reachable: true,
@@ -349,6 +353,7 @@ describe("executeVersionSwitch", () => {
       success: false,
       reason: "unsynced_saves",
       message: "Unsynced saves",
+      stranding: "unsynced",
       unsynced_rom_id: 1,
       unsynced_version_name: "Game (USA)",
       server_reachable: true,
@@ -440,5 +445,57 @@ describe("executeVersionSwitch", () => {
     expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("TestSwitch: switchVersion failed"));
     expect(toast.showToast).toHaveBeenCalledWith("Could not switch version");
     expect(setSwitching).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("executeVersionSwitch — what the unsynced-saves prompt is told", () => {
+  const leaseOwner = "version-picker:100";
+  const askUnsyncedSaves = vi.fn();
+  const block = (stranding: "unsynced" | "unchecked") => ({
+    success: false as const,
+    reason: "unsynced_saves" as const,
+    message: "Unsynced saves",
+    stranding,
+    unsynced_rom_id: 1,
+    unsynced_version_name: "Game (USA)",
+    server_reachable: true,
+  });
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    pruneLease.mountPruneLeaseOwner(leaseOwner);
+    (await vi.importActual<typeof import("./vanishedBinding")>("./vanishedBinding")).resetBoundAvailability();
+    askUnsyncedSaves.mockResolvedValue("cancel");
+  });
+
+  it("tells it the version being left is gone where RomM answered a 404 for it", async () => {
+    const actual = await vi.importActual<typeof import("./vanishedBinding")>("./vanishedBinding");
+    actual.setBoundAvailability(100, "version_gone");
+    vi.mocked(backend.switchVersion).mockResolvedValueOnce(block("unsynced"));
+
+    await executeVersionSwitch({ appId: 100, target: mockTarget, leaseOwner, askUnsyncedSaves });
+
+    expect(askUnsyncedSaves).toHaveBeenCalledWith({
+      versionName: "Game (USA)",
+      stranding: "unsynced",
+      serverReachable: true,
+      versionGone: true,
+    });
+  });
+
+  it("keeps the version live where nothing proved it gone", async () => {
+    vi.mocked(backend.switchVersion).mockResolvedValueOnce(block("unsynced"));
+
+    await executeVersionSwitch({ appId: 100, target: mockTarget, leaseOwner, askUnsyncedSaves });
+
+    expect(askUnsyncedSaves).toHaveBeenCalledWith(expect.objectContaining({ versionGone: false }));
+  });
+
+  it("passes on that the check could not read", async () => {
+    vi.mocked(backend.switchVersion).mockResolvedValueOnce(block("unchecked"));
+
+    await executeVersionSwitch({ appId: 100, target: mockTarget, leaseOwner, askUnsyncedSaves });
+
+    expect(askUnsyncedSaves).toHaveBeenCalledWith(expect.objectContaining({ stranding: "unchecked" }));
   });
 });

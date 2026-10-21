@@ -403,7 +403,12 @@ describe("makeLaunchGateOps", () => {
   it("checkLocalDrift passes a drift through, and reads a thrown check as not drifted", async () => {
     const ops = makeLaunchGateOps(ROM_ID, options());
 
-    vi.mocked(backend.checkLocalDrift).mockResolvedValueOnce({ drifted: true, rom_id: ROM_ID });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValueOnce({
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+      rom_id: ROM_ID,
+    });
     expect(await ops.checkLocalDrift()).toBe(true);
     expect(backend.checkLocalDrift).toHaveBeenCalledWith(ROM_ID);
 

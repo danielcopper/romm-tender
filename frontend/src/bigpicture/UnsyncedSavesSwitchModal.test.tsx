@@ -32,30 +32,50 @@ describe("UnsyncedSavesSwitchModal — reachable (T4)", () => {
   });
 
   it("shows the sync + switch-anyway buttons and the reachable copy", () => {
-    void showUnsyncedSavesModal({ versionName: "Game (USA)", serverReachable: true });
+    void showUnsyncedSavesModal({
+      versionName: "Game (USA)",
+      stranding: "unsynced",
+      serverReachable: true,
+      versionGone: false,
+    });
     const props = lastConfirmModalProps();
     expect(props.strTitle).toBe("Unsynced saves");
     expect(props.strDescription).toContain("Game (USA)");
-    expect(props.strDescription).toContain("never uploaded to RomM");
+    expect(props.strDescription).toContain("haven't been synced to RomM");
     expect(props.strOKButtonText).toBe("Sync now & switch");
     expect(props.strMiddleButtonText).toBe("Switch anyway");
     expect(props.strCancelButtonText).toBe("Cancel");
   });
 
   it("resolves 'sync_and_switch' on OK", async () => {
-    const promise = showUnsyncedSavesModal({ versionName: "X", serverReachable: true });
+    const promise = showUnsyncedSavesModal({
+      versionName: "X",
+      stranding: "unsynced",
+      serverReachable: true,
+      versionGone: false,
+    });
     lastConfirmModalProps().onOK?.();
     await expect(promise).resolves.toBe("sync_and_switch");
   });
 
   it("resolves 'switch_anyway' on the middle button", async () => {
-    const promise = showUnsyncedSavesModal({ versionName: "X", serverReachable: true });
+    const promise = showUnsyncedSavesModal({
+      versionName: "X",
+      stranding: "unsynced",
+      serverReachable: true,
+      versionGone: false,
+    });
     lastConfirmModalProps().onMiddleButton?.();
     await expect(promise).resolves.toBe("switch_anyway");
   });
 
   it("resolves 'cancel' on Cancel", async () => {
-    const promise = showUnsyncedSavesModal({ versionName: "X", serverReachable: true });
+    const promise = showUnsyncedSavesModal({
+      versionName: "X",
+      stranding: "unsynced",
+      serverReachable: true,
+      versionGone: false,
+    });
     lastConfirmModalProps().onCancel?.();
     await expect(promise).resolves.toBe("cancel");
   });
@@ -67,7 +87,12 @@ describe("UnsyncedSavesSwitchModal — offline (T5)", () => {
   });
 
   it("offers NO sync option — OK is 'Switch anyway' and there is no middle button", () => {
-    void showUnsyncedSavesModal({ versionName: "Game (USA)", serverReachable: false });
+    void showUnsyncedSavesModal({
+      versionName: "Game (USA)",
+      stranding: "unsynced",
+      serverReachable: false,
+      versionGone: false,
+    });
     const props = lastConfirmModalProps();
     expect(props.strTitle).toBe("Unsynced saves");
     expect(props.strDescription).toContain("not reachable right now");
@@ -78,14 +103,82 @@ describe("UnsyncedSavesSwitchModal — offline (T5)", () => {
   });
 
   it("resolves 'switch_anyway' on OK", async () => {
-    const promise = showUnsyncedSavesModal({ versionName: "X", serverReachable: false });
+    const promise = showUnsyncedSavesModal({
+      versionName: "X",
+      stranding: "unsynced",
+      serverReachable: false,
+      versionGone: false,
+    });
     lastConfirmModalProps().onOK?.();
     await expect(promise).resolves.toBe("switch_anyway");
   });
 
   it("resolves 'cancel' on Cancel", async () => {
-    const promise = showUnsyncedSavesModal({ versionName: "X", serverReachable: false });
+    const promise = showUnsyncedSavesModal({
+      versionName: "X",
+      stranding: "unsynced",
+      serverReachable: false,
+      versionGone: false,
+    });
     lastConfirmModalProps().onCancel?.();
     await expect(promise).resolves.toBe("cancel");
+  });
+});
+
+describe("UnsyncedSavesSwitchModal — the version being left is gone from RomM", () => {
+  beforeEach(() => {
+    vi.mocked(showModal).mockClear();
+  });
+
+  it.each([true, false])(
+    "offers only Switch anyway and Cancel, and says why (reachable: %s)",
+    async (serverReachable) => {
+      const promise = showUnsyncedSavesModal({
+        versionName: "Game (USA)",
+        stranding: "unsynced",
+        serverReachable,
+        versionGone: true,
+      });
+      const props = lastConfirmModalProps();
+      expect(props.strDescription).toContain("no longer available on RomM, so its saves can't be uploaded");
+      expect(props.strDescription).toContain("They stay on this device.");
+      expect(props.strOKButtonText).toBe("Switch anyway");
+      expect(props.strMiddleButtonText).toBeUndefined();
+      expect(props.onMiddleButton).toBeUndefined();
+      expect(props.strCancelButtonText).toBe("Cancel");
+      props.onOK?.();
+      await expect(promise).resolves.toBe("switch_anyway");
+    },
+  );
+
+  it("keeps Sync now & switch for a version nothing proved gone", () => {
+    void showUnsyncedSavesModal({
+      versionName: "Game (USA)",
+      stranding: "unsynced",
+      serverReachable: true,
+      versionGone: false,
+    });
+    const props = lastConfirmModalProps();
+    expect(props.strOKButtonText).toBe("Sync now & switch");
+    expect(props.strDescription).not.toContain("no longer available on RomM");
+  });
+});
+
+describe("UnsyncedSavesSwitchModal — a check that could not read", () => {
+  beforeEach(() => {
+    vi.mocked(showModal).mockClear();
+  });
+
+  it("says Tender couldn't check rather than that the saves were never synced", () => {
+    void showUnsyncedSavesModal({
+      versionName: "Game (USA)",
+      stranding: "unchecked",
+      serverReachable: true,
+      versionGone: false,
+    });
+    const props = lastConfirmModalProps();
+    expect(props.strDescription).toContain('Tender couldn\'t check whether "Game (USA)" has saves');
+    expect(props.strOKButtonText).toBe("Sync now & switch");
+    expect(props.strMiddleButtonText).toBe("Switch anyway");
   });
 });

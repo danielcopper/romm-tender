@@ -137,7 +137,12 @@ describe("SavesTab — what the slot panels keep", () => {
     vi.clearAllMocks();
     setRommConnectionState("connected");
     vi.mocked(backend.getVersionList).mockResolvedValue({ multi_version: false, bound_vanished: false });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: false, rom_id: 0 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: false,
+      only_here: false,
+      stranding: "none",
+      rom_id: 0,
+    });
     vi.mocked(backend.getSlotSaves).mockImplementation((_romId, slot) =>
       Promise.resolve({
         success: true,
@@ -230,7 +235,12 @@ describe("SavesTab — a restore reloads nothing it closed", () => {
     vi.clearAllMocks();
     setRommConnectionState("connected");
     vi.mocked(backend.getVersionList).mockResolvedValue({ multi_version: false, bound_vanished: false });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: false, rom_id: 0 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: false,
+      only_here: false,
+      stranding: "none",
+      rom_id: 0,
+    });
   });
 
   it("the restored file's Previous Versions loads fresh when reopened", async () => {

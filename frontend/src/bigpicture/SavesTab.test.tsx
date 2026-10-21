@@ -146,7 +146,12 @@ describe("SavesTab", () => {
     // Stranded-version banner probes (#1298) — default to "no other versions" so
     // the banner is absent for the unrelated slot/legacy tests.
     vi.mocked(backend.getVersionList).mockResolvedValue({ multi_version: false, bound_vanished: false });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: false, rom_id: 0 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: false,
+      only_here: false,
+      stranding: "none",
+      rom_id: 0,
+    });
     installDomEventListenerSpy();
   });
 
@@ -849,7 +854,8 @@ describe("SavesTab", () => {
   });
 
   describe("stranded-version banner (#1298)", () => {
-    const STRANDED_COPY = 'Version "Game (USA)" has saves that were never uploaded — switch back to sync them.';
+    const STRANDED_COPY =
+      'Version "Game (USA)" has saves that haven\'t been synced to RomM — switch back to sync them.';
 
     function makeVersion(
       overrides: Partial<import("../api/backend").VersionInfo>,
@@ -893,12 +899,66 @@ describe("SavesTab", () => {
 
     it("shows the banner with the verbatim copy when an inactive installed version drifts", async () => {
       vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
-      vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 5 });
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 5,
+      });
 
       const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
 
       await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
       expect(backend.checkLocalDrift).toHaveBeenCalledWith(5);
+    });
+
+    it("shows the banner for a save with no recorded sync, which is no drift", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: false,
+        only_here: true,
+        stranding: "unsynced",
+        rom_id: 5,
+      });
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+    });
+
+    it("says Tender couldn't check where the check could not read", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: false,
+        only_here: false,
+        stranding: "unchecked",
+        rom_id: 5,
+      });
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() =>
+        expect(container.textContent).toContain(
+          "Tender couldn't check whether version \"Game (USA)\" has saves that haven't been synced to RomM — " +
+            "switch back to sync them.",
+        ),
+      );
+    });
+
+    it("hides the banner for a drifted save the verdict does not hold (save sync off)", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "none",
+        rom_id: 5,
+      });
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() => expect(backend.checkLocalDrift).toHaveBeenCalledWith(5));
+      await flushAsync();
+      expect(container.textContent).not.toContain("synced to RomM");
     });
 
     it("hides the banner when no inactive version is installed", async () => {
@@ -907,30 +967,40 @@ describe("SavesTab", () => {
       const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
 
       await waitFor(() => expect(vi.mocked(backend.getVersionList)).toHaveBeenCalled());
-      expect(container.textContent).not.toContain("never uploaded");
+      expect(container.textContent).not.toContain("synced to RomM");
       // No inactive install → the drift probe is never even fired.
       expect(backend.checkLocalDrift).not.toHaveBeenCalled();
     });
 
     it("hides the banner when the inactive install has no drift", async () => {
       vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
-      vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: false, rom_id: 5 });
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: false,
+        only_here: false,
+        stranding: "none",
+        rom_id: 5,
+      });
 
       const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
 
       await waitFor(() => expect(backend.checkLocalDrift).toHaveBeenCalledWith(5));
-      expect(container.textContent).not.toContain("never uploaded");
+      expect(container.textContent).not.toContain("synced to RomM");
     });
 
     it("re-runs the check when the bound version changes (version switch)", async () => {
       // First (romId=2): nothing stranded. After the switch (romId=99): the USA
       // build is now the inactive-installed drifted sibling → banner appears.
       vi.mocked(backend.getVersionList).mockResolvedValueOnce(listNoStranded).mockResolvedValue(listWithStranded);
-      vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 5 });
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 5,
+      });
 
       const { container, rerender } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
       await waitFor(() => expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1));
-      expect(container.textContent).not.toContain("never uploaded");
+      expect(container.textContent).not.toContain("synced to RomM");
 
       rerender(<SavesTab {...defaultProps({ romId: 99 })} />);
       await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
@@ -949,14 +1019,19 @@ describe("SavesTab", () => {
         ],
       });
       vi.mocked(backend.checkLocalDrift).mockImplementation((romId: number) =>
-        Promise.resolve({ drifted: romId === 6, rom_id: romId }),
+        Promise.resolve({
+          drifted: romId === 6,
+          only_here: false,
+          stranding: romId === 6 ? "unsynced" : "none",
+          rom_id: romId,
+        }),
       );
 
       const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
 
       await waitFor(() =>
         expect(container.textContent).toContain(
-          'Version "Game (Europe)" has saves that were never uploaded — switch back to sync them.',
+          'Version "Game (Europe)" has saves that haven\'t been synced to RomM — switch back to sync them.',
         ),
       );
       // Both were probed (USA first, then Europe); the clean USA build isn't named.
@@ -975,13 +1050,18 @@ describe("SavesTab", () => {
           makeVersion({ rom_id: 6, label: "Game (Europe)", installed: true }),
         ],
       });
-      vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 6 });
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 6,
+      });
 
       const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
 
       await waitFor(() =>
         expect(container.textContent).toContain(
-          'Version "Game (Europe)" has saves that were never uploaded — switch back to sync them.',
+          'Version "Game (Europe)" has saves that haven\'t been synced to RomM — switch back to sync them.',
         ),
       );
       expect(backend.checkLocalDrift).not.toHaveBeenCalledWith(5);
@@ -999,7 +1079,7 @@ describe("SavesTab", () => {
         await waitFor(() =>
           expect(logWarnSpy).toHaveBeenCalledWith(expect.stringContaining("stranded-version check failed")),
         );
-        expect(container.textContent).not.toContain("never uploaded");
+        expect(container.textContent).not.toContain("synced to RomM");
       } finally {
         logWarnSpy.mockRestore();
       }

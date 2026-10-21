@@ -1442,7 +1442,12 @@ describe("launchInterceptor — full funnel watcher", () => {
     it("checkLocalDrift: drifted passes through; a throw logs and treats as not-drifted", async () => {
       const ops = await captureOps();
 
-      vi.mocked(backend.checkLocalDrift).mockResolvedValueOnce({ drifted: true, rom_id: 42 });
+      vi.mocked(backend.checkLocalDrift).mockResolvedValueOnce({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 42,
+      });
       expect(await ops.checkLocalDrift()).toBe(true);
 
       vi.mocked(backend.checkLocalDrift).mockRejectedValueOnce(new Error("net"));

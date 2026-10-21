@@ -1372,6 +1372,7 @@ describe("VersionPicker — unsynced-saves soft-block", () => {
     success: false as const,
     reason: "unsynced_saves" as const,
     message: "Unsynced saves on the current version.",
+    stranding: "unsynced" as const,
     server_reachable: true,
     unsynced_rom_id: 1,
     unsynced_version_name: "Game (USA)",
@@ -1409,7 +1410,9 @@ describe("VersionPicker — unsynced-saves soft-block", () => {
 
     expect(showUnsyncedSavesModal).toHaveBeenCalledWith({
       versionName: "Game (USA)",
+      stranding: "unsynced",
       serverReachable: true,
+      versionGone: false,
     });
   });
 
@@ -1780,7 +1783,12 @@ describe("VersionPicker — unsynced-saves soft-block", () => {
     const { menu } = await renderAndOpen();
     await clickRow(menu.container, "Game (Japan)");
 
-    expect(showUnsyncedSavesModal).toHaveBeenCalledWith({ versionName: "Game (USA)", serverReachable: false });
+    expect(showUnsyncedSavesModal).toHaveBeenCalledWith({
+      versionName: "Game (USA)",
+      stranding: "unsynced",
+      serverReachable: false,
+      versionGone: false,
+    });
     expect(backend.switchVersion).toHaveBeenNthCalledWith(2, APP_ID, 2, true);
   });
 });
@@ -2014,6 +2022,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
       success: false as const,
       reason: "unsynced_saves" as const,
       message: "",
+      stranding: "unsynced" as const,
       server_reachable: true,
       unsynced_rom_id: 1,
       unsynced_version_name: "Game (USA)",

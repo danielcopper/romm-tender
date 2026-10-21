@@ -17,7 +17,7 @@ import {
   type SwitchVersionUnsyncedSaves,
 } from "../api/backend";
 import { reportServerReachable } from "./connectionState";
-import { boundAvailabilityOf, setBoundAvailability } from "./vanishedBinding";
+import { boundAvailabilityOf, isBoundVanished, setBoundAvailability } from "./vanishedBinding";
 import { applyCommittedVersionSwitch } from "./versionSwitchApplication";
 import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, isPruneLeaseCancellation } from "./pruneLease";
 import { showToast } from "./toast";
@@ -29,8 +29,12 @@ export type UnsyncedSavesChoice = "sync_and_switch" | "switch_anyway" | "cancel"
 export interface UnsyncedSavesPromptArgs {
   /** Display name of the currently-bound version that would be stranded. */
   versionName: string;
-  /** Whether RomM is reachable — decides if "Sync now & switch" is offered. */
+  /** Whether its saves are unsynced, or could not be checked. */
+  stranding: SwitchVersionUnsyncedSaves["stranding"];
+  /** Whether RomM is reachable — with `versionGone`, decides if "Sync now & switch" is offered. */
   serverReachable: boolean;
+  /** Whether RomM answered a 404 for the version being left, so its saves cannot be uploaded. */
+  versionGone: boolean;
 }
 
 export type UnsyncedSavesPrompt = (args: UnsyncedSavesPromptArgs) => Promise<UnsyncedSavesChoice>;
@@ -233,7 +237,9 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
     reportServerReachable(result.server_reachable);
     const choice = await askUnsyncedSaves({
       versionName: result.unsynced_version_name,
+      stranding: result.stranding,
       serverReachable: result.server_reachable,
+      versionGone: isBoundVanished(appId),
     });
     if (!isPruneLeaseAdmissionCurrent(admission)) return;
     if (choice === "cancel") {

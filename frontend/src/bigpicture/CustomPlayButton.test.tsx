@@ -2480,7 +2480,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
 
   it("offline + local drift → OfflineDriftModal; start_anyway launches", async () => {
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: false });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+      rom_id: 42,
+    });
     vi.mocked(showOfflineDriftModal).mockResolvedValue("start_anyway");
 
     await clickPlay();
@@ -2495,7 +2500,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
 
   it("offline + local drift → OfflineDriftModal; cancel does NOT launch", async () => {
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: false });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+      rom_id: 42,
+    });
     vi.mocked(showOfflineDriftModal).mockResolvedValue("cancel");
 
     await clickPlay();
@@ -2509,7 +2519,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     // First gate pass: offline + drift → offline modal. User picks "retry".
     // Second gate pass: probe now returns online → clean sync → allow → launch.
     vi.mocked(backend.probeReachability).mockResolvedValueOnce({ online: false }).mockResolvedValue({ online: true });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+      rom_id: 42,
+    });
     vi.mocked(showOfflineDriftModal).mockResolvedValueOnce("retry");
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0, conflicts: [] });
 
@@ -2528,7 +2543,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
   it("offline + drift → retry → still offline+drift → re-shows modal; cancel bails (no launch)", async () => {
     // Both gate passes are offline + drift. User retries once, then cancels.
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: false });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+      rom_id: 42,
+    });
     vi.mocked(showOfflineDriftModal).mockResolvedValueOnce("retry").mockResolvedValueOnce("cancel");
 
     await clickPlay();
@@ -2550,7 +2570,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     vi.mocked(backend.probeReachability)
       .mockResolvedValueOnce({ online: false })
       .mockReturnValueOnce(new Promise((resolve) => (answerReprobe = resolve)));
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+      rom_id: 42,
+    });
 
     await clickPlay();
     await waitFor(() => expect(showOfflineDriftModal).toHaveBeenCalledTimes(1));
@@ -2584,7 +2609,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     // Retry flips online and the online sync surfaces a conflict → the conflict
     // modal runs, proving retry routes to the FULL online path, not just allow.
     vi.mocked(backend.probeReachability).mockResolvedValueOnce({ online: false }).mockResolvedValue({ online: true });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+      rom_id: 42,
+    });
     vi.mocked(showOfflineDriftModal).mockResolvedValueOnce("retry");
     vi.mocked(backend.preLaunchSync).mockResolvedValue({
       success: false,
@@ -2602,7 +2632,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
 
   it("offline + NO local drift → launches silently (no modal)", async () => {
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: false });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: false, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: false,
+      only_here: false,
+      stranding: "none",
+      rom_id: 42,
+    });
 
     await clickPlay();
 
@@ -2741,7 +2776,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
 
   it("reachability probe rejects → treated as offline; with drift → OfflineDriftModal", async () => {
     vi.mocked(backend.probeReachability).mockRejectedValue(new Error("net"));
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+      rom_id: 42,
+    });
     vi.mocked(showOfflineDriftModal).mockResolvedValue("cancel");
 
     await clickPlay();
@@ -2989,7 +3029,12 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0, conflicts: [] });
-    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: false, rom_id: 42 });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: false,
+      only_here: false,
+      stranding: "none",
+      rom_id: 42,
+    });
     vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
       success: true,
       app_id: 100,
@@ -3343,7 +3388,12 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
 
     it("the offline-drift dialog", async () => {
       vi.mocked(backend.probeReachability).mockResolvedValue({ online: false });
-      vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 42,
+      });
       const dialog = heldOpen<"start_anyway" | "retry" | "cancel">();
       vi.mocked(showOfflineDriftModal).mockReturnValue(dialog.promise);
 

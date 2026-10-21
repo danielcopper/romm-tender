@@ -7,8 +7,18 @@ import {
   NO_ANSWER_MESSAGE,
 } from "./launchGate";
 import type { LaunchGateOps, PreLaunchSyncOutcome, StartingSourceAnswer } from "./launchGate";
+import { makeLaunchGateOps } from "./launchGateOps";
 import { TimeoutError } from "./withTimeout";
+import * as backend from "../api/backend";
+import type { LocalDriftAnswer } from "../api/backend";
 import type { SyncConflict } from "../types";
+
+// Only the local-save check is replaced: the offline branch below runs the
+// real op that reads its answer.
+vi.mock("../api/backend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/backend")>()),
+  checkLocalDrift: vi.fn(),
+}));
 
 function conflict(overrides: Partial<SyncConflict> = {}): SyncConflict {
   return {
@@ -305,5 +315,39 @@ describe("skip-set — markLaunchSkipped / consumeLaunchSkip", () => {
       vi.setSystemTime(Date.now() - LAUNCH_SKIP_WINDOW_MS - 1);
       expect(consumeLaunchSkip(777)).toBe(false);
     });
+  });
+});
+
+describe("runLaunchGate — offline, over the local-save check's answer", () => {
+  // The real op, so what decides is which field of the answer it reads: only a
+  // save changed since its last sync warns, never one with no recorded sync
+  // and never a check that could not read.
+  function offlineOps(): LaunchGateOps {
+    const real = makeLaunchGateOps(42, {
+      tag: "LaunchGateTest",
+      toastSyncResult: false,
+      ensureTrackingConfigured: vi.fn(async (): Promise<"proceed" | "abort"> => "proceed"),
+      confirmCoreChange: vi.fn(async () => true),
+      confirmUncheckedStartingSource: vi.fn(async () => true),
+    });
+    return makeOps({ checkReachability: vi.fn(async () => false), checkLocalDrift: real.checkLocalDrift });
+  }
+
+  it.each<[string, LocalDriftAnswer]>([
+    ["a save with no recorded sync", { rom_id: 42, drifted: false, only_here: true, stranding: "unsynced" }],
+    ["a check that could not read", { rom_id: 42, drifted: false, only_here: false, stranding: "unchecked" }],
+  ])("starts for %s", async (_case, answer) => {
+    vi.mocked(backend.checkLocalDrift).mockResolvedValueOnce(answer);
+    await expect(runLaunchGate(100, 42, offlineOps())).resolves.toEqual({ decision: "allow" });
+  });
+
+  it("warns for a save changed since its last sync", async () => {
+    vi.mocked(backend.checkLocalDrift).mockResolvedValueOnce({
+      rom_id: 42,
+      drifted: true,
+      only_here: false,
+      stranding: "unsynced",
+    });
+    await expect(runLaunchGate(100, 42, offlineOps())).resolves.toEqual({ decision: "offline_drift" });
   });
 });

@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useRef, FC, type ReactElement } from "react";
 import { DialogButton, Focusable, showModal } from "@decky/ui";
-import { switchSlot, getVersionList, checkLocalDrift, debugLog, logWarn } from "../api/backend";
+import { switchSlot, getVersionList, checkLocalDrift, debugLog, logWarn, type SaveStranding } from "../api/backend";
 import { getRommConnectionState, onRommConnectionChange, reportServerReachable } from "../utils/connectionState";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, LastKnownSlots } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
@@ -27,8 +27,21 @@ import { detach } from "../utils/detach";
 import { announceSaveSync } from "../utils/saveSyncEvents";
 import { switchSlotFailureMessage } from "../utils/saveSlotWording";
 
+interface StrandedVersion {
+  name: string;
+  stranding: Exclude<SaveStranding, "none">;
+}
+
+function strandedBannerText({ name, stranding }: StrandedVersion): string {
+  const what =
+    stranding === "unchecked"
+      ? `Tender couldn't check whether version "${name}" has saves that haven't been synced to RomM`
+      : `Version "${name}" has saves that haven't been synced to RomM`;
+  return `${what} — switch back to sync them.`;
+}
+
 interface SavesTabProps {
-  /** The group's sticky Steam appId — drives the stranded-version drift check. */
+  /** The group's sticky Steam appId — drives the stranded-version check. */
   appId: number;
   romId: number;
   saveStatus: SaveStatus | null;
@@ -61,10 +74,10 @@ export const SavesTab: FC<SavesTabProps> = ({
   const [newSlotError, setNewSlotError] = useState<string | null>(null);
   const newSlotErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOffline, setIsOffline] = useState(getRommConnectionState() === "offline");
-  // Display name of an INACTIVE sibling version that is still on disk and has
-  // unsynced save drift (#1298) — null when none. Reminds the user to switch back
+  // An INACTIVE sibling version that is still on disk and holds saves the
+  // switch left behind (#1298) — null when none. Reminds the user to switch back
   // and sync before those saves are lost.
-  const [strandedVersion, setStrandedVersion] = useState<string | null>(null);
+  const [strandedVersion, setStrandedVersion] = useState<StrandedVersion | null>(null);
 
   const handleVersionRestored = () => {
     announceSaveSync(romId);
@@ -87,9 +100,10 @@ export const SavesTab: FC<SavesTabProps> = ({
 
   // Stranded-saves reminder (#1298): after a version switch the previously-bound
   // install becomes an INACTIVE sibling that still holds its (possibly unsynced)
-  // saves on disk. Surface a banner when such a version has local drift so the
-  // user knows to switch back and sync before those saves are lost. Re-runs on
-  // saves-tab load (mount) and on a version switch (romId changes).
+  // saves on disk. Surface a banner when the check's stranding verdict holds for
+  // such a version, so the user knows to switch back and sync before those saves
+  // are lost. Re-runs on saves-tab load (mount) and on a version switch (romId
+  // changes).
   useEffect(() => {
     let cancelled = false;
     // Getter, not a bare read: the two post-await `cancelled` checks would
@@ -104,13 +118,13 @@ export const SavesTab: FC<SavesTabProps> = ({
           ? (list.versions ?? []).filter((v) => v.installed && !v.active && !v.vanished)
           : [];
         // Probe every inactive-installed sibling (any of them can hold stranded
-        // saves), and surface the first one that actually drifted.
-        let stranded: string | null = null;
+        // saves), and surface the first one the verdict holds for.
+        let stranded: StrandedVersion | null = null;
         for (const v of inactiveInstalled) {
-          const drift = await checkLocalDrift(v.rom_id);
+          const { stranding } = await checkLocalDrift(v.rom_id);
           if (isCancelled()) return;
-          if (drift.drifted) {
-            stranded = v.label || v.name || String(v.rom_id);
+          if (stranding !== "none") {
+            stranded = { name: v.label || v.name || String(v.rom_id), stranding };
             break;
           }
         }
@@ -164,7 +178,7 @@ export const SavesTab: FC<SavesTabProps> = ({
         color: "#ff8800",
       }}
     >
-      {`Version "${strandedVersion}" has saves that were never uploaded — switch back to sync them.`}
+      {strandedBannerText(strandedVersion)}
     </div>
   ) : null;
 
