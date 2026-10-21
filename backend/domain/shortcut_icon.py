@@ -54,6 +54,20 @@ def is_icon_filled(icon: str, grid_dir: str, file_names: Collection[str] | None)
     return file_names is None or name in file_names
 
 
+def is_icon_set_in_steam(icon: str, app_id: int, grid_dir: str) -> bool:
+    """Whether *icon*, *app_id*'s icon path in ``shortcuts.vdf``, is an icon that is not Tender's.
+
+    Tender's are the two stand-ins, by name in any directory, and the icon it
+    writes as ``<app_id>_icon.png`` in *grid_dir*; an empty path is no icon.
+    Any other path was set some other way, through Steam's own properties or
+    another tool.
+    """
+    directory, _, name = icon.rpartition("/")
+    if name in _STAND_IN_NAMES:
+        return False
+    return not (name == f"{app_id}_icon.png" and posixpath.normpath(directory) == posixpath.normpath(grid_dir))
+
+
 def shows_no_icon(icon: str) -> bool:
     """Whether *icon*, a shortcut's icon path in ``shortcuts.vdf``, is empty or the placeholder, in any directory."""
     return icon.rpartition("/")[2] in _NO_ICON_NAMES

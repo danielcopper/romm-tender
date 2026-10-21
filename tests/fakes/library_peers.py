@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from domain.cover_refresh import scan_cover_refresh_candidates
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -77,6 +79,10 @@ class FakeArtworkManager:
             (list(all_roms), dict(registry), emit_progress, is_cancelling, progress_step, progress_total_steps, label)
         )
         return [dict(entry) for entry in self.canned_refreshes]
+
+    async def count_cover_refreshes(self, all_roms: list[dict[str, Any]], registry: dict[str, dict[str, Any]]) -> int:
+        """The real count's kernel; no grid directory, so no cover is set in Steam."""
+        return len(scan_cover_refresh_candidates(all_roms, registry).changed)
 
     def finalize_cover_path(self, grid: str | None, cover_path: str, app_id: int, rom_id_str: str) -> str:
         self.finalize_calls.append((grid, cover_path, app_id, rom_id_str))

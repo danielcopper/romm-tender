@@ -42,7 +42,6 @@ from typing import TYPE_CHECKING, Any
 
 from domain.collection_label import steam_collection_key
 from domain.collection_skip import apply_stamps
-from domain.cover_refresh import count_cover_refreshes
 from domain.session_budget import post_run_advisory, session_memory_delta
 from domain.shortcut_data import build_shortcuts_data
 from domain.sibling_group import compute_component_group_keys
@@ -411,15 +410,16 @@ class SyncOrchestrator:
             kept_platform_names = {kept_names.get(row.platform_slug, row.platform_slug) for row in kept}
             disabled_count = count_disabled_platform_removals(stale, registry, platform_name_set)
             # Cover-only work (#1386): count the bound fetched ROMs whose server
-            # cover fingerprint changed, with the SAME kernel the apply-path
-            # invalidation pass refreshes by — an in-memory compare of the fetch
-            # against the registry projection already read above (no extra DB
-            # pass, no downloads; the preview stays side-effect-free). Runs over
-            # the raw union (platform + collection units alike), not the collapsed
+            # cover fingerprint changed and whose cover is not set in Steam, by
+            # the SAME rule the apply-path invalidation pass refreshes by — the
+            # fetch compared against the registry projection already read above,
+            # and the grid file read for each changed cover (no extra DB pass,
+            # no downloads; the preview stays side-effect-free). Runs over the
+            # raw union (platform + collection units alike), not the collapsed
             # delta: covers are per-ROM, cover-blind classify_roms (ADR-0025)
             # stays untouched, and without this an empty shortcut delta would
             # short-circuit the apply and strand a changed cover forever.
-            cover_refresh_count = count_cover_refreshes(all_roms, registry)
+            cover_refresh_count = await self._cover_preparer.count_cover_refreshes(all_roms, registry)
 
             # Post-preview session-budget prognosis (#1383): warn up front when the
             # planned work would walk the renderer heap past the budget ceiling. The

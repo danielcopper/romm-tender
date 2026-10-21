@@ -149,6 +149,15 @@ class CoverPreparer:
             applied_sources=applied_sources,
         )
 
+    async def count_cover_refreshes(self, all_roms: list[dict[str, Any]], registry: dict[str, dict[str, Any]]) -> int:
+        """The preview's cover work over the fetched union *all_roms*, by the rule the apply's pass refreshes by.
+
+        ``registry`` is the bound-row projection the preview already read. The
+        count is the ArtworkManager's, since which covers are set in Steam is
+        read off the grid directory.
+        """
+        return await self._artwork.count_cover_refreshes(all_roms, registry)
+
     async def refresh_changed_covers(
         self,
         unit_roms: list[dict[str, Any]],

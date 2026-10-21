@@ -613,6 +613,28 @@ class TestPreviewCoverRefreshCount:
             assert uow.roms.get(10).cover_source == self._OLD
 
     @pytest.mark.asyncio
+    async def test_a_cover_set_in_steam_is_not_counted(self, library, fake_romm_api, home):
+        self._preview_setup(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64", "path_cover_large": self._NEW}],
+        )
+        library.settings["enabled_platforms"] = {"1": True}
+        _seed_rom_row(
+            library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64", cover_source=self._OLD
+        )
+        grid = home / ".local" / "share" / "Steam" / "userdata" / "123" / "config" / "grid"
+        grid.mkdir(parents=True)
+        (grid / "1010p.jpg").write_bytes(b"set by hand")
+
+        result = await library.sync.sync_preview()
+
+        assert result["summary"]["cover_refresh_count"] == 0
+
+    @pytest.mark.asyncio
     async def test_collection_unit_mismatch_is_counted(self, library, fake_romm_api):
         # The hardware repro was a collection-unit ROM: its platform is NOT
         # enabled, so the ROM only enters the preview union via the enabled

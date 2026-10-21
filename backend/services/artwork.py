@@ -37,6 +37,7 @@ falls back to a plain download, unchanged.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -54,6 +55,8 @@ from domain.artwork_paths import (
     staging_filename,
     with_tmp_suffix,
 )
+from domain.artwork_slot import ArtworkSlot, is_set_in_steam
+from domain.artwork_slot_outcome import SlotOutcome
 from domain.cover_refresh import cover_ts_only_change, scan_cover_refresh_candidates
 from domain.sync_stage import SyncStage
 from lib.errors import Refused, RommNotFoundError, with_system_text
@@ -361,6 +364,10 @@ class ArtworkService:
         the apply's group collapse diffs against, so the pass opens no extra
         per-ROM DB lookups of its own.
 
+        A changed cover that is set in Steam (:meth:`_covers_set_in_steam_io`)
+        is skipped: its cache and its fingerprint stay as they are, so RomM's
+        change stays pending until the slot is Tender's again.
+
         Returns the refreshed ``[{"rom_id", "app_id"}]`` list — the shortcuts
         whose Steam tile the frontend must re-apply via
         ``SetCustomArtworkForApp`` (the grid file alone leaves the in-session
@@ -374,6 +381,7 @@ class ArtworkService:
         )
         if adoptions:
             await self._loop.run_in_executor(None, self._adopt_cover_sources_io, adoptions)
+        changed = await self._without_covers_set_in_steam(changed)
         if not changed:
             return []
 
@@ -406,6 +414,68 @@ class ArtworkService:
         if refreshed:
             self._logger.info(f"Cover refresh: {len(refreshed)} of {total} changed cover(s) re-downloaded")
         return refreshed
+
+    async def count_cover_refreshes(self, all_roms: list[dict[str, Any]], registry: dict[str, dict[str, Any]]) -> int:
+        """The preview's cover work: how many covers :meth:`refresh_changed_covers` would refresh.
+
+        The changed covers of the kernel the pass scans by
+        (:func:`domain.cover_refresh.scan_cover_refresh_candidates`), less the
+        ones set in Steam, read the same way the pass reads them. It reads
+        files and downloads and writes nothing.
+        """
+        changed = scan_cover_refresh_candidates(all_roms, registry).changed
+        return len(await self._without_covers_set_in_steam(changed))
+
+    async def _without_covers_set_in_steam(self, changed: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
+        if not changed:
+            return []
+        set_in_steam = await self._loop.run_in_executor(None, self._covers_set_in_steam_io, changed)
+        if set_in_steam:
+            self._logger.info(f"Cover refresh: {len(set_in_steam)} changed cover(s) set in Steam are left alone")
+        return [entry for entry in changed if entry[0] not in set_in_steam]
+
+    def _covers_set_in_steam_io(self, changed: list[tuple[int, int, str]]) -> set[int]:
+        """The ROMs among *changed* whose cover in Steam's grid directory is not Tender's.
+
+        Judged by :func:`domain.artwork_slot.is_set_in_steam` against what
+        Tender set for the cover: its recorded hash where a ``set`` outcome is
+        recorded, else its cover cache copy. Where the grid directory cannot be
+        found or listed, no cover is recognised as set in Steam.
+        """
+        grid = self._steam_config.grid_dir()
+        try:
+            file_names = self._steam_config.grid_file_names()
+        except OSError as e:
+            self._logger.warning(f"Cover refresh: could not list Steam's grid directory: {e}")
+            return set()
+        if not grid or file_names is None:
+            return set()
+        with self._uow_factory() as uow:
+            recorded = {rom_id: uow.artwork_slot_outcomes.get(rom_id, ArtworkSlot.COVER) for rom_id, _, _ in changed}
+        set_in_steam: set[int] = set()
+        for rom_id, app_id, _ in changed:
+            png = final_filename(app_id)
+            png_sha256 = self._sha256_of(os.path.join(grid, png)) if png in file_names else None
+            outcome = recorded[rom_id]
+            if outcome is not None and outcome.outcome is SlotOutcome.SET:
+                tenders_sha256 = outcome.image_sha256
+            else:
+                tenders_sha256 = self._sha256_of(self._cache_path(rom_id)) if png_sha256 is not None else None
+            if is_set_in_steam(
+                file_names, app_id, ArtworkSlot.COVER, png_sha256=png_sha256, tenders_sha256=tenders_sha256
+            ):
+                set_in_steam.add(rom_id)
+        return set_in_steam
+
+    def _sha256_of(self, path: str) -> str | None:
+        """The SHA-256 of *path*'s bytes, or ``None`` where it is missing or cannot be read, which is logged."""
+        if not self._cover_art_file_store.exists(path):
+            return None
+        try:
+            return hashlib.sha256(self._cover_art_file_store.read_bytes(path)).hexdigest()
+        except OSError as e:
+            self._logger.warning(f"Cover refresh: could not read {path}: {e}")
+            return None
 
     def _scan_cover_refresh_candidates(
         self, all_roms: list[dict[str, Any]], registry: dict[str, dict[str, Any]]

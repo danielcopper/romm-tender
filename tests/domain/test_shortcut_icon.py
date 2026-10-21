@@ -8,7 +8,13 @@ from __future__ import annotations
 import pytest
 from _vendor import png
 
-from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG, is_icon_filled
+from domain.shortcut_icon import (
+    LOGO_ICON_NAME,
+    PLACEHOLDER_ICON_NAME,
+    PLACEHOLDER_ICON_PNG,
+    is_icon_filled,
+    is_icon_set_in_steam,
+)
 
 _GRID = "/home/deck/.steam/steam/userdata/111/config/grid"
 _OTHER_GRID = "/home/deck/.steam/steam/userdata/222/config/grid"
@@ -61,3 +67,35 @@ class TestWhetherTheIconFillsItsSlot:
     )
     def test_any_other_path_fills_it_whether_its_file_is_there_or_not(self, icon):
         assert is_icon_filled(icon, _GRID, frozenset())
+
+
+class TestWhetherTheIconIsSetInSteam:
+    _APP_ID = 3345678901
+
+    @pytest.mark.parametrize(
+        "icon",
+        [
+            "/home/deck/Pictures/mine.png",
+            f"{_GRID}/{_APP_ID}_icon.jpg",
+            f"{_GRID}/4000000000_icon.png",
+            f"/home/deck/.steam/steam/userdata/222/config/grid/{_APP_ID}_icon.png",
+        ],
+        ids=["elsewhere", "another-extension-in-the-grid", "another-shortcuts-icon", "another-accounts-grid"],
+    )
+    def test_any_path_but_tenders_files(self, icon):
+        assert is_icon_set_in_steam(icon, self._APP_ID, _GRID)
+
+    @pytest.mark.parametrize(
+        "icon",
+        [
+            "",
+            f"{_GRID}/{PLACEHOLDER_ICON_NAME}",
+            f"{_GRID}/{LOGO_ICON_NAME}",
+            f"/elsewhere/{LOGO_ICON_NAME}",
+            f"{_GRID}/{_APP_ID}_icon.png",
+            f"{_GRID}/./{_APP_ID}_icon.png",
+        ],
+        ids=["empty", "placeholder", "logo-icon", "logo-icon-elsewhere", "tenders-icon", "tenders-icon-unnormalised"],
+    )
+    def test_not_tenders_own_icons(self, icon):
+        assert not is_icon_set_in_steam(icon, self._APP_ID, _GRID)

@@ -2,7 +2,6 @@
 
 from domain.cover_refresh import (
     _strip_cover_ts,
-    count_cover_refreshes,
     cover_ts_only_change,
     fresh_cover_source,
     scan_cover_refresh_candidates,
@@ -118,26 +117,6 @@ class TestScanCoverRefreshCandidates:
             {"10": _bound(1010, _OLD)},
         )
         assert scan.changed == [(10, 1010, _NEW)]
-
-
-class TestCountCoverRefreshes:
-    def test_counts_only_the_changed_bucket(self):
-        roms = [
-            {"id": 1, "path_cover_large": "/a.png?ts=new"},  # changed → counted
-            {"id": 2, "path_cover_large": "/b.png?ts=new"},  # NULL fingerprint → not counted
-            {"id": 3, "path_cover_large": "/c.png?ts=same"},  # unchanged → not counted
-            {"id": 4, "path_cover_large": "/d.png?ts=new"},  # unbound (no entry) → not counted
-        ]
-        registry = {
-            "1": _bound(1001, "/a.png?ts=old"),
-            "2": _bound(1002, None),
-            "3": _bound(1003, "/c.png?ts=same"),
-        }
-        assert count_cover_refreshes(roms, registry) == 1
-
-    def test_empty_inputs_count_zero(self):
-        assert count_cover_refreshes([], {}) == 0
-        assert count_cover_refreshes([{"id": 1, "path_cover_large": _NEW}], {}) == 0
 
 
 class TestStripCoverTs:

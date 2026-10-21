@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.artwork_slot import ArtworkSlot, is_slot_filled
+from domain.artwork_slot import ArtworkSlot, is_set_in_steam, is_slot_filled
 
 APP_ID = 3345678901
 # The 64-bit game id other tools name a shortcut's files by: the app id in the
@@ -65,3 +65,55 @@ class TestNothingElseFillsIt:
     def test_another_shortcuts_file(self):
         assert not is_slot_filled([f"{APP_ID}1.png", f"1{APP_ID}_logo.png"], APP_ID, ArtworkSlot.WIDE_GRID)
         assert not is_slot_filled([f"1{APP_ID}_logo.png"], APP_ID, ArtworkSlot.LOGO)
+
+
+_GRID_FOLDER_SLOTS = [ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO, ArtworkSlot.HERO, ArtworkSlot.COVER]
+
+
+def _stem(slot: ArtworkSlot) -> str:
+    return {
+        ArtworkSlot.WIDE_GRID: str(APP_ID),
+        ArtworkSlot.LOGO: f"{APP_ID}_logo",
+        ArtworkSlot.HERO: f"{APP_ID}_hero",
+        ArtworkSlot.COVER: f"{APP_ID}p",
+    }[slot]
+
+
+class TestASlotSetInSteam:
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    @pytest.mark.parametrize("extension", ["jpg", "jpeg", "webp", "PNG"])
+    def test_a_file_under_another_extension_beside_tenders_png(self, slot, extension):
+        names = [f"{_stem(slot)}.png", f"{_stem(slot)}.{extension}"]
+
+        assert is_set_in_steam(names, APP_ID, slot, png_sha256="tender", tenders_sha256="tender")
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_a_file_under_another_extension_alone(self, slot):
+        assert is_set_in_steam([f"{_stem(slot)}.jpg"], APP_ID, slot, png_sha256=None, tenders_sha256=None)
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_a_png_whose_hash_is_not_the_one_tender_set(self, slot):
+        assert is_set_in_steam([f"{_stem(slot)}.png"], APP_ID, slot, png_sha256="theirs", tenders_sha256="tender")
+
+
+class TestASlotThatIsTenders:
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_a_png_with_the_hash_tender_set(self, slot):
+        assert not is_set_in_steam([f"{_stem(slot)}.png"], APP_ID, slot, png_sha256="tender", tenders_sha256="tender")
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_a_png_with_nothing_to_compare_it_with(self, slot):
+        assert not is_set_in_steam([f"{_stem(slot)}.png"], APP_ID, slot, png_sha256="theirs", tenders_sha256=None)
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_an_empty_slot(self, slot):
+        assert not is_set_in_steam([], APP_ID, slot, png_sha256=None, tenders_sha256="tender")
+
+    def test_the_logos_position_file_and_other_slots_files(self):
+        names = [f"{APP_ID}_logo.json", f"{APP_ID}p.jpg", f"{APP_ID}_hero.jpg", f"{APP_ID}.jpg"]
+
+        assert not is_set_in_steam(names, APP_ID, ArtworkSlot.LOGO, png_sha256=None, tenders_sha256=None)
+
+    def test_the_icon_is_judged_by_its_path(self):
+        with pytest.raises(ValueError, match="path"):
+            is_set_in_steam([], APP_ID, ArtworkSlot.ICON, png_sha256=None, tenders_sha256=None)

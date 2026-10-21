@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import hashlib
 import logging
 import os
 from typing import Any
@@ -14,6 +15,8 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
 from domain.artwork_paths import cover_meta_filename
+from domain.artwork_slot import ArtworkSlot
+from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
 from domain.cover_refresh import scan_cover_refresh_candidates
 from domain.rom import Rom
 from lib.errors import DeviceWriteError, Refused, RommConnectionError, RommNotFoundError, RommServerError
@@ -2390,3 +2393,139 @@ class TestAtomicWrites:
         assert file_store.files[cache] == b"cover data"  # cache survives
         assert file_store.files[final] == b"cover data"  # grid published
         assert _tmp(final) not in file_store.files  # no sidecar left behind
+
+
+class TestACoverSetInSteamIsLeftAlone:
+    """The cover refresh and its preview count skip a cover in Steam's grid directory that is not Tender's."""
+
+    _OLD = "/cover/big.png?ts=2026-01-01 00:00:00"
+    _NEW = "/cover/big.png?ts=2026-07-11 12:00:00"
+
+    @pytest.fixture
+    def grid(self, steam_config, tmp_path):
+        grid_dir = str(tmp_path / "grid")
+        steam_config.grid_dir.return_value = grid_dir
+        steam_config.grid_file_names.return_value = frozenset()
+        return grid_dir
+
+    def _lay_down(self, steam_config, file_store, grid, files: dict[str, bytes]) -> None:
+        for name, data in files.items():
+            file_store.files[os.path.join(grid, name)] = data
+        steam_config.grid_file_names.return_value = frozenset(files)
+
+    async def _refresh(self, artwork_service, uow):
+        return await artwork_service.refresh_changed_covers(
+            [{"id": 42, "name": "Game", "path_cover_large": self._NEW}],
+            _registry(uow),
+            emit_progress=_noop_emit_progress,
+            is_cancelling=_not_cancelling,
+        )
+
+    async def _count(self, artwork_service, uow):
+        return await artwork_service.count_cover_refreshes(
+            [{"id": 42, "name": "Game", "path_cover_large": self._NEW}], _registry(uow)
+        )
+
+    def _seed(self, uow, file_store, cover_cache_dir, *, cached: bytes | None = b"tenders"):
+        if cached is not None:
+            file_store.files[_cache(cover_cache_dir, 42)] = cached
+        _seed_rom(uow, 42, app_id=99999, cover_source=self._OLD)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "files",
+        [
+            {"99999p.png": b"tenders", "99999p.jpg": b"hand-set"},
+            {"99999p.jpg": b"hand-set"},
+            {"99999p.png": b"hand-set png"},
+        ],
+        ids=["another-extension-beside-tenders", "another-extension-alone", "a-png-that-is-not-tenders"],
+    )
+    async def test_it_is_not_refreshed_and_its_change_stays_pending(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, grid, files
+    ):
+        self._seed(uow, file_store, cover_cache_dir)
+        self._lay_down(steam_config, file_store, grid, files)
+
+        refreshed = await self._refresh(artwork_service, uow)
+
+        assert refreshed == []
+        romm_api.download_cover.assert_not_called()
+        assert file_store.files[_cache(cover_cache_dir, 42)] == b"tenders"
+        for name, data in files.items():
+            assert file_store.files[os.path.join(grid, name)] == data
+        with uow:
+            assert uow.roms.get(42).cover_source == self._OLD
+
+    @pytest.mark.asyncio
+    async def test_the_preview_does_not_count_it(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir)
+        self._lay_down(steam_config, file_store, grid, {"99999p.png": b"tenders", "99999p.jpg": b"hand-set"})
+
+        assert await self._count(artwork_service, uow) == 0
+        romm_api.download_cover.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_tenders_own_cover_is_refreshed_and_counted(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir)
+        self._lay_down(steam_config, file_store, grid, {"99999p.png": b"tenders"})
+        romm_api.download_cover.side_effect = _writing_download(file_store, b"fresh cover")
+
+        assert await self._count(artwork_service, uow) == 1
+        refreshed = await self._refresh(artwork_service, uow)
+
+        assert refreshed == [{"rom_id": 42, "app_id": 99999}]
+        assert file_store.files[os.path.join(grid, "99999p.png")] == b"fresh cover"
+
+    @pytest.mark.asyncio
+    async def test_a_png_with_no_cache_copy_to_compare_with_is_tenders(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir, cached=None)
+        self._lay_down(steam_config, file_store, grid, {"99999p.png": b"whatever"})
+        romm_api.download_cover.side_effect = _writing_download(file_store, b"fresh cover")
+
+        assert await self._refresh(artwork_service, uow) == [{"rom_id": 42, "app_id": 99999}]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("recorded_bytes", "refreshed"),
+        [(b"sgdb cover", True), (b"something else", False)],
+        ids=["the-recorded-image", "not-the-recorded-image"],
+    )
+    async def test_a_recorded_cover_is_judged_by_its_recorded_hash(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, grid, recorded_bytes, refreshed
+    ):
+        self._seed(uow, file_store, cover_cache_dir)
+        with uow:
+            uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome(
+                    rom_id=42,
+                    slot=ArtworkSlot.COVER,
+                    outcome=SlotOutcome.SET,
+                    sgdb_id=9999,
+                    recorded_at=1.0,
+                    image_id=7,
+                    image_sha256=hashlib.sha256(recorded_bytes).hexdigest(),
+                )
+            )
+        self._lay_down(steam_config, file_store, grid, {"99999p.png": b"sgdb cover"})
+        romm_api.download_cover.side_effect = _writing_download(file_store, b"fresh cover")
+
+        result = await self._refresh(artwork_service, uow)
+
+        assert (result == [{"rom_id": 42, "app_id": 99999}]) is refreshed
+
+    @pytest.mark.asyncio
+    async def test_a_grid_directory_that_cannot_be_listed_recognises_nothing(
+        self, artwork_service, uow, steam_config, file_store, romm_api, cover_cache_dir, grid
+    ):
+        self._seed(uow, file_store, cover_cache_dir)
+        steam_config.grid_file_names.side_effect = PermissionError("denied")
+        romm_api.download_cover.side_effect = _writing_download(file_store, b"fresh cover")
+
+        assert await self._refresh(artwork_service, uow) == [{"rom_id": 42, "app_id": 99999}]

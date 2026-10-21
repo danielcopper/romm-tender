@@ -6,9 +6,11 @@ ROMs into fingerprint-changed covers (re-download + in-session tile refresh)
 and NULL-fingerprint candidates (the pre-fingerprint upgrade path, whose
 adopt-vs-download fork needs a cache-file existence check the caller performs).
 Both the apply-path invalidation pass and the preview's cover-work count run
-this kernel, so the number the preview shows is by construction the set the
-apply pass refreshes. Pure compute — no I/O, no state; anything that reads the
-DB, checks files, or downloads belongs in the calling service.
+this kernel and then leave out the covers set in Steam through the same read
+(``ArtworkService._covers_set_in_steam_io``), so the number the preview shows
+is by construction the set the apply pass refreshes. Pure compute — no I/O, no
+state; anything that reads the DB, checks files, or downloads belongs in the
+calling service.
 """
 
 from __future__ import annotations
@@ -107,19 +109,3 @@ def scan_cover_refresh_candidates(
             continue
         changed.append((rom_id, int(entry["app_id"]), fresh))
     return CoverRefreshScan(changed=changed, null_fingerprint=null_fingerprint)
-
-
-def count_cover_refreshes(
-    all_roms: list[dict[str, Any]],
-    registry: dict[str, dict[str, Any]],
-) -> int:
-    """Count the bound ROMs whose server cover changed — the preview's cover-work number.
-
-    Exactly ``len(scan_cover_refresh_candidates(...).changed)``: the same
-    predicate the apply-path invalidation pass refreshes by, so the preview's
-    count and the run's refresh set can never diverge. NULL-fingerprint rows
-    are not counted — their adopt-vs-download fork depends on a cache-file
-    check the preview must not perform (the preview is side-effect-free and
-    the adopt is invisible to the user).
-    """
-    return len(scan_cover_refresh_candidates(all_roms, registry).changed)
