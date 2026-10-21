@@ -149,6 +149,11 @@ detection-handoff of [ADR-0016](../adr/0016-save-sync-hands-detection-to-romm-ne
 4. Dispatch each outcome through `_dispatch_sync_action` — POST / PUT / GET plus the `.romm-backup` quarantine, the
    #1062 shrink guard, and the per-file baseline writes (`update_file_sync_state`).
 
+A download (`MatrixExecutor.do_download_save`, the one used here and by a restore, a copy to another slot, a conflict
+resolution and a slot switch) lands in `<save>.tmp` and replaces the local file only once complete. On any failure up to
+that replacement it tries to remove the `.tmp` — a removal that fails is not reported — and raises the download's own
+failure.
+
 There is **no** op→action fork any more: the client's kernel is the sole authority, and `StatusService` (the read-only
 SAVES-tab path) runs the identical kernel, so the sync run and the game-detail status can never disagree. The wizard
 gate still holds — an unconfirmed ROM never syncs automatically — so the "user decides on ambiguity" invariant is
@@ -1308,13 +1313,13 @@ rollback API.
 - **The listing after the pre-flight fails**: switch never runs. A call that could not reach RomM is
   `server_unreachable`, a definitive 404 `not_found`, and any other RomM answer `romm_refused` with `classify_error`'s
   message, which the panel words "Couldn't restore the save: …".
-- **Step 1 (download) fails**: state is not mutated. Local file unchanged. The download lands in `<save>.tmp` and
-  replaces the local file only once complete; `MatrixExecutor.do_download_save` removes that `.tmp` on any failure up to
-  the replacement and raises on — for every caller: this restore, a copy to another slot, a conflict resolution, a slot
-  switch and the per-file sync. A RomM error is not caught here: the endpoint answers the shared failure shape
-  (`success: false`) with `classify_error`'s reason and message. Where this device cannot write the download
-  (`DeviceWriteError`, a full disk among them) the status is `write_failed`, its message naming the system's words for
-  the fault, and the panel words it "Couldn't restore the save: …".
+- **Step 1 (download) fails**: state is not mutated. Local file unchanged, except where the failure came after it was
+  moved into `.romm-backup` (the move into place or the backup's pruning failing): it stays there, and the next sync
+  downloads the slot's save again (row 4). The `.tmp` is handled as
+  [Negotiate as transport](#negotiate-as-transport-one-decision-kernel) describes. A RomM error is not caught here: the
+  endpoint answers the shared failure shape (`success: false`) with `classify_error`'s reason and message. Where this
+  device cannot write the download (`DeviceWriteError`, a full disk among them) the status is `write_failed`, its
+  message naming the system's words for the fault, and the panel words it "Couldn't restore the save: …".
 - **Step 1 (download) succeeds, step 2 (PUT) fails**: state mutation from the download is persisted. Status:
   `put_failed`. Local file and local state both point at the target. Cross-device propagation is incomplete — other
   devices still see the original newest save. Calling `rollback_to_version` again is safe and idempotent: step 1 is
@@ -1342,7 +1347,7 @@ Two things define the semantics:
 - **The target slot becomes the ROM's active/confirmed slot,** with the copied save as its current save. This is
   mechanically forced: `do_upload_save` resolves its upload slot purely from `save_state.active_slot`
   (`_resolve_upload_slot`) — there is no per-call slot override — so `active_slot` is set to the target (`confirm_slot`)
-  _before_ the upload, and only _after_ the download, so a copy whose download fails leaves the active slot as it was.
+  _before_ the upload.
 
 The flow is a composition of the rollback orchestration shell and the wizard-migration's make-current step (it extends
 neither in place):
@@ -1371,7 +1376,15 @@ neither in place):
    new, switches active + confirms) → `do_upload_save(server_save=None, overwrite=False)` — a POST into the now-active
    target slot. A **409** is `target_slot_busy` (the target has newer changes from another device — sync it first, then
    retry); any other upload error is `upload_failed`: as with a restore's `put_failed`, the copy is complete on this
-   device and its state is persisted, the target slot stays active, and the next sync uploads it.
+   device and its state is persisted, and the target slot stays active. The download recorded the source save as the
+   file's baseline, which the copy matches, so in a slot that already holds a save the next sync would find nothing
+   changed (row 7) and never upload it. `upload_failed` therefore records the target slot's newest save for that file —
+   its id and its `content_hash` — as the baseline, and the next sync reads the copy as a local change: row 9 uploads it
+   as a new version superseding that save, where this device is current on it. Row 9b still applies — a copy far smaller
+   than that save is a conflict, not an upload — and a save there this device never synced is a conflict too (row 6c, or
+   12b where another device moved it on). A new slot has no save to record, and the next sync uploads the copy as its
+   first save (row 2). Where the newest save carries no `content_hash`, the download's baseline stays: no hash of that
+   save is known, so the copy reaches RomM only with its next change.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?, message?} |
@@ -1379,11 +1392,12 @@ server_unreachable{message} | not_found{message} | conflict_blocked{conflicts} |
 target_slot_busy{message} | already_present{existing_id} | copy_failed{message} | upload_failed{message}`.
 On `ok` and `upload_failed` the frontend dispatches `romm_data_changed` so the parent re-fetches — refreshing both the
 source and the target slot views; the `upload_failed` toast says the save is copied on this device and the upload
-finishes on the next sync. Outside the union the endpoint answers the shared failure shape (`success: false`) in two
-cases: when the conflict rules' hold in `SaveService.copy_save_to_slot` refuses, as for a restore, and on a RomM error
-at the step-7 download, with `classify_error`'s reason and message. The panel words it "Couldn't copy the save: …",
-followed by the endpoint's message, and refreshes nothing. The source slot is excluded from the target picker (a
-same-slot copy is just a rollback) and the legacy `""` bucket is excluded as a target (it stays a read-only source).
+finishes on the next sync — true outside the conflicts and the missing hash step 7 names. Outside the union the endpoint
+answers the shared failure shape (`success: false`) in two cases: when the conflict rules' hold in
+`SaveService.copy_save_to_slot` refuses, as for a restore, and on a RomM error at the step-7 download, with
+`classify_error`'s reason and message. The panel words it "Couldn't copy the save: …", followed by the endpoint's
+message, and refreshes nothing. The source slot is excluded from the target picker (a same-slot copy is just a rollback)
+and the legacy `""` bucket is excluded as a target (it stays a read-only source).
 
 ## RomM Save Sync API Behaviour
 
