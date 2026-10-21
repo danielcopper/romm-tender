@@ -102,17 +102,18 @@ as the `savefiles_in_content_dir` skip does — except for a missing saves root,
 refusing answer that names a directory outside the content's own is still recorded and followed when that directory
 moves, because the files are on the disk either way
 ([Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory)) — except a place
-not read from the emulator's settings, which the follow carries nothing into.
+not read from the emulator's settings, which the follow carries nothing into, and a directory with a hole still in it,
+which names no folder.
 
-| State                  | What it means                                                                          | Example on a stock RetroDECK        |
-| ---------------------- | -------------------------------------------------------------------------------------- | ----------------------------------- |
-| **per-game files**     | The answer names concrete files with no hole. Sync as usual, any number.               | Game Boy Advance, Saturn            |
-| **shared**             | One card or file that many games write, so per-game sync would overwrite.              | PS2, and a Sega CD disc image       |
-| **inside the content** | The save is written into the game file itself; there is nothing separate.              | an Amiga `.adf`                     |
-| **hole**               | The shape is known, but part of the path or name is the game's own identity.           | Dreamcast, GameCube, 3DS, Wii U     |
-| **not established**    | Nobody established what this emulator writes, or the names in a known folder.          | MAME, PSP, ScummVM, unaudited cores |
-| **saves root missing** | The source read its saves folder from its settings, and it is missing.                 | saves on an SD card that is out     |
-| **place not read**     | The emulator's own settings did not name the place, so its defaults stand in for them. | a standalone emulator never started |
+| State                  | What it means                                                                                                        | Example on a stock RetroDECK        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| **per-game files**     | The answer names concrete files with no hole. Sync as usual, any number.                                             | Game Boy Advance, Saturn            |
+| **shared**             | One card or file that many games write, so per-game sync would overwrite.                                            | PS2, and a Sega CD disc image       |
+| **inside the content** | The save is written into the game file itself; there is nothing separate.                                            | an Amiga `.adf`                     |
+| **hole**               | The shape is known, but part of the path or name is the game's own identity, or the folder the game is started from. | Dreamcast, GameCube, 3DS, Wii U     |
+| **not established**    | Nobody established what this emulator writes, or the names in a known folder.                                        | MAME, PSP, ScummVM, unaudited cores |
+| **saves root missing** | The source read its saves folder from its settings, and it is missing.                                               | saves on an SD card that is out     |
+| **place not read**     | The emulator's own settings did not name the place, so its defaults stand in for them.                               | a standalone emulator never started |
 
 **The sixth is about the emulator source, not the emulator.** While the answering source reports `saves-root-missing`
 for a saves root it read from its settings (its roots answer states that root `read`), the resolver still places a save
@@ -151,6 +152,13 @@ a missing saves root, then a place not read, then what cannot be established yet
 **The hole is not always in a file name.** Flycast's Dreamcast cards need the game's `save_id` in the filename;
 Dolphin's GameCube memory cards need the game's `region` in the DIRECTORY. Either way Tender cannot complete the path,
 which is what the state is about.
+
+**Nor is it always the game's.** A RetroArch save folder set as a relative path lies below the folder the game is
+started from, and the resolver answers it as `<cwd>/…` with the `cwd` hole. Tender names the resolver no starting
+folder, so such a game is not synced, and its refusal says why instead of naming an identity: **Save sync is
+unavailable: where this emulator saves depends on the folder the game is started from.** A directory with a hole still
+in it is no folder at all, whichever hole it is: it is never followed, recorded, renamed into on adoption, or used as a
+savestate place (`SaveAnswer.concrete_directory`; the savestate answer is no answer while its `needs` is not empty).
 
 **The not-established state has three shapes and they are kept apart**, because they are three different sentences to a
 reader. `nothing_established` — nobody has established what this emulator writes. `directory_known` — the directory is

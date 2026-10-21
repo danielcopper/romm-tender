@@ -29,13 +29,15 @@ assumption, this page reflects the audit.
 Where Tender cannot carry a game's saves, it says so when you start a sync yourself: **Sync Save Files**, a slot switch,
 copying a save to another slot and restoring an older version all answer with the reason. The sync before a game starts
 and the one after it exits pass such a game over without a message, and the game's **Saves** tab reads "No saves found".
-There are four reasons, and they mean different things:
+There are five reasons, and they mean different things:
 
 - **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
   would copy other games' progress onto this one's record, so Tender leaves it alone.
 - **The save is written inside the game file itself.** There is no separate file to carry.
 - **The emulator files saves under the game's own identity**, which Tender cannot read yet — in the file name, for
   Dreamcast and GameCube alike. Dreamcast, GameCube, Nintendo 3DS and Wii U are here.
+- **Where the emulator saves depends on the folder the game is started from.** RetroArch does this when its save folder
+  is set as a relative path. Tender cannot tell which folder that is, so it leaves such a game alone.
 - **What the emulator writes could not be established** — either nobody has audited that core yet, or the folder is
   known and the names inside it are not.
 

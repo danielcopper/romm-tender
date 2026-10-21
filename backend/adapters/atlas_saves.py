@@ -196,9 +196,10 @@ class AtlasSaveLocationAdapter:
         the path's own coordinates, so a rename can ask about the name the ROM
         is about to take. ``None`` wherever nothing could be established — no
         emulator, no answering source, no entry under that label, a refusal, a
-        raise — because each leaves the states' whereabouts unknown, and a
-        caller must not read that as "there are none". :class:`NoSavestates` is
-        that statement, made by the resolver with its evidence.
+        raise, a place with a hole still in it — because each leaves the states'
+        whereabouts unknown, and a caller must not read that as "there are
+        none". :class:`NoSavestates` is that statement, made by the resolver
+        with its evidence.
         """
         if emulator_label is None:
             return None
@@ -212,6 +213,10 @@ class AtlasSaveLocationAdapter:
         if not isinstance(placement, SavestatePlacement):
             if isinstance(placement, Unresolved):
                 self._log_debug(f"[saves] {subject}: declined with code={placement.code!r}")
+            return None
+        if placement.needs:
+            # A template such as ``<cwd>/states`` is no folder to carry states into.
+            self._log_debug(f"[saves] {subject}: the place still needs {list(placement.needs)}; nothing established")
             return None
         return SavestateLocation(
             directory=placement.dir, root_kind=placement.root_kind, fallback_directory=placement.fallback_dir

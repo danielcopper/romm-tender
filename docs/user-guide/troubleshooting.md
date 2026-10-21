@@ -548,8 +548,8 @@ the game in RomM (a server database reset re-registers this device automatically
 
 **Fix**: What syncs is not one file type. For each game, Tender asks the emulator that will launch it which files its
 save consists of, and syncs only those. Where that answer is something Tender cannot carry — a card many games share, a
-save inside the game file, a name built from the game's own identity, or nothing established — save sync does nothing
-for that game rather than guessing.
+save inside the game file, a name built from the game's own identity, a save folder that depends on the folder the game
+is started from, or nothing established — save sync does nothing for that game rather than guessing.
 [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why) explains each
 case, and the [save sync support matrix](save-sync-support-matrix.md) shows how each system usually lands.
 

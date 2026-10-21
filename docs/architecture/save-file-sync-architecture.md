@@ -919,8 +919,10 @@ does not otherwise stop — and the files stay the migration's to move until it 
 files regardless of the setting: the RetroDECK home migration and the adoption rename.) A failure — a listing refused,
 the database busy — is logged and leaves the record as it was; the operation that called it goes on. Against the record:
 
-- an answer with no directory, one anchored in the content's own directory (beside the content file or inside it), or
-  one whose directory was not read from the emulator's own settings → nothing moves and nothing is recorded;
+- an answer with no directory, one anchored in the content's own directory (beside the content file or inside it), one
+  whose directory was not read from the emulator's own settings, or one whose directory still holds a hole (`<cwd>/…`,
+  `…/<region>/…`, `…/<save_id>/…`; `SaveAnswer.concrete_directory`), which names no folder → nothing moves and nothing
+  is recorded;
 - nothing recorded → today's answer is recorded; nothing moves;
 - the same directory → nothing;
 - a different one → the game's files move from the recorded directory to the answered one, then the record moves on.

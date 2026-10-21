@@ -231,11 +231,12 @@ def _followable_directory(answer: SaveAnswer) -> str | None:
 
     ``None`` too where the directory was not read from the emulator's settings
     (:data:`SAVE_STATE_PLACE_NOT_READ`): it is a default the emulator may not
-    write to, so nothing is carried into it.
+    write to, so nothing is carried into it; and where a hole is still in it
+    (:attr:`SaveAnswer.concrete_directory`), which names no folder at all.
     """
     if answer.state == SAVE_STATE_PLACE_NOT_READ:
         return None
     if answer.root_kind == ROOT_CONTENT_DIRECTORY:
         # Holds until the content-directory gate is lifted.
         return None
-    return answer.directory
+    return answer.concrete_directory

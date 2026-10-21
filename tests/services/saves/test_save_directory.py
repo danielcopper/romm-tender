@@ -489,6 +489,55 @@ class TestNeverIntoAPlaceNotRead:
         assert _recorded(svc) == str(old)
 
 
+def _with_a_hole(directory: str, hole: str) -> SaveAnswer:
+    """A refusing answer whose directory still holds the resolver's *hole*, spelled ``<hole>``."""
+    return replace(_answer(directory), state="hole", needs=(hole,))
+
+
+class TestNeverIntoAPlaceWithAHole:
+    """A directory with a hole still in it names no folder, so nothing is carried into it or recorded."""
+
+    def test_an_upgrade_that_answers_below_the_start_folder_moves_nothing_and_keeps_the_record(
+        self, tmp_path, dirs, monkeypatch
+    ):
+        # Recorded concrete before, a relative save folder answered below the
+        # folder a game is started from now: the files stay where they are.
+        old, _new = dirs
+        monkeypatch.chdir(tmp_path)
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+
+        _follow(svc, _with_a_hole("<cwd>/saves", "cwd"))
+
+        assert save.read_bytes() == b"progress"
+        assert not (tmp_path / "<cwd>").exists()
+        assert _recorded(svc) == str(old)
+
+    def test_a_folder_keyed_by_region_moves_nothing_and_keeps_the_record(self, tmp_path, dirs):
+        old, _new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+        templated = tmp_path / "GC" / "<region>" / "Card A"
+
+        _follow(svc, _with_a_hole(str(templated), "region"))
+
+        assert save.read_bytes() == b"progress"
+        assert not (tmp_path / "GC").exists()
+        assert _recorded(svc) == str(old)
+
+    def test_a_first_sight_records_nothing(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+
+        _follow(svc, _with_a_hole(str(tmp_path / "Wii" / "title" / "<save_id>" / "data"), "save_id"))
+
+        assert _recorded(svc) is None
+
+
 class TestTheSecondaryWritePathsFollowFirst:
     """The write, delete and count paths follow a moved directory first, with the reading they took.
 

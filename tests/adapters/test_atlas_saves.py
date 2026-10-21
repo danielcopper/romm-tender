@@ -52,6 +52,9 @@ from _vendor.atlas import (
     HEALTH_ISSUE_MARKER_UNREADABLE,
     HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_SAVES_ROOT_MISSING,
+    HOLE_CWD,
+    HOLE_REGION,
+    HOLE_SAVE_ID,
     PLACE_NOT_READ_CODES,
     PROVENANCE_ASSUMED,
     PROVENANCE_READ,
@@ -75,6 +78,9 @@ from _vendor.atlas.placement import (
     FILE_SET_DECLARED,
     FILE_SET_OBSERVED,
     FILE_SET_UNKNOWN,
+    TEMPLATE_CWD,
+    TEMPLATE_REGION,
+    TEMPLATE_SAVE_ID,
     Caveat,
     FileGroup,
     FileSet,
@@ -86,6 +92,7 @@ from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_i
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.save_answer import (
     CONFIGURATION_ROLES,
+    HOLE_START_FOLDER,
     SAVE_STATE_HOLE,
     SAVE_STATE_INSIDE_CONTENT,
     SAVE_STATE_PER_GAME_FILES,
@@ -96,6 +103,7 @@ from domain.save_answer import (
     UNESTABLISHED_DIRECTORY_KNOWN,
     UNESTABLISHED_NOT_ASKED,
     UNESTABLISHED_NOTHING,
+    save_shape_message,
 )
 from domain.savestate_location import NoSavestates, SavestateLocation
 
@@ -133,10 +141,11 @@ def _placement(
     physical_dir: str | None = None,
     root_kind: str = "savefile_directory",
     fallback_dir: str | None = None,
+    directory: str = _SAVES,
 ) -> SavefilePlacement:
     """One resolved savefile placement, as the resolver hands it over."""
     return SavefilePlacement(
-        dir=_SAVES,
+        dir=directory,
         root_kind=cast("Any", root_kind),
         needs=needs,
         file_set=FileSet(
@@ -154,12 +163,18 @@ def _placement(
     )
 
 
-def _states_placement(*, root_kind: str = "savestate_directory", fallback_dir: str | None = None) -> Any:
+def _states_placement(
+    *,
+    root_kind: str = "savestate_directory",
+    fallback_dir: str | None = None,
+    directory: str = "/states/gba",
+    needs: tuple[str, ...] = (),
+) -> Any:
     """One resolved savestate placement, as the resolver hands it over."""
     return SavestatePlacement(
-        dir="/states/gba",
+        dir=directory,
         root_kind=cast("Any", root_kind),
-        needs=(),
+        needs=needs,
         file_set=FileSet(state=FILE_SET_OBSERVED, files=(), provenance="test", complete=False, groups=()),
         sources=(),
         caveats=(),
@@ -1231,6 +1246,42 @@ class TestWhatTheAnswerCarries:
     def test_an_unconditional_placement_has_no_fallback(self, traces):
         assert _ask(_placement(), traces).fallback_directory is None
 
+    def test_a_save_place_below_the_start_folder_is_not_synced_and_names_no_folder(self, traces):
+        answer = _ask(_placement(directory=f"{TEMPLATE_CWD}/saves", needs=(HOLE_CWD,)), traces)
+
+        assert answer.state == SAVE_STATE_HOLE
+        assert answer.concrete_directory is None
+        assert save_shape_message(answer) == (
+            "Save sync is unavailable: where this emulator saves depends on the folder the game is started from. (mGBA)"
+        )
+
+    @pytest.mark.parametrize(
+        ("directory", "needs"),
+        [
+            (f"/dolphin-emu/GC/{TEMPLATE_REGION}/Card A", (HOLE_REGION,)),
+            (f"/dolphin-emu/Wii/title/{TEMPLATE_SAVE_ID}/data", (HOLE_SAVE_ID,)),
+        ],
+    )
+    def test_a_folder_with_a_hole_in_it_names_no_folder(self, traces, directory, needs):
+        stated = (_SAVE_ID_STATED,) if HOLE_SAVE_ID in needs else ()
+        answer = _ask(_placement(directory=directory, needs=needs, stated=stated), traces)
+
+        assert answer.directory == directory
+        assert answer.concrete_directory is None
+        assert save_shape_message(answer) == (
+            "Save sync is unavailable: this emulator files saves under an identity of the game that Tender "
+            "cannot read. (mGBA)"
+        )
+
+    def test_a_hole_in_the_file_name_alone_leaves_the_folder_a_folder(self, traces):
+        # Flycast's cards: the save id is in the name, the folder is the saves root's.
+        answer = _ask(
+            _placement(files=(f"{TEMPLATE_SAVE_ID}_1.bin",), needs=(HOLE_SAVE_ID,), stated=(_SAVE_ID_STATED,)), traces
+        )
+
+        assert answer.state == SAVE_STATE_HOLE
+        assert answer.concrete_directory == _SAVES
+
 
 class TestTheSavestateQuestion:
     """Where the same entry keeps the game's savestates — three outcomes, kept apart."""
@@ -1260,6 +1311,16 @@ class TestTheSavestateQuestion:
         answer, _entry = self._ask_states(absence, traces)
 
         assert answer == NoSavestates()
+
+    def test_a_place_with_a_hole_still_in_it_establishes_nothing(self, traces):
+        # A relative savestate folder answers below the folder the game is
+        # started from, which Tender does not name.
+        answer, _entry = self._ask_states(
+            _states_placement(directory=f"{TEMPLATE_CWD}/states", needs=(HOLE_CWD,)), traces
+        )
+
+        assert answer is None
+        assert any("needs ['cwd']" in line for line in traces)
 
     def test_a_refusal_establishes_nothing(self, traces):
         answer, _entry = self._ask_states(Unresolved(code="standalone-unsupported", message="no", data={}), traces)
@@ -1357,6 +1418,15 @@ class TestTheVocabularyIsTheResolversOwn:
         from domain.save_answer import _FILE_SET_UNKNOWN
 
         assert _FILE_SET_UNKNOWN == FILE_SET_UNKNOWN
+
+    def test_the_start_folder_hole_and_how_the_resolver_spells_a_hole_in_a_path(self):
+        assert HOLE_START_FOLDER == HOLE_CWD
+        # SaveAnswer.concrete_directory finds a hole in a path as "<hole>".
+        assert (
+            f"<{HOLE_CWD}>",
+            f"<{HOLE_REGION}>",
+            f"<{HOLE_SAVE_ID}>",
+        ) == (TEMPLATE_CWD, TEMPLATE_REGION, TEMPLATE_SAVE_ID)
 
     def test_the_missing_sorted_directory_caveat(self):
         from domain.save_answer import SORTED_DIR_MISSING

@@ -2982,6 +2982,37 @@ class TestAdoptCandidate:
         assert ("/states/Game (U).state", "/states/Game.state") in h.move.moves
         assert all(not source.startswith("/saves/") for source, _target in h.move.moves)
 
+    async def test_a_save_directory_with_a_hole_still_in_it_carries_no_save(self, h):
+        # A relative save folder answers below the folder the game is started
+        # from: "<cwd>/saves" is no folder to carry anything out of or into.
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.save_locations.answer_with(
+            "snes",
+            build_save_answer(
+                emulator="Snes9x",
+                directory="<cwd>/saves",
+                backing_directory=None,
+                granularity="per-game-file",
+                needs=("cwd",),
+                file_set_state="declared",
+                files=("Game.srm",),
+                groups=(),
+                caveats=(),
+                content_installed=True,
+                root_kind="savefile_directory",
+            ),
+        )
+        h.store.files[_OLD] = b"rom"
+        h.store.files["<cwd>/saves/Game (U).srm"] = b"srm"
+        h.store.files["/states/Game (U).state"] = b"state"
+
+        result = await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
+
+        assert result["success"] is True
+        assert ("/states/Game (U).state", "/states/Game.state") in h.move.moves
+        assert all(not source.startswith("<cwd>") for source, _target in h.move.moves)
+
     @pytest.mark.parametrize("answer", [NoSavestates(), None], ids=["keeps-none", "not-established"])
     async def test_no_savestate_directory_carries_no_states(self, h, answer):
         h.seed_rom()

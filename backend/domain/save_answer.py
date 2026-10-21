@@ -115,6 +115,11 @@ _MARKER_NAMES_NO_SAVE_PLACE = frozenset({RETRODECK, EMUDECK})
 # The resolver's finding for a saves root that is not an existing directory.
 SAVES_ROOT_MISSING = "saves-root-missing"
 
+# The resolver's hole for the working directory a game is started in: a
+# relative RetroArch save folder answers below it. Tender names it no starting
+# folder, so such a save is never synced.
+HOLE_START_FOLDER = "cwd"
+
 # The save shapes Tender never syncs, named ahead of a finding about the reading.
 _PERMANENT_SHAPES = frozenset({"shared", "inside_content"})
 
@@ -302,6 +307,21 @@ class SaveAnswer:
         return self.root_kind == ROOT_CONTENT_DIRECTORY and self.syncable
 
     @property
+    def concrete_directory(self) -> str | None:
+        """:attr:`directory` where it names a folder, ``None`` where a hole is still in it.
+
+        The resolver spells each hole it leaves in a path as ``<hole>`` and lists
+        it in :attr:`needs` — a relative save folder answers ``<cwd>/…``,
+        Dolphin's GameCube cards ``…/<region>/…``, a Wii title ``…/<save_id>/…`` —
+        and such a string is no folder: carried into or recorded, it would be a
+        literal ``<region>`` folder or a path relative to Tender's own. A hole in
+        a file name alone leaves the directory a folder.
+        """
+        if self.directory is None or any(f"<{hole}>" in self.directory for hole in self.needs):
+            return None
+        return self.directory
+
+    @property
     def sync_directory(self) -> str | None:
         """The directory a sync reads and writes, or ``None`` where it may not sync at all.
 
@@ -357,6 +377,12 @@ _STATE_MESSAGES: dict[str, str] = {
     ),
 }
 
+# A hole that is no identity of the game: where the save lands follows the
+# folder the game is started from, which outranks any other hole beside it.
+_START_FOLDER_MESSAGE = (
+    "Save sync is unavailable: where this emulator saves depends on the folder the game is started from."
+)
+
 
 def save_shape_message(answer: SaveAnswer) -> str:
     """The sentence a refusal is reported with, named after the emulator it is about.
@@ -369,7 +395,10 @@ def save_shape_message(answer: SaveAnswer) -> str:
     """
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
         return f"Save sync is unavailable: the saves folder {answer.missing_saves_root} does not exist."
-    sentence = _STATE_MESSAGES.get(answer.state, _STATE_MESSAGES[SAVE_STATE_UNESTABLISHED])
+    if answer.state == SAVE_STATE_HOLE and HOLE_START_FOLDER in answer.needs:
+        sentence = _START_FOLDER_MESSAGE
+    else:
+        sentence = _STATE_MESSAGES.get(answer.state, _STATE_MESSAGES[SAVE_STATE_UNESTABLISHED])
     return f"{sentence} ({answer.emulator})" if answer.emulator else sentence
 
 
