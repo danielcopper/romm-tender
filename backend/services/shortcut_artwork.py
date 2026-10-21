@@ -553,7 +553,9 @@ class ShortcutArtworkService:
     def _refuse_key(self) -> None:
         if not self._key_refused:
             self._key_refused = True
-            self._logger.warning("Shortcut artwork: SteamGridDB refused the API key; the run ends")
+            self._logger.warning(
+                "Shortcut artwork: SteamGridDB refused the API key, or no request can carry it; the run ends"
+            )
 
     async def _add(self, batch: list[_Finished | _SlotReady], finished: _Finished | _SlotReady) -> None:
         batch.append(finished)

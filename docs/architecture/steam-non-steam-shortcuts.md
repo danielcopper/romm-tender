@@ -719,13 +719,13 @@ next `SetCustomArtworkForApp` displaces a hand-set `.jpg` is not measured.
 `skip` for a filled slot or one a record rules out, `none` when SteamGridDB's list is empty or it does not know the game
 (a 404), or the ROM has no SteamGridDB game and the cache holds nothing for the slot, `key_refused` for a 401 or 403 and
 `rate_limited` for a 429 — the answers the shortcut artwork job tells apart, through the same mapping
-(`SteamGridService._download_or_answer_io`) — `failed` for an unsuccessful answer, a list with no usable entry or a
-download that failed, or the image's base64 with SteamGridDB's image id, the SHA-256 of its bytes, the ROM's SteamGridDB
-id and an `sgdb_artwork` lease; for the icon it answers `ready` in place of the image (below). The frontend sets the
-image under that lease, waits for it, and only then asks for the next slot, so one image at a time is in the renderer.
-For the hero, the wide grid and the logo it then reports what Steam made of it through `report_sgdb_slot_artwork` —
-`set`, or `refused` when `SetCustomArtworkForApp` failed — passing the fetch's answer back; the backend cannot see
-Steam's answer itself.
+(`SteamGridService._download_or_answer_io`), which answers a stored key no request can carry `key_refused` for the job —
+`failed` for an unsuccessful answer, a list with no usable entry or a download that failed, or the image's base64 with
+SteamGridDB's image id, the SHA-256 of its bytes, the ROM's SteamGridDB id and an `sgdb_artwork` lease; for the icon it
+answers `ready` in place of the image (below). The frontend sets the image under that lease, waits for it, and only then
+asks for the next slot, so one image at a time is in the renderer. For the hero, the wide grid and the logo it then
+reports what Steam made of it through `report_sgdb_slot_artwork` — `set`, or `refused` when `SetCustomArtworkForApp`
+failed — passing the fetch's answer back; the backend cannot see Steam's answer itself.
 
 **The icon on the game page** is judged by the job's own rule (`domain/artwork_slot_outcome.py`, `icon_waits`): the
 backend reads the shortcut's `icon` path in `shortcuts.vdf`, the grid directory's listing and the icon's record, so a
@@ -852,8 +852,8 @@ the game page.
   failure is not "no icon": nothing is recorded and the next run asks again.
 - **Pace:** four shortcuts at a time. A 429 from SteamGridDB's API or its image CDN (`SgdbRateLimitedError`) pauses
   every worker: 30 s, twice as long at each 429 in a row, at most 15 minutes, then on, with only what the 429 met asked
-  again; every run starts the pause over. A 401 or 403 from the API — a key SteamGridDB does not accept — ends the run
-  with one warning; what was written before it is still handed over.
+  again; every run starts the pause over. A 401 or 403 from the API — a key SteamGridDB does not accept — or a stored
+  key no request can carry ends the run with one warning; what was written before it is still handed over.
 - **Hand-over:** what is finished goes to the frontend as the `shortcut_artwork` event in batches of up to 25 entries,
   each batch under one prune lease (`emit_under_lease`): `icons`, each an app id and an icon path, a SteamGridDB icon
   with a `record` of the ROM, its SteamGridDB id, the image id and the hash, and `artwork`, `(app_id, rom_id, slot)`

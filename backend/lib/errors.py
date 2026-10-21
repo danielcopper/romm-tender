@@ -28,7 +28,7 @@ class SgdbKeyUnsendableError(SgdbApiError):
     """A stored SteamGridDB API key no HTTP header can carry, refused before any request was made."""
 
     def __init__(self) -> None:
-        super().__init__(None, "Invalid API key")
+        super().__init__(None, "The SteamGridDB API key holds a character no HTTP header can carry")
 
 
 class SgdbRateLimitedError(SgdbApiError):

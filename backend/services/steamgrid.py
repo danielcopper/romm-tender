@@ -96,7 +96,11 @@ _ASSET_TYPES = ("hero", "logo", "grid", "icon")
 
 
 def _refusal_for(error: SgdbApiError, *, key_refused: str = _KEY_REFUSED) -> Refused:
-    """The refusal an ``SgdbApiError`` answers with, *key_refused* for a 401 or 403; never the error's own text."""
+    """The refusal an ``SgdbApiError`` answers with; never the error's own text.
+
+    *key_refused* for a 401 or 403, and the same refusal as
+    :func:`_refuse_a_key_that_cannot_be_sent` for a key no header can carry.
+    """
     if isinstance(error, SgdbKeyUnsendableError):
         return AuthFailed(_INVALID_KEY)
     if error.status_code in (401, 403):
