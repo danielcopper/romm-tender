@@ -262,7 +262,9 @@ whitespace / `None` slot **name** is a different thing entirely: it is rejected 
 
 On the SAVES tab every slot is a collapsible panel, and the active slot's panel starts open. When the active slot
 changes — **Activate Slot**, or a copy that makes its target active — the new active slot's panel opens and the old
-one's closes, reading its files again when it is reopened. Every other panel keeps its state.
+one's closes, reading its files again when it is reopened. Every other panel keeps its state. Activate Slot and New Slot
+both switch through `executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which answers the new save status or
+the sentence the tab shows.
 
 #### Inside `.romm-backup` — naming and retention
 
@@ -1102,6 +1104,10 @@ all server saves in the slot.
 
 The delete button appears in inactive slot bodies alongside "Activate Slot". It is hidden on the active slot. Gamepad
 navigation between the buttons uses `Focusable` with `flow-children="right"` for proper DPad left/right traversal.
+
+A surface reaches steps 1 and 3 through `loadSlotDeleteInfo` and `executeSlotDelete` in
+`frontend/src/utils/saveSlotFlow.ts`: the first toasts a failure, the second its answer either way, and the surface
+draws the modal between them.
 
 ## Server Capabilities
 

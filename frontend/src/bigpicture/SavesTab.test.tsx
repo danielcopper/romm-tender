@@ -624,6 +624,32 @@ describe("SavesTab", () => {
       expect(onSlotSwitched).toHaveBeenCalledWith("newslot", newStatus);
     });
 
+    it("logs a throw from onSlotSwitched as an error rather than dropping it, and shows no sentence for it", async () => {
+      const errorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.switchSlot).mockResolvedValue({ success: true, save_status: makeSaveStatus() });
+        const onSlotSwitched = vi.fn(() => {
+          throw new Error("parent broke");
+        });
+        const { container, getByText } = render(<SavesTab {...defaultProps({ onSlotSwitched })} />);
+        fireEvent.click(getByText("+ New Slot"));
+        await act(async () => {
+          await newSlotModalSubmit()?.("newslot");
+        });
+        await waitFor(() =>
+          expect(errorSpy).toHaveBeenCalledExactlyOnceWith(
+            "SavesTab: new slot 'newslot' threw after the switch: Error: parent broke",
+          ),
+        );
+        expect(onSlotSwitched).toHaveBeenCalledOnce();
+        await flushAsync();
+        expect(container.textContent).not.toContain("An error occurred while creating the slot");
+        expect(container.textContent).not.toContain("Failed to create slot");
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
     it("surfaces the 'pending_uploads' error inline", async () => {
       vi.useFakeTimers();
       try {
@@ -662,6 +688,35 @@ describe("SavesTab", () => {
         expect(container.textContent).toContain("Sync your saves first — local changes haven't been uploaded");
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5001);
+        });
+        expect(container.textContent).not.toContain("Sync your saves first — local changes haven't been uploaded");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("gives a second failure's error its own 5 seconds, not what was left of the first's", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.switchSlot).mockResolvedValue({
+          success: false,
+          reason: "pending_uploads",
+          message: "Pending local changes — upload or discard first",
+        });
+        const { container, getByText } = render(<SavesTab {...defaultProps()} />);
+        fireEvent.click(getByText("+ New Slot"));
+        await act(async () => {
+          await newSlotModalSubmit()?.("blocked");
+          await vi.advanceTimersByTimeAsync(3000);
+        });
+        fireEvent.click(getByText("+ New Slot"));
+        await act(async () => {
+          await newSlotModalSubmit(1)?.("blocked");
+          await vi.advanceTimersByTimeAsync(2500);
+        });
+        expect(container.textContent).toContain("Sync your saves first — local changes haven't been uploaded");
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2501);
         });
         expect(container.textContent).not.toContain("Sync your saves first — local changes haven't been uploaded");
       } finally {
@@ -728,6 +783,39 @@ describe("SavesTab", () => {
         expect(container.textContent).toContain("Failed to create slot");
       } finally {
         vi.useRealTimers();
+      }
+    });
+
+    it("debug-logs a failed switch with its reason, and no such line for a throw", async () => {
+      const debugSpy = vi.spyOn(backend, "debugLog").mockResolvedValue(undefined);
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.switchSlot).mockResolvedValueOnce({
+          success: false,
+          reason: "not_installed",
+          message: "Not installed",
+        });
+        const { getByText } = render(<SavesTab {...defaultProps()} />);
+        fireEvent.click(getByText("+ New Slot"));
+        await act(async () => {
+          await newSlotModalSubmit()?.("named");
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(debugSpy).toHaveBeenCalledWith("SavesTab: new slot switch failed: not_installed");
+
+        debugSpy.mockClear();
+        vi.mocked(backend.switchSlot).mockRejectedValueOnce(new Error("boom"));
+        fireEvent.click(getByText("+ New Slot"));
+        await act(async () => {
+          await newSlotModalSubmit(1)?.("named");
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(backend.switchSlot).toHaveBeenCalledTimes(2);
+        expect(getByText("An error occurred while creating the slot")).toBeTruthy();
+        expect(debugSpy).not.toHaveBeenCalledWith(expect.stringContaining("new slot switch failed"));
+      } finally {
+        vi.useRealTimers();
+        debugSpy.mockRestore();
       }
     });
 
@@ -1041,6 +1129,80 @@ describe("SavesTab", () => {
 
       rerender(<SavesTab {...defaultProps({ romId: 99 })} />);
       await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+    });
+
+    it("keeps the banner a newer run set when an older run's list answers late, and probes nothing for it", async () => {
+      // The run for romId 2 still waits on its list when the switch to 99 starts
+      // a second run, which finds the USA build stranded. The late list names a
+      // Europe build the first run must not probe.
+      const lateList: import("../api/backend").VersionList = {
+        multi_version: true,
+        bound_vanished: false,
+        versions: [
+          makeVersion({ rom_id: 2, label: "Game (Japan)", active: true, installed: true }),
+          makeVersion({ rom_id: 7, label: "Game (Europe)", active: false, installed: true }),
+        ],
+      };
+      let answerFirstList: (list: import("../api/backend").VersionList) => void = () => {};
+      vi.mocked(backend.getVersionList)
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            answerFirstList = resolve;
+          }),
+        )
+        .mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 5,
+      });
+
+      const { container, rerender } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+      await waitFor(() => expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1));
+      rerender(<SavesTab {...defaultProps({ romId: 99 })} />);
+      await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+
+      await act(async () => {
+        answerFirstList(lateList);
+        await flushAsync();
+      });
+      expect(container.textContent).toContain(STRANDED_COPY);
+      expect(backend.checkLocalDrift).not.toHaveBeenCalledWith(7);
+    });
+
+    it("keeps the banner a newer run set when an older run's list fails late", async () => {
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      try {
+        let failFirstList: (e: Error) => void = () => {};
+        vi.mocked(backend.getVersionList)
+          .mockReturnValueOnce(
+            new Promise((_, reject) => {
+              failFirstList = reject;
+            }),
+          )
+          .mockResolvedValue(listWithStranded);
+        vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+          drifted: true,
+          only_here: false,
+          stranding: "unsynced",
+          rom_id: 5,
+        });
+
+        const { container, rerender } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+        await waitFor(() => expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1));
+        rerender(<SavesTab {...defaultProps({ romId: 99 })} />);
+        await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+
+        await act(async () => {
+          failFirstList(new Error("socket closed"));
+          await flushAsync();
+        });
+        expect(container.textContent).toContain(STRANDED_COPY);
+        expect(logWarnSpy).toHaveBeenCalledWith(expect.stringContaining("socket closed"));
+      } finally {
+        logWarnSpy.mockRestore();
+      }
     });
 
     it("probes every inactive install and surfaces the first DRIFTED one", async () => {

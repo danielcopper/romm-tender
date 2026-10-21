@@ -1,14 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
+  CREATE_SLOT_ERROR_MESSAGE,
+  DELETE_SLOT_ERROR_MESSAGE,
+  SLOT_DELETE_INFO_ERROR_MESSAGE,
+  SWITCH_SLOT_ERROR_MESSAGE,
   copyToSlotFeedback,
+  createSlotFailureMessage,
   formatSlotDeleteDescription,
   formatSlotDeleteLines,
   rollbackFeedback,
+  slotDeletedMessage,
+  strandedVersionNotice,
   switchSlotFailureMessage,
   unsupportedCopyMessage,
   unsupportedRestoreMessage,
 } from "./saveSlotWording";
-import type { EndpointFailure, SlotDeleteInfo, SyncConflict } from "../types";
+import type { EndpointFailure, SlotDeleteInfo, SyncConflict, WireReason } from "../types";
 
 describe("unsupportedRestoreMessage", () => {
   it("says the saves are written beside the game file for savefiles_in_content_dir", () => {
@@ -245,6 +252,48 @@ describe("switchSlotFailureMessage", () => {
     expect(switchSlotFailureMessage("unknown", "Specific backend error")).toBe("Failed to switch slot");
     expect(switchSlotFailureMessage("unknown", "Specific backend error", "Failed custom")).toBe("Failed custom");
     expect(switchSlotFailureMessage(undefined)).toBe("Failed to switch slot");
+  });
+});
+
+describe("createSlotFailureMessage", () => {
+  it("words pending_uploads and server_unreachable as a switch does", () => {
+    expect(createSlotFailureMessage("pending_uploads")).toBe(
+      "Sync your saves first — local changes haven't been uploaded",
+    );
+    expect(createSlotFailureMessage("server_unreachable")).toBe("Can't switch — RomM server is not reachable");
+  });
+
+  it("says the slot could not be created for every other reason, the ones a switch words included", () => {
+    const reasons: WireReason[] = ["not_installed", "savefiles_in_content_dir", "save_shape_unsupported", "not_found"];
+    for (const reason of reasons) {
+      expect(createSlotFailureMessage(reason)).toBe("Failed to create slot");
+    }
+  });
+});
+
+describe("the slot switch and delete sentences", () => {
+  it("names the version whose saves haven't been synced", () => {
+    expect(strandedVersionNotice({ name: "Japan", stranding: "unsynced" })).toBe(
+      'Version "Japan" has saves that haven\'t been synced to RomM — switch back to sync them.',
+    );
+  });
+
+  it("says when the version's saves could not be checked", () => {
+    expect(strandedVersionNotice({ name: "Japan", stranding: "unchecked" })).toBe(
+      "Tender couldn't check whether version \"Japan\" has saves that haven't been synced to RomM — switch back to " +
+        "check and sync them.",
+    );
+  });
+
+  it("names the deleted slot as given", () => {
+    expect(slotDeletedMessage("old")).toBe("Slot 'old' deleted");
+  });
+
+  it("keeps each error sentence", () => {
+    expect(SWITCH_SLOT_ERROR_MESSAGE).toBe("An error occurred while switching slots");
+    expect(CREATE_SLOT_ERROR_MESSAGE).toBe("An error occurred while creating the slot");
+    expect(SLOT_DELETE_INFO_ERROR_MESSAGE).toBe("Failed to load slot info");
+    expect(DELETE_SLOT_ERROR_MESSAGE).toBe("An error occurred while deleting the slot");
   });
 });
 

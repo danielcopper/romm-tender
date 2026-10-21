@@ -6,13 +6,12 @@
 
 import { useState, useRef, useEffect, FC, type ReactElement } from "react";
 import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
-import { showToast } from "../../utils/toast";
-import { getSlotSaves, switchSlot, debugLog, getSlotDeleteInfo, deleteSlot } from "../../api/backend";
+import { getSlotSaves, debugLog, logError } from "../../api/backend";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
-import { reportServerReachable } from "../../utils/connectionState";
 import { MUTED_COLOR, computeSyncSummary, displaySlot } from "../../utils/saveHelpers";
-import { formatSlotDeleteDescription, switchSlotFailureMessage } from "../../utils/saveSlotWording";
+import { formatSlotDeleteDescription } from "../../utils/saveSlotWording";
+import { executeSlotDelete, executeSlotSwitch, loadSlotDeleteInfo } from "../../utils/saveSlotFlow";
 import { renderSaveFileRow } from "./SaveFileRow";
 import { InactiveSlotBody } from "./InactiveSlotBody";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
@@ -184,22 +183,12 @@ export const SlotPanel: FC<SlotPanelProps> = ({
     setSwitching(true);
     setSwitchError(null);
     try {
-      const result = await switchSlot(romId, slotName);
-      if (result.success) {
-        reportServerReachable(true);
-        onSlotSwitched(slotName, result.save_status);
-      } else {
-        if (result.reason === "server_unreachable") {
-          reportServerReachable(false);
-        }
-        const msg = switchSlotFailureMessage(result.reason, result.message, "Failed to switch slot");
-        setSwitchError(msg);
-        if (switchErrorTimerRef.current) clearTimeout(switchErrorTimerRef.current);
-        switchErrorTimerRef.current = setTimeout(() => setSwitchError(null), 5000);
+      const outcome = await executeSlotSwitch(romId, slotName, "activate");
+      if (outcome.ok) {
+        onSlotSwitched(slotName, outcome.saveStatus);
+        return;
       }
-    } catch (e) {
-      detach(debugLog(`SavesTab: switchSlot error: ${e}`));
-      setSwitchError("An error occurred while switching slots");
+      setSwitchError(outcome.message);
       if (switchErrorTimerRef.current) clearTimeout(switchErrorTimerRef.current);
       switchErrorTimerRef.current = setTimeout(() => setSwitchError(null), 5000);
     } finally {
@@ -210,11 +199,8 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const info = await getSlotDeleteInfo(romId, slotName);
-      if (!info.success) {
-        showToast(info.message);
-        return;
-      }
+      const info = await loadSlotDeleteInfo(romId, slotName);
+      if (!info) return;
 
       showModal(
         <ConfirmModal
@@ -223,28 +209,12 @@ export const SlotPanel: FC<SlotPanelProps> = ({
           strOKButtonText="Delete"
           strCancelButtonText="Cancel"
           onOK={() => {
-            detach(
-              (async () => {
-                try {
-                  const result = await deleteSlot(romId, slotName);
-                  if (result.success) {
-                    showToast(`Slot '${slotName}' deleted`);
-                    onSlotDeleted();
-                  } else {
-                    showToast(result.message);
-                  }
-                } catch (e) {
-                  detach(debugLog(`SavesTab: deleteSlot error: ${e}`));
-                  showToast("An error occurred while deleting the slot");
-                }
-              })(),
-            );
+            (async () => {
+              if (await executeSlotDelete(romId, slotName)) onSlotDeleted();
+            })().catch((e) => logError(`SavesTab: slot '${slotName}' threw after its delete: ${e}`));
           }}
         />,
       );
-    } catch (e) {
-      detach(debugLog(`SavesTab: getSlotDeleteInfo error: ${e}`));
-      showToast("Failed to load slot info");
     } finally {
       setDeleting(false);
     }
@@ -360,10 +330,10 @@ export const SlotPanel: FC<SlotPanelProps> = ({
         isLegacy={isLegacy}
         deleting={deleting}
         handleActivate={() => {
-          detach(handleActivate());
+          handleActivate().catch((e) => logError(`SavesTab: slot '${slotName}' threw after its switch: ${e}`));
         }}
         handleDelete={() => {
-          detach(handleDelete());
+          handleDelete().catch((e) => logError(`SavesTab: slot '${slotName}' threw before its delete: ${e}`));
         }}
         // Copy source = this (inactive/legacy) slot; the picker excludes it as a target.
         copy={{ onCopy, sourceSlot: slotName, isOffline }}

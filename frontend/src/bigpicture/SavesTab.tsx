@@ -1,19 +1,15 @@
 /**
- * SavesTab — slot-based collapsible save file browser.
- *
- * Replaces the old two-column (files left / slots right) layout in
- * RomMGameInfoPanel with a stacked list of collapsible slot panels.
+ * SavesTab — slot-based collapsible save file browser: a stacked list of
+ * collapsible slot panels.
  *
  * - Active slot expanded by default, inactive slots collapsed.
- * - Inactive slot bodies load lazily via getSlotSaves on first expand.
- * - Activate-slot via switchSlot (v4.7+) with inline error feedback.
- * - New-slot modal opens inline (same as old NewSlotModal in parent).
+ * - New Slot asks for the name in a modal, with inline error feedback.
  */
 
 import { useState, useEffect, useRef, FC, type ReactElement } from "react";
 import { DialogButton, Focusable, showModal } from "@decky/ui";
-import { switchSlot, getVersionList, checkLocalDrift, debugLog, logWarn, type SaveStranding } from "../api/backend";
-import { getRommConnectionState, onRommConnectionChange, reportServerReachable } from "../utils/connectionState";
+import { debugLog, logError, logWarn } from "../api/backend";
+import { getRommConnectionState, onRommConnectionChange } from "../utils/connectionState";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, LastKnownSlots } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { MUTED_COLOR, sortSaveSlots, filterSaveSlotsForDisplay } from "../utils/saveHelpers";
@@ -24,32 +20,9 @@ import { ConnectingIndicator } from "./saves/ConnectingIndicator";
 import { renderSaveFileRow } from "./saves/SaveFileRow";
 import { useCopyToSlot } from "./saves/useCopyToSlot";
 import { detach } from "../utils/detach";
-import { LOCAL_CALL_LIMIT_MS } from "../utils/launchGate";
-import { withTimeout } from "../utils/withTimeout";
 import { announceSaveSync } from "../utils/saveSyncEvents";
-import { switchSlotFailureMessage } from "../utils/saveSlotWording";
-
-interface StrandedVersion {
-  name: string;
-  stranding: Exclude<SaveStranding, "none">;
-}
-
-function strandedBannerText({ name, stranding }: StrandedVersion): string {
-  return stranding === "unchecked"
-    ? `Tender couldn't check whether version "${name}" has saves that haven't been synced to RomM — switch back to ` +
-        "check and sync them."
-    : `Version "${name}" has saves that haven't been synced to RomM — switch back to sync them.`;
-}
-
-/** The local-save check's verdict for `romId`; a call that rejects or gets no answer in time could not check. */
-async function strandingOf(romId: number): Promise<SaveStranding> {
-  try {
-    return (await withTimeout(checkLocalDrift(romId), LOCAL_CALL_LIMIT_MS)).stranding;
-  } catch (e) {
-    logWarn(`SavesTab: local-save check failed for rom ${romId}: ${e}`);
-    return "unchecked";
-  }
-}
+import { strandedVersionNotice } from "../utils/saveSlotWording";
+import { executeSlotSwitch, findStrandedVersion, type StrandedVersion } from "../utils/saveSlotFlow";
 
 interface SavesTabProps {
   /** The group's sticky Steam appId — drives the stranded-version check. */
@@ -112,29 +85,11 @@ export const SavesTab: FC<SavesTabProps> = ({
   // version switch (romId changes).
   useEffect(() => {
     let cancelled = false;
-    // Getter, not a bare read: the two post-await `cancelled` checks would
-    // otherwise be narrowed to "always false" by no-unnecessary-condition (the
-    // cleanup mutation lives in another closure it can't model).
     const isCancelled = () => cancelled;
     const check = async (): Promise<void> => {
       try {
-        const list = await getVersionList(appId);
-        if (isCancelled()) return;
-        const inactiveInstalled = list.multi_version
-          ? (list.versions ?? []).filter((v) => v.installed && !v.active && !v.vanished)
-          : [];
-        // Probe every inactive-installed sibling (any of them can hold stranded
-        // saves), and surface the first one the verdict holds for.
-        let stranded: StrandedVersion | null = null;
-        for (const v of inactiveInstalled) {
-          const stranding = await strandingOf(v.rom_id);
-          if (isCancelled()) return;
-          if (stranding !== "none") {
-            stranded = { name: v.label || v.name || String(v.rom_id), stranding };
-            break;
-          }
-        }
-        setStrandedVersion(stranded);
+        const stranded = await findStrandedVersion(appId, isCancelled);
+        if (!isCancelled()) setStrandedVersion(stranded);
       } catch (e) {
         if (!isCancelled()) setStrandedVersion(null);
         logWarn(`SavesTab: stranded-version check failed for appId ${appId}: ${e}`);
@@ -184,7 +139,7 @@ export const SavesTab: FC<SavesTabProps> = ({
         color: "#ff8800",
       }}
     >
-      {strandedBannerText(strandedVersion)}
+      {strandedVersionNotice(strandedVersion)}
     </div>
   ) : null;
 
@@ -214,35 +169,19 @@ export const SavesTab: FC<SavesTabProps> = ({
           // empty name is not a valid slot target, so ignore it rather than
           // offering legacy mode. Legacy saves stay viewable in their own panel.
           if (!name) return;
-          detach(
-            (async () => {
-              // Named slot — use switchSlot to do pre-checks + immediate download
-              try {
-                const result = await switchSlot(romId, name);
-                if (result.success) {
-                  reportServerReachable(true);
-                  onSlotSwitched(name, result.save_status);
-                } else {
-                  detach(debugLog(`SavesTab: new slot switch failed: ${result.reason}`));
-                  if (result.reason === "server_unreachable") {
-                    reportServerReachable(false);
-                  }
-                  const msg =
-                    result.reason === "pending_uploads" || result.reason === "server_unreachable"
-                      ? switchSlotFailureMessage(result.reason)
-                      : "Failed to create slot";
-                  setNewSlotError(msg);
-                  if (newSlotErrorTimerRef.current) clearTimeout(newSlotErrorTimerRef.current);
-                  newSlotErrorTimerRef.current = setTimeout(() => setNewSlotError(null), 5000);
-                }
-              } catch (e) {
-                detach(debugLog(`SavesTab: new slot switch error: ${e}`));
-                setNewSlotError("An error occurred while creating the slot");
-                if (newSlotErrorTimerRef.current) clearTimeout(newSlotErrorTimerRef.current);
-                newSlotErrorTimerRef.current = setTimeout(() => setNewSlotError(null), 5000);
-              }
-            })(),
-          );
+          (async () => {
+            const outcome = await executeSlotSwitch(romId, name, "create");
+            if (outcome.ok) {
+              onSlotSwitched(name, outcome.saveStatus);
+              return;
+            }
+            if (outcome.reason !== null) {
+              detach(debugLog(`SavesTab: new slot switch failed: ${outcome.reason}`));
+            }
+            setNewSlotError(outcome.message);
+            if (newSlotErrorTimerRef.current) clearTimeout(newSlotErrorTimerRef.current);
+            newSlotErrorTimerRef.current = setTimeout(() => setNewSlotError(null), 5000);
+          })().catch((e) => logError(`SavesTab: new slot '${name}' threw after the switch: ${e}`));
         }}
       />,
     );

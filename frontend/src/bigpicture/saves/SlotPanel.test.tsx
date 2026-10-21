@@ -574,6 +574,67 @@ describe("SlotPanel", () => {
       }
     });
 
+    it("gives a second failure's error its own 5 seconds, not what was left of the first's", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+        vi.mocked(backend.switchSlot).mockResolvedValue({
+          success: false,
+          reason: "sync_disabled",
+          message: "Save sync is disabled",
+        });
+        const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
+        fireEvent.click(container.querySelector("button")!);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        fireEvent.click(getByText("Activate Slot"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(3000);
+        });
+        fireEvent.click(getByText("Activate Slot"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2500);
+        });
+        expect(container.textContent).toContain("Failed to switch slot");
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2501);
+        });
+        expect(container.textContent).not.toContain("Failed to switch slot");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("writes no debug line for a failure answer", async () => {
+      const debugSpy = vi.spyOn(backend, "debugLog").mockResolvedValue(undefined);
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+        vi.mocked(backend.switchSlot).mockResolvedValue({
+          success: false,
+          reason: "not_installed",
+          message: "Not installed",
+        });
+        const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
+        fireEvent.click(container.querySelector("button")!);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        debugSpy.mockClear();
+        fireEvent.click(getByText("Activate Slot"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(container.textContent).toContain("Can't switch — download the game first");
+        expect(debugSpy).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+        debugSpy.mockRestore();
+      }
+    });
+
     it("catches thrown errors and surfaces an error line", async () => {
       vi.useFakeTimers();
       try {
@@ -790,6 +851,74 @@ describe("SlotPanel", () => {
       );
       expect(vi.mocked(showModal)).not.toHaveBeenCalled();
     });
+
+    it("ends 'Deleting...' once the info has loaded, with the confirmation still unanswered", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+      let answerInfo: (info: Awaited<ReturnType<typeof backend.getSlotDeleteInfo>>) => void = () => {};
+      vi.mocked(backend.getSlotDeleteInfo).mockReturnValue(
+        new Promise((resolve) => {
+          answerInfo = resolve;
+        }),
+      );
+
+      const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
+      fireEvent.click(container.querySelector("button")!);
+      await flushAsync();
+      fireEvent.click(getByText("Delete Slot"));
+      await flushAsync();
+      expect((getByText("Deleting...") as HTMLButtonElement).disabled).toBe(true);
+
+      await act(async () => {
+        answerInfo({
+          success: true,
+          slot: "default",
+          source: "local",
+          server_save_count: 0,
+          server_save_ids: [],
+          local_file_count: 0,
+          local_filenames: [],
+          is_active: false,
+        });
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
+      expect(backend.deleteSlot).not.toHaveBeenCalled();
+      expect((getByText("Delete Slot") as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("ends 'Deleting...' when opening the confirmation throws", async () => {
+      const errorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+        vi.mocked(backend.getSlotDeleteInfo).mockResolvedValue({
+          success: true,
+          slot: "default",
+          source: "local",
+          server_save_count: 0,
+          server_save_ids: [],
+          local_file_count: 0,
+          local_filenames: [],
+          is_active: false,
+        });
+        vi.mocked(showModal).mockImplementationOnce(() => {
+          throw new Error("modal broke");
+        });
+
+        const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
+        fireEvent.click(container.querySelector("button")!);
+        await flushAsync();
+        fireEvent.click(getByText("Delete Slot"));
+        await flushAsync();
+        await flushAsync();
+
+        expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
+        expect((getByText("Delete Slot") as HTMLButtonElement).disabled).toBe(false);
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
   });
 
   describe("badges and summary line", () => {
@@ -880,5 +1009,94 @@ describe("SlotPanel", () => {
     fireEvent.click(container.querySelector("button")!);
     await flushAsync();
     expect(container.textContent).toContain("remote-a.srm");
+  });
+
+  describe("a throw from the panel's own code after an answer", () => {
+    const DELETE_INFO = {
+      success: true as const,
+      slot: "default",
+      source: "local" as const,
+      server_save_count: 0,
+      server_save_ids: [],
+      local_file_count: 0,
+      local_filenames: [],
+      is_active: false,
+    };
+
+    async function openInactivePanel(overrides: Partial<React.ComponentProps<typeof SlotPanel>> = {}) {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+      const view = render(<SlotPanel {...defaultProps(overrides)} />);
+      fireEvent.click(view.container.querySelector("button")!);
+      await flushAsync();
+      return view;
+    }
+
+    it("logs a throw from onSlotSwitched as an error, and shows no error line for it", async () => {
+      const errorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.switchSlot).mockResolvedValue({ success: true, save_status: makeStatus() });
+        const onSlotSwitched = vi.fn(() => {
+          throw new Error("parent broke");
+        });
+        const { container, getByText } = await openInactivePanel({ onSlotSwitched });
+        fireEvent.click(getByText("Activate Slot"));
+        await flushAsync();
+        await flushAsync();
+        expect(onSlotSwitched).toHaveBeenCalledOnce();
+        expect(errorSpy).toHaveBeenCalledExactlyOnceWith(
+          "SavesTab: slot 'default' threw after its switch: Error: parent broke",
+        );
+        expect(container.textContent).not.toContain("An error occurred while switching slots");
+        expect(container.textContent).not.toContain("Failed to switch slot");
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("logs a throw from opening the confirmation as an error, and toasts nothing for it", async () => {
+      const errorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.getSlotDeleteInfo).mockResolvedValue(DELETE_INFO);
+        vi.mocked(showModal).mockImplementationOnce(() => {
+          throw new Error("modal broke");
+        });
+        const { getByText } = await openInactivePanel();
+        fireEvent.click(getByText("Delete Slot"));
+        await flushAsync();
+        await flushAsync();
+        expect(errorSpy).toHaveBeenCalledExactlyOnceWith(
+          "SavesTab: slot 'default' threw before its delete: Error: modal broke",
+        );
+        expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("logs a throw from onSlotDeleted as an error, and toasts only the deletion", async () => {
+      const errorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.getSlotDeleteInfo).mockResolvedValue(DELETE_INFO);
+        vi.mocked(backend.deleteSlot).mockResolvedValue({ success: true, deleted_server_saves: 0, cleaned_files: 0 });
+        const onSlotDeleted = vi.fn(() => {
+          throw new Error("parent broke");
+        });
+        const { getByText } = await openInactivePanel({ onSlotDeleted });
+        fireEvent.click(getByText("Delete Slot"));
+        await flushAsync();
+        await flushAsync();
+        await lastConfirmModalProps()?.onOK?.();
+        await flushAsync();
+        expect(onSlotDeleted).toHaveBeenCalledOnce();
+        expect(errorSpy).toHaveBeenCalledExactlyOnceWith(
+          "SavesTab: slot 'default' threw after its delete: Error: parent broke",
+        );
+        expect(vi.mocked(toaster.toast)).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ body: "Slot 'default' deleted" }),
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
   });
 });
