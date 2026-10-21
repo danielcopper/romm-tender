@@ -21,10 +21,12 @@ from _vendor.atlas import machine as atlas_machine
 from _vendor.atlas.installations import (
     Health,
     InstallationRoot,
+    RomLocationsAnswer,
     RomPlacement,
     RootProvenance,
     RootsAnswer,
     RootSetting,
+    SystemRomPlacement,
     SystemsAnswer,
 )
 from _vendor.atlas.machine import CORE_READ_TIMED_OUT, CoreReading, RealMachine
@@ -55,6 +57,8 @@ class _Installation:
         self._systems = systems if systems is not None else SystemsAnswer(systems=("gba",))
         self._health_raises = health_raises
         self._rom_dirs = rom_dirs if rom_dirs is not None else {}
+        # The systems the per-system ROM-folder question was put for.
+        self.asked_one_by_one: list[str] = []
         if roots is not None:
             # Only a source the resolver answers roots for has the question.
             self.roots = lambda: roots
@@ -73,7 +77,18 @@ class _Installation:
         return self._systems
 
     def rom_location(self, system: str) -> RomPlacement:
+        self.asked_one_by_one.append(system)
         return RomPlacement(dir=self._rom_dirs.get(system))
+
+    def rom_locations(self) -> RomLocationsAnswer:
+        listed = self.systems()
+        return RomLocationsAnswer(
+            tuple(
+                SystemRomPlacement(system, RomPlacement(dir=self._rom_dirs.get(system))) for system in listed.systems
+            ),
+            listed.sources,
+            listed.caveats,
+        )
 
 
 class _Detect:
@@ -362,6 +377,20 @@ class TestRomFolders:
         assert folders.kind == "retrodeck"
         assert folders.rom_root == str(roms)
         assert folders.system_folders == (("psx", str(roms / "psx")), ("ps2", str(elsewhere)))
+
+    def test_each_source_is_asked_for_all_its_system_folders_in_one_question(self, traces):
+        retrodeck = _Installation(
+            "retrodeck",
+            systems=SystemsAnswer(systems=("psx", "ps2")),
+            roots=_roms_root("/roms"),
+            rom_dirs={"psx": "/roms/psx", "ps2": "/roms/ps2"},
+        )
+
+        answer = _holder(_Detect(retrodeck), traces).rom_folders()
+
+        assert answer is not None
+        assert [system for system, _folder in answer[0].system_folders] == ["psx", "ps2"]
+        assert retrodeck.asked_one_by_one == []
 
     def test_a_switched_off_source_and_an_assumed_rom_folder_count_too(self, traces):
         emudeck = _Installation("emudeck", roots=_roms_root("/home/deck/Emulation/roms", "assumed"))

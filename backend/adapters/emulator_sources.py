@@ -303,8 +303,9 @@ def _rom_folders_of(installation: Any) -> SourceRomFolders:
         path = source_roots(installation.roots()).root(ROOT_ROMS).path
         rom_root = os.path.realpath(path) if path else None
     system_folders: list[tuple[str, str]] = []
-    for system in installation.systems().systems:
-        folder = installation.rom_location(system).dir
+    # One question for every system: the catalogue is read once, not once per system.
+    for entry in installation.rom_locations().placements:
+        folder = entry.placement.dir
         if folder:
-            system_folders.append((system, os.path.realpath(folder)))
+            system_folders.append((entry.system, os.path.realpath(folder)))
     return SourceRomFolders(kind=installation.kind, rom_root=rom_root, system_folders=tuple(system_folders))
