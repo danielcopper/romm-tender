@@ -81,7 +81,9 @@ The migration covers three categories of files:
 
 - **ROMs** — All ROMs Tender tracks (the ones you downloaded through it)
 - **BIOS files** — Both files Tender downloaded and untracked files that one of your installed emulators asks for (e.g.
-  files you placed manually that Tender recognizes)
+  files you placed manually that Tender recognizes). A link to Tender's firmware store moves as a link, and Tender's
+  record of it follows the next time it brings its links up to date; the firmware store itself lies in
+  [Tender's folder](where-your-data-lives.md#tenders-folder) and does not move
 - **Save files** — Recursively scanned from the save directories, excluding hidden directories (like `.git` or `.tmp`)
 
 Files that Tender doesn't know about — ROMs you added outside Tender, for instance — are not affected. RetroDECK's own

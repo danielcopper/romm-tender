@@ -5,7 +5,7 @@ Tender keeps what it knows about your library in folders under your own home dir
 | Folder                        | What is in it                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state; the copy an update made of the database and your settings, in `update-backup/`, and the one going back by hand made, in `rollback-backup/`                                                                                                                                                                                                                                                                                   |
+| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state; the copy an update made of the database and your settings, in `update-backup/`, and the one going back by hand made, in `rollback-backup/`; BIOS files you replaced with **Replace…**, in `backups/bios/`                                                                                                                                                                                                                    |
 | `~/.cache/romm-tender/`       | Cached cover art and artwork                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `~/.local/state/romm-tender/` | Tender's log file, `backend.log`; `update-failure.json` after an update that was rolled back, or that the installer's pre-install check refused; `update-attempt.json` from the moment an update from Settings starts its installer until Tender knows how it went — right away when the running Tender sees the installer fail, otherwise once Tender has started again — and after one whose installer stopped Tender and then gave up, until you dismiss that notice or try again |
 
@@ -18,17 +18,19 @@ Four more places sit outside those folders, because none of them holds anything 
 | `~/.local/lib/romm-tender.old/`    | The version your last update replaced, kept so that it can be put back. Each update replaces it; going back puts it in place of the current version, after which there is none. Uninstalling removes it                                       |
 | `/run/user/<id>/romm-tender/`      | One note saying which port Tender is answering on while it runs. Your session clears it when you log out                                                                                                                                      |
 
-Your **games** are not in any of them. Downloaded ROMs, BIOS files and save files live in RetroDECK's own folders,
-exactly as before, and nothing on this page moves them. The one folder outside RetroDECK's that can hold copies of them
-is Tender's own folder below.
+Your **games** are not in any of them. Downloaded ROMs and save files live in RetroDECK's own folders, exactly as
+before, and nothing on this page moves them. BIOS files Tender downloads lie in Tender's own folder below, with a link
+to each where your emulators look for it.
 
 ## Tender's folder
 
-`Tender/` is the folder Tender keeps its own files in, and it holds things of yours. Today that is `recovery/`: the
-recovery bundles **Clean Up Removed RomM Games** seals before it removes anything, so that what the bundle recorded can
-be put back by hand. What a bundle holds and how to restore from it is under
-[Cleaning up versions removed from RomM](managing-games.md#cleaning-up-versions-removed-from-romm). Later versions keep
-the game library, the firmware store, saves and save states beside it.
+`Tender/` is the folder Tender keeps its own files in, and it holds things of yours. Today that is two folders.
+`recovery/` holds the recovery bundles **Clean Up Removed RomM Games** seals before it removes anything, so that what
+the bundle recorded can be put back by hand; what a bundle holds and how to restore from it is under
+[Cleaning up versions removed from RomM](managing-games.md#cleaning-up-versions-removed-from-romm). `bios/` is the
+firmware store: every BIOS file Tender downloads, in a folder per platform, linked from where your emulators look for it
+([Where downloads go](bios-management.md#where-downloads-go)). Later versions keep the game library, saves and save
+states beside them.
 
 It lies in `~/Tender` unless you choose another place under **Settings › Tender folder**: the internal storage, the root
 of any writable drive mounted under `/run/media/<user>/` (an SD card, a USB drive), or a folder you type in. A place

@@ -855,8 +855,13 @@ counting every row the library holds.
 
 ### Firmware store
 
-Tender's own store of BIOS files, each held once and reaching each emulator source through a link at the place emu-atlas
-names ([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md)).
+Tender's own store of the BIOS files it downloads from RomM, in `Tender/bios/<platform>/` under each file's name in
+RomM, reaching each emulator source through a link at the place emu-atlas names
+([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md)). A file is held
+once per platform it was downloaded for, never once for the whole machine (#2191 D3). A **link** of Tender's is an
+absolute symlink at such a place, pointing at a store file; it is Tender's own when it points at a store file Tender has
+recorded. _Avoid_: placement for the link itself (a placement is the resolver's answer about where an emulator opens a
+file).
 
 ### Safely-bakeable
 

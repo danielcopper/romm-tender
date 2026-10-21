@@ -9,7 +9,7 @@
  * words. What happened on this page — a link that could not be placed, a file
  * replaced, a download that arrived damaged — comes from the latest result and
  * is kept by the page, never recorded (`docs/architecture/qam-panel.md`,
- * "BIOS rows").
+ * Library, "BIOS files").
  */
 
 import type { BiosFileStatus, StoreOnly } from "../types";

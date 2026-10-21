@@ -497,11 +497,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   recorded under it** — test + prompt-only — `tests/services/test_tender_folder.py` (`TestTheState`,
   `TestCreatingTheFolder`, `TestPreparingAWrite`, `TestTheFolderRule`),
   `tests/domain/test_tender_folder.py::TestReachability`,
-  `tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder` and
-  `tests/services/prune/test_service.py::test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason`.
-  Prompt-only: a new store that writes into the folder calls `do_prepare_for_write` first, answers
-  `TenderFolderRecordReader` and joins the `records` tuple in `bootstrap/services.py`; a use case that touches the
-  folder's files names the folder rule (`folder=True`); no store counts a recovery bundle as a record
+  `tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder`,
+  `tests/services/prune/test_service.py::test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason`
+  and, for the firmware store, the first store that records something there, `tests/services/test_firmware_store.py`
+  (`TestTendersFolderRecords`, `TestFolderRule`). Prompt-only: a new store that writes into the folder calls
+  `do_prepare_for_write` first, answers `TenderFolderRecordReader` and joins the `records` tuple in
+  `bootstrap/services.py`; a use case that touches the folder's files names the folder rule (`folder=True`); no store
+  counts a recovery bundle as a record
 - **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
   with its reason** — check — `frontend/eslint.config.js` (`no-restricted-syntax` over every identifier in every file
   ESLint lints, tests and config files included; exceptions `NAMES_NOT_ABOUT_TENDER`), kept live by
@@ -702,15 +704,16 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   axes stay apart — the required counts a sentence words (`domain/bios_status.py::count_required`, every required row;
   the colour is the resolver's verdict and no count's), the progress ratio
   (`services/firmware/status.py::_bios_aggregates`, `on_server` rows only, and the stated pair only those with a
-  verdict) and the download affordance (`isFetchable`, `frontend/src/utils/biosFetchable.ts`). The platform detail and
-  the game page's BIOS tab call `isFetchable`, never a copy, while the game page's row-visibility rule stays its own;
-  display-only readers (the On-disk `⊘` mark, `rowBelongsOnThisPage`) neither count nor gate
-- **No download lands in a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
-  `FirmwarePlacement.place_unreadable` is the one reading; `tests/domain/test_firmware_groups.py` (`fetched_as_required`
-  leaves it out of `Download required`), `tests/services/test_firmware.py::TestAPlaceThatCouldNotBeLookedAt` (the batch
-  passes it over, the per-row endpoint refuses it with `place_unreadable`), and
-  `frontend/src/utils/biosFetchable.test.ts` with `PlatformsTab.test.tsx` (`isFetchable` offers no button); prompt-only:
-  a new download path checks the same property, and the frontend's copy of the caveat code agrees with the backend's
+  verdict) and the download affordance (`isFetchable`, `frontend/src/utils/biosFetchable.ts`, which reads the row's
+  `library`, `store_file`, `link` and `place_refusal`). The platform detail and the game page's BIOS tab call
+  `isFetchable`, never a copy, while the game page's row-visibility rule stays its own; display-only readers (the
+  On-disk `⊘` mark, `rowBelongsOnThisPage`) neither count nor gate
+- **No link is placed at a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
+  `FirmwarePlacement.place_unreadable` is the one reading, and `domain/firmware_places.py::place_refusal` turns it into
+  the `unreadable` refusal no link update passes; `tests/domain/test_firmware_places.py` and
+  `tests/domain/test_firmware_groups.py` (`fetched_as_required` leaves it out of `Download required`), and
+  `frontend/src/utils/biosFetchable.test.ts` (`isFetchable` offers no button); prompt-only: a new path that places a
+  link judges the place through `place_refusal`, and the frontend's copy of the caveat code agrees with the backend's
 - **No BIOS answer outlives the page that asked for it** — test + prompt-only —
   `tests/services/test_game_detail.py::TestGetCachedGameDetailCarriesNoBiosAnswer` and the two contract cases in
   `tests/contract/test_game_detail_read.py`; prompt-only: no stored or cached BIOS answer is added back (`BiosChecker`
@@ -888,26 +891,23 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   prompt-only
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
-- **A firmware row's verdict is the resolver's wherever an emulator declared the file, and its presence the resolver's
-  wherever it placed the file under this root; Tender's own filesystem probe covers only three leftovers** — prompt-only
-  — `domain/bios_status.py::_row_verdict` and `services/firmware/demand.py::FirmwareDemand.is_downloaded` are the two
-  crossing points, and nothing enforces either. The three leftovers, for presence: a library file with no placement in
-  the platform's catalogue (whose verdict is that presence, it being no requirement), a placement Tender cannot honour,
-  and the already-there check before a download (the batch and the per-row fetch). Where no BIOS download may land —
-  anything that refuses one, so that `FirmwareDemand.status_root` answers `None` — the probe looks nowhere, and a row
-  only it could answer has its verdict withheld rather than read as absent (#2244 D11). `present is None` leaves
-  `downloaded` false and the verdict withheld — a place the resolver could not look at is never missing (#2190 D3) — and
-  the `RomM library files` ratio leaves a row whose verdict was withheld out (`ratio_server_count`, #2285 D3). A
-  withheld verdict is not an absence: its cause is read off the row's caveat codes and a declared file's `checked`,
-  never off the verdict, and nothing checks that a consumer keeps `checked`'s values apart — a file the emulator read
-  and did not recognise is never worded "could not be checked", and `refused` is not a withheld verdict
+- **A firmware row's verdict and presence are the resolver's wherever the row has a place; Tender's own look at a place
+  answers only whose link lies there, whether its name is free and whether its folder exists** — prompt-only —
+  `domain/bios_status.py::_row_verdict` (the verdict) and `services/firmware/rows.py` (presence: the resolver's
+  `present` at the place, followed through a link of Tender's to the store file behind it) are the crossing points, and
+  nothing enforces either. A library row has no place and so no verdict; its `downloaded` is whether this platform's
+  store holds it. `present is None` leaves `downloaded` false and the verdict withheld — a place the resolver could not
+  look at is never missing (#2190 D3) — and the `RomM library files` ratio leaves a row whose verdict was withheld out
+  (`ratio_server_count`, #2285 D3). A withheld verdict is not an absence: its cause is read off the row's caveat codes
+  and a declared file's `checked`, never off the verdict, and nothing checks that a consumer keeps `checked`'s values
+  apart — a file the emulator read and did not recognise is never worded "could not be checked", and `refused` is not a
+  withheld verdict
 - **A firmware row's verdict is `BiosFileEntry.satisfied` — the resolver's per-file verdict at the place the launching
-  emulator opens it, never presence — and for a folder declaration it is what the folder HOLDS** — test + prompt-only —
-  `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents` and
-  `::TestTheRowsVerdictIsTheResolvers`, `tests/domain/test_firmware_wants.py` and
-  `tests/adapters/test_atlas_firmware.py`; prompt-only: no consumer reads `downloaded` as a verdict or folds a `None`
-  verdict into `False`. With no check at all: a folder declaration (`declared_kind`) is never offered as a download —
-  `FirmwareDownloader.download_firmware(firmware_id)` does not refuse one yet
+  emulator opens it, never presence — and a folder declaration is one row per file in it, each with the resolver's
+  verdict over that file, the folder's own verdict counting once as one requirement** — test + prompt-only —
+  `tests/services/test_firmware_store.py::TestAFolderTheEmulatorLists`, `tests/domain/test_firmware_wants.py` and
+  `tests/adapters/test_atlas_firmware.py::TestWhatAFolderDeclarationHolds`; prompt-only: no consumer reads `downloaded`
+  as a verdict or folds a `None` verdict into `False`, and none of a folder's files is required on its own row
 - **Every BIOS colour is the resolver's verdict for the launching emulator (`requirements_met`), never a count of rows;
   the exceptions are a one-of group whose verdict is open because of the disc's region alone (the platform page's amber)
   and, on a game's page, the image serving the game's own region (`game_region_level`) — each read off the resolver's
@@ -977,23 +977,29 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (per-candidate opt-in stated in the dialog; the row goes only after a fresh 404), and the adopt dialog's **replace**
   exit for the ROM (both sides shown, a content check offered, a second confirmation); an adoption's Overwrite of save
   and savestate files, and a collision while following a moved save directory (`services/saves/save_directory.py`), take
-  the backup leg through the same funnel. The installer's two rollbacks: one by hand takes the backup leg — the database
-  files and `settings.json` it replaces are copied to `rollback-backup/` under the data root first, and a copy that
-  cannot be made refuses it — while the automatic one discards only what a version never seen to answer wrote
-  (`tests/scripts/test_install_sh.py`, `TestRollingBackByHand` and `TestAnUpdateThatDoesNotStart`). A settings file
-  Tender does not read (older than version 13, or without a usable version) is written over with the defaults and takes
-  neither leg: 1.0.0 is a breaking release, and everything it held can be entered again. An install record goes only by
-  something the user does (Uninstall, Uninstall all ROM files, "Forget this download", a download or adoption of another
-  version of the game, Clean Up Removed RomM Games), never by the start-up step, which only reports a missing file;
-  Forget deletes no file and refuses while the file or folder exists
-  (`tests/services/test_startup_healing.py::TestReportMissingInstalls`, `tests/contract/test_missing_download.py`).
-  Prompt-only: a new path that deletes `rom_installs` rows is one the user starts
-- **A BIOS file is deleted only where a `downloaded_bios` record filed under the platform names it, and only at the path
-  that record holds** — test + prompt-only — `tests/services/test_firmware.py::TestDeletePlatformBios`,
-  `::TestDeleteOneBiosFile` and `TestGetFirmwareStatusDeletableCount`; prompt-only: a delete iterates the records, never
-  a status list, and is never authorised by `downloaded` or `on_server`; `deletable_count` (per platform and per row,
-  distinct paths) counts records still on disk and alone gates the Delete offer, and a folder row's counts the distinct
-  recorded files beneath it; the three buttons share `PlatformBiosDeleter._delete_recorded_io`, never a copy of it
+  the backup leg through the same funnel. A BIOS file a "Replace…" the user confirmed moves aside, and a file lying in
+  the firmware store without a record of Tender's whose checksum does not match, take the backup leg to
+  `<data>/backups/bios/<date and time>/<original absolute path>` (`FirmwareStore.do_back_up`,
+  `tests/services/test_firmware_store.py`, `TestReplacingAWrongFile` and `TestAStoreFileWithoutARecord`). The
+  installer's two rollbacks: one by hand takes the backup leg — the database files and `settings.json` it replaces are
+  copied to `rollback-backup/` under the data root first, and a copy that cannot be made refuses it — while the
+  automatic one discards only what a version never seen to answer wrote (`tests/scripts/test_install_sh.py`,
+  `TestRollingBackByHand` and `TestAnUpdateThatDoesNotStart`). A settings file Tender does not read (older than version
+  13, or without a usable version) is written over with the defaults and takes neither leg: 1.0.0 is a breaking release,
+  and everything it held can be entered again. An install record goes only by something the user does (Uninstall,
+  Uninstall all ROM files, "Forget this download", a download or adoption of another version of the game, Clean Up
+  Removed RomM Games), never by the start-up step, which only reports a missing file; Forget deletes no file and refuses
+  while the file or folder exists (`tests/services/test_startup_healing.py::TestReportMissingInstalls`,
+  `tests/contract/test_missing_download.py`). Prompt-only: a new path that deletes `rom_installs` rows is one the user
+  starts
+- **A BIOS file is deleted only where Tender holds a record of it, and only at the path that record holds: a store file
+  of the platform with every link of Tender's to it, or a download made into an emulator source's folder before the
+  store, at its `downloaded_bios` path; a link only while it still points at its store file and its place may be
+  touched** — test + prompt-only — `tests/services/test_firmware_store.py::TestDeleting` and
+  `tests/services/test_firmware.py` (`TestDeletePlatformBios`, `TestDeleteOneBiosFile`,
+  `TestGetFirmwareStatusDeletableCount`); prompt-only: a delete iterates the records, never a status list, and is never
+  authorised by `downloaded` or `on_server`; `delete_name` and `deletable_count` alone gate a row's Delete offer, and
+  both buttons share `PlatformBiosDeleter._delete_io`, never a copy of it
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

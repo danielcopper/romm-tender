@@ -272,8 +272,9 @@ emulator sources (`adapters/retrodeck_folders.py`, behind the `RetroDeckFolders`
 the handle's `roots()`. Tender reads no RetroDECK file of its own, builds no folder from a root, and has no fallback
 folder: where the resolver names none, nothing that depends on it runs and the answer says why. The ROM root, BIOS
 folder and saves root are whole-source roots, which not every source has; they are used only as RetroDECK's, and only by
-what still lies in RetroDECK's folders — whether the removed-game cleanup may start, the BIOS download destination and
-its bound, the cleanup's save backups, the start-up removal of leftover `.tmp` files, and the move code.
+what still lies in RetroDECK's folders — whether the removed-game cleanup may start, the bound of a BIOS file an older
+version downloaded there, which places a BIOS link may take, the cleanup's save backups, the start-up removal of
+leftover `.tmp` files, and the move code.
 
 **A removal of a game's files is bounded by its system's own ROM folder**, never by the ROM root: uninstalling,
 "Uninstall all", the removed-game cleanup's removal of a game's files and its recovery bundle, an archive's extraction,
@@ -289,17 +290,16 @@ the settings name the home, and `~/retrodeck` itself where they do not — a `re
 or with one key unset, or one that is missing, unreadable or damaged. Tender uses a root that was read or is ES-DE's own
 default, and none that was only assumed: nothing is downloaded into it, no removal is bounded by it, and the move code
 moves nothing. Each root is judged by its own provenance alone, also under a `marker-*` finding, so with a damaged
-`retrodeck.json` a game still downloads into, and is removed from, the ROM folder ES-DE's settings name, while every
-BIOS press is refused. A system's ROM folder lies below the ROM root and goes with it. The rule is the source-agnostic
-`domain/source_roots.py`, so every later caller of an EmuDeck folder asks the same one
-([#2294](https://github.com/danielcopper/romm-tender/issues/2294) D1, D3, D4, D5).
+`retrodeck.json` a game still downloads into, and is removed from, the ROM folder ES-DE's settings name, while a BIOS
+link is placed in, and removed from, no place under the assumed BIOS folder (#2191 D11). A system's ROM folder lies
+below the ROM root and goes with it. The rule is the source-agnostic `domain/source_roots.py`, so every later caller of
+an EmuDeck folder asks the same one ([#2294](https://github.com/danielcopper/romm-tender/issues/2294) D1, D3, D4, D5).
 
 Which root a folder answers by:
 
 | Asked for                                       | Needs RetroDECK               | Refused where this root is not usable                                               |
 | ----------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
 | a game download (`download_folder`)             | detected **and** switched on  | the ROM root; also on `root-missing` for a home that was read                       |
-| a BIOS download (`bios_download_folder`)        | detected **and** switched on  | the BIOS folder; also on `root-missing` for a home that was read                    |
 | a removal's bound (`rom_folders`, `rom_root`)   | detected, whatever its switch | the ROM root                                                                        |
 | a removal's bound (`bios_folder`, `saves_root`) | detected, whatever its switch | the BIOS folder, the saves root                                                     |
 | the move code (`move_roots`)                    | detected, whatever its switch | any of the home, BIOS folder and saves root, as no move and a refused migrate press |
@@ -312,10 +312,9 @@ read, and Tender's own `roots-assumed` otherwise. The resolver states no finding
 are the settings file (`path`) and the assumed roots by name (`roots`), and the source report carries it too, for Main's
 notice and the source's card. `not-set-up` refuses everything, since its ROM root has no path; a `marker-invalid` on the
 `version` key alone leaves every root read and refuses nothing. A download also stops on `root-missing` for a home that
-was read, because everything it would land in lies below a folder that is not there; a BIOS folder that is not there yet
-is created only inside a home that was read. The resolver states `root-missing`, `bios-root-missing` and
-`saves-root-missing` for an assumed root too, so on Main and the source's card all three show only for a root that was
-read, and the download rule counts `root-missing` only for a home that was read
+was read, because everything it would land in lies below a folder that is not there. The resolver states `root-missing`,
+`bios-root-missing` and `saves-root-missing` for an assumed root too, so on Main and the source's card all three show
+only for a root that was read, and the download rule counts `root-missing` only for a home that was read
 ([#2294](https://github.com/danielcopper/romm-tender/issues/2294) D6). No folder rule reads `bios-root-missing`,
 `saves-root-missing`, `roms-root-missing`, `roms-root-not-absolute` or `emulator-config-missing`; the folders they name
 are still checked on their own, as before — a missing ROM or BIOS folder, a ROM root the roots answer gives no path for.
@@ -347,10 +346,9 @@ Without RetroDECK the move code moves nothing either: the migrate press says **M
 installed.** and the pending move stays recorded ([#2285](https://github.com/danielcopper/romm-tender/issues/2285) D6).
 
 **A download creates a folder only below a root that exists.** A system's ROM folder that is not there yet is created by
-the download, as ES-DE would create it, and so is a BIOS folder inside RetroDECK's own folder. A ROM root, or a BIOS
-folder outside RetroDECK's folder, that does not exist — a drive or SD card that is out — is never created: the folder
-would land on internal storage, and the drive would hide it once it is back. The saves root follows the same rule
-through the save answer ([Save-file sync](save-file-sync-architecture.md)).
+the download, as ES-DE would create it. A ROM root that does not exist — a drive or SD card that is out — is never
+created: the folder would land on internal storage, and the drive would hide it once it is back. The saves root follows
+the same rule through the save answer ([Save-file sync](save-file-sync-architecture.md)).
 
 Every folder is returned **symlink-resolved**. The folders are handed to the path guards as safe roots — a system's own
 ROM folder for a game's files, the BIOS folder and saves root for theirs — and the ROM paths those guards are asked
