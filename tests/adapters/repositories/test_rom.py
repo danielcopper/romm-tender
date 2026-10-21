@@ -781,7 +781,8 @@ class TestChosenSgdbId:
         uow.roms.set_chosen_sgdb_id(1, None)
 
         after = uow.roms.get(1)
-        assert before is not None and after is not None
+        assert before is not None
+        assert after is not None
         assert (before.chosen_sgdb_id, after.chosen_sgdb_id) == (None, None)
 
     def test_a_resync_leaves_it_alone_and_writes_romms_id(self, uow: SqliteUnitOfWork):

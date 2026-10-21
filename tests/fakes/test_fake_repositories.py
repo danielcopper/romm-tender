@@ -758,8 +758,9 @@ class TestFakeArtworkSlotChoiceRepository:
 
     def test_an_orphan_row_aborts_the_commit(self):
         uow = FakeUnitOfWork()
+        orphan = self._choice(42, ArtworkSlot.LOGO)
         with pytest.raises(sqlite3.IntegrityError, match="artwork_slot_choices"), uow:
-            uow.artwork_slot_choices.save(self._choice(42, ArtworkSlot.LOGO))
+            uow.artwork_slot_choices.save(orphan)
         assert uow.artwork_slot_choices.get(42, ArtworkSlot.LOGO) is None
 
     def test_the_rows_go_with_their_rom(self):
@@ -775,8 +776,9 @@ class TestFakeArtworkSlotChoiceRepository:
         uow = FakeUnitOfWork()
         with uow:
             uow.roms.save(_rom(42))
+        record = self._choice(42, ArtworkSlot.LOGO)
         boom = RuntimeError("boom")
         with pytest.raises(RuntimeError), uow:
-            uow.artwork_slot_choices.save(self._choice(42, ArtworkSlot.LOGO))
+            uow.artwork_slot_choices.save(record)
             raise boom
         assert uow.artwork_slot_choices.get(42, ArtworkSlot.LOGO) is None

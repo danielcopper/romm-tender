@@ -55,8 +55,9 @@ class TestRoundTrip:
 
 class TestTheRowsBelongToTheirRom:
     def test_a_choice_for_a_rom_that_is_not_synced_is_refused(self, uow: SqliteUnitOfWork):
+        orphan = _choice(rom_id=99)
         with pytest.raises(sqlite3.IntegrityError):
-            uow.artwork_slot_choices.save(_choice(rom_id=99))
+            uow.artwork_slot_choices.save(orphan)
 
     def test_the_rows_go_with_their_rom(self, db: str):
         with SqliteUnitOfWork(db) as uow:
