@@ -1582,8 +1582,8 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
    on the `SessionFinalizeSyncResult` payload via `saveSyncToastBody` (#1481). Offline / failure keeps its backend-owned
    body on `SessionFinalizeSyncResult.failure_toast`. An update being installed and a pending RetroDECK migration each
    hold the sync off before it starts, the update checked first, with a body of their own there — the migration's is
-   `MIGRATION_MESSAGE`, the sentence every migration refusal carries. Neither is checked, and nothing is toasted, when
-   save sync or `sync_after_exit` is switched off.
+   `MIGRATION_MESSAGE`, the sentence the migration rule's refusals carry. Neither is checked, and nothing is toasted,
+   when save sync or `sync_after_exit` is switched off.
 
 The session manager handles Steam's start and stop notifications one after another on a single chain, so a backend call
 there that never answers would hold every later notification — including the stop that takes Tender's Play button off

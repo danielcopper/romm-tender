@@ -345,7 +345,7 @@ class SessionLifecycleService:
         being installed or a RetroDECK migration is pending the post-exit sync
         does not run, the log says which held it off, and the verdict is the
         failed-sync one, toasted with what held it off: the update's own body,
-        or the sentence every migration refusal answers with.
+        or the sentence the migration rule's refusals carry.
         The ``finalize_game_session`` use case checks neither rule, so this is
         the first check either meets on the way to that sync. A refusal the
         sync raises is toasted from its reason and message — as offline when
