@@ -1582,7 +1582,7 @@ Triggered automatically when a game stops (if save sync and `sync_after_exit` ar
    on the `SessionFinalizeSyncResult` payload via `saveSyncToastBody` (#1481). Offline / failure keeps its backend-owned
    body on `SessionFinalizeSyncResult.failure_toast`. While an update is being installed or a RetroDECK migration is
    pending the sync does not start, and `failure_toast` says which held it off: the update is checked first and has a
-   body of its own, the migration answers with `MIGRATION_MESSAGE`. With save sync or `sync_after_exit` switched off
+   body of its own, the migration's body is `MIGRATION_MESSAGE`. With save sync or `sync_after_exit` switched off
    neither is checked, and nothing is toasted.
 
 The session manager handles Steam's start and stop notifications one after another on a single chain, so a backend call

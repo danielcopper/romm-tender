@@ -48,7 +48,7 @@ _TOAST_BODY_UPDATING = "Tender is installing an update — saves sync with the n
 
 @dataclass(frozen=True)
 class SessionFinalizeSyncResult:
-    """Post-exit-sync verdict handed to the frontend for toast rendering + dispatch.
+    """Post-exit-sync verdict handed to the frontend for toast rendering.
 
     Carries the raw outcome flags (``offline`` / ``success``) plus the
     per-direction transfer counts (``uploaded`` / ``downloaded``) the
@@ -343,11 +343,11 @@ class SessionLifecycleService:
         A sync the settings switched off is answered success-shaped and
         untoasted; one an update or a pending migration holds off, as failed
         and toasted with what held it off. The ``finalize_game_session`` use
-        case checks neither rule, so this is the first check either meets on
-        the way to that sync. A refusal the sync raises is toasted from its
-        reason and message — as offline when its ``offline`` detail says so —
-        or not shown at all for a benign skip; a RomM error it raises is
-        toasted with ``classify_error``'s message.
+        case checks neither the update rule nor the migration rule, so this is
+        the first check either meets on the way to that sync. A refusal the
+        sync raises is toasted from its reason and message — as offline when
+        its ``offline`` detail says so — or not shown at all for a benign skip;
+        a RomM error it raises is toasted with ``classify_error``'s message.
         """
         if not self._post_exit_sync.syncs_after_exit():
             return self._switched_off(rom_id)

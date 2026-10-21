@@ -298,7 +298,7 @@ class SaveService:
         return await self._sync_engine.post_exit_sync(rom_id)
 
     def syncs_after_exit(self) -> bool:
-        """``SyncEngine.syncs_after_exit``."""
+        """The answer ``SessionPostExitSync.syncs_after_exit`` states (``services/protocols/cross_service.py``)."""
         return self._sync_engine.syncs_after_exit()
 
     async def sync_rom_saves(self, rom_id: int) -> dict[str, Any]:

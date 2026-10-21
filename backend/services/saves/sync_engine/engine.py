@@ -289,7 +289,7 @@ class SyncEngine:
         return save_sync_enabled(self._settings)
 
     def syncs_after_exit(self) -> bool:
-        """Whether the settings let a game's exit be followed by a sync."""
+        """The answer ``SessionPostExitSync.syncs_after_exit`` states (``services/protocols/cross_service.py``)."""
         return self.is_save_sync_enabled() and sync_after_exit(self._settings)
 
     def get_device_id(self) -> str | None:

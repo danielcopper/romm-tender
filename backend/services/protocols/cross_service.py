@@ -568,7 +568,7 @@ class SessionPostExitSync(Protocol):
     ``uploaded`` / ``downloaded`` / ``conflicts`` / ``message``. A refusal is
     raised as ``Refused``, with an ``offline`` detail when the server could
     not be reached, and a RomM error propagates. ``syncs_after_exit`` answers
-    whether the settings let a game's exit be followed by a sync at all.
+    whether the settings let a game's exit be followed by a sync.
     """
 
     async def post_exit_sync(self, rom_id: int) -> dict[str, Any]: ...

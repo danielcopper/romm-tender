@@ -260,7 +260,8 @@ RomM lets you turn save sync off for a specific device in its own **device setti
 disable sync for this device there, Tender stops syncing that device's saves and tells you so — a manual sync reports
 "Save sync is disabled for this device on the RomM server", and the after-exit toast says the same. Your local saves are
 left untouched, and the game still launches normally (before-launch sync just skips). Re-enable sync for the device in
-RomM to resume. This is separate from Tender's own **Save Sync** toggle in the QAM — either one being off stops syncing.
+RomM to resume. This is separate from Tender's own **Enable Save Sync** toggle in the QAM — either one being off stops
+syncing.
 
 ## Playtime Tracking
 
