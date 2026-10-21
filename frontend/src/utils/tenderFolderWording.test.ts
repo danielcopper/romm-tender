@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { TenderPlaceRefusal } from "../types";
 import {
   createMissingQuestion,
-  driveFreeLine,
-  driveRowLabel,
   elsewhereLine,
   folderConditionLine,
   forgetTitle,
@@ -11,8 +9,6 @@ import {
   tenderNamedQuestion,
   useParentButton,
 } from "./tenderFolderWording";
-
-const DRIVE = { name: "SD", mount_point: "/run/media/deck/SD", folder: "/run/media/deck/SD/Tender", free_bytes: 2048 };
 
 function refused(fields: Partial<TenderPlaceRefusal>): TenderPlaceRefusal {
   return { success: false, reason: "place_in_rom_folder", message: "the backend's sentence", ...fields };
@@ -49,11 +45,6 @@ describe("Tender folder wording", () => {
         "/sd/Tender/Tender. Use /sd instead?",
     );
     expect(useParentButton("/sd")).toBe("Use /sd");
-  });
-
-  it("offers a drive by its name and folder, with its free space", () => {
-    expect(driveRowLabel(DRIVE)).toBe("SD — /run/media/deck/SD/Tender");
-    expect(driveFreeLine(DRIVE)).toBe("2.0 KB free");
   });
 
   describe("a refused choice", () => {

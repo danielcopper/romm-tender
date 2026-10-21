@@ -352,16 +352,25 @@ up yet, a list that cannot be read yet — rather than showing an empty list.
 ## Tender folder
 
 Tender keeps its own files in one folder, `Tender/` — today the recovery bundles a cleanup seals. It lies in `~/Tender`
-until you choose another place here. **Current place** shows where it is, and why it cannot be used where it cannot: the
-drive is not connected, the folder is missing, or it cannot be written to.
+until you choose another place here. The line at the top names the place in use — **In use: Internal storage**, **In
+use: SD card · Emulation**, or **In use: Another folder** — with its state, **Reachable**, or why the folder cannot be
+used: **Not connected**, **Missing** or **Not writable**; the folder itself is under it.
 
-- **Internal storage — ~/Tender (default)** puts it back in your home folder.
-- One row per writable drive mounted under `/run/media/<user>/` — an SD card, a USB drive — with its free space puts it
-  at that drive's root.
-- **Another folder…** takes a path you type, starting with `/` or `~`. Tender puts its folder `Tender/` inside it. Where
-  the last folder you typed is itself named Tender, it asks whether you meant the folder above it; where folders of the
-  path do not exist yet, it names them and asks before creating them. A path on a drive that is not connected is
-  refused.
+Below it, one tile per place, two to a row; the tile of the place in use is outlined and marked **In use**, and pressing
+it does nothing.
+
+- **Internal storage**, marked **Default**, puts the folder back in your home folder, `~/Tender`.
+- Each writable drive mounted under `/run/media/<user>/` gets a tile named by its kind and its name — **SD card**, **USB
+  drive**, or **Drive** for any other — and puts the folder at that drive's root. Tender tells the kind from the device
+  behind the mount. With no drive connected, a line says to insert an SD card or connect a drive.
+- Every tile shows the folder it would use and the space free there.
+- **Another folder…** opens an empty text field, with an example under it, and takes a path you type, starting with `/`
+  or `~`. Tender puts its folder `Tender/` inside it. Where the last folder you typed is itself named Tender, it asks
+  whether you meant the folder above it; where folders of the path do not exist yet, it names them and asks before
+  creating them. A path on a drive that is not connected is refused.
+
+A place whose `Tender/` would be the folder in use is answered as already Tender's folder; one whose `Tender/` would lie
+inside the folder in use, or hold it, is refused — both before any question.
 
 A place is refused where `Tender/` would lie inside an emulator source's ROM folder or inside the folder a source keeps
 a system's games in — also where that folder is a link to another drive — or would hold a ROM folder. So is a place

@@ -10,10 +10,14 @@ import type { WireReasonSubset } from "./reasons";
 /** Why the folder cannot be used now: its drive gone, the folder missing, or not writable. */
 export type TenderFolderCondition = "drive_not_mounted" | "folder_missing" | "folder_not_writable";
 
+/** What kind of drive a mount is, read off the device behind it. */
+export type TenderFolderDriveKind = "sd_card" | "usb_drive" | "drive";
+
 /** A writable drive mounted under `/run/media/<user>/`, offered as a place with `Tender` at its root. */
 export interface TenderFolderDrive {
   name: string;
   mount_point: string;
+  kind: TenderFolderDriveKind;
   /** The folder a choice of this drive makes, `Tender` at its root. */
   folder: string;
   free_bytes: number;
@@ -33,6 +37,10 @@ export interface TenderFolderState {
   unreachable: TenderFolderCondition | null;
   /** The other folders something is recorded under, as the stores gave them. */
   elsewhere: string[];
+  /** The space free on the internal storage, the default place's. */
+  home_free_bytes: number;
+  /** Where drives are mounted, `/run/media/<user>`. */
+  drives_root: string;
   drives: TenderFolderDrive[];
 }
 
@@ -56,6 +64,9 @@ export type TenderPlaceRefusal = EndpointFailure & {
     | "place_not_writable"
     | "place_not_absolute"
     | "place_drive_not_mounted"
+    | "place_is_current_folder"
+    | "place_in_current_folder"
+    | "place_above_current_folder"
     | "sources_unreadable"
     | "prune_active"
     | "invalid_value"
