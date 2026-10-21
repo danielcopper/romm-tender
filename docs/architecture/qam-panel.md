@@ -2254,6 +2254,12 @@ the next open of the page shows the URL that was saved rather than the one that 
 shortcuts** refuses a second press while a run is in flight — the guard is in the handler rather than only on the
 button, because a disabled control still reports a press on the device, and the button says which state it is in.
 
+A save of the RomM URL the backend refuses — from its modal, or from the **Allow Insecure SSL** switch, which saves the
+URL again — puts the refusal's message on the section's status line and gives back what is stored: the URL row the URL
+the backend holds (once the settings have loaded; before that the attempt stays), the switch its previous position. The
+next URL save the backend accepts clears the line. A save that fails in transport says _Failed to save settings_ and
+leaves the attempt where it was typed.
+
 ## Data Management
 
 Wide, list and detail — and the rows are **not the operations**. A row names a population, something this device holds,

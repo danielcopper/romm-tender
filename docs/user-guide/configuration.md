@@ -53,10 +53,10 @@ The **Connections** section manages your RomM server connection.
 
 - **RomM URL** — the full URL of your RomM server, including port if needed (e.g. `http://192.168.1.100:8080`). Tap
   **Edit** to change it; the URL saves automatically. Leave any user name and password out of it
-  (`https://user:password@host`): Tender cannot sign in through the address, so such a URL is not saved. The field goes
-  back to the stored URL, and the status line below it — or the sign-in prompt, when you sign in with such a URL — says
-  "Remove the user name and password from the RomM URL — Tender cannot sign in through the address; use Sign in under
-  RomM Account instead."
+  (`https://user:password@host`): Tender cannot sign in through the address, so such a URL is not saved. The **RomM
+  URL** row keeps showing the stored one, and the line at the bottom of the section says why — see
+  [Connection shows "Remove login from RomM URL"](troubleshooting.md#connection-shows-remove-login-from-romm-url). A
+  login your proxy asks for goes into [Custom headers](#custom-headers-for-an-authenticating-proxy) instead.
 - **RomM Account** — shows **Signed in** once a token is stored, or **Not signed in** otherwise. Tap **Sign in** to open
   a one-time prompt. The prompt offers three sign-in methods, chosen from the **Sign-in method** dropdown:
   - **Username & password** (default) — enter your RomM username and password once. Tender exchanges them for a RomM

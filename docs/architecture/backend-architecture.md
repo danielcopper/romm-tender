@@ -1856,11 +1856,13 @@ a different destination, not the same one. A legacy token minted before origin s
 None` and is treated as un-bound: it is still attached (never blocked) so existing installs
 keep working until their next sign-in stamps the origin.
 
-**An address carrying a user name or password is refused, never sent.** urllib signs in from no address, and
-`http.client` reads `user:password@host` as a host with a non-numeric port. `lib/url_host.carries_userinfo` decides it,
-and `ADDRESS_WITH_USERINFO_MESSAGE` beside it is the one sentence every refusal carries, as `config_error`: when the URL
-is saved (`SettingsService.save_server_url`), at each of the three sign-ins, and at `test_connection` for a stored one,
-before any request. The panel's Connection row names it _Remove login from RomM URL_ by matching the sentence's words.
+**An address carrying a user name or password is refused where it is entered and where the connection is checked.** No
+request to such an address reaches RomM; why is the comment at `ADDRESS_WITH_USERINFO_MESSAGE` in `lib/url_host.py`.
+`carries_userinfo` beside it decides it, and that sentence is the one every refusal carries, as `config_error`: when the
+URL is saved (`SettingsService.save_server_url`), at each of the three sign-ins, and at `test_connection` for a stored
+one, before any request. The panel's Connection row names it _Remove login from RomM URL_. A stored one is not refused
+anywhere else: a sync, a download or any other request still goes out to it and fails, with errors that carry no login
+(below, "what an error's text carries").
 
 **A stored token no HTTP header can carry is refused before it is used.** `auth_header()` raises `TokenUnsendableError`
 for a token holding a CR, an LF or a character past latin-1 (`domain/header_value.py`, the same rule the SteamGridDB key
@@ -2479,14 +2481,21 @@ alone, and no refusal message quotes a value.
 
 #### RommHttpAdapter notes: what an error's text carries
 
-An error the adapter raises names the method, the address and the path it asked — never a header, and never the
-address's user name or password: `translate_http_error` and `_translate_with_detail` write the URL through
-`lib/url_host.without_userinfo`, and `RommApiError` stores its `url` the same way. A request `http.client` cannot build
-— `InvalidURL`, a `ValueError` or `UnicodeEncodeError` from a header value, anything that is not a timeout, an SSL error
-or an `OSError` — raises an exception whose text holds the material it refused, so `_translate_unwrapped` keeps only its
-type (`Unexpected error: InvalidURL`). The reason stays what it was: a status-less `RommApiError`, which
-`classify_error` answers `server_unreachable`. `tests/adapters/romm/test_http.py::TestNoCredentialReachesAnErrorOrALog`
-holds every public request method, failing every way, to that.
+Where an error the adapter raises names a request, it names its method and URL, path and query included — never a
+header, and never the address's user name or password: `translate_http_error` and `_translate_with_detail` write the URL
+through `lib/url_host.without_userinfo`, and `RommApiError` stores its `url` the same way. A password holding an
+unescaped `/`, `?` or `#` is not recognised as one (`_userinfo_end` says why).
+
+A request `urllib` or `http.client` cannot build raises an exception whose text holds the material it refused —
+`InvalidURL` for an address it cannot read as a host and port, a `ValueError` from `urllib.request.Request` for an
+address without a scheme or from a header value, `UnicodeEncodeError` among them. For those alone
+(`_could_not_be_built`) `_translate_unwrapped` keeps only the type (`Unexpected error: InvalidURL`), and the error is
+raised without its cause, so no traceback shows the original either; `_new_request` does the same for the `Request`
+every method builds before its translated `try`. An answer that could not be read — `json.JSONDecodeError`,
+`UnicodeDecodeError`, both `ValueError` too — keeps its text and its cause. Either way the reason stays what it was: a
+status-less `RommApiError`, which `classify_error` answers `server_unreachable`.
+`tests/adapters/romm/test_http.py::TestNoCredentialReachesAnErrorOrALog` holds every public request method, failing
+every way, to that, traceback included.
 
 #### RommHttpAdapter notes: what makes a 404 an entity verdict
 
