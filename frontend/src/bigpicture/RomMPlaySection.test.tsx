@@ -328,6 +328,7 @@ const ALL_AUTOMATIC: ArtworkSlots = {
     source: slot === "cover" ? ("romm" as const) : ("tender" as const),
     image_id: null,
     has_choice: false,
+    signature: "",
   })),
 };
 

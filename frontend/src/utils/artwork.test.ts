@@ -938,6 +938,7 @@ describe("the ARTWORK tab's writes", () => {
       source: "tender",
       image_id: null,
       has_choice: false,
+      signature: "",
     })),
   });
 
@@ -1138,6 +1139,7 @@ describe("every write moves its own slot's thumbnail token (#2381)", () => {
         source: "tender" as const,
         image_id: null,
         has_choice: slot === "logo",
+        signature: "",
       })),
     });
     const before = tokens();

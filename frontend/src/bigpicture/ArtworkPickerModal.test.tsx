@@ -14,7 +14,15 @@ const PAGE: backend.ArtworkCandidatePage = {
 };
 
 function row(overrides: Partial<backend.ArtworkSlotRow> = {}): backend.ArtworkSlotRow {
-  return { slot: "grid", state: "automatic", source: "tender", image_id: 2, has_choice: false, ...overrides };
+  return {
+    slot: "grid",
+    state: "automatic",
+    source: "tender",
+    image_id: 2,
+    has_choice: false,
+    signature: "",
+    ...overrides,
+  };
 }
 
 function button(container: HTMLElement, text: string): HTMLButtonElement {

@@ -31,6 +31,7 @@ function answer(
       source: rows[slot]?.source ?? (slot === "cover" ? "romm" : "tender"),
       image_id: null,
       has_choice: rows[slot]?.state === "chosen",
+      signature: `${slot}-sig`,
     })),
   };
 }
@@ -141,10 +142,12 @@ describe("ArtworkTab", () => {
     it("shows Steam's own copy of the image, first URL first", async () => {
       const { container } = await renderTab(answer(FROM_ROMM));
       const cover = rowButton(container, "Cover").querySelector("img");
-      expect(cover?.getAttribute("src")).toMatch(/^https:\/\/steamloopback\.host\/customimages\/5000p\.jpg\?v=9&t=/);
+      expect(cover?.getAttribute("src")).toMatch(
+        /^https:\/\/steamloopback\.host\/customimages\/5000p\.jpg\?s=cover-sig&t=/,
+      );
       fireEvent.error(cover!);
       expect(rowButton(container, "Cover").querySelector("img")?.getAttribute("src")).toMatch(
-        /^https:\/\/steamloopback\.host\/customimages\/5000p\.png\?v=9&t=/,
+        /^https:\/\/steamloopback\.host\/customimages\/5000p\.png\?s=cover-sig&t=/,
       );
     });
 

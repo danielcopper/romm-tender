@@ -13,7 +13,7 @@
 import { FC, useState, type ReactElement } from "react";
 import type { InstalledRom, RomMetadata } from "../types";
 import { coverUrls } from "../utils/artworkThumbs";
-import { artworkThumbToken, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
+import { artworkThumbToken, heldArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
 import { formatReleaseDate } from "../utils/formatters";
 import { infoRow, section } from "./panelSection";
 
@@ -29,6 +29,8 @@ interface GameInfoTabProps {
   coverBase64: string | null;
   /** The shortcut whose cover Steam shows — the one this tab shows first (#2381 D18). */
   appId?: number;
+  /** The ROM showing, whose ARTWORK tab read — where one is held — signs the cover's URLs. */
+  romId?: number;
   installed: boolean;
   installedRom: InstalledRom | null;
 }
@@ -159,11 +161,17 @@ const Cover: FC<{ sources: string[] }> = ({ sources }) => {
   );
 };
 
+/** The URLs of the cover Steam shows for shortcut *appId*, signed by the cover row of *romId*'s held ARTWORK read. */
+function steamsCover(appId: number, romId: number | null): string[] {
+  const cover = heldArtworkSlots(appId, romId)?.slots?.slots.find((row) => row.slot === "cover");
+  return coverUrls(appId, artworkThumbToken(appId, "cover"), cover?.signature ?? null);
+}
+
 export const GameInfoTab: FC<GameInfoTabProps> = (props) => {
   const rows = gameInfoRows(props);
   useArtworkSlotsChanges(props.appId ?? 0);
   const sources = [
-    ...(props.appId === undefined ? [] : coverUrls(props.appId, artworkThumbToken(props.appId, "cover"))),
+    ...(props.appId === undefined ? [] : steamsCover(props.appId, props.romId ?? null)),
     ...(props.coverBase64 ? [`data:image/png;base64,${props.coverBase64}`] : []),
   ];
 

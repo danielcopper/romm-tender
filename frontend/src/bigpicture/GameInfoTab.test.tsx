@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
+import { render, fireEvent, act } from "@testing-library/react";
+import * as backend from "../api/backend";
+import { _resetArtworkSlotsForTests, loadArtworkSlots, noteArtworkWritten } from "../utils/artworkSlotsStore";
 import { GameInfoTab } from "./GameInfoTab";
 
 const PROPS = {
@@ -12,8 +14,25 @@ const PROPS = {
   installedRom: null,
 };
 
+function slotsSigned(coverSignature: string): backend.ArtworkSlots {
+  return {
+    success: true,
+    has_api_key: true,
+    game: { sgdb_id: 7, source: "romm", name: "Mario Golf" },
+    slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
+      slot,
+      state: "automatic",
+      source: slot === "cover" ? "romm" : "tender",
+      image_id: null,
+      has_choice: false,
+      signature: slot === "cover" ? coverSignature : `${slot}-sig`,
+    })),
+  };
+}
+
 describe("GameInfoTab's cover (#2381 D18)", () => {
   beforeEach(() => {
+    _resetArtworkSlotsForTests();
     vi.stubGlobal("appStore", {
       GetAppOverviewByAppID: vi.fn(() => ({ appid: 5000 })),
       GetCustomVerticalCapsuleURLs: vi.fn(() => ["/customimages/5000p.jpg?v=9", "/customimages/5000p.png?v=9"]),
@@ -44,5 +63,30 @@ describe("GameInfoTab's cover (#2381 D18)", () => {
     const { container } = render(<GameInfoTab {...PROPS} appId={5000} coverBase64="ROMM" />);
 
     expect(container.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,ROMM");
+  });
+
+  it("signs the cover by the ARTWORK tab's read of the ROM showing, in place of Steam's v=", async () => {
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue(slotsSigned("c1"));
+    await loadArtworkSlots(5000, 42);
+
+    const { container } = render(<GameInfoTab {...PROPS} appId={5000} romId={42} coverBase64="ROMM" />);
+
+    expect(container.querySelector("img")?.getAttribute("src")).toMatch(
+      /^https:\/\/steamloopback\.host\/customimages\/5000p\.jpg\?s=c1&t=/,
+    );
+  });
+
+  it("keeps its cover when another slot is written, and loads it anew once the read signs the cover anew", async () => {
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue(slotsSigned("c1"));
+    await loadArtworkSlots(5000, 42);
+    const { container } = render(<GameInfoTab {...PROPS} appId={5000} romId={42} coverBase64="ROMM" />);
+    const before = container.querySelector("img")?.getAttribute("src");
+
+    act(() => noteArtworkWritten(5000, ["hero"]));
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(before);
+
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue(slotsSigned("c2"));
+    await act(() => loadArtworkSlots(5000, 42));
+    expect(container.querySelector("img")?.getAttribute("src")).not.toBe(before);
   });
 });

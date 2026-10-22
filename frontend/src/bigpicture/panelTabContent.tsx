@@ -39,6 +39,7 @@ export function buildTabContent({ appId, binding, state }: TabContentContext): R
         platformName={state.platformName}
         coverBase64={state.coverBase64}
         appId={appId}
+        romId={romId}
         installed={state.installed}
         installedRom={state.installedRom}
       />

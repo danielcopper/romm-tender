@@ -644,6 +644,8 @@ export interface ArtworkSlotRow {
   image_id: number | null;
   /** The user chose an image for the slot — also where it now reads set in Steam over that choice. */
   has_choice: boolean;
+  /** Moves whenever a file filling the slot in Steam's grid folder changes; empty where none fills it. */
+  signature: string;
 }
 
 /** The ARTWORK tab: the ROM's SteamGridDB game — RomM's, the user's choice, or none — and its five slots. */
