@@ -14,6 +14,7 @@ import hashlib
 
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_choice import ArtworkSlotChoice
+from domain.artwork_slot_outcome import ArtworkSlotOutcome
 
 from ._seed import seed_rom
 
@@ -112,6 +113,26 @@ async def test_a_reported_cover_reads_chosen_and_without_its_record_set_in_steam
     assert report == {"success": True}
     assert _rows(before)["cover"] == ("set_in_steam", "steam", None)
     assert _rows(after)["cover"] == ("chosen", "chosen", 5)
+
+
+async def test_an_automatic_cover_tender_set_from_steamgriddb_reads_as_tenders_pick(harness):
+    grid = _grid(harness)
+    (grid / f"{_ROM_ID}p.png").write_bytes(b"steamgriddb cover")
+    with harness.uow_factory() as uow:
+        uow.artwork_slot_outcomes.save(
+            ArtworkSlotOutcome.record_set(
+                rom_id=_ROM_ID,
+                slot=ArtworkSlot.COVER,
+                sgdb_id=9999,
+                image_id=7,
+                image_sha256=hashlib.sha256(b"steamgriddb cover").hexdigest(),
+                recorded_at=1.0,
+            )
+        )
+
+    slots = await harness.endpoints.get_artwork_slots(_ROM_ID, _ROM_ID)
+
+    assert _rows(slots)["cover"] == ("automatic", "tender", 7)
 
 
 async def test_a_cover_romm_has_none_for_answers_the_failure_shape_and_keeps_the_choice(harness):

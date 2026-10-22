@@ -13,7 +13,7 @@ import hashlib
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_set_in_steam, is_slot_filled, slot_files, slot_stem
+from domain.artwork_slot import SET_RECORDED_SLOTS, ArtworkSlot, is_set_in_steam, is_slot_filled, slot_files, slot_stem
 from domain.artwork_slot_choice import ArtworkSlotChoice
 from domain.artwork_slot_handover import HANDED_SLOTS
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
@@ -200,7 +200,7 @@ class ArtworkSlots:
     def _views_io(self, rom_id: int, app_id: int, grid: _GridState, *, has_game: bool) -> list[SlotView]:
         with self._uow_factory() as uow:
             choices = {choice.slot: choice for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
-            recorded = {slot: uow.artwork_slot_outcomes.get(rom_id, slot) for slot in RECORDED_SLOTS}
+            recorded = {slot: uow.artwork_slot_outcomes.get(rom_id, slot) for slot in SET_RECORDED_SLOTS}
             handed = {slot: uow.artwork_slot_handovers.get(rom_id, slot) for slot in HANDED_SLOTS}
         return [
             self._view_io(

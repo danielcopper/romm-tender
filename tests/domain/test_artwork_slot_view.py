@@ -69,6 +69,17 @@ class TestAutomatic:
 
             assert view == SlotView(ArtworkSlot.COVER, SlotState.AUTOMATIC, SlotSource.ROMM, None)
 
+    @pytest.mark.parametrize("has_game", [True, False])
+    def test_a_cover_tender_set_from_steamgriddb_is_tenders_pick(self, has_game):
+        view = _view(ArtworkSlot.COVER, has_game=has_game, filled=True, recorded=_set(ArtworkSlot.COVER, 12))
+
+        assert view == SlotView(ArtworkSlot.COVER, SlotState.AUTOMATIC, SlotSource.TENDER, 12)
+
+    def test_a_steamgriddb_cover_whose_file_is_gone_is_romms_again(self):
+        view = _view(ArtworkSlot.COVER, recorded=_set(ArtworkSlot.COVER, 12))
+
+        assert view == SlotView(ArtworkSlot.COVER, SlotState.AUTOMATIC, SlotSource.ROMM, None)
+
     @pytest.mark.parametrize("slot", _SGDB_SLOTS)
     def test_a_steamgriddb_slot_without_a_game_needs_one(self, slot):
         assert _view(slot, has_game=False, filled=True).source is SlotSource.NEEDS_GAME
