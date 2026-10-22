@@ -35,7 +35,7 @@ from lib.errors import (
 )
 from models.shortcut_artwork import SlotAnswer, WrittenIcon
 from services.steamgrid._files import CachedArtwork, NoArtwork, SgdbArtworkFiles, SgdbArtworkFilesConfig
-from services.steamgrid._handover import HandedOverImages, HandedOverImagesConfig
+from services.steamgrid._handover import HandedOverImages, HandedOverImagesConfig, PreviousChoice
 from services.steamgrid._refusals import (
     INVALID_KEY,
     KEY_REFUSED,
@@ -505,12 +505,17 @@ class SteamGridService:
         """Asset type 0: the cover the user chose, ``chosen`` saying whether there is one (#2381 D16).
 
         ``chosen`` without an image is a chosen cover that cannot be served
-        now — the cache lost it and it cannot be downloaded — which the
-        version switch must not write RomM's cover over; it is logged.
+        now — the cache lost it and it cannot be downloaded, or the download
+        was refused — which the version switch must not write RomM's cover
+        over; it is logged.
         """
         if not await self._loop.run_in_executor(None, self._slots.has_choice_io, rom_id, ArtworkSlot.COVER):
             return {"base64": None, "no_api_key": False, "chosen": False}
-        answer = await self._cached_or_downloaded(rom_id, _COVER_ASSET_TYPE)
+        try:
+            answer = await self._cached_or_downloaded(rom_id, _COVER_ASSET_TYPE)
+        except Refused as e:
+            self._logger.warning(f"The cover chosen for rom_id={rom_id} was refused: {e.message}")
+            answer = {"base64": None, "no_api_key": False}
         if answer.get("base64") is None:
             self._logger.warning(f"The cover chosen for rom_id={rom_id} cannot be served now")
         return {**answer, "chosen": True}
@@ -648,18 +653,25 @@ class SteamGridService:
         return self._image_answer_io(rom_id, slot, found, sgdb_id) or {"status": "failed"}
 
     def _image_answer_io(
-        self, rom_id: int, slot: ArtworkSlot, found: CachedArtwork, sgdb_id: int | None
+        self,
+        rom_id: int,
+        slot: ArtworkSlot,
+        found: CachedArtwork,
+        sgdb_id: int | None,
+        previous: PreviousChoice | None = None,
     ) -> dict[str, Any] | None:
         """The ``image`` answer serving *found* as *rom_id*'s *slot*, and its hand-over.
 
-        ``None`` where it cannot be read, which is logged.
+        *previous* is the choice the press replaced, where the caller read it
+        before (``_handover.HandedOverImages.served_io``). ``None`` where the
+        image cannot be read, which is logged.
         """
         try:
             data = self._sgdb_artwork_cache.read_bytes(found.path)
         except OSError as e:
             self._logger.warning(f"Failed to read cached artwork {found.path}: {e}")
             return None
-        self._handovers.served_io(rom_id, slot, found.image_id, data)
+        self._handovers.served_io(rom_id, slot, found.image_id, data, previous)
         return {
             "status": "image",
             "base64": base64.b64encode(data).decode("ascii"),
@@ -752,7 +764,7 @@ class SteamGridService:
         as Tender's, and a ``refused`` records nothing, since no cover is
         recorded as refused. Steam's answer settles the slot's hand-over, keeps
         a ``set`` record over a ``refused``, and gives back the choice a refused
-        chosen image replaced, dropping that image from the cache
+        chosen image replaced, removing that one image from the cache
         (``_handover.HandedOverImages.settle_io``, #2381 D15, D20).
         Refuses with ``invalid_payload`` for a slot that is not recorded, an
         unknown outcome, or a ``set`` without its image id and hash.
@@ -762,11 +774,13 @@ class SteamGridService:
             record = self._reported_outcome(rom_id, slot, outcome, sgdb_id, image_id, sha256)
             artwork_slot = record.slot if record is not None else ArtworkSlot.COVER
             reported_id = int(image_id) if image_id is not None else None
-            given_back = await self._loop.run_in_executor(
+            refused_choice = await self._loop.run_in_executor(
                 None, self._handovers.settle_io, rom_id, artwork_slot, record, reported_id
             )
-            if given_back:
-                await self._loop.run_in_executor(None, self._files.drop, rom_id, artwork_slot.value)
+            if refused_choice is not None:
+                await self._loop.run_in_executor(
+                    None, self._files.remove_image, rom_id, artwork_slot.value, refused_choice
+                )
             return {"success": True}
 
     def _reported_outcome(self, rom_id, slot, outcome, sgdb_id, image_id, sha256) -> ArtworkSlotOutcome | None:

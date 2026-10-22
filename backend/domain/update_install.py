@@ -171,7 +171,8 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
 )
 
 # The claims whose own work only reads, or writes nothing a restart can cut
-# short, so they make no press wait. Each write is one transaction of a kind
+# short, so they make no press wait. This comment is the one list of the writes
+# they may make. Each write is one transaction of a kind
 # whose loss costs nothing done: a cache it can build again; an artwork slot's
 # `none` record and Refresh Artwork's deletion of the records, whose loss only
 # changes when SteamGridDB is asked again; and the record of an artwork image

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from services.protocols import ConflictRules, CoverSlotReader
+    from services.steamgrid._handover import PreviousChoice
     from services.steamgrid._slots import ArtworkSlots
 
 
@@ -50,7 +51,7 @@ class ArtworkTabUseCasesConfig:
     loop: asyncio.AbstractEventLoop
     sgdb_ids: Callable[[int], tuple[int | None, int | None]]
     effective_sgdb_id: Callable[[int], int | None]
-    image_answer: Callable[[int, ArtworkSlot, CachedArtwork, int | None], dict[str, Any] | None]
+    image_answer: Callable[[int, ArtworkSlot, CachedArtwork, int | None, PreviousChoice | None], dict[str, Any] | None]
 
 
 class ArtworkTabUseCases:
@@ -167,10 +168,10 @@ class ArtworkTabUseCases:
         async with self._rules.hold("choose_artwork_slot_image", prune=True):
             rom_id, artwork_slot = int(rom_id), _tab_slot(slot)
             sgdb_id = await self._tab_game_or_refuse(rom_id)
-            found = await self._loop.run_in_executor(
+            found, previous = await self._loop.run_in_executor(
                 None, self._slots.choose_io, rom_id, artwork_slot, int(image_id), sgdb_id
             )
-            return await self._served_with_a_lease(rom_id, artwork_slot, found, sgdb_id)
+            return await self._served_with_a_lease(rom_id, artwork_slot, found, sgdb_id, previous)
 
     async def set_artwork_slot_automatic(self, rom_id, slot):
         """Set *rom_id*'s *slot* back to automatic, and serve what automatic is now.
@@ -216,12 +217,17 @@ class ArtworkTabUseCases:
         return int(sgdb_id)
 
     async def _served_with_a_lease(
-        self, rom_id: int, slot: ArtworkSlot, found: CachedArtwork, sgdb_id: int
+        self,
+        rom_id: int,
+        slot: ArtworkSlot,
+        found: CachedArtwork,
+        sgdb_id: int,
+        previous: PreviousChoice | None = None,
     ) -> dict[str, Any]:
         if slot is ArtworkSlot.ICON:
             answer: dict[str, Any] | None = {"status": "ready", "image_id": found.image_id, "sgdb_id": sgdb_id}
         else:
-            answer = await self._loop.run_in_executor(None, self._image_answer, rom_id, slot, found, sgdb_id)
+            answer = await self._loop.run_in_executor(None, self._image_answer, rom_id, slot, found, sgdb_id, previous)
         if answer is None:
             raise Refused("download_failed", "The downloaded image could not be read")
         answer["prune_lease_token"] = await self._rules.acquire_lease("sgdb_artwork")

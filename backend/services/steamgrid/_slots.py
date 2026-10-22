@@ -28,6 +28,7 @@ from domain.shortcut_icon import is_icon_filled, is_icon_set_in_steam
 from lib.errors import Refused, SgdbApiError, SgdbRateLimitedError, SteamGridDirMissingError
 from models.shortcut_artwork import SlotAnswer
 from services.steamgrid._files import CachedArtwork, NoArtwork
+from services.steamgrid._handover import PreviousChoice
 from services.steamgrid._refusals import RATE_LIMITED, refusal_for
 
 if TYPE_CHECKING:
@@ -314,14 +315,21 @@ class ArtworkSlots:
             self._logger.warning(f"SGDB {slot.value} listing failed for game {sgdb_id}: {e}")
             raise refusal_for(e) from e
 
-    def choose_io(self, rom_id: int, slot: ArtworkSlot, image_id: int, sgdb_id: int) -> CachedArtwork:
+    def choose_io(
+        self, rom_id: int, slot: ArtworkSlot, image_id: int, sgdb_id: int
+    ) -> tuple[CachedArtwork, PreviousChoice]:
         """Download image *image_id* as *rom_id*'s *slot* and record it as the user's choice.
 
-        The choice is recorded once the image is in the artwork cache. Refuses
+        The choice is recorded once the image is in the artwork cache. Answers
+        the image and the choice it replaced, read before anything is stored,
+        for the hand-over to keep (#2381 D20). Refuses
         with ``image_not_found`` when SteamGridDB no longer lists it for the
         game, ``download_failed`` when the download did not succeed, and as
         :meth:`candidates_io` refuses SteamGridDB's errors.
         """
+        with self._uow_factory() as uow:
+            replaced = uow.artwork_slot_choices.get(rom_id, slot)
+        previous = PreviousChoice(replaced.image_id if replaced is not None else None)
         candidate = self._find_candidate_io(rom_id, slot, image_id, sgdb_id)
         if candidate is None:
             raise Refused("image_not_found", "SteamGridDB no longer lists this image for the game")
@@ -336,7 +344,7 @@ class ArtworkSlots:
             if uow.roms.get(rom_id) is None:
                 raise Refused("not_synced", "ROM is not synced to Steam")
             uow.artwork_slot_choices.save(choice)
-        return found
+        return found, previous
 
     def _find_candidate_io(self, rom_id: int, slot: ArtworkSlot, image_id: int, sgdb_id: int) -> SgdbCandidate | None:
         candidate = self._listed.get((rom_id, slot), {}).get(image_id)

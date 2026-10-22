@@ -165,6 +165,18 @@ class SgdbArtworkFiles:
             self._note_cache_name(rom_id, asset_type, name, held=False)
         return None
 
+    def remove_image(self, rom_id: int, asset_type: str, image_id: int) -> None:
+        """Remove *rom_id*'s cached *asset_type* named by *image_id*, and no other file of the slot (sync)."""
+        name = cached_artwork_name(rom_id, asset_type, image_id)
+        try:
+            self._cache.remove_file(os.path.join(self._cache.cache_dir(), name))
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            self._logger.warning(f"Failed to clear cached artwork {name}: {e}")
+            return
+        self._note_cache_name(rom_id, asset_type, name, held=False)
+
     def drop(self, rom_id, asset_type, *, keep: str | None = None) -> None:
         """Remove every cache file of *rom_id*'s *asset_type* but *keep* (sync)."""
         art_dir = self._cache.cache_dir()

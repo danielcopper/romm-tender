@@ -30,6 +30,13 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class PreviousChoice:
+    """The image the user had chosen for a slot before a press, read before it; ``None`` for no choice."""
+
+    image_id: int | None
+
+
+@dataclass(frozen=True)
 class HandedOverImagesConfig:
     """Wiring for :class:`HandedOverImages`: the database, the artwork cache, Steam's grid directory, the clock."""
 
@@ -50,25 +57,23 @@ class HandedOverImages:
         self._clock = config.clock
         self._logger = config.logger
 
-    def served_io(self, rom_id: int, slot: ArtworkSlot, image_id: int, data: bytes) -> None:
+    def served_io(
+        self, rom_id: int, slot: ArtworkSlot, image_id: int, data: bytes, previous: PreviousChoice | None = None
+    ) -> None:
         """Record that *data*, SteamGridDB's image *image_id*, is handed to Steam as *rom_id*'s *slot*.
 
         The hand-over keeps the image the user had chosen for the slot at the
-        press: the choice now, unless this image is already the hand-over,
-        whose press came first — so an image chosen in the tab, stored before
-        its choice is saved and served after, keeps the choice it replaced.
-        Nothing is recorded for a ROM with no ``roms`` row.
+        press: *previous*, which the ARTWORK tab reads before its choice is
+        saved, else the slot's choice now. Nothing is recorded for a ROM with
+        no ``roms`` row.
         """
         sha256 = hashlib.sha256(data).hexdigest()
         with self._uow_factory() as uow:
             if uow.roms.get(rom_id) is None:
                 return
-            held = uow.artwork_slot_handovers.get(rom_id, slot)
-            if held is not None and held.image_id == image_id:
-                previous = held.previous_choice_id
-            else:
+            if previous is None:
                 choice = uow.artwork_slot_choices.get(rom_id, slot)
-                previous = choice.image_id if choice is not None else None
+                previous = PreviousChoice(choice.image_id if choice is not None else None)
             uow.artwork_slot_handovers.save(
                 ArtworkSlotHandover.hand_over(
                     rom_id=rom_id,
@@ -76,7 +81,7 @@ class HandedOverImages:
                     image_id=image_id,
                     image_sha256=sha256,
                     handed_at=self._clock.time(),
-                    previous_choice_id=previous,
+                    previous_choice_id=previous.image_id,
                 )
             )
 
@@ -99,21 +104,22 @@ class HandedOverImages:
 
     def settle_io(
         self, rom_id: int, slot: ArtworkSlot, record: ArtworkSlotOutcome | None, image_id: int | None
-    ) -> bool:
+    ) -> int | None:
         """Settle *rom_id*'s *slot* by Steam's answer for image *image_id*; *record* is that answer's outcome, if any.
 
         The hand-over goes once Steam answered for its image. A ``set`` is
         saved; a ``refused`` is saved unless a ``set`` is held, whose image is
         still Tender's. Where Steam refused the handed-over image and it is the
         slot's choice, the choice the hand-over kept comes back — none, if there
-        was none — so the slot is as it was before the press (D20). Answers
-        whether that happened, for the caller to drop the refused image from
-        the cache.
+        was none — so the slot is as it was before the press (D20). Answers the
+        refused image's id where that happened, for the caller to drop that
+        image from the cache; ``None`` otherwise, also where the choice kept is
+        the refused image itself, which stays chosen.
         """
         refused = record is None or record.outcome is SlotOutcome.REFUSED
         with self._uow_factory() as uow:
             if uow.roms.get(rom_id) is None:
-                return False
+                return None
             handover = uow.artwork_slot_handovers.get(rom_id, slot)
             handed = handover is not None and handover.image_id == image_id
             if handed:
@@ -122,12 +128,12 @@ class HandedOverImages:
             held = uow.artwork_slot_outcomes.get(rom_id, slot)
             if record is not None and not (refused and held is not None and held.outcome is SlotOutcome.SET):
                 uow.artwork_slot_outcomes.save(record)
-        return given_back
+        return image_id if given_back else None
 
     def _give_choice_back(self, uow: UnitOfWork, handover: ArtworkSlotHandover) -> bool:
         """Put back the choice *handover* kept, where its refused image is the slot's choice; answers whether it did."""
         choice = uow.artwork_slot_choices.get(handover.rom_id, handover.slot)
-        if choice is None or choice.image_id != handover.image_id:
+        if choice is None or choice.image_id != handover.image_id or handover.previous_choice_id == choice.image_id:
             return False
         if handover.previous_choice_id is None:
             uow.artwork_slot_choices.delete_slot(handover.rom_id, handover.slot)
