@@ -289,6 +289,17 @@ describe("resolveKnownConflicts", () => {
     expect(toastBodies()).toEqual(["RomM couldn't find this game's save data — conflict left unresolved"]);
   });
 
+  it("a device that could not be registered says so, and does not blame the connection", async () => {
+    vi.mocked(backend.getSaveStatus).mockResolvedValue(
+      saveStatus({ server_query_failed: true, server_query_reason: "device_not_registered", conflicts: [] }),
+    );
+
+    await expect(resolveKnownConflicts(42, vi.fn(), "test")).resolves.toBe("failed");
+
+    expect(getRommConnectionState()).toBe("connected");
+    expect(toastBodies()).toEqual(["This device could not be registered with RomM — conflict left unresolved"]);
+  });
+
   it("a thrown read toasts and is failed", async () => {
     vi.mocked(backend.getSaveStatus).mockRejectedValue(new Error("network down"));
 

@@ -5,11 +5,12 @@
  * (`ensureTrackingConfiguredBigPicture` in `launchGateOps.ts`). Anything that lives
  * here can be unit-tested without rendering the component or stubbing React.
  *
- * The "server_unreachable", "not_found" and "romm_refused" branches exist
- * because `recommended_action` carries the explicit failure mode from the
- * backend (see `get_save_setup_info`); the call site MUST NOT treat an empty
- * `server_slots` array as authoritative on any of them or it risks clobbering
- * real server saves on first sync. They hold identically and differ only in copy.
+ * The "server_unreachable", "not_found", "romm_refused" and
+ * "device_not_registered" branches exist because `recommended_action` carries
+ * the explicit failure mode from the backend (see `get_save_setup_info`); the
+ * call site MUST NOT treat an empty `server_slots` array as authoritative on any
+ * of them or it risks clobbering real server saves on first sync. They hold
+ * identically and differ only in copy.
  */
 
 import type { SaveSetupInfo } from "../types";
@@ -18,6 +19,7 @@ export type SaveSetupOutcome =
   | { kind: "server_unreachable" }
   | { kind: "not_found" }
   | { kind: "romm_refused"; message: string }
+  | { kind: "device_not_registered" }
   | { kind: "auto_confirm"; slot: string }
   | { kind: "needs_user_choice" };
 
@@ -33,6 +35,11 @@ export function resolveSaveSetupOutcome(info: SaveSetupInfo): SaveSetupOutcome {
   }
   if (info.recommended_action === "romm_refused") {
     return { kind: "romm_refused", message: info.message ?? "" };
+  }
+  // RomM answered the device's registration and still did not register it, so
+  // nothing was listed: the same hold.
+  if (info.recommended_action === "device_not_registered") {
+    return { kind: "device_not_registered" };
   }
   // Either the backend marked the response as "auto_confirm_default", or the
   // server is reachable but reports no saves on either side — both are safe
@@ -82,6 +89,14 @@ export function rommRefusedWizardMessage(message: string): string {
 export function rommRefusedToastBody(message: string): string {
   return `Cannot configure save slot — RomM did not list this game's saves. ${message}`;
 }
+
+/** Copy for the `device_not_registered` branch: RomM answered, but this device
+ *  could not be registered with it, so its saves were not listed. */
+export const DEVICE_NOT_REGISTERED_WIZARD_MESSAGE =
+  "This device could not be registered with RomM — setup paused. Retry in a moment.";
+
+export const DEVICE_NOT_REGISTERED_TOAST_BODY =
+  "Cannot configure save slot — this device could not be registered with RomM. Open the Saves tab to retry.";
 
 const NEEDS_USER_CHOICE_TOAST_BODY = "Configure save sync in the Saves tab first";
 
@@ -133,6 +148,11 @@ export async function applyLaunchGateSetupOutcome(
   }
   if (outcome.kind === "romm_refused") {
     deps.toast(rommRefusedToastBody(outcome.message));
+    deps.dispatchSavesTab();
+    return "abort";
+  }
+  if (outcome.kind === "device_not_registered") {
+    deps.toast(DEVICE_NOT_REGISTERED_TOAST_BODY);
     deps.dispatchSavesTab();
     return "abort";
   }
@@ -202,6 +222,10 @@ export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps:
     deps.setError(rommRefusedWizardMessage(result.message ?? ""));
     return;
   }
+  if (result.recommended_action === "device_not_registered") {
+    deps.setError(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+    return;
+  }
   if (result.recommended_action === "auto_confirm_default") {
     deps.setConfirming(true);
     try {
@@ -257,6 +281,11 @@ export function applyWizardRetrySetupResult(result: SaveSetupInfo, deps: WizardR
   }
   if (result.recommended_action === "romm_refused") {
     deps.setError(rommRefusedWizardMessage(result.message ?? ""));
+    deps.setLoading(false);
+    return;
+  }
+  if (result.recommended_action === "device_not_registered") {
+    deps.setError(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
     deps.setLoading(false);
     return;
   }

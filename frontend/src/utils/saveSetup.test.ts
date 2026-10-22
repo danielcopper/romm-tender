@@ -16,6 +16,8 @@ import {
   SERVER_UNREACHABLE_TOAST_BODY,
   NOT_FOUND_WIZARD_MESSAGE,
   NOT_FOUND_TOAST_BODY,
+  DEVICE_NOT_REGISTERED_WIZARD_MESSAGE,
+  DEVICE_NOT_REGISTERED_TOAST_BODY,
   type LaunchGateSetupDeps,
   type SaveSetupOutcome,
   type WizardRetryDeps,
@@ -503,5 +505,49 @@ describe("a save listing RomM refused (romm_refused)", () => {
     expect(rommRefusedToastBody(message)).toContain(message);
     expect(rommRefusedWizardMessage(message)).not.toMatch(/unreachable|not reachable|offline/i);
     expect(rommRefusedToastBody(message)).not.toMatch(/unreachable|not reachable|offline/i);
+  });
+});
+
+describe("a device that could not be registered", () => {
+  it("holds the outcome rather than auto-confirming over an unlisted server", () => {
+    const info = makeInfo({
+      recommended_action: "device_not_registered",
+      server_query_failed: true,
+      has_local_saves: true,
+    });
+    expect(resolveSaveSetupOutcome(info)).toEqual({ kind: "device_not_registered" });
+  });
+
+  it("aborts the launch with its own copy", async () => {
+    const deps = makeLaunchGateDeps();
+    const result = await applyLaunchGateSetupOutcome({ kind: "device_not_registered" }, deps);
+    expect(result).toBe("abort");
+    expect(deps.toast).toHaveBeenCalledWith(DEVICE_NOT_REGISTERED_TOAST_BODY);
+    expect(deps.dispatchSavesTab).toHaveBeenCalledOnce();
+    expect(deps.confirmSlotChoice).not.toHaveBeenCalled();
+  });
+
+  it("holds the wizard on the initial fetch, never auto-confirming", async () => {
+    const deps = makeWizardDeps();
+    await applyWizardInitialSetupResult(
+      makeInfo({ recommended_action: "device_not_registered", server_query_failed: true }),
+      deps,
+    );
+    expect(deps.setError).toHaveBeenCalledWith(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+    expect(deps.confirmSlotChoice).not.toHaveBeenCalled();
+    expect(deps.setInfo).not.toHaveBeenCalled();
+  });
+
+  it("holds the wizard on a retry and clears loading", () => {
+    const deps = makeRetryDeps();
+    applyWizardRetrySetupResult(makeInfo({ recommended_action: "device_not_registered" }), deps);
+    expect(deps.setError).toHaveBeenCalledWith(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+    expect(deps.setLoading).toHaveBeenCalledWith(false);
+    expect(deps.setInfo).not.toHaveBeenCalled();
+  });
+
+  it("does not blame the connection", () => {
+    expect(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE).not.toMatch(/unreachable|not reachable|offline/i);
+    expect(DEVICE_NOT_REGISTERED_TOAST_BODY).not.toMatch(/unreachable|not reachable|offline/i);
   });
 });

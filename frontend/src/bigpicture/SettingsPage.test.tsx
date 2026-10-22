@@ -449,12 +449,23 @@ describe("SettingsPage", () => {
       expect(ss?.deviceInfo).toEqual({ device_id: "dev-1", device_name: "Test Deck" });
     });
 
-    it("does NOT call ensureDeviceRegistered / listDevices when disabled", async () => {
-      // defaults to disabled
+    it("registers this device but lists no devices when disabled", async () => {
+      // defaults to disabled, signed in
+      renderPage();
+      await flushAsync();
+      expect(vi.mocked(backend.ensureDeviceRegistered)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(backend.listDevices)).not.toHaveBeenCalled();
+    });
+
+    it("registers nothing while signed out", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue({ ...defaultSettings(), has_token: false });
+      vi.mocked(backend.getSaveSyncSettings).mockResolvedValue({
+        ...defaultSaveSyncSettings(),
+        save_sync_enabled: true,
+      });
       renderPage();
       await flushAsync();
       expect(vi.mocked(backend.ensureDeviceRegistered)).not.toHaveBeenCalled();
-      expect(vi.mocked(backend.listDevices)).not.toHaveBeenCalled();
     });
 
     it("does NOT set deviceInfo when ensureDeviceRegistered returns success=false", async () => {

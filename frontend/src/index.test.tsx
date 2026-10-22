@@ -34,7 +34,6 @@ import {
   getAllPlaytime,
   getAppIdRomIdMap,
   ensureDeviceRegistered,
-  getSaveSyncSettings,
   getInstalledRelaunchOptions,
   invalidateCachedGameDetail,
   getMetadataCachePage,
@@ -466,20 +465,35 @@ describe("index.tsx — launcher relocation at panel load", () => {
 });
 
 describe("index.tsx — the session manager at panel load", () => {
+  const signedIn = (hasToken: boolean) =>
+    vi.mocked(getSettings).mockResolvedValue({ has_token: hasToken } as Awaited<ReturnType<typeof getSettings>>);
+
   beforeEach(() => {
     vi.mocked(initSessionManager).mockClear();
-    vi.mocked(getSaveSyncSettings).mockResolvedValue({
-      save_sync_enabled: true,
-      sync_before_launch: true,
-      sync_after_exit: true,
-      default_slot: "autosave",
-      autocleanup_limit: 10,
-    });
+    signedIn(true);
   });
 
   afterEach(() => {
-    vi.mocked(getSaveSyncSettings).mockReset();
+    vi.mocked(getSettings).mockReset();
     vi.mocked(ensureDeviceRegistered).mockReset();
+  });
+
+  it("registers this device while signed in, whatever the save-sync setting", async () => {
+    panelFactory();
+    await act(flush);
+
+    expect(ensureDeviceRegistered).toHaveBeenCalledTimes(1);
+    expect(initSessionManager).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers nothing while signed out, and still starts the session manager", async () => {
+    signedIn(false);
+
+    panelFactory();
+    await act(flush);
+
+    expect(ensureDeviceRegistered).not.toHaveBeenCalled();
+    expect(initSessionManager).toHaveBeenCalledTimes(1);
   });
 
   it("starts the session manager when the device registration rejects", async () => {

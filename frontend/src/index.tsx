@@ -40,7 +40,7 @@ import { hasAnySaveConflict } from "./utils/saveStatus";
 import {
   getAppIdRomIdMap,
   ensureDeviceRegistered,
-  getSaveSyncSettings,
+  getSettings,
   getAllPlaytime,
   getMigrationStatus,
   getInstalledRelaunchOptions,
@@ -692,16 +692,17 @@ const tender = definePanel(() => {
     })(),
   );
 
-  // Register device and initialize session manager for save sync (if enabled)
+  // Register this device while signed in, whether save sync is on or off — the
+  // cross-device playtime sends its id too — then initialize the session manager.
   detach(
     (async () => {
       try {
-        const syncSettings = await getSaveSyncSettings();
-        if (syncSettings.save_sync_enabled) {
+        const settings = await getSettings();
+        if (settings.has_token) {
           try {
             await ensureDeviceRegistered();
           } catch (e) {
-            logError(`Failed to init save sync: ${e}`);
+            logError(`Failed to register this device: ${e}`);
           }
         }
         // Always init session manager — it handles playtime tracking too

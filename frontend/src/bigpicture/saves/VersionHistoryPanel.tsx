@@ -68,6 +68,10 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
       } else if (result.status === "romm_refused") {
         setVersions(null);
         setLoadError(`Couldn't load the versions: ${result.message}`);
+      } else if (result.status === "device_not_registered") {
+        detach(debugLog(`VersionHistoryPanel: device not registered for ${filename}: ${result.message}`));
+        setVersions(null);
+        setLoadError("This device could not be registered with RomM. Tap retry.");
       } else {
         detach(debugLog(`VersionHistoryPanel: server unreachable for ${filename}: ${result.message}`));
         setVersions(null);
