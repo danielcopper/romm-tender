@@ -15,7 +15,10 @@ calling service.
 
 from __future__ import annotations
 
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
+
+if TYPE_CHECKING:
+    from collections.abc import Collection
 
 
 class CoverRefreshScan(NamedTuple):
@@ -80,6 +83,7 @@ def cover_ts_only_change(stored_source: str | None, fresh_source: str | None) ->
 def scan_cover_refresh_candidates(
     all_roms: list[dict[str, Any]],
     registry: dict[str, dict[str, Any]],
+    steamgriddb_covers: Collection[int] = (),
 ) -> CoverRefreshScan:
     """Split *all_roms* against *registry* fingerprints into changed / NULL buckets.
 
@@ -88,6 +92,11 @@ def scan_cover_refresh_candidates(
     ``id``, no registry entry (unbound rows are never projected), or an
     unchanged fingerprint is skipped. Order follows *all_roms*; a duplicate
     ``rom_id`` is counted once (first occurrence wins).
+
+    *steamgriddb_covers* are the ROMs whose cover is Tender's pick from
+    SteamGridDB, given while RomM had none: each that has a fresh cover is
+    changed whatever its fingerprint, since RomM's cover takes its place
+    (#2381 D24).
     """
     changed: list[tuple[int, int, str]] = []
     null_fingerprint: list[tuple[int, str]] = []
@@ -104,6 +113,9 @@ def scan_cover_refresh_candidates(
         if entry is None or entry.get("app_id") is None:
             continue
         stored = entry.get("cover_source")
+        if rom_id in steamgriddb_covers:
+            changed.append((rom_id, int(entry["app_id"]), fresh))
+            continue
         if stored == fresh:
             continue
         if stored is None:
