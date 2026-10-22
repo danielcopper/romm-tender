@@ -250,6 +250,9 @@ jobs:
       - name: Check urlopen choke-point confinement
         run: python scripts/check_urlopen_choke_point.py
 
+      - name: Check live device id confinement
+        run: python scripts/check_live_device_id.py
+
       - name: Check no bare ignores
         run: bash scripts/check_no_bare_ignores.sh
 
