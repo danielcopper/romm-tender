@@ -204,11 +204,3 @@ class TestLinks:
         assert (tmp_path / "backup" / "a" / "f.bin").read_bytes() == b"wrong"
         assert os.readlink(tmp_path / "backup" / "a" / "l.bin") == str(tmp_path / "elsewhere.bin")
         assert not (tmp_path / "f.bin").exists()
-
-    def test_is_file_is_a_regular_file_not_followed(self, fw_files, tmp_path):
-        (tmp_path / "f.bin").write_bytes(b"x")
-        (tmp_path / "l.bin").symlink_to(tmp_path / "f.bin")
-
-        assert fw_files.is_file(str(tmp_path / "f.bin")) is True
-        assert fw_files.is_file(str(tmp_path / "l.bin")) is False
-        assert fw_files.is_file(str(tmp_path / "none.bin")) is False

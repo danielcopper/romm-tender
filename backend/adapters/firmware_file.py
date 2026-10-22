@@ -88,10 +88,3 @@ class FirmwareFileAdapter:
         """Move the file or link at *src* to *dst*, creating *dst*'s folders; a link moves as itself."""
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.move(src, dst)
-
-    def is_file(self, path: str) -> bool:
-        """Whether *path* is a regular file, a link not followed."""
-        try:
-            return stat.S_ISREG(os.lstat(path).st_mode)
-        except FileNotFoundError:
-            return False

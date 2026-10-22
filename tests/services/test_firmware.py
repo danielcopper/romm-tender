@@ -5133,8 +5133,8 @@ class TestCheckPlatformBiosNoCoreFields:
         # The launching emulator was read and declares nothing here.
         _resolver(fw).describe_emulator(_id("genesisplusgx_libretro"))
 
-        # No firmware on the server matches the platform → collect_firmware_status
-        # returns nothing, hitting the empty-files needs_bios=False branch.
+        # No firmware on the server matches the platform and nothing is
+        # declared, so there are no rows: the empty-files needs_bios=False branch.
         _stub_listing(fw, [])
         _inline_executor(fw)
 
@@ -6167,7 +6167,6 @@ class TestThePlatformRommStatesForAFile:
         firmware.romm_api.list_platforms.return_value = _platforms(
             [{**row, "platform_slug": "psx"}], folders={"psx": "ps"}
         )
-        firmware.romm_api.get_firmware.return_value = dict(row)
 
         def write(_firmware_id, _file_name, dest):
             with open(dest, "wb") as f:

@@ -51,20 +51,6 @@ class TestALink:
         with pytest.raises(ValueError, match="absolute"):
             self._link(**{relative: "bios/saturn_bios.bin"})
 
-    def test_moved_keeps_everything_but_its_place(self):
-        link = self._link()
-
-        moved = link.moved_to("/run/media/deck/SD/retrodeck/bios/kronos/saturn_bios.bin")
-
-        assert moved.place == "/run/media/deck/SD/retrodeck/bios/kronos/saturn_bios.bin"
-        assert (moved.target, moved.platform_slug, moved.file_name, moved.source, moved.placed_at) == (
-            link.target,
-            link.platform_slug,
-            link.file_name,
-            link.source,
-            link.placed_at,
-        )
-
 
 class TestTheBackupPlace:
     def test_keeps_the_original_absolute_path_below_the_dated_folder(self):

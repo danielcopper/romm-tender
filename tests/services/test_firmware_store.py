@@ -78,9 +78,6 @@ class _Romm:
             )
         return list(platforms.values())
 
-    def get_firmware(self, firmware_id: int) -> dict[str, Any]:
-        raise AssertionError("a download looks the file up in the listing")
-
     def download_firmware(self, firmware_id: int, filename: str, dest: str) -> None:
         self.downloads.append(firmware_id)
         Path(dest).write_bytes(self.served.get(firmware_id, self.files[firmware_id][2]))

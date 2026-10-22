@@ -529,9 +529,8 @@ class FirmwareStatusReader:
         prints, and a caller handing those on separately is how a surface comes
         to name one emulator and judge by another
         (:class:`~domain.emulator_commands.LaunchingEmulator`). Its identity
-        filters the firmware list by what THIS emulator needs (an INPUT to
-        ``collect_firmware_status`` so ``required_count`` / the missing-BIOS
-        badge stay launch-aware) and names a standalone emulator as readily as a
+        filters the firmware list by what THIS emulator needs (so
+        ``required_count`` / the missing-BIOS badge stay launch-aware) and names a standalone emulator as readily as a
         libretro core; its label rides back out as ``active_core_label`` and
         nothing else does (#923 — what a game launches with reaches the frontend
         through ``get_platform_core_info``). ``None`` means "use the platform's

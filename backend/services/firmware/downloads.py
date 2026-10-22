@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from services.firmware.listing import FirmwareListing
     from services.firmware.store import FirmwareStore, LinkOutcome
     from services.protocols import (
-        ActiveCoreReader,
         CoreInfoProvider,
         FirmwareFileStore,
         PlatformCoreReader,
@@ -58,7 +57,6 @@ class FirmwareDownloaderConfig:
     core_info: CoreInfoProvider
     platform_systems: PlatformSystems
     platform_core_reader: PlatformCoreReader
-    active_core: ActiveCoreReader
     firmware_file_store: FirmwareFileStore
     uow_factory: UnitOfWorkFactory
     loop: asyncio.AbstractEventLoop
@@ -75,7 +73,6 @@ class FirmwareDownloader:
         self._core_info = config.core_info
         self._platform_systems = config.platform_systems
         self._platform_core_reader = config.platform_core_reader
-        self._active_core = config.active_core
         self._files = config.firmware_file_store
         self._uow_factory = config.uow_factory
         self._loop = config.loop

@@ -92,13 +92,6 @@ class RommFirmwareApi(Protocol):
         """
         ...
 
-    def get_firmware(self, firmware_id: int) -> dict[str, Any]:
-        """Fetch metadata for a single firmware file.
-
-        Returns firmware dict from /api/firmware/{firmware_id}.
-        """
-        ...
-
     def download_firmware(self, firmware_id: int, filename: str, dest: str) -> None:
         """Download a firmware/BIOS file to a local path.
 

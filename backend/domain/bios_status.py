@@ -453,35 +453,6 @@ def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool, dest: st
     return downloaded
 
 
-def collect_firmware_status(
-    items: list[dict[str, Any]],
-    placements: Mapping[str, FirmwarePlacement],
-    complete: bool,
-    launching_emulator: str | None,
-    groups: tuple[FirmwareGroup, ...] = (),
-) -> tuple[BiosFileEntry, ...]:
-    """Build BiosFileEntry objects for a list of pre-resolved firmware items.
-
-    Each item must have keys: file_name, downloaded, dest; ``on_server``
-    defaults to ``True`` for the items that came off the RomM listing.
-    ``groups`` spans the whole answer and is read per row, so one emulator's
-    group answers the same way on every file it lists.
-    """
-    return tuple(
-        build_file_entry(
-            item["file_name"],
-            item["downloaded"],
-            item["dest"],
-            placements.get(item["file_name"]),
-            complete,
-            launching_emulator,
-            on_server=item.get("on_server", True),
-            groups=groups,
-        )
-        for item in items
-    )
-
-
 def count_required(
     files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = (), folders: tuple[bool | None, ...] = ()
 ) -> tuple[int, int]:

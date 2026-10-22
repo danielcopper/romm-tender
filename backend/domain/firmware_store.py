@@ -119,21 +119,6 @@ class FirmwareLink:
             placed_at=placed_at,
         )
 
-    def moved_to(self, place: str) -> FirmwareLink:
-        """This record at *place* instead, every other field kept.
-
-        The place is the identity, so the answer is a new record; the caller
-        removes the old one.
-        """
-        return FirmwareLink.mark_placed(
-            place=place,
-            target=self.target,
-            platform_slug=self.platform_slug,
-            file_name=self.file_name,
-            source=self.source,
-            placed_at=self.placed_at,
-        )
-
 
 def backup_path(data_dir: str, stamp: str, original: str) -> str:
     """Where a replaced file at the absolute path *original* goes: below the backup folder, under its whole path."""

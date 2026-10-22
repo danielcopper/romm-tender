@@ -492,10 +492,6 @@ class FirmwareFileStore(Protocol):
         """Move the file or link at *src* to *dst*, creating *dst*'s folders; a link moves as itself."""
         ...
 
-    def is_file(self, path: str) -> bool:
-        """Whether *path* is a regular file, a link not followed."""
-        ...
-
 
 class MigrationFileStore(Protocol):
     """Filesystem seam for the RetroDECK home migration's I/O.

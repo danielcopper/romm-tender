@@ -95,6 +95,3 @@ class FakeFirmwareFileStore:
             self.files[dst] = self.files.pop(src)
         else:
             raise FileNotFoundError(src)
-
-    def is_file(self, path: str) -> bool:
-        return path in self.files
