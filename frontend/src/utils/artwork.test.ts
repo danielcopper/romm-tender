@@ -1069,6 +1069,19 @@ describe("the ARTWORK tab's writes", () => {
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
   });
 
+  it("answers unavailable where the chosen-cover read is refused or fails, and writes nothing", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValueOnce({
+      success: false,
+      reason: "auth_failed",
+      message: "refused",
+    });
+    await expect(setChosenCover(42, 5000)).resolves.toBe("unavailable");
+    vi.mocked(backend.getSgdbArtworkBase64).mockRejectedValueOnce(new Error("connection lost"));
+    await expect(setChosenCover(42, 5000)).resolves.toBe("unavailable");
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
   it("sets nothing for a slot SteamGridDB has nothing for", async () => {
     await expect(applyTabSlotImage(42, 5000, "logo", { status: "none" }, false)).resolves.toBe("none");
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
