@@ -3067,7 +3067,9 @@ class TestUninstall:
         # does not read, so its line names the default and the choice; every
         # other path in the list is printed with `~` for the home.
         assert "~/Tender, or the place you chose" in result.stdout
-        assert "Tender's folder: recovery bundles, if you made any" in result.stdout
+        assert "Tender's folder: recovery bundles and BIOS downloads" in result.stdout
+        (replaced,) = [line for line in result.stdout.splitlines() if "BIOS files you replaced" in line]
+        assert str(machine.data / "backups" / "bios") in replaced
         assert "romm-tender-recovery" not in result.stdout
         assert str(machine.home) not in result.stdout
 
