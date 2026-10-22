@@ -490,7 +490,8 @@ leave the page. Without a proven-right copy in your library the row stays red wi
 and a file the emulator accepts, or that could not be checked, is never replaced.
 
 A file lying in the store folder that Tender has no record of — copied there by hand, say — is taken over without a
-download when its checksum is RomM's; otherwise it is moved to the same backup folder before the download.
+download when its checksum is RomM's; otherwise it is moved to the same backup folder before the download, and the line
+under the section says so: _A different scph5501.bin was already in Tender's firmware store. It was moved to …_
 
 ### Deleting BIOS Files
 
@@ -514,9 +515,11 @@ file Saturn's Kronos and YabaSanshiro both want lies once in the store with a li
 
 Once confirmed, Tender removes the files and reports the result. Where a file cannot be removed, the line under the
 section says so and the list re-reads itself: the rows that still offer **Delete** are the files that stayed. A link
-under RetroDECK's folder while RetroDECK's settings cannot be read stays where it is, and the result names it and why;
-Tender removes it the next time it brings its links up to date with the settings read. Games that need those files won't
-launch until you download them again with **Download all** or **Download required for _emulator_**.
+under RetroDECK's folder while RetroDECK's settings cannot be read stays where it is, and the line under the section
+says so, once per folder: _Left a link in …/retrodeck/bios: RetroDECK's settings could not be read. Tender removes it
+once they can be read._ Tender removes it the next time it brings its links up to date with the settings read. Games
+that need those files won't launch until you download them again with **Download all** or **Download required for
+_emulator_**.
 
 **It only ever deletes its own downloads and links.** A file is removed when Tender has a record of downloading it, a
 link when Tender has a record of placing it or it points into Tender's firmware store, and for no other reason.

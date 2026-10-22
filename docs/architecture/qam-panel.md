@@ -1703,15 +1703,20 @@ it, for the focused platform:
   line then carries the backend's sentence ("Downloaded 2 firmware files (1 failed: scph5501.bin)"). The button says
   `Failed` as well only when every file the batch tried failed. The platform-wide delete still writes its result there
   on success too ("Deleted 3 BIOS file(s)"), which is the one outcome on this pane no row can show; a row's own Delete
-  says it by the row changing. A delete that could not remove every file answers `delete_incomplete`: its line says so,
-  and the rows are re-read as after a success, because it may have removed files or dropped records before the file it
-  stopped on. The platform-wide one names no file; the rows still offering Delete after the re-read are the files that
-  stayed. An open game page is told of a BIOS change (`romm_data_changed`, `bios`) only when a run moved a file — a
-  download that fetched one, a delete that removed one — because each page that matches pays a live BIOS read for it.
-  The game page's own Download BIOS keeps that rule too, and its toast is the backend's sentence once a file failed,
-  "BIOS downloaded (_N_ files)" otherwise. The spinner is keyed on the run's slug as well as the button's identity, so
-  walking to another platform mid-download shows disabled buttons and the "Working on _X_" line rather than a spinner
-  that belongs elsewhere.
+  says it by the row changing. Either Delete adds one line per folder where it left a link of Tender's because the
+  folder lies under a root RetroDECK's settings did not name — "Left a link in `<folder>`: RetroDECK's settings could
+  not be read. Tender removes it once they can be read." (#2191 D20, D27) — and a download adds one line per file it
+  found in the store without a record and moved aside — "A different `<file name>` was already in Tender's firmware
+  store. It was moved to `<backup path>`." (D25, D27). Both are lines of this status line alone, kept until the pane is
+  left. A delete that could not remove every file answers `delete_incomplete`: its line says so, and the rows are
+  re-read as after a success, because it may have removed files or dropped records before the file it stopped on. The
+  platform-wide one names no file; the rows still offering Delete after the re-read are the files that stayed. An open
+  game page is told of a BIOS change (`romm_data_changed`, `bios`) only when a run moved a file — a download that
+  fetched one, a delete that removed one — because each page that matches pays a live BIOS read for it. The game page's
+  own Download BIOS keeps that rule too, and its toast is the backend's sentence once a file failed, "BIOS downloaded
+  (_N_ files)" otherwise. The spinner is keyed on the run's slug as well as the button's identity, so walking to another
+  platform mid-download shows disabled buttons and the "Working on _X_" line rather than a spinner that belongs
+  elsewhere.
 
   **The per-row Delete is authorised by Tender's own records and nothing else** — the row carries `deletable_count` and
   the `delete_name` the delete is asked by, which the backend derives from the same records the platform count comes
