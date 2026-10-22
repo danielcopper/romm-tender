@@ -723,10 +723,25 @@ class FakeRommApi:
             entry["emulator"] = emulator
             return dict(entry)
 
+        # On a slot POST the real server first refuses (409) to stack onto a
+        # slot this device hasn't synced — before its content dedup below, as
+        # RomM 5.3.0's ``add_save`` orders them. The gate runs BEFORE any
+        # mutation and lets ``RommConflictError`` propagate uncaught, exactly
+        # like the adapter.
+        if slot is not None:
+            check_add_save_conflict(
+                device_id=device_id,
+                slot=slot,
+                overwrite=overwrite,
+                slot_saves=[s for s in self.saves.values() if s.get("rom_id") == rom_id and s.get("slot") == slot],
+                sync_ledger=self._device_sync_ledger,
+            )
+
         # add_save content-dedup early-return (RomM 5.3.0): a named-slot
         # ``overwrite=false`` POST whose content matches an existing slot save
-        # returns that save BEFORE the DeviceSaveSync upsert, so the uploading
-        # device reads is_current=false and the confirm ack stays load-bearing.
+        # returns that save BEFORE the DeviceSaveSync upsert. The gate above has
+        # passed, so this device is current on the slot's latest save; on an
+        # older save the answer reads it not current.
         if self._dedup_next_upload_save_id is not None and slot is not None and not overwrite:
             dedup_id = self._dedup_next_upload_save_id
             self._dedup_next_upload_save_id = None
@@ -738,20 +753,10 @@ class FakeRommApi:
                 )
                 return response
 
-        # POST path. On a slot POST the real server refuses (409) to stack onto
-        # a slot this device hasn't synced, and tags the stored filename so
-        # versions never collide. The gate runs BEFORE any mutation and lets
-        # ``RommConflictError`` propagate uncaught, exactly like the adapter.
+        # POST path. A slot POST tags the stored filename so versions never
+        # collide.
         stored_filename = filename
         if slot is not None:
-            slot_saves = [s for s in self.saves.values() if s.get("rom_id") == rom_id and s.get("slot") == slot]
-            check_add_save_conflict(
-                device_id=device_id,
-                slot=slot,
-                overwrite=overwrite,
-                slot_saves=slot_saves,
-                sync_ledger=self._device_sync_ledger,
-            )
             stored_filename = tag_filename(filename, stamp.strftime("%Y-%m-%d_%H-%M-%S"))
 
         new_save_id = self._next_save_id
@@ -925,9 +930,10 @@ class FakeRommApi:
 
         The next named-slot ``overwrite=false`` POST returns *save_id* (as if the
         uploaded content matched it) BEFORE any DeviceSaveSync upsert — no new save
-        row, no ledger write — with the uploading device reported ``is_current=false``.
-        Mirrors RomM 5.3.0's ``add_save`` so a test can exercise the dedup path where the
-        post-upload confirm ack is the only writer of our sync row (#1458).
+        row, no ledger write. RomM's slot gate answers first, so the device must be
+        current on the slot's latest save for the dedup to be reached; the answer
+        reads it current on that save and, through its sync row or RomM's
+        placeholder, not current on an older one. Mirrors RomM 5.3.0's ``add_save``.
 
         *save_id* need not be the slot head: arm an OLDER save while a newer,
         different head is present to model the dedup-to-non-head shape — the POST

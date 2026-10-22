@@ -807,6 +807,8 @@ class TestDedupToNonHeadUploadGuard:
         head = _server_save(save_id=200, slot="default", updated_at="2026-03-01T00:00:00Z")
         fake.saves[100] = older
         fake.saves[200] = head
+        # Current on the head, so RomM's slot gate lets the POST through to the dedup.
+        fake.stage_device_sync(200, "device-1", "2026-03-01T00:00:00Z")
         fake.arm_add_save_dedup(100)  # the POST dedups to the OLDER save
 
         state = RomSaveSyncState(active_slot="default")
@@ -829,9 +831,10 @@ class TestDedupToNonHeadUploadGuard:
         assert state.own_upload_ids is None
         assert not any(c[0] == "confirm_download" for c in fake.call_log)
 
-    def test_dedup_to_head_records_baseline_and_confirms(self, tmp_path):
-        """Dedup to the head itself is benign — baseline recorded on the head and
-        the #1458 confirm ack still fires (today's behavior, unchanged)."""
+    def test_dedup_to_head_records_baseline_without_a_confirm(self, tmp_path):
+        """Dedup to the head itself is benign — baseline recorded on the head. RomM
+        reaches its dedup only past the slot gate, so the device is already current
+        on the head, the answer says so, and the #1458 confirm ack is not sent."""
         svc, fake = make_service(tmp_path)
         _set_device_id(svc, "device-1")
         _install_rom(svc, tmp_path)
@@ -841,6 +844,8 @@ class TestDedupToNonHeadUploadGuard:
         head = _server_save(save_id=200, slot="default", updated_at="2026-03-01T00:00:00Z")
         fake.saves[100] = older
         fake.saves[200] = head
+        # Current on the head, so RomM's slot gate lets the POST through to the dedup.
+        fake.stage_device_sync(200, "device-1", "2026-03-01T00:00:00Z")
         fake.arm_add_save_dedup(200)  # dedup to the HEAD → benign
 
         state = RomSaveSyncState(active_slot="default")
@@ -857,37 +862,8 @@ class TestDedupToNonHeadUploadGuard:
 
         assert result["id"] == 200
         assert state.files["pokemon.srm"].tracked_save_id == 200
-        # Dedup response reported is_current=false → the ack stays load-bearing.
-        assert fake.call_log[-1] == ("confirm_download", (200, "device-1"), {})
-
-    def test_empty_planned_group_records_baseline(self, tmp_path):
-        """Empty planned slot (no head to bypass — the empty-slot race) keeps
-        today's behavior: the dedup response is recorded as the baseline. Safe
-        because the response holds our content; a concurrent newer head is caught
-        on the next sync's fresh ``list_saves`` (#1482 documented edge)."""
-        svc, fake = make_service(tmp_path)
-        _set_device_id(svc, "device-1")
-        _install_rom(svc, tmp_path)
-        save_path = _create_save(tmp_path, content=b"raced content")
-
-        raced = _server_save(save_id=300, slot="default", updated_at="2026-03-01T00:00:00Z")
-        fake.saves[300] = raced
-        fake.arm_add_save_dedup(300)
-
-        state = RomSaveSyncState(active_slot="default")
-        result = svc._sync_engine._matrix.do_upload_save(
-            42,
-            str(save_path),
-            "pokemon.srm",
-            state,
-            "device-1",
-            "gba",
-            None,
-            planned_group=[],  # the plan saw an empty slot
-        )
-
-        assert result["id"] == 300
-        assert state.files["pokemon.srm"].tracked_save_id == 300
+        # The dedup answer shows this device current on the head → no ack.
+        assert not any(c[0] == "confirm_download" for c in fake.call_log)
 
     def test_no_planned_group_leaves_guard_inert(self, tmp_path):
         """A caller that passes no ``planned_group`` (PUT / explicit actions)
@@ -902,6 +878,8 @@ class TestDedupToNonHeadUploadGuard:
         head = _server_save(save_id=200, slot="default", updated_at="2026-03-01T00:00:00Z")
         fake.saves[100] = older
         fake.saves[200] = head
+        # Current on the head, so RomM's slot gate lets the POST through to the dedup.
+        fake.stage_device_sync(200, "device-1", "2026-03-01T00:00:00Z")
         fake.arm_add_save_dedup(100)  # non-head dedup, but no planned_group passed
 
         state = RomSaveSyncState(active_slot="default")

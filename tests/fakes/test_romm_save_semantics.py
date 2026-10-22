@@ -135,6 +135,9 @@ class TestTheDedupAnswer:
     def test_carries_the_placeholder_with_the_saves_updated_at_first(self, fake) -> None:
         device_id = _register(fake)
         fake.seed_foreign_save(ROM_ID, save_id=100, uploaded_by="device-B", updated_at=UPDATED_AT)
+        # A newer head this device is current on lets the POST past RomM's slot gate.
+        _seed_unsynced_save(fake, save_id=101, updated_at="2026-03-02T00:00:00Z")
+        fake.stage_device_sync(101, device_id, "2026-03-02T00:00:00Z")
         fake.arm_add_save_dedup(100)
 
         response = fake.upload_save(ROM_ID, "/saves/game.srm", "retroarch", device_id=device_id, slot="default")
@@ -143,3 +146,11 @@ class TestTheDedupAnswer:
         assert [ds["device_id"] for ds in response["device_syncs"]] == [device_id, "device-B"]
         assert response["device_syncs"][0]["last_synced_at"] == UPDATED_AT
         assert response["device_syncs"][0]["is_current"] is False
+
+    def test_the_slot_gate_refuses_before_the_dedup_answers(self, fake) -> None:
+        device_id = _register(fake)
+        fake.seed_foreign_save(ROM_ID, save_id=100, uploaded_by="device-B", updated_at=UPDATED_AT)
+        fake.arm_add_save_dedup(100)
+
+        with pytest.raises(RommConflictError):
+            fake.upload_save(ROM_ID, "/saves/game.srm", "retroarch", device_id=device_id, slot="default")
