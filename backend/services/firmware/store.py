@@ -116,10 +116,11 @@ class LinkOutcome:
 
 @dataclass
 class RemovalOutcome:
-    """What removing store files did: how many went, the links kept and why, and what could not be removed.
+    """What removing store files did: how many went, the links kept, and what could not be removed.
 
-    Each kept entry names its ``kind`` (``link``), its place, the folder it was
-    kept in where one is known, and the source the link lies in.
+    A link is kept only because the root it lies under could not be read. Each
+    kept entry names its ``kind`` (``link``), its place, the folder it was kept
+    in where one is known, and the source whose settings could not be read.
     """
 
     deleted: int = 0
@@ -206,7 +207,7 @@ class FirmwareStore:
         match the checksum, and otherwise moved to the backup folder first.
 
         Refuses ``folder_unreachable`` (Tender's folder), ``no_checksum`` where
-        RomM states none, ``path_traversal`` for a name that leaves the store,
+        RomM states none, ``path_traversal`` for a name or a platform that leaves the store,
         ``bios_download_failed`` where this device could not write the file and
         :data:`DOWNLOAD_DAMAGED` where the bytes did not match. A RomM error
         propagates as it was raised.
@@ -220,8 +221,10 @@ class FirmwareStore:
         try:
             path = _in_platform_folder(folder, platform_slug, name)
         except PathTraversalError as exc:
-            self._logger.error(f"Rejected firmware with unsafe file name {name!r}: {exc}")
-            raise Refused("path_traversal", "Server sent an unsafe firmware file name — download aborted") from exc
+            self._logger.error(f"Rejected firmware {name!r} for platform {platform_slug!r}: {exc}")
+            raise Refused(
+                "path_traversal", "Server sent an unsafe firmware file name or platform — download aborted"
+            ) from exc
         record = self._record_of(platform_slug, name)
         backup = None
         if self._files.exists(path):
