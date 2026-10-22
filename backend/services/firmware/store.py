@@ -215,6 +215,7 @@ class FirmwareStore:
         except PathTraversalError as exc:
             self._logger.error(f"Rejected firmware with unsafe file name {name!r}: {exc}")
             raise Refused("path_traversal", "Server sent an unsafe firmware file name — download aborted") from exc
+        stored = self._stored(platform_slug, name, folder, md5, firmware)
         record = self._record_of(platform_slug, name)
         backup = None
         if self._files.exists(path):
@@ -222,11 +223,11 @@ class FirmwareStore:
                 return FetchOutcome(file_name=name, downloaded=False)
             if record is None:
                 if self._files.checksum_md5(path).lower() == md5:
-                    self._save_stored(platform_slug, name, folder, md5, firmware)
+                    self._save(stored)
                     return FetchOutcome(file_name=name, downloaded=False)
                 backup = self._backup(path)
         self._download(firmware, path, md5)
-        self._save_stored(platform_slug, name, folder, md5, firmware)
+        self._save(stored)
         self._logger.info(f"Firmware downloaded into the store: {name} -> {path}")
         return FetchOutcome(file_name=name, downloaded=True, backup=backup)
 
@@ -255,9 +256,10 @@ class FirmwareStore:
         with self._uow_factory() as uow:
             return uow.firmware_store.get(platform_slug, name)
 
-    def _save_stored(self, platform_slug: str, name: str, folder: str, md5: str, firmware: dict[str, Any]) -> None:
+    def _stored(self, platform_slug: str, name: str, folder: str, md5: str, firmware: dict[str, Any]) -> StoredFirmware:
+        """The record a fetch of *firmware* writes, built before anything is written so bad metadata writes nothing."""
         try:
-            stored = StoredFirmware.mark_downloaded(
+            return StoredFirmware.mark_downloaded(
                 platform_slug=platform_slug,
                 file_name=name,
                 folder=folder,
@@ -268,6 +270,8 @@ class FirmwareStore:
             )
         except ValueError as exc:
             raise Refused("invalid_firmware", f"Invalid firmware metadata: {exc}") from exc
+
+    def _save(self, stored: StoredFirmware) -> None:
         with self._uow_factory() as uow:
             uow.firmware_store.save(stored)
 
