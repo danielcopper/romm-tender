@@ -1,22 +1,25 @@
-"""Shared, test-only model of RomM 4.9.2 save-sync server semantics.
+"""Shared, test-only model of RomM 5.3.0 save-sync server semantics.
 
 Both ``FakeSaveApi`` and ``FakeRommApi`` import these helpers so the two
 fakes model one server contract without duplicating (and drifting) the
 rules. Everything here is pure: no I/O, no state — inputs in, a value or a
 raised ``RommConflictError`` out.
 
-Modeled from the verified RomM 4.9.2 behavior:
+Modeled from RomM 5.3.0's ``backend/endpoints/saves.py``:
 
 - ``is_current`` on a save's ``device_syncs`` entry is
   ``last_synced_at >= save.updated_at`` (``>=``, not ``>``): a device is
   current once its recorded sync is at or after the save's last change.
+- Every save in an answer carries ``device_syncs`` built by
+  ``_build_save_schema``: empty without a device id; with one, a placeholder
+  for a calling device that has no sync row, and the caller's entry first.
 - A slot POST tags the stored filename with a timestamp marker
   (``Name [YYYY-MM-DD_HH-MM-SS].ext``) so slot versions never collide.
 - ``add_save`` refuses (409) an ``overwrite=false`` POST that would stack
   onto a slot whose latest save the calling device has not synced —
   including a device that has NEVER synced a non-empty slot.
 
-Keeping these three rules in one place is the point: before this module a
+Keeping these rules in one place is the point: before this module a
 fake's ``upload_save`` unconditionally succeeded and its ``list_saves``
 stamped ``is_current=True`` for any querying device, so a test could not
 tell a working 409 backstop from a missing one.
@@ -42,18 +45,38 @@ def compute_is_current(last_synced_at: str | None, save_updated_at: str) -> bool
     return last_synced_at >= save_updated_at
 
 
-def with_absent_device_placeholder(device_syncs: list[dict[str, Any]], device_id: str | None) -> list[dict[str, Any]]:
-    """Ensure *device_id* appears in *device_syncs* as ``is_current=false``.
+def device_syncs_answer(
+    rows: list[dict[str, Any]],
+    *,
+    device_id: str | None,
+    device_name: str | None,
+    save_updated_at: str,
+) -> list[dict[str, Any]]:
+    """A save's ``device_syncs`` as RomM answers them, from its stored sync *rows*.
 
-    Models ``add_save``'s content-dedup early-return response (saves.py:67-76):
-    when the uploading device has no DeviceSaveSync row on the matched save, RomM
-    synthesizes an ``is_current=false`` placeholder for it. Existing rows (a stale
-    prior sync) pass through untouched — either way the uploading device reads as
-    not current, which is the discriminator the post-upload confirm keys on (#1458).
+    Models ``_build_save_schema``, which every save answer goes through —
+    ``GET /api/saves``, the POST response and ``add_save``'s content-dedup
+    early return alike. Without *device_id* the answer carries no entry at all,
+    whatever rows are stored. With one, every row is kept, and a calling device
+    that has none gets a placeholder RomM stores nowhere: ``is_current`` false,
+    ``last_synced_at`` the save's own ``updated_at``. The caller's entry is
+    sorted first; the others keep their order.
     """
-    if device_id and not any(ds.get("device_id") == device_id for ds in device_syncs):
-        return [*device_syncs, {"device_id": device_id, "is_current": False, "last_synced_at": None}]
-    return device_syncs
+    if not device_id:
+        return []
+    entries = list(rows)
+    if not any(ds.get("device_id") == device_id for ds in entries):
+        entries.append(
+            {
+                "device_id": device_id,
+                "device_name": device_name,
+                "last_synced_at": save_updated_at,
+                "is_untracked": False,
+                "is_current": False,
+            }
+        )
+    entries.sort(key=lambda ds: ds.get("device_id") != device_id)
+    return entries
 
 
 def tag_filename(filename: str, ts: str) -> str:
@@ -79,7 +102,7 @@ def check_add_save_conflict(
 ) -> None:
     """Raise ``RommConflictError`` if an ``overwrite=false`` slot POST would stack unsafely.
 
-    Mirrors the RomM 4.9.2 ``add_save`` gate: with a device and a slot, the
+    Mirrors the RomM 5.3.0 ``add_save`` gate: with a device and a slot, the
     server takes the latest save in the slot and refuses the create unless the
     calling device has synced that save to its current version
     (``last_synced_at >= latest.updated_at``). A device with no sync row for
