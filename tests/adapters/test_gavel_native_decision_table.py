@@ -847,8 +847,8 @@ def test_no_device_entry_no_baseline_missing_content_hash_returns_conflict():
     server save carries NO ``content_hash`` key (older / migrated saves may lack
     it). The dedup check is skipped, but without a baseline the present local of
     unknown provenance can't be silently mtime-picked → ``Conflict`` (branch-5
-    parity), even though local mtime >= server. The mtime fallback's remaining
-    duplicate-POST gap now applies only when local matches a held baseline (see
+    parity), even though local mtime >= server. The mtime fallback's duplicate-POST
+    gap applies only when local matches a held baseline or its hash is unknown (see
     ``test_no_device_entry_baseline_matches_preserves_mtime_behavior``).
     """
     server_updated_at = "2024-01-01T12:00:00+00:00"
