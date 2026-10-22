@@ -47,8 +47,8 @@ export type FirmwareDeclaredKind = "file" | "directory";
 export type FirmwareDeclarationState = "read" | "packaged" | "absent" | "unreadable" | "unsupported";
 
 /**
- * What became of a row's BYTES, in the resolver's own stable vocabulary, carried
- * verbatim like {@link FirmwareDeclarationState}.
+ * What became of a row's BYTES, in the resolver's own stable vocabulary but for
+ * `rejected` (below), carried verbatim like {@link FirmwareDeclarationState}.
  *
  * Nine values and they are not one axis. Three say a comparison HAPPENED and
  * differ in what it found — `verified` (the bytes are the pinned ones),

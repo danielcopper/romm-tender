@@ -782,7 +782,7 @@ export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDow
 );
 // The emulator is the identity the page shows — the files fetched are what IT
 // requires; `null` asks for the platform's own pick. Every file is linked for
-// every emulator that asks for it.
+// every emulator that asks for it and is not stated not installed.
 export const downloadRequiredFirmware = endpoint<[string, string | null], FirmwareDownloadResult | EndpointFailure>(
   "download_required_firmware",
 );

@@ -1603,27 +1603,37 @@ Format: **invariant** — tier — enforced by.
   any of this.** A delete path looping a status list on `downloaded` alone would go green — which is exactly the shape
   the older one had when it destroyed that file
 - **A BIOS link goes only to a place the resolver states, for an emulator its source does not state not installed on
-  every row it lists it under (`FirmwareCatalogue.linkable`), in every enabled source, a sealed catalogue's places
+  every entry it lists it under (`FirmwareCatalogue.linkable`), in every enabled source, a sealed catalogue's places
   included while its rows stay withheld; the link update removes a link of Tender's that still points at its store file
   only in a source whose list it read whole — never a sealed one — and whose roots it may touch, at a place no emulator
-  of that source wants any more, for this platform or for another Tender holds store files for; a link whose store file
-  is gone goes wherever its place may be touched** — test + prompt-only —
+  that source does not state not installed wants any more, for this platform or for any other platform RomM listed at
+  the last sync or Tender holds store files for, and keeps it wherever such a platform or its source could not be read;
+  a link whose store file is gone goes wherever its place may be touched** — test + prompt-only —
   `tests/services/test_firmware_store.py::TestOnlyAnInstalledEmulatorIsLinkedFor` (no link for an emulator stated not
   installed; a link nobody wants removed; a link the user put there, one under a root only assumed, one in a source not
-  read, one a sealed list leaves out and one another platform's emulator still wants left alone; its row refusing
-  "Replace…" with the refusal `not_installed`) and `tests/adapters/test_atlas_firmware.py::TestEverySourceItIsPlacedIn`
-  (the launch reading's `not-installed` is the only exclusion, and only where every row of the emulator says it —
-  `unestablished` and a reading that raised rule nothing out — and a sealed catalogue is read for its places while the
-  answering read of one stays withheld). Why: a packaged card states what a standalone emulator wants whether or not it
-  is installed, so the firmware reading alone cannot keep a link from an emulator that is not there; the launch reading
-  (`emulators_for(system)`, each entry's `availability`) is the source's own statement. A place the resolver states is a
-  place a link may go even beside a sealed catalogue: what the sealed list leaves out is a link not placed, while
-  reading it as complete — for rows and verdicts, or for deciding that a link is unwanted — would misstate what is
-  needed. One place can serve two platforms (D19), so a link one platform no longer wants stays while another platform's
-  emulator in the same source wants its place ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36,
-  D37, D40, D42). Prompt-only: a new placing path reads `linkable()`, never `placements`; `not_installed` comes only
-  from the source's own launch reading; a link of a source switched off or not read stays, whatever that source's list
-  would say; a platform Tender holds no store file for is not asked whether it wants a place
+  read and one a sealed list leaves out left alone; its row refusing "Replace…" with the refusal `not_installed`),
+  `::TestALinkAnotherPlatformMayStillWant` (a link another platform's emulator still wants kept — a platform RomM listed
+  without a store file of Tender's, a sealed list that states the place, a platform whose system is switched off, the
+  images a folder another platform's emulator reads recognises — and kept where the listing was never kept, a platform's
+  system could not be asked or a source could not be read for its system; removed once no platform wants it, a platform
+  with no system wanting nothing; each system read once and the asking stopped once every link is known to be wanted;
+  the same through a download and a replacement),
+  `::TestBringingLinksUpToDate::test_a_link_of_tenders_with_no_store_copy_left_is_removed` (a link whose store file is
+  gone) and `tests/adapters/test_atlas_firmware.py::TestEverySourceItIsPlacedIn` (the launch reading's `not-installed`
+  is the only exclusion, and only where every entry of the emulator says it — `unestablished` and a reading that raised
+  rule nothing out; a sealed catalogue is read for its places and marked sealed while the answering read of one stays
+  withheld; a source whose reading raised or named no root is named unread). Why: a packaged card states what a
+  standalone emulator wants whether or not it is installed, so the firmware reading alone cannot keep a link from an
+  emulator that is not there; the launch reading (`emulators_for(system)`, each entry's `availability`) is the source's
+  own statement. A place the resolver states is a place a link may go even beside a sealed catalogue: what the sealed
+  list leaves out is a link not placed, while reading it as complete — for rows and verdicts, or for deciding that a
+  link is unwanted — would misstate what is needed. One place can serve two platforms (D19), and a platform need hold no
+  file of Tender's to want a place, so a link one platform no longer wants stays while another platform's emulator in
+  the same source wants its place, and an answer that could not be had is never read as wanting nothing
+  ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42). Prompt-only: a new placing path
+  reads `linkable()`, never `placements`; `not_installed` comes only from the source's own launch reading; a link of
+  Tender's that still points at its store file, in a source switched off or not read, stays whatever that source's list
+  would say; a link whose store file is gone goes in any source, not only the one the test places it in
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

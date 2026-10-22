@@ -14,11 +14,11 @@ could not remove with its store file its own (:class:`domain.firmware_store.Firm
 Bringing the links up to date (:func:`plan_link_update`) places every link an
 emulator not stated not installed wants where the name is free, places again a
 link of Tender's that points at nothing where a store copy exists, removes such
-a link where none does, removes a link of Tender's no emulator of a source read
-whole wants any more on any platform Tender holds store files for, records a
-link of Tender's found at a new place, and drops the record of a place it may
-touch where no link of Tender's to the recorded file lies any more. It
-downloads nothing.
+a link where none does, removes a link of Tender's that no emulator of a source
+read whole wants any more — on this platform, and on none of those the caller
+found wanting it or could not ask — records a link of Tender's found at a new
+place, and drops the record of a place it may touch where no link of Tender's
+to the recorded file lies any more. It downloads nothing.
 
 Pure compute — the caller looks at the places and carries the plan out.
 """
@@ -237,8 +237,9 @@ def plan_link_update(
     *judged* are the sources whose list was read whole, never a sealed one: a
     link of Tender's in one of them that still points at its store file goes
     where no emulator there that is not stated not installed wants its place
-    any more — for this platform, nor for another (*wanted_elsewhere*, by source
-    and place). Such a link in any other source stays. A link of Tender's whose
+    any more — for this platform, nor for another: *wanted_elsewhere* holds, by
+    source and place, every link another platform wants or could not be asked
+    about. Such a link in any other source stays. A link of Tender's whose
     store file is gone goes wherever its place may be touched.
     """
     plan = _Plan()

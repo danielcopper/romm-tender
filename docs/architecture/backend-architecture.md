@@ -1614,7 +1614,7 @@ folder rule.
 **An emulator reaches a store file through an absolute symlink at the place the resolver names for it** (#2219 D4). The
 link goes in for every emulator of the platform whose requirement the file fills and that its source does not state not
 installed, in every enabled emulator source (D23, D36): the source's own launch reading (`emulators_for`, each entry's
-`availability`) is asked beside its firmware reading, and only `not-installed` on every row the source lists the
+`availability`) is asked beside its firmware reading, and only `not-installed` on every entry the source lists the
 emulator under rules it out — one it cannot establish is linked for (D37). The launch reading mainly guards a carded
 standalone emulator, whose card states what it wants whether or not it is installed. A sealed emulator catalogue
 (EmuDeck's) is read for its places all the same, while its rows and verdicts stay withheld and its list never decides
@@ -1637,14 +1637,24 @@ names the path it points at — which is what keeps a link Tender could not remo
 places every link an emulator of the platform wants where the name is free, places again a link of Tender's that points
 at nothing where a store copy exists, removes such a link where none does, wherever its place may be touched, removes a
 link of Tender's that still points at its store file where no emulator of its source that is not stated not installed
-wants its place any more, for this platform or for another Tender holds store files for — only in a source whose list it
-read whole, never a sealed one, and whose roots it may touch, so a link in a source switched off, not read or sealed
-stays (D36, D40, D42) — records a link of Tender's found at a new place, and drops the record of a place it may touch
-where no link of Tender's to the recorded file lies any more; it downloads nothing (D6). Beside it, "Replace…" places
-the one link at the place it cleared (`do_place_link`), and a delete and "Forget what is recorded there" remove the
-links of the files they take (`do_remove`, `forget_records_under`); nothing else places or removes a link. Every
-download ends with it; so does a replacement; and the panel asks for it (`update_bios_links`) when a platform page or a
-game's page opens and after an emulator switch.
+wants its place any more — only in a source whose list it read whole, never a sealed one, and whose roots it may touch,
+so such a link in a source switched off, not read or sealed stays (D36, D37, D40) — records a link of Tender's found at
+a new place, and drops the record of a place it may touch where no link of Tender's to the recorded file lies any more;
+it downloads nothing (D6). Beside it, "Replace…" places the one link at the place it cleared (`do_place_link`), and a
+delete and "Forget what is recorded there" remove the links of the files they take (`do_remove`,
+`forget_records_under`); nothing else places or removes a link. Every download ends with it; so does a replacement; and
+the panel asks for it (`update_bios_links`) when a platform page or a game's page opens and after an emulator switch.
+
+**Before such a link goes, every other platform is asked whether it still wants the place** (D42): every platform RomM
+listed at the last sync — the ids `PlatformSystems.library_platforms` keeps — and every one Tender holds store files
+for, whether or not it holds one itself. Each platform's system is asked first and each system read once in every
+enabled source; an emulator its source states is not installed wants nothing, a sealed list's places count as wanted,
+and a folder declaration wants a place in its folder only for a copy it recognises
+(`domain/firmware_rows.py::wants_place`). The asking stops once every link is known to be wanted. A link stays wherever
+the answer could not be had: no listing was ever kept, a platform's system could not be asked, or a source could not be
+read for its system (`SourceCatalogues.unread`) — what could not be read is never counted as wanting nothing, and the
+next update asks again. A platform with no system in the answering source wants nothing; one whose system is switched
+off is asked by that system all the same.
 
 **A file the resolver reads as wrong is replaced only on the user's confirmation**, and only where the library copy is
 proven right by its checksum (D5): the copy is fetched and checked first, the file in the way goes to
@@ -2926,16 +2936,17 @@ the three answers; neither moves the level. A search that settled and reached no
 states it as `firmware-path-names-no-file` with the folder it searched (`dir`) and how many files of an accepted size it
 held (`candidates`), and `adapters/atlas_firmware.py::_notes` carries exactly that shape as the emulator's
 `search-found-nothing` note — a required file not met is never read as one. What a withheld row SAYS comes from its
-caveat codes and, for a declared FILE, from its `checked` — the resolver's own word for what became of the bytes,
-carried from the same entry `declaration` is, because a file the emulator read and does not recognise WAS checked while
-one whose bytes never came back was not, and one withheld verdict cannot say which. The verdict is the answer alone and
-carries none of its causes; the verdict decides only which family of codes can apply and what to say when none of them
-is recognised, which is the one sentence written off it — `frontend/src/utils/biosFileNote.ts` is the one place both
-surfaces derive what a row says from — a sentence, the lines under it, which is how a satisfied folder's images arrive
-as a list rather than folded into the row's own name, and the description on its own line under the row
-(`biosFileDescription`). A row is headed by the file it declares on both surfaces and never by its description: that is
-the packager's prose out of a core's `.info`, outside the resolver's contract, and it routinely spells the row's own
-name into its words — so the shared rule takes the name back out and answers `null` where nothing is left.
+caveat codes and, for a declared FILE, from its `checked` — the resolver's own word for what became of the bytes, but
+for `rejected`, which is Tender's (#2191 D41), carried from the same entry `declaration` is, because a file the emulator
+read and does not recognise WAS checked while one whose bytes never came back was not, and one withheld verdict cannot
+say which. The verdict is the answer alone and carries none of its causes; the verdict decides only which family of
+codes can apply and what to say when none of them is recognised, which is the one sentence written off it —
+`frontend/src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines
+under it, which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
+description on its own line under the row (`biosFileDescription`). A row is headed by the file it declares on both
+surfaces and never by its description: that is the packager's prose out of a core's `.info`, outside the resolver's
+contract, and it routinely spells the row's own name into its words — so the shared rule takes the name back out and
+answers `null` where nothing is left.
 
 **No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
 emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing

@@ -245,7 +245,7 @@ place Tender cannot read is usually one your emulator cannot read either. Once t
 says what is there by itself, and offers the download if the file really is missing.
 
 Where a file **is** there and the emulator looked at its contents, the row says what came of that, because "not ready"
-covers four quite different situations and only the last two are a problem a different copy of the file fixes:
+covers five quite different situations and only the last three are a problem a different copy of the file fixes:
 
 - _the emulator does not recognise this file_ — it read the file and no list it keeps matches these bytes. That is not a
   failure: DuckStation starts such an image and calls it an unknown BIOS. It is also not a clean bill of health, which
@@ -259,6 +259,8 @@ covers four quite different situations and only the last two are a problem a dif
 - _wrong file — not the image Beetle PSX expects_ — the emulator compared the file with the images it knows and this is
   not one of them. Where the launch requires the file this is red, and the fix is the right copy of the file. The
   platform page's **Contents** column says the same words.
+- _wrong file — not an image LRPS2 accepts_ — a file in a folder the emulator reads as a whole, which the emulator's own
+  test turned down. It is a file the emulator will not use, and the fix is the right copy of the file.
 
 Some rows say something better than that. Where the file sitting at the destination is byte-for-byte the copy your
 emulator distribution ships, the row names the distribution instead — _provided by RetroDECK_ — because it is the
@@ -456,13 +458,15 @@ checksum for is never downloaded: its row says _RomM states no checksum for scph
 download._
 
 Tender keeps its links up to date by itself whenever you open a platform's page or a game's page, and after you change
-the emulator a platform or game launches with: it places every link an emulator of the platform wants from the store,
-puts back one of its links that was removed, and removes one whose file is gone, or one no emulator of that source wants
-any more — for this platform or for another platform you downloaded BIOS files for — where the source's list was read
-whole. A link is only placed for an emulator its emulator source has installed — or where the source cannot tell — and
-also into EmuDeck while its emulator list is sealed, wherever the place is known; that sealed list never takes a link
-away. It never downloads anything for that — a download is only ever made when you press a button. Until that is done a
-row whose file is in the store reads _In Tender's firmware store, not linked here yet_.
+the emulator a platform or game launches with. It places every link an emulator of the platform wants from the store,
+and puts back one of its links that was removed. It removes one whose file is gone. It also removes one no installed
+emulator of that source wants any more, where the source's list was read whole — but only once it has asked every other
+platform of your RomM library, whether or not you downloaded anything for it, and none of their emulators wants that
+place either. A platform it cannot ask keeps the link, and so does one whose emulator source it cannot read; the next
+update asks again. A link is only placed for an emulator its emulator source has installed — or where the source cannot
+tell — and also into EmuDeck while its emulator list is sealed, wherever the place is known; that sealed list never
+takes a link away. It never downloads anything for that — a download is only ever made when you press a button. Until
+that is done a row whose file is in the store reads _In Tender's firmware store, not linked here yet_.
 
 A link is only ever placed where the name is free. Where a file, a folder or a link that is not Tender's already lies
 there, Tender leaves it as it is, and the row says what the emulator makes of it: _Another file lies here, and the

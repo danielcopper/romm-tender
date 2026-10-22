@@ -79,7 +79,8 @@ export function biosPlaceLines(
     lines.push(`${source}'s settings could not be read, so Tender places nothing in ${refusal.folder}.`);
   }
   if (refusal?.reason === "not_installed") {
-    // Nothing is linked for it, so what lies at the place is no link of Tender's to speak of.
+    // The only line about the place: Tender places nothing there for an emulator that is not installed, so what lies
+    // there — a file, or another platform's link — is not worded.
     lines.push(`${emulator ?? "The emulator"} is not installed here, so Tender links nothing for it.`);
   } else {
     lines.push(...linkLines(row, platformName));

@@ -725,8 +725,8 @@ alone.
 ### Byte reading (firmware): what became of a row's bytes
 
 What the reading DID to a declared file, carried on the row beside its **verdict** in the resolver's own vocabulary and
-never re-derived here. It answers a different question: the verdict says whether the requirement is met, this says what
-was done to establish it.
+never re-derived here — but for `rejected`, Tender's own word, read off a folder file's verdict (below). It answers a
+different question: the verdict says whether the requirement is met, this says what was done to establish it.
 
 It is needed because a withheld verdict has several causes and one of them is not a withholding at all. A file the
 emulator **read and does not recognise** was checked — DuckStation boots such an image and calls it an unknown BIOS — so
