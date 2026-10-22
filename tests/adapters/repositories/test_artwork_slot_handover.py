@@ -50,6 +50,16 @@ class TestRoundTrip:
 
         assert uow.artwork_slot_handovers.get(5, ArtworkSlot.LOGO) is None
 
+    def test_the_choice_it_replaced_reads_back(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        kept = ArtworkSlotHandover.hand_over(
+            rom_id=5, slot=ArtworkSlot.LOGO, image_id=6, image_sha256="sha", handed_at=1.0, previous_choice_id=77
+        )
+
+        uow.artwork_slot_handovers.save(kept)
+
+        assert uow.artwork_slot_handovers.get(5, ArtworkSlot.LOGO) == kept
+
     def test_the_table_refuses_the_icon(self, uow: SqliteUnitOfWork):
         _seed_rom(uow, 5)
         icon = ArtworkSlotHandover(rom_id=5, slot=ArtworkSlot.ICON, image_id=1, image_sha256="x", handed_at=1.0)

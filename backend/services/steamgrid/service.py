@@ -473,8 +473,10 @@ class SteamGridService:
         """Serve one SteamGridDB hero, logo or wide grid for *rom_id* as base64, from the cache first.
 
         Asset type 0, Steam's own for the cover, serves only a cover the user
-        chose, so a version switch writes it rather than RomM's (#2381 D16);
-        without a choice it answers no image. An answer that carries an image
+        chose, so a version switch writes it rather than RomM's (#2381 D16),
+        and says in ``chosen`` whether there is one: without a choice it
+        answers no image and ``chosen`` false; a chosen cover that cannot be
+        served now answers no image and ``chosen`` true. An answer that carries an image
         also carries an ``sgdb_artwork`` lease in ``prune_lease_token`` for the
         frontend's Steam write. Refuses the icon (asset type 4) with
         ``invalid_payload``: it is served by :meth:`get_sgdb_slot_artwork` and
@@ -489,18 +491,32 @@ class SteamGridService:
     async def _get_sgdb_artwork_base64(self, rom_id, asset_type_num):
         rom_id = int(rom_id)
         asset_type_num = int(asset_type_num)
-        asset_type = _COVER_ASSET_TYPE if asset_type_num == 0 else asset_type_name(asset_type_num)
         self._log_debug(f"SGDB artwork request: rom_id={rom_id}, asset_type={asset_type_num}")
-        if asset_type == _COVER_ASSET_TYPE:
-            has_choice = await self._loop.run_in_executor(None, self._slots.has_choice_io, rom_id, ArtworkSlot.COVER)
-            if not has_choice:
-                return {"base64": None, "no_api_key": False}
+        if asset_type_num == 0:
+            return await self._chosen_cover_answer(rom_id)
+        asset_type = asset_type_name(asset_type_num)
         if not asset_type:
             return {"base64": None, "no_api_key": False}
         if asset_type == ArtworkSlot.ICON.value:
             raise Refused("invalid_payload", "The icon is served by the per-slot fetch")
+        return await self._cached_or_downloaded(rom_id, asset_type)
 
-        # Return from cache if available, unless it holds another image than the one chosen
+    async def _chosen_cover_answer(self, rom_id: int) -> dict[str, Any]:
+        """Asset type 0: the cover the user chose, ``chosen`` saying whether there is one (#2381 D16).
+
+        ``chosen`` without an image is a chosen cover that cannot be served
+        now — the cache lost it and it cannot be downloaded — which the
+        version switch must not write RomM's cover over; it is logged.
+        """
+        if not await self._loop.run_in_executor(None, self._slots.has_choice_io, rom_id, ArtworkSlot.COVER):
+            return {"base64": None, "no_api_key": False, "chosen": False}
+        answer = await self._cached_or_downloaded(rom_id, _COVER_ASSET_TYPE)
+        if answer.get("base64") is None:
+            self._logger.warning(f"The cover chosen for rom_id={rom_id} cannot be served now")
+        return {**answer, "chosen": True}
+
+    async def _cached_or_downloaded(self, rom_id: int, asset_type: str) -> dict[str, Any]:
+        """*rom_id*'s *asset_type* from the cache unless it holds another image than the one chosen, else downloaded."""
         cached = await self._loop.run_in_executor(
             None, self._slots.cached_as_chosen_io, rom_id, ArtworkSlot(asset_type)
         )
@@ -735,8 +751,9 @@ class SteamGridService:
         a SteamGridDB image on it: a ``set`` is recorded, so that image is read
         as Tender's, and a ``refused`` records nothing, since no cover is
         recorded as refused. Steam's answer settles the slot's hand-over, keeps
-        a ``set`` record over a ``refused``, and discards a choice whose image
-        Steam refused (``_handover.HandedOverImages.settle_io``, #2381 D15).
+        a ``set`` record over a ``refused``, and gives back the choice a refused
+        chosen image replaced, dropping that image from the cache
+        (``_handover.HandedOverImages.settle_io``, #2381 D15, D20).
         Refuses with ``invalid_payload`` for a slot that is not recorded, an
         unknown outcome, or a ``set`` without its image id and hash.
         """
@@ -745,7 +762,11 @@ class SteamGridService:
             record = self._reported_outcome(rom_id, slot, outcome, sgdb_id, image_id, sha256)
             artwork_slot = record.slot if record is not None else ArtworkSlot.COVER
             reported_id = int(image_id) if image_id is not None else None
-            await self._loop.run_in_executor(None, self._handovers.settle_io, rom_id, artwork_slot, record, reported_id)
+            given_back = await self._loop.run_in_executor(
+                None, self._handovers.settle_io, rom_id, artwork_slot, record, reported_id
+            )
+            if given_back:
+                await self._loop.run_in_executor(None, self._files.drop, rom_id, artwork_slot.value)
             return {"success": True}
 
     def _reported_outcome(self, rom_id, slot, outcome, sgdb_id, image_id, sha256) -> ArtworkSlotOutcome | None:

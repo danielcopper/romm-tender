@@ -2390,11 +2390,11 @@ class Test035AddArtworkSlotHandovers:
         conn = sqlite3.connect(db_path, isolation_level=None)
         try:
             _insert_rom(conn, 1, 100)
-            conn.execute("INSERT INTO artwork_slot_handovers VALUES (1, ?, 4242, 'ab', 2.5)", (slot,))
+            conn.execute("INSERT INTO artwork_slot_handovers VALUES (1, ?, 4242, 'ab', 2.5, 77)", (slot,))
             stored = conn.execute("SELECT * FROM artwork_slot_handovers").fetchall()
         finally:
             conn.close()
-        assert stored == [(1, slot, 4242, "ab", 2.5)]
+        assert stored == [(1, slot, 4242, "ab", 2.5, 77)]
 
     @pytest.mark.parametrize(
         ("slot", "image_id", "sha"),
@@ -2408,7 +2408,7 @@ class Test035AddArtworkSlotHandovers:
         try:
             _insert_rom(conn, 1, 100)
             with pytest.raises(sqlite3.IntegrityError):
-                conn.execute("INSERT INTO artwork_slot_handovers VALUES (1, ?, ?, ?, 2.5)", (slot, image_id, sha))
+                conn.execute("INSERT INTO artwork_slot_handovers VALUES (1, ?, ?, ?, 2.5, NULL)", (slot, image_id, sha))
         finally:
             conn.close()
 
@@ -2419,7 +2419,7 @@ class Test035AddArtworkSlotHandovers:
         try:
             conn.execute("PRAGMA foreign_keys=ON")
             _insert_rom(conn, 1, 100)
-            conn.execute("INSERT INTO artwork_slot_handovers VALUES (1, 'logo', 4242, 'ab', 2.5)")
+            conn.execute("INSERT INTO artwork_slot_handovers VALUES (1, 'logo', 4242, 'ab', 2.5, NULL)")
             conn.execute("DELETE FROM roms WHERE rom_id = 1")
             left = conn.execute("SELECT COUNT(*) FROM artwork_slot_handovers").fetchone()
         finally:

@@ -90,31 +90,46 @@ def _is_cover_set_in_steam(
     handed-over cover is Tender's before any other comparison.
     """
     png = final_filename(app_id)
+    if png not in file_names:
+        return is_set_in_steam(file_names, app_id, ArtworkSlot.COVER, png_sha256=None, tenders_sha256=None)
+    png_path = os.path.join(grid, png)
+    if handover is not None:
+        png_sha256 = _sha256_of(file_store, png_path, logger)
+        if png_sha256 == handover.image_sha256:
+            return is_set_in_steam(
+                file_names,
+                app_id,
+                ArtworkSlot.COVER,
+                png_sha256=png_sha256,
+                tenders_sha256=None,
+                handed_sha256=handover.image_sha256,
+            )
+    if outcome is not None and outcome.outcome is SlotOutcome.SET:
+        png_sha256 = _sha256_of(file_store, png_path, logger)
+        return is_set_in_steam(
+            file_names, app_id, ArtworkSlot.COVER, png_sha256=png_sha256, tenders_sha256=outcome.image_sha256
+        )
+    cache_path = os.path.join(cover_cache_dir, cache_filename(rom_id))
+    return _differs_from_the_cache_copy(file_names, app_id, png_path, cache_path, file_store=file_store, logger=logger)
+
+
+def _differs_from_the_cache_copy(
+    file_names: frozenset[str],
+    app_id: int,
+    png_path: str,
+    cache_path: str,
+    *,
+    file_store: CoverArtFileStore,
+    logger: logging.Logger,
+) -> bool:
+    """:func:`_is_cover_set_in_steam` where the cover's cache copy is Tender's reference: sizes first, then hashes."""
+    sizes = _size_of(file_store, png_path, logger), _size_of(file_store, cache_path, logger)
+    if None not in sizes and sizes[0] != sizes[1]:
+        return True
     png_sha256 = tenders_sha256 = None
-    handed_sha256 = handover.image_sha256 if handover is not None else None
-    if png in file_names:
-        png_path = os.path.join(grid, png)
-        if handed_sha256 is not None:
-            png_sha256 = _sha256_of(file_store, png_path, logger)
-            if png_sha256 == handed_sha256:
-                return is_set_in_steam(
-                    file_names,
-                    app_id,
-                    ArtworkSlot.COVER,
-                    png_sha256=png_sha256,
-                    tenders_sha256=None,
-                    handed_sha256=handed_sha256,
-                )
-        if outcome is not None and outcome.outcome is SlotOutcome.SET:
-            png_sha256, tenders_sha256 = _sha256_of(file_store, png_path, logger), outcome.image_sha256
-        else:
-            cache_path = os.path.join(cover_cache_dir, cache_filename(rom_id))
-            sizes = _size_of(file_store, png_path, logger), _size_of(file_store, cache_path, logger)
-            if None not in sizes and sizes[0] != sizes[1]:
-                return True
-            if None not in sizes:
-                png_sha256 = _sha256_of(file_store, png_path, logger)
-                tenders_sha256 = _sha256_of(file_store, cache_path, logger)
+    if None not in sizes:
+        png_sha256 = _sha256_of(file_store, png_path, logger)
+        tenders_sha256 = _sha256_of(file_store, cache_path, logger)
     return is_set_in_steam(file_names, app_id, ArtworkSlot.COVER, png_sha256=png_sha256, tenders_sha256=tenders_sha256)
 
 

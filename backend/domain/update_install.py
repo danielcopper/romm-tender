@@ -170,11 +170,15 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
     }
 )
 
-# The claims whose own work only reads — or writes a cache it can build again —
-# so a restart cuts nothing short, and they make no press wait. A lease one of
-# them hands out for the frontend's Steam write is a claim of its own above. An
-# artwork slot's `none` record, and Refresh Artwork's deletion of the records,
-# count as cache: losing either only changes when SteamGridDB is asked again.
+# The claims whose own work only reads, or writes nothing a restart can cut
+# short, so they make no press wait. Each write is one transaction of a kind
+# whose loss costs nothing done: a cache it can build again; an artwork slot's
+# `none` record and Refresh Artwork's deletion of the records, whose loss only
+# changes when SteamGridDB is asked again; and the record of an artwork image
+# handed to Steam, with the `set` record kept for a cache copy a download
+# replaces (#2381 D15), written before the image goes out, so a restart in
+# between leaves no image in Steam the records do not know. A lease one of them
+# hands out for the frontend's Steam write is a claim of its own above.
 READ_ONLY_CLAIMS: frozenset[str] = frozenset(
     {
         "fetch_cover_base64",

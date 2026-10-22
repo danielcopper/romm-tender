@@ -6,7 +6,7 @@ image into the artwork cache or serves it from there. Both moments land here:
 the image becomes the slot's hand-over, so a grid file holding it is Tender's
 until Steam answers, however the apply ends. Steam's answer settles it: ``set``
 makes the slot's outcome name the image, ``refused`` forgets it and, for an
-image the user chose, the choice.
+image the user chose, gives back the choice it replaced.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from domain.artwork_slot import ArtworkSlot, slot_stem
+from domain.artwork_slot_choice import ArtworkSlotChoice
 from domain.artwork_slot_handover import HANDED_SLOTS, ArtworkSlotHandover
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
 from lib.errors import SteamGridDirMissingError
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
-    from services.protocols import Clock, SgdbArtworkCache, SteamConfigStore, UnitOfWorkFactory
+    from services.protocols import Clock, SgdbArtworkCache, SteamConfigStore, UnitOfWork, UnitOfWorkFactory
     from services.steamgrid._files import CachedArtwork
 
 
@@ -52,18 +53,32 @@ class HandedOverImages:
     def served_io(self, rom_id: int, slot: ArtworkSlot, image_id: int, data: bytes) -> None:
         """Record that *data*, SteamGridDB's image *image_id*, is handed to Steam as *rom_id*'s *slot*.
 
+        The hand-over keeps the image the user had chosen for the slot at the
+        press: the choice now, unless this image is already the hand-over,
+        whose press came first — so an image chosen in the tab, stored before
+        its choice is saved and served after, keeps the choice it replaced.
         Nothing is recorded for a ROM with no ``roms`` row.
         """
-        handover = ArtworkSlotHandover.hand_over(
-            rom_id=rom_id,
-            slot=slot,
-            image_id=image_id,
-            image_sha256=hashlib.sha256(data).hexdigest(),
-            handed_at=self._clock.time(),
-        )
+        sha256 = hashlib.sha256(data).hexdigest()
         with self._uow_factory() as uow:
-            if uow.roms.get(rom_id) is not None:
-                uow.artwork_slot_handovers.save(handover)
+            if uow.roms.get(rom_id) is None:
+                return
+            held = uow.artwork_slot_handovers.get(rom_id, slot)
+            if held is not None and held.image_id == image_id:
+                previous = held.previous_choice_id
+            else:
+                choice = uow.artwork_slot_choices.get(rom_id, slot)
+                previous = choice.image_id if choice is not None else None
+            uow.artwork_slot_handovers.save(
+                ArtworkSlotHandover.hand_over(
+                    rom_id=rom_id,
+                    slot=slot,
+                    image_id=image_id,
+                    image_sha256=sha256,
+                    handed_at=self._clock.time(),
+                    previous_choice_id=previous,
+                )
+            )
 
     def stored_io(self, rom_id: int, asset_type: str, previous: CachedArtwork | None, stored: CachedArtwork) -> None:
         """Note that *stored* replaced *previous* as *rom_id*'s cached *asset_type*: it is the image Steam gets next.
@@ -84,31 +99,48 @@ class HandedOverImages:
 
     def settle_io(
         self, rom_id: int, slot: ArtworkSlot, record: ArtworkSlotOutcome | None, image_id: int | None
-    ) -> None:
+    ) -> bool:
         """Settle *rom_id*'s *slot* by Steam's answer for image *image_id*; *record* is that answer's outcome, if any.
 
-        The hand-over goes once Steam answered for its image. A ``set`` is saved;
-        a ``refused`` is saved unless a ``set`` is held, whose image is still
-        Tender's, and an image the user chose that Steam refused discards the
-        choice, so the slot is as it was before the press.
+        The hand-over goes once Steam answered for its image. A ``set`` is
+        saved; a ``refused`` is saved unless a ``set`` is held, whose image is
+        still Tender's. Where Steam refused the handed-over image and it is the
+        slot's choice, the choice the hand-over kept comes back — none, if there
+        was none — so the slot is as it was before the press (D20). Answers
+        whether that happened, for the caller to drop the refused image from
+        the cache.
         """
         refused = record is None or record.outcome is SlotOutcome.REFUSED
         with self._uow_factory() as uow:
             if uow.roms.get(rom_id) is None:
-                return
+                return False
             handover = uow.artwork_slot_handovers.get(rom_id, slot)
-            if handover is not None and handover.image_id == image_id:
+            handed = handover is not None and handover.image_id == image_id
+            if handed:
                 uow.artwork_slot_handovers.delete_slot(rom_id, slot)
-            if refused:
-                choice = uow.artwork_slot_choices.get(rom_id, slot)
-                if choice is not None and choice.image_id == image_id:
-                    uow.artwork_slot_choices.delete_slot(rom_id, slot)
-            if record is None:
-                return
+            given_back = refused and handover is not None and handed and self._give_choice_back(uow, handover)
             held = uow.artwork_slot_outcomes.get(rom_id, slot)
-            if refused and held is not None and held.outcome is SlotOutcome.SET:
-                return
-            uow.artwork_slot_outcomes.save(record)
+            if record is not None and not (refused and held is not None and held.outcome is SlotOutcome.SET):
+                uow.artwork_slot_outcomes.save(record)
+        return given_back
+
+    def _give_choice_back(self, uow: UnitOfWork, handover: ArtworkSlotHandover) -> bool:
+        """Put back the choice *handover* kept, where its refused image is the slot's choice; answers whether it did."""
+        choice = uow.artwork_slot_choices.get(handover.rom_id, handover.slot)
+        if choice is None or choice.image_id != handover.image_id:
+            return False
+        if handover.previous_choice_id is None:
+            uow.artwork_slot_choices.delete_slot(handover.rom_id, handover.slot)
+        else:
+            uow.artwork_slot_choices.save(
+                ArtworkSlotChoice(
+                    rom_id=handover.rom_id,
+                    slot=handover.slot,
+                    image_id=handover.previous_choice_id,
+                    chosen_at=self._clock.time(),
+                )
+            )
+        return True
 
     def _keep_the_shown_image_io(self, rom_id: int, slot: ArtworkSlot, previous: CachedArtwork) -> None:
         with self._uow_factory() as uow:

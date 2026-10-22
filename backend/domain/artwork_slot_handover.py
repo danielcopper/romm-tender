@@ -3,8 +3,10 @@
 Steam's answer, ``report_sgdb_slot_artwork``, may never arrive: the apply can be
 cancelled or overtaken after the image went out, or the report can be lost.
 Until it arrives, a grid file holding these bytes is Tender's as much as one
-holding the bytes its ``set`` outcome names (#2381 D15). A ``set`` report makes
-the outcome name the image and drops this record; a ``refused`` one drops it.
+holding the bytes its ``set`` outcome names (#2381 D15). It also keeps the
+image the user had chosen for the slot when it was handed over, so a chosen
+image Steam refuses gives that choice back (D20). A ``set`` report makes the
+outcome name the image and drops this record; a ``refused`` one drops it.
 Kept apart from :class:`domain.artwork_slot_outcome.ArtworkSlotOutcome`, whose
 record is built whole per outcome, because a hand-over exists beside any
 outcome and beside none.
@@ -27,17 +29,28 @@ HANDED_SLOTS: frozenset[ArtworkSlot] = frozenset(
 
 @cosmic_aggregate
 class ArtworkSlotHandover:
-    """SteamGridDB's image *image_id*, whose bytes hash to *image_sha256*, handed to Steam at *handed_at*."""
+    """SteamGridDB's image *image_id*, whose bytes hash to *image_sha256*, handed to Steam at *handed_at*.
+
+    *previous_choice_id* is the image the user had chosen for the slot then, ``None`` for none.
+    """
 
     rom_id: int
     slot: ArtworkSlot
     image_id: int
     image_sha256: str
     handed_at: float
+    previous_choice_id: int | None = None
 
     @classmethod
     def hand_over(
-        cls, *, rom_id: int, slot: ArtworkSlot, image_id: int, image_sha256: str, handed_at: float
+        cls,
+        *,
+        rom_id: int,
+        slot: ArtworkSlot,
+        image_id: int,
+        image_sha256: str,
+        handed_at: float,
+        previous_choice_id: int | None = None,
     ) -> ArtworkSlotHandover:
         """Record that the image was handed to Steam.
 
@@ -47,4 +60,11 @@ class ArtworkSlotHandover:
             raise ValueError(f"no hand-over is recorded for the {slot.value} slot")
         if not image_sha256:
             raise ValueError("a handed-over image carries its hash")
-        return cls(rom_id=rom_id, slot=slot, image_id=image_id, image_sha256=image_sha256, handed_at=handed_at)
+        return cls(
+            rom_id=rom_id,
+            slot=slot,
+            image_id=image_id,
+            image_sha256=image_sha256,
+            handed_at=handed_at,
+            previous_choice_id=previous_choice_id,
+        )

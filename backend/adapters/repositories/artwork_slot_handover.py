@@ -16,7 +16,7 @@ from domain.artwork_slot_handover import ArtworkSlotHandover
 if TYPE_CHECKING:
     import sqlite3
 
-_COLUMNS = "rom_id, slot, image_id, image_sha256, handed_at"
+_COLUMNS = "rom_id, slot, image_id, image_sha256, handed_at, previous_choice_id"
 
 
 def _row_to_handover(row: sqlite3.Row) -> ArtworkSlotHandover:
@@ -26,6 +26,7 @@ def _row_to_handover(row: sqlite3.Row) -> ArtworkSlotHandover:
         image_id=row["image_id"],
         image_sha256=row["image_sha256"],
         handed_at=row["handed_at"],
+        previous_choice_id=row["previous_choice_id"],
     )
 
 
@@ -41,8 +42,15 @@ class SqliteArtworkSlotHandoverRepository(BaseRepository):
 
     def save(self, handover: ArtworkSlotHandover) -> None:
         self._conn.execute(
-            f"INSERT OR REPLACE INTO artwork_slot_handovers ({_COLUMNS}) VALUES (?, ?, ?, ?, ?)",
-            (handover.rom_id, handover.slot.value, handover.image_id, handover.image_sha256, handover.handed_at),
+            f"INSERT OR REPLACE INTO artwork_slot_handovers ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                handover.rom_id,
+                handover.slot.value,
+                handover.image_id,
+                handover.image_sha256,
+                handover.handed_at,
+                handover.previous_choice_id,
+            ),
         )
 
     def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:

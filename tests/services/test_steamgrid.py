@@ -35,6 +35,7 @@ from adapters.steam_config import SteamConfigAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_choice import ArtworkSlotChoice
+from domain.artwork_slot_handover import ArtworkSlotHandover
 from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, SlotOutcome
 from domain.rom import Rom
 from lib.errors import Refused, SgdbApiError, SgdbKeyUnsendableError, SgdbRateLimitedError, SteamGridDirMissingError
@@ -3998,6 +3999,127 @@ class TestTwoReferencesTellTendersImage:
         await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
 
 
+class TestARefusedChoiceGivesBackTheOneBefore:
+    """D20: a chosen image Steam refuses gives back the choice the press replaced, and leaves the cache."""
+
+    @pytest.mark.asyncio
+    async def test_chosen_a_then_b_refused_is_chosen_a_again(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300), (6, 800, 300))
+        a = await steamgrid.service.choose_artwork_slot_image(42, "logo", 5)
+        await steamgrid.prune_conflicts.release_lease(a["prune_lease_token"])
+        (slot_ready / f"{_APP_ID}_logo.png").write_bytes(b"image 5")
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "set", 9999, 5, _sha(b"image 5"))
+        before = _slot_rows(await steamgrid.service.get_artwork_slots(42, _APP_ID))["logo"]
+        b = await steamgrid.service.choose_artwork_slot_image(42, "logo", 6)
+        await steamgrid.prune_conflicts.release_lease(b["prune_lease_token"])
+
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 6, None)
+
+        after = _slot_rows(await steamgrid.service.get_artwork_slots(42, _APP_ID))["logo"]
+        assert before == after == ("chosen", "chosen", 5)
+        assert _choice(uow, ArtworkSlot.LOGO).image_id == 5
+
+    @pytest.mark.asyncio
+    async def test_the_same_image_chosen_again_and_refused_stays_chosen(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300))
+        first = await steamgrid.service.choose_artwork_slot_image(42, "logo", 5)
+        await steamgrid.prune_conflicts.release_lease(first["prune_lease_token"])
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "set", 9999, 5, _sha(b"image 5"))
+        again = await steamgrid.service.choose_artwork_slot_image(42, "logo", 5)
+        await steamgrid.prune_conflicts.release_lease(again["prune_lease_token"])
+
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 5, None)
+
+        assert _choice(uow, ArtworkSlot.LOGO).image_id == 5
+
+    @pytest.mark.asyncio
+    async def test_a_late_refusal_after_steam_took_it_changes_no_choice(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300))
+        a = await steamgrid.service.choose_artwork_slot_image(42, "logo", 5)
+        await steamgrid.prune_conflicts.release_lease(a["prune_lease_token"])
+        (slot_ready / f"{_APP_ID}_logo.png").write_bytes(b"image 5")
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "set", 9999, 5, _sha(b"image 5"))
+
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 5, None)
+
+        rows = _slot_rows(await steamgrid.service.get_artwork_slots(42, _APP_ID))
+        assert rows["logo"] == ("chosen", "chosen", 5)
+
+    @pytest.mark.asyncio
+    async def test_a_late_refusal_of_an_older_chosen_image_keeps_the_newer_choice(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300), (7, 800, 300))
+        for image_id in (6, 7):
+            answer = await steamgrid.service.choose_artwork_slot_image(42, "logo", image_id)
+            await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 6, None)
+
+        assert _choice(uow, ArtworkSlot.LOGO).image_id == 7
+
+    @pytest.mark.asyncio
+    async def test_a_refused_image_that_is_no_longer_the_choice_changes_no_choice(self, steamgrid, uow, slot_ready):
+        _choose(uow, ArtworkSlot.LOGO, 9)
+        with uow:
+            uow.artwork_slot_handovers.save(
+                ArtworkSlotHandover.hand_over(
+                    rom_id=42,
+                    slot=ArtworkSlot.LOGO,
+                    image_id=6,
+                    image_sha256="sha",
+                    handed_at=1.0,
+                    previous_choice_id=5,
+                )
+            )
+
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 6, None)
+
+        assert _choice(uow, ArtworkSlot.LOGO).image_id == 9
+
+    @pytest.mark.asyncio
+    async def test_the_hand_over_keeps_the_choice_the_press_replaced(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300), (6, 800, 300))
+        _choose(uow, ArtworkSlot.LOGO, 5)
+
+        answer = await steamgrid.service.choose_artwork_slot_image(42, "logo", 6)
+
+        assert (_handover(uow, ArtworkSlot.LOGO).image_id, _handover(uow, ArtworkSlot.LOGO).previous_choice_id) == (
+            6,
+            5,
+        )
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+    @pytest.mark.asyncio
+    async def test_the_refused_image_leaves_the_cache(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300))
+        answer = await steamgrid.service.choose_artwork_slot_image(42, "logo", 6)
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 6, None)
+
+        assert _cached_path(sgdb_artwork_cache, 42, "logo", 6) not in sgdb_artwork_cache.files
+
+    @pytest.mark.asyncio
+    async def test_a_refused_image_nobody_chose_stays_in_the_cache(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300))
+        await steamgrid.service.refresh_sgdb_artwork(42, 9999)
+
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 6, None)
+
+        assert _cached_path(sgdb_artwork_cache, 42, "logo", 6) in sgdb_artwork_cache.files
+
+
 class TestTheChoiceAGameChangeDiscards:
     """D17 against the re-review: what the discard leaves for the automatic apply, and what it never touches."""
 
@@ -4076,10 +4198,19 @@ class TestAVersionSwitchWritesTheChosenCover:
         await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
 
     @pytest.mark.asyncio
+    async def test_a_chosen_cover_that_cannot_be_served_says_it_was_chosen(self, steamgrid, uow, slot_ready):
+        _choose(uow, ArtworkSlot.COVER, 6)
+        steamgrid.settings["steamgriddb_api_key"] = ""
+
+        answer = await steamgrid.service.get_sgdb_artwork_base64(42, 0)
+
+        assert (answer["base64"], answer["chosen"]) == (None, True)
+
+    @pytest.mark.asyncio
     async def test_without_a_chosen_cover_nothing_is_served(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
         _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
 
         answer = await steamgrid.service.get_sgdb_artwork_base64(42, 0)
 
-        assert answer == {"base64": None, "no_api_key": False}
+        assert answer == {"base64": None, "no_api_key": False, "chosen": False}
         assert fake_steamgrid_db_api.requested_paths == []
