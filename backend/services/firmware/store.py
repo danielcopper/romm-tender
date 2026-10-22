@@ -2,10 +2,12 @@
 
 The only writer of a store record and of a link record, and the only code that
 places or removes a link of Tender's. A file is fetched into the store first and
-kept only on the checksum RomM states for it; links follow from the store, and
-bringing them up to date (:meth:`FirmwareStore.do_update_links`) is the one way a
-link is placed, put back, rewritten or removed — after a download, after a
-replacement, and whenever the panel asks. Which link goes where is
+kept only on the checksum RomM states for it; links follow from the store.
+Bringing them up to date (:meth:`FirmwareStore.do_update_links`) places, puts
+back, rewrites and removes them — after a download, after a replacement, and
+whenever the panel asks; besides it, "Replace…" places the one link at the place
+it cleared (:meth:`FirmwareStore.do_place_link`), and a delete and forgetting
+Tender's folder remove the links of the files they take. Which link goes where is
 :mod:`domain.firmware_places` and :mod:`domain.firmware_rows`; this module looks
 at the places and carries the plan out.
 

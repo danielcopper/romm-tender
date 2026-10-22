@@ -130,19 +130,21 @@ files, exactly where it opens them and with its own verdict for each: with YabaS
 emulator changes only the list — never which emulator launches. The line above and the **BIOS** badge beside Play stay
 those of the emulator you launch with. A per-region image another emulator lacks shows a grey dot here, not a red one:
 only the emulator you launch with is checked against this game's region. This page downloads and deletes no BIOS file
-itself: **Download BIOS** in the game's RomM Actions menu fetches for the emulator the game launches with, and every
-file of every emulator can be downloaded or deleted on the platform's page (see **Library › Platforms** below). Files in
-your RomM library that no emulator was found to ask for are listed in a section of their own under the list, the same
-whichever emulator is chosen (see below). A row is headed by the file the emulator declares, with its folder where it
-asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one thing you need when placing one by
-hand. Whatever the emulator's packager wrote about the file follows the name on the same line, in the packager's own
-wording and punctuation — `scph5500.bin (PS1 JP BIOS)` — and only where it says something the name does not: those
-descriptions usually repeat the file name, and many are nothing else. Where the file also has something to say about its
-state, that comes last, behind a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
-your RomM library`. It is the
-**emulator's own** wording — a RetroArch core's description file — and it is shown for no other source. Where Tender's
-own card stands in for an emulator that ships no description of its own, that card explains the requirement in full
-sentences, which is a paragraph on a line meant for a few words; the row shows the file and its state instead.
+itself: **Download BIOS** in the game's RomM Actions menu fetches every file your library holds for the platform into
+Tender's firmware store and links it for every emulator that asks for it — its notification says how many files it
+downloaded, and what it could not link or moved aside is said under the rows here — and every file of every emulator can
+be downloaded or deleted on the platform's page (see **Library › Platforms** below). Files in your RomM library that no
+emulator was found to ask for are listed in a section of their own under the list, the same whichever emulator is chosen
+(see below). A row is headed by the file the emulator declares, with its folder where it asks for one (`dc/dc_boot.bin`)
+— that is where the file has to go, and it is the one thing you need when placing one by hand. Whatever the emulator's
+packager wrote about the file follows the name on the same line, in the packager's own wording and punctuation —
+`scph5500.bin (PS1 JP BIOS)` — and only where it says something the name does not: those descriptions usually repeat the
+file name, and many are nothing else. Where the file also has something to say about its state, that comes last, behind
+a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
+your RomM library`. It is the **emulator's own** wording — a
+RetroArch core's description file — and it is shown for no other source. Where Tender's own card stands in for an
+emulator that ships no description of its own, that card explains the requirement in full sentences, which is a
+paragraph on a line meant for a few words; the row shows the file and its state instead.
 
 Under every name a small line says what the chosen emulator needs of the file — _required_, _optional_, or _one of these
 · for USA discs_ for one of the per-region images below — so a file the launch needs and one it can do without read
@@ -272,25 +274,27 @@ reads them the way the core does, and lists the folder **one row per file**, lik
   with its download, its link and its **Delete**. Once downloaded it is linked into the folder under its name in RomM.
   None of them is marked required on its own: the core needs exactly one image, and the folder counts once in the
   summary.
-- Each file already lying in the folder that is not Tender's is a row too, with the emulator's verdict on it, in its own
-  words — _USA v02.00(14/06/2004) Console 20040614-100909_ and so on — and nothing to press: Tender did not put it
-  there.
+- Each file already lying in the folder that is not Tender's, and that the emulator says something about, is a row too,
+  with the emulator's verdict on it, in its own words — _USA v02.00(14/06/2004) Console 20040614-100909_ and so on — and
+  nothing to press: Tender did not put it there. A file the emulator passes over because a valid image lies beside it
+  gets no row.
 - Where LRPS2's own settings name an image that is not in the folder, a neutral line says so, naming the emulator as the
   selector does — _ℹ LRPS2 / PCSX2's settings name scph10000.bin, which is not here — it uses another BIOS from this
   folder instead._ That is not a fault: LRPS2 falls back to the images it finds in the folder.
 - A folder holding no image is red, exactly like a missing file, and it is what the red **BIOS** badge beside Play
-  appears for. While nothing lies in it and your library holds no file recognised for it, one row stands for the folder
-  itself, with what the emulator found there and the line _No BIOS image here yet_; it goes as soon as a file is there.
-  **Download required** then fetches one image — the first recognised one in your library, alphabetically — because one
-  is all the emulator opens.
+  appears for. **Download required** then fetches one image — the first recognised one in your library, alphabetically —
+  because one is all the emulator opens. While nothing lies in the folder and your library holds no file recognised for
+  it, one row stands for the folder itself, with what the emulator found there and the line _No BIOS image here yet_; it
+  goes as soon as a file is there.
 - Where the read could not finish — a file whose bytes would not come back, a folder that could not be listed in full,
   or an image Tender's identity table and the emulator's own check disagree about — the row says so and gets a grey dot,
   and the system's readiness line declines (see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
   below). Nothing is being claimed either way.
 
-A folder that is **absent** is red like any other requirement that is not there. Tender does not create it: the row says
-_pcsx2/bios does not exist yet. Start LRPS2 / PCSX2 once, then try again._ On a stock RetroDECK that will not happen for
-`pcsx2/bios`, which RetroDECK links onto the BIOS folder itself.
+A folder that is **absent** is red like any other requirement that is not there. Tender does not create it: each row of
+a library file recognised for it says _/home/deck/retrodeck/bios/pcsx2/bios does not exist yet. Start LRPS2 / PCSX2
+once, then try again._, and with no such file the folder's own row reads _No BIOS image here yet_. On a stock RetroDECK
+that will not happen for `pcsx2/bios`, which RetroDECK links onto the BIOS folder itself.
 
 <!-- Screenshot: Game detail page showing red BIOS status with "2 of 3 files melonDS opens by name are in place" -->
 
@@ -463,11 +467,11 @@ still offers a download into this platform's own folder.
 
 Some places are left alone for a reason the row names:
 
-- _bios/dc does not exist yet. Start Flycast once, then try again._ — the folder the emulator opens is created by the
-  emulator, not by Tender.
-- _RetroDECK's settings could not be read, so Tender places nothing in bios._ — while RetroDECK's settings cannot be
-  read, the places under RetroDECK are only guesses, and Tender writes nothing into a guess. Places read from the
-  settings, and places outside RetroDECK, are used as usual.
+- _/home/deck/retrodeck/bios/dc does not exist yet. Start Flycast once, then try again._ — the folder the emulator opens
+  is created by the emulator, not by Tender.
+- _RetroDECK's settings could not be read, so Tender places nothing in /home/deck/retrodeck/bios._ — while RetroDECK's
+  settings cannot be read, the places under RetroDECK are only guesses, and Tender writes nothing into a guess. Places
+  read from the settings, and places outside RetroDECK, are used as usual.
 - _Could not place a link at …: …_ — placing the link failed, and the reason follows. It is said by the latest attempt
   on the page and is gone once you leave it.
 
@@ -518,13 +522,15 @@ file Saturn's Kronos and YabaSanshiro both want lies once in the store with a li
 Once confirmed, Tender removes the files and reports the result. Where a file cannot be removed, the line under the
 section says so and the list re-reads itself: the rows that still offer **Delete** are the files that stayed. A link
 under RetroDECK's folder while RetroDECK's settings cannot be read stays where it is, and the line under the section
-says so, once per folder: _Left a link in …/retrodeck/bios: RetroDECK's settings could not be read. Tender removes it
-once they can be read._ Tender removes it the next time it brings its links up to date with the settings read. Games
-that need those files won't launch until you download them again with **Download all** or **Download required for
-_emulator_**.
+says so, once per folder: _Left a link in /home/deck/retrodeck/bios: RetroDECK's settings could not be read. Tender
+removes it once they can be read._ Tender removes it the next time it brings its links up to date with the settings
+read. A file an older version of Tender downloaded straight into that folder stays too, says so — _Left dc_boot.bin in
+/home/deck/retrodeck/bios: RetroDECK's settings could not be read. Delete it again once they can be read._ — and keeps
+its **Delete**: Tender removes it only when you press it again. Games that need those files won't launch until you
+download them again with **Download all** or **Download required for _emulator_**.
 
 **It only ever deletes its own downloads and links.** A file is removed when Tender has a record of downloading it, a
-link when Tender has a record of placing it or it points into Tender's firmware store, and for no other reason.
+link when it points at a file of Tender's firmware store that Tender has a record of, and for no other reason.
 Everything else in the BIOS folder is left alone, including:
 
 - **Firmware RetroDECK ships itself.** RetroDECK installs some files into the BIOS folder with its own components —
@@ -540,8 +546,9 @@ if Tender downloaded it — otherwise its own downloads would be stranded on dis
 file that is in your library but arrived some other way is left where it is. If you want one of those gone, delete it in
 the file manager.
 
-The count on the button is the same set: it counts Tender's own downloads that are still on disk, so it matches what the
-delete reports.
+The count on the button is the same set: it counts every file in the platform's firmware store and every older download
+of Tender's still on disk — a copy only another emulator uses, and a second copy of the same bytes, included — so it
+matches what the delete reports.
 
 This is the only place a platform's BIOS files are deleted. The Data Management page used to offer the same action
 without a confirmation; that copy is gone.

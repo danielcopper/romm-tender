@@ -677,12 +677,13 @@ export const applySteamInputSetting = endpoint<[], { success: boolean; message: 
 export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
 export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
 // The ROM is the game whose page started the download, whose install record names
-// the system its files are placed for; `null` from the platform page.
+// the system its files are linked for; `null` from the platform page.
 export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDownloadResult | EndpointFailure>(
   "download_all_firmware",
 );
-// The emulator is the identity the page shows — the files land where IT opens
-// them; `null` places them for the platform's own pick.
+// The emulator is the identity the page shows — the files fetched are what IT
+// requires; `null` asks for the platform's own pick. Every file is linked for
+// every emulator that asks for it.
 export const downloadRequiredFirmware = endpoint<[string, string | null], FirmwareDownloadResult | EndpointFailure>(
   "download_required_firmware",
 );
@@ -701,8 +702,8 @@ export const updateBiosLinks = endpoint<[string, number | null], BiosLinkResult 
 // "Replace…" on a row: the file at the place goes to the backup folder and
 // Tender's copy is linked there. Addressed by the place the row named.
 export const replaceBiosFile = endpoint<[string, string], BiosReplaceResult | EndpointFailure>("replace_bios_file");
-// What the resolver knows a library file's content as, by its MD5 — about a
-// quarter of a second each, so asked one row at a time after the page is shown.
+// What the resolver knows a library file's content as, by its MD5 — slow for
+// each file, so asked one row at a time after the page is shown.
 export const identifyLibraryFirmware = endpoint<[string], FirmwareIdentification | EndpointFailure>(
   "identify_library_firmware",
 );

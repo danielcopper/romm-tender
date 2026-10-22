@@ -359,10 +359,10 @@ device still start, because RetroDECK starts them itself.
 **Tender uses none of RetroDECK's folders where it could not ask about them** — finding RetroDECK at all, or asking it
 where its own folder, its ROM folder, its BIOS folder and its saves folder are, failed with an error. Every one of those
 buttons then says **RetroDECK's folders could not be established, so Tender downloads into and removes from none of
-them.**, and no leftover partial download is removed. A download while RetroDECK is switched off says that instead, as
-it always does. Where only the question for one system's ROM folder failed, the buttons that need that folder —
-**Download**, **Use Existing Files**, **Check Against Server** and replacing a copy — say the same sentence for that
-system's games, and every other button works as usual.
+them.**, and no leftover partial download in RetroDECK's folders is removed. A download while RetroDECK is switched off
+says that instead, as it always does. Where only the question for one system's ROM folder failed, the buttons that need
+that folder — **Download**, **Use Existing Files**, **Check Against Server** and replacing a copy — say the same
+sentence for that system's games, and every other button works as usual.
 
 **Only one version of a game is kept on disk at a time.** If you tap **Download** on a version while another version of
 the same game (its [sibling group](#versions)) is already on disk, Tender removes the old install first and then

@@ -139,7 +139,7 @@ class FirmwarePlatformResolver(Protocol):
 
 
 class FirmwareIdentityProvider(Protocol):
-    """Ask what a piece of firmware content is, by its MD5 — the resolver's identification, about 0.25 s a file.
+    """Ask what a piece of firmware content is, by its MD5 — the resolver's identification, a slow question per file.
 
     Answers every name the resolver knows the content under, empty where it
     does not know it, and ``None`` where nothing could be asked.

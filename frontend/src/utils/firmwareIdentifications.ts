@@ -2,8 +2,8 @@
  * What the resolver knows a library file's content as — asked for the rows of
  * the library's own section, after the page is shown, and never as part of it.
  *
- * The question costs about a quarter of a second a file (`identify_firmware`),
- * so it is asked one file at a time, and each row reads "Checking…" until its
+ * The question is slow for each file (`identify_firmware`), so it is asked one
+ * file at a time, and each row reads "Checking…" until its
  * answer arrives. An answer is kept by MD5 for the page that asked, at most
  * thirty minutes, and forgotten when that page is left; the questions still out
  * then are not asked. The answer only labels a row: it decides no verdict and no

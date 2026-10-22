@@ -534,10 +534,10 @@ class FirmwarePlacement:
     def place_unreadable(self) -> bool:
         """Could the resolver not look at the place this file goes?
 
-        Such a place is never downloaded into: a download could
-        overwrite a file nobody could see, and a place the resolver cannot read
-        is usually one the emulator cannot read either. Once it is readable
-        again, the verdict follows by itself and so does the download.
+        Such a place gets no link: nobody could see what lies there, and a
+        place the resolver cannot read is usually one the emulator cannot read
+        either. Once it is readable again, the verdict follows by itself and so
+        does the link.
         """
         return CAVEAT_PATH_INACCESSIBLE in self.caveats
 

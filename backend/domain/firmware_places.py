@@ -14,8 +14,9 @@ could not remove with its store file its own (:class:`domain.firmware_store.Firm
 Bringing the links up to date (:func:`plan_link_update`) places every link an
 emulator wants where the name is free, places again a link of Tender's that
 points at nothing where a store copy exists, removes such a link where none
-does, records a link of Tender's found at a new place and drops a record where
-no link of Tender's lies any more. It downloads nothing.
+does, records a link of Tender's found at a new place, and drops the record of a
+place it may touch where no link of Tender's to the recorded file lies any more.
+It downloads nothing.
 
 Pure compute — the caller looks at the places and carries the plan out.
 """

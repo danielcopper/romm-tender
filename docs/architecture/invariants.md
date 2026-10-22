@@ -241,14 +241,14 @@ Format: **invariant** — tier — enforced by.
   `tests/services/test_tender_folder.py` pins the rest: `TestTheState` (unreachable only with records, for each of the
   three conditions), `TestCreatingTheFolder` (start, id file, a drive that is gone, a recorded folder),
   `TestPreparingAWrite` and `TestTheFolderRule`. The firmware store is the first store that records something under the
-  folder: `FirmwareStore` answers `TenderFolderRecordReader` off its `firmware_store` rows, makes every write ready
-  through `do_prepare_for_write`, forgets its records under a folder by removing Tender's links to those files and
-  deleting no file, and every firmware use case names the folder rule
-  (`tests/services/test_firmware_store.py::TestTendersFolderRecords` and `::TestFolderRule`). Prompt-only: a new store
-  that writes there must call `do_prepare_for_write` first, answer `TenderFolderRecordReader` and join the `records`
-  tuple in `bootstrap/services.py`, and a use case that touches the folder's files names the folder rule
-  (`folder=True`); a recovery bundle is never a record — Tender lists bundles from the folder and keeps no record of
-  them
+  folder: `FirmwareStore` answers `TenderFolderRecordReader` off its `firmware_store` rows, forgets its records under a
+  folder by removing Tender's links to those files and deleting no file, and every firmware use case that writes into
+  the store or links into it names the folder rule (`tests/services/test_firmware_store.py::TestTendersFolderRecords`
+  and `::TestFolderRule`). That it makes every write ready through `do_prepare_for_write` is prompt-only: its tests hand
+  it a stub in that function's place. Prompt-only: a new store that writes there must call `do_prepare_for_write` first,
+  answer `TenderFolderRecordReader` and join the `records` tuple in `bootstrap/services.py`, and a use case that touches
+  the folder's files names the folder rule (`folder=True`); a recovery bundle is never a record — Tender lists bundles
+  from the folder and keeps no record of them
 - **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
   with its reason** — check — Tender stopped being a Decky Loader plugin when the backend began hosting itself, and a
   name that still says "plugin" teaches its reader the old model: that something loads Tender and owns its life cycle,
@@ -663,7 +663,8 @@ Format: **invariant** — tier — enforced by.
   `services/firmware/status.py::_bios_aggregates` scopes `server_count` / `local_count` to `on_server` rows, and the
   stated pair `ratio_server_count` / `ratio_local_count` further to those with a verdict; the download buttons'
   condition is `isFetchable` (`frontend/src/utils/biosFetchable.ts`), which reads the row's `library` — the RomM file
-  that fills it by content, wherever RomM files it — its `store_file`, its `link` and its `place_refusal`, called from
+  that fills it, by content or, where the resolver's identity is an archive or names no checksum, by name, wherever RomM
+  files it — its `store_file`, its `link` and its `place_refusal`, called from
   `frontend/src/bigpicture/library/PlatformDetail.tsx` — and since #1815 the per-row Download button reads the same
   filtered set, so a fourth reader of the axis now exists in that one file. A fifth reads it in the same file for the
   On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
@@ -671,26 +672,29 @@ Format: **invariant** — tier — enforced by.
   and it is display alone in the same sense: it decides whether a row gets a LINE — a file no page can fetch, that the
   shown emulator does not require and whose verdict is not met, is nothing that page can act on — and gates no count and
   offers no action, so it belongs to none of the three folds below either. It is asked about whichever emulator the page
-  shows. What holds the two surfaces together is that they call one predicate rather than spelling the three clauses
-  twice: a second copy would let the game page point at a download button the platform page does not offer, or leave off
-  a row it does. What must NOT be shared is the game page's rule around it — required for this launch, an option of the
+  shows. What holds the two surfaces together is that they call one predicate rather than spelling its clauses twice: a
+  second copy would let the game page point at a download button the platform page does not offer, or leave off a row it
+  does. What must NOT be shared is the game page's rule around it — required for this launch, an option of the
   emulator's one-of group, present, fetchable, or unjudged — which is that page's alone; the platform detail has no such
   rule, and a shared "visibility" module would invent a notion only one surface has. Each fold has its own quiet
   failure: drop the row from the required counts and a sentence reads "all in place" under a red verdict; add it to the
   ratio and a SNES page reports `0 / 26 files, 26 missing` for twenty-six optional files no core wants; add it to the
-  buttons and the page offers a download that cannot succeed. `on_server` is the one field all three read; the row's
-  `id: None` is an honest absence with no consumer at all, so nothing breaks if it is filled in and nothing is guarded
-  by leaving it empty
+  buttons and the page offers a download that cannot succeed. The counts and the ratio read `on_server`, the buttons
+  read `library` (`on_server` only on a payload that states no `library`); the row's `id: None` is an honest absence
+  with no consumer at all, so nothing breaks if it is filled in and nothing is guarded by leaving it empty
 - **No link is placed at a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
-  a link there could stand over a file nobody could see, which is the backup-or-confirm rule's concern, and a place the
-  resolver cannot read is usually one the emulator cannot read either (#2190). The row's verdict is withheld, grey, and
-  its sentence names the place ("Tender could not look into bios/kronos/, so whether saturn_bios.bin is there is not
-  known"). The backend reads it in one place, `FirmwarePlacement.place_unreadable`, from two:
-  `domain/firmware_groups.py::fetched_as_required` (so `Download required` neither counts nor fetches it) and
-  `domain/firmware_places.py::place_refusal`, whose `unreadable` refusal no link update passes; the frontend's
-  `isFetchable` reads the same caveat code and that refusal, so neither page points at the row as something to download.
-  A download itself lands in Tender's firmware store, never at the place, so the place's reading decides only the link.
-  Pinned by `tests/domain/test_firmware_places.py`, `tests/domain/test_firmware_groups.py`,
+  nobody could see what lies there, so a link could not be judged against it, and a place the resolver cannot read is
+  usually one the emulator cannot read either (#2190). The row's verdict is withheld, grey, and its sentence names the
+  place ("Tender could not look into bios/kronos/, so whether saturn_bios.bin is there is not known"). The backend reads
+  it as one property, `FirmwarePlacement.place_unreadable`, and four callers ask it:
+  `domain/firmware_groups.py::fetched_as_required` (so `Download required` neither counts nor fetches it), and
+  `domain/firmware_places.py::place_refusal` as the link update (`services/firmware/store.py`), the rows
+  (`services/firmware/rows.py`) and "Replace…" (`services/firmware/replacement.py`) call it, whose `unreadable` refusal
+  none of them passes; the frontend's `isFetchable` reads the same caveat code and that refusal, so neither page points
+  at the row as something to download. A download itself lands in Tender's firmware store, never at the place, so the
+  place's reading decides only the link. Pinned by `tests/domain/test_firmware_places.py`,
+  `tests/domain/test_firmware_groups.py`,
+  `tests/services/test_firmware.py::TestAPlaceThatCouldNotBeLookedAt::test_a_download_places_no_link_there`,
   `frontend/src/utils/biosFetchable.test.ts`; the resolver's spelling of the code by
   `tests/adapters/test_atlas_firmware.py::TestVocabularyConformance`. Unseen: a new path that places a link without
   `place_refusal`, and the frontend's copy of the code, which nothing holds equal to the backend's. Once the place is
@@ -1273,31 +1277,38 @@ Format: **invariant** — tier — enforced by.
   oldest version it can be updated from directly
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
-- **A firmware row's verdict and presence are the resolver's wherever the row has a place; Tender's own look at a place
-  answers only whose link lies there, whether its name is free and whether its folder exists** — prompt-only —
-  `domain/bios_status.py::_row_verdict` (the verdict) and `services/firmware/rows.py` (presence) are the crossing
-  points. The verdict is the resolver's per-file verdict over the launching emulator's own requirement
-  ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D3): a wrong image is there and not met, a file it
-  could not compare is there and withheld, and a place it could not look at is withheld, never missing. Presence is the
-  resolver's `present` at the place, read the way the emulator reaches it — through a link of Tender's to the store file
-  behind it, which the resolver judges by its bytes (emu-atlas#578) — so Tender re-implements no symlink walk. A library
-  row has no place, no verdict, and its `downloaded` is whether this platform's store holds it. Tender's own look
-  (`FirmwareFileStore.look`, no link followed) decides only the link's state, never the row's answer. `present is None`
-  leaves `downloaded` false and the row's verdict withheld, and the `RomM library files` ratio counts only the rows
-  whose verdict was established (`ratio_server_count` / `ratio_local_count`): there a withheld row would read as a file
-  missing ([#2285](https://github.com/danielcopper/romm-tender/issues/2285) D3). **Nothing enforces either crossing
-  point.** A row builder deciding presence by `look(place).lexists` would go green and read a link to a missing store
-  file as present; one reading `downloaded` as the verdict would read a wrong image as met. A withheld verdict is not an
-  absence — its cause is read off the row's caveat codes and, for a declared FILE, off its `checked` (GLOSSARY.md → Byte
+- **A file requirement's verdict and presence are the resolver's wherever the row has a place; Tender's own look at a
+  place answers whose link lies there, whether its name is free, whether its folder exists — and, for a file of a folder
+  declaration, whether a file lies there** — prompt-only — `domain/bios_status.py::_row_verdict` (the verdict) and
+  `services/firmware/rows.py` (presence) are the crossing points. The verdict is the resolver's per-file verdict over
+  the launching emulator's own requirement ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D3): a
+  wrong image is there and not met, a file it could not compare is there and withheld, and a place it could not look at
+  is withheld, never missing. Presence is the resolver's `present` at the place, read the way the emulator reaches it —
+  through a link of Tender's to the store file behind it, which the resolver judges by its bytes (emu-atlas#578) — so
+  Tender re-implements no symlink walk. A library row has no place, no verdict, and its `downloaded` is whether this
+  platform's store holds it. Tender's own look (`FirmwareFileStore.look`, no link followed) decides the link's state,
+  and the row's answer in one case only: a row for one file of a folder declaration (`_folder_rows`), which the resolver
+  answers per file only where it makes a statement about that file. There presence is the look's `lexists`, and the
+  verdict is the statement — or, where the resolver made none, not in place when nothing lies there and not established
+  when something does. `present is None` leaves `downloaded` false and the row's verdict withheld, and the
+  `RomM library files` ratio counts only the rows whose verdict was established (`ratio_server_count` /
+  `ratio_local_count`): there a withheld row would read as a file missing
+  ([#2285](https://github.com/danielcopper/romm-tender/issues/2285) D3). **Nothing enforces either crossing point.** A
+  row builder deciding presence by `look(place).lexists` would go green and read a link to a missing store file as
+  present; one reading `downloaded` as the verdict would read a wrong image as met. A withheld verdict is not an absence
+  — its cause is read off the row's caveat codes and, for a declared FILE, off its `checked` (GLOSSARY.md → Byte
   reading), never off the verdict itself. Three of that vocabulary's eight values sit behind one withheld verdict and
   are three different statements: a file the emulator READ and does not recognise was checked, so wording it "could not
   be checked" is untrue; `refused` is not withheld at all, arriving with the verdict already `false`. Nothing checks
   that a consumer keeps them apart — `checked` is a plain string on the row beside a `satisfied` that reads like its
   summary
 - **A firmware row's verdict is `BiosFileEntry.satisfied` — the resolver's per-file verdict at the place the launching
-  emulator opens it, never presence — and a folder declaration is one row per file in it, each with the resolver's
-  verdict over that file, the folder's own verdict counting once as one requirement** — test + prompt-only —
+  emulator opens it, never presence — and a folder declaration is one row per file of it the resolver makes a statement
+  about or recognises in the library (#2191 D26), each with the verdict over that file, the folder's own verdict
+  counting once as one requirement; where that leaves no row, one row stands for the folder with the folder's verdict
+  and the codes the resolver states over it (D28)** — test + prompt-only —
   `tests/services/test_firmware_store.py::TestAFolderTheEmulatorLists` pins the per-file rows end-to-end,
+  `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents` the folder's own row (D28),
   `tests/domain/test_firmware_wants.py` the fold the service asks through, and
   `tests/adapters/test_atlas_firmware.py::TestWhatAFolderDeclarationHolds` each file's verdict as the resolver states it
   (an image the emulator's own test accepts met; a file its reads disagree on, or whose read did not come back,
@@ -1305,13 +1316,15 @@ Format: **invariant** — tier — enforced by.
   ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D26). The rule spans three modules and no
   diff-scoped review sees it whole: the adapter carries the folder's verdict and each file's, settled in the same
   verified per-platform reading the rest of the row comes from; `services/firmware/rows.py` builds a row per file the
-  folder takes — each library file the packaged table recognises for the folder, and each other file a statement names —
-  marks none of them required, and hands the folder's own verdict to the counts as one requirement (`count_required`'s
-  `folders`); and both frontend surfaces colour and word each row off its own verdict. **Nothing mechanical joins those
-  three**, which is what a consumer reading `downloaded` for a folder breaks: RetroDECK links LRPS2's `pcsx2/bios` onto
-  the BIOS root, so the folder is always there, and reading its presence as readiness reports "All required ready" over
-  a PS2 install with no BIOS file at all. The same holds for the third value: a required row answered `None` keeps the
-  resolver's verdict open, and folding it into `False` claims an absence nothing established
+  folder takes — each library file the packaged table recognises for the folder, and each other file a statement names;
+  a file the resolver passes over because a valid image lies beside it gets no row — marks none of them required, stands
+  one row for the folder where that leaves none (`_empty_folder_row`), and hands the folder's own verdict to the counts
+  as one requirement (`count_required`'s `folders`); and both frontend surfaces colour and word each row off its own
+  verdict. **Nothing mechanical joins those three**, which is what a consumer reading `downloaded` for a folder breaks:
+  RetroDECK links LRPS2's `pcsx2/bios` onto the BIOS root, so the folder is always there, and reading its presence as
+  readiness reports "All required ready" over a PS2 install with no BIOS file at all. The same holds for the third
+  value: a required row answered `None` keeps the resolver's verdict open, and folding it into `False` claims an absence
+  nothing established
 - **Every BIOS colour is the resolver's verdict for the launching emulator (`requirements_met`), never a count of rows;
   the exceptions are a one-of group whose verdict is open because of the disc's region alone (the platform page's amber)
   and, on a game's page, the image serving the game's own region (`game_region_level`) — each read off the resolver's
@@ -1479,16 +1492,15 @@ Format: **invariant** — tier — enforced by.
 - **The whole-machine firmware inventory is never asked with content verification, and the per-platform reading is never
   asked without it** — prompt-only — `firmware_inventory()` (`FirmwareResolver`, `AtlasFirmwareAdapter`) is asked
   unverified: `verify=True` there sweeps every unclaimed file under the BIOS root plus each declared file the packaged
-  identity table covers at a matching size, and its two callers — the home migration's untracked-BIOS sweep and
-  `download_firmware(firmware_id)` — need only where a file GOES. `firmware_for_system(<system>)`
-  (`FirmwarePlatformResolver`, `AtlasPlatformFirmwareAdapter`) is asked WITH it, and that half is the one a reader is
-  likely to "optimise": drop the flag and two answers go silent rather than loud — a packaged card that identifies its
-  image by content names no file at all (DuckStation comes back `declaration="packaged"` with an empty list and no
-  system recording), and every folder declaration's verdict falls to `None`, which takes each platform holding one to
-  `unknown`. Measured on the reference machine at emu-atlas 0.22, the median of five runs each: 59-173 ms per system
-  verified, against 172 ms for one unverified whole-machine sweep — the per-system read performs no unclaimed sweep at
-  all, which is what bounds it. Nothing detects either direction: `verify` is one keyword argument on each call and
-  every test stays green
+  identity table covers at a matching size, and its one caller — the home migration's untracked-BIOS sweep — needs only
+  where a file LIES. `firmware_for_system(<system>)` (`FirmwarePlatformResolver`, `AtlasPlatformFirmwareAdapter`) is
+  asked WITH it, and that half is the one a reader is likely to "optimise": drop the flag and two answers go silent
+  rather than loud — a packaged card that identifies its image by content names no file at all (DuckStation comes back
+  `declaration="packaged"` with an empty list and no system recording), and every folder declaration's verdict falls to
+  `None`, which takes each platform holding one to `unknown`. Measured on the reference machine at emu-atlas 0.22, the
+  median of five runs each: 59-173 ms per system verified, against 172 ms for one unverified whole-machine sweep — the
+  per-system read performs no unclaimed sweep at all, which is what bounds it. Nothing detects either direction:
+  `verify` is one keyword argument on each call and every test stays green
 - **No sentinel objects on the wire — explicit JSON-representable tagged values only** — prompt-only — no sentinel
   survives on the wire today (`NO_MIGRATION` retired with #1004, legacy `slot:null` confirmation with #1276), so the
   rule now guards reintroduction; nothing mechanical detects a new one
@@ -1506,15 +1518,16 @@ Format: **invariant** — tier — enforced by.
   That reasoning covers the **ROM** only: an adoption's Overwrite also replaces save and savestate files, and those take
   the **backup** leg through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not
   quarantining a ROM (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is
-  synced nowhere at all. A BIOS file at an emulator's place is changed only by a "Replace…" the user confirmed on its
-  row, and it takes the **backup** leg as well: once Tender's copy has passed RomM's checksum, the file moves to
-  `<data>/backups/bios/<date and time>/<its original absolute path>`, where it stays until the user deletes it
-  ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D5, D17); so does a file lying in the firmware store
-  without a record of Tender's whose checksum is not RomM's, before a download takes its name (D25). Both go through
-  `FirmwareStore.do_back_up` and are pinned by `tests/services/test_firmware_store.py` (`TestReplacingAWrongFile`,
-  `TestAStoreFileWithoutARecord`). It is the first caller to hand that funnel a directory outside the saves root: it
-  takes the directory it is given, so a savestate's backup lands in `<states>/.romm-backup/`. Following a moved save
-  directory (`services/saves/save_directory.py`) takes the same **backup** leg on a collision — detail:
+  synced nowhere at all. It is the first caller to hand that funnel a directory outside the saves root: it takes the
+  directory it is given, so a savestate's backup lands in `<states>/.romm-backup/`. A BIOS file at an emulator's place
+  is changed only by a "Replace…" the user confirmed on its row, and it takes the **backup** leg too, by a path of its
+  own rather than that funnel: once Tender's copy has passed RomM's checksum, the file moves to
+  `<data>/backups/bios/<date and time>/<its original absolute path>`, where it stays until the user deletes it, and
+  moves back where the link cannot be placed ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D5, D17);
+  so does a file lying in the firmware store without a record of Tender's whose checksum is not RomM's, before a
+  download takes its name (D25). Both go through `FirmwareStore.do_back_up` and are pinned by
+  `tests/services/test_firmware_store.py` (`TestReplacingAWrongFile`, `TestAStoreFileWithoutARecord`). Following a moved
+  save directory (`services/saves/save_directory.py`) takes the same **backup** leg on a collision — detail:
   [Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory). The installer
   replaces the user's database and settings on two paths, and they are held to the rule differently. A **rollback by
   hand** (`install.sh --rollback`) takes the **backup** leg: it stops the unit and copies the database files and
@@ -1565,13 +1578,15 @@ Format: **invariant** — tier — enforced by.
   holds and nothing here can fetch back — an older delete authorised on presence did exactly that to
   `<bios>/dolphin-emu/Sys/codehandler.bin` on a real device. `on_server` describes what the library holds _now_, not who
   wrote the file: authorise on it and a file dropped from RomM after we downloaded it is stranded on disk. The count the
-  UI offers is bound to the same set: `deletable_count` on the `get_platform_firmware_status` payload counts this
-  platform's store files and the older downloads still on disk, and each row carries the name its Delete is addressed by
-  (`delete_name`) — its store file, or the older download of the library file that fills it — which alone gates the
-  row's Delete. **Both buttons reach one removal** (`PlatformBiosDeleter._delete_io` over `FirmwareStore.do_remove`,
-  under a name selection per button): a second copy of that loop is the shape this rule is about, because the copies
-  would drift silently. **Nothing mechanical stands behind any of this.** A delete path looping a status list on
-  `downloaded` alone would go green — which is exactly the shape the older one had when it destroyed that file
+  UI offers is bound to the same set: `deletable_count` on the `get_platform_firmware_status` payload counts every file
+  of this platform's store on disk — a copy only another emulator uses and a second copy of the same bytes included —
+  and the older downloads still on disk, one a Delete could not reach included (#2191 D29); each row carries the name
+  its Delete is addressed by (`delete_name`) — its store file, the older download of the library file that fills it, or
+  the older download lying at its own place — which alone gates the row's Delete. **Both buttons reach one removal**
+  (`PlatformBiosDeleter._delete_io` over `FirmwareStore.do_remove`, under a name selection per button): a second copy of
+  that loop is the shape this rule is about, because the copies would drift silently. **Nothing mechanical stands behind
+  any of this.** A delete path looping a status list on `downloaded` alone would go green — which is exactly the shape
+  the older one had when it destroyed that file
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

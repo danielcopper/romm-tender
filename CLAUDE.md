@@ -500,7 +500,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder`,
   `tests/services/prune/test_service.py::test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason`
   and, for the firmware store, the first store that records something there, `tests/services/test_firmware_store.py`
-  (`TestTendersFolderRecords`, `TestFolderRule`). Prompt-only: a new store that writes into the folder calls
+  (`TestTendersFolderRecords`, `TestFolderRule`). Prompt-only: the firmware store's writes go through
+  `do_prepare_for_write` (its tests hand it a stub); a new store that writes into the folder calls
   `do_prepare_for_write` first, answers `TenderFolderRecordReader` and joins the `records` tuple in
   `bootstrap/services.py`; a use case that touches the folder's files names the folder rule (`folder=True`); no store
   counts a recovery bundle as a record
@@ -710,8 +711,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   On-disk `⊘` mark, `rowBelongsOnThisPage`) neither count nor gate
 - **No link is placed at a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
   `FirmwarePlacement.place_unreadable` is the one reading, and `domain/firmware_places.py::place_refusal` turns it into
-  the `unreadable` refusal no link update passes; `tests/domain/test_firmware_places.py` and
-  `tests/domain/test_firmware_groups.py` (`fetched_as_required` leaves it out of `Download required`), and
+  the `unreadable` refusal no link update passes; `tests/domain/test_firmware_places.py`,
+  `tests/domain/test_firmware_groups.py` (`fetched_as_required` leaves it out of `Download required`),
+  `tests/services/test_firmware.py::TestAPlaceThatCouldNotBeLookedAt::test_a_download_places_no_link_there` and
   `frontend/src/utils/biosFetchable.test.ts` (`isFetchable` offers no button); prompt-only: a new path that places a
   link judges the place through `place_refusal`, and the frontend's copy of the caveat code agrees with the backend's
 - **No BIOS answer outlives the page that asked for it** — test + prompt-only —
@@ -891,23 +893,29 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   prompt-only
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
-- **A firmware row's verdict and presence are the resolver's wherever the row has a place; Tender's own look at a place
-  answers only whose link lies there, whether its name is free and whether its folder exists** — prompt-only —
-  `domain/bios_status.py::_row_verdict` (the verdict) and `services/firmware/rows.py` (presence: the resolver's
-  `present` at the place, followed through a link of Tender's to the store file behind it) are the crossing points, and
-  nothing enforces either. A library row has no place and so no verdict; its `downloaded` is whether this platform's
-  store holds it. `present is None` leaves `downloaded` false and the verdict withheld — a place the resolver could not
-  look at is never missing (#2190 D3) — and the `RomM library files` ratio leaves a row whose verdict was withheld out
-  (`ratio_server_count`, #2285 D3). A withheld verdict is not an absence: its cause is read off the row's caveat codes
-  and a declared file's `checked`, never off the verdict, and nothing checks that a consumer keeps `checked`'s values
-  apart — a file the emulator read and did not recognise is never worded "could not be checked", and `refused` is not a
-  withheld verdict
+- **A file requirement's verdict and presence are the resolver's wherever the row has a place; Tender's own look at a
+  place answers whose link lies there, whether its name is free, whether its folder exists — and, for a file of a folder
+  declaration, whether a file lies there** — prompt-only — `domain/bios_status.py::_row_verdict` (the verdict) and
+  `services/firmware/rows.py` (presence: the resolver's `present` at the place, followed through a link of Tender's to
+  the store file behind it) are the crossing points, and nothing enforces either. A row for one file of a folder
+  declaration (`_folder_rows`) takes its presence from Tender's look and its verdict from the resolver's statement over
+  that file — not in place where it made none and nothing lies there, not established where something does. A library
+  row has no place and so no verdict; its `downloaded` is whether this platform's store holds it. `present is None`
+  leaves `downloaded` false and the verdict withheld — a place the resolver could not look at is never missing (#2190
+  D3) — and the `RomM library files` ratio leaves a row whose verdict was withheld out (`ratio_server_count`, #2285 D3).
+  A withheld verdict is not an absence: its cause is read off the row's caveat codes and a declared file's `checked`,
+  never off the verdict, and nothing checks that a consumer keeps `checked`'s values apart — a file the emulator read
+  and did not recognise is never worded "could not be checked", and `refused` is not a withheld verdict
 - **A firmware row's verdict is `BiosFileEntry.satisfied` — the resolver's per-file verdict at the place the launching
-  emulator opens it, never presence — and a folder declaration is one row per file in it, each with the resolver's
-  verdict over that file, the folder's own verdict counting once as one requirement** — test + prompt-only —
-  `tests/services/test_firmware_store.py::TestAFolderTheEmulatorLists`, `tests/domain/test_firmware_wants.py` and
-  `tests/adapters/test_atlas_firmware.py::TestWhatAFolderDeclarationHolds`; prompt-only: no consumer reads `downloaded`
-  as a verdict or folds a `None` verdict into `False`, and none of a folder's files is required on its own row
+  emulator opens it, never presence — and a folder declaration is one row per file of it the resolver makes a statement
+  about or recognises in the library (#2191 D26), each with the verdict over that file, the folder's own verdict
+  counting once as one requirement; where that leaves no row, one row stands for the folder with the folder's verdict
+  and the codes the resolver states over it (D28)** — test + prompt-only —
+  `tests/services/test_firmware_store.py::TestAFolderTheEmulatorLists`,
+  `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents`,
+  `tests/domain/test_firmware_wants.py` and `tests/adapters/test_atlas_firmware.py::TestWhatAFolderDeclarationHolds`;
+  prompt-only: no consumer reads `downloaded` as a verdict or folds a `None` verdict into `False`, and none of a
+  folder's files is required on its own row
 - **Every BIOS colour is the resolver's verdict for the launching emulator (`requirements_met`), never a count of rows;
   the exceptions are a one-of group whose verdict is open because of the disc's region alone (the platform page's amber)
   and, on a game's page, the image serving the game's own region (`game_region_level`) — each read off the resolver's

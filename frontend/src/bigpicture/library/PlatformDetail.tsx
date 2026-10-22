@@ -704,8 +704,9 @@ function downloadLabel(
  * confirmation names the exact path and where the old file goes.
  *
  * **The delete's condition is `delete_name` and nothing else.** It names
- * Tender's own store file, or an older download of the library file that
- * fills the row, which is the whole authority; `downloaded` is the resolver's
+ * Tender's own store file, an older download of the library file that fills
+ * the row, or an older download lying at the row's place, which is the whole
+ * authority; `downloaded` is the resolver's
  * presence at the row's place and is equally true of a file the user placed.
  * The removal itself re-reads the records and takes only Tender's own files
  * and links, so this button cannot widen what it removes.
@@ -963,7 +964,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
           <BiosFileRow
             file={file}
             // Every emulator's rows offer their download and their delete; a
-            // download lands where the SHOWN emulator opens the file.
+            // download lands in the store and is linked for every emulator.
             action={rowAction(row, state, file, fetchable, backupRoot, focus, tableKey(file.file_name))}
             emulator={shownLabel ?? firmware.active_core_label ?? null}
             placeLines={biosPlaceLines(

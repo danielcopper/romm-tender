@@ -206,8 +206,9 @@ interface FirmwareVerdict {
   /** The folder declaration this row is one file in — LRPS2's `pcsx2/bios` —
    *  `null` for every other row. */
   in_folder?: string | null;
-  /** The name a Delete on this row is addressed by: the store file, or an older
-   *  download of the library file that fills the row. `null` offers no Delete. */
+  /** The name a Delete on this row is addressed by: the store file, an older
+   *  download of the library file that fills the row, or an older download
+   *  lying at the row's own place. `null` offers no Delete. */
   delete_name?: string | null;
 }
 
@@ -334,15 +335,13 @@ interface FirmwareFile extends FirmwareVerdict {
   used_by_active?: boolean;
   on_server: boolean;
   supplied_by?: string | null;
-  /** How many of Tender's own downloads a delete on THIS row would remove:
-   *  1 for a declared file a download record names and still holds, and for a
-   *  declared FOLDER the number of recorded files written underneath it — the
-   *  emulator lists the folder, but whatever we downloaded into it is ours.
-   *  Having placed a file is the whole authority to remove it.
+  /** Whether a Delete on THIS row removes a file of Tender's: 1 where the row
+   *  names one (`delete_name`), 0 otherwise. Having placed a file is the whole
+   *  authority to remove it.
    *
-   *  **Never substitute `downloaded` for this.** That is `os.path.exists` at the
-   *  row's recomputed destination, equally true of firmware the emulator shipped
-   *  with (`dolphin-emu/Sys/codehandler.bin`) and of a file the user placed by
+   *  **Never substitute `downloaded` for this.** That is whether a file is at
+   *  the row's place, equally true of firmware the emulator shipped with
+   *  (`dolphin-emu/Sys/codehandler.bin`) and of a file the user placed by
    *  hand — neither of which any RomM library can hand back. Absent means the
    *  payload never spoke about it, which offers no delete rather than guessing. */
   deletable_count?: number;
@@ -503,8 +502,9 @@ export interface FirmwarePlatformExt extends EmulatorAnswer {
   ratio_local_count?: number;
   known_count?: number;
   unknown_count?: number;
-  /** How many files the platform-wide delete would remove: this platform's
-   *  store files and the older downloads still on disk. Deliberately not
+  /** How many files the platform-wide delete would remove: every file of this
+   *  platform's store on disk, whichever row it fills or none, and the older
+   *  downloads still on disk. Deliberately not
    *  `local_count` — that is the library's progress ratio, which counts files
    *  nothing here put on disk. */
   deletable_count?: number;

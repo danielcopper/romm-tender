@@ -1577,19 +1577,19 @@ The BIOS subsystem is a façade over its sub-services plus the demand reader the
 the RomM library holds are two different questions, and the split is drawn where they meet: `demand.py` answers the
 first and `listing.py` the second, and every surface below joins them rather than asking either source twice.
 
-| Module                | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `service.py`          | `FirmwareService` façade — public use cases; wires the sub-services and delegates                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `listing.py`          | `FirmwareListing` — the firmware subsystem's only reader of RomM's platform list, and so of the library's firmware listing (a download also reads its one file's own metadata, `get_firmware`). It reads the platform list (`/api/platforms` carries each platform's `firmware`), files each file on the platform its `platform_id` names and leaves out the files RomM marks `missing_from_fs`, whose bytes are gone from the server (`domain/firmware_platforms.py`). It owns the TTL cache, in memory and in the SQLite `firmware_cache` table; a download and a delete both invalidate it through this one instance |
-| `refiling.py`         | `FirmwareRefiling` — moves the download records and per-platform emulator overrides filed under a server folder name, before the platform came from `platform_id`, to their platform. It runs after each listing read that reaches the server; a read the cache answers moves nothing. Only an entry filed under a name that is no listed platform's slug is judged, so an entry already under a platform is never moved                                                                                                                                                                                                |
-| `demand.py`           | `FirmwareDemand` — the machine's side: the per-platform verified reading every status answer and every download is built from                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `status.py`           | `FirmwareStatusReader` — `get_firmware_status` (whether the RomM firmware listing could be read, and nothing about any platform), `get_platform_firmware_status` (one platform's whole entry, the call that pays the reading) and `check_platform_bios` (the per-game check), the aggregates they answer from, and the per-platform delete count                                                                                                                                                                                                                                                                        |
-| `emulator_answers.py` | What the resolver says about each emulator of a platform: the launching emulator's answer and the words a surface puts to it (`emulator_fields`), and one entry per emulator it answered for (`emulator_tabs`, #2190 D15)                                                                                                                                                                                                                                                                                                                                                                                               |
-| `downloads.py`        | `FirmwareDownloader` — the three download entry points: each fetches into the platform's store folder and then brings the platform's links up to date                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `store.py`            | `FirmwareStore` — Tender's firmware store: fetching a file into it, the links into the emulator sources, removing both, and what is recorded under Tender's folder (_The firmware store_ below)                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `rows.py`             | One platform's rows: the resolver's requirements, what fills each, what lies at each place, and the library section                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `replacement.py`      | `FirmwareReplacer` — "Replace…", which asks every condition again off a fresh reading before anything moves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `deletion.py`         | `PlatformBiosDeleter` — every BIOS delete: the store's files with Tender's own links to them, and the downloads made into an emulator source's folder before the store, at the path their records hold                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Module                | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `service.py`          | `FirmwareService` façade — public use cases; wires the sub-services and delegates                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `listing.py`          | `FirmwareListing` — the firmware subsystem's only reader of RomM's platform list, and so of the library's firmware listing. It reads the platform list (`/api/platforms` carries each platform's `firmware`), files each file on the platform its `platform_id` names and leaves out the files RomM marks `missing_from_fs`, whose bytes are gone from the server (`domain/firmware_platforms.py`). It owns the TTL cache, in memory and in the SQLite `firmware_cache` table; a download and a delete both invalidate it through this one instance |
+| `refiling.py`         | `FirmwareRefiling` — moves the download records and per-platform emulator overrides filed under a server folder name, before the platform came from `platform_id`, to their platform. It runs after each listing read that reaches the server; a read the cache answers moves nothing. Only an entry filed under a name that is no listed platform's slug is judged, so an entry already under a platform is never moved                                                                                                                            |
+| `demand.py`           | `FirmwareDemand` — the machine's side: the per-platform verified reading every status answer and `Download required` are built from                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `status.py`           | `FirmwareStatusReader` — `get_firmware_status` (whether the RomM firmware listing could be read, and nothing about any platform), `get_platform_firmware_status` (one platform's whole entry, the call that pays the reading) and `check_platform_bios` (the per-game check), the aggregates they answer from, and the per-platform delete count                                                                                                                                                                                                    |
+| `emulator_answers.py` | What the resolver says about each emulator of a platform: the launching emulator's answer and the words a surface puts to it (`emulator_fields`), and one entry per emulator it answered for (`emulator_tabs`, #2190 D15)                                                                                                                                                                                                                                                                                                                           |
+| `downloads.py`        | `FirmwareDownloader` — the three download entry points: each fetches into the platform's store folder and then brings the platform's links up to date                                                                                                                                                                                                                                                                                                                                                                                               |
+| `store.py`            | `FirmwareStore` — Tender's firmware store: fetching a file into it, the links into the emulator sources, removing both, and what is recorded under Tender's folder (_The firmware store_ below)                                                                                                                                                                                                                                                                                                                                                     |
+| `rows.py`             | One platform's rows: the resolver's requirements, what fills each, what lies at each place, and the library section                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `replacement.py`      | `FirmwareReplacer` — "Replace…", which asks every condition again off a fresh reading before anything moves                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `deletion.py`         | `PlatformBiosDeleter` — every BIOS delete: the store's files with Tender's own links to them, and the downloads made into an emulator source's folder before the store, at the path their records hold                                                                                                                                                                                                                                                                                                                                              |
 
 The two resolver seams, the scope that tells them apart, and the reasoning behind every answer they produce are in the
 _FirmwareService notes — the live firmware resolver_ section below.
@@ -1599,13 +1599,13 @@ _FirmwareService notes — the live firmware resolver_ section below.
 A BIOS file Tender downloads lands in its firmware store, `<Tender's folder>/bios/<platform>/<the file's name in
 RomM>`,
 where the platform is the one the download was made for
-([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D3). It is written to a `.tmp` beside its place and
-kept only when its MD5 is the one RomM states (D9); RomM states one for every file, and a file it states none for is not
-downloaded. Every file is kept as it comes, two files with the same bytes included, and a file two platforms need lies
-in each of their folders, so no link points into another platform's folder. A file already lying at a store place with
-no record of Tender's is taken over where its MD5 matches and otherwise moved to the backup folder first (D25). The
-store is the first store that records something under Tender's folder (#2385 D2): `FirmwareStore` answers
-`TenderFolderRecordReader`, every write into the store goes through `do_prepare_for_write`, and every use case names the
+([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D3). It is written to a `.tmp` beside its store path
+and kept only when its MD5 is the one RomM states (D9); a file RomM states none for is not downloaded. Every file is
+kept as it comes, two files with the same bytes included, and a file two platforms need lies in each of their folders,
+so no link points into another platform's folder. A file already lying at a store place with no record of Tender's is
+taken over where its MD5 matches and otherwise moved to the backup folder first (D25). The store is the first store that
+records something under Tender's folder (#2385 D2): `FirmwareStore` answers `TenderFolderRecordReader`, every write into
+the store goes through `do_prepare_for_write`, and every use case that writes into the store or links into it names the
 folder rule.
 
 **An emulator reaches a store file through an absolute symlink at the place the resolver names for it** (#2219 D4). The
@@ -1623,12 +1623,14 @@ naming the store path it points at rather than the store row (`domain/firmware_s
 it points at a store file Tender has recorded, wherever it lies (D24), or where Tender's record of a link at that place
 names the path it points at — which is what keeps a link Tender could not remove with its store file its own (D20).
 
-**Bringing the links up to date** (`FirmwareStore.do_update_links`, `domain/firmware_places.py::plan_link_update`) is
-the one way a link is placed, put back, rewritten or removed: it places every link an emulator of the platform wants
-where the name is free, places again a link of Tender's that points at nothing where a store copy exists, removes such a
-link where none does, records a link of Tender's found at a new place and drops a record where no link of Tender's lies
-any more, and downloads nothing (D6). Every download ends with it; so does a replacement; and the panel asks for it
-(`update_bios_links`) when a platform page or a game's page opens and after an emulator switch.
+**Bringing the links up to date** (`FirmwareStore.do_update_links`, `domain/firmware_places.py::plan_link_update`)
+places every link an emulator of the platform wants where the name is free, places again a link of Tender's that points
+at nothing where a store copy exists, removes such a link where none does, records a link of Tender's found at a new
+place, and drops the record of a place it may touch where no link of Tender's to the recorded file lies any more; it
+downloads nothing (D6). Beside it, "Replace…" places the one link at the place it cleared (`do_place_link`), and a
+delete and "Forget what is recorded there" remove the links of the files they take (`do_remove`,
+`forget_records_under`); nothing else places or removes a link. Every download ends with it; so does a replacement; and
+the panel asks for it (`update_bios_links`) when a platform page or a game's page opens and after an emulator switch.
 
 **A file the resolver reads as wrong is replaced only on the user's confirmation**, and only where the library copy is
 proven right by its checksum (D5): the copy is fetched and checked first, the file in the way goes to
@@ -2707,9 +2709,8 @@ vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) copy in `backend
 standalone alike — and it is what every platform-scoped answer reads. `firmware_inventory()` sweeps the machine instead
 — the installed `.so` files, one entry each, plus (since the resolver's 0.19.0) the standalone emulators a packaged card
 covers — and it is asked **unverified**, so a card that identifies its image by content names no file there at all. It
-is the right question only where the caller has no platform to name, which is two places: the RetroDECK-home migration's
-untracked-BIOS sweep, and `download_firmware(firmware_id)`. Both ask it for **placement** — where a file goes — never
-for readiness.
+is the right question only where the caller has no platform to name, which is one place: the RetroDECK-home migration's
+untracked-BIOS sweep, which asks it for **placement** — where a file lies — never for readiness.
 
 **The per-platform reading is verified, and that is a contract rather than a tuning choice.** Two answers cannot be had
 without reading bytes. A packaged rule card may identify its image by CONTENT, so unverified it names no file while
@@ -2816,16 +2817,19 @@ yields `.` and loses the folder the core opens. A file requirement whose `declar
 in that folder under its own name — LRPS2's configured image; which requirements that is, and why a Beetle PSX spelling
 is not one, is `_declared_location`'s.
 
-**Presence is the resolver's everywhere a row has a place.** A row's `downloaded` is the resolver's `present` at its
-place, read the way the emulator reaches it, through a link of Tender's and the store file behind it; a `None` leaves
-`downloaded` false and is no claim that anything is there. Tender's own look at a place (`FirmwareFileStore.look`, no
-link followed) answers only whose link lies there, whether a name is free and whether its folder exists — never a
-verdict. A library row has no place: its `downloaded` is whether this platform's store holds it. What the reading found
-at a place travels per row — `supplied_by` (the distribution whose own copy sits there, named in the resolver's own
-display form) and `caveats` (the resolver's stable codes for whatever else it found at or in that place, attributed as
-the paragraph on folder words below sets out, and collapsed on the code within one place) — so both surfaces can say
-what a row IS instead of describing every one of them as a gap in the library. `declared_kind` is what the emulator
-OPENS the place at, a property of the declaration that survives an empty place.
+**Presence is the resolver's wherever a file requirement's row has a place.** Such a row's `downloaded` is the
+resolver's `present` at its place, read the way the emulator reaches it, through a link of Tender's and the store file
+behind it; a `None` leaves `downloaded` false and is no claim that anything is there. Tender's own look at a place
+(`FirmwareFileStore.look`, no link followed) answers whose link lies there, whether a name is free and whether its
+folder exists. The one row it answers is a file of a folder declaration: the resolver states a verdict per file only
+where it says something about that file, so there `downloaded` is whether a file lies at the place, and the verdict is
+the resolver's statement — or, with none, not in place where nothing lies there and not established where something
+does. A library row has no place: its `downloaded` is whether this platform's store holds it. What the reading found at
+a place travels per row — `supplied_by` (the distribution whose own copy sits there, named in the resolver's own display
+form) and `caveats` (the resolver's stable codes for whatever else it found at or in that place, attributed as the
+paragraph on folder words below sets out, and collapsed on the code within one place) — so both surfaces can say what a
+row IS instead of describing every one of them as a gap in the library. `declared_kind` is what the emulator OPENS the
+place at, a property of the declaration that survives an empty place.
 
 **A folder requirement is answered by what is inside it.** LRPS2 declares `pcsx2/bios` — a folder, required, and always
 present because RetroDECK links it onto the BIOS root. Reading presence as the verdict would say "All 2 files LRPS2
@@ -2840,12 +2844,16 @@ library's own `server_count` / `local_count` ratio is a different axis again and
 library file no emulator declares is no requirement, so the resolver has no verdict for it, and its row has none
 (`domain/bios_status.py::_row_verdict`).
 
-**A folder is shown as one row per file in it** ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D26):
+**A folder is shown as one row per file of it** ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D26):
 each library file the resolver recognises for the folder — its MD5 filed under the folder's prefix in the packaged table
 (`FirmwarePlacement.folder_md5s`) — with its download, its link and its Delete, and each file already lying in the
-folder that is not Tender's, with the resolver's verdict over that file and no Delete (`FirmwarePlacement.folder_files`,
-read off the per-image statements of the verified listing). The folder itself is ONE requirement in the counts, answered
-by its own verdict (`count_required`'s `folders`), and none of its files is required on its own row.
+folder that is not Tender's and that the resolver makes a statement about, with its verdict over that file and no Delete
+(`FirmwarePlacement.folder_files`, read off the per-image statements of the verified listing). A file the resolver
+passes over because a valid image lies beside it gets no row. The folder itself is ONE requirement in the counts,
+answered by its own verdict (`count_required`'s `folders`), and none of its files is required on its own row. Where that
+leaves no row — nothing lies in the folder and no library file is recognised for it — one row stands for the folder,
+with its verdict and the codes the resolver states over it, and the line "No BIOS image here yet" (D28,
+`services/firmware/rows.py::_empty_folder_row`).
 
 **A folder verdict costs a content read, and the per-platform reading pays for it once.** There is no second, narrower
 question any more: `firmware_for_system(<system>, verify=True)` settles the folder rows in the same answer the rest of
@@ -3007,22 +3015,25 @@ evidence of that, so a status listing cannot gate it — that gate hid the butto
 had all left the RomM library. And the record's path is where the download actually wrote, where a status row's
 `local_path` is recomputed from today's placement: for a file fetched before an emu-atlas bump moved it, the recomputed
 path names whatever now occupies the new destination. An older download whose file is already gone is pruned without
-counting as a deletion or an error. `get_platform_firmware_status` ships `deletable_count` — records still on disk,
-distinct paths — so the button's number is the same set the delete acts on; `local_count` is the library's progress
-ratio and is wrong for it in both directions.
+counting as a deletion or an error. `get_platform_firmware_status` ships `deletable_count` — every store file of the
+platform on disk, whichever row it fills or none, and the older downloads still on disk, distinct paths — so the
+button's number is the same set the delete acts on; `local_count` is the library's progress ratio and is wrong for it in
+both directions.
 
 **A delete is never refused because a place cannot be reached** (#2191 D20). A link under a root the resolver only
-assumed, or under none it could judge, stays where it is and keeps its record; an older download outside the BIOS folder
-RetroDECK names now, or while it names none, stays too (`RetroDeckFolders.bios_folder`, `is_inside_folder`). The answer
-names each such place under `kept`, and a later delete or link update takes it once the place can be judged.
+assumed, or under none it could judge, stays where it is and keeps its record, and the link update removes it once the
+root is read. An older download outside the BIOS folder RetroDECK names now, or while it names none, stays too
+(`RetroDeckFolders.bios_folder`, `is_inside_folder`) and stays counted, so its row keeps its Delete — nothing but a
+second press removes it (D29). The answer names each under `kept` with its kind, place, folder and source (and an older
+download's file name), and the status line words each (D27, D29).
 
 **Two buttons reach that one loop**, and they differ only in which names they select: the platform-wide
 `Delete downloads (N)` (every record, #2190 D24) and a row's Delete (`delete_bios_file`, the records naming the row's
-`delete_name`). A declared folder has no Delete of its own: each file the platform's library holds for it is a row of
-its own (#2191 D26). A name can only narrow that platform's own record set, so no caller can reach a file Tender did not
-place; a second copy of the loop is what the register's BIOS-delete rule warns against, because the copies would drift
-in silence. The same answer is stamped per ROW as `deletable_count`, which is what each row's button is offered on —
-never `downloaded`, which is equally true of firmware RetroDECK ships.
+`delete_name`). A declared folder has no Delete of its own: each file of it Tender downloaded is a row of its own (#2191
+D26). A name can only narrow that platform's own record set, so no caller can reach a file Tender did not place; a
+second copy of the loop is what the register's BIOS-delete rule warns against, because the copies would drift in
+silence. The same answer is stamped per ROW as `deletable_count`, which is what each row's button is offered on — never
+`downloaded`, which is equally true of firmware RetroDECK ships.
 
 **A store record is keyed by platform and file NAME** (`PRIMARY KEY (platform_slug, file_name)`), and so is an older
 download record (#2190 D27). One store file can serve several places, each with a link record of its own keyed by place,

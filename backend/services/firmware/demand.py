@@ -1,8 +1,8 @@
 """What the installed emulators want — the one reading every platform-scoped answer is built from.
 
 The demand side of the subsystem: the resolver's verified reading of one
-platform's emulators, which the status surfaces and the download entry points
-both ask. It holds no server vocabulary at all — RomM contributes a download and
+platform's emulators, which the status surfaces, "Download required" and
+"Replace…" ask. It holds no server vocabulary at all — RomM contributes a download and
 nothing to any question here, which is why readiness survives an unreachable
 server.
 

@@ -443,10 +443,9 @@ def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool, dest: st
     the folder HOLDS, never by the folder being there.
 
     A library file no emulator declared is no requirement of anything, so the
-    resolver has no verdict to give; there the row says only whether Tender's
-    own look found it (``FirmwareDemand.is_downloaded``), and where there is no
-    *dest* to look at, because no download may land in the BIOS folder, that is
-    withheld too.
+    resolver has no verdict to give; with no *dest* to look at either — a library
+    row has no place — the verdict is withheld. Given a *dest* and no
+    declaration, it is whether a file was found there.
     """
     if placement is not None:
         return placement.satisfied
