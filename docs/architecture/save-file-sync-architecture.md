@@ -808,9 +808,10 @@ cross-device. `do_upload_save` compares the POST response against the pre-upload
 (`_dedup_returned_non_head`: the response is a pre-existing snapshot member that is not the newest) and raises
 `RommConflictError` **before** any baseline / confirm / own-upload write, so the same backstop below surfaces the true
 state and nothing stamps currency on the non-head save
-([#1482](https://github.com/danielcopper/romm-tender/issues/1482)). An **empty** planned slot (no head to bypass — the
-empty-slot race) keeps today's behavior: the dedup response holds our content, so it is recorded as the baseline and any
-concurrent newer head is caught on the next sync's fresh list.
+([#1482](https://github.com/danielcopper/romm-tender/issues/1482)). An **empty** planned slot has no head to bypass. A
+save another device puts there before our POST lands is never what the POST dedups to: RomM's
+[409-gate](#the-add_save-post-409-gate) runs first and refuses the POST, since this device holds no sync row on that
+save, and the backstop below decides.
 
 On a 409 (or a client-detected dedup-to-non-head) the executor re-fetches the slot, picks the newest save in the
 canonical group, and resolves through the `ResolveUploadConflictFn` seam — the core's second entry point, reading the
