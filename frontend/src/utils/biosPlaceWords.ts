@@ -17,7 +17,15 @@ import type { BiosFileStatus, BiosKeptLink, StoreOnly } from "../types";
 /** The fields the lines are read off — both surfaces' row shapes carry them. */
 export type PlaceRow = Pick<
   BiosFileStatus,
-  "library" | "link" | "linked_for" | "place_refusal" | "satisfied" | "local_path" | "store_file" | "declared_by"
+  | "library"
+  | "link"
+  | "linked_for"
+  | "place_refusal"
+  | "satisfied"
+  | "local_path"
+  | "store_file"
+  | "declared_by"
+  | "declared_kind"
 >;
 
 /** A row's download that arrived damaged, in the words the backend refuses it with. */
@@ -46,6 +54,9 @@ export function biosPlaceLines(
   platformName: (slug: string) => string = (slug) => slug,
 ): string[] {
   const lines: string[] = [];
+  // A folder declaration is a row of its own only while nothing lies in it and
+  // no library file is recognised for it.
+  if (row.declared_kind === "directory") lines.push("No BIOS image here yet");
   const library = row.library ?? null;
   if (library?.no_checksum) {
     lines.push(`RomM states no checksum for ${library.file_name}, so Tender cannot check a download.`);

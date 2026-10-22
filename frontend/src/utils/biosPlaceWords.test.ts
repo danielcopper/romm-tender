@@ -35,10 +35,23 @@ const row = (fields: Partial<PlaceRow> = {}): PlaceRow => ({
   local_path: "/home/deck/retrodeck/bios/saturn_bios.bin",
   store_file: "sega_101.bin",
   declared_by: "yabasanshiro_libretro.so",
+  declared_kind: "file",
   ...fields,
 });
 
 describe("biosPlaceLines", () => {
+  it("says a folder holds no BIOS image yet, under the row that names the folder", () => {
+    const folder = row({
+      declared_kind: "directory",
+      library: null,
+      link: null,
+      store_file: null,
+      satisfied: false,
+    });
+
+    expect(biosPlaceLines(folder, "LRPS2")).toEqual(["No BIOS image here yet"]);
+  });
+
   it("says nothing of a row whose link is in place", () => {
     expect(biosPlaceLines(row(), "YabaSanshiro")).toEqual([]);
   });
