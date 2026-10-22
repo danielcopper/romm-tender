@@ -20,11 +20,12 @@ from typing import Any
 
 import pytest
 
-from lib.errors import Refused, RommConnectionError, RommForbiddenError, RommNotFoundError
+from lib.errors import NotInstalled, Refused, RommConnectionError, RommForbiddenError, RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
     _file_md5,
     _install_rom,
+    _no_save_directory,
     _require_save_state,
     _seed_save_state_dict,
     _server_save,
@@ -47,8 +48,8 @@ def _store_device_id(svc, device_id: str | None) -> None:
     svc._sync_engine._devices.invalidate_device_id_cache()
 
 
-def _ready(tmp_path, *, save_sync: bool = True):
-    """Rom 42 installed and confirmed on ``autosave``, its local save in sync with save 100.
+def _ready(tmp_path, *, save_sync: bool = True, installed: bool = True):
+    """Rom 42 installed (unless *installed* is false), confirmed on ``autosave``, its save in sync with save 100.
 
     The server also holds a legacy save (10, a copy and migration source) and a
     save in a second slot (``other``, 101) the slot operations name. No device id
@@ -58,7 +59,8 @@ def _ready(tmp_path, *, save_sync: bool = True):
     svc, fake = make_service(tmp_path)
     svc._config.settings["save_sync_enabled"] = save_sync
     fake.set_version("5.3.0")
-    _install_rom(svc, tmp_path)
+    if installed:
+        _install_rom(svc, tmp_path)
     save_path = _create_save(tmp_path, content=b"local-bytes")
     local_hash = _file_md5(str(save_path))
     _seed_save_state_dict(
@@ -278,3 +280,27 @@ class TestAFailedRegistrationEndsTheOperation:
             await svc.confirm_slot_choice(42, "default", True, None)
 
         assert _require_save_state(svc, 42).active_slot == "autosave"
+
+
+class TestTheMigrationAsksLocallyFirst:
+    """The slot-choice migration refuses on this device's own answers before it registers anything."""
+
+    @pytest.mark.asyncio
+    async def test_a_rom_that_is_not_installed_is_refused_without_a_registration_request(self, tmp_path):
+        svc, fake = _ready(tmp_path, installed=False)
+
+        with pytest.raises(NotInstalled):
+            await svc.confirm_slot_choice(42, "default", True, None)
+
+        assert [c for c in fake.call_log if c[0] in ("register_device", "update_device")] == []
+
+    @pytest.mark.asyncio
+    async def test_a_save_no_sync_carries_confirms_the_slot_without_a_registration_request(self, tmp_path):
+        svc, fake = _ready(tmp_path)
+        _no_save_directory(svc)
+
+        with pytest.raises(Refused):
+            await svc.confirm_slot_choice(42, "default", True, None)
+
+        assert _require_save_state(svc, 42).active_slot == "default"
+        assert [c for c in fake.call_log if c[0] in ("register_device", "update_device")] == []
