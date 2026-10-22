@@ -42,7 +42,7 @@ from domain.bios_status import (
 )
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.firmware_groups import console_regions_of, judge_groups
-from domain.firmware_rows import library_file
+from domain.firmware_rows import leaves_its_folder, library_file
 from services.firmware.emulator_answers import (
     EMULATOR_FIELDS,
     EmulatorAnswer,
@@ -116,6 +116,17 @@ class FirmwareStatusReader:
 
     # ── Rows and aggregates ──────────────────────────────────
 
+    def _storable(self, firmware_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """The listing less every file whose name would leave the store — it cannot lie there, so it is no row."""
+        kept = []
+        for fw in firmware_list:
+            name = str(fw.get("file_name") or "")
+            if leaves_its_folder(name):
+                self._logger.warning(f"Skipping firmware with unsafe file name: {name!r}")
+                continue
+            kept.append(fw)
+        return kept
+
     def _platform_rows(
         self, system: str | None, platform_slug: str, firmware_list: list[dict[str, Any]], emulator: str | None
     ) -> tuple[FirmwareCatalogue, list[BiosFileEntry], dict[str, list[BiosFileEntry]]]:
@@ -137,7 +148,7 @@ class FirmwareStatusReader:
         inputs = RowInputs(
             catalogue=catalogue,
             platform_slug=platform_slug,
-            library=tuple(library_file(fw) for fw in firmware_list),
+            library=tuple(library_file(fw) for fw in self._storable(firmware_list)),
             copies=tuple(self._store.do_copies(records, platform_slug)),
             owned=self._store.do_owned(records),
             files=self._firmware_file_store,
@@ -315,21 +326,27 @@ class FirmwareStatusReader:
         in this platform's store folder, and a file Tender downloaded into an
         emulator source's folder before the store existed, which its download
         record names at the path it was written to. A row's Delete takes the
-        store file that fills it, or the older download of the library file
-        that does, by the name both carry, which is the file's name in RomM —
-        ``delete_name``. The platform count is the distinct paths of both kinds
-        still on disk. Nothing here is ``downloaded``: that is the resolver's
-        presence at the row's place, equally true of a file the user placed.
+        store file that fills it, the older download of the library file that
+        does, or the older download lying at the row's own place, by the name
+        each carries, which is the file's name in RomM — ``delete_name``. The
+        platform count is the distinct paths of both kinds still on disk.
+        Nothing here is ``downloaded``: that is the resolver's presence at the
+        row's place, equally true of a file the user placed.
         """
         mine = [record for record in records if record.platform_slug == platform_slug]
         present = [record for record in mine if self._firmware_file_store.exists(record.file_path)]
         older = {record.file_name for record in present}
+        at_place = {record.file_path: record.file_name for record in present}
         stored = set(plat.get("store_files", ()))
         plat["deletable_count"] = len({record.file_path for record in present}) + len(stored)
         tab_rows = [row for tab in plat.get("emulator_tabs", []) for row in tab.get("rows", [])]
         for f in [*plat["files"], *tab_rows]:
             library = f.get("library") or {}
-            name = f.get("store_file") or (library.get("file_name") if library.get("file_name") in older else None)
+            name = (
+                f.get("store_file")
+                or (library.get("file_name") if library.get("file_name") in older else None)
+                or at_place.get(f.get("local_path") or "")
+            )
             f["delete_name"] = name
             f["deletable_count"] = 1 if name is not None else 0
 

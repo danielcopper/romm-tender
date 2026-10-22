@@ -149,7 +149,7 @@ class FirmwareStore:
 
     def store_path(self, stored: StoredFirmware) -> str:
         """Where *stored* lies: below its Tender folder, its platform and its name in RomM."""
-        return safe_join(stored.folder, *stored.path_parts)
+        return _in_platform_folder(stored.folder, stored.platform_slug, stored.file_name)
 
     def do_copies(self, records: StoreRecords, platform_slug: str) -> list[StoreCopy]:
         """*platform_slug*'s store files, each with whether it is on disk."""
@@ -211,7 +211,7 @@ class FirmwareStore:
             raise Refused("no_checksum", f"RomM states no checksum for {name}, so Tender cannot check a download.")
         folder = self._prepare_folder()
         try:
-            path = safe_join(folder, STORE_FOLDER, platform_slug, name)
+            path = _in_platform_folder(folder, platform_slug, name)
         except PathTraversalError as exc:
             self._logger.error(f"Rejected firmware with unsafe file name {name!r}: {exc}")
             raise Refused("path_traversal", "Server sent an unsafe firmware file name — download aborted") from exc
@@ -476,6 +476,15 @@ class FirmwareStore:
                 uow.firmware_links.delete(place)
             for stored in forgotten:
                 uow.firmware_store.delete(stored.platform_slug, stored.file_name)
+
+
+def _in_platform_folder(folder: str, platform_slug: str, name: str) -> str:
+    """*name* in *platform_slug*'s store folder, refused where either leaves the folder it is joined onto.
+
+    Joined in two steps so a server-supplied name can no more reach another
+    platform's folder than leave the store.
+    """
+    return safe_join(safe_join(folder, STORE_FOLDER, platform_slug), name)
 
 
 def _blocked(place: str, roots: SourceRoots | None) -> bool:

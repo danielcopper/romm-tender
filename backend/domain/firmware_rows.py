@@ -75,6 +75,16 @@ def library_file(firmware: Mapping[str, Any]) -> LibraryFirmware:
     )
 
 
+def leaves_its_folder(file_name: str) -> bool:
+    """Would the server-supplied *file_name* leave the folder it is joined onto, or name the folder itself?
+
+    Such a name can never lie in the store, so no row is made of it; a
+    download of it is refused where the store path is joined.
+    """
+    normal = os.path.normpath(file_name) if file_name else ""
+    return normal in ("", ".", "..") or normal.startswith(f"..{os.sep}") or os.path.isabs(file_name)
+
+
 def library_match(placement: FirmwarePlacement, library: Iterable[LibraryFirmware]) -> dict[str, Any] | None:
     """The library file that fills *placement*, as a row carries it, or ``None``.
 

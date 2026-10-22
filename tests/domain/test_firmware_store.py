@@ -21,9 +21,6 @@ def _stored(**overrides) -> StoredFirmware:
 
 
 class TestAStoreFile:
-    def test_lies_under_its_platform_and_its_name_in_romm(self):
-        assert _stored().path_parts == ("bios", "saturn", "sega_101.bin")
-
     def test_keeps_the_checksum_in_lower_case(self):
         assert _stored().md5 == "85ec9ca47d8f6807718151cbcca8b964"
 

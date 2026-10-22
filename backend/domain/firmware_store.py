@@ -79,11 +79,6 @@ class StoredFirmware:
             firmware_id=firmware_id,
         )
 
-    @property
-    def path_parts(self) -> tuple[str, str, str]:
-        """The store path below Tender's folder, as segments a caller joins under ``folder``."""
-        return (STORE_FOLDER, self.platform_slug, self.file_name)
-
 
 @cosmic_aggregate
 class FirmwareLink:

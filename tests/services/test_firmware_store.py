@@ -237,6 +237,16 @@ class TestADownloadLandsInTheStore:
         assert refused.value.message == "RomM states no checksum for sega_101.bin, so Tender cannot check a download."
         assert machine.romm.downloads == []
 
+    async def test_a_name_that_reaches_another_platforms_folder_is_refused(self, machine):
+        machine.romm.add(1, "saturn", "../dc/dc_boot.bin", _SATURN)
+
+        with pytest.raises(Refused) as refused:
+            await machine.service.download_platform_firmware_file("saturn", "../dc/dc_boot.bin")
+
+        assert refused.value.reason == "path_traversal"
+        assert machine.romm.downloads == []
+        assert not (machine.tender / "bios" / "dc").exists()
+
     async def test_a_second_download_of_a_stored_file_fetches_nothing(self, machine):
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
         await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
