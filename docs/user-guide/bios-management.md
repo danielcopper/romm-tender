@@ -487,13 +487,14 @@ are, and their **Delete** still removes them there.
 
 Tender never overwrites a file it did not put there, and **Download required** leaves such a file in place. Where the
 emulator reads the file at a place as the wrong image, or refuses it, and your RomM library holds a copy whose checksum
-is the one the emulator expects, the row offers **Replace…**. Its confirmation names the exact path and where the old
-file goes: _The file at /home/deck/retrodeck/bios/scph5501.bin goes to /home/deck/.local/share/romm-tender/backups/bios,
-and Tender's copy is linked in its place._ Only once you confirm is the old file moved to Tender's backup folder —
-`backups/bios/` in [Tender's data folder](where-your-data-lives.md), under the date and time, followed by the file's
-original path — never deleted, and the link placed. Afterwards the row says _Replaced. The old file is in …_ until you
-leave the page. Without a proven-right copy in your library the row stays red with its sentence and nothing is offered,
-and a file the emulator accepts, or that could not be checked, is never replaced.
+is the one the emulator expects, the row offers **Replace…**, on the platform's page and on a game's BIOS tab, where you
+select the row itself and press A. Its confirmation names the exact path and where the old file goes: _The file at
+/home/deck/retrodeck/bios/scph5501.bin goes to /home/deck/.local/share/romm-tender/backups/bios, and Tender's copy is
+linked in its place._ Only once you confirm is the old file moved to Tender's backup folder — `backups/bios/` in
+[Tender's data folder](where-your-data-lives.md), under the date and time, followed by the file's original path — never
+deleted, and the link placed. Afterwards the row says _Replaced. The old file is in …_ until you leave the page. Without
+a proven-right copy in your library the row stays red with its sentence and nothing is offered, and a file the emulator
+accepts, or that could not be checked, is never replaced.
 
 A file lying in the store folder that Tender has no record of — copied there by hand, say — is taken over without a
 download when its checksum is RomM's; otherwise it is moved to the same backup folder before the download, and the line
