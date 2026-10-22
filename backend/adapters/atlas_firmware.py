@@ -122,7 +122,7 @@ from domain.firmware_wants import (
 from domain.source_roots import SourceRoot, SourceRoots
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from adapters.emulator_sources import DetectedSourcesReading, EmulatorSourcesAdapter
 
@@ -884,27 +884,34 @@ def _folder_files(speaking: tuple[Any, ...], links_out: dict[str, str]) -> tuple
     """
     files: dict[str, FolderFile] = {}
     targets = {link: target for target, link in links_out.items()}
-
-    def add(path: Any, satisfied: bool | None, data: dict[str, Any]) -> None:
+    for path, satisfied, data in _folder_statements(speaking):
         if isinstance(path, str) and path not in files:
-            md5, description = data.get("md5"), data.get("description")
-            files[path] = FolderFile(
-                path=path,
-                satisfied=satisfied,
-                target=targets.get(path),
-                md5=md5.lower() if isinstance(md5, str) and md5 else None,
-                description=description if isinstance(description, str) and description else None,
-            )
+            files[path] = _folder_file(path, satisfied, data, targets.get(path))
+    return tuple(sorted(files.values(), key=lambda file: file.path))
 
+
+def _folder_statements(speaking: tuple[Any, ...]) -> Iterator[tuple[Any, bool | None, dict[str, Any]]]:
+    """Each file a statement about a declared folder names, its verdict, and what the statement says of it."""
     for caveat in speaking:
         if caveat.code in _IDENTIFIED_IMAGE_CODES:
-            add(caveat.data.get("path"), True, caveat.data)
+            yield caveat.data.get("path"), True, caveat.data
         elif caveat.code in (CAVEAT_FIRMWARE_IMAGE_CONTRADICTED, CAVEAT_FIRMWARE_UNREADABLE):
-            add(caveat.data.get("path"), None, caveat.data)
+            yield caveat.data.get("path"), None, caveat.data
         elif caveat.code == CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE:
             for path in caveat.data.get("paths") or ():
-                add(path, False, {})
-    return tuple(sorted(files.values(), key=lambda file: file.path))
+                yield path, False, {}
+
+
+def _folder_file(path: str, satisfied: bool | None, data: dict[str, Any], target: str | None) -> FolderFile:
+    """One file inside a declared folder as the resolver stated it."""
+    md5, description = data.get("md5"), data.get("description")
+    return FolderFile(
+        path=path,
+        satisfied=satisfied,
+        target=target,
+        md5=md5.lower() if isinstance(md5, str) and md5 else None,
+        description=description if isinstance(description, str) and description else None,
+    )
 
 
 def _missing_configured_image(core: Any, speaking: tuple[Any, ...]) -> MissingConfiguredImage | None:

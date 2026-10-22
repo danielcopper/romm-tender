@@ -425,42 +425,68 @@ class FirmwareStore:
             path = self._path_or_none(stored)
             if path is None:
                 continue
-            for link in records.links.values():
-                if link.target != path:
-                    continue
-                source_roots = roots.get(link.source)
-                if _blocked(link.place, source_roots):
-                    outcome.kept.append(
-                        {
-                            "kind": "link",
-                            "place": link.place,
-                            "folder": _assumed_folder(link.place, source_roots),
-                            "source": link.source,
-                        }
-                    )
-                    continue
-                if self._files.look(link.place).link_target == path:
-                    try:
-                        self._files.remove_link(link.place)
-                    except OSError as exc:
-                        outcome.errors.append(f"{link.place}: {exc}")
-                        continue
-                removed_links.append(link.place)
-            if self._files.exists(path):
-                try:
-                    self._files.remove_file(path)
-                except OSError as exc:
-                    self._logger.warning(f"Failed to remove BIOS file {stored.file_name}: {exc}")
-                    outcome.errors.append(f"{stored.file_name}: {exc}")
-                    continue
-                outcome.deleted += 1
-            removed_files.append((stored.platform_slug, stored.file_name))
+            removed_links += self._remove_links_to(path, records.links.values(), roots, outcome)
+            if self._remove_stored_file(stored, path, outcome):
+                removed_files.append((stored.platform_slug, stored.file_name))
         with self._uow_factory() as uow:
             for place in removed_links:
                 uow.firmware_links.delete(place)
             for slug, name in removed_files:
                 uow.firmware_store.delete(slug, name)
         return outcome
+
+    def _remove_links_to(
+        self,
+        path: str,
+        links: Iterable[FirmwareLink],
+        roots: dict[str, SourceRoots | None],
+        outcome: RemovalOutcome,
+    ) -> list[str]:
+        """Remove every link of Tender's to the store file at *path* that may be touched; answer the places that went.
+
+        A link whose place may not be touched is added to *outcome*'s kept,
+        a removal that failed to its errors; neither is answered.
+        """
+        removed: list[str] = []
+        for link in links:
+            if link.target != path:
+                continue
+            source_roots = roots.get(link.source)
+            if _blocked(link.place, source_roots):
+                outcome.kept.append(
+                    {
+                        "kind": "link",
+                        "place": link.place,
+                        "folder": _assumed_folder(link.place, source_roots),
+                        "source": link.source,
+                    }
+                )
+                continue
+            if self._files.look(link.place).link_target == path:
+                try:
+                    self._files.remove_link(link.place)
+                except OSError as exc:
+                    outcome.errors.append(f"{link.place}: {exc}")
+                    continue
+            removed.append(link.place)
+        return removed
+
+    def _remove_stored_file(self, stored: StoredFirmware, path: str, outcome: RemovalOutcome) -> bool:
+        """Remove the store file at *path* where it is on disk; answer whether its record goes.
+
+        A removal counts in *outcome*'s deleted, and one that failed goes to
+        its errors and keeps the record.
+        """
+        if not self._files.exists(path):
+            return True
+        try:
+            self._files.remove_file(path)
+        except OSError as exc:
+            self._logger.warning(f"Failed to remove BIOS file {stored.file_name}: {exc}")
+            outcome.errors.append(f"{stored.file_name}: {exc}")
+            return False
+        outcome.deleted += 1
+        return True
 
     # ── What is recorded under Tender's folder ───────────────
 

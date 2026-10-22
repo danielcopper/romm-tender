@@ -62,6 +62,18 @@ def _why_kept(bound: str | FolderRefused | None, path: str) -> str | None:
     return None if is_inside_folder(path, bound) else KEPT_OUTSIDE_BIOS_FOLDER
 
 
+def _kept_older(record: BiosFile, why: str) -> dict[str, str | None]:
+    """The answer's entry for an older download a delete left, and why."""
+    return {
+        "kind": "file",
+        "place": record.file_path,
+        "folder": os.path.dirname(record.file_path),
+        "source": RETRODECK,
+        "file_name": record.file_name,
+        "why": why,
+    }
+
+
 @dataclass(frozen=True)
 class PlatformBiosDeleterConfig:
     """Frozen wiring bundle handed to ``PlatformBiosDeleter.__init__``.
@@ -124,37 +136,41 @@ class PlatformBiosDeleter:
         for record in self._older_downloads(platform_slug):
             if names is not None and record.file_name not in names:
                 continue
-            if not self._files.exists(record.file_path):
+            removed, drop = self._settle_older(record, bound, kept, errors)
+            deleted += removed
+            if drop:
                 pruned.append((record.platform_slug, record.file_name))
-                continue
-            why = _why_kept(bound, record.file_path)
-            if why is not None:
-                kept.append(
-                    {
-                        "kind": "file",
-                        "place": record.file_path,
-                        "folder": os.path.dirname(record.file_path),
-                        "source": RETRODECK,
-                        "file_name": record.file_name,
-                        "why": why,
-                    }
-                )
-                if why == KEPT_OUTSIDE_BIOS_FOLDER:
-                    pruned.append((record.platform_slug, record.file_name))
-                continue
-            try:
-                self._files.remove_file(record.file_path)
-            except OSError as e:
-                self._logger.warning(f"Failed to remove BIOS file {record.file_name}: {e}")
-                errors.append(f"{record.file_name}: {e}")
-                continue
-            deleted += 1
-            pruned.append((record.platform_slug, record.file_name))
         if pruned:
             with self._uow_factory() as uow:
                 for slug, file_name in pruned:
                     uow.bios_files.delete(slug, file_name)
         return deleted, kept, errors
+
+    def _settle_older(
+        self,
+        record: BiosFile,
+        bound: str | FolderRefused | None,
+        kept: list[dict[str, str | None]],
+        errors: list[str],
+    ) -> tuple[bool, bool]:
+        """Remove one older download where it may go; answer whether it went and whether its record goes.
+
+        What stays is added to *kept* with why, and a removal that failed to
+        *errors*.
+        """
+        if not self._files.exists(record.file_path):
+            return False, True
+        why = _why_kept(bound, record.file_path)
+        if why is not None:
+            kept.append(_kept_older(record, why))
+            return False, why == KEPT_OUTSIDE_BIOS_FOLDER
+        try:
+            self._files.remove_file(record.file_path)
+        except OSError as e:
+            self._logger.warning(f"Failed to remove BIOS file {record.file_name}: {e}")
+            errors.append(f"{record.file_name}: {e}")
+            return False, False
+        return True, True
 
     def _older_downloads(self, platform_slug: str) -> list[BiosFile]:
         """The download records of files Tender wrote into a source's folder before the store, for *platform_slug*."""

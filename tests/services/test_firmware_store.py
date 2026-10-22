@@ -932,8 +932,9 @@ class TestFolderRule:
     async def test_each_use_case_names_the_folder_rule(self, machine, call, args):
         refusal = Refused("folder_unreachable", "Tender's folder cannot be reached.")
         machine.service._rules = _make_conflict_rules(folder_unreachable=refusal)
+        use_case = getattr(machine.service, call)
 
         with pytest.raises(Refused) as refused:
-            await getattr(machine.service, call)(*args)
+            await use_case(*args)
 
         assert refused.value.reason == "folder_unreachable"

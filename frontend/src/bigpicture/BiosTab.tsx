@@ -455,7 +455,8 @@ function buildBiosFileList(
   // The run of rows the next row joins: the last part, unless that is a row
   // pressed on its own.
   const rows = (): ReactElement[] => {
-    const last = parts[parts.length - 1];
+    // `slice` rather than `.at(-1)`: the panel compiles against ES2020, which has no `Array.prototype.at`.
+    const [last] = parts.slice(-1);
     if (last?.kind === "rows") return last.elements;
     const elements: ReactElement[] = [];
     parts.push({ kind: "rows", key: `rows-${parts.length}`, elements });
@@ -556,9 +557,7 @@ function listPart(part: BiosListPart, index: number, count: number, onPress: (()
 
 /** The list's stop that holds the row whose place is *place*, or null. */
 function stopHolding(root: ParentNode, place: string): HTMLElement | null {
-  const row = [...root.querySelectorAll<HTMLElement>("[data-bios-place]")].find(
-    (el) => el.getAttribute("data-bios-place") === place,
-  );
+  const row = [...root.querySelectorAll<HTMLElement>("[data-bios-place]")].find((el) => el.dataset.biosPlace === place);
   return row?.closest<HTMLElement>(`.${LIST_PART_CLASS}`) ?? null;
 }
 

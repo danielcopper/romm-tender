@@ -15,7 +15,7 @@ event loop, inside the worker hop that read the catalogue.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from domain.bios_status import BiosFileEntry, build_file_entry
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from domain.firmware_places import PlaceLook
-    from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement
+    from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement, FolderFile
     from services.protocols import FirmwareFileStore
 
 
@@ -98,11 +98,13 @@ def library_rows(inputs: RowInputs, emulator: str | None) -> list[BiosFileEntry]
         copy = spare.pop(file.file_name, None)
         entry = build_file_entry(file.file_name, copy is not None, None, None, complete, emulator)
         rows.append(
-            replace(entry, library=library_payload(file, None), store_file=copy.file_name if copy is not None else None)
+            entry.with_changes(
+                library=library_payload(file, None), store_file=copy.file_name if copy is not None else None
+            )
         )
     for copy in spare.values():
         entry = build_file_entry(copy.file_name, True, None, None, complete, emulator, on_server=False)
-        rows.append(replace(entry, store_file=copy.file_name))
+        rows.append(entry.with_changes(store_file=copy.file_name))
     return rows
 
 
@@ -145,7 +147,7 @@ def _file_row(inputs: RowInputs, placement: FirmwarePlacement, emulator: str | N
         owned=inputs.owned,
         satisfied=placement.satisfied,
     )
-    return replace(entry, **facts)
+    return entry.with_changes(**facts)
 
 
 def _folder_rows(
@@ -163,11 +165,22 @@ def _folder_rows(
     image is all the emulator opens. Every other file the resolver stated
     something about is a row too, with its verdict and nothing to offer.
     """
+    named: set[str] = set()
+    rows = _recognised_folder_rows(inputs, placement, emulator, complete, named)
+    rows += _stated_folder_rows(inputs, placement, emulator, complete, named)
+    if not rows:
+        rows.append(_empty_folder_row(inputs, placement, emulator, complete))
+    return rows
+
+
+def _recognised_folder_rows(
+    inputs: RowInputs, placement: FirmwarePlacement, emulator: str | None, complete: bool, named: set[str]
+) -> list[BiosFileEntry]:
+    """The rows of the library files and store copies recognised for the folder; their places go into *named*."""
     catalogue = inputs.catalogue
     statements = {file.path: file for file in placement.folder_files}
     wanted = fetched_as_required(placement, emulator, ()) and placement.satisfied is not True
     rows: list[BiosFileEntry] = []
-    named: set[str] = set()
     for name, file, copy in folder_entries(placement, inputs.library, inputs.copies):
         place = folder_place(placement, name)
         if place is None:
@@ -175,7 +188,7 @@ def _folder_rows(
         named.add(place)
         look = inputs.look(place)
         statement = statements.get(place)
-        satisfied = statement.satisfied if statement is not None else (None if look.lexists else False)
+        satisfied = _folder_file_verdict(statement, look)
         library = library_payload(file, MATCHED_CONTENT) if file is not None else None
         entry = _in_folder(
             build_file_entry(
@@ -199,12 +212,28 @@ def _folder_rows(
             owned=inputs.owned,
             satisfied=satisfied,
         )
-        rows.append(replace(entry, **facts))
+        rows.append(entry.with_changes(**facts))
+    return rows
+
+
+def _folder_file_verdict(statement: FolderFile | None, look: PlaceLook) -> bool | None:
+    """A recognised file's verdict in the folder: the resolver's, else not established where it lies there."""
+    if statement is not None:
+        return statement.satisfied
+    if look.lexists:
+        return None
+    return False
+
+
+def _stated_folder_rows(
+    inputs: RowInputs, placement: FirmwarePlacement, emulator: str | None, complete: bool, named: set[str]
+) -> list[BiosFileEntry]:
+    """The rows of every other file in the folder the resolver stated something about, none of *named*."""
+    rows: list[BiosFileEntry] = []
     for statement in placement.folder_files:
         if statement.path in named or (statement.target or "") in inputs.owned.store_targets:
             continue
         name = os.path.basename(statement.path)
-        look = inputs.look(statement.path)
         entry = _in_folder(
             build_file_entry(name, True, statement.path, placement, complete, emulator, on_server=False, groups=()),
             placement,
@@ -215,18 +244,16 @@ def _folder_rows(
         )
         facts = place_facts(
             place=statement.path,
-            look=look,
+            look=inputs.look(statement.path),
             refusal=None,
             library=None,
             copy=None,
             platform_slug=inputs.platform_slug,
-            source=catalogue.source or "",
+            source=inputs.catalogue.source or "",
             owned=inputs.owned,
             satisfied=statement.satisfied,
         )
-        rows.append(replace(entry, **facts))
-    if not rows:
-        rows.append(_empty_folder_row(inputs, placement, emulator, complete))
+        rows.append(entry.with_changes(**facts))
     return rows
 
 
@@ -250,7 +277,7 @@ def _empty_folder_row(
         on_server=False,
         groups=inputs.catalogue.groups,
     )
-    return replace(entry, satisfied=placement.satisfied, required_by_active=False, fetch_for_required=False)
+    return entry.with_changes(satisfied=placement.satisfied, required_by_active=False, fetch_for_required=False)
 
 
 def _in_folder(
@@ -263,8 +290,7 @@ def _in_folder(
     fetch: bool,
 ) -> BiosFileEntry:
     """*entry* as one file in the folder *placement* declares: a file of its own, required by nothing alone."""
-    return replace(
-        entry,
+    return entry.with_changes(
         declared_path=os.path.join(placement.destination, name),
         declared_kind=DECLARED_FILE,
         required_by_active=False,

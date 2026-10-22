@@ -31,7 +31,7 @@ them, chosen by the disc's region.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from domain.firmware_groups import GROUP_MET, GROUP_UNKNOWN, GROUP_UNMET, fetched_as_required
@@ -196,6 +196,10 @@ class BiosFileEntry:
     place_refusal: dict[str, Any] | None = None
     replace_offered: bool = False
     in_folder: str | None = None
+
+    def with_changes(self, **changes: Any) -> BiosFileEntry:
+        """This entry with *changes*, every other field kept."""
+        return replace(self, **changes)
 
 
 @dataclass(frozen=True)
