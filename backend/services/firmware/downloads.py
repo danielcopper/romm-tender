@@ -150,10 +150,10 @@ class FirmwareDownloader:
         rows = await self._loop.run_in_executor(
             None, self._required_files, catalogue, platform_slug, identity, firmware_list
         )
-        return await self._fetch_and_link(platform_slug, rows, system)
+        return await self._fetch_and_link(platform_slug, rows, system, what="required firmware files")
 
     async def _fetch_and_link(
-        self, platform_slug: str, rows: list[dict[str, Any]], system: str | None
+        self, platform_slug: str, rows: list[dict[str, Any]], system: str | None, *, what: str = "firmware files"
     ) -> dict[str, Any]:
         """Fetch each of *rows* into the store, then bring the platform's links up to date once.
 
@@ -184,7 +184,7 @@ class FirmwareDownloader:
             if fetched.backup:
                 backups.append(fetched.backup)
         links = await self._update(platform_slug, system)
-        message = f"Downloaded {downloaded} firmware files"
+        message = f"Downloaded {downloaded} {what}"
         if failed:
             message += f" ({len(failed)} failed: {', '.join(failed)})"
         return {
