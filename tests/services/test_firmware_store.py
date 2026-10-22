@@ -629,6 +629,28 @@ class TestDeleting:
         assert machine.links() == {}
         assert result["deleted_count"] == 1
 
+    async def test_the_platform_count_takes_every_store_copy(self, machine):
+        """Two copies of the same bytes, and a copy only another emulator asks for, all count and all go."""
+        _saturn(machine)
+        other = b"kronos only"
+        machine.resolver.declare(
+            "kronos_extra.bin",
+            required_by=[_KRONOS],
+            place=str(machine.bios / "kronos" / "kronos_extra.bin"),
+            identity_md5=_md5(other),
+            identity_kind=IDENTITY_FILE,
+        )
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        machine.romm.add(2, "saturn", "Sega_100.bin", _SATURN)
+        machine.romm.add(3, "saturn", "kronos_extra.bin", other)
+        await machine.service.download_all_firmware("saturn")
+
+        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        deleted = await machine.service.delete_platform_bios("saturn")
+
+        assert entry["deletable_count"] == 3
+        assert deleted["deleted_count"] == 3
+
     async def test_a_file_the_user_placed_stays(self, machine):
         _saturn(machine)
         (machine.bios / "saturn_bios.bin").write_bytes(b"mine")

@@ -319,6 +319,16 @@ class FirmwareStatusReader:
         with self._uow_factory() as uow:
             return uow.roms.get_bound_platform_slugs()
 
+    def _store_files(self, platform_slug: str) -> list[str]:
+        """Every file of *platform_slug*'s store folder that is on disk, by its name in RomM. Blocking.
+
+        All of them, whichever row they fill or none: a copy only another
+        emulator uses, and a second copy of the same bytes, are Tender's to
+        delete as much as the one a row shows.
+        """
+        copies = self._store.do_copies(self._store.do_read_records(), platform_slug)
+        return sorted(copy.file_name for copy in copies if copy.present)
+
     def _stamp_deletable(self, plat: dict[str, Any], platform_slug: str, records: list[BiosFile]) -> None:
         """Stamp what a delete would take — per row, and for the platform.
 
@@ -398,7 +408,7 @@ class FirmwareStatusReader:
             (_overview_payload(entry) for entry in files),
             key=lambda f: (f.get("declared_path") or f.get("file_name", "")).lower(),
         )
-        plat["store_files"] = sorted({entry.store_file for entry in files if entry.store_file is not None})
+        plat["store_files"] = await self._loop.run_in_executor(None, self._store_files, slug)
         plat["store_only"] = _store_only(system, catalogue, identity)
         plat["backup_root"] = self._store.backup_root()
         plat["has_games"] = slug in synced_slugs
