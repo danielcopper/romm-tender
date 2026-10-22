@@ -148,6 +148,14 @@ class RomRepository(Protocol):
         """
         ...
 
+    def set_artwork_checked_at(self, rom_id: int, checked_at: float | None) -> None:
+        """Store (or clear with ``None``) when *rom_id*'s automatic artwork was last checked against SteamGridDB.
+
+        The only write path for ``artwork_checked_at``; the sync upsert in
+        :meth:`save` never touches it.
+        """
+        ...
+
     def clear_all_applied_launch_options(self) -> None:
         """Reset every recorded launch command to "unknown" (NULL).
 

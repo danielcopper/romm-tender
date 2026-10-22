@@ -171,6 +171,17 @@ class TestFakeRomRepository:
         assert loaded is not None
         assert loaded.chosen_sgdb_id == 5555
 
+    def test_a_keep_current_check_time_survives_a_resync(self):
+        repo = FakeRomRepository()
+        repo.save(_rom(1))
+        repo.set_artwork_checked_at(1, 1700000000.5)
+
+        repo.save(_rom(1))
+
+        loaded = repo.get(1)
+        assert loaded is not None
+        assert loaded.artwork_checked_at == 1700000000.5
+
     def test_bound_platform_slugs_leave_out_unbound_and_empty_slug_rows(self):
         repo = FakeRomRepository()
         unbound = _rom(3, platform="psx")

@@ -942,3 +942,38 @@ class TestHasFileOnDisk:
         loaded = uow.roms.get(1)
         assert loaded is not None
         assert loaded.has_file_on_disk is True
+
+
+class TestArtworkCheckedAt:
+    """The time of the last keep-current check — written only by its own path, never by the sync UPSERT."""
+
+    def test_round_trips_via_get(self, uow: SqliteUnitOfWork):
+        uow.roms.save(_rom(1))
+        uow.roms.set_artwork_checked_at(1, 1700000000.5)
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert loaded.artwork_checked_at == 1700000000.5
+
+    def test_defaults_to_none_and_clears_to_none(self, uow: SqliteUnitOfWork):
+        uow.roms.save(_rom(1))
+        before = uow.roms.get(1)
+        uow.roms.set_artwork_checked_at(1, 1700000000.5)
+        uow.roms.set_artwork_checked_at(1, None)
+
+        after = uow.roms.get(1)
+        assert before is not None
+        assert after is not None
+        assert (before.artwork_checked_at, after.artwork_checked_at) == (None, None)
+
+    def test_a_resync_leaves_it_alone(self, uow: SqliteUnitOfWork):
+        uow.roms.save(_rom(1, app_id=100))
+        uow.roms.set_artwork_checked_at(1, 1700000000.5)
+
+        resynced = _rom(1, app_id=200)
+        assert resynced.artwork_checked_at is None
+        uow.roms.save(resynced)
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert (loaded.artwork_checked_at, loaded.shortcut_app_id) == (1700000000.5, 200)

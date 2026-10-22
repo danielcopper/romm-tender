@@ -88,8 +88,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 031_add_platform_skip_fetch_start_and_checksum
 # + 032_add_collection_skip_fetch_start_and_checksum
 # + 033_add_artwork_slot_choices + 034_clear_firmware_cache_filed_by_folder
-# + 035_add_artwork_slot_handovers + 036_add_firmware_store).
-_SHIPPED_VERSION = 36
+# + 035_add_artwork_slot_handovers + 036_add_firmware_store
+# + 037_add_rom_artwork_checked_at).
+_SHIPPED_VERSION = 37
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -2495,7 +2496,7 @@ class Test036AddFirmwareStore:
         finally:
             conn.close()
 
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 36)))
 
         conn = sqlite3.connect(db_path)
         try:
@@ -2505,3 +2506,52 @@ class Test036AddFirmwareStore:
         assert _user_version(db_path) == 36
         assert {"firmware_store", "firmware_links"} <= _tables(db_path)
         assert handovers == 1
+
+
+class Test037AddRomArtworkCheckedAt:
+    """037 — adds the nullable artwork_checked_at column to roms: the last keep-current check (#2381 D21)."""
+
+    def test_adds_artwork_checked_at_to_roms_only(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert "artwork_checked_at" in _columns(db_path, "roms")
+        assert "artwork_checked_at" not in _columns(db_path, "artwork_slot_outcomes")
+
+    def test_artwork_checked_at_absent_before_037(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 36)))
+
+        assert _user_version(db_path) == 36
+        assert "artwork_checked_at" not in _columns(db_path, "roms")
+
+    def test_an_existing_row_reads_never_checked_across_the_migration(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 36)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            value = conn.execute("SELECT artwork_checked_at FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert value is None
+
+    def test_a_time_is_stored_as_epoch_seconds(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            conn.execute("UPDATE roms SET artwork_checked_at = 1700000000.5 WHERE rom_id = 1")
+            stored = conn.execute("SELECT artwork_checked_at FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert stored == 1700000000.5

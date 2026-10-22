@@ -218,6 +218,32 @@ class TestChooseSgdbGame:
         assert (rom.sgdb_id, rom.chosen_sgdb_id) == (7, 9)
 
 
+class TestArtworkCheck:
+    def test_a_check_records_when_it_started(self):
+        rom = _make_rom()
+
+        rom.begin_artwork_check(1700000000.5)
+
+        assert rom.artwork_checked_at == 1700000000.5
+
+    def test_a_withdrawn_check_puts_the_earlier_time_back(self):
+        rom = _make_rom()
+        rom.begin_artwork_check(100.0)
+        rom.begin_artwork_check(200.0)
+
+        rom.withdraw_artwork_check(100.0)
+
+        assert rom.artwork_checked_at == 100.0
+
+    def test_withdrawing_the_first_check_leaves_it_never_checked(self):
+        rom = _make_rom()
+        rom.begin_artwork_check(200.0)
+
+        rom.withdraw_artwork_check(None)
+
+        assert rom.artwork_checked_at is None
+
+
 class TestAssignRaId:
     def test_sets_ra_id(self):
         rom = _make_rom()
