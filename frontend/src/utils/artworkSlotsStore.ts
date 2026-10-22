@@ -7,7 +7,7 @@
  * one showing. A read replaces the entry whole; a reader that started earlier and lands later is dropped by its ticket.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   getArtworkGame,
   getArtworkSlots,
@@ -31,9 +31,21 @@ const entries = new Map<number, Entry>();
 const games = new Map<number, { romId: number; sgdbId: number | null }>();
 const tickets = new Map<number, number>();
 const listeners = new Map<number, Set<() => void>>();
+/** Per appId, how many changes were announced: the snapshot the hooks re-render on. */
+const versions = new Map<number, number>();
 
 function notify(appId: number): void {
+  versions.set(appId, (versions.get(appId) ?? 0) + 1);
   for (const listener of listeners.get(appId) ?? []) listener();
+}
+
+function subscribe(appId: number, listener: () => void): () => void {
+  const set = listeners.get(appId) ?? new Set();
+  set.add(listener);
+  listeners.set(appId, set);
+  return () => {
+    set.delete(listener);
+  };
 }
 
 /** Whether *answer* is the game read's answer rather than a failure — or nothing, as an unprimed test endpoint answers. */
@@ -86,27 +98,19 @@ export async function loadArtworkSlots(appId: number, romId: number): Promise<Ar
 /** What is held for shortcut *appId* about ROM *romId*; nothing for another ROM. */
 export function heldArtworkSlots(appId: number, romId: number | null): Entry | null {
   const entry = entries.get(appId);
-  return entry && entry.romId === romId ? entry : null;
+  return entry?.romId === romId ? entry : null;
 }
 
 /** Whether ROM *romId* of shortcut *appId* is known to have no SteamGridDB game; `false` while that is not known. */
 export function isKnownWithoutSgdbGame(appId: number, romId: number | null): boolean {
   const game = games.get(appId);
-  return game !== undefined && game.romId === romId && game.sgdbId === null;
+  return game?.romId === romId && game.sgdbId === null;
 }
 
 /** Re-render on every change to what is held for *appId*. */
 export function useArtworkSlotsChanges(appId: number): void {
-  const [, setVersion] = useState(0);
-  useEffect(() => {
-    const listener = () => setVersion((v) => v + 1);
-    const set = listeners.get(appId) ?? new Set();
-    set.add(listener);
-    listeners.set(appId, set);
-    return () => {
-      set.delete(listener);
-    };
-  }, [appId]);
+  const onChange = useCallback((listener: () => void) => subscribe(appId, listener), [appId]);
+  useSyncExternalStore(onChange, () => versions.get(appId) ?? 0);
 }
 
 /**
@@ -114,16 +118,9 @@ export function useArtworkSlotsChanges(appId: number): void {
  * Answers `null` until a read lands.
  */
 export function useArtworkSlots(appId: number, romId: number | null): Entry | null {
-  const [, setVersion] = useState(0);
+  useArtworkSlotsChanges(appId);
   useEffect(() => {
-    const listener = () => setVersion((v) => v + 1);
-    const set = listeners.get(appId) ?? new Set();
-    set.add(listener);
-    listeners.set(appId, set);
     if (romId && !heldArtworkSlots(appId, romId)) detach(loadArtworkSlots(appId, romId));
-    return () => {
-      set.delete(listener);
-    };
   }, [appId, romId]);
   return heldArtworkSlots(appId, romId);
 }
@@ -188,6 +185,7 @@ export function _resetArtworkSlotsForTests(): void {
   games.clear();
   tickets.clear();
   listeners.clear();
+  versions.clear();
   written.clear();
   keepTabUntil.clear();
 }

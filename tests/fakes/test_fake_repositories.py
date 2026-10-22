@@ -834,8 +834,9 @@ class TestFakeArtworkSlotHandoverRepository:
 
     def test_an_orphan_row_aborts_the_commit(self):
         uow = FakeUnitOfWork()
+        orphan = self._handover(42, ArtworkSlot.LOGO)
         with pytest.raises(sqlite3.IntegrityError, match="artwork_slot_handovers"), uow:
-            uow.artwork_slot_handovers.save(self._handover(42, ArtworkSlot.LOGO))
+            uow.artwork_slot_handovers.save(orphan)
         assert uow.artwork_slot_handovers.get(42, ArtworkSlot.LOGO) is None
 
     def test_the_rows_go_with_their_rom(self):

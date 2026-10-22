@@ -129,7 +129,11 @@ class ArtworkTabUseCases:
         if discarded and sgdb_id:
             name = await self._loop.run_in_executor(None, self._slots.game_name_io, sgdb_id) if api_key else None
             superseded = {"name": name, "slots": sorted(slot.value for slot in discarded)}
-        source = "romm" if romm_id else ("chosen" if chosen_id else None)
+        source = None
+        if romm_id:
+            source = "romm"
+        elif chosen_id:
+            source = "chosen"
         return {
             "has_api_key": bool(api_key),
             "game": {"sgdb_id": sgdb_id, "source": source, "name": None},

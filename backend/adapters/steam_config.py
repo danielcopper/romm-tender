@@ -22,6 +22,9 @@ if TYPE_CHECKING:
     from collections.abc import Collection
 
 
+_NO_GRID_DIR = "Cannot find Steam grid directory"
+
+
 class SteamConfigAdapter:
     """Thin wrapper around Steam's on-disk config files."""
 
@@ -210,7 +213,7 @@ class SteamConfigAdapter:
         """
         grid_dir = self.grid_dir()
         if not grid_dir:
-            raise SteamGridDirMissingError("Cannot find Steam grid directory")
+            raise SteamGridDirMissingError(_NO_GRID_DIR)
         with open(os.path.join(grid_dir, os.path.basename(name)), "rb") as f:
             return f.read()
 
@@ -224,7 +227,7 @@ class SteamConfigAdapter:
         """
         grid_dir = self.grid_dir()
         if not grid_dir:
-            raise SteamGridDirMissingError("Cannot find Steam grid directory")
+            raise SteamGridDirMissingError(_NO_GRID_DIR)
         stamps: dict[str, str] = {}
         for name in names:
             try:
@@ -246,7 +249,7 @@ class SteamConfigAdapter:
         """
         grid_dir = self.grid_dir()
         if not grid_dir:
-            raise SteamGridDirMissingError("Cannot find Steam grid directory")
+            raise SteamGridDirMissingError(_NO_GRID_DIR)
         icon_path = os.path.join(grid_dir, f"{app_id}_icon.png")
         tmp_path = icon_path + ".tmp"
         try:
@@ -269,7 +272,7 @@ class SteamConfigAdapter:
         """
         grid_dir = self.grid_dir()
         if not grid_dir:
-            raise SteamGridDirMissingError("Cannot find Steam grid directory")
+            raise SteamGridDirMissingError(_NO_GRID_DIR)
         path = os.path.join(grid_dir, name)
         with contextlib.suppress(OSError), open(path, "rb") as existing:
             if existing.read() == content:

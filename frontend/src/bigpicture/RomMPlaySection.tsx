@@ -129,6 +129,30 @@ async function readAndBroadcastSaveStatus(appId: number, isCancelled: () => bool
   }
 }
 
+/** Reload RomM's cover for *romId* and tell the game info panel; answers why it failed, or `null` once reloaded. */
+async function refreshRommCover(romId: number): Promise<string | null> {
+  // Re-download the RomM cover, rename to {app_id}p.png, and patch
+  // cover_path on the registry row so the game info panel can render the
+  // refreshed image.
+  const coverResult = await refreshCoverArtwork(romId).catch(
+    (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
+      detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
+      return { success: false, reason: "exception", message: "the request did not complete" };
+    },
+  );
+  if (!coverResult.success) {
+    detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
+    return coverResult.message;
+  }
+  // Notify the game info panel so it can re-render the cover image.
+  globalThis.dispatchEvent(
+    new CustomEvent("romm_data_changed", {
+      detail: { type: "cover_refreshed", rom_id: romId },
+    }),
+  );
+  return null;
+}
+
 interface RomMPlaySectionProps {
   appId: number;
 }
@@ -426,26 +450,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         return;
       }
       if (slots.slots.some((row) => row.slot === "cover" && row.state === "automatic")) {
-        // Re-download the RomM cover, rename to {app_id}p.png, and patch
-        // cover_path on the registry row so the game info panel can render the
-        // refreshed image.
-        const coverResult = await refreshCoverArtwork(romId).catch(
-          (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
-            detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
-            return { success: false, reason: "exception", message: "the request did not complete" };
-          },
-        );
-        if (coverResult.success) {
-          // Notify the game info panel so it can re-render the cover image.
-          globalThis.dispatchEvent(
-            new CustomEvent("romm_data_changed", {
-              detail: { type: "cover_refreshed", rom_id: romId },
-            }),
-          );
-        } else {
-          detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
-          coverFailure = coverResult.message;
-        }
+        coverFailure = await refreshRommCover(romId);
       }
 
       const resolution = await getSgdbResolution(romId).catch((e): null => {
