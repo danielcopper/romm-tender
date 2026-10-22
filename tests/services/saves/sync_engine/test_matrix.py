@@ -2169,16 +2169,69 @@ class TestSyncRomSavesDispatch:
         assert (saves_dir / "pokemon.srm").exists()
 
     def test_sync_rom_saves_upload_409_downgrades_to_download(self, tmp_path):
-        """Upload POST 409 (slot head moved) + local unchanged since baseline →
-        the backstop re-fetches the slot and downloads the fresh head, no conflict."""
+        """A slot that was empty when listed + local unchanged since baseline: the
+        POST planned for it (row 2) 409s because another device's save landed
+        first, and the backstop re-fetches the slot and downloads that fresh head,
+        no conflict."""
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"in-sync local")
+        local_hash = _file_md5(str(save_path))
+        _seed_save_state_dict(
+            svc,
+            42,
+            {
+                "active_slot": "default",
+                "slot_confirmed": True,
+                "files": {"pokemon.srm": {"last_sync_hash": local_hash}},
+            },
+        )
+        foreign: dict[str, Any] = {}
+        upload_save = fake.upload_save
+
+        def upload_after_another_device(*args, **kwargs):
+            if not foreign:
+                foreign.update(
+                    fake.seed_foreign_save(
+                        42,
+                        uploaded_by="device-B",
+                        slot="default",
+                        updated_at="2026-03-01T00:00:00Z",
+                        content=b"newer from device B",
+                    )
+                )
+            return upload_save(*args, **kwargs)
+
+        fake.upload_save = upload_after_another_device
+
+        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert errors == []
+        assert conflicts == []
+        # The 409-downgraded transfer is attributed as a download, not an upload (#250).
+        assert uploaded == 0
+        assert downloaded == 1
+        # The POST was attempted overwrite=false (so RomM's 409 could fire)…
+        upload_calls = [c for c in fake.call_log if c[0] == "upload_save"]
+        assert len(upload_calls) == 1
+        assert upload_calls[0][2]["overwrite"] is False
+        # …then the backstop downloaded the fresh server head into the local file.
+        download_calls = [c for c in fake.call_log if c[0] == "download_save_content"]
+        assert [c[1][0] for c in download_calls] == [foreign["id"]]
+        assert (tmp_path / "saves" / "gba" / "pokemon.srm").read_bytes() == b"newer from device B"
+
+    def test_sync_rom_saves_newer_foreign_head_with_unchanged_local_downloads_without_a_post(self, tmp_path):
+        """A newer foreign head + local unchanged since baseline: RomM answers this
+        device a not-current placeholder on it, so row 10 downloads the head
+        directly — no POST, no conflict."""
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=b"in-sync local")
         local_hash = _file_md5(str(save_path))
 
-        # A newer save from another device this device has never synced → the POST
-        # into the slot 409s.
+        # A newer save from another device this device has never synced.
         foreign = fake.seed_foreign_save(
             42,
             uploaded_by="device-B",
@@ -2200,14 +2253,9 @@ class TestSyncRomSavesDispatch:
 
         assert errors == []
         assert conflicts == []
-        # The 409-downgraded transfer is attributed as a download, not an upload (#250).
         assert uploaded == 0
         assert downloaded == 1
-        # The POST was attempted overwrite=false (so RomM's 409 could fire)…
-        upload_calls = [c for c in fake.call_log if c[0] == "upload_save"]
-        assert len(upload_calls) == 1
-        assert upload_calls[0][2]["overwrite"] is False
-        # …then the backstop downloaded the fresh server head into the local file.
+        assert not any(c[0] == "upload_save" for c in fake.call_log)
         download_calls = [c for c in fake.call_log if c[0] == "download_save_content"]
         assert [c[1][0] for c in download_calls] == [foreign["id"]]
         assert (tmp_path / "saves" / "gba" / "pokemon.srm").read_bytes() == b"newer from device B"

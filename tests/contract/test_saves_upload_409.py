@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from typing import Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
 
@@ -47,24 +48,35 @@ def _tracked_slot_state(*, baseline: str | None) -> RomSaveSyncState:
     return state
 
 
-async def test_saves_upload_409_stale_downgrades_to_download(harness):
-    """A newer foreign save + local unchanged since baseline: the POST 409s and the
-    backstop silently downloads the fresh head (overwrite=false POST, then download)."""
+async def test_saves_upload_409_stale_downgrades_to_download(harness, monkeypatch):
+    """A slot that was empty when listed + local unchanged since baseline: the POST
+    planned for it (row 2) 409s because another device's save landed first, and
+    the backstop silently downloads that fresh head (overwrite=false POST, then
+    download)."""
     enable_save_sync(harness)
     seed_install(harness, 42, system="gba", file_name="game.gba")
     _write_local_save(harness, system="gba", content=b"in-sync local", filename="game.srm")
     baseline = hashlib.md5(b"in-sync local").hexdigest()
     seed_save_state(harness, 42, _tracked_slot_state(baseline=baseline))
 
-    # A newer save from another device this device has never synced → the POST 409s.
-    foreign = harness.romm.seed_foreign_save(
-        42,
-        uploaded_by="device-B",
-        slot="default",
-        filename="game.srm",
-        updated_at="2026-03-01T00:00:00Z",
-        content=b"newer from device B",
-    )
+    foreign: dict[str, Any] = {}
+    real_upload_save = harness.romm.upload_save
+
+    def upload_after_another_device(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        if not foreign:
+            foreign.update(
+                harness.romm.seed_foreign_save(
+                    42,
+                    uploaded_by="device-B",
+                    slot="default",
+                    filename="game.srm",
+                    updated_at="2026-03-01T00:00:00Z",
+                    content=b"newer from device B",
+                )
+            )
+        return real_upload_save(*args, **kwargs)
+
+    monkeypatch.setattr(harness.romm, "upload_save", upload_after_another_device)
 
     result = await harness.endpoints.sync_rom_saves(42)
 
@@ -79,6 +91,40 @@ async def test_saves_upload_409_stale_downgrades_to_download(harness):
     assert len(upload_calls) == 1
     assert upload_calls[0][2]["overwrite"] is False
     # …then the backstop downloaded the fresh server head into the local file.
+    downloads = [c for c in harness.romm.call_log if c[0] == "download_save_content"]
+    assert [c[1][0] for c in downloads] == [foreign["id"]]
+    local = os.path.join(harness.saves_root, "gba", "game.srm")
+    with open(local, "rb") as fh:
+        assert fh.read() == b"newer from device B"
+
+
+async def test_saves_newer_foreign_head_with_unchanged_local_downloads_without_a_post(harness):
+    """A newer foreign save + local unchanged since baseline: RomM answers this device
+    a not-current placeholder on the head, so row 10 downloads it directly — no POST."""
+    enable_save_sync(harness)
+    seed_install(harness, 42, system="gba", file_name="game.gba")
+    _write_local_save(harness, system="gba", content=b"in-sync local", filename="game.srm")
+    baseline = hashlib.md5(b"in-sync local").hexdigest()
+    seed_save_state(harness, 42, _tracked_slot_state(baseline=baseline))
+
+    # A newer save from another device this device has never synced.
+    foreign = harness.romm.seed_foreign_save(
+        42,
+        uploaded_by="device-B",
+        slot="default",
+        filename="game.srm",
+        updated_at="2026-03-01T00:00:00Z",
+        content=b"newer from device B",
+    )
+
+    result = await harness.endpoints.sync_rom_saves(42)
+
+    assert result["success"] is True
+    assert result["synced"] == 1
+    assert result["uploaded"] == 0
+    assert result["downloaded"] == 1
+    assert result["conflicts"] == []
+    assert not any(c[0] == "upload_save" for c in harness.romm.call_log)
     downloads = [c for c in harness.romm.call_log if c[0] == "download_save_content"]
     assert [c[1][0] for c in downloads] == [foreign["id"]]
     local = os.path.join(harness.saves_root, "gba", "game.srm")
@@ -127,10 +173,9 @@ async def test_saves_upload_409_stale_with_local_edit_surfaces_conflict(harness)
 
 async def test_saves_upload_never_synced_device_existing_slot_conflicts(harness):
     """A device that has never synced a non-empty slot, with a local edit and no
-    baseline to prove local's innocence, surfaces a conflict UP-FRONT — the #1276
-    branch-6 guard decides "user decides" from the ``list_saves`` snapshot alone,
-    without even attempting the POST (the former mtime-newer POST would have 409'd
-    into this same conflict; #1276 just drops the wasted round-trip). Nothing is
+    baseline to prove local's innocence, surfaces a conflict UP-FRONT — RomM's
+    not-current placeholder sends it to row 11b, which decides "user decides" from
+    the ``list_saves`` snapshot alone, without even attempting the POST. Nothing is
     overwritten on either side."""
     enable_save_sync(harness)
     seed_install(harness, 42, system="gba", file_name="game.gba")
