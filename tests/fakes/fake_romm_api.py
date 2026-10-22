@@ -676,8 +676,8 @@ class FakeRommApi:
         if slot is not None:
             saves = [s for s in saves if s.get("slot") == slot]
         # An explicit ``device_syncs`` seeded on the save stands for its stored
-        # sync rows; else they come from the ledger. Either way RomM's answer
-        # is built from them, which reads nothing back into the ledger.
+        # sync rows; else they come from the ledger. Either way RomM builds its
+        # answer from them and writes no row.
         for s in saves:
             rows = s["device_syncs"] if "device_syncs" in s else self._device_syncs_for(s)
             s["device_syncs"] = self._device_syncs_answer(s, rows, device_id)

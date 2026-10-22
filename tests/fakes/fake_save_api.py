@@ -575,8 +575,7 @@ class FakeSaveApi:
             entry = dict(s)
             # An explicit ``device_syncs`` seeded on the stored save stands for
             # its stored sync rows; else they come from the ledger. Either way
-            # RomM's answer is built from them, which reads nothing back into
-            # the ledger.
+            # RomM builds its answer from them and writes no row.
             rows = entry["device_syncs"] if "device_syncs" in entry else self._device_syncs_for(s)
             entry["device_syncs"] = self._device_syncs_answer(s, rows, device_id)
             result.append(entry)
