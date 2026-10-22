@@ -776,7 +776,8 @@ does not load.
 Pressing a slot opens a picker with SteamGridDB's images for it, in SteamGridDB's order, each labelled with its size.
 The first tile is **Automatic**; the image the slot shows is marked **CURRENT** — the Automatic tile while the slot is
 on automatic, the chosen image while you chose one — and the one Tender's own rule takes today **Tender's pick today**.
-**Load more** shows the next page. Select a tile and press **Use this image**. The previews load straight from
+The grid shows 15 images at a time; its last tile, **Load more**, shows 15 more. Select a tile and press **Use this
+image**, which stays below the grid. An image SteamGridDB gives no size for shows none. The previews load straight from
 SteamGridDB; only the image you choose is downloaded in full. The cover can be chosen from SteamGridDB's portrait
 covers; setting it back to **Automatic** reloads RomM's cover at once. Choosing images needs a
 [SteamGridDB API key](configuration.md#steamgriddb-api-key); without one the tab says so. The cover's slot opens either
