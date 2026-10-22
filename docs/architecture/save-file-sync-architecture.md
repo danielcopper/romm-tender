@@ -1384,9 +1384,9 @@ neither in place):
    Row 9b still applies — a copy under half that save's size is a conflict, not an upload — and so is a save there this
    device is not current on: row 6c where it never synced it, 12b where another device moved it on since. A new slot has
    no save to record, and the next sync uploads the copy as its first save (row 2). Where the newest save carries no
-   `content_hash` or no id, no hash of it is known, and the file's tracking is dropped instead: the next sync adopts the
-   copy as the baseline without uploading it where this device is current on that save (row 8), and answers a conflict
-   where it is not.
+   `content_hash` or no id, there is no baseline to record from it, and the file's tracking is dropped instead: the next
+   sync adopts the copy as the baseline without uploading it where this device is current on that save (row 8), and
+   answers a conflict where it is not.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?, message?} |
@@ -1394,12 +1394,12 @@ server_unreachable{message} | not_found{message} | conflict_blocked{conflicts} |
 target_slot_busy{message} | already_present{existing_id} | copy_failed{message} | upload_failed{message}`.
 On `ok` and `upload_failed` the frontend dispatches `romm_data_changed` so the parent re-fetches — refreshing both the
 source and the target slot views; the `upload_failed` toast says the save is copied on this device but not uploaded to
-RomM yet, and names both outcomes of the next sync: it uploads the copy, or asks which to keep. Outside the union the
-endpoint answers the shared failure shape (`success: false`) in two cases: when the conflict rules' hold in
-`SaveService.copy_save_to_slot` refuses, as for a restore, and on a RomM error at the step-7 download, with
-`classify_error`'s reason and message. The panel words it "Couldn't copy the save: …", followed by the endpoint's
-message, and refreshes nothing. The source slot is excluded from the target picker (a same-slot copy is just a rollback)
-and the legacy `""` bucket is excluded as a target (it stays a read-only source).
+RomM yet, and names the two outcomes the next sync has outside the missing-hash case step 7 names: it uploads the copy,
+or asks which to keep. Outside the union the endpoint answers the shared failure shape (`success: false`) in two cases:
+when the conflict rules' hold in `SaveService.copy_save_to_slot` refuses, as for a restore, and on a RomM error at the
+step-7 download, with `classify_error`'s reason and message. The panel words it "Couldn't copy the save: …", followed by
+the endpoint's message, and refreshes nothing. The source slot is excluded from the target picker (a same-slot copy is
+just a rollback) and the legacy `""` bucket is excluded as a target (it stays a read-only source).
 
 ## RomM Save Sync API Behaviour
 

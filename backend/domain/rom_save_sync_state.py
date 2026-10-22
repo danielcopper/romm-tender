@@ -241,11 +241,9 @@ class RomSaveSyncState:
         self.slots = merged
 
     def delete_file_tracking(self, filename: str) -> None:
-        """Drop ``filename``'s per-file baseline (its server save was deleted).
+        """Drop ``filename``'s per-file baseline, so the next sync decides the file as one with no baseline.
 
-        Used when a slot's server saves are torn down — the local file-tracking
-        entries that pointed at them are stale. Idempotent: a no-op when
-        ``filename`` is not tracked.
+        Idempotent: a no-op when ``filename`` is not tracked.
         """
         self.files.pop(filename, None)
 

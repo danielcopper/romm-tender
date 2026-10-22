@@ -152,10 +152,11 @@ class SaveCopyService:
         sync then does is the copy section of
         ``docs/architecture/save-file-sync-architecture.md``. A slot with no such
         save keeps the baseline the download recorded. A head without a
-        ``content_hash`` or an id drops the file's tracking instead: no hash of
-        its content is known, one made up to differ from the copy would claim a
-        sync that never happened, and the download's baseline would let a next
-        sync on a head this device is not current on download it over the copy.
+        ``content_hash`` or an id drops the file's tracking instead: without both
+        there is no baseline to record, a hash made up to differ from the copy
+        would claim a sync that never happened, and the download's baseline
+        would let a next sync on a head this device is not current on download
+        it over the copy.
         """
         in_slot = [s for s in server_saves if save_in_slot(s, target_slot)]
         head = newest_server_saves_by_target(in_slot, rom_name, known_names=save_names).get(canonical)
