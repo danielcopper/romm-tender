@@ -3583,7 +3583,7 @@ describe("Library › Platforms", () => {
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download")!);
         });
-        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "saturn_bios.bin");
+        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "saturn_bios.bin", null);
         await flushAsync();
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download required for Kronos (1)")!);
@@ -3733,10 +3733,44 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin");
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
       // No notice on success: the spinner ending and the re-read rows are the
       // message, which is what the device pass asked for.
       expect(within(container).queryByTestId("status-bios")).toBeNull();
+    });
+
+    it("downloads the library file the row shows, by its id", async () => {
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              library: {
+                firmware_id: 42,
+                file_name: "gba_bios.bin",
+                platform_slug: "gba",
+                matched: "content",
+                md5: "a860e8c0b6d573d191e4ec7db1b1e4f6",
+                size: 16384,
+                no_checksum: false,
+              },
+            }),
+          ],
+        }),
+      ]);
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({
+        success: true,
+        message: "Downloaded gba_bios.bin",
+        downloaded: 1,
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", 42);
     });
 
     it("offers no Download for a file already here, nor for one the library does not hold", async () => {
@@ -4833,7 +4867,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin");
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
     });
 
     it("says the console does not start without an image where the counts would say nothing is required", async () => {

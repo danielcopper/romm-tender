@@ -232,11 +232,13 @@ class FirmwareService:
             with self._downloads.downloading():
                 return await self._downloads.download_all_firmware(platform_slug, rom_id)
 
-    async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
-        """Download one library file into a platform's store folder by its name in RomM, and link it."""
+    async def download_platform_firmware_file(
+        self, platform_slug, file_name, firmware_id: int | None = None
+    ) -> dict[str, Any]:
+        """Download one library file into a platform's store folder — by its id where given — and link it."""
         async with self._rules.hold("download_platform_firmware_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_platform_firmware_file(platform_slug, file_name)
+                return await self._downloads.download_platform_firmware_file(platform_slug, file_name, firmware_id)
 
     async def download_required_firmware(self, platform_slug, emulator: str | None = None) -> dict[str, Any]:
         """Download only the firmware *emulator* — the platform's pick without one — will not run without."""

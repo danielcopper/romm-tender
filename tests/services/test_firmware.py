@@ -4113,6 +4113,45 @@ class TestDownloadPlatformFirmwareFile:
         assert fetched == [2]
 
     @pytest.mark.asyncio
+    async def test_the_row_s_library_file_is_fetched_by_its_id_where_two_share_its_name(self, firmware, fw, tmp_path):
+        # The row shows the n64 folder's file, matched by content; the platform's
+        # own file of that name is another one.
+        bios_dir = tmp_path / "retrodeck" / "bios"
+        bios_dir.mkdir(parents=True)
+        _set_loop(fw, asyncio.get_running_loop())
+        download, fetched = _writes(b"")
+
+        with (
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._listing())),
+            patch.object(firmware.romm_api, "download_firmware", side_effect=download),
+            patch.object(_resolver(fw), "bios_root", str(bios_dir)),
+        ):
+            result = await fw.download_platform_firmware_file("dc", "missing.bin", 3)
+
+        assert result["downloaded"] == 1
+        assert fetched == [3]
+
+    @pytest.mark.asyncio
+    async def test_an_id_the_listing_no_longer_holds_under_the_name_falls_back_to_the_name(
+        self, firmware, fw, tmp_path
+    ):
+        bios_dir = tmp_path / "retrodeck" / "bios"
+        bios_dir.mkdir(parents=True)
+        _set_loop(fw, asyncio.get_running_loop())
+        download, fetched = _writes(b"")
+
+        with (
+            patch.object(firmware.romm_api, "list_platforms", return_value=_platforms(self._listing())),
+            patch.object(firmware.romm_api, "download_firmware", side_effect=download),
+            patch.object(_resolver(fw), "bios_root", str(bios_dir)),
+        ):
+            # id 1 is another name's file: an id never fetches a file of another name.
+            result = await fw.download_platform_firmware_file("dc", "missing.bin", 1)
+
+        assert result["downloaded"] == 1
+        assert fetched == [2]
+
+    @pytest.mark.asyncio
     async def test_a_file_already_in_the_store_is_not_refetched(self, firmware, fw, tmp_path):
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)

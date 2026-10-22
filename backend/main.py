@@ -349,8 +349,10 @@ class Endpoints:
         return await self._services.firmware_service.download_required_firmware(platform_slug, emulator)
 
     @route
-    async def download_platform_firmware_file(self, platform_slug, file_name):
-        return await self._services.firmware_service.download_platform_firmware_file(platform_slug, file_name)
+    async def download_platform_firmware_file(self, platform_slug, file_name, firmware_id=None):
+        return await self._services.firmware_service.download_platform_firmware_file(
+            platform_slug, file_name, firmware_id
+        )
 
     @route
     async def update_bios_links(self, platform_slug, rom_id):

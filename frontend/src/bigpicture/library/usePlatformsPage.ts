@@ -268,7 +268,7 @@ export interface PlatformsPageState {
   downloadRequired: (slug: string, emulator: string | null) => void;
   downloadAll: (slug: string) => void;
   /** One library file, by its name in RomM, into the platform's store folder and linked. */
-  downloadOne: (slug: string, fileName: string) => void;
+  downloadOne: (slug: string, fileName: string, firmwareId: number | null) => void;
   /** "Replace…" on the row whose place is *place*, once the user confirmed it. */
   replaceBios: (slug: string, place: string) => void;
   /**
@@ -911,7 +911,7 @@ export function usePlatformsPage(): PlatformsPageState {
     [runDownload],
   );
   const downloadOne = useCallback(
-    (slug: string, fileName: string) => {
+    (slug: string, fileName: string, firmwareId: number | null) => {
       setAttempts((prev) => {
         const key = `${slug}|file:${fileName}`;
         if (!(key in prev)) return prev;
@@ -919,7 +919,7 @@ export function usePlatformsPage(): PlatformsPageState {
         delete next[key];
         return next;
       });
-      runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName));
+      runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName, firmwareId));
     },
     [runDownload],
   );

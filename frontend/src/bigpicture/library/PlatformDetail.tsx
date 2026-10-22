@@ -736,7 +736,7 @@ function rowAction(
         onClick={() => {
           if (busy) return;
           focus.mark(key);
-          state.downloadOne(row.slug, name);
+          state.downloadOne(row.slug, name, file.library?.firmware_id ?? null);
         }}
       >
         {downloadLabel(row, state, name, "Download", 11, disabled)}

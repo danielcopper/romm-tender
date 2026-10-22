@@ -105,18 +105,25 @@ class FirmwareDownloader:
         rows = [fw for fw in firmware_list if fw["platform_slug"] == platform_slug]
         return await self._fetch_and_link(platform_slug, rows, await self.platform_system(platform_slug, rom_id))
 
-    async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
+    async def download_platform_firmware_file(
+        self, platform_slug, file_name, firmware_id: int | None = None
+    ) -> dict[str, Any]:
         """Fetch the library file *file_name* into *platform_slug*'s store folder, and link it.
 
-        The name is the file's name in RomM. It is looked up among the files
-        RomM lists for the platform first, and then in the whole library, since
-        a file fills a requirement wherever RomM files it. A name the library
-        does not hold is a ``not_in_library`` refusal, never a silent no-op.
-        A single file's refusal or RomM error reaches the caller as it stands.
+        *firmware_id* is the library file the row shows, so the file fetched is
+        that one even where two files share its name; it must carry the name.
+        Without it the name — the file's name in RomM — is looked up among the
+        files RomM lists for the platform first, and then in the whole library,
+        since a file fills a requirement wherever RomM files it. A name the
+        library does not hold is a ``not_in_library`` refusal, never a silent
+        no-op. A single file's refusal or RomM error reaches the caller as it
+        stands.
         """
         firmware_list = await self._firmware_list()
-        own = [fw for fw in firmware_list if fw["platform_slug"] == platform_slug and fw.get("file_name") == file_name]
-        wanted = own or [fw for fw in firmware_list if fw.get("file_name") == file_name]
+        named = [fw for fw in firmware_list if fw.get("file_name") == file_name]
+        own = [fw for fw in named if fw["platform_slug"] == platform_slug]
+        exact = [fw for fw in named if firmware_id is not None and fw.get("id") == firmware_id]
+        wanted = exact or own or named
         if not wanted:
             raise Refused("not_in_library", f"{file_name} is not in your RomM library for {platform_slug}")
         fetched = await self._loop.run_in_executor(None, self._store.do_fetch, platform_slug, wanted[0])

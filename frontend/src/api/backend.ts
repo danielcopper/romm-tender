@@ -687,13 +687,15 @@ export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDow
 export const downloadRequiredFirmware = endpoint<[string, string | null], FirmwareDownloadResult | EndpointFailure>(
   "download_required_firmware",
 );
-// One row's Download button. Addressed by the file's name in RomM — never by
-// RomM's firmware id, which the status row may have been holding since before the
-// listing moved on. The file lands in the platform's store folder and is linked
-// for every emulator that wants it, whichever the page shows.
-export const downloadPlatformFirmwareFile = endpoint<[string, string], FirmwareDownloadResult | EndpointFailure>(
-  "download_platform_firmware_file",
-);
+// One row's Download button. Addressed by the file's name in RomM and by the id of
+// the library file the row shows, so two files of one name fetch the one shown; an
+// id the listing no longer holds under that name falls back to the name alone. The
+// file lands in the platform's store folder and is linked for every emulator that
+// wants it, whichever the page shows.
+export const downloadPlatformFirmwareFile = endpoint<
+  [string, string, number | null],
+  FirmwareDownloadResult | EndpointFailure
+>("download_platform_firmware_file");
 // Brings a platform's links up to date in every enabled source and downloads
 // nothing; the ROM is the game whose page asked, whose install record names the
 // system, `null` from the platform page. Asked after the page is shown, and after
