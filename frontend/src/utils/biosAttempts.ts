@@ -26,16 +26,23 @@ function publish(attempts: Attempts): void {
 /**
  * What a download said about the rows: each link it could not place, by its
  * place, and each file it moved out of the store, by the file's name in RomM.
- * Replaces what an earlier press on the page said, as the latest attempt is
- * the one a row shows.
+ * Replaces what an earlier download on the page said, as the latest attempt
+ * is the one a row shows; what a "Replace…" said stays until the page is left.
  */
 export function noteBiosPress(result: {
   link_failures?: readonly BiosLinkFailure[];
   backups?: readonly string[];
 }): void {
   const attempts: Record<string, RowAttempt> = {};
+  for (const [key, attempt] of Object.entries(held)) {
+    const replaced = {
+      ...(attempt.replacedTo === undefined ? {} : { replacedTo: attempt.replacedTo }),
+      ...(attempt.replaceFailure === undefined ? {} : { replaceFailure: attempt.replaceFailure }),
+    };
+    if (Object.keys(replaced).length > 0) attempts[key] = replaced;
+  }
   for (const failure of result.link_failures ?? []) {
-    attempts[`place:${failure.place}`] = { linkFailure: failure.reason };
+    attempts[`place:${failure.place}`] = { ...attempts[`place:${failure.place}`], linkFailure: failure.reason };
   }
   for (const path of result.backups ?? []) {
     attempts[`file:${path.slice(path.lastIndexOf("/") + 1)}`] = { movedAside: path };

@@ -109,6 +109,25 @@ describe("executeBiosReplace", () => {
   });
 });
 
+describe("noteBiosPress", () => {
+  afterEach(() => forgetBiosPresses());
+
+  it("keeps what a Replace… said on a row until the page is left", () => {
+    noteReplaced("/bios/saturn_bios.bin", "/data/backups/bios/y/saturn_bios.bin", []);
+    noteReplaceFailed("/bios/mpr.bin", "denied");
+
+    noteBiosPress({
+      link_failures: [{ place: "/bios/saturn_bios.bin", file_name: "saturn_bios.bin", reason: "busy" }],
+    });
+
+    expect(attemptAt("/bios/saturn_bios.bin")).toEqual({
+      replacedTo: "/data/backups/bios/y/saturn_bios.bin",
+      linkFailure: "busy",
+    });
+    expect(attemptAt("/bios/mpr.bin")).toEqual({ replaceFailure: "denied" });
+  });
+});
+
 describe("noteReplaced", () => {
   afterEach(() => forgetBiosPresses());
 
