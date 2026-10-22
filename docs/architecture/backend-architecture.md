@@ -1613,10 +1613,11 @@ link goes in for every emulator of the platform whose requirement the file fills
 (D23), and only where nothing lies under that name: Tender places no link over a file, a folder or a link that is not
 its own, and changes nothing there (D13). For a folder an emulator lists (LRPS2's `pcsx2/bios`) every store file the
 resolver recognises for it is linked into it under its name in RomM (D26). A place under a root the resolver only
-assumed gets no link, and nor does a place whose folder is not there — Tender creates none (D11, #2219 D6). Which file
-fills which requirement is `domain/firmware_match.py`: its MD5 against the checksum the resolver pins for the
-requirement, by its declared name only for an archive or where no checksum is known (D2, D8, D16); where several fill
-one, the alphabetically first is linked.
+assumed gets no link, nor does any place of a source whose roots could not be asked, and nor does a place whose folder
+is not there — Tender creates none (D11, #2219 D6). The row says so naming that source (D32). Which file fills which
+requirement is `domain/firmware_match.py`: its MD5 against the checksum the resolver pins for the requirement, by its
+declared name only for an archive or where no checksum is known (D2, D8, D16); where several fill one, the
+alphabetically first is linked.
 
 **Two records.** `firmware_store` holds one row per store file; `firmware_links` one row per link, keyed by its place,
 naming the store path it points at rather than the store row (`domain/firmware_store.py`). A link is Tender's own when
@@ -1642,7 +1643,10 @@ to it, the platform's Delete every store file of the platform and their links (D
 place cannot be reached: a link under a root the resolver only assumed stays with its record, the answer names it, and
 the next link update removes it or places it again once that root is read (D20). BIOS files Tender downloaded into an
 emulator source's folder before the store existed stay where they are with their download records, and their Delete
-removes exactly the recorded path, bounded by the BIOS folder RetroDECK names (D12).
+removes exactly the recorded path, only inside the BIOS folder RetroDECK names now (D12, D29): a record whose file is
+gone is dropped without a word; while RetroDECK's settings cannot be read, or RetroDECK is not installed, the file stays
+with its record and stays counted; a file outside that folder stays and its record goes. The answer names each file it
+left and why.
 
 #### DownloadService notes
 

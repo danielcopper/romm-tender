@@ -469,9 +469,10 @@ Some places are left alone for a reason the row names:
 
 - _/home/deck/retrodeck/bios/dc does not exist yet. Start Flycast once, then try again._ — the folder the emulator opens
   is created by the emulator, not by Tender.
-- _RetroDECK's settings could not be read, so Tender places nothing in /home/deck/retrodeck/bios._ — while RetroDECK's
-  settings cannot be read, the places under RetroDECK are only guesses, and Tender writes nothing into a guess. Places
-  read from the settings, and places outside RetroDECK, are used as usual.
+- _RetroDECK's settings could not be read, so Tender places nothing in /home/deck/retrodeck/bios._ — the row names the
+  emulator source it is read in, RetroDECK or another. While that source's settings cannot be read, the places under its
+  folders are only guesses, and Tender writes nothing into a guess; where Tender could not ask the source for its
+  folders at all, it places nothing anywhere for it. Places read from the settings are used as usual.
 - _Could not place a link at …: …_ — placing the link failed, and the reason follows. It is said by the latest attempt
   on the page and is gone once you leave it.
 
@@ -525,10 +526,18 @@ section says so and the list re-reads itself: the rows that still offer **Delete
 under RetroDECK's folder while RetroDECK's settings cannot be read stays where it is, and the line under the section
 says so, once per folder: _Left a link in /home/deck/retrodeck/bios: RetroDECK's settings could not be read. Tender
 removes it once they can be read._ Tender removes it the next time it brings its links up to date with the settings
-read. A file an older version of Tender downloaded straight into that folder stays too, says so — _Left dc_boot.bin in
-/home/deck/retrodeck/bios: RetroDECK's settings could not be read. Delete it again once they can be read._ — and keeps
-its **Delete**: Tender removes it only when you press it again. Games that need those files won't launch until you
-download them again with **Download all** or **Download required for _emulator_**.
+read. A file an older version of Tender downloaded straight into RetroDECK's BIOS folder is removed only inside the BIOS
+folder RetroDECK names now, and Tender says why where it leaves one:
+
+- _Left dc_boot.bin in /home/deck/retrodeck/bios: RetroDECK's settings could not be read. Delete it again once they can
+  be read._ — it keeps its **Delete**: Tender removes it only when you press it again.
+- _Left dc_boot.bin in /home/deck/retrodeck/bios: RetroDECK is not installed. Delete it again once it is._ — it keeps
+  its **Delete** too.
+- _Left dc_boot.bin in /run/media/deck/old/bios: it lies outside RetroDECK's BIOS folder, so Tender does not remove it.
+  Delete it yourself if you no longer need it._ — Tender forgets the file and offers no **Delete** for it again.
+
+A file that is already gone is forgotten without a word. Games that need those files won't launch until you download
+them again with **Download all** or **Download required for _emulator_**.
 
 **It only ever deletes its own downloads and links.** A file is removed when Tender has a record of downloading it, a
 link when it points at a file of Tender's firmware store that Tender has a record of, and for no other reason.

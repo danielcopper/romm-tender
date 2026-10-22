@@ -1740,13 +1740,14 @@ it, for the focused platform:
   from (`_stamp_deletable`): the firmware store's record of the file, or the `downloaded_bios` record of a download made
   before the store existed — of the library file that fills the row, or lying at the row's own place. The removal
   re-reads the record and takes the path it holds; a store file goes with every link of Tender's to it, and a link under
-  a root the resolver only assumed stays, named in the answer (#2191 D20), as does an older download under a root Tender
-  could not read, which stays counted so its Delete stays offered (D29). `downloaded` is whether a file is at the row's
-  place and is equally true of firmware RetroDECK ships: `dolphin-emu/Sys/codehandler.bin` sits one row above a real
-  download on a GameCube pane, no RomM library can hand it back, and authorising on presence destroyed exactly that file
-  on a real device. Both buttons — the platform's and a row's, a file of a folder's included, since each file there is a
-  row of its own (#2191 D26) — run **one** removal loop (`PlatformBiosDeleter._delete_io`) under different record
-  predicates, because a second copy of that loop is exactly what the register's BIOS-delete rule warns about.
+  a root the resolver only assumed stays, named in the answer (#2191 D20), as does an older download Tender may not
+  remove now, with why: while RetroDECK's settings cannot be read or RetroDECK is not installed it stays counted, so its
+  Delete stays offered, and outside RetroDECK's BIOS folder its record goes (D29). `downloaded` is whether a file is at
+  the row's place and is equally true of firmware RetroDECK ships: `dolphin-emu/Sys/codehandler.bin` sits one row above
+  a real download on a GameCube pane, no RomM library can hand it back, and authorising on presence destroyed exactly
+  that file on a real device. Both buttons — the platform's and a row's, a file of a folder's included, since each file
+  there is a row of its own (#2191 D26) — run **one** removal loop (`PlatformBiosDeleter._delete_io`) under different
+  record predicates, because a second copy of that loop is exactly what the register's BIOS-delete rule warns about.
 
   **`On disk` holds marks and never text**, and it is the only place presence is stated. A cell carries **one or two**
   of them.
