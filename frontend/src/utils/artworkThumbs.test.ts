@@ -21,9 +21,9 @@ describe("slotThumbnailUrls", () => {
   });
 
   it("answers Steam's own list for the slot, on steamloopback.host, in Steam's order", () => {
-    expect(slotThumbnailUrls(5000, row({}))).toEqual([
-      "https://steamloopback.host/customimages/5000_hero.jpg?v=9",
-      "https://steamloopback.host/customimages/5000_hero.png?v=9",
+    expect(slotThumbnailUrls(5000, row({}), "7")).toEqual([
+      "https://steamloopback.host/customimages/5000_hero.jpg?v=9&t=7.tender",
+      "https://steamloopback.host/customimages/5000_hero.png?v=9&t=7.tender",
     ]);
   });
 
@@ -37,8 +37,8 @@ describe("slotThumbnailUrls", () => {
   });
 
   it("names Tender's icon file for an icon that is Tender's", () => {
-    expect(slotThumbnailUrls(5000, row({ slot: "icon" }))).toEqual([
-      "https://steamloopback.host/customimages/5000_icon.png?v=9",
+    expect(slotThumbnailUrls(5000, row({ slot: "icon", image_id: 31 }), "7")).toEqual([
+      "https://steamloopback.host/customimages/5000_icon.png?t=7.31",
     ]);
   });
 
@@ -48,5 +48,17 @@ describe("slotThumbnailUrls", () => {
 
   it("names no file for an icon Tender has not set", () => {
     expect(slotThumbnailUrls(5000, row({ slot: "icon", source: "empty" }))).toEqual([]);
+  });
+
+  it("loads the icon anew once another image is in it, though Steam's own value has not moved", () => {
+    const before = slotThumbnailUrls(5000, row({ slot: "icon", image_id: 31 }), "7");
+    const after = slotThumbnailUrls(5000, row({ slot: "icon", image_id: 32 }), "7");
+    expect(after).not.toEqual(before);
+  });
+
+  it("loads a slot anew after a write, also where it names the same image and Steam's value has not moved", () => {
+    const before = slotThumbnailUrls(5000, row({ slot: "hero", source: "romm" }), "7");
+    const after = slotThumbnailUrls(5000, row({ slot: "hero", source: "romm" }), "8");
+    expect(after).not.toEqual(before);
   });
 });

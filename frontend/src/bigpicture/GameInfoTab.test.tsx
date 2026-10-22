@@ -24,8 +24,8 @@ describe("GameInfoTab's cover (#2381 D18)", () => {
   it("shows the cover Steam shows, first of Steam's URLs first", () => {
     const { container } = render(<GameInfoTab {...PROPS} appId={5000} coverBase64="ROMM" />);
 
-    expect(container.querySelector("img")?.getAttribute("src")).toBe(
-      "https://steamloopback.host/customimages/5000p.jpg?v=9",
+    expect(container.querySelector("img")?.getAttribute("src")).toMatch(
+      /^https:\/\/steamloopback\.host\/customimages\/5000p\.jpg\?v=9&t=/,
     );
   });
 

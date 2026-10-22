@@ -14,6 +14,7 @@ const ROMM_GAME_INFO_PANEL_ID = "romm-game-info-panel-styles";
 const ROMM_GEAR_BUTTONS_ID = "romm-gear-btn-styles";
 const ROMM_TABS_ID = "romm-tabs-styles";
 const ROMM_ACHIEVEMENTS_ID = "romm-achievements-styles";
+const ROMM_ARTWORK_ID = "romm-artwork-styles";
 
 export function hideNativePlaySection(playSectionClass: string) {
   const sp = findSP();
@@ -859,6 +860,68 @@ export function hideNativePlaySection(playSectionClass: string) {
 }`;
     sp.window.document.head.appendChild(cheevoStyle);
   }
+
+  // The ARTWORK tab's cards and the picker's tiles (#2381). A DialogButton
+  // turns white with dark text under Steam's focus style; these rules keep the
+  // card or tile dark and ring it in the accent blue instead, so its own text
+  // and its state pill stay readable focused and not.
+  if (!sp.window.document.getElementById(ROMM_ARTWORK_ID)) {
+    const artworkStyle = sp.window.document.createElement("style");
+    artworkStyle.id = ROMM_ARTWORK_ID;
+    artworkStyle.textContent = `
+.romm-artwork-game {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.romm-artwork-game-notice {
+  background: rgba(255,170,0,0.12);
+  border-color: rgba(255,170,0,0.35);
+}
+.romm-artwork-game-text, .romm-artwork-game-text.gpfocus {
+  text-align: left !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: inherit !important;
+}
+.romm-artwork-row, .romm-artwork-tile {
+  background: rgba(255,255,255,0.06) !important;
+  border: 2px solid transparent !important;
+  border-radius: 6px !important;
+  color: #dcdedf !important;
+}
+.romm-artwork-row {
+  padding: 8px 12px !important;
+}
+.romm-artwork-row.gpfocus, .romm-artwork-row:hover,
+.romm-artwork-tile.gpfocus, .romm-artwork-tile:hover {
+  background: rgba(255,255,255,0.1) !important;
+  border-color: #1a9fff !important;
+  box-shadow: 0 0 0 1px #1a9fff;
+  color: #ffffff !important;
+}
+.romm-artwork-tile-selected {
+  border-color: #1a9fff !important;
+}
+.romm-artwork-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.romm-artwork-chip-automatic { background: #24394f; color: #9fd2ff; }
+.romm-artwork-chip-chosen { background: #3b3320; color: #f2c46d; }
+.romm-artwork-chip-set_in_steam { background: #33263d; color: #d6b0f0; }
+.romm-artwork-choose {
+  font-size: 12px;
+  color: #1a9fff;
+}
+.romm-artwork-row.gpfocus .romm-artwork-choose { color: #9fd2ff; }`;
+    sp.window.document.head.appendChild(artworkStyle);
+  }
 }
 
 export function showNativePlaySection() {
@@ -871,4 +934,5 @@ export function showNativePlaySection() {
   sp.window.document.getElementById(ROMM_GEAR_BUTTONS_ID)?.remove();
   sp.window.document.getElementById(ROMM_TABS_ID)?.remove();
   sp.window.document.getElementById(ROMM_ACHIEVEMENTS_ID)?.remove();
+  sp.window.document.getElementById(ROMM_ARTWORK_ID)?.remove();
 }

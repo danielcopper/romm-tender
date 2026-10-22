@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as backend from "../api/backend";
 import {
   _resetArtworkSlotsForTests,
+  artworkThumbToken,
   heldArtworkSlots,
   isKnownWithoutSgdbGame,
+  keepArtworkTabOpen,
+  keptArtworkSlot,
   loadArtworkSlots,
+  noteArtworkWritten,
 } from "./artworkSlotsStore";
 
 const slots = (sgdbId: number | null): backend.ArtworkSlots => ({
@@ -58,5 +62,33 @@ describe("artworkSlotsStore", () => {
     first(slots(null));
     await older;
     expect(isKnownWithoutSgdbGame(5000, 42)).toBe(false);
+  });
+});
+
+describe("the ARTWORK tab kept across a remount (#2381 device test)", () => {
+  beforeEach(() => {
+    _resetArtworkSlotsForTests();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keeps the tab and the slot for a while after a press, then no longer", () => {
+    keepArtworkTabOpen(5000, "hero");
+    expect(keptArtworkSlot(5000)).toBe("hero");
+    expect(keptArtworkSlot(6000)).toBeNull();
+
+    vi.advanceTimersByTime(16_000);
+
+    expect(keptArtworkSlot(5000)).toBeNull();
+  });
+
+  it("moves the thumbnails' token with every write", () => {
+    const before = artworkThumbToken(5000);
+    noteArtworkWritten(5000);
+    expect(artworkThumbToken(5000)).not.toBe(before);
+    expect(artworkThumbToken(6000)).toBe(before.replace(/\.\d+$/, ".0"));
   });
 });

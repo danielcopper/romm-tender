@@ -21,7 +21,14 @@ import {
   type ArtworkTabSlot,
 } from "../api/backend";
 import { applyTabSlotImage, type TabSlotOutcome } from "../utils/artwork";
-import { loadArtworkSlots, useArtworkSlots } from "../utils/artworkSlotsStore";
+import {
+  artworkThumbToken,
+  keepArtworkTabOpen,
+  keptArtworkSlot,
+  loadArtworkSlots,
+  noteArtworkWritten,
+  useArtworkSlots,
+} from "../utils/artworkSlotsStore";
 import { slotThumbnailUrls } from "../utils/artworkThumbs";
 import {
   NO_API_KEY,
@@ -102,6 +109,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   const setPicked = async (row: ArtworkSlotRow, pick: ArtworkPick, replaceSetInSteam: boolean) => {
     if (busy) return;
     setBusy(true);
+    keepArtworkTabOpen(appId, row.slot);
     try {
       const answer = await (pick.kind === "automatic"
         ? setArtworkSlotAutomatic(romId, row.slot)
@@ -110,6 +118,9 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
         showToast(answer.message);
         return;
       }
+      // The backend holds the new state once it answered: read it now, since
+      // Steam's write below may re-render the page before it returns.
+      detach(loadArtworkSlots(appId, romId));
       const outcome = await applyTabSlotImage(romId, appId, row.slot, answer, replaceSetInSteam);
       if (outcome !== "left") showToast(OUTCOME_TOASTS[outcome]);
       if (row.slot === "cover") {
@@ -122,6 +133,8 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
       showToast("The image could not be set");
     } finally {
       setBusy(false);
+      keepArtworkTabOpen(appId, row.slot);
+      noteArtworkWritten(appId);
       detach(loadArtworkSlots(appId, romId));
     }
   };
@@ -170,23 +183,16 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   }
 
   const line = gameLine(slots.game);
+  const token = artworkThumbToken(appId);
+  const keptSlot = keptArtworkSlot(appId);
   return (
     <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
       <Focusable
         flow-children="right"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
-          padding: "8px",
-          borderRadius: "4px",
-          background: line.notice ? "rgba(255, 170, 0, 0.12)" : "transparent",
-        }}
+        className={`romm-artwork-game${line.notice ? " romm-artwork-game-notice" : ""}`}
+        style={{ display: "flex", alignItems: "center", gap: "12px" }}
       >
-        <DialogButton
-          onFocus={scrollFocusedToCenter}
-          style={{ flex: 1, textAlign: "left", background: "transparent", border: "none", padding: 0 }}
-        >
+        <DialogButton className="romm-artwork-game-text" onFocus={scrollFocusedToCenter} style={{ flex: 1 }}>
           <div style={{ fontSize: "14px", color: line.notice ? "#ffb74d" : "#fff" }}>{line.text}</div>
           {line.explanation && (
             <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{line.explanation}</div>
@@ -199,36 +205,27 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
           </DialogButton>
         )}
       </Focusable>
-      {slots.slots.map((row) => (
-        <DialogButton
-          key={row.slot}
-          className="romm-artwork-row"
-          onClick={() => openPicker(row)}
-          onFocus={scrollFocusedToCenter}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            textAlign: "left",
-            padding: "8px",
-            background: "transparent",
-          }}
-        >
-          <SlotThumb
-            key={slotThumbnailUrls(appId, row).join("|")}
-            urls={slotThumbnailUrls(appId, row)}
-            slot={row.slot}
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "14px", color: "#fff" }}>{SLOT_NAMES[row.slot]}</div>
-            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{sourceLine(row.slot, row.source)}</div>
-          </div>
-          <div className={`romm-artwork-chip romm-artwork-chip-${row.state}`} style={{ fontSize: "11px" }}>
-            {STATE_CHIPS[row.state]}
-          </div>
-          {opensPicker(slots, row) && <div style={{ fontSize: "12px", color: "#1a9fff" }}>Choose…</div>}
-        </DialogButton>
-      ))}
+      {slots.slots.map((row) => {
+        const urls = slotThumbnailUrls(appId, row, token);
+        return (
+          <DialogButton
+            key={row.slot}
+            className="romm-artwork-row"
+            preferredFocus={keptSlot === row.slot}
+            onClick={() => openPicker(row)}
+            onFocus={scrollFocusedToCenter}
+            style={{ display: "flex", alignItems: "center", gap: "12px", textAlign: "left" }}
+          >
+            <SlotThumb key={urls.join("|")} urls={urls} slot={row.slot} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "14px", color: "#fff" }}>{SLOT_NAMES[row.slot]}</div>
+              <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{sourceLine(row.slot, row.source)}</div>
+            </div>
+            <div className={`romm-artwork-chip romm-artwork-chip-${row.state}`}>{STATE_CHIPS[row.state]}</div>
+            {opensPicker(slots, row) && <div className="romm-artwork-choose">Choose…</div>}
+          </DialogButton>
+        );
+      })}
     </Focusable>
   );
 };

@@ -6,6 +6,7 @@ import {
   type SwitchVersionSuccess,
 } from "../api/backend";
 import { setChosenCover } from "./artwork";
+import { noteArtworkWritten } from "./artworkSlotsStore";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from "./pruneLease";
 import { refreshAppIdMap } from "./sessionManager";
@@ -72,6 +73,7 @@ export async function publishCommittedVersionSwitch(
     logWarn(`Version switch: cover apply after switch failed for rom ${romId}: ${e}`);
   }
   if (signal?.aborted) return;
+  noteArtworkWritten(appId);
   invalidateCachedGameDetail(appId);
   globalThis.dispatchEvent(
     new CustomEvent("romm_data_changed", {

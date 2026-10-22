@@ -98,7 +98,7 @@ export function gameLine(game: ArtworkSlots["game"]): GameLine {
   };
 }
 
-/** A candidate's size, as the picker labels each tile; empty where SteamGridDB states none. */
+/** A candidate's size, as the picker labels each tile; empty where SteamGridDB states none, or 0 for either side. */
 export function sizeLabel(width: number | null, height: number | null): string {
-  return width !== null && height !== null ? `${width}×${height}` : "";
+  return width && height ? `${width}×${height}` : "";
 }

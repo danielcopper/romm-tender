@@ -8,7 +8,14 @@
  */
 
 import { useEffect, useState } from "react";
-import { getArtworkGame, getArtworkSlots, debugLog, type ArtworkGame, type ArtworkSlots } from "../api/backend";
+import {
+  getArtworkGame,
+  getArtworkSlots,
+  debugLog,
+  type ArtworkGame,
+  type ArtworkSlots,
+  type ArtworkTabSlot,
+} from "../api/backend";
 import { detach } from "./detach";
 
 interface Entry {
@@ -121,9 +128,46 @@ export function useArtworkSlots(appId: number, romId: number | null): Entry | nu
   return heldArtworkSlots(appId, romId);
 }
 
+// Steam keeps a slot's URL — and, for the icon, its cache-buster — when an image
+// is set, so a thumbnail would keep showing the old image from the renderer's
+// cache. Each write the page makes moves this token, which every thumbnail URL
+// carries; the session's start keeps one session's tokens from another's.
+const sessionStart = Date.now();
+const written = new Map<number, number>();
+
+/** Note that an image of shortcut *appId* was just set, so its thumbnails load anew. */
+export function noteArtworkWritten(appId: number): void {
+  written.set(appId, (written.get(appId) ?? 0) + 1);
+  notify(appId);
+}
+
+/** The cache-buster the thumbnails of shortcut *appId* carry; it moves with every image the page sets. */
+export function artworkThumbToken(appId: number): string {
+  return `${sessionStart}.${written.get(appId) ?? 0}`;
+}
+
+// How long after an ARTWORK tab press a remount of the game page opens on the
+// tab again: Steam re-renders the page when artwork changes, which mounts
+// Tender's section afresh, and the write may land after the press returned.
+const KEEP_TAB_MS = 15_000;
+const keepTabUntil = new Map<number, { until: number; slot: ArtworkTabSlot }>();
+
+/** Have a remount of shortcut *appId*'s game page open on the ARTWORK tab, focused on *slot*, for a while after a press. */
+export function keepArtworkTabOpen(appId: number, slot: ArtworkTabSlot): void {
+  keepTabUntil.set(appId, { until: Date.now() + KEEP_TAB_MS, slot });
+}
+
+/** The slot a remount of shortcut *appId*'s game page opens the ARTWORK tab on; `null` where it opens as usual. */
+export function keptArtworkSlot(appId: number): ArtworkTabSlot | null {
+  const kept = keepTabUntil.get(appId);
+  return kept !== undefined && Date.now() < kept.until ? kept.slot : null;
+}
+
 export function _resetArtworkSlotsForTests(): void {
   entries.clear();
   games.clear();
   tickets.clear();
   listeners.clear();
+  written.clear();
+  keepTabUntil.clear();
 }

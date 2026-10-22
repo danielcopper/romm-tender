@@ -44,6 +44,9 @@ export interface ArtworkPickerModalProps {
 
 const AUTOMATIC = "automatic";
 
+// How many candidates the grid shows at once; "Load more" follows them as the next tile.
+const PAGE_SIZE = 15;
+
 const TILE_STYLE = {
   display: "flex",
   flexDirection: "column" as const,
@@ -54,6 +57,11 @@ const TILE_STYLE = {
   height: "auto",
   minWidth: "0",
 };
+
+/** A tile's classes: dark at rest and focused, ringed in the accent colour on focus and while selected. */
+function tileClass(selected: boolean): string {
+  return selected ? "romm-artwork-tile romm-artwork-tile-selected" : "romm-artwork-tile";
+}
 
 const MARK_STYLE = {
   fontSize: "10px",
@@ -74,6 +82,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
   const [tendersPick, setTendersPick] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [shown, setShown] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(onlyAutomatic === null);
   const [failure, setFailure] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | typeof AUTOMATIC | null>(null);
@@ -114,9 +123,14 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
   }, [listPage, onlyAutomatic]);
 
   const loadMore = async () => {
-    setLoading(true);
-    takePage(page + 1, await listPage(page + 1));
+    const wanted = shown + PAGE_SIZE;
+    if (wanted > candidates.length && hasMore) {
+      setLoading(true);
+      takePage(page + 1, await listPage(page + 1));
+    }
+    setShown(wanted);
   };
+  const moreToShow = shown < candidates.length || hasMore;
 
   const pick = (): ArtworkPick | null => {
     if (selected === AUTOMATIC) return { kind: "automatic" };
@@ -156,63 +170,72 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
           </Focusable>
         ) : (
           <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <Focusable
-              flow-children="right"
-              style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}
-            >
-              <DialogButton
-                onClick={() => setSelected(AUTOMATIC)}
-                onFocus={scrollFocusedToCenter}
-                style={{ ...TILE_STYLE, outline: selected === AUTOMATIC ? "2px solid #1a9fff" : "none" }}
+            <div style={{ maxHeight: "60vh", overflowY: "auto", padding: "4px" }}>
+              <Focusable
+                flow-children="right"
+                style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}
               >
-                <div style={{ fontSize: "12px", color: "#fff", textAlign: "center" }}>
-                  {automaticTileLabel(row.slot)}
-                </div>
-                {row.state === "automatic" && <div style={MARK_STYLE}>CURRENT</div>}
-              </DialogButton>
-              {candidates.map((candidate) => (
                 <DialogButton
-                  key={candidate.image_id}
-                  onClick={() => setSelected(candidate.image_id)}
+                  className={tileClass(selected === AUTOMATIC)}
+                  onClick={() => setSelected(AUTOMATIC)}
                   onFocus={scrollFocusedToCenter}
-                  style={{ ...TILE_STYLE, outline: selected === candidate.image_id ? "2px solid #1a9fff" : "none" }}
+                  style={TILE_STYLE}
                 >
-                  {candidate.thumb ? (
-                    <img
-                      src={candidate.thumb}
-                      alt={sizeLabel(candidate.width, candidate.height)}
-                      style={{ width: "100%", height: "90px", objectFit: "contain" }}
-                    />
-                  ) : (
-                    <div style={{ height: "90px", fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>No preview</div>
-                  )}
-                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)" }}>
-                    {sizeLabel(candidate.width, candidate.height)}
+                  <div style={{ fontSize: "12px", color: "#fff", textAlign: "center" }}>
+                    {automaticTileLabel(row.slot)}
                   </div>
-                  {row.state !== "automatic" && row.image_id === candidate.image_id && (
-                    <div style={MARK_STYLE}>CURRENT</div>
-                  )}
-                  {tendersPick === candidate.image_id && <div style={MARK_STYLE}>Tender&apos;s pick today</div>}
+                  {row.state === "automatic" && <div style={MARK_STYLE}>CURRENT</div>}
                 </DialogButton>
-              ))}
-            </Focusable>
-            {loading && (
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <div style={{ width: "32px", height: "32px" }}>
-                  <Spinner />
+                {candidates.slice(0, shown).map((candidate) => (
+                  <DialogButton
+                    key={candidate.image_id}
+                    className={tileClass(selected === candidate.image_id)}
+                    onClick={() => setSelected(candidate.image_id)}
+                    onFocus={scrollFocusedToCenter}
+                    style={TILE_STYLE}
+                  >
+                    {candidate.thumb ? (
+                      <img
+                        src={candidate.thumb}
+                        alt={sizeLabel(candidate.width, candidate.height)}
+                        style={{ width: "100%", height: "90px", objectFit: "contain" }}
+                      />
+                    ) : (
+                      <div style={{ height: "90px", fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>No preview</div>
+                    )}
+                    {sizeLabel(candidate.width, candidate.height) && (
+                      <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)" }}>
+                        {sizeLabel(candidate.width, candidate.height)}
+                      </div>
+                    )}
+                    {row.state !== "automatic" && row.image_id === candidate.image_id && (
+                      <div style={MARK_STYLE}>CURRENT</div>
+                    )}
+                    {tendersPick === candidate.image_id && <div style={MARK_STYLE}>Tender&apos;s pick today</div>}
+                  </DialogButton>
+                ))}
+                {moreToShow && !loading && (
+                  <DialogButton
+                    className={tileClass(false)}
+                    onClick={() => {
+                      detach(loadMore());
+                    }}
+                    onFocus={scrollFocusedToCenter}
+                    style={TILE_STYLE}
+                  >
+                    <div style={{ fontSize: "12px", color: "#fff", textAlign: "center" }}>Load more</div>
+                  </DialogButton>
+                )}
+              </Focusable>
+              {loading && (
+                <div style={{ display: "flex", justifyContent: "center", paddingTop: "8px" }}>
+                  <div style={{ width: "32px", height: "32px" }}>
+                    <Spinner />
+                  </div>
                 </div>
-              </div>
-            )}
-            {failure && <div style={{ fontSize: "12px", color: "#ff8800" }}>{failure}</div>}
-            {hasMore && !loading && (
-              <DialogButton
-                onClick={() => {
-                  detach(loadMore());
-                }}
-              >
-                Load more
-              </DialogButton>
-            )}
+              )}
+              {failure && <div style={{ fontSize: "12px", color: "#ff8800" }}>{failure}</div>}
+            </div>
             <Focusable flow-children="right" style={{ display: "flex", gap: "8px" }}>
               <DialogButton onClick={() => closeModal?.()} style={{ opacity: 0.5 }}>
                 Cancel

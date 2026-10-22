@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
+import { artworkThumbToken } from "./artworkSlotsStore";
 import { publishCommittedVersionSwitch } from "./versionSwitchApplication";
 
 vi.mock("../api/backend", async (importOriginal) => ({
@@ -75,5 +76,14 @@ describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
       "Version switch: whether a cover was chosen for rom 42 could not be read (A cleanup is running); " +
         "the cover Steam shows stays",
     );
+  });
+
+  it("has the thumbnails load anew after the switch", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+    const before = artworkThumbToken(5000);
+
+    await publishCommittedVersionSwitch(5000, 42);
+
+    expect(artworkThumbToken(5000)).not.toBe(before);
   });
 });

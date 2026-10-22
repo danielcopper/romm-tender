@@ -1,6 +1,8 @@
+import { _resetArtworkSlotsForTests, keepArtworkTabOpen } from "../utils/artworkSlotsStore";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { MutableRefObject, SetStateAction } from "react";
 import {
+  openingTab,
   bindRomInState,
   refreshPanelCoreInfo,
   refreshSlotState,
@@ -278,5 +280,18 @@ describe("refreshSlotState", () => {
     await flush();
 
     expect(state.slotConfirmed).toBe(true);
+  });
+});
+
+describe("openingTab (#2381 device test)", () => {
+  beforeEach(() => {
+    _resetArtworkSlotsForTests();
+  });
+
+  it("opens GAME INFO, or ARTWORK right after a press in that tab", () => {
+    expect(openingTab(5000)).toBe("info");
+    keepArtworkTabOpen(5000, "logo");
+    expect(openingTab(5000)).toBe("artwork");
+    expect(openingTab(6000)).toBe("info");
   });
 });

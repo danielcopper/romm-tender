@@ -13,6 +13,7 @@
 import { FC, useState, type ReactElement } from "react";
 import type { InstalledRom, RomMetadata } from "../types";
 import { coverUrls } from "../utils/artworkThumbs";
+import { artworkThumbToken, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
 import { formatReleaseDate } from "../utils/formatters";
 import { infoRow, section } from "./panelSection";
 
@@ -160,8 +161,9 @@ const Cover: FC<{ sources: string[] }> = ({ sources }) => {
 
 export const GameInfoTab: FC<GameInfoTabProps> = (props) => {
   const rows = gameInfoRows(props);
+  useArtworkSlotsChanges(props.appId ?? 0);
   const sources = [
-    ...(props.appId === undefined ? [] : coverUrls(props.appId)),
+    ...(props.appId === undefined ? [] : coverUrls(props.appId, artworkThumbToken(props.appId))),
     ...(props.coverBase64 ? [`data:image/png;base64,${props.coverBase64}`] : []),
   ];
 

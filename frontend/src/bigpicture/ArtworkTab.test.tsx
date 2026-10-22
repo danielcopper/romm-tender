@@ -5,7 +5,7 @@ import { showModal } from "@decky/ui";
 import * as backend from "../api/backend";
 import { toaster } from "../api/host";
 import * as artwork from "../utils/artwork";
-import { _resetArtworkSlotsForTests } from "../utils/artworkSlotsStore";
+import { _resetArtworkSlotsForTests, keptArtworkSlot } from "../utils/artworkSlotsStore";
 import { ArtworkTab } from "./ArtworkTab";
 import type { ArtworkPickerModalProps } from "./ArtworkPickerModal";
 import type { SgdbGamePickerModalProps } from "./SgdbGamePickerModal";
@@ -141,10 +141,10 @@ describe("ArtworkTab", () => {
     it("shows Steam's own copy of the image, first URL first", async () => {
       const { container } = await renderTab(answer(FROM_ROMM));
       const cover = rowButton(container, "Cover").querySelector("img");
-      expect(cover?.getAttribute("src")).toBe("https://steamloopback.host/customimages/5000p.jpg?v=9");
+      expect(cover?.getAttribute("src")).toMatch(/^https:\/\/steamloopback\.host\/customimages\/5000p\.jpg\?v=9&t=/);
       fireEvent.error(cover!);
-      expect(rowButton(container, "Cover").querySelector("img")?.getAttribute("src")).toBe(
-        "https://steamloopback.host/customimages/5000p.png?v=9",
+      expect(rowButton(container, "Cover").querySelector("img")?.getAttribute("src")).toMatch(
+        /^https:\/\/steamloopback\.host\/customimages\/5000p\.png\?v=9&t=/,
       );
     });
 
@@ -300,6 +300,70 @@ describe("ArtworkTab", () => {
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
         expect.objectContaining({ body: "Steam did not take the image" }),
       );
+    });
+  });
+
+  describe("after a press (#2381 device test)", () => {
+    const IMAGE: backend.ArtworkSlotImage = {
+      status: "image",
+      base64: "IMG=",
+      image_id: 12,
+      sha256: "sha",
+      sgdb_id: 7,
+      prune_lease_token: "lease",
+    };
+
+    it("reads the slots again as soon as the backend answered, before Steam's write returns", async () => {
+      vi.mocked(backend.chooseArtworkSlotImage).mockResolvedValue(IMAGE);
+      let writeDone: (outcome: "set") => void = () => {};
+      vi.mocked(artwork.applyTabSlotImage).mockReturnValue(new Promise((resolve) => (writeDone = resolve)));
+      const { container } = await renderTab(answer(FROM_ROMM));
+      fireEvent.click(rowButton(container, "Logo"));
+      const reads = vi.mocked(backend.getArtworkSlots).mock.calls.length;
+
+      await act(async () => {
+        lastModal<ArtworkPickerModalProps>().onPick({ kind: "image", imageId: 12 }, false);
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getArtworkSlots).mock.calls.length).toBeGreaterThan(reads);
+      await act(async () => {
+        writeDone("set");
+      });
+    });
+
+    it("loads the rows' thumbnails anew once the press is done", async () => {
+      vi.mocked(backend.chooseArtworkSlotImage).mockResolvedValue(IMAGE);
+      vi.mocked(artwork.applyTabSlotImage).mockResolvedValue("set");
+      const { container } = await renderTab(answer(FROM_ROMM));
+      const before = rowButton(container, "Cover").querySelector("img")?.getAttribute("src");
+      fireEvent.click(rowButton(container, "Logo"));
+
+      await act(async () => {
+        lastModal<ArtworkPickerModalProps>().onPick({ kind: "image", imageId: 12 }, false);
+      });
+      await flush();
+
+      expect(rowButton(container, "Cover").querySelector("img")?.getAttribute("src")).not.toBe(before);
+    });
+
+    it("has a remount of the page open on the ARTWORK tab, at the slot pressed, while Steam's write is under way", async () => {
+      vi.mocked(backend.chooseArtworkSlotImage).mockResolvedValue(IMAGE);
+      let writeDone: (outcome: "set") => void = () => {};
+      vi.mocked(artwork.applyTabSlotImage).mockReturnValue(new Promise((resolve) => (writeDone = resolve)));
+      const { container } = await renderTab(answer(FROM_ROMM));
+      fireEvent.click(rowButton(container, "Hero"));
+
+      await act(async () => {
+        lastModal<ArtworkPickerModalProps>().onPick({ kind: "image", imageId: 12 }, false);
+      });
+      await flush();
+
+      expect(keptArtworkSlot(APP_ID)).toBe("hero");
+      await act(async () => {
+        writeDone("set");
+      });
+      expect(keptArtworkSlot(APP_ID)).toBe("hero");
     });
   });
 

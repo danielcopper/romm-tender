@@ -192,3 +192,70 @@ describe("ArtworkPickerModal with Automatic alone (#2381 D19)", () => {
     expect(onPick).toHaveBeenCalledWith({ kind: "automatic" }, false);
   });
 });
+
+describe("ArtworkPickerModal's pages (#2381 device test)", () => {
+  const many = (from: number, count: number, hasMore: boolean): backend.ArtworkCandidatePage => ({
+    success: true,
+    candidates: Array.from({ length: count }, (_, i) => ({
+      image_id: from + i,
+      thumb: `https://cdn.example/t${from + i}.jpg`,
+      width: 512,
+      height: 512,
+    })),
+    has_more: hasMore,
+    tenders_pick: null,
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("shows 15 candidates and then Load more as a tile of the grid", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates).mockResolvedValue(many(1, 20, false));
+    const { container } = await open(row());
+
+    const grid = container.querySelector("img")!.closest("button")!.parentElement!;
+    const tiles = Array.from(grid.children).map((tile) => tile.textContent);
+    expect(container.querySelectorAll("img")).toHaveLength(15);
+    expect(tiles[0]).toContain("Automatic");
+    expect(tiles[tiles.length - 1]).toBe("Load more");
+    expect(tiles).toHaveLength(17);
+  });
+
+  it("Load more shows the next 15, asking SteamGridDB only once the held page runs out", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates)
+      .mockResolvedValueOnce(many(1, 20, true))
+      .mockResolvedValueOnce(many(21, 20, false));
+    const { container } = await open(row());
+
+    await act(async () => {
+      fireEvent.click(button(container, "Load more"));
+    });
+    await flush();
+
+    expect(container.querySelectorAll("img")).toHaveLength(30);
+    expect(vi.mocked(backend.getArtworkSlotCandidates)).toHaveBeenLastCalledWith(42, "grid", 1);
+  });
+
+  it("labels no size where SteamGridDB states 0×0", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates).mockResolvedValue({
+      success: true,
+      candidates: [{ image_id: 9, thumb: "https://cdn.example/t9.jpg", width: 0, height: 0 }],
+      has_more: false,
+      tenders_pick: null,
+    });
+    const { container } = await open(row({ slot: "icon" }));
+
+    expect(container.textContent).not.toContain("0×0");
+  });
+
+  it("keeps Cancel and Use this image out of the scrolling grid", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates).mockResolvedValue(many(1, 20, false));
+    const { container } = await open(row());
+
+    const scroller = container.querySelector("img")!.closest("div[style*='overflow']");
+    expect(scroller).not.toBeNull();
+    expect(scroller!.contains(button(container, "Use this image"))).toBe(false);
+    expect(scroller!.contains(button(container, "Cancel"))).toBe(false);
+  });
+});
