@@ -147,13 +147,15 @@ class SaveCopyService:
     ) -> None:
         """Record the target slot's newest save for *canonical* as the file's baseline.
 
-        After an upload that failed, so the next sync reads the copy on disk as
-        a change against the save the target slot holds; what that sync then
-        does is the copy section of ``docs/architecture/save-file-sync-architecture.md``.
-        A slot with no such save keeps the baseline the download recorded. So
-        does a head without a ``content_hash``: no hash of its content is known,
-        and one made up to differ from the copy would claim a sync that never
-        happened.
+        Called after an upload that failed, so that the next sync reads the copy
+        on disk as a change against the save the target slot holds; what that
+        sync then does is the copy section of
+        ``docs/architecture/save-file-sync-architecture.md``. A slot with no such
+        save keeps the baseline the download recorded. A head without a
+        ``content_hash`` or an id drops the file's tracking instead: no hash of
+        its content is known, one made up to differ from the copy would claim a
+        sync that never happened, and the download's baseline would let a next
+        sync on a head this device is not current on download it over the copy.
         """
         in_slot = [s for s in server_saves if save_in_slot(s, target_slot)]
         head = newest_server_saves_by_target(in_slot, rom_name, known_names=save_names).get(canonical)
@@ -162,11 +164,13 @@ class SaveCopyService:
         head_hash = head.get("content_hash")
         if not head_hash or not head.get("id"):
             self._logger.warning(
-                "_copy_save_to_slot_io: newest save %r in slot %r carries no content_hash; "
-                "the copy is uploaded only with its next change",
+                "_copy_save_to_slot_io: newest save %r in slot %r carries no content_hash or id; "
+                "dropping the tracking of %r",
                 head.get("id"),
                 target_slot,
+                canonical,
             )
+            save_state.delete_file_tracking(canonical)
             return
         previous = save_state.files.get(canonical)
         save_state.adopt_baseline(
@@ -219,8 +223,8 @@ class SaveCopyService:
            target has newer changes from another device — resolve it first); any
            other upload error is ``upload_failed``: the copy is complete on this
            device, the target stays active, and
-           :meth:`_adopt_target_head_as_baseline` makes the next sync see the
-           copy as a change to upload.
+           :meth:`_adopt_target_head_as_baseline` records the baseline the next
+           sync compares the copy with.
 
         The source save is never touched. Mutates *save_state* in memory; the
         caller owns the write UoW.
