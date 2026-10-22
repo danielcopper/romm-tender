@@ -107,7 +107,7 @@ export function needWords(row: NeedRow): string {
  * it is there — so a mark never contradicts the Contents words beside it.
  */
 export function unmetWord(checked: FirmwareChecked | null | undefined): string {
-  if (checked === "mismatch") return WRONG_FILE;
+  if (checked === "mismatch" || checked === "rejected") return WRONG_FILE;
   if (checked === "refused") return REFUSED;
   return MISSING;
 }

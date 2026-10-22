@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { FirmwareChecked, FirmwareDeclaredKind } from "../types";
-import { biosFileDescription, biosFileNote, type BiosNoteRow } from "./biosFileNote";
+import { biosFileDescription, biosFileNote, contentsWords, type BiosNoteRow } from "./biosFileNote";
 
 /** The sentence half, for the cases that are about wording alone. */
 const noteOf = (row: BiosNoteRow) => biosFileNote(row).note;
@@ -203,6 +203,11 @@ describe("biosFileNote", () => {
       expect(biosFileNote(file(false, "mismatch"), "Beetle PSX").note).toBe(
         "wrong file — not the image Beetle PSX expects",
       );
+    });
+
+    it("names the emulator a file in its folder was turned down by, and words its Contents alike", () => {
+      expect(biosFileNote(file(false, "rejected"), "LRPS2").note).toBe("wrong file — not an image LRPS2 accepts");
+      expect(contentsWords(file(false, "rejected"), "LRPS2")).toBe("wrong file — not an image LRPS2 accepts");
     });
 
     it("says nothing for the values that are the row's ordinary answer", () => {

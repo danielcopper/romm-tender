@@ -202,7 +202,9 @@ class FirmwareDownloader:
         }
 
     async def _update(self, platform_slug: str, system: str | None) -> LinkOutcome:
-        outcome = await self._loop.run_in_executor(None, self._store.do_update_links, platform_slug, system)
+        outcome = await self._loop.run_in_executor(
+            None, self._store.do_update_links, platform_slug, system, self.do_platform_system
+        )
         self._listing.invalidate()
         return outcome
 
@@ -296,6 +298,10 @@ class FirmwareDownloader:
         """
         platform = await self._loop.run_in_executor(None, self._platform_system_io, platform_slug, rom_id)
         return platform.taken
+
+    def do_platform_system(self, platform_slug: str) -> str | None:
+        """The system *platform_slug* is in the answering source, ``None`` where none answers. Blocking."""
+        return self._platform_systems.platform_system(platform_slug).taken
 
     def _platform_system_io(self, platform_slug: str, rom_id: int | None) -> PlatformSystem:
         if rom_id is None:

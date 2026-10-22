@@ -213,6 +213,10 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  *   Its verdict is `false`, and without the sentence the row would read as a
  *   file that is missing. The words are the Contents column's, so
  *   both pages say it alike.
+ * - **`rejected`** — Tender's own word for a file in a declared folder the
+ *   emulator's test read and turned down: a wrong file too, but against no
+ *   one pinned image, so it is not an image the emulator accepts rather than
+ *   not the one it expects.
  *
  * `verified` gets no note: it is the ordinary met row. Every other value, and
  * the absent field, leave the note to the library half below.
@@ -227,6 +231,7 @@ function fileAtItsDestination(
   if (checked === "unread") return said("its bytes could not be read");
   if (checked === "refused") return said(refusedFile(emulator));
   if (checked === "mismatch") return said(wrongFile(emulator));
+  if (checked === "rejected") return said(rejectedFile(emulator));
   return said("");
 }
 
@@ -390,6 +395,8 @@ export function contentsWords(row: ContentsRow, emulator: string | null): string
       return "right file";
     case "mismatch":
       return wrongFile(emulator);
+    case "rejected":
+      return rejectedFile(emulator);
     case "refused":
       return refusedFile(emulator);
     case "not-comparable":
@@ -417,6 +424,11 @@ function refusedFile(emulator: string | null): string {
 /** A wrong image, in the one wording both pages use — naming the emulator whose image it is not. */
 function wrongFile(emulator: string | null): string {
   return `wrong file — not the image ${emulator ?? "the emulator"} expects`;
+}
+
+/** A file in a declared folder the emulator's own test read and turned down, in the one wording both pages use. */
+function rejectedFile(emulator: string | null): string {
+  return `wrong file — not an image ${emulator ?? "the emulator"} accepts`;
 }
 
 /** Did the reading identify *row*'s file by its contents — the emulator's search of the BIOS folder? */

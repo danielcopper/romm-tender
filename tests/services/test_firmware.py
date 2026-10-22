@@ -1289,7 +1289,7 @@ class TestAFolderRequirementIsAnsweredByItsContents:
         result = await fw.check_platform_bios("ps2")
         checked = {row["file_name"]: row["checked"] for row in result["files"]}
 
-        assert checked == {"scph70004.bin": "verified", "notabios.bin": "unrecognised", "odd.bin": "unknown"}
+        assert checked == {"scph70004.bin": "verified", "notabios.bin": "rejected", "odd.bin": "unknown"}
 
     @pytest.mark.asyncio
     async def test_a_folder_linked_onto_the_bios_root_answers_its_images_by_their_resolved_paths(

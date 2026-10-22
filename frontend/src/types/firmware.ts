@@ -56,7 +56,9 @@ export type FirmwareDeclarationState = "read" | "packaged" | "absent" | "unreada
  * emulator keeps knows them, which DuckStation boots anyway with a warning) —
  * while `unread` says the bytes were asked for and did not come back, and
  * `unchecked` that nothing asked. `refused` is the emulator declining to open
- * the file at all on its size, before reading a byte.
+ * the file at all on its size, before reading a byte. `rejected` is Tender's own
+ * word, not the resolver's: a file in a declared folder the emulator's own test
+ * read and turned down, which the resolver states only as that file's verdict.
  *
  * It is not a second verdict and never read as one: `satisfied` says whether the
  * requirement is met, this says what was done to establish it. What it exists
@@ -67,7 +69,15 @@ export type FirmwareDeclarationState = "read" | "packaged" | "absent" | "unreada
  * ordinary answer for a file that is simply not there.
  */
 export type FirmwareChecked =
-  "verified" | "mismatch" | "unchecked" | "unknown" | "not-comparable" | "unrecognised" | "refused" | "unread";
+  | "verified"
+  | "mismatch"
+  | "rejected"
+  | "unchecked"
+  | "unknown"
+  | "not-comparable"
+  | "unrecognised"
+  | "refused"
+  | "unread";
 
 /**
  * This file as an option of a one-of group — a requirement whose launch needs

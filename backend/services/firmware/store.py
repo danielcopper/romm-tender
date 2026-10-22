@@ -295,11 +295,16 @@ class FirmwareStore:
 
     # ── The links ────────────────────────────────────────────
 
-    def do_update_links(self, platform_slug: str, system: str | None) -> LinkOutcome:
+    def do_update_links(
+        self, platform_slug: str, system: str | None, system_of: Callable[[str], str | None]
+    ) -> LinkOutcome:
         """Bring *platform_slug*'s links up to date in every enabled source; download nothing.
 
         A platform with no system to ask about has no emulator to link for,
-        and only its records are looked at.
+        and only its records are looked at. *system_of* answers another
+        platform's system: before a link nobody on this platform wants goes,
+        the platforms Tender holds store files for are asked whether one of
+        their emulators still wants its place.
         """
         catalogues = self._resolver.every_source(system) if system is not None else ()
         records = self.do_read_records()
@@ -320,6 +325,17 @@ class FirmwareStore:
             looks.setdefault(place, self._files.look(place))
             if _blocked(place, roots.get(link.source)):
                 blocked.add(place)
+        judged = frozenset(
+            catalogue.source for catalogue in catalogues if catalogue.source is not None and not catalogue.sealed
+        )
+        wanted_here = {want.place for want in wanted}
+        unwanted = any(
+            link.platform_slug == platform_slug
+            and link.source in judged
+            and place not in blocked
+            and place not in wanted_here
+            for place, link in records.links.items()
+        )
         plan = plan_link_update(
             platform_slug,
             wanted,
@@ -328,9 +344,31 @@ class FirmwareStore:
             present=owned.present,
             records=records.links,
             blocked=frozenset(blocked),
-            judged=frozenset(catalogue.source for catalogue in catalogues if catalogue.source is not None),
+            judged=judged,
+            wanted_elsewhere=self._wanted_elsewhere(platform_slug, records, system_of) if unwanted else frozenset(),
         )
         return self._carry_out(plan)
+
+    def _wanted_elsewhere(
+        self, platform_slug: str, records: StoreRecords, system_of: Callable[[str], str | None]
+    ) -> frozenset[tuple[str, str]]:
+        """Every place, by source, an emulator of another platform Tender holds store files for still wants.
+
+        Only sources whose list was read whole are asked, and an emulator its
+        source states is not installed wants nothing.
+        """
+        wanted: set[tuple[str, str]] = set()
+        for other in sorted({stored.platform_slug for stored in records.stored} - {platform_slug}):
+            system = system_of(other)
+            if system is None:
+                continue
+            copies = self.do_copies(records, other)
+            for catalogue in self._resolver.every_source(system):
+                if catalogue.sealed or catalogue.source is None:
+                    continue
+                for want, _placement in wanted_links(catalogue.linkable(), other, catalogue.source, copies):
+                    wanted.add((want.source, want.place))
+        return frozenset(wanted)
 
     def _carry_out(self, plan: LinkUpdatePlan) -> LinkOutcome:
         outcome = LinkOutcome(left_in_place=plan.left_in_place)

@@ -239,9 +239,13 @@ class _Installation:
 
 
 class _Launching(_Installation):
-    """An installation that also answers its launch reading: each emulator's availability, by identity."""
+    """An installation that also answers its launch reading: each emulator's rows' availability, by identity.
 
-    def __init__(self, answer: FirmwareAnswer, *, availability: dict[str, str] | Exception) -> None:
+    An emulator given a tuple has one catalogue row per value, as EmuDeck lists
+    Cemu twice.
+    """
+
+    def __init__(self, answer: FirmwareAnswer, *, availability: dict[str, str | tuple[str, ...]] | Exception) -> None:
         super().__init__(answer)
         self._availability = availability
 
@@ -251,7 +255,8 @@ class _Launching(_Installation):
         return SimpleNamespace(
             entries=tuple(
                 SimpleNamespace(emulator=emulator, availability=availability)
-                for emulator, availability in self._availability.items()
+                for emulator, rows in self._availability.items()
+                for availability in ((rows,) if isinstance(rows, str) else rows)
             )
         )
 
@@ -2586,6 +2591,27 @@ class TestEverySourceItIsPlacedIn:
 
         assert catalogue.not_installed == frozenset({"mgba_libretro.so"})
         assert sorted(placement.file_name for placement in catalogue.linkable()) == ["a.bin", "b.bin"]
+
+    @pytest.mark.parametrize(
+        ("rows", "ruled_out"),
+        [
+            (("not-installed", "startable"), False),
+            (("not-installed", "unestablished"), False),
+            (("not-installed", "not-installed"), True),
+        ],
+        ids=["one-row-starts", "one-row-unestablished", "every-row-not-installed"],
+    )
+    def test_an_emulator_listed_twice_is_ruled_out_only_where_every_row_says_not_installed(
+        self, traces, monkeypatch, rows, ruled_out
+    ):
+        answer = _answer(_core(core_so="cemu", requirements=(_requirement(core_so="cemu", file_name="keys.txt"),)))
+        _detect(monkeypatch, _detecting(_Launching(answer, availability={"cemu": rows})))
+        adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        (catalogue,) = adapter.every_source("wiiu")
+
+        assert ("cemu" in catalogue.not_installed) is ruled_out
+        assert [placement.file_name for placement in catalogue.linkable()] == ([] if ruled_out else ["keys.txt"])
 
     def test_a_launch_reading_that_raised_rules_no_emulator_out(self, traces, monkeypatch):
         installation = _Launching(_answer(_core(requirements=(_requirement(),))), availability=RuntimeError("boom"))

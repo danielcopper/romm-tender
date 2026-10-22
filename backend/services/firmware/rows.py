@@ -35,7 +35,7 @@ from domain.firmware_rows import (
     unclaimed,
     unused,
 )
-from domain.firmware_wants import CHECKED_UNKNOWN, CHECKED_UNRECOGNISED, CHECKED_VERIFIED, DECLARED_FILE
+from domain.firmware_wants import CHECKED_REJECTED, CHECKED_UNKNOWN, CHECKED_VERIFIED, DECLARED_FILE
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -230,13 +230,14 @@ def _folder_file_checked(satisfied: bool | None) -> str:
     """What a file in a declared folder's contents read as, in the ``checked`` words its Contents cell is worded by.
 
     The resolver states a verdict per file and no check state of its own:
-    identified by its contents is the right file, a file the read found no
-    image among is not recognised, and anything else is not established.
+    identified by its contents is the right file, a file the emulator's test
+    read and rejected is a wrong file (Tender's own ``rejected``), and anything
+    else is not established.
     """
     if satisfied is True:
         return CHECKED_VERIFIED
     if satisfied is False:
-        return CHECKED_UNRECOGNISED
+        return CHECKED_REJECTED
     return CHECKED_UNKNOWN
 
 

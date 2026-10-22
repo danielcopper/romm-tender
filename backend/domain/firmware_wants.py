@@ -139,10 +139,14 @@ CAVEAT_PATH_INACCESSIBLE = "firmware-path-inaccessible"
 # keeps knows. Spelled as the resolver spells them.
 CHECKED_UNREAD = "unread"
 CHECKED_UNRECOGNISED = "unrecognised"
-# A file's contents matched what the emulator expects, and nothing could be
-# compared. Spelled as the resolver spells them.
+# A file's contents matched what the emulator expects (``verified``), and
+# nothing could be compared (``unknown``). Spelled as the resolver spells them.
 CHECKED_VERIFIED = "verified"
 CHECKED_UNKNOWN = "unknown"
+# Tender's own word, never the resolver's: a file in a declared folder the
+# emulator's own test read and rejected, which the resolver states only as the
+# file's verdict.
+CHECKED_REJECTED = "rejected"
 
 # The codes with which the resolver states that a search identified a file by
 # its contents: an image its table names, and one the emulator's own test
@@ -601,6 +605,11 @@ class FirmwareCatalogue:
     the place of an emulator outside it (:meth:`linkable`): a packaged card
     states what an emulator wants whether or not it is installed, and an
     emulator that could not be established is not ruled out.
+
+    ``sealed`` marks an answer read beside a sealed emulator catalogue
+    (EmuDeck's), only ever for placing links: its places are where a file
+    goes, but its list may leave an emulator out, so it never decides that a
+    link is unwanted.
     """
 
     placements: tuple[FirmwarePlacement, ...]
@@ -612,6 +621,7 @@ class FirmwareCatalogue:
     source: str | None = None
     roots: SourceRoots | None = None
     not_installed: frozenset[str] = frozenset()
+    sealed: bool = False
 
     def linkable(self) -> tuple[FirmwarePlacement, ...]:
         """The placements a link may go to: every one but those of an emulator stated not installed."""

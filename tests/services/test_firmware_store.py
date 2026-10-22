@@ -86,12 +86,16 @@ class _Romm:
 
 
 class _LaunchReadingResolver(FakeFirmwareResolver):
-    """The fake, with the source's launch reading: the emulators it states are not installed."""
+    """The fake, with the source's launch reading — the emulators it states are not installed, per system where
+    ``not_installed_in`` names one — and whether its catalogue is sealed."""
 
     not_installed: frozenset[str] = frozenset()
+    not_installed_in: dict[str, frozenset[str]] = {}  # noqa: RUF012 - replaced whole by a test, never mutated
+    sealed: bool = False
 
     def __call__(self, system: str | None = None):
-        return replace(super().__call__(system), not_installed=self.not_installed)
+        missing = self.not_installed_in.get(system or "", self.not_installed)
+        return replace(super().__call__(system), not_installed=missing, sealed=self.sealed)
 
 
 @dataclass
@@ -790,6 +794,68 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         refusals = {row["declared_by"]: row["place_refusal"] for row in rows}
         assert refusals[_KRONOS] == {"reason": "not_installed", "folder": None, "source": "retrodeck"}
         assert refusals[_YABA] is None
+
+    async def test_a_sealed_list_never_decides_that_a_link_is_unwanted(self, machine, tmp_path):
+        other_bios = tmp_path / "emudeck" / "bios"
+        other_bios.mkdir(parents=True)
+        other = _LaunchReadingResolver(
+            bios_root=str(other_bios), present_probe=os.path.exists, source="emudeck", roots=_roots(other_bios)
+        )
+        other.sealed = True
+        other.declare(
+            "saturn_bios.bin",
+            required_by=[_YABA],
+            place=str(other_bios / "saturn_bios.bin"),
+            identity_md5=_md5(_SATURN),
+            identity_kind=IDENTITY_FILE,
+        )
+        machine.resolver.other_sources.append(other)
+        _saturn(machine)
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        await machine.service.download_all_firmware("saturn")
+        assert (other_bios / "saturn_bios.bin").is_symlink()
+        # The sealed list no longer names the place: an incomplete list is no evidence nobody wants it.
+        other.placements = []
+
+        await machine.service.update_bios_links("saturn")
+
+        assert (other_bios / "saturn_bios.bin").is_symlink()
+        assert str(other_bios / "saturn_bios.bin") in machine.links()
+
+    async def test_a_link_another_platforms_emulator_still_wants_stays(self, machine):
+        boot = b"gb boot rom"
+        place = machine.bios / "gb_bios.bin"
+        for platform in ("gb", "gbc"):
+            machine.romm.add({"gb": 1, "gbc": 2}[platform], platform, "gb_bios.bin", boot)
+        machine.resolver.declare(
+            "gb_bios.bin", required_by=[_YABA], place=str(place), identity_md5=_md5(boot), identity_kind=IDENTITY_FILE
+        )
+        await machine.service.download_all_firmware("gb")
+        await machine.service.download_all_firmware("gbc")
+        # No emulator for Game Boy wants the place any more; Game Boy Color's still does.
+        machine.resolver.not_installed_in = {"gb": frozenset({_YABA})}
+
+        await machine.service.update_bios_links("gb")
+
+        assert os.readlink(place) == str(machine.store_path("gb", "gb_bios.bin"))
+        assert str(place) in machine.links()
+
+    async def test_a_link_no_platform_with_store_files_wants_goes(self, machine):
+        boot = b"gb boot rom"
+        place = machine.bios / "gb_bios.bin"
+        for platform in ("gb", "gbc"):
+            machine.romm.add({"gb": 1, "gbc": 2}[platform], platform, "gb_bios.bin", boot)
+        machine.resolver.declare(
+            "gb_bios.bin", required_by=[_YABA], place=str(place), identity_md5=_md5(boot), identity_kind=IDENTITY_FILE
+        )
+        await machine.service.download_all_firmware("gb")
+        await machine.service.download_all_firmware("gbc")
+        machine.resolver.not_installed_in = {"gb": frozenset({_YABA}), "gbc": frozenset({_YABA})}
+
+        await machine.service.update_bios_links("gb")
+
+        assert not os.path.lexists(place)
+        assert str(place) not in machine.links()
 
     async def test_no_replace_for_an_emulator_its_source_states_is_not_installed(self, machine):
         place = machine.bios / "saturn_bios.bin"

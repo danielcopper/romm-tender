@@ -268,19 +268,23 @@ class AtlasPlatformFirmwareAdapter:
     def _not_installed(self, system: str, kind: str, installation: Any) -> frozenset[str]:
         """The emulators *installation*'s launch reading states are not installed for *system*.
 
-        None where that reading could not be asked: an emulator nothing ruled
-        out is linked for, as one the reading could not establish is.
+        Empty where that reading could not be asked: an emulator nothing ruled
+        out is linked for, as one the reading could not establish is. Read over
+        the identity rather than over the row, as :func:`_unread_emulators` is:
+        an emulator the catalogue lists twice (EmuDeck's Cemu, native and
+        through Proton) is not installed only where EVERY one of its rows says so.
         """
         try:
             entries = installation.emulators_for(system).entries
         except Exception as exc:
             self._log_debug(f"[firmware] launch reading failed for {system} in {kind}: {exc!r}")
             return frozenset()
-        missing = frozenset(
-            entry.emulator
-            for entry in entries
-            if entry.availability == AVAILABILITY_NOT_INSTALLED and entry.emulator is not None
-        )
+        installed: dict[str, bool] = {}
+        for entry in entries:
+            identity = emulator_identity(entry)
+            if identity is not None:
+                installed[identity] = installed.get(identity, False) or entry.availability != AVAILABILITY_NOT_INSTALLED
+        missing = frozenset(identity for identity, maybe in installed.items() if not maybe)
         self._log_debug(f"[firmware] {kind} {system}: not installed={sorted(missing)}")
         return missing
 
@@ -402,6 +406,7 @@ def _catalogue(
         source=source,
         roots=roots,
         not_installed=not_installed,
+        sealed=sealed,
     )
 
 

@@ -84,10 +84,16 @@ class FirmwareReplacer:
         firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
         firmware, source = await self._loop.run_in_executor(None, self._replaceable, system, place, firmware_list)
         backup = await self._loop.run_in_executor(None, self._replace_io, platform_slug, place, firmware, source)
-        links = await self._loop.run_in_executor(None, self._store.do_update_links, platform_slug, system)
+        links = await self._loop.run_in_executor(
+            None, self._store.do_update_links, platform_slug, system, self._system_of
+        )
         self._listing.invalidate()
         self._logger.info(f"Replaced {place} with Tender's copy; the old file is at {backup}")
         return {"success": True, "backup_path": backup, **links.payload(), "placed": links.placed + 1}
+
+    def _system_of(self, platform_slug: str) -> str | None:
+        """The system *platform_slug* is in the answering source. Blocking."""
+        return self._platform_systems.platform_system(platform_slug).taken
 
     def _replaceable(
         self, system: str | None, place: str, firmware_list: list[dict[str, Any]]
