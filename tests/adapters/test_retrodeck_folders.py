@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 from _vendor.atlas.installations import RetroDeck
 
+from adapters import retrodeck_folders
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from adapters.retrodeck_folders import RetroDeckFoldersAdapter
 from domain.retrodeck_folders import EveryFolderRefused, FindingRefused, FolderRefused, MoveRoots
@@ -423,6 +424,21 @@ class TestEachRootIsJudgedByItsProvenance:
         _assumed(adapter.move_roots(), "bios")
         assert adapter.saves_root() == _real(rd_home / "saves")
         assert adapter.download_folder("gba") == _real(rd_home / "roms" / "gba")
+
+    def test_a_retrodeck_that_names_no_bios_folder_and_says_nothing_of_why_answers_so(
+        self, tree, tmp_path, monkeypatch
+    ):
+        tree.set_up(tmp_path / "retrodeck")
+        real_root = retrodeck_folders._root
+
+        def no_bios(roots, name):
+            return None if name == "bios" else real_root(roots, name)
+
+        monkeypatch.setattr(retrodeck_folders, "_root", no_bios)
+        answer = tree.adapter().bios_folder()
+
+        assert isinstance(answer, FolderRefused)
+        assert answer.reason == "no_bios_root"
 
     def test_a_settings_file_whose_version_alone_cannot_be_read_refuses_no_folder(self, tree, tmp_path):
         rd_home = tmp_path / "retrodeck"

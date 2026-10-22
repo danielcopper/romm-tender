@@ -214,7 +214,7 @@ describe("keptLines", () => {
     expect(keptLines(undefined)).toEqual([]);
   });
 
-  it("says why an older download stayed where RetroDECK is not installed, and where it lies outside its BIOS folder", () => {
+  it("says why an older download stayed where RetroDECK is not installed, names no BIOS folder, and where it lies outside its BIOS folder", () => {
     const lines = keptLines([
       {
         kind: "file",
@@ -223,6 +223,14 @@ describe("keptLines", () => {
         source: "retrodeck",
         file_name: "dc_boot.bin",
         why: "not_installed",
+      },
+      {
+        kind: "file",
+        place: "/r/bios/mpr.bin",
+        folder: "/r/bios",
+        source: "retrodeck",
+        file_name: "mpr.bin",
+        why: "no_bios_folder",
       },
       {
         kind: "file",
@@ -236,6 +244,7 @@ describe("keptLines", () => {
 
     expect(lines).toEqual([
       "Left dc_boot.bin in /r/bios: RetroDECK is not installed. Delete it again once it is.",
+      "Left mpr.bin in /r/bios: RetroDECK names no BIOS folder. Delete it again once it does.",
       "Left scph5501.bin in /old/bios: it lies outside RetroDECK's BIOS folder, so Tender does not remove it. " +
         "Delete it yourself if you no longer need it.",
     ]);

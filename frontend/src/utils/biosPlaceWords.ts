@@ -161,6 +161,8 @@ function whyKept(entry: BiosKeptLink, settings: string): string {
   switch (entry.why) {
     case "not_installed":
       return `${sourceName(entry.source)} is not installed. Delete it again once it is.`;
+    case "no_bios_folder":
+      return `${sourceName(entry.source)} names no BIOS folder. Delete it again once it does.`;
     case "outside_bios_folder":
       return (
         `it lies outside ${sourceName(entry.source)}'s BIOS folder, so Tender does not remove it. ` +

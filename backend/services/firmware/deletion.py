@@ -16,12 +16,13 @@ A Delete is never refused because a place cannot be reached. A link under a
 root the resolver only assumed — or under none it could judge — stays where it
 is, keeps its record, and the answer names it. An older download is removed
 only inside the BIOS folder RetroDECK names now; one whose file is gone loses
-its record without a word. Where RetroDECK's settings could not be read or
-RetroDECK is not installed, the file stays with its record, so its Delete stays
-offered; where it lies outside that folder, the file stays and its record goes.
-Each kept entry names its ``kind``, its place, the folder it was kept in and
-the source whose settings could not be read; an older download also names its
-file and ``why`` it was kept (``settings_unreadable``, ``not_installed`` or
+its record without a word. Where RetroDECK's settings could not be read,
+RetroDECK is not installed, or it names no BIOS folder, the file stays with its
+record, so its Delete stays offered; where it lies outside that folder, the
+file stays and its record goes. Each kept entry names its ``kind``, its place,
+the folder it was kept in and the emulator source the reason is about; an
+older download also names its file and ``why`` it was kept
+(``settings_unreadable``, ``not_installed``, ``no_bios_folder`` or
 ``outside_bios_folder``).
 """
 
@@ -32,7 +33,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
-from domain.retrodeck_folders import FolderRefused
+from domain.retrodeck_folders import NO_BIOS_ROOT, FolderRefused
 from lib.partial_failure import PartialFailure
 from lib.path_safety import is_inside_folder
 
@@ -48,13 +49,14 @@ if TYPE_CHECKING:
 
 KEPT_SETTINGS_UNREADABLE = "settings_unreadable"
 KEPT_NOT_INSTALLED = "not_installed"
+KEPT_NO_BIOS_FOLDER = "no_bios_folder"
 KEPT_OUTSIDE_BIOS_FOLDER = "outside_bios_folder"
 
 
 def _why_kept(bound: str | FolderRefused | None, path: str) -> str | None:
     """Why an older download at *path* may not be removed under *bound*; ``None`` where it may."""
     if isinstance(bound, FolderRefused):
-        return KEPT_SETTINGS_UNREADABLE
+        return KEPT_NO_BIOS_FOLDER if bound.reason == NO_BIOS_ROOT else KEPT_SETTINGS_UNREADABLE
     if bound is None:
         return KEPT_NOT_INSTALLED
     return None if is_inside_folder(path, bound) else KEPT_OUTSIDE_BIOS_FOLDER

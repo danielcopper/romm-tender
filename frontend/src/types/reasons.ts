@@ -98,6 +98,7 @@ export type WireReason =
   | "no_active_download"
   | "no_active_session"
   | "no_api_key"
+  | "no_bios_root"
   | "no_checksum"
   | "no_cover"
   | "no_file_on_romm"

@@ -275,9 +275,10 @@ export interface BiosKeptLink {
   /** The older download's name in RomM; a link names none. */
   file_name?: string;
   /** Why an older download stayed: RetroDECK's settings could not be read,
-   *  RetroDECK is not installed — in both it stays counted — or it lies
-   *  outside RetroDECK's BIOS folder, and Tender dropped its record. */
-  why?: "settings_unreadable" | "not_installed" | "outside_bios_folder";
+   *  RetroDECK is not installed, or it names no BIOS folder — in these it
+   *  stays counted — or it lies outside RetroDECK's BIOS folder, and Tender
+   *  dropped its record. */
+  why?: "settings_unreadable" | "not_installed" | "no_bios_folder" | "outside_bios_folder";
 }
 
 /** A link a placement could not create, and the system's reason. */

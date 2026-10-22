@@ -31,6 +31,7 @@ RETRODECK_NOT_INSTALLED = "retrodeck_not_installed"
 RETRODECK_SWITCHED_OFF = "retrodeck_switched_off"
 NO_ROM_FOLDER = "no_rom_folder"
 NO_ROM_ROOT = "no_rom_root"
+NO_BIOS_ROOT = "no_bios_root"
 ROM_ROOT_MISSING = "rom_root_missing"
 RETRODECK_UNANSWERED = "retrodeck_unanswered"
 # The panel words this one from the finding it carries, with the sentence the
@@ -111,6 +112,11 @@ def uninstall_not_installed() -> FolderRefused:
 def moving_not_installed() -> FolderRefused:
     """The refusal of the move code's migrate press where no RetroDECK is detected."""
     return FolderRefused(RETRODECK_NOT_INSTALLED, "Moving needs RetroDECK, which is not installed.")
+
+
+def no_bios_root() -> FolderRefused:
+    """The bound of a removal of an older BIOS download where a detected RetroDECK names no BIOS folder."""
+    return FolderRefused(NO_BIOS_ROOT, "RetroDECK names no BIOS folder.")
 
 
 def no_rom_root() -> FolderRefused:

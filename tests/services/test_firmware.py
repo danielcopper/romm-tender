@@ -48,7 +48,7 @@ from domain.firmware_wants import (
     FolderVerdict,
 )
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
-from domain.retrodeck_folders import GAME_DOWNLOAD, finding_refusal, switched_off
+from domain.retrodeck_folders import GAME_DOWNLOAD, finding_refusal, no_bios_root, switched_off
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.shortcut_data import EmulatorInvocation
@@ -808,6 +808,26 @@ class TestWhileRetroDeckIsSwitchedOff:
 
         assert isinstance(result, dict)
         assert [k["why"] for k in result["kept"]] == ["not_installed"]
+        assert bios.exists()
+        assert firmware.uow.bios_files.get("dc", "dc_boot.bin") is not None
+        assert entry["deletable_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_where_retrodeck_names_no_bios_folder_a_delete_leaves_the_older_download_counted_and_says_why(
+        self, firmware, tmp_path
+    ):
+        bios = tmp_path / "bios" / "dc_boot.bin"
+        bios.parent.mkdir(parents=True)
+        bios.write_bytes(b"\x00")
+        self._older_download(firmware, bios)
+        fw = self._service(firmware, tmp_path, FakeFirmwareResolver(), FakeRetroDeckFolders(refusal=no_bios_root()))
+        fw._deletion._files = FirmwareFileAdapter()
+
+        result = await fw.delete_bios_file("dc", "dc_boot.bin")
+        entry = (await fw.get_platform_firmware_status("dc"))["platform"]
+
+        assert isinstance(result, dict)
+        assert [k["why"] for k in result["kept"]] == ["no_bios_folder"]
         assert bios.exists()
         assert firmware.uow.bios_files.get("dc", "dc_boot.bin") is not None
         assert entry["deletable_count"] == 1

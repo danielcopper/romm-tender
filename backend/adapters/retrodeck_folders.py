@@ -54,6 +54,7 @@ from domain.retrodeck_folders import (
     FolderRefused,
     MoveRoots,
     finding_refusal,
+    no_bios_root,
     no_rom_folder,
     no_rom_root,
     not_installed,
@@ -169,8 +170,18 @@ class RetroDeckFoldersAdapter:
         return no_rom_root() if placement.dir is None else os.path.realpath(placement.dir)
 
     def bios_folder(self) -> str | FolderRefused | None:
-        """The BIOS folder a removal is bounded by; ``None`` where RetroDECK names none."""
-        return self._removal_root(ROOT_BIOS)
+        """The BIOS folder a removal is bounded by; ``None`` where no RetroDECK is detected.
+
+        A detected RetroDECK that names no BIOS folder, and no finding says
+        why, answers :func:`no_bios_root`.
+        """
+        retrodeck = self._for_removal()
+        if retrodeck is None or isinstance(retrodeck, FolderRefused):
+            return retrodeck
+        path = _root(retrodeck.roots, ROOT_BIOS)
+        if path is None:
+            return no_bios_root()
+        return path if isinstance(path, FolderRefused) else os.path.realpath(path)
 
     def saves_root(self) -> str | FolderRefused | None:
         """The saves root a removal is bounded by; ``None`` where RetroDECK names none."""
