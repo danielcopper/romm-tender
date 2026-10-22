@@ -1609,15 +1609,20 @@ the store goes through `do_prepare_for_write`, and every use case that writes in
 folder rule.
 
 **An emulator reaches a store file through an absolute symlink at the place the resolver names for it** (#2219 D4). The
-link goes in for every emulator of the platform whose requirement the file fills, in every enabled emulator source
-(D23), and only where nothing lies under that name: Tender places no link over a file, a folder or a link that is not
-its own, and changes nothing there (D13). For a folder an emulator lists (LRPS2's `pcsx2/bios`) every store file the
-resolver recognises for it is linked into it under its name in RomM (D26). A place under a root the resolver only
-assumed gets no link, nor does any place of a source whose roots could not be asked, and nor does a place whose folder
-is not there — Tender creates none (D11, #2219 D6). For the first two the row says so, naming that source (D32). Which
-file fills which requirement is `domain/firmware_match.py`: its MD5 against the checksum the resolver pins for the
-requirement, by its declared name only for an archive or where no checksum is known (D2, D8, D16); where several fill
-one, the alphabetically first is linked.
+link goes in for every emulator of the platform whose requirement the file fills and that its source does not state not
+installed, in every enabled emulator source (D23, D36): the source's own launch reading (`emulators_for`, each entry's
+`availability`) is asked beside its firmware reading, and only `not-installed` rules an emulator out — one it cannot
+establish is linked for (D37), which mainly guards a carded standalone emulator, whose card states what it wants whether
+or not it is installed. A sealed emulator catalogue (EmuDeck's) is read for its places all the same, while its rows and
+verdicts stay withheld (`AtlasPlatformFirmwareAdapter.every_source`, D37). A link goes only where nothing lies under
+that name: Tender places no link over a file, a folder or a link that is not its own, and changes nothing there (D13).
+For a folder an emulator lists (LRPS2's `pcsx2/bios`) every store file the resolver recognises for it is linked into it
+under its name in RomM (D26). A place under a root the resolver only assumed gets no link, nor does any place of a
+source whose roots could not be asked, and nor does a place whose folder is not there — Tender creates none (D11, #2219
+D6). For the first two the row says so, naming that source (D32). Which file fills which requirement is
+`domain/firmware_match.py`: its MD5 against the checksum the resolver pins for the requirement, by its declared name
+only for an archive or where no checksum is known (D2, D8, D16); where several fill one, the alphabetically first is
+linked.
 
 **Two records.** `firmware_store` holds one row per store file; `firmware_links` one row per link, keyed by its place,
 naming the store path it points at rather than the store row (`domain/firmware_store.py`). A link is Tender's own when
@@ -1626,12 +1631,14 @@ names the path it points at — which is what keeps a link Tender could not remo
 
 **Bringing the links up to date** (`FirmwareStore.do_update_links`, `domain/firmware_places.py::plan_link_update`)
 places every link an emulator of the platform wants where the name is free, places again a link of Tender's that points
-at nothing where a store copy exists, removes such a link where none does, records a link of Tender's found at a new
-place, and drops the record of a place it may touch where no link of Tender's to the recorded file lies any more; it
-downloads nothing (D6). Beside it, "Replace…" places the one link at the place it cleared (`do_place_link`), and a
-delete and "Forget what is recorded there" remove the links of the files they take (`do_remove`,
-`forget_records_under`); nothing else places or removes a link. Every download ends with it; so does a replacement; and
-the panel asks for it (`update_bios_links`) when a platform page or a game's page opens and after an emulator switch.
+at nothing where a store copy exists, removes such a link where none does, removes a link of Tender's no installed
+emulator of its source wants any more — only in a source whose wants it read and whose roots it may touch, so a link in
+a source switched off or not read stays (D36) — records a link of Tender's found at a new place, and drops the record of
+a place it may touch where no link of Tender's to the recorded file lies any more; it downloads nothing (D6). Beside it,
+"Replace…" places the one link at the place it cleared (`do_place_link`), and a delete and "Forget what is recorded
+there" remove the links of the files they take (`do_remove`, `forget_records_under`); nothing else places or removes a
+link. Every download ends with it; so does a replacement; and the panel asks for it (`update_bios_links`) when a
+platform page or a game's page opens and after an emulator switch.
 
 **A file the resolver reads as wrong is replaced only on the user's confirmation**, and only where the library copy is
 proven right by its checksum (D5): the copy is fetched and checked first, the file in the way goes to

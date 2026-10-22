@@ -457,7 +457,9 @@ download._
 
 Tender keeps its links up to date by itself whenever you open a platform's page or a game's page, and after you change
 the emulator a platform or game launches with: it places every link an emulator of the platform wants from the store,
-puts back one of its links that was removed, and removes one whose file is gone. It never downloads anything for that —
+puts back one of its links that was removed, and removes one whose file is gone or that no installed emulator wants any
+more. A link is only placed for an emulator its emulator source has installed — or where the source cannot tell — and
+also into EmuDeck while its emulator list is sealed, wherever the place is known. It never downloads anything for that —
 a download is only ever made when you press a button. Until that is done a row whose file is in the store reads _In
 Tender's firmware store, not linked here yet_.
 

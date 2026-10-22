@@ -1007,6 +1007,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `TestGetFirmwareStatusDeletableCount`); prompt-only: a delete iterates the records, never a status list, and is never
   authorised by `downloaded` or `on_server`; `delete_name` and `deletable_count` alone gate a row's Delete offer, and
   both buttons share `PlatformBiosDeleter._delete_io`, never a copy of it
+- **A BIOS link goes only to a place the resolver states, for an emulator its source does not state not installed
+  (`FirmwareCatalogue.linkable`), in every enabled source, a sealed catalogue's places included while its rows stay
+  withheld; the link update removes only Tender's own links, only in a source whose wants it read and whose roots it may
+  touch, at places no such emulator wants any more** — test + prompt-only —
+  `tests/services/test_firmware_store.py::TestOnlyAnInstalledEmulatorIsLinkedFor` and
+  `tests/adapters/test_atlas_firmware.py::TestEverySourceItIsPlacedIn`; prompt-only: a new placing path reads
+  `linkable()`, never `placements`, and `not_installed` comes only from the source's own launch reading
+  ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37)
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes
