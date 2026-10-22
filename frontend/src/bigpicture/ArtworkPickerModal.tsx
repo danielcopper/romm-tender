@@ -25,7 +25,7 @@ import { detach } from "../utils/detach";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { REPLACE_SET_IN_STEAM, SLOT_NAMES, automaticTileLabel, sizeLabel } from "../utils/artworkTabWording";
 
-/** What the user chose for the slot: automatic again, or one SteamGridDB image; and whether to replace Steam's. */
+/** What the user chose for the slot: automatic again, or one SteamGridDB image. */
 export type ArtworkPick = { kind: "automatic" } | { kind: "image"; imageId: number };
 
 export interface ArtworkPickerModalProps {

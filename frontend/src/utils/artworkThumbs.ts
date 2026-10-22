@@ -49,3 +49,17 @@ export function slotThumbnailUrls(appId: number, row: ArtworkSlotRow): string[] 
     return [];
   }
 }
+
+/**
+ * The URLs to try for the cover Steam shows for shortcut *appId* — the GAME INFO tab's cover (#2381 D18) — the same
+ * list the ARTWORK tab's cover row tries; empty where Steam names none.
+ */
+export function coverUrls(appId: number): string[] {
+  return slotThumbnailUrls(appId, {
+    slot: "cover",
+    state: "automatic",
+    source: "romm",
+    image_id: null,
+    has_choice: false,
+  });
+}

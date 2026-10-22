@@ -2,7 +2,8 @@
  * The body of the game detail panel's active tab.
  *
  * Only the pane the user is looking at is created. That is load-bearing for
- * SAVES and ARTWORK: both fetch on mount, so building them for a tab nobody
+ * SAVES and ARTWORK: both fetch on mount (ARTWORK asks SteamGridDB for the
+ * game's name and hashes the slots' images), so building them for a tab nobody
  * opened would fire those requests on every game page.
  *
  * The ACHIEVEMENTS and BIOS panes are not built here — the panel mounts them for
@@ -37,6 +38,7 @@ export function buildTabContent({ appId, binding, state }: TabContentContext): R
         metadata={state.metadata}
         platformName={state.platformName}
         coverBase64={state.coverBase64}
+        appId={appId}
         installed={state.installed}
         installedRom={state.installedRom}
       />

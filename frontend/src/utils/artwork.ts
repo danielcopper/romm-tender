@@ -1,10 +1,11 @@
 /**
  * SGDB artwork apply — writes a ROM's SGDB hero, logo, wide grid and icon onto
  * its Steam shortcut. Shared by the game page — `useAutoArtwork`'s fill of the
- * empty slots on a first visit and replacing apply after a version switch, and
- * RomMPlaySection's Refresh Artwork — and SgdbGamePickerModal (the replacing
- * apply after a manual game-id pick), so it lives here rather than on any one
- * component to keep their import graph acyclic. The shortcut artwork job's
+ * empty slots on a first visit and replacing apply after a version switch,
+ * RomMPlaySection's Refresh Artwork and SgdbGamePickerModal's change of game
+ * (both on the slots on automatic only), and the ARTWORK tab's one-slot writes —
+ * so it lives here rather than on any one component to keep their import graph
+ * acyclic. The shortcut artwork job's
  * writes (`utils/shortcutArtwork.ts`) ask it whether an apply is under way, and
  * set the job's wide grids and logos through it.
  */
@@ -479,7 +480,7 @@ export const STEAM_ASSET_TYPES: Readonly<Record<Exclude<ArtworkTabSlot, "icon">,
 /**
  * Remove the image set through Steam for *appId*'s slot *assetType* before Tender sets its own (#2381 D13): Steam
  * shows a `.jpg` before a `.png` (D14), so Tender's image would not show while Steam's stays. What Steam's call
- * removes is measured on the device; if it leaves the hand-set file, this is the one place that changes.
+ * removes is not measured yet; if it leaves the hand-set file, this is the one place that changes.
  */
 export async function removeImageSetInSteam(appId: number, assetType: number): Promise<void> {
   await SteamClient.Apps.ClearCustomArtworkForApp(appId, assetType);

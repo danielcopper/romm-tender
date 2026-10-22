@@ -930,11 +930,13 @@ describe("the ARTWORK tab's writes", () => {
     success: true,
     has_api_key: true,
     game: { sgdb_id: 9999, source: "romm", name: "Game" },
+    superseded: null,
     slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
       slot,
       state: states[slot] ?? "automatic",
       source: "tender",
       image_id: null,
+      has_choice: false,
     })),
   });
 

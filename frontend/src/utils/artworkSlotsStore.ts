@@ -1,13 +1,14 @@
 /**
- * The ARTWORK tab's answer per shortcut, shared by the tab and the play row's Refresh Artwork, which is disabled while
- * the ROM has no SteamGridDB game (#2381 D3).
+ * The ARTWORK tab's answer per shortcut, and the SteamGridDB game it names, shared by the tab and the play row: Refresh
+ * Artwork is disabled while the ROM has no SteamGridDB game (#2381 D3), which the play row learns from the lighter
+ * `getArtworkGame` read every visit makes, and the tab's read refreshes.
  *
  * Held per appId with the ROM it was read for, so an answer about the version a switch replaced is never taken for the
  * one showing. A read replaces the entry whole; a reader that started earlier and lands later is dropped by its ticket.
  */
 
 import { useEffect, useState } from "react";
-import { getArtworkSlots, debugLog, type ArtworkSlots } from "../api/backend";
+import { getArtworkGame, getArtworkSlots, debugLog, type ArtworkGame, type ArtworkSlots } from "../api/backend";
 import { detach } from "./detach";
 
 interface Entry {
@@ -19,11 +20,33 @@ interface Entry {
 }
 
 const entries = new Map<number, Entry>();
+/** Per appId, the ROM last read and whether it has a SteamGridDB game, from either read. */
+const games = new Map<number, { romId: number; sgdbId: number | null }>();
 const tickets = new Map<number, number>();
 const listeners = new Map<number, Set<() => void>>();
 
 function notify(appId: number): void {
   for (const listener of listeners.get(appId) ?? []) listener();
+}
+
+/** Whether *answer* is the game read's answer rather than a failure — or nothing, as an unprimed test endpoint answers. */
+function isArtworkGame(answer: unknown): answer is ArtworkGame {
+  return typeof answer === "object" && answer !== null && "game" in answer && "superseded" in answer;
+}
+
+/**
+ * Read which SteamGridDB game *romId*'s artwork comes from, as every visit to its page does, and hold whether it has
+ * one; answers the read, or `null` where it failed.
+ */
+export async function loadArtworkGame(appId: number, romId: number): Promise<ArtworkGame | null> {
+  const answer: unknown = await getArtworkGame(romId).catch((e: unknown) => {
+    detach(debugLog(`The SteamGridDB game of appId ${appId} could not be read: ${e}`));
+    return null;
+  });
+  if (!isArtworkGame(answer)) return null;
+  games.set(appId, { romId, sgdbId: answer.game.sgdb_id });
+  notify(appId);
+  return answer;
 }
 
 /** Whether *answer* is the tab's answer rather than a failure — or nothing, as a test's unprimed endpoint answers. */
@@ -48,6 +71,7 @@ export async function loadArtworkSlots(appId: number, romId: number): Promise<Ar
     appId,
     isArtworkSlots(answer) ? { romId, slots: answer, failure: null } : { romId, slots: null, failure },
   );
+  if (isArtworkSlots(answer)) games.set(appId, { romId, sgdbId: answer.game.sgdb_id });
   notify(appId);
   return isArtworkSlots(answer) ? answer : null;
 }
@@ -60,8 +84,22 @@ export function heldArtworkSlots(appId: number, romId: number | null): Entry | n
 
 /** Whether ROM *romId* of shortcut *appId* is known to have no SteamGridDB game; `false` while that is not known. */
 export function isKnownWithoutSgdbGame(appId: number, romId: number | null): boolean {
-  const slots = heldArtworkSlots(appId, romId)?.slots;
-  return slots !== null && slots !== undefined && slots.game.sgdb_id === null;
+  const game = games.get(appId);
+  return game !== undefined && game.romId === romId && game.sgdbId === null;
+}
+
+/** Re-render on every change to what is held for *appId*. */
+export function useArtworkSlotsChanges(appId: number): void {
+  const [, setVersion] = useState(0);
+  useEffect(() => {
+    const listener = () => setVersion((v) => v + 1);
+    const set = listeners.get(appId) ?? new Set();
+    set.add(listener);
+    listeners.set(appId, set);
+    return () => {
+      set.delete(listener);
+    };
+  }, [appId]);
 }
 
 /**
@@ -85,6 +123,7 @@ export function useArtworkSlots(appId: number, romId: number | null): Entry | nu
 
 export function _resetArtworkSlotsForTests(): void {
   entries.clear();
+  games.clear();
   tickets.clear();
   listeners.clear();
 }

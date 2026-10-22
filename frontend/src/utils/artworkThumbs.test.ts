@@ -7,6 +7,7 @@ const row = (overrides: Partial<ArtworkSlotRow>): ArtworkSlotRow => ({
   state: "automatic",
   source: "tender",
   image_id: null,
+  has_choice: false,
   ...overrides,
 });
 

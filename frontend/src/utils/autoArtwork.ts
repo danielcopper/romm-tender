@@ -23,8 +23,7 @@ export function _resetArtworkAppliedForTests(): void {
 export function useAutoArtwork(appId: number, romId: number | null, logContext: string = "Auto-artwork error"): void {
   // Apply SGDB artwork once per (appId, rom_id). A first visit fills only the
   // empty slots, so an image already there keeps it; a version switch (an
-  // earlier rom_id applied for this appId) replaces every slot, as Refresh
-  // Artwork does. Marked applied once the apply resolves, so a slot whose fetch
+  // earlier rom_id applied for this appId) replaces every slot. Marked applied once the apply resolves, so a slot whose fetch
   // failed is asked again in the next session; an apply that throws — cut
   // short by leaving the page, or a Steam write failing in the replacing apply
   // — is not marked, and the next visit applies again.

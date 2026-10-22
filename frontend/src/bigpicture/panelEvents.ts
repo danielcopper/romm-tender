@@ -351,10 +351,9 @@ async function handleCoverRefreshed(
   if (detail.rom_id !== ctx.romIdRef.current) return;
   const romId = ctx.romIdRef.current;
   if (!romId) return;
-  // Re-fetch the cover image. Backend has already patched the registry's
-  // cover_path; getArtworkBase64 will now resolve the freshly-downloaded
-  // file. Catch swallowed because the .then handles the success path —
-  // the rejection branch surfaces via the empty-cover render.
+  // Re-fetch RomM's cover, which GAME INFO falls back to where Steam's own copy
+  // does not load. A cover set from the ARTWORK tab dispatches this too: Steam's
+  // copy then changes on its own, and RomM's is re-read all the same.
   await refreshCoverArtInBackground(bindCurrentRom(ctx, romId));
 }
 

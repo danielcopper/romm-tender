@@ -640,6 +640,8 @@ export interface ArtworkSlotRow {
   source: ArtworkSlotSource;
   /** The SteamGridDB image the slot shows, where Tender knows it. */
   image_id: number | null;
+  /** The user chose an image for the slot — also where it now reads set in Steam over that choice. */
+  has_choice: boolean;
 }
 
 /** The ARTWORK tab: the ROM's SteamGridDB game — RomM's, the user's choice, or none — and its five slots. */
@@ -647,10 +649,29 @@ export interface ArtworkSlots {
   success: true;
   has_api_key: boolean;
   game: { sgdb_id: number | null; source: "romm" | "chosen" | null; name: string | null };
+  superseded: SupersededGame | null;
   slots: ArtworkSlotRow[];
 }
 
 export const getArtworkSlots = endpoint<[number, number], ArtworkSlots | EndpointFailure>("get_artwork_slots");
+
+/** RomM's SteamGridDB game took the place of the user's: the slots whose chosen image went back to automatic. */
+export interface SupersededGame {
+  /** RomM's game's name on SteamGridDB, where it could be asked. */
+  name: string | null;
+  slots: ArtworkTabSlot[];
+}
+
+/** The game the artwork comes from, as the game page asks on every visit; no name is asked for it. */
+export interface ArtworkGame {
+  success: true;
+  has_api_key: boolean;
+  game: { sgdb_id: number | null; source: "romm" | "chosen" | null; name: null };
+  /** Set once, where RomM's id has just replaced the game the user chose (#2381 D17). */
+  superseded: SupersededGame | null;
+}
+
+export const getArtworkGame = endpoint<[number], ArtworkGame | EndpointFailure>("get_artwork_game");
 
 /** One SteamGridDB candidate in the picker; its thumbnail loads straight from SteamGridDB. */
 export interface ArtworkCandidate {

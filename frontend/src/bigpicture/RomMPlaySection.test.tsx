@@ -322,11 +322,13 @@ const ALL_AUTOMATIC: ArtworkSlots = {
   success: true,
   has_api_key: true,
   game: { sgdb_id: 42, source: "romm", name: "Test Game" },
+  superseded: null,
   slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
     slot,
     state: "automatic" as const,
     source: slot === "cover" ? ("romm" as const) : ("tender" as const),
     image_id: null,
+    has_choice: false,
   })),
 };
 
@@ -461,7 +463,7 @@ describe("RomMPlaySection", () => {
     });
     vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
     // The ARTWORK tab's read defaults to a ROM with a SteamGridDB game and every
-    // slot on automatic, the state the Refresh Artwork cases before #2381 assume.
+    // slot on automatic, the state the Refresh Artwork cases below assume.
     vi.mocked(backend.getArtworkSlots).mockResolvedValue(ALL_AUTOMATIC);
     _resetArtworkSlotsForTests();
   });
@@ -5557,13 +5559,24 @@ describe("RomMPlaySection", () => {
     }
 
     it("is disabled and says where to choose the game while the ROM has none", async () => {
-      vi.mocked(backend.getArtworkSlots).mockResolvedValue(withRows({}, { sgdb_id: null, source: null, name: null }));
+      vi.mocked(backend.getArtworkGame).mockResolvedValue({
+        success: true,
+        has_api_key: true,
+        game: { sgdb_id: null, source: null, name: null },
+        superseded: null,
+      });
       const items = await openMenu();
       const refresh = items[0]!;
       expect(refresh.props.disabled).toBe(true);
       const hint = render(<div>{refresh.props.children as ReactElement}</div>);
       expect(hint.container.textContent).toContain("Refresh Artwork");
       expect(hint.container.textContent).toContain("Choose a SteamGridDB game in the ARTWORK tab first.");
+    });
+
+    it("asks which game the artwork comes from on every visit, never the tab's full read", async () => {
+      await openMenu();
+      expect(vi.mocked(backend.getArtworkGame)).toHaveBeenCalledWith(77);
+      expect(vi.mocked(backend.getArtworkSlots)).not.toHaveBeenCalled();
     });
 
     it("is offered while the ROM has a game", async () => {

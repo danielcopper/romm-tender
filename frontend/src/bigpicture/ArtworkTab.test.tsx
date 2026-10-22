@@ -25,11 +25,13 @@ function answer(
     success: true,
     has_api_key: true,
     game,
+    superseded: null,
     slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
       slot,
       state: rows[slot]?.state ?? "automatic",
       source: rows[slot]?.source ?? (slot === "cover" ? "romm" : "tender"),
       image_id: null,
+      has_choice: rows[slot]?.state === "chosen",
     })),
   };
 }
@@ -131,7 +133,7 @@ describe("ArtworkTab", () => {
       expect(rows[0]).toContain("Cover");
       expect(rows[0]).toContain("Automatic");
       expect(rowButton(container, "Wide grid").textContent).toContain("SteamGridDB — Tender's pick");
-      expect(rowButton(container, "Logo").textContent).toContain("SteamGridDB — picked by you");
+      expect(rowButton(container, "Logo").textContent).toContain("SteamGridDB — chosen by you");
       expect(rowButton(container, "Logo").textContent).toContain("Chosen by you");
       expect(rowButton(container, "Hero").textContent).toContain("Set through Steam's “Set custom artwork”");
       expect(rowButton(container, "Hero").textContent).toContain("Set in Steam");
@@ -226,6 +228,37 @@ describe("ArtworkTab", () => {
         expect.objectContaining({ body: "SteamGridDB no longer lists this image for the game" }),
       );
       expect(vi.mocked(artwork.applyTabSlotImage)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the fix round's rows (#2381)", () => {
+    it("words an icon set in Steam as the shortcut's properties", async () => {
+      const { container } = await renderTab(answer(FROM_ROMM, { icon: { state: "set_in_steam", source: "steam" } }));
+      expect(rowButton(container, "Icon").textContent).toContain("Set in the shortcut's properties");
+    });
+
+    it("says a key is needed where none is configured", async () => {
+      const { container } = await renderTab({ ...answer(NONE), has_api_key: false });
+      expect(container.textContent).toContain("Add a SteamGridDB API key in Settings to choose images.");
+    });
+
+    it("warns of discarded choices also where the only chosen slot now reads set in Steam", async () => {
+      const slots = answer(CHOSEN, { logo: { state: "set_in_steam", source: "steam" } });
+      slots.slots = slots.slots.map((row) => (row.slot === "logo" ? { ...row, has_choice: true } : row));
+      const { container } = await renderTab(slots);
+      fireEvent.click(Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Change game…")!);
+      expect(lastModal<SgdbGamePickerModalProps>().discardsChoices).toBe(true);
+    });
+
+    it("on a read that finds RomM's game replaced the chosen one, says so and applies automatic", async () => {
+      vi.mocked(artwork.applyAutomaticArtwork).mockResolvedValue(1);
+      await renderTab({ ...answer(FROM_ROMM), superseded: { name: "Mario Golf", slots: ["logo"] } });
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: "RomM now maps this game to Mario Golf; your chosen images went back to automatic.",
+        }),
+      );
+      expect(vi.mocked(artwork.applyAutomaticArtwork)).toHaveBeenCalledWith(42, APP_ID);
     });
   });
 

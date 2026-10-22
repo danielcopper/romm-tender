@@ -31,7 +31,8 @@ import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
 import { useTriggerHandler } from "./emulatorStepping";
 import { applyAutomaticArtwork, cancelArtworkApply } from "../utils/artwork";
-import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlots } from "../utils/artworkSlotsStore";
+import { settleArtworkGame } from "../utils/artworkGameChange";
+import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
 import { CHOOSE_GAME_FIRST } from "../utils/artworkTabWording";
 import { useAutoArtwork } from "../utils/autoArtwork";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
@@ -376,8 +377,12 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   }, [appId]);
 
   const playtimeInfo = useGamePlaytime(appId, detail.romId, "RomMPlaySection");
-  // Refresh Artwork is offered only once the ROM has a SteamGridDB game (#2381 D3).
-  useArtworkSlots(appId, detail.romId);
+  // Refresh Artwork is offered only once the ROM has a SteamGridDB game (#2381 D3); the visit's read also settles a
+  // game RomM's id replaced (D17).
+  useArtworkSlotsChanges(appId);
+  useEffect(() => {
+    if (detail.romId) detach(settleArtworkGame(appId, detail.romId));
+  }, [appId, detail.romId]);
   const withoutSgdbGame = isKnownWithoutSgdbGame(appId, detail.romId);
 
   // Helper: create an info item with header and value (Steam's two-line pattern)

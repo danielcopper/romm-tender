@@ -38,7 +38,7 @@ export interface SgdbGamePickerModalProps {
   romId: number;
   appId: number;
   romName: string;
-  /** Initial candidate list from the resolution cascade. */
+  /** Candidates to show before the first search; none, and the picker searches nothing until asked. */
   candidates?: SgdbCandidate[];
   /** The ROM has images the user chose, which the change discards (#2381 D12). */
   discardsChoices?: boolean;

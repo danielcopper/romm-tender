@@ -10,8 +10,9 @@
  * styleInjector.
  */
 
-import { FC, type ReactElement } from "react";
+import { FC, useState, type ReactElement } from "react";
 import type { InstalledRom, RomMetadata } from "../types";
+import { coverUrls } from "../utils/artworkThumbs";
 import { formatReleaseDate } from "../utils/formatters";
 import { infoRow, section } from "./panelSection";
 
@@ -23,7 +24,10 @@ interface GameInfoTabProps {
   languages: string[];
   metadata: RomMetadata | null;
   platformName: string;
+  /** RomM's cover, shown where Steam's own copy of the shortcut's cover does not load. */
   coverBase64: string | null;
+  /** The shortcut whose cover Steam shows — the one this tab shows first (#2381 D18). */
+  appId?: number;
   installed: boolean;
   installedRom: InstalledRom | null;
 }
@@ -139,20 +143,34 @@ function romFileSection(installed: boolean, installedRom: InstalledRom | null): 
   return section("rom-file", "ROM File", infoRow("filename", "Filename", installedRom.file_name), noLaunchTargetNote);
 }
 
+/** The cover Steam shows — the first of its URLs that loads — else RomM's cover. */
+const Cover: FC<{ sources: string[] }> = ({ sources }) => {
+  const [failed, setFailed] = useState(0);
+  const src = sources[failed];
+  if (!src) return null;
+  return (
+    <img
+      alt=""
+      src={src}
+      onError={() => setFailed((n) => n + 1)}
+      style={{ width: "120px", borderRadius: "4px", flexShrink: 0, objectFit: "cover" as const }}
+    />
+  );
+};
+
 export const GameInfoTab: FC<GameInfoTabProps> = (props) => {
   const rows = gameInfoRows(props);
+  const sources = [
+    ...(props.appId === undefined ? [] : coverUrls(props.appId)),
+    ...(props.coverBase64 ? [`data:image/png;base64,${props.coverBase64}`] : []),
+  ];
 
-  const gameInfoSection = props.coverBase64
+  const gameInfoSection = sources.length
     ? section(
         "game-info",
         null,
         <div key="game-info-row" style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-          <img
-            alt=""
-            key="cover"
-            src={`data:image/png;base64,${props.coverBase64}`}
-            style={{ width: "120px", borderRadius: "4px", flexShrink: 0, objectFit: "cover" as const }}
-          />
+          <Cover key={sources.join("|")} sources={sources} />
           <div key="details" style={{ flex: 1 }}>
             {rows}
           </div>

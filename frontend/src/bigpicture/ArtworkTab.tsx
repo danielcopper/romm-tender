@@ -22,7 +22,8 @@ import {
 import { applyTabSlotImage, type TabSlotOutcome } from "../utils/artwork";
 import { loadArtworkSlots, useArtworkSlots } from "../utils/artworkSlotsStore";
 import { slotThumbnailUrls } from "../utils/artworkThumbs";
-import { SLOT_NAMES, SOURCE_LINES, STATE_CHIPS, gameLine } from "../utils/artworkTabWording";
+import { NO_API_KEY, SLOT_NAMES, SOURCE_LINES, STATE_CHIPS, gameLine, sourceLine } from "../utils/artworkTabWording";
+import { applySupersededGame } from "../utils/artworkGameChange";
 import { detach } from "../utils/detach";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { showToast } from "../utils/toast";
@@ -47,7 +48,7 @@ const THUMB_SIZES: Readonly<Record<ArtworkTabSlot, { width: number; height: numb
 const OUTCOME_TOASTS: Readonly<Record<Exclude<TabSlotOutcome, "left">, string>> = {
   set: "Artwork updated",
   refused: "Steam did not take the image",
-  none: "SteamGridDB has no image for this slot",
+  none: SOURCE_LINES.none,
 };
 
 /** Steam's copy of a slot's image: the first URL that loads, else a placeholder box. */
@@ -68,7 +69,7 @@ const SlotThumb: FC<{ urls: string[]; slot: ArtworkTabSlot }> = ({ urls, slot })
   );
 };
 
-/** Whether a press on *row* opens the picker: a SteamGridDB game and a key are needed to list candidates. */
+/** Whether a press on a row opens the picker: a SteamGridDB game and a key are needed to list candidates. */
 function canPick(slots: ArtworkSlots): boolean {
   return slots.has_api_key && slots.game.sgdb_id !== null;
 }
@@ -80,7 +81,13 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   useEffect(() => {
     // The tab always reads afresh on opening: an image set through Steam since
     // the last read changes a row's state, and only the read sees it.
-    detach(loadArtworkSlots(appId, romId));
+    detach(
+      loadArtworkSlots(appId, romId).then(async (read) => {
+        if (!read?.superseded) return;
+        await applySupersededGame(appId, romId, read.superseded);
+        await loadArtworkSlots(appId, romId);
+      }),
+    );
   }, [appId, romId]);
 
   const slots = held?.slots ?? null;
@@ -131,7 +138,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
         romId={romId}
         appId={appId}
         romName={romName}
-        discardsChoices={current.slots.some((row) => row.state === "chosen")}
+        discardsChoices={current.slots.some((row) => row.has_choice)}
         onApplied={() => {
           // The backend reloaded RomM's cover in place of a chosen one; it is
           // set back to automatic here once more so Steam shows it in this session.
@@ -176,6 +183,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
           {line.explanation && (
             <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{line.explanation}</div>
           )}
+          {!slots.has_api_key && <div style={{ fontSize: "12px", color: "#ffb74d" }}>{NO_API_KEY}</div>}
         </DialogButton>
         {line.button && slots.has_api_key && (
           <DialogButton onClick={() => openGamePicker(slots)} style={{ width: "auto", minWidth: "140px" }}>
@@ -205,7 +213,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
           />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: "14px", color: "#fff" }}>{SLOT_NAMES[row.slot]}</div>
-            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{SOURCE_LINES[row.source]}</div>
+            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{sourceLine(row.slot, row.source)}</div>
           </div>
           <div className={`romm-artwork-chip romm-artwork-chip-${row.state}`} style={{ fontSize: "11px" }}>
             {STATE_CHIPS[row.state]}
