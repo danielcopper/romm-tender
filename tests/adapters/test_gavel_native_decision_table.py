@@ -677,8 +677,8 @@ def test_no_device_entry_baseline_diverged_server_newer_returns_conflict():
     """Branch 6 / #1059 — no entry for our device on the newest server save, but
     we hold a baseline and local has diverged from it. The chosen head is a save
     we never synced (a NEW save id became the slot head while we played offline),
-    so both sides moved → Conflict, mirroring branch 5. Today branch 6 does
-    mtime-only and Downloads here, silently replacing the diverged local.
+    so both sides moved → Conflict, mirroring branch 5 — never a Download that
+    would silently replace the diverged local.
     """
     server_updated_at = "2024-01-01T12:00:00+00:00"
     server_epoch = datetime.fromisoformat(server_updated_at).timestamp()
@@ -687,7 +687,7 @@ def test_no_device_entry_baseline_diverged_server_newer_returns_conflict():
         device_syncs=[_device_sync(OTHER_DEVICE_ID, is_current=True)],
     )
     result = _ADAPTER.compute_sync_action(
-        local_file=_local(mtime=server_epoch - 3600),  # local older → today Downloads
+        local_file=_local(mtime=server_epoch - 3600),  # local older → still Conflict
         server_saves_in_slot=[server],
         files_state={"last_sync_hash": "abc"},
         device_id=DEVICE_ID,
@@ -699,7 +699,7 @@ def test_no_device_entry_baseline_diverged_server_newer_returns_conflict():
 def test_no_device_entry_baseline_diverged_local_newer_returns_conflict():
     """Branch 6 / #1059 — same divergence-from-baseline case, but local mtime is
     newer than the server save. Divergence beats mtime: both sides moved → Conflict,
-    not Upload. Today branch 6 does mtime-only and Uploads here.
+    not Upload.
     """
     server_updated_at = "2024-01-01T12:00:00+00:00"
     server_epoch = datetime.fromisoformat(server_updated_at).timestamp()
@@ -708,7 +708,7 @@ def test_no_device_entry_baseline_diverged_local_newer_returns_conflict():
         device_syncs=[_device_sync(OTHER_DEVICE_ID, is_current=True)],
     )
     result = _ADAPTER.compute_sync_action(
-        local_file=_local(mtime=server_epoch + 3600),  # local newer → today Uploads
+        local_file=_local(mtime=server_epoch + 3600),  # local newer → still Conflict
         server_saves_in_slot=[server],
         files_state={"last_sync_hash": "abc"},
         device_id=DEVICE_ID,
@@ -799,7 +799,7 @@ def test_no_device_entry_identical_content_returns_skip_adopt_baseline():
     backup, fresh reinstall). The local bytes already exist on the server, so adopt
     that save as the baseline (``Skip(synced, adopt_baseline=True)``) instead of
     POSTing a duplicate — even when local mtime is at-or-after the server's
-    ``updated_at`` (today branch 6 does mtime-only and returns ``Upload(None)``).
+    ``updated_at``.
     """
     server_updated_at = "2024-01-01T12:00:00+00:00"
     server_epoch = datetime.fromisoformat(server_updated_at).timestamp()
@@ -809,7 +809,7 @@ def test_no_device_entry_identical_content_returns_skip_adopt_baseline():
     )
     server["content_hash"] = "abc"
     result = _ADAPTER.compute_sync_action(
-        local_file=_local(mtime=server_epoch + 3600),  # local newer → today Uploads
+        local_file=_local(mtime=server_epoch + 3600),  # local newer → still adopted
         server_saves_in_slot=[server],
         files_state={},
         device_id=DEVICE_ID,
@@ -847,8 +847,8 @@ def test_no_device_entry_no_baseline_missing_content_hash_returns_conflict():
     server save carries NO ``content_hash`` key (older / migrated saves may lack
     it). The dedup check is skipped, but without a baseline the present local of
     unknown provenance can't be silently mtime-picked → ``Conflict`` (branch-5
-    parity), even though local mtime >= server. The mtime fallback's remaining
-    duplicate-POST gap now applies only when local matches a held baseline (see
+    parity), even though local mtime >= server. The mtime fallback's duplicate-POST
+    gap applies only when local matches a held baseline or its hash is unknown (see
     ``test_no_device_entry_baseline_matches_preserves_mtime_behavior``).
     """
     server_updated_at = "2024-01-01T12:00:00+00:00"

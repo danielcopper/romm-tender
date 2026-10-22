@@ -24,8 +24,9 @@ Sync uses a **newest-wins** model with a hash-divergence guard:
   do.
 - If another device pushed a newer save and your local file is unchanged, the new server save is downloaded silently.
 - If you played offline and your local file changed, your save is pushed back to the server.
-- A conflict modal only appears if **both sides changed** since the last sync — Tender won't silently overwrite either
-  version.
+- A conflict modal only appears if **both sides changed** to different content since the last sync, if a save on this
+  device that Tender never synced meets a different save in RomM, or if your local save looks emptied or cut short —
+  Tender won't silently overwrite either version.
 
 This is the same model used by the official RomM clients (Argosy and Grout). It keeps cross-device save sync simple: one
 timeline per slot, newest wins.
@@ -99,7 +100,9 @@ Tender uses a single, automatic resolution policy:
   the server version is downloaded silently.
 - **Your local edits push automatically** when the server still considers your device up-to-date — for example, you
   played offline and no other device synced in the meantime.
-- **A conflict modal appears only when both sides changed** since the last sync. You pick which version to keep.
+- **A conflict modal appears only when both sides changed** to different content since the last sync, when a save on
+  this device that Tender never synced meets a different save in RomM, or when your local save looks emptied or cut
+  short. You pick which version to keep.
 
 Tap **Sync All Saves Now** to sync saves for all installed ROMs at once. This is useful for:
 
@@ -113,7 +116,9 @@ device.
 
 ## Resolving Conflicts
 
-When both your local save and the server save have changed since the last sync, a modal appears with both versions.
+When both your local save and the server save have changed to different content since the last sync, or a save Tender
+never synced meets a different one in RomM, or your local save looks emptied or cut short, a modal appears with both
+versions.
 
 <!-- Screenshot: Sync conflict modal with local and server save details and three buttons -->
 

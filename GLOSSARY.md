@@ -1030,9 +1030,11 @@ baseline to detect drift on the next sync. Adopting a baseline (`adopt_baseline(
 ### Newest-wins matrix
 
 The save-sync conflict-resolution model (`services/saves/sync_engine/`). For each tracked file it evaluates local vs
-remote vs **baseline** and resolves to whichever side is newer, rather than blindly mirroring one direction. The
-"matrix" is the per-file evaluation table that drives the actual upload / download / no-op dispatch for a ROM's sync
-run.
+remote vs **baseline** and decides from what changed on each side since the last sync, rather than blindly mirroring one
+direction. Where both sides changed to different content, or a local save of unknown provenance meets a different server
+save, or a local save looks emptied or cut short, it asks the user; modification times are compared only where nothing
+else orders the two sides. The "matrix" is the per-file evaluation table that drives the actual upload / download /
+no-op dispatch for a ROM's sync run.
 
 ### SyncRun
 
