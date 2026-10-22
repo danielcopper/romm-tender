@@ -734,13 +734,16 @@ the verdict stays withheld while "could not be checked" is simply untrue of it. 
 not come back**, which is a statement about Tender's own read and no evidence the launch cannot read it, and one the
 emulator **refuses** on its size before reading a byte, which arrives with the verdict already unmet and needs the
 reason rather than a verdict, and one that is there and is **not the image** the emulator expects, which arrives unmet
-too and is worded as the wrong file rather than as one that is missing. Everything else — the bytes matched, nothing
-asked — leaves the row to the axes it always had.
+too and is worded as the wrong file rather than as one that is missing. A file in a declared folder the emulator's own
+test read and **turned down** is a wrong file too, worded as not an image the emulator accepts; that word, `rejected`,
+is Tender's own, since the resolver states it only as the file's verdict (#2191 D41). Everything else — the bytes
+matched, nothing asked — leaves the row to the axes it always had.
 
 Where each of these is worded is `frontend/src/utils/biosFileNote.ts`, the one place both surfaces derive a row's note
 from. The platform pane's **Contents** column words every value, from the same module (`contentsWords`): right file,
-wrong file, refused, not comparable, not recognised, could not be read, not checked, not established. The mark in its
-`On disk` cell stays the verdict alone, so the two columns explain each other.
+wrong file (not the image expected, or not an image accepted), refused, not comparable, not recognised, could not be
+read, not checked, not established. The mark in its `On disk` cell stays the verdict alone, so the two columns explain
+each other.
 
 ### One-of group (firmware): met / partial / unmet / unknown
 

@@ -964,7 +964,8 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
           <BiosFileRow
             file={file}
             // Every emulator's rows offer their download and their delete; a
-            // download lands in the store and is linked for every emulator.
+            // download lands in the store and is linked for every emulator its
+            // source does not state is not installed.
             action={rowAction(row, state, file, fetchable, backupRoot, focus, tableKey(file.file_name))}
             emulator={shownLabel ?? firmware.active_core_label ?? null}
             placeLines={biosPlaceLines(

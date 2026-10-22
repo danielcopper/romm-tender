@@ -3,9 +3,10 @@
 Every entry point fetches into the store folder of the platform it is pressed
 for (:meth:`FirmwareStore.do_fetch`) and then brings that platform's links up to
 date in every enabled source (:meth:`FirmwareStore.do_update_links`), so a file
-reaches each emulator that wants it at the place the resolver names. No
-download lands outside the store. A library file fills a requirement by its
-content wherever RomM files it (:mod:`domain.firmware_match`).
+reaches each emulator that wants it and its source does not state is not
+installed, at the place the resolver names. No download lands outside the
+store. A library file fills a requirement by its content wherever RomM files it
+(:mod:`domain.firmware_match`).
 """
 
 from __future__ import annotations

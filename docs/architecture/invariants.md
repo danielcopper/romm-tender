@@ -1602,23 +1602,28 @@ Format: **invariant** — tier — enforced by.
   that loop is the shape this rule is about, because the copies would drift silently. **Nothing mechanical stands behind
   any of this.** A delete path looping a status list on `downloaded` alone would go green — which is exactly the shape
   the older one had when it destroyed that file
-- **A BIOS link goes only to a place the resolver states, for an emulator its source does not state not installed
-  (`FirmwareCatalogue.linkable`), in every enabled source, a sealed catalogue's places included while its rows stay
-  withheld; the link update removes only Tender's own links, only in a source whose wants it read and whose roots it may
-  touch, at places no such emulator wants any more** — test + prompt-only —
+- **A BIOS link goes only to a place the resolver states, for an emulator its source does not state not installed on
+  every row it lists it under (`FirmwareCatalogue.linkable`), in every enabled source, a sealed catalogue's places
+  included while its rows stay withheld; the link update removes a link of Tender's that still points at its store file
+  only in a source whose list it read whole — never a sealed one — and whose roots it may touch, at a place no emulator
+  of that source wants any more, for this platform or for another Tender holds store files for; a link whose store file
+  is gone goes wherever its place may be touched** — test + prompt-only —
   `tests/services/test_firmware_store.py::TestOnlyAnInstalledEmulatorIsLinkedFor` (no link for an emulator stated not
-  installed, a stale own link removed, a link the user put there, one under a root only assumed and one in a source not
-  read left alone, no "Replace…" for such an emulator) and
-  `tests/adapters/test_atlas_firmware.py::TestEverySourceItIsPlacedIn` (the launch reading's `not-installed` is the only
-  exclusion — `unestablished` and a reading that raised rule nothing out — and a sealed catalogue is read for its places
-  while the answering read of one stays withheld). Why: a packaged card states what a standalone emulator wants whether
-  or not it is installed, and the firmware reading of a libretro core alone cannot tell; the launch reading
+  installed; a link nobody wants removed; a link the user put there, one under a root only assumed, one in a source not
+  read, one a sealed list leaves out and one another platform's emulator still wants left alone; its row refusing
+  "Replace…" with the refusal `not_installed`) and `tests/adapters/test_atlas_firmware.py::TestEverySourceItIsPlacedIn`
+  (the launch reading's `not-installed` is the only exclusion, and only where every row of the emulator says it —
+  `unestablished` and a reading that raised rule nothing out — and a sealed catalogue is read for its places while the
+  answering read of one stays withheld). Why: a packaged card states what a standalone emulator wants whether or not it
+  is installed, so the firmware reading alone cannot keep a link from an emulator that is not there; the launch reading
   (`emulators_for(system)`, each entry's `availability`) is the source's own statement. A place the resolver states is a
   place a link may go even beside a sealed catalogue: what the sealed list leaves out is a link not placed, while
-  reading it as complete for rows and verdicts would misstate what is needed
-  ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37). Prompt-only: a new placing path reads
-  `linkable()`, never `placements`; `not_installed` comes only from the source's own launch reading; a link of a source
-  switched off or not read stays until #2228 decides what follows a switch
+  reading it as complete — for rows and verdicts, or for deciding that a link is unwanted — would misstate what is
+  needed. One place can serve two platforms (D19), so a link one platform no longer wants stays while another platform's
+  emulator in the same source wants its place ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36,
+  D37, D40, D42). Prompt-only: a new placing path reads `linkable()`, never `placements`; `not_installed` comes only
+  from the source's own launch reading; a link of a source switched off or not read stays, whatever that source's list
+  would say; a platform Tender holds no store file for is not asked whether it wants a place
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

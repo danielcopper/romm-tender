@@ -1614,15 +1614,16 @@ folder rule.
 **An emulator reaches a store file through an absolute symlink at the place the resolver names for it** (#2219 D4). The
 link goes in for every emulator of the platform whose requirement the file fills and that its source does not state not
 installed, in every enabled emulator source (D23, D36): the source's own launch reading (`emulators_for`, each entry's
-`availability`) is asked beside its firmware reading, and only `not-installed` rules an emulator out — one it cannot
-establish is linked for (D37), which mainly guards a carded standalone emulator, whose card states what it wants whether
-or not it is installed. A sealed emulator catalogue (EmuDeck's) is read for its places all the same, while its rows and
-verdicts stay withheld (`AtlasPlatformFirmwareAdapter.every_source`, D37). A link goes only where nothing lies under
-that name: Tender places no link over a file, a folder or a link that is not its own, and changes nothing there (D13).
-For a folder an emulator lists (LRPS2's `pcsx2/bios`) every store file the resolver recognises for it is linked into it
-under its name in RomM (D26). A place under a root the resolver only assumed gets no link, nor does any place of a
-source whose roots could not be asked, and nor does a place whose folder is not there — Tender creates none (D11, #2219
-D6). For the first two the row says so, naming that source (D32). Which file fills which requirement is
+`availability`) is asked beside its firmware reading, and only `not-installed` on every row the source lists the
+emulator under rules it out — one it cannot establish is linked for (D37). The launch reading mainly guards a carded
+standalone emulator, whose card states what it wants whether or not it is installed. A sealed emulator catalogue
+(EmuDeck's) is read for its places all the same, while its rows and verdicts stay withheld and its list never decides
+that a link is unwanted (`AtlasPlatformFirmwareAdapter.every_source`, D37, D40). A link goes only where nothing lies
+under that name: Tender places no link over a file, a folder or a link that is not its own, and changes nothing there
+(D13). For a folder an emulator lists (LRPS2's `pcsx2/bios`) every store file the resolver recognises for it is linked
+into it under its name in RomM (D26). A place under a root the resolver only assumed gets no link, nor does any place of
+a source whose roots could not be asked, and nor does a place whose folder is not there — Tender creates none (D11,
+#2219 D6). For the first two the row says so, naming that source (D32). Which file fills which requirement is
 `domain/firmware_match.py`: its MD5 against the checksum the resolver pins for the requirement, by its declared name
 only for an archive or where no checksum is known (D2, D8, D16); where several fill one, the alphabetically first is
 linked.
@@ -1634,14 +1635,16 @@ names the path it points at — which is what keeps a link Tender could not remo
 
 **Bringing the links up to date** (`FirmwareStore.do_update_links`, `domain/firmware_places.py::plan_link_update`)
 places every link an emulator of the platform wants where the name is free, places again a link of Tender's that points
-at nothing where a store copy exists, removes such a link where none does, removes a link of Tender's no installed
-emulator of its source wants any more — only in a source whose wants it read and whose roots it may touch, so a link in
-a source switched off or not read stays (D36) — records a link of Tender's found at a new place, and drops the record of
-a place it may touch where no link of Tender's to the recorded file lies any more; it downloads nothing (D6). Beside it,
-"Replace…" places the one link at the place it cleared (`do_place_link`), and a delete and "Forget what is recorded
-there" remove the links of the files they take (`do_remove`, `forget_records_under`); nothing else places or removes a
-link. Every download ends with it; so does a replacement; and the panel asks for it (`update_bios_links`) when a
-platform page or a game's page opens and after an emulator switch.
+at nothing where a store copy exists, removes such a link where none does, wherever its place may be touched, removes a
+link of Tender's that still points at its store file where no emulator of its source that is not stated not installed
+wants its place any more, for this platform or for another Tender holds store files for — only in a source whose list it
+read whole, never a sealed one, and whose roots it may touch, so a link in a source switched off, not read or sealed
+stays (D36, D40, D42) — records a link of Tender's found at a new place, and drops the record of a place it may touch
+where no link of Tender's to the recorded file lies any more; it downloads nothing (D6). Beside it, "Replace…" places
+the one link at the place it cleared (`do_place_link`), and a delete and "Forget what is recorded there" remove the
+links of the files they take (`do_remove`, `forget_records_under`); nothing else places or removes a link. Every
+download ends with it; so does a replacement; and the panel asks for it (`update_bios_links`) when a platform page or a
+game's page opens and after an emulator switch.
 
 **A file the resolver reads as wrong is replaced only on the user's confirmation**, and only where the library copy is
 proven right by its checksum (D5): the copy is fetched and checked first, the file in the way goes to
@@ -2819,11 +2822,12 @@ one placement per emulator and name, never folding them by name, and every launc
 its place, its presence, its verdict — and the first declarer's for a name it does not declare. The status rows and all
 three platform downloads read it, so with YabaSanshiro picked the Saturn row reads not met over a file lying only under
 `kronos/`, and "Download required" fetches the file into the store and links it where YabaSanshiro opens it — and, since
-a download links for every emulator whose requirement the file fills, under `kronos/` for Kronos as well
-([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D3). `download_required_firmware` takes an `emulator`
-— the identity the page's emulator selector shows, `None` for the platform's pick — and fetches what THAT emulator
-requires. An identity the answer holds no verdict for is refused with `emulator_unknown` rather than answered with
-another emulator's requirement (`_shown_emulator`).
+a download links for every emulator whose requirement the file fills and its source does not state is not installed,
+under `kronos/` for Kronos as well where Kronos is installed
+([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D3, D36). `download_required_firmware` takes an
+`emulator` — the identity the page's emulator selector shows, `None` for the platform's pick — and fetches what THAT
+emulator requires. An identity the answer holds no verdict for is refused with `emulator_unknown` rather than answered
+with another emulator's requirement (`_shown_emulator`).
 
 **Where a link goes is the place the emulator opens, as the resolver names it.** `FirmwarePlacement.place` is absolute:
 the requirement's own path, inside the firmware root or outside it (Cemu's `keys.txt` under RetroDECK's data folder) —

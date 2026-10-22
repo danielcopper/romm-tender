@@ -224,9 +224,10 @@ class AtlasPlatformFirmwareAdapter:
         """*system*'s firmware demand in each enabled source, in the user's order, to place links by.
 
         A source not read is left out. A sealed emulator catalogue (EmuDeck's)
-        is read for its places all the same: where the resolver states where a
-        file goes, a link may go there, though the rows of such an answer stay
-        withheld (:func:`_catalogue`).
+        is read for its places all the same, and marked ``sealed``: where the
+        resolver states where a file goes, a link may go there, but its list
+        never decides that a link is unwanted, and the rows of such an answer
+        stay withheld (:func:`_catalogue`).
         """
         reading = self._sources.read()
         catalogues: list[FirmwareCatalogue] = []
@@ -384,9 +385,10 @@ def _catalogue(
     An answer beside a sealed emulator catalogue (EmuDeck's) is built from the
     overlay entries the resolver could read, an incomplete list that would look
     complete, so it reads as nothing established — the way the catalogue and
-    save adapters decline on the same code. *for_links* reads it all the same:
-    a place the resolver states is a place a link may go, and what the list
-    leaves out is only a link not placed.
+    save adapters decline on the same code. *for_links* reads it all the same,
+    marked ``sealed``: a place the resolver states is a place a link may go,
+    and what the list leaves out is only a link not placed — never a link
+    taken away.
     """
     sealed = any(caveat.code == CAVEAT_EMULATOR_CATALOGUE_SEALED for caveat in answer.caveats)
     if answer.root is None or (sealed and not for_links):

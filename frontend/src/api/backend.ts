@@ -790,7 +790,7 @@ export const downloadRequiredFirmware = endpoint<[string, string | null], Firmwa
 // the library file the row shows, so two files of one name fetch the one shown; an
 // id the listing no longer holds under that name falls back to the name alone. The
 // file lands in the platform's store folder and is linked for every emulator that
-// wants it, whichever the page shows.
+// wants it and is not stated not installed, whichever the page shows.
 export const downloadPlatformFirmwareFile = endpoint<
   [string, string, number | null],
   FirmwareDownloadResult | EndpointFailure

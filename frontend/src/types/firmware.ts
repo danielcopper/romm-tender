@@ -50,7 +50,7 @@ export type FirmwareDeclarationState = "read" | "packaged" | "absent" | "unreada
  * What became of a row's BYTES, in the resolver's own stable vocabulary, carried
  * verbatim like {@link FirmwareDeclarationState}.
  *
- * Eight values and they are not one axis. Three say a comparison HAPPENED and
+ * Nine values and they are not one axis. Three say a comparison HAPPENED and
  * differ in what it found — `verified` (the bytes are the pinned ones),
  * `mismatch` (they are not), `unrecognised` (they were read and no table the
  * emulator keeps knows them, which DuckStation boots anyway with a warning) —

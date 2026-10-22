@@ -1544,67 +1544,68 @@ it, for the focused platform:
   ([#2191](https://github.com/danielcopper/romm-tender/issues/2191)): **Download** where a RomM library file fills the
   row (`library` — by its content, or by name where the resolver's identity is an archive or names no checksum), RomM
   states its checksum, this platform's firmware store holds no copy yet and nothing that is not Tender's lies at the
-  row's place (`isFetchable`) — the file lands in the store and is linked for every emulator that wants it, whichever
-  the page shows; **Replace…** where the backend offers it (`replace_offered`: another file lies at the place, the
-  resolver reads it as wrong, and the library copy is proven right by its checksum), behind a confirmation that names
-  the exact path and the backup folder (`backup_root`); **Delete** where the row names a file of Tender's (`delete_name`
-  — its store file, an older download of the library file that fills it, or an older download lying at the row's own
-  place), behind "Delete `<file name>`?" / "Tender removes it from its firmware store and every link to it. Files you
-  placed yourself stay." A folder the emulator lists is not one row but one per file in it (#2191 D26): each library
-  file the resolver recognises for the folder, with its download, link and Delete, and each other file lying in it that
-  the resolver makes a statement about, with its verdict and no button; a file it passes over because a valid image lies
-  beside it gets no row. Where that leaves no row — nothing lies in the folder and no library file is recognised for it
-  — one row stands for the folder, named by it, with the resolver's verdict over it and the code it words that by, no
-  button, and the line "No BIOS image here yet" (D28); it goes as soon as a file of the folder has a row of its own.
-  Under each row, beside the resolver's words, stand Tender's own (`utils/biosPlaceWords.ts`, the same on the game
-  page's BIOS tab): a store copy not linked here yet, a link to another platform's copy ("Linked to Tender's copy for
-  `<platform>`"), another file lying at the place, a file matched by name, RomM stating no checksum, a folder that does
-  not exist yet, a place under a root the row's source's settings do not name or of a source whose roots could not be
-  asked (D32), an emulator the source states is not installed ("`<emulator>` is not installed here, so Tender links
-  nothing for it.", a `place_refusal` of reason `not_installed`, said in place of what lies at the place, D39), and what
-  the latest attempt on this page did — a link that could not be placed, a damaged download, "Replaced. The old file is
-  in `<backup path>`." — kept until the page is left or another Replace… on that row says otherwise, and never recorded
-  (#2191 D22). The game page's BIOS tab says on its rows what the play row's "Download BIOS" did the same way — a link
-  it could not place, and a file it moved out of the store ("A different `<file name>` was already in Tender's firmware
-  store. It was moved to `<backup path>`.") — while that press's toast says only how many files it downloaded (D30;
-  `utils/biosAttempts.ts`, forgotten when the game page is left). A row there that offers **Replace…** is a focus stop
-  of its own, pressed as a whole with the label at the end of its name line — the list's stops are buttons, so it cannot
-  hold one — and the rows before and after it stand in stops of their own; A opens the same confirmation as on the
-  platform page, the replacement runs for the game's platform, and once the re-read shows the row linked, focus that the
-  vanished stop took with it goes to the stop that now holds the row. A replacement refused or failed says so on its
-  row, "Failed to replace the file: `<reason>`", until the page is left or another Replace… on that row says otherwise,
-  never in a toast. Above the table, a sentence says where a download lands in the store only (`store_only`: an emulator
-  the resolver does not cover, or no emulator source for the platform). The library's own section words each row by what
-  the resolver's identification says its content is — "Checking…" until the answer arrives, then "Not recognised" or
-  "Recognised as `<names>`" — asked one file at a time after the page is shown, because the resolver's identification
-  takes about 0.25 s a file on the reference machine, kept by MD5 for the page and at most thirty minutes
-  (`utils/firmwareIdentifications.ts`), and a store copy no emulator uses reads "In Tender's firmware store, used by no
-  emulator" with its Delete. When a platform's pane is first shown with an answer, and after an emulator switch, the
-  pane asks for the platform's links to be brought up to date (`update_bios_links`) and reads the platform again where
-  that placed or removed one; a download's, a replacement's and that update's result say, in the status line, "`<n>`
-  placed, `<m>` left in place: another file lies there" where something stayed in the way. Focus never falls back to the
-  top of the page here (#2190 D32; `library/useBiosFocus.ts`), which is where Steam puts focus that was lost, scrolling
-  the pane there. A button that greys out keeps the focus: as Steam's shipped client code shows (`steamui/sp.js`), its
-  `DialogButton` never disables its element — it adds the class `Disabled`, unwires its handlers and hides its A legend
-  — so a press on it does nothing. That grey is the whole look of a greyed button: the red of a Delete label, and of
-  "Failed", is drawn only while the button can be pressed. While a row's download or delete, or one of the bulk buttons
-  below, runs, the pressed button stays enabled and every other one waits greyed; Steam's dialog hands no focus back, so
-  a confirmed or cancelled delete puts it back on the pressed button; and where the work leaves the row nothing to
-  press, focus goes to the row itself. Steam also scrolls the pane to every element focus lands on, so the position the
-  pane stood at when the button was pressed — before its dialog, for a delete — is put back at once and again after
-  Steam's own scroll has run, each time only while focus is still in the BIOS part. After a step of the selector, focus
-  that was on a row of the table stays on the same file's row where the new emulator lists it, goes to the new table's
-  top row where it does not, and to the carousel's shown entry where the new emulator lists no file; focus anywhere else
-  stays where it is. On the game page the list is one focus stop, or one per run of rows around a row that offers
-  Replace…, and focus on any of them stays on the list unless the new emulator lists no file, and then goes to the
-  carousel's shown entry. Below the table one button, `Download required for
-  <emulator> (N)`, over the shown
-  emulator's rows, sending that emulator's identity. _N_ counts those rows that are fetchable and that the backend marks
-  `fetch_for_required` — the rule the download applies too, which takes the options of a one-of group's uncovered
-  regions as well as the files the emulator requires. Under a sub-heading of their own, `For all of <platform>` —
-  `SubHeading` in `layout/pane.tsx`, smaller and quieter than a section title, so it reads as part of the BIOS section
-  (#2190 D30) — the platform-wide pair, which no emulator choice touches: `Download all`, every file the library holds
-  for the platform, fetched into Tender's firmware store and linked for every emulator that asks for it (#2191 D21), and
+  row's place (`isFetchable`) — the file lands in the store and is linked for every emulator that wants it and its
+  source does not state is not installed, whichever the page shows; **Replace…** where the backend offers it
+  (`replace_offered`: another file lies at the place, the resolver reads it as wrong, and the library copy is proven
+  right by its checksum), behind a confirmation that names the exact path and the backup folder (`backup_root`);
+  **Delete** where the row names a file of Tender's (`delete_name` — its store file, an older download of the library
+  file that fills it, or an older download lying at the row's own place), behind "Delete `<file name>`?" / "Tender
+  removes it from its firmware store and every link to it. Files you placed yourself stay." A folder the emulator lists
+  is not one row but one per file in it (#2191 D26): each library file the resolver recognises for the folder, with its
+  download, link and Delete, and each other file lying in it that the resolver makes a statement about, with its verdict
+  and no button; a file it passes over because a valid image lies beside it gets no row. Where that leaves no row —
+  nothing lies in the folder and no library file is recognised for it — one row stands for the folder, named by it, with
+  the resolver's verdict over it and the code it words that by, no button, and the line "No BIOS image here yet" (D28);
+  it goes as soon as a file of the folder has a row of its own. Under each row, beside the resolver's words, stand
+  Tender's own (`utils/biosPlaceWords.ts`, the same on the game page's BIOS tab): a store copy not linked here yet, a
+  link to another platform's copy ("Linked to Tender's copy for `<platform>`"), another file lying at the place, a file
+  matched by name, RomM stating no checksum, a folder that does not exist yet, a place under a root the row's source's
+  settings do not name or of a source whose roots could not be asked (D32), an emulator the source states is not
+  installed ("`<emulator>` is not installed here, so Tender links nothing for it.", a `place_refusal` of reason
+  `not_installed`, said in place of what lies at the place, D39), and what the latest attempt on this page did — a link
+  that could not be placed, a damaged download, "Replaced. The old file is in `<backup path>`." — kept until the page is
+  left or another Replace… on that row says otherwise, and never recorded (#2191 D22). The game page's BIOS tab says on
+  its rows what the play row's "Download BIOS" did the same way — a link it could not place, and a file it moved out of
+  the store ("A different `<file name>` was already in Tender's firmware store. It was moved to `<backup path>`.") —
+  while that press's toast says only how many files it downloaded (D30; `utils/biosAttempts.ts`, forgotten when the game
+  page is left). A row there that offers **Replace…** is a focus stop of its own, pressed as a whole with the label at
+  the end of its name line — the list's stops are buttons, so it cannot hold one — and the rows before and after it
+  stand in stops of their own; A opens the same confirmation as on the platform page, the replacement runs for the
+  game's platform, and once the re-read shows the row linked, focus that the vanished stop took with it goes to the stop
+  that now holds the row. A replacement refused or failed says so on its row, "Failed to replace the file: `<reason>`",
+  until the page is left or another Replace… on that row says otherwise, never in a toast. Above the table, a sentence
+  says where a download lands in the store only (`store_only`: an emulator the resolver does not cover, or no emulator
+  source for the platform). The library's own section words each row by what the resolver's identification says its
+  content is — "Checking…" until the answer arrives, then "Not recognised" or "Recognised as `<names>`" — asked one file
+  at a time after the page is shown, because the resolver's identification takes about 0.25 s a file on the reference
+  machine, kept by MD5 for the page and at most thirty minutes (`utils/firmwareIdentifications.ts`), and a store copy no
+  emulator uses reads "In Tender's firmware store, used by no emulator" with its Delete. When a platform's pane is first
+  shown with an answer, and after an emulator switch, the pane asks for the platform's links to be brought up to date
+  (`update_bios_links`) and reads the platform again where that placed or removed one; a download's, a replacement's and
+  that update's result say, in the status line, "`<n>` placed, `<m>` left in place: another file lies there" where
+  something stayed in the way. Focus never falls back to the top of the page here (#2190 D32;
+  `library/useBiosFocus.ts`), which is where Steam puts focus that was lost, scrolling the pane there. A button that
+  greys out keeps the focus: as Steam's shipped client code shows (`steamui/sp.js`), its `DialogButton` never disables
+  its element — it adds the class `Disabled`, unwires its handlers and hides its A legend — so a press on it does
+  nothing. That grey is the whole look of a greyed button: the red of a Delete label, and of "Failed", is drawn only
+  while the button can be pressed. While a row's download or delete, or one of the bulk buttons below, runs, the pressed
+  button stays enabled and every other one waits greyed; Steam's dialog hands no focus back, so a confirmed or cancelled
+  delete puts it back on the pressed button; and where the work leaves the row nothing to press, focus goes to the row
+  itself. Steam also scrolls the pane to every element focus lands on, so the position the pane stood at when the button
+  was pressed — before its dialog, for a delete — is put back at once and again after Steam's own scroll has run, each
+  time only while focus is still in the BIOS part. After a step of the selector, focus that was on a row of the table
+  stays on the same file's row where the new emulator lists it, goes to the new table's top row where it does not, and
+  to the carousel's shown entry where the new emulator lists no file; focus anywhere else stays where it is. On the game
+  page the list is one focus stop, or one per run of rows around a row that offers Replace…, and focus on any of them
+  stays on the list unless the new emulator lists no file, and then goes to the carousel's shown entry. Below the table
+  one button, `Download required for
+  <emulator> (N)`, over the shown emulator's rows, sending that emulator's
+  identity. _N_ counts those rows that are fetchable and that the backend marks `fetch_for_required` — the rule the
+  download applies too, which takes the options of a one-of group's uncovered regions as well as the files the emulator
+  requires. Under a sub-heading of their own, `For all of <platform>` — `SubHeading` in `layout/pane.tsx`, smaller and
+  quieter than a section title, so it reads as part of the BIOS section (#2190 D30) — the platform-wide pair, which no
+  emulator choice touches: `Download all`, every file the library holds for the platform, fetched into Tender's firmware
+  store and linked for every emulator that asks for it and is not stated not installed (#2191 D21, D36), and
   `Delete downloads (N)` behind a `ConfirmModal`, whose title and text say it takes only Tender's own downloads (#2190
   D24). Then the library section, under the sub-heading "In your RomM library, asked for by no emulator here", with the
   same table and per-row buttons (a download from it lands in the store, linked once an emulator asks for it), the same
@@ -1655,26 +1656,26 @@ it, for the focused platform:
   required" or "need not established" (`needWords`). The choice changes the list and nothing else, and this page offers
   no BIOS delete and no download button of its own: its one press is a row's **Replace…**, which fetches only the copy
   it links in, and the play row's "Download BIOS" fetches every library file of the platform into the store and links it
-  for every emulator that asks for it. The ratio is a third set again, which is why it rides along on both rather than
-  being folded in. **The ratio names that set in its own words**, because the sentence in front of it counts another one
-  and the numbers cannot say which is which: `The one file … opens by name is in place (1/20 RomM library files)` states
-  three correct numbers over three sets, and the words are the only thing that tells them apart. The pair is the
-  library's inventory for the platform — what it holds, and how many of those Tender found at their destination
-  (GLOSSARY.md → Library inventory) — and the tail names no axis of its own deliberately: the ratio form carries that,
-  and each candidate word for the numerator was worse than none. Two of them are already on the screen under this
-  sentence and stand for something else there — `present` is the row marks and `on disk` the column beside them, both
-  the row's own verdict rather than this pair — and the third, `downloaded`, would read as a claim about who put the
-  file there, which is more than `local_count` counts: `on_server` rows whose file is at its destination, the field
-  itself answering presence and nothing more. Neither surface prints the ratio where the library holds nothing for the
-  platform: `(0/0 RomM library files)` counts a set that does not exist. Nor does it count a row that reads "could not
-  be established", which is no file missing: the ratio is the payload's own pair (`ratio_server_count` /
-  `ratio_local_count`, over the rows whose verdict was established), and where no row was established neither surface
-  prints one. The level, its label and the download buttons read `server_count` / `local_count`, which still count every
-  row the library holds. What stops a surface writing one of these sentences back into itself is
-  `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and fails on any phrase the module
-  builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and `biosGroup.test.ts` over the
-  region names and a file's place in a group. **All three SWEEP the set they search rather than naming it** — every
-  non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
+  for every emulator that asks for it and is not stated not installed. The ratio is a third set again, which is why it
+  rides along on both rather than being folded in. **The ratio names that set in its own words**, because the sentence
+  in front of it counts another one and the numbers cannot say which is which:
+  `The one file … opens by name is in place (1/20 RomM library files)` states three correct numbers over three sets, and
+  the words are the only thing that tells them apart. The pair is the library's inventory for the platform — what it
+  holds, and how many of those Tender found at their destination (GLOSSARY.md → Library inventory) — and the tail names
+  no axis of its own deliberately: the ratio form carries that, and each candidate word for the numerator was worse than
+  none. Two of them are already on the screen under this sentence and stand for something else there — `present` is the
+  row marks and `on disk` the column beside them, both the row's own verdict rather than this pair — and the third,
+  `downloaded`, would read as a claim about who put the file there, which is more than `local_count` counts: `on_server`
+  rows whose file is at its destination, the field itself answering presence and nothing more. Neither surface prints
+  the ratio where the library holds nothing for the platform: `(0/0 RomM library files)` counts a set that does not
+  exist. Nor does it count a row that reads "could not be established", which is no file missing: the ratio is the
+  payload's own pair (`ratio_server_count` / `ratio_local_count`, over the rows whose verdict was established), and
+  where no row was established neither surface prints one. The level, its label and the download buttons read
+  `server_count` / `local_count`, which still count every row the library holds. What stops a surface writing one of
+  these sentences back into itself is `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and
+  fails on any phrase the module builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and
+  `biosGroup.test.ts` over the region names and a file's place in a group. **All three SWEEP the set they search rather
+  than naming it** — every non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
   `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two while three
   surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted. Deriving the
   set from who imports the module would be worse still, since a surface wording a state for itself is precisely one that
@@ -1892,14 +1893,15 @@ it, for the focused platform:
   `frontend/src/utils/biosFileNote.ts`, #1803): for a folder declaration the count of images it holds (the resolver's
   verbatim strings are listed full-width under the row, `pre-wrap`, because the padding in them is what makes a line
   matchable against the emulator's own picker), that it holds none, or that nothing established its contents; for a file
-  the resolver's `checked` in words — right file, wrong file, refused, not comparable, not recognised, could not be
-  read, not checked, not established — the longer ones wrapping inside the 84px column rather than cut. A file of a
-  folder declaration that has a row of its own carries its own `checked`, never the folder's: the resolver states a
-  verdict per file and no check state, so `services/firmware/rows.py` words an identified image `verified`, a file in a
-  folder holding no image `unrecognised`, and anything else `unknown`. They explain the mark beside them and never
-  contradict it, and the word "unknown" is not one of them. A file nothing was asked about — one that is not there —
-  reads an em dash, and the dash must never come to mean "asked, and nothing found". The section appears whenever the
-  firmware read speaks for the platform, synced or not.
+  the resolver's `checked` in words — right file, wrong file (not the image expected, or not an image accepted),
+  refused, not comparable, not recognised, could not be read, not checked, not established — the longer ones wrapping
+  inside the 84px column rather than cut. A file of a folder declaration that has a row of its own carries its own
+  `checked`, never the folder's: the resolver states a verdict per file and no check state, so
+  `services/firmware/rows.py` words an identified image `verified`, a file the emulator's test read and turned down
+  `rejected` — Tender's own word, "wrong file — not an image `<emulator>` accepts" (#2191 D41) — and anything else
+  `unknown`. They explain the mark beside them and never contradict it, and the word "unknown" is not one of them. A
+  file nothing was asked about — one that is not there — reads an em dash, and the dash must never come to mean "asked,
+  and nothing found". The section appears whenever the firmware read speaks for the platform, synced or not.
 
 - **Remove** — Remove _N_ shortcuts and Delete _N_ save files on one row, the actions the Data Management platform modal
   used to offer, without the BIOS delete (it is one group up). Red, last, each behind a confirmation, and with **no

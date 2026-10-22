@@ -184,7 +184,7 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  *
  * The shape of the destination comes first — a folder standing where a file is
  * opened says nothing about bytes, because there were none to read. Then what
- * became of the bytes, which is `checked` and is four distinct things the row's
+ * became of the bytes, which is `checked` and is five distinct things the row's
  * verdict cannot tell apart:
  *
  * - **`unrecognised`** — the emulator read the file and no table it keeps knows

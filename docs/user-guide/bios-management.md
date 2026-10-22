@@ -132,20 +132,20 @@ those of the emulator you launch with. A per-region image another emulator lacks
 only the emulator you launch with is checked against this game's region. This page deletes no BIOS file, and its one
 press, **Replace…** on a row where a wrong file is in the way (see below), downloads only the copy it links in its
 place. **Download BIOS** in the game's RomM Actions menu fetches every file your library holds for the platform into
-Tender's firmware store and links it for every emulator that asks for it — its notification says how many files it
-downloaded, and what it could not link or moved aside is said under the rows here — and every file of every emulator can
-be downloaded or deleted on the platform's page (see **Library › Platforms** below). Files in your RomM library that no
-emulator was found to ask for are listed in a section of their own under the list, the same whichever emulator is chosen
-(see below). A row is headed by the file the emulator declares, with its folder where it asks for one (`dc/dc_boot.bin`)
-— that is where the file has to go, and it is the one thing you need when placing one by hand. Whatever the emulator's
-packager wrote about the file follows the name on the same line, in the packager's own wording and punctuation —
-`scph5500.bin (PS1 JP BIOS)` — and only where it says something the name does not: those descriptions usually repeat the
-file name, and many are nothing else. Where the file also has something to say about its state, that comes last, behind
-a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
-your RomM library`. It is the **emulator's own** wording — a
-RetroArch core's description file — and it is shown for no other source. Where Tender's own card stands in for an
-emulator that ships no description of its own, that card explains the requirement in full sentences, which is a
-paragraph on a line meant for a few words; the row shows the file and its state instead.
+Tender's firmware store and links it for every emulator that asks for it and is installed — its notification says how
+many files it downloaded, and what it could not link or moved aside is said under the rows here — and every file of
+every emulator can be downloaded or deleted on the platform's page (see **Library › Platforms** below). Files in your
+RomM library that no emulator was found to ask for are listed in a section of their own under the list, the same
+whichever emulator is chosen (see below). A row is headed by the file the emulator declares, with its folder where it
+asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one thing you need when placing one by
+hand. Whatever the emulator's packager wrote about the file follows the name on the same line, in the packager's own
+wording and punctuation — `scph5500.bin (PS1 JP BIOS)` — and only where it says something the name does not: those
+descriptions usually repeat the file name, and many are nothing else. Where the file also has something to say about its
+state, that comes last, behind a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
+your RomM library`. It is the
+**emulator's own** wording — a RetroArch core's description file — and it is shown for no other source. Where Tender's
+own card stands in for an emulator that ships no description of its own, that card explains the requirement in full
+sentences, which is a paragraph on a line meant for a few words; the row shows the file and its state instead.
 
 Under every name a small line says what the chosen emulator needs of the file — _required_, _optional_, or _one of these
 · for USA discs_ for one of the per-region images below — so a file the launch needs and one it can do without read
@@ -392,16 +392,16 @@ and the row you focus is the one the right-hand pane describes.
    row has to say is printed **under** the row rather than in the column — that a file was provided by RetroDECK, that a
    folder holds no image, that a place could not be looked into (and so is offered no download)
 9. **Contents** says what the resolver's check found at the file's place, in its own terms: **right file**; **wrong file
-   — not the image … expects**; **refused — … does not accept a file of this size**; **not comparable — this kind of
-   file changes with the emulator version**; **not recognised**; **could not be read**; **not checked**; or **not
-   established — the resolver could not tell**. It explains the mark beside it and never contradicts it: a wrong or
-   refused file reads ✗, one that could not be compared or recognised reads `?`. A file that is not there reads an em
-   dash — nothing was there to check. For a required **folder** it says how many BIOS images the folder holds — and the
-   images themselves are listed under the row, in the emulator's own words so you can match one against its picker — or
-   that it holds none, or that its contents could not be established. A file in such a folder that has a row of its own
-   reads by its own check: **right file** for an image the resolver identified, **not recognised** for a file in a
-   folder it found no image in, and **not established** where the resolver could not tell. Where a cell is too narrow
-   for its words, they wrap onto the next line
+   — not the image … expects**; **wrong file — not an image … accepts**; **refused — … does not accept a file of this
+   size**; **not comparable — this kind of file changes with the emulator version**; **not recognised**; **could not be
+   read**; **not checked**; or **not established — the resolver could not tell**. It explains the mark beside it and
+   never contradicts it: a wrong or refused file reads ✗, one that could not be compared or recognised reads `?`. A file
+   that is not there reads an em dash — nothing was there to check. For a required **folder** it says how many BIOS
+   images the folder holds — and the images themselves are listed under the row, in the emulator's own words so you can
+   match one against its picker — or that it holds none, or that its contents could not be established. A file in such a
+   folder that has a row of its own reads by its own check: **right file** for an image the resolver identified, **wrong
+   file — not an image … accepts** for a file the emulator read and turned down, and **not established** where the
+   resolver could not tell. Where a cell is too narrow for its words, they wrap onto the next line
 10. A **Download** button sits on every row that your RomM library fills and that Tender's firmware store does not hold
     yet, and a **Delete** button on every row whose file Tender downloaded for this platform and still has (see
     [Deleting BIOS Files](#deleting-bios-files)). Both are on every emulator's rows. Where another file already lies at
@@ -457,11 +457,12 @@ download._
 
 Tender keeps its links up to date by itself whenever you open a platform's page or a game's page, and after you change
 the emulator a platform or game launches with: it places every link an emulator of the platform wants from the store,
-puts back one of its links that was removed, and removes one whose file is gone or that no installed emulator wants any
-more. A link is only placed for an emulator its emulator source has installed — or where the source cannot tell — and
-also into EmuDeck while its emulator list is sealed, wherever the place is known. It never downloads anything for that —
-a download is only ever made when you press a button. Until that is done a row whose file is in the store reads _In
-Tender's firmware store, not linked here yet_.
+puts back one of its links that was removed, and removes one whose file is gone, or one no emulator of that source wants
+any more — for this platform or for another platform you downloaded BIOS files for — where the source's list was read
+whole. A link is only placed for an emulator its emulator source has installed — or where the source cannot tell — and
+also into EmuDeck while its emulator list is sealed, wherever the place is known; that sealed list never takes a link
+away. It never downloads anything for that — a download is only ever made when you press a button. Until that is done a
+row whose file is in the store reads _In Tender's firmware store, not linked here yet_.
 
 A link is only ever placed where the name is free. Where a file, a folder or a link that is not Tender's already lies
 there, Tender leaves it as it is, and the row says what the emulator makes of it: _Another file lies here, and the

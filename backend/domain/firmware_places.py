@@ -12,11 +12,13 @@ path it points at (:func:`is_own_link`). That record is what keeps a link Tender
 could not remove with its store file its own (:class:`domain.firmware_store.FirmwareLink`).
 
 Bringing the links up to date (:func:`plan_link_update`) places every link an
-emulator wants where the name is free, places again a link of Tender's that
-points at nothing where a store copy exists, removes such a link where none
-does, records a link of Tender's found at a new place, and drops the record of a
-place it may touch where no link of Tender's to the recorded file lies any more.
-It downloads nothing.
+emulator not stated not installed wants where the name is free, places again a
+link of Tender's that points at nothing where a store copy exists, removes such
+a link where none does, removes a link of Tender's no emulator of a source read
+whole wants any more on any platform Tender holds store files for, records a
+link of Tender's found at a new place, and drops the record of a place it may
+touch where no link of Tender's to the recorded file lies any more. It
+downloads nothing.
 
 Pure compute — the caller looks at the places and carries the plan out.
 """
@@ -232,11 +234,12 @@ def plan_link_update(
     of the platform; *blocked* are the recorded places that may not be touched
     now, under a root the resolver only assumed or one that could not be judged.
     A place two emulators want is one place, and its first want decides.
-    *judged* are the sources whose wants were read whole: a link of Tender's
-    in one of them that points at its store file goes where no emulator there
-    that is not stated not installed wants its place any more — for this
-    platform, nor for another (*wanted_elsewhere*, by source and place). A
-    link in any other source stays.
+    *judged* are the sources whose list was read whole, never a sealed one: a
+    link of Tender's in one of them that still points at its store file goes
+    where no emulator there that is not stated not installed wants its place
+    any more — for this platform, nor for another (*wanted_elsewhere*, by source
+    and place). Such a link in any other source stays. A link of Tender's whose
+    store file is gone goes wherever its place may be touched.
     """
     plan = _Plan()
     seen: set[str] = set()

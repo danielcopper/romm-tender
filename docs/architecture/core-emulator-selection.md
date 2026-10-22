@@ -321,14 +321,17 @@ overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the resolver fo
 with that finding and an empty enumeration. `source` is the answering source's `{kind, starts_games}`. The platform page
 and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a system the frontend
 knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); the launch degrades to plain. The overlay
-entries the resolver gives beside `emulator-catalogue-sealed` are used nowhere — not for the emulator list, not for
-saves and not for firmware, whose answer beside a sealed catalogue reads as nothing established: an incomplete list
-would look complete. An empty list carrying none of those codes is that real "knows none", and
-`emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml` declaring itself the whole catalogue
-gives a complete answer, merely a small one. The test is the codes and never an empty caveat list — a broken
-installation states health findings on every answer it gives. `options_to_payload` projects the list to the frontend
-picker shape (`{label, labels, name, kind, core_so, emulator, is_default, bakeable, reason}`): bakeable entries are
-clickable, the default is marked, and `needs_setup` / `unbakeable` entries are disabled with their reason.
+entries the resolver gives beside `emulator-catalogue-sealed` are not read as a list — not for the emulator list, not
+for saves and not for the firmware rows and verdicts, whose answer beside a sealed catalogue reads as nothing
+established: an incomplete list would look complete. The one use is a BIOS link: a place such an answer states is a
+place a link may go, and the list never decides that a link is unwanted
+([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D37, D40). An empty list carrying none of those codes
+is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml`
+declaring itself the whole catalogue gives a complete answer, merely a small one. The test is the codes and never an
+empty caveat list — a broken installation states health findings on every answer it gives. `options_to_payload` projects
+the list to the frontend picker shape (`{label, labels, name, kind, core_so, emulator, is_default, bakeable, reason}`):
+bakeable entries are clickable, the default is marked, and `needs_setup` / `unbakeable` entries are disabled with their
+reason.
 
 **One entry per launch command, not per label.** Options whose command text is identical — compared as
 `classify_command` keeps it, stripped and otherwise verbatim — are one entry (`same_command_groups`): RetroDECK lists
