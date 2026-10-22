@@ -576,12 +576,13 @@ the game in RomM (a server database reset re-registers this device automatically
 ### "This device could not be registered with RomM"
 
 **Symptom**: the Saves tab's sync line reads "Device not registered with RomM", the save-slot setup pauses with "This
-device could not be registered with RomM", or the previous versions show the same message; the **RomM offline** badge
-stays clear.
+device could not be registered with RomM", the previous versions show the same message, resolving a conflict says "This
+device could not be registered with RomM — conflict left unresolved", or a sync, copy, restore or slot switch fails with
+"Device not registered with RomM"; the **RomM offline** badge stays clear.
 
 Tender registers this device with RomM before it asks about a game's saves, and here RomM answered without registering
-it — or a proxy in front of RomM answered in its place, or Tender could not send your saved login. Nothing was read or
-changed on either side. The usual cause is a token without the `devices.write` scope (see
+it — or a proxy in front of RomM answered in its place, or Tender could not send your saved login. Tender listed nothing
+from RomM, and no save was synced. The usual cause is a token without the `devices.write` scope (see
 [Required scopes](configuration.md#required-scopes)); sign in again with a token that has it. If a proxy sits in front
 of RomM, check that it lets `/api/devices` through. Then tap **Retry**, or open the game page again.
 

@@ -7,7 +7,7 @@ literals in service code.
 """
 
 SAVE_SYNC_DISABLED = "Save sync is disabled"
-DEVICE_NOT_REGISTERED = "Device not registered"
+DEVICE_NOT_REGISTERED = "Device not registered with RomM"
 # The wizard's legacy migration (``confirm_slot_choice``).
 MIGRATION_LOCAL_FILES_FAILED = (
     "The saves could not be migrated: a save file on this device could not be read or written,"
