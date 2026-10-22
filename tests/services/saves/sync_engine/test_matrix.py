@@ -2506,10 +2506,10 @@ class TestADownloadThatFailsLeavesNoTmp:
 
         monkeypatch.setattr(svc._save_file_store, "rename", failing_rename)
 
+        download = svc._sync_engine._matrix.do_download_save
+        server_save, saves_dir_path, state = fake.saves[100], str(saves_dir), RomSaveSyncState()
         with pytest.raises(PermissionError, match="read-only"):
-            svc._sync_engine._matrix.do_download_save(
-                fake.saves[100], str(saves_dir), "pokemon.srm", RomSaveSyncState(), "device-1", "gba"
-            )
+            download(server_save, saves_dir_path, "pokemon.srm", state, "device-1", "gba")
 
         assert not (saves_dir / "pokemon.srm.tmp").exists()
 
@@ -2529,10 +2529,10 @@ class TestADownloadThatFailsLeavesNoTmp:
 
         monkeypatch.setattr(svc._save_file_store, "remove_file", failing_remove)
 
+        download = svc._sync_engine._matrix.do_download_save
+        server_save, saves_dir_path, state = fake.saves[100], str(saves_dir), RomSaveSyncState()
         with pytest.raises(RommTimeoutError) as caught:
-            svc._sync_engine._matrix.do_download_save(
-                fake.saves[100], str(saves_dir), "pokemon.srm", RomSaveSyncState(), "device-1", "gba"
-            )
+            download(server_save, saves_dir_path, "pokemon.srm", state, "device-1", "gba")
 
         assert caught.value is failure
         assert removals == [str(saves_dir / "pokemon.srm.tmp")]
