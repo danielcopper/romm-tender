@@ -47,10 +47,12 @@ def _strip_cover_ts(source: str) -> str:
     """Return *source* with its ``ts`` query parameter removed.
 
     Splits off the query string and drops the ``ts=…`` cache-buster RomM embeds
-    (the value that a server-side rescan re-stamps without touching the file),
-    preserving any other query parameters and their order. Pure string algebra —
-    no URL parsing library — so it stays dependency-free and never rewrites the
-    path portion (the compare is exact-string equality).
+    (which scans move it without touching the file:
+    docs/architecture/backend-architecture.md, "Conditional-request
+    revalidation on a ts-only change"), preserving any other query parameters
+    and their order. Pure string algebra — no URL parsing library — so it stays
+    dependency-free and never rewrites the path portion (the compare is
+    exact-string equality).
     """
     base, sep, query = source.partition("?")
     if not sep:
@@ -65,7 +67,7 @@ def cover_ts_only_change(stored_source: str | None, fresh_source: str | None) ->
     The revalidation trigger's pure part: both sources are present, they differ
     (a fingerprint change was already detected), and stripping the ``ts`` query
     parameter from each yields equal, non-empty bases — i.e. the same underlying
-    asset path with only the rescan-restamped timestamp differing. A path change
+    asset path with only the ``ts`` timestamp differing. A path change
     beyond ``ts`` (a different rom path, or a ``url_cover``↔``path_cover`` switch
     from #1450) is NOT ts-only and must take the regular download path.
     """

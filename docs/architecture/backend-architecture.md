@@ -599,10 +599,23 @@ fingerprint records the source **actually applied** — `url_cover` on a fallbac
 `url_cover`, a later fixed RomM asset (or a changed `url_cover`) is always re-checked, at the cost of re-downloading the
 fallback ROM's cover each sync until the RomM asset is repaired.
 
-**Conditional-request revalidation on a ts-only change (#1454).** A server-side rescan re-stamps every ROM's
-`updated_at` — and thus the `?ts=` in every cover path — without touching the cover files, so the `cover_source`
-fingerprint changes library-wide and the #1386 compare would re-download **every** cover. Instead, when a fingerprint
-change is **ts-only** (the paths are equal once the `ts` query param is stripped —
+**Conditional-request revalidation on a ts-only change (#1454).** The `?ts=` in a RomM cover path is the ROM row's
+`updated_at` (`path_cover_small` / `path_cover_large` in RomM's `backend/models/rom.py`), which every update of the row
+moves (`onupdate`, `backend/models/base.py`, and `update_rom` always writes). Which scans move it without touching the
+cover file is RomM's, read from its source at 5.3.0 and unchanged on its `master` at `ca2a36ca5`:
+
+- A **quick scan** — RomM's default, and what its scheduled scan and its file watcher's per-platform rescan run — sends
+  every existing ROM through `refresh_rom_files` (`backend/handler/rom_files.py`), which calls `update_rom` only when
+  what it reads from disk differs from the stored row, so an unchanged ROM's `?ts=` stays. The exception: every ROM of a
+  platform whose folder is missing is re-stamped on each scan (`mark_missing_platforms`).
+- An **Update** or **Unmatched** scan, a metadata refresh of chosen games, and the watcher's library-wide update
+  re-stamp every ROM they cover (each goes through `download_rom_resources` → `update_rom`) and keep its cover file
+  unless the cover's source URL changed (`get_cover` writes over the file only then). This is the case the revalidation
+  exists for: across everything such a scan covers, the `cover_source` fingerprint changes while the bytes do not, and
+  the #1386 compare alone would download each of those covers again.
+- A **Complete** scan deletes every cover and downloads it again, so the file changes too.
+
+So when a fingerprint change is **ts-only** (the paths are equal once the `ts` query param is stripped —
 `domain/cover_refresh.cover_ts_only_change`) and a stored validator exists, the cached bytes are **revalidated** with a
 conditional request rather than re-downloaded: every regular download records the response's HTTP validator (`ETag` /
 `Last-Modified`) in a `{rom_id}.cover-meta.json` sidecar beside the cache file, and a ts-only change re-requests with
