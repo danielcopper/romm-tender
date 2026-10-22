@@ -82,7 +82,9 @@ describe("isFetchable over the firmware store", () => {
 
   it("refuses a place something not Tender's lies at, and one the resolver could not look at", () => {
     expect(isFetchable({ ...free, link: "occupied" })).toBe(false);
-    expect(isFetchable({ ...free, place_refusal: { reason: "unreadable", folder: null } })).toBe(false);
+    expect(isFetchable({ ...free, place_refusal: { reason: "unreadable", folder: null, source: "retrodeck" } })).toBe(
+      false,
+    );
   });
 
   it("names a download by the library file, which may not be the row's name", () => {

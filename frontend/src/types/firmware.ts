@@ -243,13 +243,16 @@ export type PlaceLink = "linked" | "linked_elsewhere" | "not_linked" | "occupied
 
 /**
  * Why a link may not go to a row's place: the folder it lies in does not exist
- * (`folder_missing`), it lies under a root the resolver only assumed
- * (`root_assumed`), the resolver could not look at it (`unreadable`), or the
- * answer names no place (`no_place`). `folder` is the folder a sentence names.
+ * (`folder_missing`), it lies under a root the resolver only assumed, or the
+ * source's roots could not be asked at all (`root_assumed`), the resolver could
+ * not look at it (`unreadable`), or the answer names no place (`no_place`).
+ * `folder` is the folder a sentence names, `source` the emulator source the
+ * row is read in.
  */
 export interface PlaceRefusal {
   reason: "folder_missing" | "root_assumed" | "unreadable" | "no_place";
   folder: string | null;
+  source: string;
 }
 
 /**

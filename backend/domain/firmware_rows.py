@@ -168,7 +168,9 @@ def place_facts(
         "store_file": copy.file_name if copy is not None else None,
         "link": link,
         "linked_for": linked_for if linked_for != platform_slug else None,
-        "place_refusal": {"reason": refusal.reason, "folder": refusal.folder} if refusal is not None else None,
+        "place_refusal": (
+            {"reason": refusal.reason, "folder": refusal.folder, "source": source} if refusal is not None else None
+        ),
         "replace_offered": replace,
     }
 

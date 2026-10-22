@@ -105,7 +105,11 @@ describe("biosPlaceLines", () => {
   });
 
   it("names a folder that is not there yet and the emulator to start", () => {
-    const refusal = { reason: "folder_missing" as const, folder: "/home/deck/.var/app/x/data/Cemu" };
+    const refusal = {
+      reason: "folder_missing" as const,
+      folder: "/home/deck/.var/app/x/data/Cemu",
+      source: "retrodeck",
+    };
 
     expect(biosPlaceLines(row({ place_refusal: refusal, link: "free" }), "Cemu")).toEqual([
       "/home/deck/.var/app/x/data/Cemu does not exist yet. Start Cemu once, then try again.",
@@ -113,10 +117,18 @@ describe("biosPlaceLines", () => {
   });
 
   it("names the folder under a root the resolver only assumed", () => {
-    const refusal = { reason: "root_assumed" as const, folder: "/home/deck/retrodeck/bios" };
+    const refusal = { reason: "root_assumed" as const, folder: "/home/deck/retrodeck/bios", source: "retrodeck" };
 
     expect(biosPlaceLines(row({ place_refusal: refusal, link: "free" }), null)).toEqual([
       "RetroDECK's settings could not be read, so Tender places nothing in /home/deck/retrodeck/bios.",
+    ]);
+  });
+
+  it("names the source whose settings could not be read", () => {
+    const refusal = { reason: "root_assumed" as const, folder: "/home/deck/Emulation/bios", source: "emudeck" };
+
+    expect(biosPlaceLines(row({ place_refusal: refusal, link: "free" }), null)).toEqual([
+      "EmuDeck's settings could not be read, so Tender places nothing in /home/deck/Emulation/bios.",
     ]);
   });
 

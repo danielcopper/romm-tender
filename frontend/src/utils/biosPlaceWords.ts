@@ -74,7 +74,8 @@ export function biosPlaceLines(
     lines.push(`${refusal.folder} does not exist yet. Start ${emulator ?? "the emulator"} once, then try again.`);
   }
   if (refusal?.reason === "root_assumed") {
-    lines.push(`RetroDECK's settings could not be read, so Tender places nothing in ${refusal.folder}.`);
+    const source = sourceName(refusal.source);
+    lines.push(`${source}'s settings could not be read, so Tender places nothing in ${refusal.folder}.`);
   }
   lines.push(...linkLines(row, platformName));
   if (attempt.linkFailure) lines.push(`Could not place a link at ${row.local_path}: ${attempt.linkFailure}`);

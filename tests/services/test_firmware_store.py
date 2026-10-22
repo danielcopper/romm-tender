@@ -370,7 +370,7 @@ class TestAPlaceOutsideTheBiosFolder:
 
         assert not cemu.exists()
         (row,) = [f for f in entry["files"] if f["file_name"] == "keys.txt"]
-        assert row["place_refusal"] == {"reason": "folder_missing", "folder": str(cemu)}
+        assert row["place_refusal"] == {"reason": "folder_missing", "folder": str(cemu), "source": "retrodeck"}
 
 
 class TestASourceWhoseRootsCouldNotBeAsked:
@@ -398,6 +398,7 @@ class TestASourceWhoseRootsCouldNotBeAsked:
         assert not os.path.lexists(machine.bios / "kronos" / "saturn_bios.bin")
         (row,) = [f for f in entry["files"] if f["declared_by"] == _YABA]
         assert row["place_refusal"]["reason"] == "root_assumed"
+        assert row["place_refusal"]["source"] == "retrodeck"
 
 
 class TestTwoSources:
