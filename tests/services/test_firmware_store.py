@@ -447,6 +447,15 @@ class TestAPlaceSomethingElseLiesAt:
         assert not (machine.bios / "saturn_bios.bin").is_symlink()
         assert (result["placed"], result["left_in_place"]) == (1, 1)
 
+    async def test_download_required_counts_what_it_left_in_place(self, machine):
+        _saturn(machine)
+        (machine.bios / "saturn_bios.bin").write_bytes(b"the user's own copy")
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+
+        result = await machine.service.download_required_firmware("saturn", _KRONOS)
+
+        assert (result["downloaded"], result["placed"], result["left_in_place"]) == (1, 1, 1)
+
     async def test_the_row_says_another_file_lies_there(self, machine):
         _saturn(machine)
         (machine.bios / "saturn_bios.bin").write_bytes(b"the user's own copy")
