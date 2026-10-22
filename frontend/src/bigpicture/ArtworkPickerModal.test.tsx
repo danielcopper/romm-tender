@@ -210,22 +210,22 @@ describe("ArtworkPickerModal's pages (#2381 device test)", () => {
     vi.resetAllMocks();
   });
 
-  it("shows 15 candidates and then Load more as a tile of the grid", async () => {
-    vi.mocked(backend.getArtworkSlotCandidates).mockResolvedValue(many(1, 20, false));
+  it("fills a 4×4 grid: Automatic, 14 candidates and Load more last", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates).mockResolvedValue(many(1, 40, false));
     const { container } = await open(row());
 
     const grid = container.querySelector("img")!.closest("button")!.parentElement!;
     const tiles = Array.from(grid.children).map((tile) => tile.textContent);
-    expect(container.querySelectorAll("img")).toHaveLength(15);
+    expect(container.querySelectorAll("img")).toHaveLength(14);
+    expect(tiles).toHaveLength(16);
     expect(tiles[0]).toContain("Automatic");
-    expect(tiles[tiles.length - 1]).toBe("Load more");
-    expect(tiles).toHaveLength(17);
+    expect(tiles[15]).toBe("Load more");
   });
 
-  it("Load more shows the next 15, asking SteamGridDB only once the held page runs out", async () => {
+  it("Load more adds 16, asking SteamGridDB only once the held page runs out, and stays last", async () => {
     vi.mocked(backend.getArtworkSlotCandidates)
       .mockResolvedValueOnce(many(1, 20, true))
-      .mockResolvedValueOnce(many(21, 20, false));
+      .mockResolvedValueOnce(many(21, 20, true));
     const { container } = await open(row());
 
     await act(async () => {
@@ -235,6 +235,31 @@ describe("ArtworkPickerModal's pages (#2381 device test)", () => {
 
     expect(container.querySelectorAll("img")).toHaveLength(30);
     expect(vi.mocked(backend.getArtworkSlotCandidates)).toHaveBeenLastCalledWith(42, "grid", 1);
+    const grid = container.querySelector("img")!.closest("button")!.parentElement!;
+    expect(grid.children).toHaveLength(32);
+    expect(grid.lastElementChild?.textContent).toBe("Load more");
+  });
+
+  it("puts focus on the first new tile, where Load more stood, also after a page fetch", async () => {
+    let page: (answer: backend.ArtworkCandidatePage) => void = () => {};
+    vi.mocked(backend.getArtworkSlotCandidates)
+      .mockResolvedValueOnce(many(1, 14, true))
+      .mockReturnValueOnce(new Promise((resolve) => (page = resolve)));
+    const { container } = await open(row());
+    const more = button(container, "Load more");
+
+    await act(async () => {
+      fireEvent.click(more);
+    });
+    const grid = container.querySelector("img")!.closest("button")!.parentElement!;
+    expect(grid.children).toHaveLength(16);
+    await act(async () => {
+      page(many(15, 20, false));
+    });
+    await flush();
+
+    const firstNew = container.querySelector('img[src="https://cdn.example/t15.jpg"]')!.closest("button");
+    expect(document.activeElement).toBe(firstNew);
   });
 
   it("labels no size where SteamGridDB states 0×0", async () => {

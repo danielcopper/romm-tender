@@ -13,7 +13,7 @@
  * The picker only answers what was chosen; the tab sets it.
  */
 
-import { FC, useCallback, useEffect, useState } from "react";
+import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { DialogButton, Focusable, ModalRoot, Spinner, showModal } from "@decky/ui";
 import {
   getArtworkSlotCandidates,
@@ -25,6 +25,7 @@ import {
   type EndpointFailure,
 } from "../api/backend";
 import { detach } from "../utils/detach";
+import { placeEntryFocus } from "../utils/entryFocus";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { REPLACE_SET_IN_STEAM, SLOT_NAMES, automaticTileLabel, sizeLabel } from "../utils/artworkTabWording";
 
@@ -44,17 +45,22 @@ export interface ArtworkPickerModalProps {
 
 const AUTOMATIC = "automatic";
 
-// How many candidates the grid shows at once; "Load more" follows them as the next tile.
-const PAGE_SIZE = 15;
+// The grid is four tiles wide. Its first page — Automatic, 14 candidates and
+// "Load more" — fills four rows exactly, and each "Load more" adds four rows of
+// candidates, so "Load more" always closes the grid at its bottom right.
+const FIRST_PAGE = 14;
+const PAGE_SIZE = 16;
 
 const TILE_STYLE = {
   display: "flex",
   flexDirection: "column" as const,
   alignItems: "center",
+  justifyContent: "center",
   gap: "4px",
   padding: "6px",
   width: "100%",
-  height: "auto",
+  height: "100%",
+  minHeight: "130px",
   minWidth: "0",
 };
 
@@ -82,7 +88,11 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
   const [tendersPick, setTendersPick] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [shown, setShown] = useState(PAGE_SIZE);
+  const [shown, setShown] = useState(FIRST_PAGE);
+  // The candidate focus goes to once "Load more" has shown it: the first new
+  // tile, which takes the place "Load more" stood in.
+  const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  const grid = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(onlyAutomatic === null);
   const [failure, setFailure] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | typeof AUTOMATIC | null>(null);
@@ -123,14 +133,24 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
   }, [listPage, onlyAutomatic]);
 
   const loadMore = async () => {
+    if (loading) return;
     const wanted = shown + PAGE_SIZE;
     if (wanted > candidates.length && hasMore) {
       setLoading(true);
       takePage(page + 1, await listPage(page + 1));
     }
+    setFocusIndex(shown);
     setShown(wanted);
   };
   const moreToShow = shown < candidates.length || hasMore;
+
+  useEffect(() => {
+    if (focusIndex === null || !grid.current) return;
+    // The grid's tiles in order: Automatic, the candidates shown, "Load more".
+    const tile = grid.current.querySelectorAll<HTMLElement>("button")[focusIndex + 1];
+    if (tile) placeEntryFocus(grid.current, () => tile);
+    setFocusIndex(null);
+  }, [focusIndex, shown, candidates.length]);
 
   const pick = (): ArtworkPick | null => {
     if (selected === AUTOMATIC) return { kind: "automatic" };
@@ -170,7 +190,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
           </Focusable>
         ) : (
           <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ maxHeight: "60vh", overflowY: "auto", padding: "4px" }}>
+            <div ref={grid} style={{ maxHeight: "60vh", overflowY: "auto", padding: "4px" }}>
               <Focusable
                 flow-children="right"
                 style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}
@@ -214,7 +234,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
                     {tendersPick === candidate.image_id && <div style={MARK_STYLE}>Tender&apos;s pick today</div>}
                   </DialogButton>
                 ))}
-                {moreToShow && !loading && (
+                {(moreToShow || (loading && candidates.length > 0)) && (
                   <DialogButton
                     className={tileClass(false)}
                     onClick={() => {
@@ -223,11 +243,17 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
                     onFocus={scrollFocusedToCenter}
                     style={TILE_STYLE}
                   >
-                    <div style={{ fontSize: "12px", color: "#fff", textAlign: "center" }}>Load more</div>
+                    {loading ? (
+                      <div style={{ width: "32px", height: "32px" }}>
+                        <Spinner />
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "12px", color: "#fff", textAlign: "center" }}>Load more</div>
+                    )}
                   </DialogButton>
                 )}
               </Focusable>
-              {loading && (
+              {loading && candidates.length === 0 && (
                 <div style={{ display: "flex", justifyContent: "center", paddingTop: "8px" }}>
                   <div style={{ width: "32px", height: "32px" }}>
                     <Spinner />

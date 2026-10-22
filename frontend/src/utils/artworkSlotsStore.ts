@@ -130,20 +130,24 @@ export function useArtworkSlots(appId: number, romId: number | null): Entry | nu
 
 // Steam keeps a slot's URL — and, for the icon, its cache-buster — when an image
 // is set, so a thumbnail would keep showing the old image from the renderer's
-// cache. Each write the page makes moves this token, which every thumbnail URL
-// carries; the session's start keeps one session's tokens from another's.
+// cache. Each write moves the token of the slots it set, which their thumbnail
+// URLs carry, so only those reload; the session's start keeps one session's
+// tokens from another's.
 const sessionStart = Date.now();
-const written = new Map<number, number>();
+const written = new Map<number, Map<ArtworkTabSlot, number>>();
+const ALL_SLOTS: readonly ArtworkTabSlot[] = ["cover", "grid", "hero", "logo", "icon"];
 
-/** Note that an image of shortcut *appId* was just set, so its thumbnails load anew. */
-export function noteArtworkWritten(appId: number): void {
-  written.set(appId, (written.get(appId) ?? 0) + 1);
+/** Note that *slots* of shortcut *appId* — all five where none are named — were just set, so their thumbnails load anew. */
+export function noteArtworkWritten(appId: number, slots: readonly ArtworkTabSlot[] = ALL_SLOTS): void {
+  const held = written.get(appId) ?? new Map<ArtworkTabSlot, number>();
+  for (const slot of slots) held.set(slot, (held.get(slot) ?? 0) + 1);
+  written.set(appId, held);
   notify(appId);
 }
 
-/** The cache-buster the thumbnails of shortcut *appId* carry; it moves with every image the page sets. */
-export function artworkThumbToken(appId: number): string {
-  return `${sessionStart}.${written.get(appId) ?? 0}`;
+/** The cache-buster the thumbnail of shortcut *appId*'s *slot* carries; it moves with every image set in that slot. */
+export function artworkThumbToken(appId: number, slot: ArtworkTabSlot): string {
+  return `${sessionStart}.${written.get(appId)?.get(slot) ?? 0}`;
 }
 
 // How long after an ARTWORK tab press a remount of the game page opens on the

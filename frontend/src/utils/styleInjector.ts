@@ -879,12 +879,10 @@ export function hideNativePlaySection(playSectionClass: string) {
   background: rgba(255,170,0,0.12);
   border-color: rgba(255,170,0,0.35);
 }
-.romm-artwork-game-text, .romm-artwork-game-text.gpfocus {
-  text-align: left !important;
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  color: inherit !important;
+.romm-artwork-game-button.gpfocus, .romm-artwork-game-button:hover {
+  outline: 2px solid #1a9fff !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px #1a9fff;
 }
 .romm-artwork-row, .romm-artwork-tile {
   background: rgba(255,255,255,0.06) !important;

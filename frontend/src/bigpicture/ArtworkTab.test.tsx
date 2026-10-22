@@ -332,19 +332,21 @@ describe("ArtworkTab", () => {
       });
     });
 
-    it("loads the rows' thumbnails anew once the press is done", async () => {
+    it("loads only the pressed row's thumbnail anew once the press is done", async () => {
       vi.mocked(backend.chooseArtworkSlotImage).mockResolvedValue(IMAGE);
       vi.mocked(artwork.applyTabSlotImage).mockResolvedValue("set");
       const { container } = await renderTab(answer(FROM_ROMM));
-      const before = rowButton(container, "Cover").querySelector("img")?.getAttribute("src");
-      fireEvent.click(rowButton(container, "Logo"));
+      const src = (name: string) => rowButton(container, name).querySelector("img")?.getAttribute("src");
+      const [grid, cover] = [src("Wide grid"), src("Cover")];
+      fireEvent.click(rowButton(container, "Wide grid"));
 
       await act(async () => {
         lastModal<ArtworkPickerModalProps>().onPick({ kind: "image", imageId: 12 }, false);
       });
       await flush();
 
-      expect(rowButton(container, "Cover").querySelector("img")?.getAttribute("src")).not.toBe(before);
+      expect(src("Wide grid")).not.toBe(grid);
+      expect(src("Cover")).toBe(cover);
     });
 
     it("has a remount of the page open on the ARTWORK tab, at the slot pressed, while Steam's write is under way", async () => {
@@ -364,6 +366,20 @@ describe("ArtworkTab", () => {
         writeDone("set");
       });
       expect(keptArtworkSlot(APP_ID)).toBe("hero");
+    });
+  });
+
+  describe("the game line as a focus stop (#2381 device test)", () => {
+    it("is no stop with RomM's game, so the first stop below the tab bar is the cover's row", async () => {
+      const { container } = await renderTab(answer(FROM_ROMM));
+      expect(container.querySelector("button")).toBe(rowButton(container, "Cover"));
+    });
+
+    it("stops on its button where it has one, which carries the accent ring's class", async () => {
+      const { container } = await renderTab(answer(CHOSEN));
+      const first = container.querySelector("button");
+      expect(first?.textContent).toBe("Change game…");
+      expect(first?.className).toContain("romm-artwork-game-button");
     });
   });
 

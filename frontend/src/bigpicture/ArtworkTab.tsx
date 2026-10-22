@@ -134,7 +134,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
     } finally {
       setBusy(false);
       keepArtworkTabOpen(appId, row.slot);
-      noteArtworkWritten(appId);
+      noteArtworkWritten(appId, [row.slot]);
       detach(loadArtworkSlots(appId, romId));
     }
   };
@@ -183,7 +183,6 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   }
 
   const line = gameLine(slots.game);
-  const token = artworkThumbToken(appId);
   const keptSlot = keptArtworkSlot(appId);
   return (
     <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -192,21 +191,26 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
         className={`romm-artwork-game${line.notice ? " romm-artwork-game-notice" : ""}`}
         style={{ display: "flex", alignItems: "center", gap: "12px" }}
       >
-        <DialogButton className="romm-artwork-game-text" onFocus={scrollFocusedToCenter} style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "14px", color: line.notice ? "#ffb74d" : "#fff" }}>{line.text}</div>
           {line.explanation && (
             <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>{line.explanation}</div>
           )}
           {!slots.has_api_key && <div style={{ fontSize: "12px", color: "#ffb74d" }}>{NO_API_KEY}</div>}
-        </DialogButton>
+        </div>
         {line.button && slots.has_api_key && (
-          <DialogButton onClick={() => openGamePicker(slots)} style={{ width: "auto", minWidth: "140px" }}>
+          <DialogButton
+            className="romm-artwork-game-button"
+            onClick={() => openGamePicker(slots)}
+            onFocus={scrollFocusedToCenter}
+            style={{ width: "auto", minWidth: "140px" }}
+          >
             {line.button}
           </DialogButton>
         )}
       </Focusable>
       {slots.slots.map((row) => {
-        const urls = slotThumbnailUrls(appId, row, token);
+        const urls = slotThumbnailUrls(appId, row, artworkThumbToken(appId, row.slot));
         return (
           <DialogButton
             key={row.slot}

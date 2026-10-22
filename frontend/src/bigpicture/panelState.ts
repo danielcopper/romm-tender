@@ -403,9 +403,6 @@ export function refreshPanelCoreInfo(binding: RomBinding): Promise<void> {
     .catch(() => {});
 }
 
-/** Cache-first initial render. Resolves the cached game detail for this appId,
- *  pushes it into PanelState, and fires the background refresh tasks whose
- *  results are merged in later. */
 /**
  * The tab the panel of shortcut *appId* opens on: GAME INFO, or ARTWORK where Steam re-rendered the game page right
  * after a press in that tab — an artwork change remounts Tender's section, which would otherwise reopen GAME INFO.
@@ -414,6 +411,9 @@ export function openingTab(appId: number): string {
   return keptArtworkSlot(appId) === null ? "info" : "artwork";
 }
 
+/** Cache-first initial render. Resolves the cached game detail for this appId,
+ *  pushes it into PanelState, and fires the background refresh tasks whose
+ *  results are merged in later. */
 export async function loadData(
   appId: number,
   cancelled: () => boolean,

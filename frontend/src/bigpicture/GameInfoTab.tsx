@@ -163,7 +163,7 @@ export const GameInfoTab: FC<GameInfoTabProps> = (props) => {
   const rows = gameInfoRows(props);
   useArtworkSlotsChanges(props.appId ?? 0);
   const sources = [
-    ...(props.appId === undefined ? [] : coverUrls(props.appId, artworkThumbToken(props.appId))),
+    ...(props.appId === undefined ? [] : coverUrls(props.appId, artworkThumbToken(props.appId, "cover"))),
     ...(props.coverBase64 ? [`data:image/png;base64,${props.coverBase64}`] : []),
   ];
 

@@ -80,10 +80,10 @@ describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
 
   it("has the thumbnails load anew after the switch", async () => {
     vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
-    const before = artworkThumbToken(5000);
+    const before = artworkThumbToken(5000, "cover");
 
     await publishCommittedVersionSwitch(5000, 42);
 
-    expect(artworkThumbToken(5000)).not.toBe(before);
+    expect(artworkThumbToken(5000, "cover")).not.toBe(before);
   });
 });

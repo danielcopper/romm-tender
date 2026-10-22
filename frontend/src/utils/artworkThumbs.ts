@@ -26,9 +26,9 @@ const GETTERS: Readonly<Record<Exclude<ArtworkTabSlot, "icon">, UrlGetter>> = {
 /**
  * The URLs to try, in order, for the thumbnail of *row* of shortcut *appId*; empty where none can be named. The icon
  * has no getter: it is Tender's `<appid>_icon.png` while the icon is Tender's, and nothing once it is set in Steam,
- * whose file may lie anywhere on the disk. Each URL carries *token* (`artworkThumbToken`) and the image the row names:
- * Steam does not move its own cache-buster for the icon at all, nor for a slot set back to an image under the same
- * name, so without them the renderer would keep showing the image it cached.
+ * whose file may lie anywhere on the disk. Each URL carries *token*, the slot's `artworkThumbToken`: Steam does not move
+ * its own cache-buster for the icon at all, nor for a slot set back to an image under the same name, so without it the
+ * renderer would keep showing the image it cached.
  */
 export function slotThumbnailUrls(appId: number, row: ArtworkSlotRow, token = ""): string[] {
   let overview: SteamAppOverview | null = null;
@@ -37,7 +37,7 @@ export function slotThumbnailUrls(appId: number, row: ArtworkSlotRow, token = ""
   } catch {
     return [];
   }
-  const bust = `t=${token}.${row.image_id ?? row.source}`;
+  const bust = `t=${token}`;
   if (row.slot === "icon") {
     if (row.state === "set_in_steam" || (row.source !== "tender" && row.source !== "chosen")) return [];
     return [`${LOOPBACK}/customimages/${appId}_icon.png?${bust}`];

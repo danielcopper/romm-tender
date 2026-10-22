@@ -85,10 +85,16 @@ describe("the ARTWORK tab kept across a remount (#2381 device test)", () => {
     expect(keptArtworkSlot(5000)).toBeNull();
   });
 
-  it("moves the thumbnails' token with every write", () => {
-    const before = artworkThumbToken(5000);
+  it("moves only the token of the slot written, and every slot's where none is named", () => {
+    const logo = artworkThumbToken(5000, "logo");
+    const hero = artworkThumbToken(5000, "hero");
+
+    noteArtworkWritten(5000, ["logo"]);
+    expect(artworkThumbToken(5000, "logo")).not.toBe(logo);
+    expect(artworkThumbToken(5000, "hero")).toBe(hero);
+    expect(artworkThumbToken(6000, "logo")).toBe(logo);
+
     noteArtworkWritten(5000);
-    expect(artworkThumbToken(5000)).not.toBe(before);
-    expect(artworkThumbToken(6000)).toBe(before.replace(/\.\d+$/, ".0"));
+    expect(artworkThumbToken(5000, "hero")).not.toBe(hero);
   });
 });
