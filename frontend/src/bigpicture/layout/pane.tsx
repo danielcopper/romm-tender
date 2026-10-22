@@ -420,7 +420,10 @@ export function GroupStatus<Scope extends string>({
   scope: NoInfer<Scope>;
 }): ReactElement | null {
   return status?.key === forKey && status.scope === scope ? (
-    <div data-testid={`status-${scope}`} style={{ fontSize: "12px", color: "#dcdedf", padding: "0 16px 8px" }}>
+    <div
+      data-testid={`status-${scope}`}
+      style={{ fontSize: "12px", color: "#dcdedf", padding: "0 16px 8px", whiteSpace: "pre-line" }}
+    >
       {status.text}
     </div>
   ) : null;

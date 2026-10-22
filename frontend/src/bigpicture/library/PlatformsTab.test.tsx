@@ -5060,6 +5060,65 @@ describe("Library › Platforms", () => {
   });
 
   // ------------------------------------------------------------------
+  // What a delete left and a download moved aside, in the status line
+  // ------------------------------------------------------------------
+  describe("what a delete left and a download moved aside", () => {
+    const KEPT =
+      "Left a link in /r/bios: RetroDECK's settings could not be read. Tender removes it once they can be read.";
+
+    beforeEach(() => {
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue({
+        success: true,
+        placed: 0,
+        left_in_place: 0,
+        removed: 0,
+        link_failures: [],
+      });
+    });
+
+    it("says under the platform's delete which folder kept a link", async () => {
+      mockFirmware([firmwarePlatform({ deletable_count: 1 })]);
+      vi.mocked(backend.deletePlatformBios).mockResolvedValue({
+        success: true,
+        deleted_count: 1,
+        message: "Deleted 1 BIOS file(s)",
+        kept: [{ kind: "link", place: "/r/bios/gba_bios.bin", folder: "/r/bios" }],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Delete downloads (1)")!);
+        await Promise.resolve();
+      });
+      await confirmLastModal();
+      await flushAsync();
+
+      expect(within(container).getByTestId("status-bios").textContent).toBe(`Deleted 1 BIOS file(s)\n${KEPT}`);
+    });
+
+    it("says after a download which file it moved aside", async () => {
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({
+        success: true,
+        message: "Downloaded gba_bios.bin",
+        downloaded: 1,
+        backups: ["/d/backups/bios/2026-10-21_20-00-00/t/bios/gba/gba_bios.bin"],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(within(container).getByTestId("status-bios").textContent).toBe(
+        "A different gba_bios.bin was already in Tender's firmware store. It was moved to /d/backups/bios/2026-10-21_20-00-00/t/bios/gba/gba_bios.bin.",
+      );
+    });
+  });
+
+  // ------------------------------------------------------------------
   // Removing a platform's shortcuts and saves
   // ------------------------------------------------------------------
   describe("removing", () => {

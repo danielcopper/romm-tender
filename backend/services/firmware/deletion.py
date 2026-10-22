@@ -100,7 +100,9 @@ class PlatformBiosDeleter:
             if names is not None and record.file_name not in names:
                 continue
             if bound is None or isinstance(bound, FolderRefused) or not is_inside_folder(record.file_path, bound):
-                kept.append({"place": record.file_path, "folder": bound if isinstance(bound, str) else None})
+                kept.append(
+                    {"kind": "file", "place": record.file_path, "folder": bound if isinstance(bound, str) else None}
+                )
                 continue
             if self._files.exists(record.file_path):
                 try:

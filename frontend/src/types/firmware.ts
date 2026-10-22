@@ -256,9 +256,12 @@ export interface PlaceRefusal {
  */
 export type StoreOnly = "unsupported" | "no_source";
 
-/** A link a store file's Delete left in place, because its folder may not be
- *  touched now; `folder` is the root it lies under, where one is known. */
+/** What a Delete left in place, because its folder may not be touched now: a
+ *  link of Tender's into the store, or a file an older version downloaded into
+ *  RetroDECK's BIOS folder. `folder` is the root it lies under, where one is
+ *  known. */
 export interface BiosKeptLink {
+  kind: "link" | "file";
   place: string;
   folder: string | null;
 }

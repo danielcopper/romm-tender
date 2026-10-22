@@ -765,7 +765,7 @@ class TestWhileRetroDeckIsSwitchedOff:
         result = await fw.delete_bios_file("dc", "dc_boot.bin")
 
         assert isinstance(result, dict)
-        assert result["kept"] == [{"place": str(bios), "folder": None}]
+        assert result["kept"] == [{"kind": "file", "place": str(bios), "folder": None}]
         assert bios.exists()
         assert firmware.uow.bios_files.get("dc", "dc_boot.bin") is not None
 

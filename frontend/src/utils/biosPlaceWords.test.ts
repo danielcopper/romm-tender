@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import type { LibraryMatch } from "../types";
 import {
   DOWNLOAD_DAMAGED,
+  backupLines,
   biosPlaceLines,
+  keptLinkLines,
   libraryRowLines,
   placedSentence,
   storeOnlySentence,
@@ -150,5 +152,34 @@ describe("placedSentence", () => {
   it("says how many were placed and how many stayed in the way, only where one did", () => {
     expect(placedSentence({ placed: 3, left_in_place: 1 })).toBe("3 placed, 1 left in place: another file lies there");
     expect(placedSentence({ placed: 3, left_in_place: 0 })).toBeNull();
+  });
+});
+
+describe("keptLinkLines", () => {
+  it("says once per folder that a link stays until RetroDECK's settings can be read", () => {
+    const lines = keptLinkLines([
+      { kind: "link", place: "/r/bios/a.bin", folder: "/r/bios" },
+      { kind: "link", place: "/r/bios/kronos/b.bin", folder: "/r/bios" },
+      { kind: "link", place: "/e/bios/c.bin", folder: null },
+    ]);
+
+    expect(lines).toEqual([
+      "Left a link in /r/bios: RetroDECK's settings could not be read. Tender removes it once they can be read.",
+      "Left a link in /e/bios: RetroDECK's settings could not be read. Tender removes it once they can be read.",
+    ]);
+  });
+
+  it("says nothing of a file it kept, or where it kept nothing", () => {
+    expect(keptLinkLines([{ kind: "file", place: "/r/bios/a.bin", folder: null }])).toEqual([]);
+    expect(keptLinkLines(undefined)).toEqual([]);
+  });
+});
+
+describe("backupLines", () => {
+  it("names each file moved aside and where it went", () => {
+    expect(backupLines(["/d/backups/bios/2026-10-21_20-00-00/home/deck/Tender/bios/saturn/sega_101.bin"])).toEqual([
+      "A different sega_101.bin was already in Tender's firmware store. It was moved to /d/backups/bios/2026-10-21_20-00-00/home/deck/Tender/bios/saturn/sega_101.bin.",
+    ]);
+    expect(backupLines(undefined)).toEqual([]);
   });
 });
