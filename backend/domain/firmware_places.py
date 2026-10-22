@@ -148,14 +148,17 @@ def place_refusal(
     """Why *place* gets no link, or ``None`` where it may get one.
 
     The root it lies under is judged by where the resolver took it from: one
-    it only assumed is used for nothing. A place under no root of the source
-    — Cemu's ``data/Cemu`` — is the emulator's own and may be used. A folder
-    that is not there is never created for a link.
+    it only assumed is used for nothing, and with no *roots* — the source's
+    could not be asked — nothing is. A place under no root of the source —
+    Cemu's ``data/Cemu`` — is the emulator's own and may be used. A folder that
+    is not there is never created for a link.
     """
     if place is None:
         return PlaceRefusal(REFUSED_NO_PLACE)
     if unreadable:
         return PlaceRefusal(REFUSED_UNREADABLE)
+    if roots is None:
+        return PlaceRefusal(REFUSED_ROOT_ASSUMED, os.path.dirname(place))
     root = root_over(place, roots)
     if root is not None and root.assumed:
         return PlaceRefusal(REFUSED_ROOT_ASSUMED, root.path)

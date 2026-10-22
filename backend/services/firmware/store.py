@@ -214,12 +214,12 @@ class FirmwareStore:
         if not md5:
             raise Refused("no_checksum", f"RomM states no checksum for {name}, so Tender cannot check a download.")
         folder = self._prepare_folder()
+        stored = self._stored(platform_slug, name, folder, md5, firmware)
         try:
             path = _in_platform_folder(folder, platform_slug, name)
         except PathTraversalError as exc:
             self._logger.error(f"Rejected firmware with unsafe file name {name!r}: {exc}")
             raise Refused("path_traversal", "Server sent an unsafe firmware file name — download aborted") from exc
-        stored = self._stored(platform_slug, name, folder, md5, firmware)
         record = self._record_of(platform_slug, name)
         backup = None
         if self._files.exists(path):
@@ -491,10 +491,10 @@ class FirmwareStore:
 def _in_platform_folder(folder: str, platform_slug: str, name: str) -> str:
     """*name* in *platform_slug*'s store folder, refused where either leaves the folder it is joined onto.
 
-    Joined in two steps so a server-supplied name can no more reach another
-    platform's folder than leave the store.
+    Joined one segment at a time, so a platform cannot leave the store and a
+    server-supplied name cannot reach another platform's folder.
     """
-    return safe_join(safe_join(folder, STORE_FOLDER, platform_slug), name)
+    return safe_join(safe_join(safe_join(folder, STORE_FOLDER), platform_slug), name)
 
 
 def _blocked(place: str, roots: SourceRoots | None) -> bool:

@@ -247,6 +247,16 @@ class TestADownloadLandsInTheStore:
         assert machine.romm.downloads == []
         assert not (machine.tender / "bios" / "dc").exists()
 
+    async def test_a_platform_that_leaves_the_store_is_refused(self, machine):
+        machine.romm.add(1, "../roms", "sega_101.bin", _SATURN)
+
+        with pytest.raises(Refused) as refused:
+            await machine.service.download_platform_firmware_file("../roms", "sega_101.bin")
+
+        assert refused.value.reason == "path_traversal"
+        assert machine.romm.downloads == []
+        assert not (machine.tender / "roms").exists()
+
     async def test_a_second_download_of_a_stored_file_fetches_nothing(self, machine):
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
         await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
@@ -363,6 +373,33 @@ class TestAPlaceOutsideTheBiosFolder:
         assert not cemu.exists()
         (row,) = [f for f in entry["files"] if f["file_name"] == "keys.txt"]
         assert row["place_refusal"] == {"reason": "folder_missing", "folder": str(cemu)}
+
+
+class TestASourceWhoseRootsCouldNotBeAsked:
+    @pytest.mark.parametrize(
+        ("press", "args"),
+        [
+            ("download_all_firmware", ("saturn",)),
+            ("download_required_firmware", ("saturn",)),
+            ("download_platform_firmware_file", ("saturn", "sega_101.bin")),
+            ("update_bios_links", ("saturn",)),
+        ],
+    )
+    async def test_no_bios_press_places_a_link_there(self, machine, press, args):
+        _saturn(machine)
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
+        for place in machine.links():
+            os.unlink(place)
+        machine.resolver.roots = None
+
+        await getattr(machine.service, press)(*args)
+        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+
+        assert not os.path.lexists(machine.bios / "saturn_bios.bin")
+        assert not os.path.lexists(machine.bios / "kronos" / "saturn_bios.bin")
+        (row,) = [f for f in entry["files"] if f["declared_by"] == _YABA]
+        assert row["place_refusal"]["reason"] == "root_assumed"
 
 
 class TestTwoSources:

@@ -95,9 +95,15 @@ class TestWhetherAPlaceMayBeUsed:
     def test_a_missing_folder_is_refused_naming_it(self):
         look = PlaceLook(lexists=False, folder_exists=False)
 
-        refusal = place_refusal("/x/data/Cemu/keys.txt", look, None, unreadable=False)
+        refusal = place_refusal("/x/data/Cemu/keys.txt", look, SourceRoots(roots=(), findings=()), unreadable=False)
 
         assert refusal == PlaceRefusal(REFUSED_FOLDER_MISSING, "/x/data/Cemu")
+
+    def test_a_source_whose_roots_could_not_be_asked_gets_no_link(self):
+        """Nothing tells an assumed root from a read one there, so no place of that source is used."""
+        refusal = place_refusal(f"{_BIOS}/a.bin", _FREE, None, unreadable=False)
+
+        assert refusal == PlaceRefusal(REFUSED_ROOT_ASSUMED, _BIOS)
 
     def test_a_place_the_resolver_could_not_look_at_is_refused(self):
         assert place_refusal(f"{_BIOS}/a.bin", _FREE, _roots(), unreadable=True) == PlaceRefusal(REFUSED_UNREADABLE)

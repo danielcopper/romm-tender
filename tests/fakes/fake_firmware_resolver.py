@@ -19,12 +19,15 @@ from domain.firmware_wants import (
     FolderVerdict,
     MissingConfiguredImage,
 )
+from domain.source_roots import SourceRoots
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import EllipsisType
 
-    from domain.source_roots import SourceRoots
+
+# A source that names no root: every place it answers lies under none.
+_NO_ROOTS = SourceRoots(roots=(), findings=())
 
 
 class FakeFirmwareResolver:
@@ -76,7 +79,9 @@ class FakeFirmwareResolver:
 
     A placement's ``place`` is the declared location joined under
     ``bios_root``, unless :meth:`declare` names one. ``source`` and ``roots``
-    are what the catalogue says it was read from; :meth:`every_source` answers
+    are what the catalogue says it was read from — by default a source that
+    names no root, and ``None`` a source whose roots could not be asked;
+    :meth:`every_source` answers
     this one catalogue followed by each of ``other_sources``, a test's further
     emulator sources, and :meth:`source_roots` every source's roots.
     """
@@ -91,7 +96,7 @@ class FakeFirmwareResolver:
         bios_root: str | None = None,
         present_probe: Callable[[str], bool] = os.path.exists,
         source: str | None = "retrodeck",
-        roots: SourceRoots | None = None,
+        roots: SourceRoots | None = _NO_ROOTS,
     ) -> None:
         self.placements: list[FirmwarePlacement] = list(placements or [])
         self.source = source
