@@ -11,7 +11,8 @@
 // `testAppId` per test (incremented in `beforeEach`) — Option A in the playbook.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, act, fireEvent, waitFor } from "@testing-library/react";
+import { render, renderHook, act, fireEvent, waitFor } from "@testing-library/react";
+import { forgetBiosPresses, useBiosPresses } from "../utils/biosAttempts";
 import { createElement, type ComponentProps, type ReactElement } from "react";
 import { RomMPlaySection } from "./RomMPlaySection";
 import * as backend from "../api/backend";
@@ -3309,6 +3310,36 @@ describe("RomMPlaySection", () => {
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
       }
+    });
+
+    it("toasts only what it downloaded, and leaves a link it could not place to the BIOS tab's rows", async () => {
+      const items = await setupBiosAction();
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
+        success: true,
+        message: "",
+        downloaded: 1,
+        failed: [],
+        placed: 0,
+        left_in_place: 1,
+        link_failures: [{ place: "/r/bios/scph5501.bin", file_name: "scph5501.bin", reason: "Permission denied" }],
+        backups: ["/d/backups/bios/s/t/bios/ps1/scph5501.bin"],
+      } as never);
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null, bios_label: null });
+      vi.mocked(toaster.toast).mockClear();
+
+      await act(async () => {
+        await items[3]!.props.onClick?.();
+      });
+
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ body: "BIOS downloaded (1 files)" }),
+      );
+      const { result } = renderHook(() => useBiosPresses());
+      expect(result.current("/r/bios/scph5501.bin", "scph5501.bin")).toEqual({
+        linkFailure: "Permission denied",
+        movedAside: "/d/backups/bios/s/t/bios/ps1/scph5501.bin",
+      });
+      act(() => forgetBiosPresses());
     });
 
     it("nothing downloaded and getBiosStatus rejecting → safe fallback, no setInfo write, no game page told", async () => {

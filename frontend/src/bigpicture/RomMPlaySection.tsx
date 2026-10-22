@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, FC, Fragment, type ReactElement } from "react";
+import { noteBiosPress } from "../utils/biosAttempts";
 import { showToast } from "../utils/toast";
 import {
   ConfirmModal,
@@ -510,6 +511,10 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       const result = await downloadAllFirmware(detail.platformSlug, detail.romId);
       if (result.success) {
         const failed = result.failed ?? [];
+        // The toast says what was downloaded; what was left in place, a link
+        // that could not be placed and a file moved aside are said on the BIOS
+        // tab's rows.
+        noteBiosPress(result);
         showToast(failed.length > 0 ? result.message : `BIOS downloaded (${result.downloaded} files)`);
         if (result.downloaded > 0) {
           globalThis.dispatchEvent(

@@ -35,6 +35,7 @@ import { SettingsResetCard } from "./SettingsResetCard";
 import { StrandedPanelCard } from "./StrandedPanelCard";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
+import { forgetBiosPresses } from "../utils/biosAttempts";
 
 interface RomMGameInfoPanelProps {
   appId: number;
@@ -114,6 +115,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     return () => {
       cancelled = true;
       unwire();
+      forgetBiosPresses();
     };
   }, [appId]);
 

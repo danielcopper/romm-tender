@@ -10,6 +10,7 @@ import { EmulatorStepScope } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
 import { libretroEmu, sharedBy, standaloneEmu } from "../test-utils/coreFixtures";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
+import { forgetBiosPresses, noteBiosPress } from "../utils/biosAttempts";
 import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption, MissingConfiguredImage } from "../types";
 
 const coreInfo: CoreInfo = {
@@ -1067,6 +1068,29 @@ describe("BiosTab", () => {
       ["nothing could judge it", { satisfied: null }],
     ] as const)("keeps a row where %s", (_why, over) => {
       expect(namesOf([row("dc_boot.bin", over)])).toContain("dc_boot.bin");
+    });
+
+    it("says on a row what the latest press on the page did to it, until the page is left", () => {
+      const place = "/home/deck/retrodeck/bios/dc_boot.bin";
+      const backup = "/d/backups/bios/2026-10-22_10-00-00/t/bios/dc/dc_boot.bin";
+      act(() => {
+        noteBiosPress({
+          link_failures: [{ place, file_name: "dc_boot.bin", reason: "Permission denied" }],
+          backups: [backup],
+        });
+      });
+      const files = [row("dc_boot.bin", { required_by_active: true, local_path: place, store_file: "dc_boot.bin" })];
+      const { container } = render(
+        <BiosTab biosStatus={statusWith(files)} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+
+      expect(container.textContent).toContain(`Could not place a link at ${place}: Permission denied`);
+      expect(container.textContent).toContain(
+        `A different dc_boot.bin was already in Tender's firmware store. It was moved to ${backup}.`,
+      );
+
+      act(() => forgetBiosPresses());
+      expect(container.textContent).not.toContain("Could not place a link");
     });
 
     it("leaves the rest to the platform page, counted and pointed at", () => {

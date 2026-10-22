@@ -38,7 +38,15 @@ import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
 import { needWords, type GroupLineTone } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
-import { biosPlaceLines, libraryRowLines, storeOnlySentence, type Identification } from "../utils/biosPlaceWords";
+import {
+  backupLines,
+  biosPlaceLines,
+  libraryRowLines,
+  storeOnlySentence,
+  type Identification,
+  type RowAttempt,
+} from "../utils/biosPlaceWords";
+import { useBiosPresses } from "../utils/biosAttempts";
 import { biosSummary, groupBlocks } from "../utils/biosSummary";
 import { emulatorClause } from "../utils/emulatorClause";
 import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../utils/biosTabs";
@@ -352,6 +360,7 @@ function buildBiosFileList(
   tab: EmulatorTab | null,
   launchingLabel: string | null,
   identifications: Readonly<Record<string, Identification>>,
+  attemptFor: (place: string | null, fileName: string | null) => RowAttempt,
 ): ReactElement[] {
   const files = bios.files ?? [];
   const otherTab = tab !== null && !tab.launching;
@@ -368,11 +377,17 @@ function buildBiosFileList(
     const note = words.note;
     // What Tender's own part in the row is: its store copy, the link at its
     // place — or, in the library's section, what the file's content is.
+    // And what the latest press on this page did to it (D30): said here,
+    // never in a toast.
+    const attempt = attemptFor(f.local_path, f.store_file ?? f.library?.file_name ?? null);
     const lines = [
       ...words.lines,
       ...(library
-        ? libraryRowLines(f, f.library ? identifications[f.library.md5] : undefined)
-        : biosPlaceLines(f, named)),
+        ? [
+            ...libraryRowLines(f, f.library ? identifications[f.library.md5] : undefined),
+            ...backupLines(attempt.movedAside ? [attempt.movedAside] : []),
+          ]
+        : biosPlaceLines(f, named, attempt)),
     ];
     // The row is headed by the file the emulator DECLARED — `declared_path`, not
     // `file_name`, which is only its basename: a `dc/dc_boot.bin` row would
@@ -458,6 +473,7 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
   const [tabKey, setTabKey] = useState<string | null>(null);
   const part = useRef<HTMLDivElement>(null);
   const [steppedFromList, setSteppedFromList] = useState(false);
+  const attemptFor = useBiosPresses();
   // What the resolver knows each library file's content as, asked after the
   // page is shown, one file at a time.
   const identifications = useIdentifications(
@@ -517,6 +533,7 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
     tab,
     biosStatus.active_core_label ?? coreInfo?.active_core_label ?? null,
     identifications,
+    attemptFor,
   );
 
   // The selector and the list sit below the header, outside its section: a
