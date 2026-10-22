@@ -398,8 +398,10 @@ and the row you focus is the one the right-hand pane describes.
    refused file reads ✗, one that could not be compared or recognised reads `?`. A file that is not there reads an em
    dash — nothing was there to check. For a required **folder** it says how many BIOS images the folder holds — and the
    images themselves are listed under the row, in the emulator's own words so you can match one against its picker — or
-   that it holds none, or that its contents could not be established. Where a cell is too narrow for its words, they
-   wrap onto the next line
+   that it holds none, or that its contents could not be established. A file in such a folder that has a row of its own
+   reads by its own check: **right file** for an image the resolver identified, **not recognised** for a file in a
+   folder it found no image in, and **not established** where the resolver could not tell. Where a cell is too narrow
+   for its words, they wrap onto the next line
 10. A **Download** button sits on every row that your RomM library fills and that Tender's firmware store does not hold
     yet, and a **Delete** button on every row whose file Tender downloaded for this platform and still has (see
     [Deleting BIOS Files](#deleting-bios-files)). Both are on every emulator's rows. Where another file already lies at

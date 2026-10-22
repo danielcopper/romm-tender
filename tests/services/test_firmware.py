@@ -1268,6 +1268,69 @@ class TestAFolderRequirementIsAnsweredByItsContents:
         assert all(row["file_name"] != "bios" for row in result["files"])
 
     @pytest.mark.asyncio
+    async def test_each_file_in_the_folder_reads_its_own_check_never_the_folders(self, firmware, tmp_path):
+        """The folder's own reading compared nothing (``unknown``); each file the read stated something about did."""
+        identified = FolderFile(path=self._in_folder(tmp_path, "scph70004.bin"), satisfied=True)
+        rejected = FolderFile(path=self._in_folder(tmp_path, "notabios.bin"), satisfied=False)
+        contradicted = FolderFile(path=self._in_folder(tmp_path, "odd.bin"), satisfied=None)
+        resolver = FakeFirmwareResolver()
+        resolver.declare(
+            "bios",
+            required_by=[_id(self._CORE)],
+            relative_path="pcsx2/bios",
+            present=True,
+            declares_directory=True,
+            folder=FolderVerdict(satisfied=True, images=self._IMAGES),
+            checked="unknown",
+            folder_files=(identified, rejected, contradicted),
+        )
+        fw = self._service(firmware, tmp_path, resolver)
+
+        result = await fw.check_platform_bios("ps2")
+        checked = {row["file_name"]: row["checked"] for row in result["files"]}
+
+        assert checked == {"scph70004.bin": "verified", "notabios.bin": "unrecognised", "odd.bin": "unknown"}
+
+    @pytest.mark.asyncio
+    async def test_a_folder_linked_onto_the_bios_root_answers_its_images_by_their_resolved_paths(
+        self, firmware, tmp_path
+    ):
+        """RetroDECK links ``pcsx2/bios`` onto the BIOS root; the resolver states the folder and its images there."""
+        root = tmp_path / "bios"
+        root.mkdir()
+        images = [
+            FolderFile(path=str(root / name), satisfied=True, description=description)
+            for name, description in (
+                ("ps2-0200a-20040614.bin", "USA     v02.00(14/06/2004)  Console 20040614-100909"),
+                ("ps2-0200e-20040614.bin", "Europe  v02.00(14/06/2004)  Console 20040614-100914"),
+            )
+        ]
+        for image in images:
+            open(image.path, "wb").close()
+        resolver = FakeFirmwareResolver()
+        resolver.declare(
+            "bios",
+            required_by=[_id(self._CORE)],
+            relative_path="pcsx2/bios",
+            place=str(root),
+            present=True,
+            declares_directory=True,
+            folder=FolderVerdict(satisfied=True, images=self._IMAGES),
+            checked="unknown",
+            folder_files=tuple(images),
+        )
+        fw = self._service(firmware, tmp_path, resolver)
+
+        result = await fw.check_platform_bios("ps2")
+        rows = [row for row in result["files"] if row.get("in_folder") == "pcsx2/bios"]
+
+        assert sorted(row["declared_path"] for row in rows) == [
+            "pcsx2/bios/ps2-0200a-20040614.bin",
+            "pcsx2/bios/ps2-0200e-20040614.bin",
+        ]
+        assert {(row["satisfied"], row["checked"]) for row in rows} == {(True, "verified")}
+
+    @pytest.mark.asyncio
     async def test_a_folder_holding_no_image_is_a_requirement_shown_to_be_unmet(self, firmware, tmp_path):
         """Not a declined verdict: the read happened and the answer is no, for the folder and for the file in it."""
         rejected = FolderFile(path=self._in_folder(tmp_path, "notabios.bin"), satisfied=False)

@@ -1891,10 +1891,13 @@ it, for the focused platform:
   verbatim strings are listed full-width under the row, `pre-wrap`, because the padding in them is what makes a line
   matchable against the emulator's own picker), that it holds none, or that nothing established its contents; for a file
   the resolver's `checked` in words — right file, wrong file, refused, not comparable, not recognised, could not be
-  read, not checked, not established — the longer ones wrapping inside the 84px column rather than cut. They explain the
-  mark beside them and never contradict it, and the word "unknown" is not one of them. A file nothing was asked about —
-  one that is not there — reads an em dash, and the dash must never come to mean "asked, and nothing found". The section
-  appears whenever the firmware read speaks for the platform, synced or not.
+  read, not checked, not established — the longer ones wrapping inside the 84px column rather than cut. A file of a
+  folder declaration that has a row of its own carries its own `checked`, never the folder's: the resolver states a
+  verdict per file and no check state, so `services/firmware/rows.py` words an identified image `verified`, a file in a
+  folder holding no image `unrecognised`, and anything else `unknown`. They explain the mark beside them and never
+  contradict it, and the word "unknown" is not one of them. A file nothing was asked about — one that is not there —
+  reads an em dash, and the dash must never come to mean "asked, and nothing found". The section appears whenever the
+  firmware read speaks for the platform, synced or not.
 
 - **Remove** — Remove _N_ shortcuts and Delete _N_ save files on one row, the actions the Data Management platform modal
   used to offer, without the BIOS delete (it is one group up). Red, last, each behind a confirmation, and with **no

@@ -35,7 +35,7 @@ from domain.firmware_rows import (
     unclaimed,
     unused,
 )
-from domain.firmware_wants import DECLARED_FILE
+from domain.firmware_wants import CHECKED_UNKNOWN, CHECKED_UNRECOGNISED, CHECKED_VERIFIED, DECLARED_FILE
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -198,6 +198,7 @@ def _recognised_folder_rows(
             name,
             satisfied,
             statement.description if statement is not None else None,
+            checked=_folder_file_checked(satisfied) if statement is not None or look.lexists else None,
             fetch=wanted and file is not None,
         )
         wanted = wanted and file is None
@@ -214,6 +215,20 @@ def _recognised_folder_rows(
         )
         rows.append(entry.with_changes(**facts))
     return rows
+
+
+def _folder_file_checked(satisfied: bool | None) -> str:
+    """What a file in a declared folder's contents read as, in the ``checked`` words its Contents cell is worded by.
+
+    The resolver states a verdict per file and no check state of its own:
+    identified by its contents is the right file, a file the read found no
+    image among is not recognised, and anything else is not established.
+    """
+    if satisfied is True:
+        return CHECKED_VERIFIED
+    if satisfied is False:
+        return CHECKED_UNRECOGNISED
+    return CHECKED_UNKNOWN
 
 
 def _folder_file_verdict(statement: FolderFile | None, look: PlaceLook) -> bool | None:
@@ -240,6 +255,7 @@ def _stated_folder_rows(
             name,
             statement.satisfied,
             statement.description,
+            checked=_folder_file_checked(statement.satisfied),
             fetch=False,
         )
         facts = place_facts(
@@ -287,14 +303,19 @@ def _in_folder(
     satisfied: bool | None,
     description: str | None,
     *,
+    checked: str | None,
     fetch: bool,
 ) -> BiosFileEntry:
-    """*entry* as one file in the folder *placement* declares: a file of its own, required by nothing alone."""
+    """*entry* as one file in the folder *placement* declares: a file of its own, required by nothing alone.
+
+    Its ``checked`` is the file's own, never the folder's.
+    """
     return entry.with_changes(
         declared_path=os.path.join(placement.destination, name),
         declared_kind=DECLARED_FILE,
         required_by_active=False,
         satisfied=satisfied,
+        checked=checked,
         images=(description,) if description else (),
         caveats=(),
         fetch_for_required=fetch,

@@ -139,6 +139,10 @@ CAVEAT_PATH_INACCESSIBLE = "firmware-path-inaccessible"
 # keeps knows. Spelled as the resolver spells them.
 CHECKED_UNREAD = "unread"
 CHECKED_UNRECOGNISED = "unrecognised"
+# A file's contents matched what the emulator expects, and nothing could be
+# compared. Spelled as the resolver spells them.
+CHECKED_VERIFIED = "verified"
+CHECKED_UNKNOWN = "unknown"
 
 # The codes with which the resolver states that a search identified a file by
 # its contents: an image its table names, and one the emulator's own test
