@@ -62,7 +62,8 @@ _ASSET_TYPE_QUERY: dict[str, str] = {
 }
 
 # A wide grid's and a cover's sizes in the order they are preferred, and the
-# widths a logo is preferred within; the reasons are the same doc section's.
+# widths a logo is preferred within; the reasons are the same doc section's,
+# the cover's order #2381 D7's.
 _WIDE_GRID_SIZES: tuple[tuple[int, int], ...] = ((920, 430), (460, 215))
 _COVER_SIZES: tuple[tuple[int, int], ...] = ((600, 900), (660, 930), (342, 482))
 _LOGO_WIDTHS = range(640, 2048 + 1)
@@ -101,9 +102,11 @@ def sgdb_endpoint_path(asset_type: str, sgdb_game_id: int) -> str | None:
 
 
 def sgdb_candidates_page_path(asset_type: str, sgdb_game_id: int, page: int) -> str | None:
-    """:func:`sgdb_endpoint_path` for page *page* of the candidates, counted from 0 as SteamGridDB counts its pages.
+    """:func:`sgdb_endpoint_path` for page *page* of the candidates, counted from 0.
 
-    Page 0 is the list the automatic choice is made from.
+    Page 0 is the list the automatic choice is made from. That SteamGridDB
+    counts its pages from 0 is an assumption no measurement has checked; its
+    API documents the ``page`` parameter without saying where it starts.
     """
     path = sgdb_endpoint_path(asset_type, sgdb_game_id)
     if path is None:

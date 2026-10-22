@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_set_in_steam, is_slot_filled, slot_stem
 from domain.artwork_slot_choice import ArtworkSlotChoice
-from domain.artwork_slot_outcome import SlotOutcome
+from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
 from domain.artwork_slot_view import SlotState, SlotView, describe_slot
 from domain.sgdb_artwork import (
     choose_candidate,
@@ -33,7 +33,6 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Collection, Mapping
 
-    from domain.artwork_slot_outcome import ArtworkSlotOutcome
     from domain.sgdb_artwork import SgdbCandidate
     from services.protocols import (
         Clock,
@@ -54,9 +53,10 @@ TAB_SLOTS: tuple[ArtworkSlot, ...] = (
     ArtworkSlot.ICON,
 )
 
-# How many pages of a slot's candidates are walked to find an image chosen in
-# the picker once the listing it came from is no longer held (a backend restart
-# between the listing and the choice).
+# How many pages of a slot's candidates are walked to find a chosen image once
+# the listing it came from is no longer held — a backend restart between the
+# listing and the choice, or a chosen image the cache lost. A bound on the
+# requests one choice may cost, not a measured size of SteamGridDB's lists.
 _PAGES_WALKED_FOR_A_CHOICE = 10
 
 
@@ -103,6 +103,9 @@ class ArtworkSlots:
         # id, so a choice downloads the image listed without asking again.
         # Replaced whole on each listing, never changed in place.
         self._listed: dict[tuple[int, ArtworkSlot], dict[int, SgdbCandidate]] = {}
+        # SteamGridDB's name per game id, once asked: a name does not change
+        # between two reads of the tab, and asking costs a request.
+        self._game_names: dict[int, str] = {}
 
     # -- reading ------------------------------------------------------------
 
@@ -115,6 +118,11 @@ class ArtworkSlots:
         if grid.grid_dir is None:
             raise Refused("no_grid_dir", "Steam grid directory not found")
         return self._views_io(rom_id, app_id, grid, has_game=sgdb_id is not None)
+
+    def chosen_slots_io(self, rom_id: int) -> set[ArtworkSlot]:
+        """The slots of *rom_id* the user chose an image for."""
+        with self._uow_factory() as uow:
+            return {choice.slot for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
 
     def slots_left_to_tender_io(self, rom_id: int) -> list[ArtworkSlot]:
         """The SteamGridDB slots of *rom_id* on automatic and not set in Steam: the ones Tender may replace.
@@ -141,12 +149,17 @@ class ArtworkSlots:
         return any(view.slot is slot and view.state is SlotState.SET_IN_STEAM for view in self._views_of_rom_io(rom_id))
 
     def game_name_io(self, sgdb_id: int) -> str | None:
-        """SteamGridDB's name for game *sgdb_id*; ``None`` where it cannot be asked, which is logged."""
+        """SteamGridDB's name for game *sgdb_id*, asked once per game; ``None`` where it cannot be asked (logged)."""
+        if sgdb_id in self._game_names:
+            return self._game_names[sgdb_id]
         try:
-            return parse_game_name(self._sgdb_api.request(f"/games/id/{sgdb_id}"))
+            name = parse_game_name(self._sgdb_api.request(f"/games/id/{sgdb_id}"))
         except Exception as e:
             self._logger.warning(f"SGDB game name lookup failed for game {sgdb_id}: {e}")
             return None
+        if name is not None:
+            self._game_names[sgdb_id] = name
+        return name
 
     def _views_of_rom_io(self, rom_id: int) -> list[SlotView]:
         with self._uow_factory() as uow:
@@ -302,12 +315,41 @@ class ArtworkSlots:
             raise Refused("rate_limited", RATE_LIMITED) from e
         if not isinstance(found, CachedArtwork):
             raise Refused("download_failed", "The image could not be downloaded from SteamGridDB")
-        choice = ArtworkSlotChoice(rom_id=rom_id, slot=slot, image_id=image_id, chosen_at=self._clock.time())
+        now = self._clock.time()
+        choice = ArtworkSlotChoice(rom_id=rom_id, slot=slot, image_id=image_id, chosen_at=now)
+        reference = self._chosen_reference_io(rom_id, slot, found, sgdb_id, now)
         with self._uow_factory() as uow:
             if uow.roms.get(rom_id) is None:
                 raise Refused("not_synced", "ROM is not synced to Steam")
             uow.artwork_slot_choices.save(choice)
+            if reference is not None:
+                uow.artwork_slot_outcomes.save(reference)
         return found
+
+    def _chosen_reference_io(
+        self, rom_id: int, slot: ArtworkSlot, found: CachedArtwork, sgdb_id: int, now: float
+    ) -> ArtworkSlotOutcome | None:
+        """The ``set`` record of the chosen image, so it reads as Tender's however its report ends (#2381 D15).
+
+        The hash is of the bytes the frontend is handed. ``None`` for the icon,
+        which is judged by its path and whose written bytes are downscaled.
+        Refuses with ``download_failed`` when the downloaded image cannot be read.
+        """
+        if slot is ArtworkSlot.ICON:
+            return None
+        try:
+            data = self._cache.read_bytes(found.path)
+        except OSError as e:
+            self._logger.warning(f"Could not read the chosen {slot.value} {found.path}: {e}")
+            raise Refused("download_failed", "The downloaded image could not be read") from e
+        return ArtworkSlotOutcome.record_set(
+            rom_id=rom_id,
+            slot=slot,
+            sgdb_id=sgdb_id,
+            image_id=found.image_id,
+            image_sha256=hashlib.sha256(data).hexdigest(),
+            recorded_at=now,
+        )
 
     def _find_candidate_io(self, rom_id: int, slot: ArtworkSlot, image_id: int, sgdb_id: int) -> SgdbCandidate | None:
         candidate = self._listed.get((rom_id, slot), {}).get(image_id)
@@ -319,6 +361,20 @@ class ArtworkSlots:
             if candidate is not None or not listed["has_more"]:
                 return candidate
         return None
+
+    def has_choice_io(self, rom_id: int, slot: ArtworkSlot) -> bool:
+        """Whether the user chose an image for *rom_id*'s *slot*."""
+        with self._uow_factory() as uow:
+            return uow.artwork_slot_choices.get(rom_id, slot) is not None
+
+    def cached_as_chosen_io(self, rom_id: int, slot: ArtworkSlot) -> CachedArtwork | None:
+        """What the cache holds for *rom_id*'s *slot*; ``None`` where it holds another image than the user chose."""
+        with self._uow_factory() as uow:
+            choice = uow.artwork_slot_choices.get(rom_id, slot)
+        cached = self._files.cached(rom_id, slot.value)
+        if cached is not None and choice is not None and cached.image_id != choice.image_id:
+            return None
+        return cached
 
     def download_io(self, rom_id: int, slot: ArtworkSlot, sgdb_id: int) -> CachedArtwork | NoArtwork | SlotAnswer:
         """*rom_id*'s cached *slot*, downloaded first when it is not cached: the user's chosen image, else Tender's.
@@ -352,11 +408,12 @@ class ArtworkSlots:
     def automatic_io(self, rom_id: int, slot: ArtworkSlot, sgdb_id: int) -> CachedArtwork | NoArtwork | SlotAnswer:
         """Download Tender's pick for *rom_id*'s SteamGridDB *slot* anew, and drop the user's choice for it.
 
-        The choice goes once SteamGridDB has answered with an image or with
-        none, and stays when the download failed or was refused.
+        The choice goes once Tender's image is in the cache, and stays where
+        SteamGridDB has none — Steam keeps showing the chosen image then — and
+        where the download failed or was refused.
         """
         found = self._files.fetch_or_answer(rom_id, slot.value, sgdb_id, anew=True)
-        if isinstance(found, CachedArtwork) or found is NoArtwork.NONE:
+        if isinstance(found, CachedArtwork):
             with self._uow_factory() as uow:
                 uow.artwork_slot_choices.delete_slot(rom_id, slot)
         return found
@@ -368,16 +425,61 @@ class ArtworkSlots:
             uow.artwork_slot_outcomes.delete_slot(rom_id, ArtworkSlot.COVER)
 
     def forget_choices_io(self, rom_id: int) -> set[ArtworkSlot]:
-        """Drop every choice of *rom_id*, answering the slots that had one."""
+        """Drop the choices a change of *rom_id*'s SteamGridDB game discards (#2381 D12, D17); answers the slots chosen.
+
+        A chosen cover that is not set in Steam keeps its choice: it goes back to
+        RomM's through ``set_artwork_slot_automatic``, which reloads RomM's cover
+        under its own conflict rules, so the cover never reads automatic while
+        Steam still shows the chosen image.
+        """
         with self._uow_factory() as uow:
             chosen = {choice.slot for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
-            uow.artwork_slot_choices.delete_for_rom(rom_id)
+            rom = uow.roms.get(rom_id)
+        app_id = rom.shortcut_app_id if rom is not None else None
+        keep_cover = (
+            ArtworkSlot.COVER in chosen and app_id is not None and not self._cover.is_cover_set_in_steam(rom_id, app_id)
+        )
+        with self._uow_factory() as uow:
+            for slot in chosen:
+                if not (slot is ArtworkSlot.COVER and keep_cover):
+                    uow.artwork_slot_choices.delete_slot(rom_id, slot)
+        return chosen
+
+    def discard_superseded_choices_io(
+        self, rom_id: int, romm_id: int | None, chosen_id: int | None
+    ) -> set[ArtworkSlot]:
+        """Where RomM's SteamGridDB id has replaced the game the user chose, discard that game's choices (#2381 D17).
+
+        As a change of game does (:meth:`forget_choices_io`), and the chosen game
+        goes with them, so this happens once. Nothing changes while RomM gives no
+        id, gives the chosen one, or no slot was chosen; answers the slots that
+        had a choice.
+        """
+        if not romm_id or not chosen_id or romm_id == chosen_id:
+            return set()
+        with self._uow_factory() as uow:
+            if not uow.artwork_slot_choices.get_all_for_rom(rom_id):
+                return set()
+        chosen = self.forget_choices_io(rom_id)
+        with self._uow_factory() as uow:
+            uow.roms.set_chosen_sgdb_id(rom_id, None)
+        self._logger.info(f"RomM's SteamGridDB game replaced the one chosen for rom_id={rom_id}; its choices went")
         return chosen
 
 
-def views_payload(views: Collection[SlotView]) -> list[Mapping[str, Any]]:
-    """The wire shape of *views*: per slot, its name, state, source and the SteamGridDB image it shows."""
+def views_payload(views: Collection[SlotView], chosen: Collection[ArtworkSlot]) -> list[Mapping[str, Any]]:
+    """The wire shape of *views*: per slot, its name, state, source, the SteamGridDB image it shows, and ``has_choice``.
+
+    ``has_choice`` holds also where the slot reads set in Steam over the
+    choice, which a change of game still discards (#2381 D12).
+    """
     return [
-        {"slot": view.slot.value, "state": view.state.value, "source": view.source.value, "image_id": view.image_id}
+        {
+            "slot": view.slot.value,
+            "state": view.state.value,
+            "source": view.source.value,
+            "image_id": view.image_id,
+            "has_choice": view.slot in chosen,
+        }
         for view in views
     ]

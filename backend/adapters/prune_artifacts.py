@@ -13,7 +13,10 @@ from models.prune import MutationOutcome
 if TYPE_CHECKING:
     from models.prune import RecoveryArtifact, SourceClaim
 
-_SGDB_TYPES = ("hero", "logo", "grid", "icon")
+# The asset types an older release cached under a name without an image id, and
+# every type the cache holds, the cover from SteamGridDB included.
+_UNNUMBERED_SGDB_TYPES = ("hero", "logo", "grid", "icon")
+_SGDB_TYPES = (*_UNNUMBERED_SGDB_TYPES, "cover")
 
 
 class PruneArtifactAdapter:
@@ -71,7 +74,7 @@ class PruneArtifactAdapter:
             (os.path.join(covers, cache_filename(rom_id)), "cover_cache"),
             (os.path.join(covers, cover_meta_filename(rom_id)), "cover_validator"),
         ]
-        names = {f"{rom_id}_{kind}.png" for kind in _SGDB_TYPES}
+        names = {f"{rom_id}_{kind}.png" for kind in _UNNUMBERED_SGDB_TYPES}
         names.update(name for name in _listed(artwork) if any(is_cached_artwork(name, rom_id, k) for k in _SGDB_TYPES))
         paths.extend((os.path.join(artwork, name), "sgdb_cache") for name in sorted(names))
         return paths

@@ -141,6 +141,7 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
                 # Artwork and shortcut settings written to disk, to Steam or to their record.
                 "apply_sgdb_game_id",
                 "choose_artwork_slot_image",
+                "get_artwork_game",
                 "set_artwork_slot_automatic",
                 "sgdb_artwork",
                 "report_sgdb_slot_artwork",

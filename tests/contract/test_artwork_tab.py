@@ -1,4 +1,4 @@
-"""Contract tests for the game page's ARTWORK tab (#2381, cut 2).
+"""Contract tests for the game page's ARTWORK tab (#2381).
 
 Drives ``get_artwork_slots``, ``get_artwork_slot_candidates``,
 ``choose_artwork_slot_image``, ``set_artwork_slot_automatic`` and the cover's

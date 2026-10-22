@@ -21,8 +21,8 @@ class ArtworkSlot(StrEnum):
     """A slot of a shortcut's artwork.
 
     The four SteamGridDB fills are spelled as Tender's asset-type name
-    (``domain.sgdb_artwork``); the cover, which the sync takes from RomM, is
-    ``cover``.
+    (``domain.sgdb_artwork``); the cover, which the sync takes from RomM unless
+    the user chose one from SteamGridDB, is ``cover``.
     """
 
     WIDE_GRID = "grid"
@@ -32,8 +32,8 @@ class ArtworkSlot(StrEnum):
     COVER = "cover"
 
 
-# The slots whose outcome is recorded: the four Tender fills from SteamGridDB.
-# No outcome is recorded for the cover.
+# The slots whose every outcome is recorded: the four Tender fills from
+# SteamGridDB. The cover is recorded only as ``set`` (SET_RECORDED_SLOTS).
 RECORDED_SLOTS: frozenset[ArtworkSlot] = frozenset(
     {ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO, ArtworkSlot.HERO, ArtworkSlot.ICON}
 )

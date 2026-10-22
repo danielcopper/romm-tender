@@ -812,6 +812,10 @@ class Endpoints:
         return await self._services.sgdb_service.refresh_sgdb_artwork(rom_id, sgdb_id)
 
     @route
+    async def get_artwork_game(self, rom_id):
+        return await self._services.sgdb_service.get_artwork_game(rom_id)
+
+    @route
     async def get_artwork_slots(self, rom_id, app_id):
         return await self._services.sgdb_service.get_artwork_slots(rom_id, app_id)
 

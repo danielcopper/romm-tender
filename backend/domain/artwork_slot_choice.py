@@ -1,6 +1,7 @@
 """ArtworkSlotChoice — the SteamGridDB image a user chose for one of a ROM's artwork slots.
 
-A slot with no choice is automatic: Tender picks its image by its own rule.
+A slot with no choice that is not set in Steam is automatic: Tender picks its
+image by its own rule.
 Keyed by ``(rom_id, slot)`` like the slot's outcome, and kept apart from it,
 because Refresh Artwork, the artwork job and a version switch rewrite or delete
 outcomes.

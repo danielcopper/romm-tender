@@ -705,6 +705,7 @@ class TestSgdbEndpointDelegation:
     @pytest.mark.parametrize(
         ("name", "args"),
         [
+            ("get_artwork_game", (42,)),
             ("get_artwork_slots", (42, 7)),
             ("get_artwork_slot_candidates", (42, "logo", 1)),
             ("choose_artwork_slot_image", (42, "logo", 12)),

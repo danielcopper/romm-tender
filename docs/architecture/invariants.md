@@ -942,13 +942,15 @@ Format: **invariant** — tier — enforced by.
   settle. **Listing them changes nothing at their call sites**: each service reaches its reading through
   `run_in_executor` as a bound method, which is this checker's documented blind spot, so the entries are a statement of
   the rule rather than an enforcement of it. They are also not the store's only real I/O — `grid_dir()` is called from
-  `services/artwork/` (seven sites), `services/shortcut_removal.py` and `services/library/reporter.py`,
-  `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
-  `services/library/reporter.py`, `write_shortcut_icon()` from `services/steamgrid/service.py`, and `ensure_grid_file()`
-  from `services/shortcut_artwork.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
-  `.read_shortcut_icons` (the same whole-file parse, for the shortcut artwork job's worklist, called plainly, so its
-  entry is enforced), `.grid_file_names` (lists Steam's grid directory to answer which artwork slots a shortcut has),
-  the shortcut artwork job's reading of Steam's renderer memory before each batch (`_renderer_above_ceiling`, with
+  `services/artwork/` (seven sites), `services/steamgrid/` (`service.py` and `_slots.py`),
+  `services/shortcut_removal.py` and `services/library/reporter.py`, `set_steam_input_config()` from
+  `services/settings.py`, `services/shortcut_removal.py` and `services/library/reporter.py`, `write_shortcut_icon()`
+  from `services/steamgrid/service.py`, and `ensure_grid_file()` from `services/shortcut_artwork.py` — those are
+  unlisted, and their being unlisted is a gap, not a judgement), `.read_shortcut_icons` (the same whole-file parse, for
+  the shortcut artwork job's worklist, called plainly, so its entry is enforced), `.grid_file_names` (lists Steam's grid
+  directory to answer which artwork slots a shortcut has), `.read_grid_file` (reads one grid file whole, for the ARTWORK
+  tab to hash a slot's image; reached as a bound method, so listed rather than enforced), the shortcut artwork job's
+  reading of Steam's renderer memory before each batch (`_renderer_above_ceiling`, with
   `LibraryService.renderer_above_ceiling` beside it: a `/proc` read, and at or above `GC_SKIP_BELOW_KB` a garbage
   collection over Steam's debugger, bounded at about 5 s, and a second read), `FirmwarePlatformResolver` (reads what one
   system's emulators want WITH content verification: it opens each candidate in a declared folder and reads it the way
@@ -1509,12 +1511,18 @@ Format: **invariant** — tier — enforced by.
   The adopt dialog's **replace** exit is the second such case, and it does **not** rest on that justification: the
   premise is that the content is the user's own — a different rip, a patch, a romhack — which is exactly what the server
   cannot hand back. What carries it instead is that the user is shown both sides, offered a content check, and chooses
-  between two named outcomes behind a second confirmation ([ADR-0028](../adr/0028-adopted-install-is-an-install.md)).
-  That reasoning covers the **ROM** only: an adoption's Overwrite also replaces save and savestate files, and those take
-  the **backup** leg through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not
-  quarantining a ROM (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is
-  synced nowhere at all. It is the first caller to hand that funnel a directory outside the saves root: it takes the
-  directory it is given, so a savestate's backup lands in `<states>/.romm-backup/`. Following a moved save directory
+  between two named outcomes behind a second confirmation ([ADR-0028](../adr/0028-adopted-install-is-an-install.md)). A
+  choice in the game page's ARTWORK tab over an image set in Steam is the third: Steam's copy of the image the user set
+  is cleared before Tender's goes in, and that copy may exist nowhere else, so the picker asks once more — Replace or
+  Cancel — and Cancel changes nothing ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D13;
+  `frontend/src/bigpicture/ArtworkPickerModal.test.tsx`, "asks once more before it replaces an image set in Steam, and
+  answers to replace it" and "Cancel on the second question replaces nothing"). The icon is not asked about: Tender
+  repoints the shortcut and the file the user set stays where it was. That reasoning about the adopt dialog covers the
+  **ROM** only: an adoption's Overwrite also replaces save and savestate files, and those take the **backup** leg
+  through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not quarantining a ROM
+  (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is synced nowhere at
+  all. It is the first caller to hand that funnel a directory outside the saves root: it takes the directory it is
+  given, so a savestate's backup lands in `<states>/.romm-backup/`. Following a moved save directory
   (`services/saves/save_directory.py`) takes the same **backup** leg on a collision — detail:
   [Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory). The installer
   replaces the user's database and settings on two paths, and they are held to the rule differently. A **rollback by
