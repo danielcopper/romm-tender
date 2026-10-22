@@ -7,7 +7,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import save_shape_message, unestablished_answer
-from lib.errors import DeviceWriteError, RommNotFoundError, RommRateLimitedError
+from lib.errors import DeviceWriteError, RommNotFoundError, RommRateLimitedError, RommTimeoutError
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -918,6 +918,23 @@ class TestRollbackToVersion:
             "message": "it could not be written on this device (No space left on device)",
         }
         assert not any(call[0] == "upload_save" for call in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_restore_whose_download_breaks_off_leaves_no_tmp(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        save_path = _create_save(tmp_path, content=b"current bytes")
+        self._setup_state(svc, tmp_path, tracked_id=100, last_sync_hash=_file_md5(str(save_path)))
+        fake.saves[100] = self._tracked_save(100)
+        fake.saves[50] = _server_save(save_id=50, rom_id=42, slot="default", updated_at="2026-02-01T10:00:00Z")
+        failure = RommTimeoutError("read timed out")
+        fake.break_download_on(50, failure)
+
+        with pytest.raises(RommTimeoutError) as caught:
+            await svc.rollback_to_version(42, "default", 50)
+
+        assert caught.value is failure
+        assert not (save_path.parent / "pokemon.srm.tmp").exists()
+        assert save_path.read_bytes() == b"current bytes"
 
     @pytest.mark.asyncio
     async def test_rollback_ignores_confirm_download_failure(self, tmp_path):

@@ -277,4 +277,5 @@ export type CopySaveToSlotStatus =
   | { status: "conflict_blocked"; conflicts: SyncConflict[] }
   | { status: "preflight_failed"; errors: string[] }
   | { status: "target_slot_busy"; message: string }
-  | { status: "copy_failed"; message: string };
+  | { status: "copy_failed"; message: string }
+  | { status: "upload_failed"; message: string };

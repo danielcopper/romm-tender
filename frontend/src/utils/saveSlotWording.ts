@@ -87,6 +87,11 @@ export function copyToSlotFeedback(
       return { kind: "toast", message: "Set up save slots for this game first, then copy." };
     case "copy_failed":
       return { kind: "toast", message: `Couldn't copy the save: ${result.message}` };
+    case "upload_failed":
+      return {
+        kind: "toast",
+        message: `Save copied to slot '${displaySlot(targetSlot)}' on this device, but not uploaded to RomM yet. The next sync uploads it or asks you which to keep.`,
+      };
     case "invalid_slot_name":
       return { kind: "toast", message: "Enter a valid slot name." };
     default:

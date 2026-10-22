@@ -12,7 +12,7 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, RommServerError
+from lib.errors import NotInstalled, Refused, RommApiError, RommConnectionError, RommNotFoundError, RommServerError
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.saves.sync_engine.rollback import StaleConflict
 from tests.services.saves._helpers import (
@@ -566,6 +566,21 @@ class TestResolveSyncConflictTransferFailures:
             await resolving
 
         assert caught.value is failure
+        assert save_path.read_bytes() == b"local-stale"
+
+    @pytest.mark.asyncio
+    async def test_a_download_that_breaks_off_leaves_no_tmp(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        save_path = self._seed_use_server(svc, fake, tmp_path)
+        failure = RommConnectionError("connection reset by peer")
+        fake.break_download_on(100, failure)
+        resolving = svc.resolve_sync_conflict(42, "pokemon.srm", 100, "use_server")
+
+        with pytest.raises(RommConnectionError) as caught:
+            await resolving
+
+        assert caught.value is failure
+        assert not (save_path.parent / "pokemon.srm.tmp").exists()
         assert save_path.read_bytes() == b"local-stale"
 
     @pytest.mark.asyncio

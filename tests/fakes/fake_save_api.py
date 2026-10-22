@@ -72,6 +72,8 @@ class FakeSaveApi:
         self._next_play_session_id = 3000
         self._fail_on_next: Exception | None = None
         self._fail_download_on: dict[int, Exception] = {}  # save_id -> exc for download_save_content
+        # save_id -> (exc, bytes written to the destination before it is raised)
+        self._break_download_on: dict[int, tuple[Exception, bytes]] = {}
         self.heartbeat_raises: Exception | None = None
         # Overrides the default heartbeat body when set, so a test can inject a
         # SYSTEM.VERSION (or a malformed one) into the version-probe path.
@@ -104,6 +106,16 @@ class FakeSaveApi:
         is requested until cleared.
         """
         self._fail_download_on[save_id] = exc
+
+    def break_download_on(self, save_id: int, exc: Exception, *, written: bytes = b"partial") -> None:
+        """Make ``download_save_content`` write *written* for *save_id*, then raise *exc*.
+
+        Models a transfer that breaks off mid-stream — a stall, a reset, a full
+        disk: unlike :meth:`fail_download_on`, which raises before anything is
+        written, the destination holds part of the file when the error arrives.
+        Fires every time the save is requested.
+        """
+        self._break_download_on[save_id] = (exc, written)
 
     def set_server_save_content(self, save_id: int, content: bytes) -> None:
         """Stage server-side bytes for *save_id* without writing to disk.
@@ -481,6 +493,10 @@ class FakeSaveApi:
         self._check_fail()
         if save_id in self._fail_download_on:
             raise self._fail_download_on[save_id]
+        if save_id in self._break_download_on:
+            exc, written = self._break_download_on[save_id]
+            pathlib.Path(dest_path).write_bytes(written)
+            raise exc
 
         self.downloaded_files[save_id] = dest_path
         self._materialize_download(save_id, dest_path)
