@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pytest
 from _standalone_firmware import SYSTEMS, lay_down_standalone_emulators
@@ -2411,6 +2411,27 @@ class TestWhatAFolderDeclarationHolds:
         }
         assert filed
         assert placement.folder_md5s == frozenset(filed)
+
+    def test_recognises_an_image_filed_below_the_folder_as_the_resolver_does(self, platform_adapter, monkeypatch):
+        """The resolver reads a folder by prefix, so an image filed one level below it counts too."""
+
+        class _Table:
+            _FILES: ClassVar[dict[str, Any]] = {
+                "pcsx2/bios/a.bin": type("E", (), {"md5": "AA"})(),
+                "pcsx2/bios/sub/b.bin": type("E", (), {"md5": "BB"})(),
+                "other/c.bin": type("E", (), {"md5": "CC"})(),
+            }
+
+            def names(self):
+                return list(self._FILES)
+
+            def get(self, name):
+                return self._FILES.get(name)
+
+        monkeypatch.setattr("adapters.atlas_firmware.load_hashes", _Table)
+        placement = self._placement(platform_adapter, monkeypatch)
+
+        assert placement.folder_md5s == frozenset({"aa", "bb"})
 
     def test_states_each_file_by_the_resolvers_own_verdict(self, platform_adapter, monkeypatch):
         mine, ours, odd, unread = (f"{self._FOLDER}/{name}" for name in ("mine.bin", "ours.bin", "odd.bin", "x.bin"))

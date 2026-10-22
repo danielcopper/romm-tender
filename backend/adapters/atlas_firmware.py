@@ -92,8 +92,8 @@ from _vendor.atlas import (
     REASON_REGION_DECIDED_BY_DISC,
 )
 
-# None of these names is in emu-atlas's ``__all__``; whether they are public
-# API is emu-atlas#555's question.
+# None of these names is in emu-atlas's ``__all__``, and emu-atlas has not said
+# whether they are kept: a rename there fails this import at start-up.
 from _vendor.atlas.firmware import core_short_name, declared_directory_of, load_hashes
 
 from adapters.atlas_identity import emulator_identity
@@ -319,18 +319,15 @@ class _FolderIdentities:
     """
 
     def __init__(self) -> None:
-        self._by_prefix: dict[str, frozenset[str]] | None = None
+        self._by_prefix: dict[str, frozenset[str]] = {}
 
     def under(self, prefix: str) -> frozenset[str]:
-        if self._by_prefix is None:
+        """Every checksum filed under *prefix*, below it at any depth — the resolver's own reading of a folder."""
+        if prefix not in self._by_prefix:
             table = load_hashes()
-            by_prefix: dict[str, set[str]] = {}
-            for name in table.names():
-                entry = table.get(name)
-                if entry is not None and "/" in name:
-                    by_prefix.setdefault(name.rsplit("/", 1)[0] + "/", set()).add(entry.md5.lower())
-            self._by_prefix = {key: frozenset(values) for key, values in by_prefix.items()}
-        return self._by_prefix.get(prefix, frozenset())
+            filed = (table.get(name) for name in table.names() if name.startswith(prefix))
+            self._by_prefix[prefix] = frozenset(entry.md5.lower() for entry in filed if entry is not None)
+        return self._by_prefix[prefix]
 
 
 def _unresolved() -> FirmwareCatalogue:
