@@ -6,7 +6,7 @@ import {
   type SwitchVersionSuccess,
 } from "../api/backend";
 import { setChosenCover } from "./artwork";
-import { noteArtworkWritten } from "./artworkSlotsStore";
+import { writeSlotArtwork } from "./artworkSlotsStore";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from "./pruneLease";
 import { refreshAppIdMap } from "./sessionManager";
@@ -67,13 +67,13 @@ export async function publishCommittedVersionSwitch(
     if (signal?.aborted) return;
     if (cover?.base64) {
       onCover?.(romId, cover.base64);
-      await SteamClient.Apps.SetCustomArtworkForApp(appId, cover.base64, "png", 0);
+      const base64 = cover.base64;
+      await writeSlotArtwork(appId, "cover", () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", 0));
     }
   } catch (e) {
     logWarn(`Version switch: cover apply after switch failed for rom ${romId}: ${e}`);
   }
   if (signal?.aborted) return;
-  noteArtworkWritten(appId);
   invalidateCachedGameDetail(appId);
   globalThis.dispatchEvent(
     new CustomEvent("romm_data_changed", {

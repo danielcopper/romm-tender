@@ -26,6 +26,7 @@ import {
   type SgdbArtworkSlot,
   type SgdbSlotArtwork,
 } from "../api/backend";
+import { writeSlotArtwork } from "./artworkSlotsStore";
 import { detach } from "./detach";
 import {
   capturePruneLeaseAdmission,
@@ -206,7 +207,8 @@ async function applySgdbArtwork(
         if (!base64) continue;
         if (isPruneLeaseCancelled(signal)) return applied;
         if (superseded()) return bail();
-        const write = () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType);
+        const write = () =>
+          writeSlotArtwork(appId, slot, () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType));
         await setReplacedSlot(romId, slot, answer, write); // NOSONAR(typescript:S9382)
         applied++;
       }
@@ -234,7 +236,9 @@ const NO_IMAGE: SgdbArtwork = { base64: null, no_api_key: false };
 async function setReplacedIcon(romId: number, appId: number, signal: AbortSignal): Promise<boolean> {
   const saved = await saveIcon(romId, appId, signal);
   if (!saved) return false;
-  await setReplacedSlot(romId, "icon", saved, () => SteamClient.Apps.SetShortcutIcon(appId, saved.icon_path));
+  await setReplacedSlot(romId, "icon", saved, () =>
+    writeSlotArtwork(appId, "icon", () => SteamClient.Apps.SetShortcutIcon(appId, saved.icon_path)),
+  );
   return true;
 }
 
@@ -331,7 +335,7 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
     const outcome = await withPruneLeases( // NOSONAR(typescript:S9382)
       [answer.prune_lease_token],
       "Artwork apply",
-      (signal) => setSlotImage(appId, answer, assetType, signal, superseded),
+      (signal) => setSlotImage(appId, slot, answer, assetType, signal, superseded),
       leaseOwner,
       admission,
     );
@@ -367,7 +371,7 @@ async function fillIcon(
       if (!saved) return false;
       let outcome: "set" | "refused" = "set";
       try {
-        SteamClient.Apps.SetShortcutIcon(appId, saved.icon_path);
+        await writeSlotArtwork(appId, "icon", () => SteamClient.Apps.SetShortcutIcon(appId, saved.icon_path));
       } catch (e) {
         detach(debugLog(`Artwork: Steam refused the icon for appId ${appId}: ${e}`));
         outcome = "refused";
@@ -406,6 +410,7 @@ async function fetchSlotToFill(
 /** Set one slot's image; `null` when the write was left out because the apply was cancelled or overtaken. */
 async function setSlotImage(
   appId: number,
+  slot: Exclude<SgdbArtworkSlot, "icon">,
   image: SlotImage,
   assetType: number,
   signal: AbortSignal,
@@ -413,7 +418,9 @@ async function setSlotImage(
 ): Promise<"set" | "refused" | null> {
   if (isPruneLeaseCancelled(signal) || superseded()) return null;
   try {
-    await SteamClient.Apps.SetCustomArtworkForApp(appId, image.base64, "png", assetType);
+    await writeSlotArtwork(appId, slot, () =>
+      SteamClient.Apps.SetCustomArtworkForApp(appId, image.base64, "png", assetType),
+    );
     return "set";
   } catch (e) {
     detach(debugLog(`Artwork: Steam refused the image for appId ${appId}, asset type ${assetType}: ${e}`));
@@ -463,7 +470,7 @@ export async function setJobSlotArtwork(
   }
   if (answer.status !== "image") return false;
   const outcome = await withPruneLeases([answer.prune_lease_token], "Shortcut artwork", (signal) =>
-    setSlotImage(appId, answer, JOB_SLOT_ASSET_TYPES[slot], signal, left),
+    setSlotImage(appId, slot, answer, JOB_SLOT_ASSET_TYPES[slot], signal, left),
   );
   if (outcome !== null) await reportSlotOutcome(romId, slot, outcome, answer);
   return outcome === "set";
@@ -506,7 +513,10 @@ export async function setChosenCover(
   onCover?.(base64);
   await withPruneLeases([answer.prune_lease_token], "Version switch", async (signal) => {
     if (isPruneLeaseCancelled(signal)) return;
-    const write = () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", STEAM_ASSET_TYPES.cover);
+    const write = () =>
+      writeSlotArtwork(appId, "cover", () =>
+        SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", STEAM_ASSET_TYPES.cover),
+      );
     await setReplacedSlot(romId, "cover", answer, write).catch((e: unknown) => {
       detach(debugLog(`Version switch: Steam refused the chosen cover for appId ${appId}: ${e}`));
     });
@@ -560,7 +570,8 @@ export async function applyTabSlotImage(
         const assetType = STEAM_ASSET_TYPES[slot];
         if (replaceSetInSteam) await removeImageSetInSteam(appId, assetType);
         const base64 = image.base64;
-        const write = () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType);
+        const write = () =>
+          writeSlotArtwork(appId, slot, () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType));
         try {
           await (answer.status === "cover" ? write() : setReplacedSlot(romId, slot, answer, write));
         } catch (e) {

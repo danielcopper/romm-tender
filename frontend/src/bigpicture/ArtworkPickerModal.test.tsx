@@ -262,6 +262,56 @@ describe("ArtworkPickerModal's pages (#2381 device test)", () => {
     expect(document.activeElement).toBe(firstNew);
   });
 
+  it("keeps focus on the last tile where Load more brought nothing new", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates)
+      .mockResolvedValueOnce(many(1, 14, true))
+      .mockResolvedValueOnce({ success: true, candidates: [], has_more: false, tenders_pick: null });
+    const { container } = await open(row());
+
+    await act(async () => {
+      fireEvent.click(button(container, "Load more"));
+    });
+    await flush();
+
+    const last = container.querySelector('img[src="https://cdn.example/t14.jpg"]')!.closest("button");
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("shows no more and keeps the grid where the page fetch fails", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates)
+      .mockResolvedValueOnce(many(1, 20, true))
+      .mockResolvedValueOnce({ success: false, reason: "server_unreachable", message: "SteamGridDB is unreachable" });
+    const { container } = await open(row());
+
+    await act(async () => {
+      fireEvent.click(button(container, "Load more"));
+    });
+    await flush();
+
+    expect(container.querySelectorAll("img")).toHaveLength(14);
+    expect(container.textContent).toContain("SteamGridDB is unreachable");
+    const grid = container.querySelector("img")!.closest("button")!.parentElement!;
+    expect(grid.lastElementChild?.textContent).toBe("Load more");
+  });
+
+  it("tops a short page up from the next one, so Load more stays at the bottom right", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates)
+      .mockResolvedValueOnce(many(1, 14, true))
+      .mockResolvedValueOnce(many(15, 5, true))
+      .mockResolvedValueOnce(many(20, 20, true));
+    const { container } = await open(row());
+
+    await act(async () => {
+      fireEvent.click(button(container, "Load more"));
+    });
+    await flush();
+
+    expect(container.querySelectorAll("img")).toHaveLength(30);
+    const grid = container.querySelector("img")!.closest("button")!.parentElement!;
+    expect(grid.children).toHaveLength(32);
+    expect(grid.lastElementChild?.textContent).toBe("Load more");
+  });
+
   it("labels no size where SteamGridDB states 0×0", async () => {
     vi.mocked(backend.getArtworkSlotCandidates).mockResolvedValue({
       success: true,

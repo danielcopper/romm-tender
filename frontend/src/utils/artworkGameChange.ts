@@ -6,7 +6,7 @@
 
 import { isEndpointFailure, setArtworkSlotAutomatic, debugLog, type SupersededGame } from "../api/backend";
 import { applyAutomaticArtwork, applyTabSlotImage } from "./artwork";
-import { loadArtworkGame, noteArtworkWritten } from "./artworkSlotsStore";
+import { loadArtworkGame } from "./artworkSlotsStore";
 import { detach } from "./detach";
 import { showToast } from "./toast";
 
@@ -26,15 +26,11 @@ export async function settleArtworkGame(appId: number, romId: number): Promise<v
 export async function applySupersededGame(appId: number, romId: number, superseded: SupersededGame): Promise<void> {
   showToast(supersededNotice(superseded));
   await applyAutomaticArtwork(romId, appId);
-  if (!superseded.slots.includes("cover")) {
-    noteArtworkWritten(appId, superseded.slots);
-    return;
-  }
+  if (!superseded.slots.includes("cover")) return;
   // The cover goes back to RomM's through the endpoint that reloads it under its own rules.
   const cover = await setArtworkSlotAutomatic(romId, "cover").catch((e: unknown) => {
     detach(debugLog(`The cover of appId ${appId} could not go back to RomM's: ${e}`));
     return null;
   });
   if (cover && !isEndpointFailure(cover)) await applyTabSlotImage(romId, appId, "cover", cover, false);
-  noteArtworkWritten(appId, superseded.slots);
 }

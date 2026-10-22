@@ -26,7 +26,6 @@ import {
   keepArtworkTabOpen,
   keptArtworkSlot,
   loadArtworkSlots,
-  noteArtworkWritten,
   useArtworkSlots,
 } from "../utils/artworkSlotsStore";
 import { slotThumbnailUrls } from "../utils/artworkThumbs";
@@ -134,7 +133,6 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
     } finally {
       setBusy(false);
       keepArtworkTabOpen(appId, row.slot);
-      noteArtworkWritten(appId, [row.slot]);
       detach(loadArtworkSlots(appId, romId));
     }
   };

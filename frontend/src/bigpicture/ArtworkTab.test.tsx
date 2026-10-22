@@ -5,7 +5,7 @@ import { showModal } from "@decky/ui";
 import * as backend from "../api/backend";
 import { toaster } from "../api/host";
 import * as artwork from "../utils/artwork";
-import { _resetArtworkSlotsForTests, keptArtworkSlot } from "../utils/artworkSlotsStore";
+import { _resetArtworkSlotsForTests, keptArtworkSlot, noteArtworkWritten } from "../utils/artworkSlotsStore";
 import { ArtworkTab } from "./ArtworkTab";
 import type { ArtworkPickerModalProps } from "./ArtworkPickerModal";
 import type { SgdbGamePickerModalProps } from "./SgdbGamePickerModal";
@@ -332,9 +332,12 @@ describe("ArtworkTab", () => {
       });
     });
 
-    it("loads only the pressed row's thumbnail anew once the press is done", async () => {
+    it("loads only the written row's thumbnail anew, as the write moves its slot's token", async () => {
       vi.mocked(backend.chooseArtworkSlotImage).mockResolvedValue(IMAGE);
-      vi.mocked(artwork.applyTabSlotImage).mockResolvedValue("set");
+      vi.mocked(artwork.applyTabSlotImage).mockImplementation(async (_rom, appId, slot) => {
+        noteArtworkWritten(appId, [slot]);
+        return "set";
+      });
       const { container } = await renderTab(answer(FROM_ROMM));
       const src = (name: string) => rowButton(container, name).querySelector("img")?.getAttribute("src");
       const [grid, cover] = [src("Wide grid"), src("Cover")];

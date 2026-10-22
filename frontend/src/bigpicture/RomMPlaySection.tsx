@@ -32,12 +32,7 @@ import { WarningCard } from "./WarningCard";
 import { useTriggerHandler } from "./emulatorStepping";
 import { applyAutomaticArtwork, cancelArtworkApply } from "../utils/artwork";
 import { settleArtworkGame } from "../utils/artworkGameChange";
-import {
-  isKnownWithoutSgdbGame,
-  loadArtworkSlots,
-  noteArtworkWritten,
-  useArtworkSlotsChanges,
-} from "../utils/artworkSlotsStore";
+import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
 import { CHOOSE_GAME_FIRST } from "../utils/artworkTabWording";
 import { useAutoArtwork } from "../utils/autoArtwork";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
@@ -494,7 +489,6 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       say("Failed to refresh artwork");
     } finally {
       setActionPending(null);
-      noteArtworkWritten(appId);
       detach(loadArtworkSlots(appId, romId));
     }
   };

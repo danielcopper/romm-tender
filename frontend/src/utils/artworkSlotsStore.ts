@@ -145,6 +145,22 @@ export function noteArtworkWritten(appId: number, slots: readonly ArtworkTabSlot
   notify(appId);
 }
 
+/**
+ * Hand Steam an image for shortcut *appId*'s *slot* through *write*, and move that slot's thumbnail token however the
+ * write ends. Every write of a slot's image goes through here, so no caller can leave a thumbnail stale.
+ */
+export async function writeSlotArtwork<T>(
+  appId: number,
+  slot: ArtworkTabSlot,
+  write: () => T | Promise<T>,
+): Promise<T> {
+  try {
+    return await write();
+  } finally {
+    noteArtworkWritten(appId, [slot]);
+  }
+}
+
 /** The cache-buster the thumbnail of shortcut *appId*'s *slot* carries; it moves with every image set in that slot. */
 export function artworkThumbToken(appId: number, slot: ArtworkTabSlot): string {
   return `${sessionStart}.${written.get(appId)?.get(slot) ?? 0}`;

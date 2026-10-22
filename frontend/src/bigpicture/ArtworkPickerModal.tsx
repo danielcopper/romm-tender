@@ -50,6 +50,8 @@ const AUTOMATIC = "automatic";
 // candidates, so "Load more" always closes the grid at its bottom right.
 const FIRST_PAGE = 14;
 const PAGE_SIZE = 16;
+// How many SteamGridDB pages one "Load more" asks for at most to fill its 16.
+const MAX_PAGES_PER_LOAD = 4;
 
 const TILE_STYLE = {
   display: "flex",
@@ -107,16 +109,21 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
     [romId, row.slot],
   );
 
-  const takePage = (next: number, answer: ArtworkCandidatePage | EndpointFailure | null) => {
+  /** Take page *next*'s answer into the grid; answers the page, or `null` where the listing failed (shown). */
+  const takePage = (
+    next: number,
+    answer: ArtworkCandidatePage | EndpointFailure | null,
+  ): ArtworkCandidatePage | null => {
     setLoading(false);
     if (!answer || isEndpointFailure(answer)) {
       setFailure(answer?.message ?? "SteamGridDB's images could not be listed.");
-      return;
+      return null;
     }
     setCandidates((held) => (next === 0 ? answer.candidates : [...held, ...answer.candidates]));
     if (next === 0) setTendersPick(answer.tenders_pick);
     setHasMore(answer.has_more);
     setPage(next);
+    return answer;
   };
 
   useEffect(() => {
@@ -132,12 +139,22 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
     };
   }, [listPage, onlyAutomatic]);
 
+  // SteamGridDB's pages need not hold 16: pages are fetched until 16 more are
+  // held or none are left, so "Load more" keeps its place at the bottom right.
+  // A listing that fails shows nothing more and leaves the grid as it was.
   const loadMore = async () => {
     if (loading) return;
     const wanted = shown + PAGE_SIZE;
-    if (wanted > candidates.length && hasMore) {
+    let held = candidates.length;
+    let more = hasMore;
+    let next = page;
+    for (let fetched = 0; wanted > held && more && fetched < MAX_PAGES_PER_LOAD; fetched++) {
       setLoading(true);
-      takePage(page + 1, await listPage(page + 1));
+      next += 1;
+      const taken = takePage(next, await listPage(next));
+      if (!taken) return;
+      held += taken.candidates.length;
+      more = taken.has_more;
     }
     setFocusIndex(shown);
     setShown(wanted);
@@ -147,7 +164,9 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
   useEffect(() => {
     if (focusIndex === null || !grid.current) return;
     // The grid's tiles in order: Automatic, the candidates shown, "Load more".
-    const tile = grid.current.querySelectorAll<HTMLElement>("button")[focusIndex + 1];
+    // Where the load brought nothing new, the last tile takes the focus.
+    const tiles = grid.current.querySelectorAll<HTMLElement>("button");
+    const tile = tiles[focusIndex + 1] ?? tiles[tiles.length - 1];
     if (tile) placeEntryFocus(grid.current, () => tile);
     setFocusIndex(null);
   }, [focusIndex, shown, candidates.length]);
