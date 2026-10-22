@@ -699,10 +699,10 @@ is already on disk; Steam just hasn't re-rendered the tile yet.
 **Fix**: If a tile stays blank after that, open the game's detail page and tap **Refresh Artwork** in the Tender panel.
 This downloads the cover from RomM again and the SteamGridDB images anew, for the images on automatic. For a game
 without a SteamGridDB game it is greyed out; there the next sync brings the cover, or setting the cover back to
-**Automatic** in the game's [ARTWORK tab](managing-games.md#the-artwork-tab) reloads it at once. **Refresh Metadata**
-changes no artwork: it shows the metadata Tender stored at the last sync again and asks RomM nothing. (Hero banners,
-logos, and wide grid images additionally need a [SteamGridDB API key](configuration.md#steamgriddb-api-key) — see
-above.)
+**Automatic** in the game's [ARTWORK tab](managing-games.md#the-artwork-tab) reloads it at once — the cover's slot
+offers **Automatic** without a SteamGridDB game or key too. **Refresh Metadata** changes no artwork: it shows the
+metadata Tender stored at the last sync again and asks RomM nothing. (Hero banners, logos, and wide grid images
+additionally need a [SteamGridDB API key](configuration.md#steamgriddb-api-key) — see above.)
 
 ## Shortcuts Appear on Other Devices
 

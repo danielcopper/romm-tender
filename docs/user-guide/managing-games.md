@@ -779,7 +779,10 @@ on automatic, the chosen image while you chose one — and the one Tender's own 
 **Load more** shows the next page. Select a tile and press **Use this image**. The previews load straight from
 SteamGridDB; only the image you choose is downloaded in full. The cover can be chosen from SteamGridDB's portrait
 covers; setting it back to **Automatic** reloads RomM's cover at once. Choosing images needs a
-[SteamGridDB API key](configuration.md#steamgriddb-api-key); without one the tab says so.
+[SteamGridDB API key](configuration.md#steamgriddb-api-key); without one the tab says so. The cover's slot opens either
+way: without a key or a SteamGridDB game its picker offers **Automatic — RomM cover** alone and says why no SteamGridDB
+covers are offered, so RomM's cover is always one press away. If Steam does not take an image you chose, the tab says
+"Steam did not take the image" and the slot stays as it was before.
 
 Over an image set in Steam the picker asks once more: "This image was set through Steam. Replacing it removes it; Tender
 keeps no copy." **Replace** has Steam remove its image and sets yours — whether Steam's call removes its file in every

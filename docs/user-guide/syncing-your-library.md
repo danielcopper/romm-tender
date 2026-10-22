@@ -107,15 +107,16 @@ Cover changes count too: if you replaced a game's cover on the server but nothin
 shortcut changes — N cover updates" in place of the table and still offers **Apply Sync** — applying refreshes those
 tiles without touching the shortcuts. A cover you set yourself in Steam, and one you chose from SteamGridDB in the
 game's **ARTWORK** tab, is left as it is and not counted, and a sync does not bring the server's new cover later on its
-own: setting the cover back to **Automatic** in the ARTWORK tab loads it, after asking before it replaces a cover set in
-Steam ([The ARTWORK tab](managing-games.md#the-artwork-tab)). A platform or a collection Tender has to read in full
-again although none of its shortcuts change reads "No shortcut changes — recording what RomM has now." and offers
-**Apply Sync** as well: applying records what RomM serves on that platform or in that collection, so the next sync can
-skip it again. You see it once after an update that introduced this check, while every platform or collection is read in
-full one time; after a game was hidden or deleted in RomM; after a game was changed in RomM in a way none of its
-shortcuts shows, such as a metadata edit or a rescan, since the last sync or shortly before it; and after a sync that
-stopped before it finished. With **Skip preview** on there is no preview to show it in: the sync records what RomM has
-now by itself. Only when there is truly nothing to do does the page read "Everything is up to date."
+own: setting the cover back to **Automatic** in the ARTWORK tab loads it — the cover's slot offers that even without a
+SteamGridDB game or key — after asking before it replaces a cover set in Steam
+([The ARTWORK tab](managing-games.md#the-artwork-tab)). A platform or a collection Tender has to read in full again
+although none of its shortcuts change reads "No shortcut changes — recording what RomM has now." and offers **Apply
+Sync** as well: applying records what RomM serves on that platform or in that collection, so the next sync can skip it
+again. You see it once after an update that introduced this check, while every platform or collection is read in full
+one time; after a game was hidden or deleted in RomM; after a game was changed in RomM in a way none of its shortcuts
+shows, such as a metadata edit or a rescan, since the last sync or shortly before it; and after a sync that stopped
+before it finished. With **Skip preview** on there is no preview to show it in: the sync records what RomM has now by
+itself. Only when there is truly nothing to do does the page read "Everything is up to date."
 
 A preview stays good for **30 minutes**, and it belongs to Tender rather than to the page you are looking at: you can
 leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That

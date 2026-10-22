@@ -1198,7 +1198,7 @@ and IGDB-collection are both `kind="virtual"`, distinguished by `virtual_type` (
 complete-set reconcile on the next normal sync (no Force Full Sync). Collections whose Steam names come out the same
 still union.
 
-### Artwork slot / filled slot / slot outcome / slot choice / automatic / set in Steam
+### Artwork slot / filled slot / slot outcome / slot choice / automatic / set in Steam / hand-over
 
 An **artwork slot** is one of the five images Steam draws for a shortcut — the hero, the logo, the wide grid and the
 icon, which Tender takes from SteamGridDB, and the cover, which the sync takes from RomM unless the user chose one from
@@ -1215,10 +1215,11 @@ SteamGridDB game changes — the user choosing another game, or RomM's id replac
 neither a choice nor an image set in Steam is **automatic**: Tender picks its image — RomM's cover for the cover,
 falling back to Tender's pick from SteamGridDB where RomM has none, and Tender's pick (`choose_candidate`) for the other
 four — and Refresh Artwork may replace it. A slot is **set in Steam** when its file in the grid directory is not
-Tender's — another extension, or a `.png` whose hash is not the one Tender set — or, for the icon, when the shortcut's
-icon path is not Tender's file; neither the shortcut artwork job, the sync's cover refresh and cover write nor Refresh
-Artwork replaces such a slot. A version switch and a sync rebind do, and so does a choice in the ARTWORK tab, after
-asking — except for the icon, which it repoints without asking. Detail:
+Tender's — another extension, or a `.png` whose hash is neither the one Steam last confirmed Tender set nor that of the
+image Tender last handed to Steam whose answer is outstanding (the slot's **hand-over**, `ArtworkSlotHandover`) — or,
+for the icon, when the shortcut's icon path is not Tender's file; neither the shortcut artwork job, the sync's cover
+refresh and cover write nor Refresh Artwork replaces such a slot. A version switch and a sync rebind do, and so does a
+choice in the ARTWORK tab, after asking — except for the icon, which it repoints without asking. Detail:
 [Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork). _Avoid_: plain "slot", which
 means a **Save-sync slot** or a **Conditional slot**; "picked" for what the user chose, which is Tender's word for its
 own pick.
