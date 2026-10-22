@@ -3607,15 +3607,115 @@ class TestAutomaticAgain:
         await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
 
     @pytest.mark.asyncio
-    async def test_a_cover_reload_romm_refuses_keeps_the_choice(self, steamgrid, uow, slot_ready):
+    async def test_a_cover_reload_romm_refuses_keeps_the_choice(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
         _choose(uow, ArtworkSlot.COVER, 5)
-        steamgrid.cover.refusal = Refused("no_cover", "ROM has no cover artwork")
+        _seed_cover_candidates(fake_steamgrid_db_api)
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
 
         with pytest.raises(Refused) as refused:
             await steamgrid.service.set_artwork_slot_automatic(42, "cover")
 
         assert refused.value.reason == "no_cover"
         assert _choice(uow, ArtworkSlot.COVER).image_id == 5
+
+    @pytest.mark.asyncio
+    async def test_without_a_romm_cover_tenders_steamgriddb_pick_is_served(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _choose(uow, ArtworkSlot.COVER, 5)
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (5, 600, 900), (7, 660, 930), (6, 600, 900))
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        answer = await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert (answer["status"], answer["image_id"], base64.b64decode(answer["base64"])) == ("image", 5, b"image 5")
+        assert _choice(uow, ArtworkSlot.COVER) is None
+        assert _handover(uow, ArtworkSlot.COVER).image_id == 5
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+    @pytest.mark.asyncio
+    async def test_without_a_romm_cover_the_pick_is_downloaded_anew(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "cover", 5)] = b"damaged"
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        answer = await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert base64.b64decode(answer["base64"]) == b"image 5"
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("missing", ["key", "game"])
+    async def test_without_a_romm_cover_or_a_steamgriddb_game_or_key_romms_refusal_stands(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, missing
+    ):
+        _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
+        if missing == "key":
+            steamgrid.settings["steamgriddb_api_key"] = ""
+        else:
+            _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert (refused.value.reason, refused.value.message) == ("no_cover", "RomM has no cover artwork")
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("error", "reason"),
+        [
+            (SgdbRateLimitedError("slow down"), "rate_limited"),
+            (SgdbApiError(401, "Unauthorized"), "auth_failed"),
+        ],
+        ids=["429", "refused-key"],
+    )
+    async def test_without_a_romm_cover_steamgriddbs_refusal_is_answered(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, error, reason
+    ):
+        _choose(uow, ArtworkSlot.COVER, 5)
+        fake_steamgrid_db_api.request_side_effect = error
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert refused.value.reason == reason
+        assert _choice(uow, ArtworkSlot.COVER).image_id == 5
+
+    @pytest.mark.asyncio
+    async def test_without_a_romm_cover_a_failed_download_is_refused(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        fake_steamgrid_db_api.seed_raw_response(
+            "/grids/game/9999?dimensions=600x900",
+            {"success": True, "data": [{"id": 5, "url": "https://cdn.example/5.png", "width": 600, "height": 900}]},
+        )
+        fake_steamgrid_db_api.download_image_return = False
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert refused.value.reason == "download_failed"
+
+    @pytest.mark.asyncio
+    async def test_another_refusal_of_romms_reload_asks_steamgriddb_nothing(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
+        steamgrid.cover.refusal = Refused("not_found", "Could not fetch ROM from server")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert refused.value.reason == "not_found"
+        assert fake_steamgrid_db_api.requested_paths == []
 
     @pytest.mark.asyncio
     async def test_an_update_in_progress_refuses_it(self, steamgrid, slot_ready):

@@ -135,8 +135,35 @@ async def test_an_automatic_cover_tender_set_from_steamgriddb_reads_as_tenders_p
     assert _rows(slots)["cover"] == ("automatic", "tender", 7)
 
 
+async def test_a_cover_romm_has_none_for_is_tenders_steamgriddb_pick_and_reads_so_once_set(harness):
+    grid = _grid(harness)
+    harness.sgdb.seed_raw_response(
+        "/grids/game/9999?dimensions=600x900",
+        {
+            "success": True,
+            "data": [
+                {"id": 8, "url": "https://cdn.example/8.png", "width": 342, "height": 482},
+                {"id": 6, "url": "https://cdn.example/6.png", "width": 600, "height": 900},
+            ],
+        },
+    )
+    harness.sgdb.seed_image_bytes("https://cdn.example/6.png", b"steamgriddb cover 6")
+
+    answer = await harness.endpoints.set_artwork_slot_automatic(_ROM_ID, "cover")
+    await harness.endpoints.release_prune_conflict_lease(answer.pop("prune_lease_token"))
+    (grid / f"{_ROM_ID}p.png").write_bytes(base64.b64decode(answer["base64"]))
+    await harness.endpoints.report_sgdb_slot_artwork(
+        _ROM_ID, "cover", "set", answer["sgdb_id"], answer["image_id"], answer["sha256"]
+    )
+    slots = await harness.endpoints.get_artwork_slots(_ROM_ID, _ROM_ID)
+
+    assert (answer["status"], answer["image_id"]) == ("image", 6)
+    assert _rows(slots)["cover"] == ("automatic", "tender", 6)
+
+
 async def test_a_cover_romm_has_none_for_answers_the_failure_shape_and_keeps_the_choice(harness):
     _grid(harness)
+    harness.sgdb.seed_raw_response("/grids/game/9999?dimensions=600x900", {"success": True, "data": []})
     with harness.uow_factory() as uow:
         uow.artwork_slot_choices.save(
             ArtworkSlotChoice(rom_id=_ROM_ID, slot=ArtworkSlot.COVER, image_id=5, chosen_at=1.0)
