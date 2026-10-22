@@ -17,6 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act } from "@testing-library/react";
 import * as backend from "../api/backend";
+import { artworkThumbToken } from "./artworkSlotsStore";
 import { emitHostEvent } from "../test-utils/host-event-bus";
 import { resetSyncDelta, getSyncDelta } from "./syncDeltaStore";
 import { getSyncProgress, onSyncProgressChange, setSyncProgress } from "./syncProgress";
@@ -849,6 +850,22 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     expect(setCustomArtwork).toHaveBeenCalledWith(6000, "COVERPNG", "png", 0);
   });
 
+  it("moves the created shortcut's cover thumbnail token, and no other slot's", async () => {
+    getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>());
+    addShortcut.mockResolvedValue(6000);
+    vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
+    const cover = artworkThumbToken(6000, "cover");
+    const hero = artworkThumbToken(6000, "hero");
+
+    const applyUnit = initUnitSyncManager();
+    await act(async () => {
+      await applyUnit(chunkOf([sc(42)], "run-cover-token"));
+    });
+
+    expect(artworkThumbToken(6000, "cover")).not.toBe(cover);
+    expect(artworkThumbToken(6000, "hero")).toBe(hero);
+  });
+
   it("does NOT apply a cover on the update path (existing shortcut)", async () => {
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[42, 5000]]));
     vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
@@ -881,6 +898,29 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       expect(setShortcutIcon.mock.invocationCallOrder[0]).toBeGreaterThan(
         setCustomArtwork.mock.invocationCallOrder[0]!,
       );
+    });
+
+    it.each([
+      ["sets it", () => undefined],
+      [
+        "refuses it",
+        () => {
+          throw new Error("no such app");
+        },
+      ],
+    ])("moves the icon's thumbnail token where Steam %s", async (_case, setIcon) => {
+      getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>());
+      addShortcut.mockResolvedValue(6000);
+      vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: null });
+      setShortcutIcon.mockImplementation(setIcon);
+      const icon = artworkThumbToken(6000, "icon");
+
+      const applyUnit = initUnitSyncManager();
+      await act(async () => {
+        await applyUnit({ ...chunkOf([sc(42)], "run-placeholder-token"), icon_placeholder_path: PLACEHOLDER });
+      });
+
+      expect(artworkThumbToken(6000, "icon")).not.toBe(icon);
     });
 
     it("is not set on an updated shortcut, which keeps the icon it has", async () => {

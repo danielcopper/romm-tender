@@ -320,6 +320,23 @@ describe("ArtworkPickerModal's pages (#2381 device test)", () => {
     expect(grid.lastElementChild?.textContent).toBe("Load more");
   });
 
+  it("asks SteamGridDB for at most four pages on one Load more, and shows what they held", async () => {
+    vi.mocked(backend.getArtworkSlotCandidates).mockImplementation(async (_rom, _slot, page) =>
+      page === 0 ? many(1, 14, true) : many(100 + page, 1, true),
+    );
+    const { container } = await open(row());
+
+    await act(async () => {
+      fireEvent.click(button(container, "Load more"));
+    });
+    for (let i = 0; i < 6; i++) await flush();
+
+    expect(vi.mocked(backend.getArtworkSlotCandidates).mock.calls.map(([, , page]) => page)).toEqual([0, 1, 2, 3, 4]);
+    expect(container.querySelectorAll("img")).toHaveLength(18);
+    const grid = container.querySelector("img")!.closest("button")!.parentElement!;
+    expect(grid.lastElementChild?.textContent).toBe("Load more");
+  });
+
   it("labels no size where SteamGridDB states 0×0", async () => {
     vi.mocked(backend.getArtworkSlotCandidates).mockResolvedValue({
       success: true,

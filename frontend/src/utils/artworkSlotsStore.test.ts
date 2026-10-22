@@ -9,6 +9,7 @@ import {
   keptArtworkSlot,
   loadArtworkSlots,
   noteArtworkWritten,
+  writeSlotArtwork,
 } from "./artworkSlotsStore";
 
 const slots = (sgdbId: number | null): backend.ArtworkSlots => ({
@@ -96,5 +97,27 @@ describe("the ARTWORK tab kept across a remount (#2381 device test)", () => {
 
     noteArtworkWritten(5000);
     expect(artworkThumbToken(5000, "hero")).not.toBe(hero);
+  });
+
+  it("moves the slot's token after a write and answers what the write answered", async () => {
+    const logo = artworkThumbToken(5000, "logo");
+
+    await expect(writeSlotArtwork(5000, "logo", () => "done")).resolves.toBe("done");
+
+    expect(artworkThumbToken(5000, "logo")).not.toBe(logo);
+  });
+
+  it("moves the slot's token also where Steam refuses the write, and passes the refusal on", async () => {
+    const logo = artworkThumbToken(5000, "logo");
+    await expect(writeSlotArtwork(5000, "logo", () => Promise.reject(new Error("refused")))).rejects.toThrow("refused");
+    expect(artworkThumbToken(5000, "logo")).not.toBe(logo);
+
+    const after = artworkThumbToken(5000, "logo");
+    await expect(
+      writeSlotArtwork(5000, "logo", () => {
+        throw new Error("no such app");
+      }),
+    ).rejects.toThrow("no such app");
+    expect(artworkThumbToken(5000, "logo")).not.toBe(after);
   });
 });

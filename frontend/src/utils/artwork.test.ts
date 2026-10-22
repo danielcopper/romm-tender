@@ -1178,4 +1178,53 @@ describe("every write moves its own slot's thumbnail token (#2381)", () => {
 
     expect(moved(before)).toEqual(["grid", "hero", "icon", "logo"]);
   });
+
+  it("a version's chosen cover moves the cover's", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
+      base64: "CHOSEN=",
+      no_api_key: false,
+      image_id: 6,
+      sha256: "sha6",
+      sgdb_id: 9999,
+      prune_lease_token: "lease",
+    });
+    const before = tokens();
+
+    await setChosenCover(42, 5000);
+
+    expect(moved(before)).toEqual(["cover"]);
+  });
+
+  it("the shortcut artwork job's slot moves that slot's", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({
+      status: "image",
+      base64: "HR==",
+      image_id: 12,
+      sha256: "s",
+      sgdb_id: 9999,
+      prune_lease_token: "l",
+    });
+    const before = tokens();
+
+    await setJobSlotArtwork(42, 5000, "logo", () => false);
+
+    expect(moved(before)).toEqual(["logo"]);
+  });
+
+  it("a slot Steam refuses moves that slot's all the same", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({
+      status: "image",
+      base64: "HR==",
+      image_id: 12,
+      sha256: "s",
+      sgdb_id: 9999,
+      prune_lease_token: "l",
+    });
+    vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockRejectedValue(new Error("refused"));
+    const before = tokens();
+
+    await expect(setJobSlotArtwork(42, 5000, "logo", () => false)).resolves.toBe(false);
+
+    expect(moved(before)).toEqual(["logo"]);
+  });
 });
