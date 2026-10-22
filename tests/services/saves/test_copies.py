@@ -235,7 +235,7 @@ class TestAnUploadThatFailsAfterTheDownload:
         assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == new_ids[0]
 
     @pytest.mark.asyncio
-    async def test_a_copy_far_smaller_than_the_target_head_makes_the_next_sync_a_conflict(self, tmp_path, monkeypatch):
+    async def test_a_copy_under_half_the_target_head_s_size_makes_the_next_sync_a_conflict(self, tmp_path, monkeypatch):
         svc, fake = self._a_copy_whose_upload_fails_once(tmp_path, monkeypatch, target_head=self._target_head())
         fake.stage_device_sync(200, "device-1", "2026-03-01T10:00:00Z")
         fake.set_server_save_content(10, b"C" * 10)
@@ -289,16 +289,27 @@ class TestAnUploadThatFailsAfterTheDownload:
         del head["content_hash"]
         return head
 
+    @pytest.mark.parametrize("missing", ["content_hash", "id"])
     @pytest.mark.asyncio
-    async def test_without_a_content_hash_a_head_this_device_is_current_on_is_adopted_by_the_next_sync(
-        self, tmp_path, monkeypatch
+    async def test_without_a_content_hash_or_id_a_head_this_device_is_current_on_is_adopted_by_the_next_sync(
+        self, tmp_path, monkeypatch, missing
     ):
-        svc, fake = self._a_copy_whose_upload_fails_once(
-            tmp_path, monkeypatch, target_head=self._a_head_without_a_content_hash()
-        )
+        head = self._a_head_without_a_content_hash() if missing == "content_hash" else self._target_head()
+        svc, fake = self._a_copy_whose_upload_fails_once(tmp_path, monkeypatch, target_head=head)
         fake.stage_device_sync(200, "device-1", "2026-03-01T10:00:00Z")
+        listing = fake.list_saves
+        copying = [missing == "id"]
+
+        def listing_the_head_without_its_id_while_copying(*args, **kwargs):
+            saves = listing(*args, **kwargs)
+            if copying[0]:
+                saves = [{k: v for k, v in s.items() if k != "id"} if s.get("id") == 200 else s for s in saves]
+            return saves
+
+        monkeypatch.setattr(fake, "list_saves", listing_the_head_without_its_id_while_copying)
 
         assert (await svc.copy_save_to_slot(42, 10, TARGET))["status"] == "upload_failed"
+        copying[0] = False
         assert "pokemon.srm" not in _require_save_state(svc, 42).files
         _uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
 
