@@ -154,3 +154,13 @@ class TestTheDedupAnswer:
 
         with pytest.raises(RommConflictError):
             fake.upload_save(ROM_ID, "/saves/game.srm", "retroarch", device_id=device_id, slot="default")
+
+    def test_a_save_in_another_slot_is_never_deduped_to(self, fake) -> None:
+        device_id = _register(fake)
+        _seed_unsynced_save(fake, save_id=100, slot="other")
+        fake.arm_add_save_dedup(100)
+
+        response = fake.upload_save(ROM_ID, "/saves/game.srm", "retroarch", device_id=device_id, slot="default")
+
+        assert response["id"] != 100
+        assert response["slot"] == "default"

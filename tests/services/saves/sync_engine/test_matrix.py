@@ -529,11 +529,12 @@ class TestConfirmDownloadAfterSync:
     is_current is computed server-side as
     ``device_save_sync.last_synced_at >= save.updated_at``. ``add_save`` (POST)
     and ``update_save`` (PUT) both upsert the calling device's
-    ``last_synced_at = updated_at`` on every supported RomM version, so a normal
+    ``last_synced_at = updated_at`` when the request names a device, so a normal
     upload leaves us current without a follow-up ack — the POST response proves
-    it and ``_confirm_upload_sync`` skips the redundant round-trip (#1458). The
-    ack stays load-bearing only on ``add_save``'s content-dedup early-return
-    (returns before the upsert, ``is_current=false``). For downloads, the
+    it and ``_confirm_upload_sync`` skips the redundant round-trip (#1458). When
+    a content-dedup answer still needs the ack is in
+    docs/architecture/save-file-sync-architecture.md, "POST and PUT both upsert
+    the calling device's sync row". For downloads, the
     optimistic query-param on ``download_save_content`` upserts the row
     server-side before streaming.
     """
@@ -608,17 +609,21 @@ class TestConfirmDownloadAfterSync:
     def test_do_upload_save_swallows_confirm_download_error(self, tmp_path):
         """confirm_download failure must NOT bubble — upload is reported successful.
 
-        Driven down the dedup early-return path (``is_current=false``), where the
-        ack still fires, so the swallow-the-error contract stays exercised (#1458).
+        Driven down a content dedup onto an older save this device holds no sync
+        row on: the answer reads it not current, so the ack still fires and the
+        swallow-the-error contract stays exercised (#1458).
         """
         svc, fake = make_service(tmp_path)
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
 
-        # An existing "default"-slot save the POST content dedups against; the
-        # dedup response reports us is_current=false, so the ack still fires.
-        fake.saves[100] = _server_save(save_id=100, rom_id=42, slot="default")
+        # The POST goes to "autosave" (a brand-new ROM's fallback slot). Its head is
+        # current for dev-1, so RomM's slot gate lets the POST through; the content
+        # matches the older save there, which dev-1 holds no row on.
+        fake.saves[200] = _server_save(save_id=200, rom_id=42, slot="autosave", updated_at="2026-03-01T00:00:00Z")
+        fake.stage_device_sync(200, "dev-1", "2026-03-01T00:00:00Z")
+        fake.saves[100] = _server_save(save_id=100, rom_id=42, slot="autosave")
         fake.arm_add_save_dedup(100)
 
         # Patch confirm_download to raise; the upload itself must still complete.
@@ -792,7 +797,8 @@ class TestDedupToNonHeadUploadGuard:
     while a newer, different head still leads the slot — no new version, the
     foreign head stays authoritative. The automatic POST path passes its
     pre-upload ``list_saves`` snapshot as ``planned_group`` so the response can
-    be classified; the PUT / explicit-action callers pass none and are inert.
+    be classified; the callers that plan no listing (the PUT, keep_local, the
+    copy into another slot, the legacy migration) pass none and are inert.
     """
 
     def test_dedup_to_non_head_raises_conflict_without_baseline_or_confirm(self, tmp_path):
@@ -866,7 +872,7 @@ class TestDedupToNonHeadUploadGuard:
         assert not any(c[0] == "confirm_download" for c in fake.call_log)
 
     def test_no_planned_group_leaves_guard_inert(self, tmp_path):
-        """A caller that passes no ``planned_group`` (PUT / explicit actions)
+        """A caller that passes no ``planned_group`` (one that plans no listing)
         never triggers the guard, even on a non-head dedup shape — baseline is
         recorded as before."""
         svc, fake = make_service(tmp_path)

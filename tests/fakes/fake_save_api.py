@@ -143,10 +143,13 @@ class FakeSaveApi:
 
         The next named-slot ``overwrite=false`` POST returns *save_id* (as if the
         uploaded content matched it) BEFORE any DeviceSaveSync upsert — no new save
-        row, no ledger write. RomM's slot gate answers first, so the device must be
-        current on the slot's latest save for the dedup to be reached; the answer
-        reads it current on that save and, through its sync row or RomM's
-        placeholder, not current on an older one. Mirrors RomM 5.3.0's ``add_save``.
+        row, no ledger write. *save_id* must be in the POST's slot: RomM matches
+        content only there, and a save elsewhere leaves the POST to create a new
+        version. With a device id RomM's slot gate answers first, so the device
+        must be current on the slot's latest save for the dedup to be reached;
+        the answer reads it current on that save, and on an older one whatever
+        its row there says (or RomM's placeholder). Mirrors RomM 5.3.0's
+        ``add_save``.
         """
         self._dedup_next_upload_save_id = save_id
 
@@ -645,14 +648,16 @@ class FakeSaveApi:
 
         # add_save content-dedup early-return (RomM 5.3.0): a named-slot
         # ``overwrite=false`` POST whose content matches an existing slot save
-        # returns that save BEFORE the DeviceSaveSync upsert. The gate above has
-        # passed, so this device is current on the slot's latest save; on an
-        # older save the answer reads it not current.
+        # returns that save BEFORE the DeviceSaveSync upsert, and only a save in
+        # the POST's own slot. With a device id the gate above has passed, so this
+        # device is current on the slot's latest save; on an older save the answer
+        # reads what its row there says (current only for a version it synced
+        # that nobody changed since, else a stale row or RomM's placeholder).
         if self._dedup_next_upload_save_id is not None and slot is not None and not overwrite:
             dedup_id = self._dedup_next_upload_save_id
             self._dedup_next_upload_save_id = None
             existing = self.saves.get(dedup_id)
-            if existing is not None:
+            if existing is not None and existing.get("rom_id") == rom_id and existing.get("slot") == slot:
                 response = dict(existing)
                 response["device_syncs"] = self._device_syncs_answer(
                     existing, self._device_syncs_for(existing), device_id
