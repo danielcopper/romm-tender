@@ -12,7 +12,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
-import { createElement, useSyncExternalStore, type ComponentProps } from "react";
+import { createElement, useSyncExternalStore, type ComponentProps, type ReactElement } from "react";
+import { showModal } from "@decky/ui";
 import { RomMGameInfoPanel } from "./RomMGameInfoPanel";
 import { EmulatorStepScope, useStepOnTriggers } from "./emulatorStepping";
 import * as backend from "../api/backend";
@@ -1681,6 +1682,72 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toContain(
         "PlayStation does not start without a BIOS image, and the one image the launching emulator knows is not in place",
       );
+    });
+
+    it("bios: replaces a row's file for this panel's own platform", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail({ platform_slug: "psx" }));
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({
+        bios_status: {
+          platform_slug: "psx",
+          needs_bios: true,
+          server_count: 1,
+          local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
+          all_downloaded: false,
+          required_count: 1,
+          required_downloaded: 0,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: true,
+              local_path: "/bios/scph5501.bin",
+              description: "",
+              wanted: "needed",
+              required_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+              replace_offered: true,
+            },
+          ],
+        },
+        bios_level: "missing",
+      });
+      vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+        success: true,
+        placed: 1,
+        left_in_place: 0,
+        removed: 0,
+        link_failures: [],
+        backup_path: "/data/backups/bios/x/bios/scph5501.bin",
+      });
+      vi.mocked(showModal).mockClear();
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      await flushAsync();
+
+      const stop = [...container.querySelectorAll<HTMLElement>(".romm-panel-bios-list")].find((el) =>
+        el.textContent.includes("Replace…"),
+      );
+      fireEvent.click(stop as HTMLElement);
+      const calls = vi.mocked(showModal).mock.calls;
+      const confirm = (calls[calls.length - 1]?.[0] as ReactElement<{ onOK: () => void }> | undefined)?.props;
+      await act(async () => {
+        confirm?.onOK();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("psx", "/bios/scph5501.bin");
     });
 
     it("bios: threads bios_level from the endpoint result into the rendered status-dot color (#461)", async () => {
