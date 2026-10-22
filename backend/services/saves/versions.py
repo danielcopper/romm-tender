@@ -136,13 +136,15 @@ class VersionsService:
           device's registration could not reach RomM. The frontend
           distinguishes this from an empty list so it can show a retry
           affordance instead of "no versions available".
-        - ``{"status": "device_not_registered", "message": ...}`` if RomM
-          answered the device's registration
-          (``SyncEngine.live_device_id``) and the device is still not
-          registered; nothing was listed.
+        - ``{"status": "device_not_registered", "message": ...}`` if the
+          device's registration (``SyncEngine.live_device_id``) failed any other
+          way: RomM, or a proxy in front of it, answered without registering
+          the device (the id-less answer included), or the stored token could
+          not be sent. Nothing was listed.
         - ``{"status": "not_found", "message": ...}`` if the ``list_saves``
           call drew a definitive 404 — RomM no longer has this ROM or the
-          registered device id. Distinct from ``server_unreachable``: the
+          registered device id (Tender re-registers this device first, so the
+          latter rarely shows). Distinct from ``server_unreachable``: the
           server answered, so retrying is pointless and the panel says so
           instead of blaming the connection (#1570).
         - ``{"status": "romm_refused", "message": ...}`` if that call drew any

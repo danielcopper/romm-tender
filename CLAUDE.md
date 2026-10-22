@@ -1000,11 +1000,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   before — and no other: `RommSaveApi.list_saves` and the sync logic (`do_sync_rom_saves`,
   `MatrixExecutor.sync_rom_saves`, `do_download_save`, `do_upload_save`) take a `LiveDeviceId`, only that entry builds
   one, and no save service but `SyncEngine` holds the `DeviceRegistry`** — check + test + prompt-only — basedpyright
-  refuses a stored id or `None` where a `LiveDeviceId` is taken; `scripts/check_live_device_id.py` fails on a
-  `LiveDeviceId(...)` or a `cast` to it outside the entry and on a renamed import (unseen: the name bound to a variable
-  and called through it, `getattr`, a `# pyright: ignore` on a plain `str`, and `tests/`);
-  `tests/services/saves/test_device_registry_holder.py` fails on an annotation naming `DeviceRegistry` outside
-  `SyncEngineConfig` and on a `DeviceRegistry(...)` kept on `self` (unseen: an unannotated parameter or attribute).
+  refuses a stored id or `None` where a `LiveDeviceId` is taken, but not a value typed `Any` (a `dict[str, Any]` read
+  such as `ensure_device_registered()["device_id"]`) nor one an unannotated parameter carries (basic mode);
+  `scripts/check_live_device_id.py` fails on a `LiveDeviceId(...)` or a `cast` to it outside the entry and on a renamed
+  import; `tests/services/saves/test_device_registry_holder.py` fails on an annotation naming `DeviceRegistry` outside
+  `SyncEngineConfig` and on a `DeviceRegistry(...)` kept on `self`. What the two miss is listed in their docstrings.
   Prompt-only: each save operation calls the entry once, before its first request to RomM; a new request that names the
   device (`upload_save`, `download_save_content`, `negotiate_sync` and `confirm_download` take a plain `str`) takes the
   id from there

@@ -210,8 +210,8 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         storedSsl.current = s.romm_allow_insecure_ssl;
         setUrl(s.romm_url);
         setHasToken(s.has_token);
-        // While signed in, whether save sync is on or off: the cross-device
-        // playtime sends the device id too.
+        // While signed in, whether save sync is on or off: the play-session
+        // upload sends the device id too.
         if (s.has_token) {
           ensureDeviceRegistered()
             .then((result) => {

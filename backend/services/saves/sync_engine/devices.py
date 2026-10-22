@@ -47,7 +47,7 @@ class DeviceRegistry:
     device through :meth:`ensure_device_registered` first, and
     :class:`SyncEngine` is the one save service that holds this registry.
     The cached id (:meth:`get_device_id`, one Unit-of-Work read reused for
-    the process lifetime) is for that entry, for the cross-device playtime,
+    the process lifetime) is for that entry, for the play-session upload,
     and for the device list. Registration is the only writer. The device
     *label* lives in ``settings.json`` (ADR-0003: server identity in
     ``kv_config``, user-set label in settings) and flows through the
@@ -121,8 +121,8 @@ class DeviceRegistry:
 
         Called on a sign-in whose server origin changed: the device id is
         bound to the origin it was minted against, so a foreign id makes
-        RomM's ``negotiate`` hard-404. Deleting the row lets the next
-        :meth:`ensure_device_registered` re-register against the new server,
+        RomM's ``negotiate`` hard-404. Deleting the row lets the sign-in's
+        :meth:`ensure_device_registered` register against the new server,
         and the cache is set coherent (the id is now absent, not stale).
         Local-only — the row on the old server is left for RomM's machine-id
         dedup to reconcile on a later re-registration.
@@ -221,7 +221,7 @@ class DeviceRegistry:
         touch failure is a transient miss that leaves the cached id in
         force — a server blip must never churn a re-registration.
 
-        Registers whether save sync is on or off: cross-device playtime sends
+        Registers whether save sync is on or off: the play-session upload sends
         the id too. Refuses with ``server_unreachable`` when the server answers
         the registration without an id; anything the registration raises
         propagates.

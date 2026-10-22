@@ -693,7 +693,7 @@ const tender = definePanel(() => {
   );
 
   // Register this device while signed in, whether save sync is on or off — the
-  // cross-device playtime sends its id too — then initialize the session manager.
+  // play-session upload sends its id too — then initialize the session manager.
   detach(
     (async () => {
       try {

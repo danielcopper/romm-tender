@@ -173,8 +173,9 @@ class SyncEngineConfig:
 
     Holds the live ``settings.json`` dict (home of the save-sync feature
     toggles), the Unit-of-Work factory (the transactional seam over the
-    SQLite repositories), the peer save sub-services (rom_info and the
-    shared :class:`DeviceRegistry` that owns the server device id), the
+    SQLite repositories), the peer save sub-service rom_info, the
+    :class:`DeviceRegistry` that owns the server device id and that no other
+    save service holds, the
     Protocol-typed RomM adapter and retry strategy, the two save-sync
     decision kernels (``compute_sync_action`` and its upload-409 backstop
     ``resolve_upload_conflict``), runtime infrastructure (loop, logger,
@@ -303,7 +304,7 @@ class SyncEngine:
     def get_device_id(self) -> str | None:
         """The stored server device id, ``None`` when unregistered — never one a save operation sends.
 
-        Delegates to the shared :class:`DeviceRegistry`, the single owner of
+        Delegates to the :class:`DeviceRegistry`, the single owner of
         ``kv_config["device_id"]``. A save operation takes its id from
         :meth:`live_device_id` instead.
         """
@@ -444,9 +445,10 @@ class SyncEngine:
     async def ensure_device_registered(self) -> dict[str, Any]:
         """Register or heal this device with the RomM server, one registration at a time.
 
-        Whether save sync is on or off. The sign-in, the start-up and the
-        settings page reach it through the endpoint; a save operation reaches it
-        only through :meth:`live_device_id`.
+        Whether save sync is on or off. The start-up and the settings page reach
+        it through the endpoint, a successful sign-in through the
+        ``DeviceRegisterFn`` seam, and a save operation only through
+        :meth:`live_device_id`.
         """
         async with self._registration_lock:
             return await self._register_device()
@@ -472,8 +474,9 @@ class SyncEngine:
 
         Refuses with ``server_unreachable`` when the registration could not
         reach RomM (an error :func:`classify_error` calls unreachable), and with
-        ``device_not_registered`` when RomM answered and the device is still
-        not registered.
+        ``device_not_registered`` when it failed any other way: RomM, or a proxy
+        in front of it, answered without registering the device (the id-less
+        answer included), or the stored token could not be sent.
 
         Takes only the registration lock, and nothing under it, so a caller
         may hold ``rom_lock`` or the device gate.

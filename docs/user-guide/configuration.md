@@ -57,8 +57,10 @@ The **Connections** section manages your RomM server connection.
   sign in through the address, and the window says "Tender cannot sign in through a user name and password in the RomM
   URL — leave them out. Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom
   headers." A login your proxy asks for goes into [Custom headers](#custom-headers-for-an-authenticating-proxy) instead.
-- **RomM Account** — shows **Signed in** once a token is stored, or **Not signed in** otherwise. Tap **Sign in** to open
-  a one-time prompt. The prompt offers three sign-in methods, chosen from the **Sign-in method** dropdown:
+- **RomM Account** — shows **Signed in** once a token is stored, or **Not signed in** otherwise. Signing in registers
+  this device with RomM — it appears in RomM's device list — whether or not save sync is on; the play-session upload
+  sends its id too. Tap **Sign in** to open a one-time prompt. The prompt offers three sign-in methods, chosen from the
+  **Sign-in method** dropdown:
   - **Username & password** (default) — enter your RomM username and password once. Tender exchanges them for a RomM
     Client API Token and stores only the token; your password is discarded after the token is minted and never saved. If
     your account cannot create API tokens, the status reports that.
@@ -180,7 +182,9 @@ Both methods validate the token at sign-in with an authenticated probe against y
 expired credential is rejected there with an actionable message. Sign-in only confirms that the token **authenticates**,
 though — Tender cannot verify the token's granted scopes, so double-check that you granted the write scopes
 (`assets.write`, `devices.write`, `roms.user.write`) when creating it. A missing write scope is not caught at sign-in;
-it surfaces later as a permissions error on the affected action (save upload, device sync, or playtime).
+it surfaces later as a permissions error on the affected action (save upload, device sync, or playtime). A token without
+`devices.write` shows that this device could not be registered with RomM on the Saves tab, the save-slot setup and the
+previous versions — see [Troubleshooting](troubleshooting.md#this-device-could-not-be-registered-with-romm).
 
 #### Required scopes
 

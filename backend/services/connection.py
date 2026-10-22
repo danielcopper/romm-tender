@@ -246,7 +246,9 @@ class ConnectionService:
         persisted. On a successful sign-in whose origin differs from the
         previous token's, the registered server device id is forgotten
         (best-effort) — it is bound to its minting origin and would otherwise
-        404 against the new server's negotiate. Raises ``NotConfigured`` for a
+        404 against the new server's negotiate — and every successful sign-in
+        then registers this device (best-effort, whether save sync is on or
+        off). Raises ``NotConfigured`` for a
         missing or invalid URL or one carrying a user name or password,
         ``VersionUnsupported`` as :meth:`test_connection` does, ``AuthFailed``
         when RomM answers the mint with a 403, ``ServerUnreachable`` when RomM
@@ -521,9 +523,10 @@ class ConnectionService:
         ``/api/users/me`` probe (a 401 means the token is invalid/revoked, a 403
         means it lacks a required scope), persists the token with ``id = None``
         and ``"user"`` provenance, then fires the device-forget-on-origin-change,
-        the device registration and the playtime-scope-notice clear. Rolls the in-memory auth state back to
-        *snapshot* on any failure up to a successful save; disk is untouched until
-        validation passes. The token value is never logged.
+        the device registration and the playtime-scope-notice clear. Rolls the
+        in-memory auth state back to *snapshot* on any failure up to a successful
+        save; disk is untouched until validation passes. The token value is never
+        logged.
         """
         try:
             try:
@@ -582,8 +585,8 @@ class ConnectionService:
         """Forget the registered device id only when the sign-in origin genuinely changed.
 
         A device id is bound to the origin it was minted against, so a real
-        server switch must drop it (RomM's negotiate hard-404s a foreign id) and
-        let the next sync re-register. A same-server re-sign-in — including a
+        server switch must drop it (RomM's negotiate hard-404s a foreign id), and
+        the sign-in then registers this device against the new server. A same-server re-sign-in — including a
         token swap on the unchanged URL — must KEEP the id, or the next post-exit
         sync flags a spurious conflict for a save this device itself synced
         (#1437). An *unknown* old origin (``None`` — a legacy/unstamped token, or

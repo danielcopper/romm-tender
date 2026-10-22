@@ -447,12 +447,13 @@ The wizard confirms a slot through `confirm_slot_choice(rom_id, chosen_slot, mig
 Each machine running Tender registers as a device with the RomM server. This allows RomM to track which device uploaded
 each save.
 
-1. Tender registers the device — whether save sync is on or off, since the cross-device playtime sends the id too — on
-   every successful sign-in, at start-up and when the settings page opens while signed in, and before the first request
-   to RomM of every save operation (see [`DeviceRegistry` owns device identity](#deviceregistry-owns-device-identity)).
-   With no id stored it calls `POST /api/devices` with the friendly device label (`name`), platform, client info, and
-   the contents of `/etc/machine-id` as the `hostname` fingerprint; with one stored it touches it
-   (`PUT /api/devices/{id}`), and a 404 there registers afresh
+1. Tender registers the device — whether save sync is on or off, since the play-session upload sends the id too — on
+   every successful sign-in, when the panel loads and when the settings page opens while signed in, and before the first
+   request to RomM of every save operation that names the device (see
+   [`DeviceRegistry` owns device identity](#deviceregistry-owns-device-identity)). With no id stored it calls
+   `POST /api/devices` with the friendly device label (`name`), platform, client info, and the contents of
+   `/etc/machine-id` as the `hostname` fingerprint; with one stored it touches it (`PUT /api/devices/{id}`), and a 404
+   there registers afresh
 2. Server returns a `device_id` (UUID). Registration writes it to `kv_config["device_id"]` **first** — the `device_id`
    is the authoritative "registered" signal — then writes the device label to `settings.json` as a **best-effort** step
    (the two live in separate stores per [ADR-0003](../adr/0003-json-sqlite-persistence-boundary.md), so the two writes
@@ -535,9 +536,11 @@ head position. Other saves in the slot are ignored — no foreign-save surfacing
 Three discriminators drive the branch:
 
 1. **Our device's entry on the picked save**: `server.device_syncs[me]` may be missing (on every save when `list_saves`
-   went out without a device id), `is_current=true` (server claims our last write/read is current), or
-   `is_current=false` (someone else has moved this save forward since we last touched it, or we never touched it and
-   RomM answered its placeholder — see [`GET /api/saves` writes no sync row](#get-apisaves-writes-no-sync-row)).
+   went out without a device id, which no Tender path sends — see
+   [Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached)), `is_current=true` (server
+   claims our last write/read is current), or `is_current=false` (someone else has moved this save forward since we last
+   touched it, or we never touched it and RomM answered its placeholder — see
+   [`GET /api/saves` writes no sync row](#get-apisaves-writes-no-sync-row)).
 2. **Hash divergence vs. baseline**: `local_hash != files_state["last_sync_hash"]` means the local file has been edited
    since the last successful sync. Without a baseline (`last_sync_hash` is missing) we cannot claim divergence.
 3. **Size plausibility (upload guard only)**: in the branch that uploads a diverged edit (our device `is_current=true` +
@@ -680,7 +683,7 @@ Instead we adopt the existing save as the baseline (`Skip(adopt_baseline=true)`,
 no re-hash — because RomM stamps `content_hash` on every save. **Known fallback gap:** older / migrated server saves may
 lack `content_hash`; when it is absent neither identity route can match. A local with no baseline then conflicts (row
 6a) and a diverged one conflicts (row 6c), so only a local unchanged since its baseline — or one whose hash is unknown —
-can still reach row 6e's upload of what may be a byte-identical duplicate, which is refused before any POST
+can still reach row 6e's upload of what may be a byte-identical duplicate — a row no Tender path reaches
 ([Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached)). No slow-path content fetch is
 attempted (#1013).
 
@@ -699,9 +702,9 @@ progress, and no upload. This is the same "user decides on ambiguity" exit row 1
 
 Rows 6b and 6e still compare times because they are the one never-touched case with nothing else to go on and nothing of
 ours at stake: the local file is unchanged since the baseline (or its hash is unknown, which Tender never passes). A
-local at or after the head is answered with an upload (row 6e), which is refused before any POST
-([Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached)); an older local, or a time that
-cannot be read, downloads the head (row 6b).
+local at or after the head is answered with an upload (row 6e) and an older local, or a time that cannot be read,
+downloads the head (row 6b) — rows no Tender path reaches
+([Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached)).
 
 ### Why row 6c conflicts instead of downloading
 
@@ -1116,7 +1119,7 @@ or on a new head we have no entry for (row 6c). Rows 6a and 11b are the no-basel
 our local content differs from the server head, whether we hold no entry on it (6a) or an `is_current=false` one (11b) —
 the same both-sides-unreconciled hazard (#1276). A sync sends the device id, so a head this device never synced carries
 RomM's placeholder: a brand-new device, which holds no baseline, lands on 11b, and a device holding a baseline from an
-earlier sync beside a head it never synced lands on 12b. 6c and 6a are reached only without a device id
+earlier sync beside a head it never synced lands on 12b. 6c and 6a are reached by no Tender path
 ([Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached)). In all four the two sides have
 unsynced changes that cannot be silently merged. Row 9b is the corrupt-local guard: we own the picked save and our local
 diverged, but the local file is 0-byte or implausibly shrunk, so the upload is refused and the user resolves it instead
@@ -1793,10 +1796,11 @@ failure with its own classified `reason` + `message` rather than a generic slug,
 `classify_error`'s message beneath its "Could not load devices" heading. A registration the server answers without an id
 refuses with `server_unreachable` / "Could not register device". Inside a save operation the registration is
 `SyncEngine.live_device_id`'s, and it answers differently: a registration that could not reach RomM (an error
-`classify_error` calls unreachable) refuses with `server_unreachable`, and one RomM answered without registering the
-device — that id-less answer included — with `device_not_registered`. An operation that changes saves raises that
-refusal; a read reports it in the failure field it already has — the status as `server_query_failed` with the reason in
-`server_query_reason`, the version list as its `status`, the setup info as its `recommended_action` — and lists nothing.
+`classify_error` calls unreachable) refuses with `server_unreachable`, and a registration that failed any other way with
+`device_not_registered`: RomM, or a proxy in front of it, answered without registering the device (the id-less answer
+included), or the stored token could not be sent. A read with a failure field of its own reports it there — the status
+as `server_query_failed` with the reason in `server_query_reason`, the version list as its `status`, the setup info as
+its `recommended_action`; every other operation, the slot listing among them, raises it; nothing is listed either way.
 
 ### `DeviceRegistry` owns device identity
 
@@ -1820,9 +1824,9 @@ be the divergence the entry exists to remove. Concurrent callers wait on one loc
 under it, so a holder of `rom_lock` or the device gate may call the entry — and two of them never register twice. What
 keeps the rule and what those checks miss: the invariant register in `CLAUDE.md` and [invariants.md](invariants.md).
 
-The cached id outside that entry is read by the cross-device playtime (`SaveService.get_device_id`, the
+The cached id outside that entry is read by the play-session upload (`SaveService.get_device_id`, the
 `DeviceIdProvider`), and by the device list, which marks this device's row. Registration happens whether save sync is on
-or off (see [Device Registration](#device-registration)), so the playtime has an id with save sync off too.
+or off (see [Device Registration](#device-registration)), so the play-session upload has an id with save sync off too.
 
 **A dead id heals itself, and its queued playtime moves with it.** A cached id is trusted only as far as the best-effort
 `update_device` touch every `ensure_device_registered` makes: a definitive **404** means the server no longer has this

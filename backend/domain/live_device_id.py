@@ -1,8 +1,8 @@
 """The server device id a save operation may send to RomM.
 
 A ``LiveDeviceId`` is an id this device's registration answered for during the
-operation that holds it: registered, or touched and found alive, a moment
-before. Only ``SyncEngine.live_device_id`` builds one, and
+operation that holds it: registered, or touched without the server answering
+that it is gone, a moment before. Only ``SyncEngine.live_device_id`` builds one, and
 ``scripts/check_live_device_id.py`` fails on a construction anywhere else; the
 places that take one are where the type checker refuses a stored id or ``None``.
 

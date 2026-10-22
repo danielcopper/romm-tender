@@ -5,9 +5,13 @@ Every save operation takes the device id it sends to RomM from
 ``SyncEngine.live_device_id``, which registers or heals the device first, and
 ``RommSaveApi.list_saves`` and the sync logic take a ``LiveDeviceId`` so the
 type checker refuses a stored id or ``None``. That refusal is only as good as
-the type's origin: one ``LiveDeviceId(stored_id)`` anywhere else turns a stored,
-possibly dead id into one the type checker trusts, and nothing fails — the
-operation runs, and RomM answers it with no sync rows for this device.
+the type's origin: one ``LiveDeviceId(stored_id)`` anywhere else turns a stored
+id into one the type checker trusts, and nothing fails — the operation runs, and
+RomM answers it with a 404 where that id is dead, or with no sync rows for this
+device where none is stored. Nor is the refusal whole on its own: basedpyright in
+basic mode lets a value typed ``Any`` (a ``dict[str, Any]`` read such as
+``ensure_device_registered()["device_id"]``) or one an unannotated parameter
+carries through where a ``LiveDeviceId`` is taken.
 
 It enforces a **structural** rule over every module under ``backend/`` but
 ``_vendor/`` and ``native/``: a call to ``LiveDeviceId(...)``, or
@@ -17,7 +21,8 @@ only in the body of ``SyncEngine.live_device_id`` in
 imported under another name. It is an AST check over call sites, NOT dataflow
 analysis. It does not see: the name bound to a variable and called through it
 (``make = LiveDeviceId``), a call reached through ``getattr``, a function that
-builds one and is defined inside the entry itself, a ``# type: ignore`` or
+builds one and is defined inside the entry itself, a value typed ``Any`` or an
+unannotated parameter handed on as one, a ``# type: ignore`` or
 ``# pyright: ignore`` that hands a plain ``str`` to a parameter typed
 ``LiveDeviceId``, and ``tests/``, where building one is how a test hands an id
 to the code under test.
