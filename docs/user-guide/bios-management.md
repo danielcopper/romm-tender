@@ -279,8 +279,10 @@ reads them the way the core does, and lists the folder **one row per file**, lik
   selector does — _ℹ LRPS2 / PCSX2's settings name scph10000.bin, which is not here — it uses another BIOS from this
   folder instead._ That is not a fault: LRPS2 falls back to the images it finds in the folder.
 - A folder holding no image is red, exactly like a missing file, and it is what the red **BIOS** badge beside Play
-  appears for. **Download required** then fetches one image — the first recognised one in your library, alphabetically —
-  because one is all the emulator opens.
+  appears for. While nothing lies in it and your library holds no file recognised for it, one row stands for the folder
+  itself, with what the emulator found there and the line _No BIOS image here yet_; it goes as soon as a file is there.
+  **Download required** then fetches one image — the first recognised one in your library, alphabetically — because one
+  is all the emulator opens.
 - Where the read could not finish — a file whose bytes would not come back, a folder that could not be listed in full,
   or an image Tender's identity table and the emulator's own check disagree about — the row says so and gets a grey dot,
   and the system's readiness line declines (see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
