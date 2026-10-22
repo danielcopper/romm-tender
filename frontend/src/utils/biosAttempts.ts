@@ -71,7 +71,7 @@ export function noteReplaced(place: string, backupPath: string, linkFailures: re
 
 /** "Replace…" at *place* was refused or failed, for *reason*. */
 export function noteReplaceFailed(place: string, reason: string): void {
-  const { replacedTo: _replaced, ...earlier } = held[`place:${place}`] ?? {};
+  const { replacedTo: _replaced, linkFailure: _linkFailed, ...earlier } = held[`place:${place}`] ?? {};
   publish({ ...held, [`place:${place}`]: { ...earlier, replaceFailure: reason } });
 }
 

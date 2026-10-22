@@ -92,6 +92,24 @@ describe("executeBiosReplace", () => {
     expect(attemptAt("/bios/saturn_bios.bin").replaceFailure).toBe("Error: connection lost");
   });
 
+  it("drops a link an earlier press could not place there once the replacement fails", async () => {
+    noteBiosPress({
+      link_failures: [{ place: "/bios/saturn_bios.bin", file_name: "saturn_bios.bin", reason: "busy" }],
+    });
+    vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+      success: false,
+      reason: "replace_failed",
+      message: "Could not place a link at /bios/saturn_bios.bin: Permission denied. The old file is back where it was.",
+    });
+
+    await executeBiosReplace("saturn", "/bios/saturn_bios.bin");
+
+    expect(attemptAt("/bios/saturn_bios.bin")).toEqual({
+      replaceFailure:
+        "Could not place a link at /bios/saturn_bios.bin: Permission denied. The old file is back where it was.",
+    });
+  });
+
   it("drops a failure an earlier press left on the row once the replacement succeeds", async () => {
     noteReplaceFailed("/bios/saturn_bios.bin", "denied");
     vi.mocked(backend.replaceBiosFile).mockResolvedValue({
