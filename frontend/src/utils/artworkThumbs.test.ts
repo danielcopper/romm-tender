@@ -141,8 +141,22 @@ describe("coverUrls", () => {
     });
   });
 
-  it("carries the cover row's signature in place of Steam's v=", () => {
-    expect(coverUrls(5000, "7", "c1")).toEqual(["https://steamloopback.host/customimages/5000p.png?s=c1&t=7"]);
+  it("carries Steam's v= beside the cover row's signature and the token", () => {
+    expect(coverUrls(5000, "7", "c1")).toEqual(["https://steamloopback.host/customimages/5000p.png?v=9&s=c1&t=7"]);
+  });
+
+  it("while the ARTWORK tab's cover row, from the same getter, carries no v=", () => {
+    const row = {
+      slot: "cover",
+      state: "automatic",
+      source: "romm",
+      image_id: null,
+      has_choice: false,
+      signature: "c1",
+    };
+    expect(slotThumbnailUrls(5000, row as ArtworkSlotRow, "7")).toEqual([
+      "https://steamloopback.host/customimages/5000p.png?s=c1&t=7",
+    ]);
   });
 
   it("keeps Steam's v= where no cover row is held to sign it", () => {

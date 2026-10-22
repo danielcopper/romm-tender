@@ -849,45 +849,46 @@ no other — each place that hands Steam a slot's image (the tab, the first visi
 game, a version switch, the shortcut artwork job, the sync's covers) writes through `writeSlotArtwork`, or notes the
 icon it set — and the slot's `signature` from the tab's read, a digest of the size and modification time of each file
 filling the slot in the grid directory (`SteamConfigStore.grid_file_stamps`), which also moves for an image set through
-Steam itself. Only the row whose image changed reloads. GAME INFO's cover carries the cover's token and, once the tab's
-read is held for that ROM, the cover's signature; until then it keeps Steam's `v=`. On the device (2026-10-22) the
-renderer kept showing the old image for minutes without a value of Tender's, and with Steam's `v=` in every URL a write
-to one slot reloaded all four. Measured on the desktop client in Desktop Mode (2026-10-21): each URL answered as many
-bytes as the named file holds, and a name without an extension answered 404; this paragraph is the one home of that
-measurement and of the `.jpg`-before-`.png` order. Pressing a row opens the picker
-(`bigpicture/ArtworkPickerModal.tsx`): `get_artwork_slot_candidates(rom_id, slot, page)` answers a page of the slot's
-candidates in SteamGridDB's order — the same query automatic draws from, the cover's being its three portrait sizes, so
-the picker shows every candidate of the slot's class (D7) — each with its `thumb` URL, which the tile loads straight
-from SteamGridDB, its size, and on page 0 `tenders_pick`, the one Tender's rule takes (none for the cover, whose
-automatic image is RomM's). `choose_artwork_slot_image(rom_id, slot, image_id)` downloads the chosen image into the
-cache, which makes it the slot's hand-over, records it in `artwork_slot_choices`, and serves it like the per-slot fetch,
-or `ready` for the icon; `set_artwork_slot_automatic(rom_id, slot)` serves Tender's pick downloaded anew and drops the
-choice once it is in the cache — where SteamGridDB has none it answers `none` and the choice stays, since Steam still
-shows the chosen image — or, for the cover, reloads RomM's cover at once (`refresh_cover_unchecked`, under its own
-update, migration and cleanup rules, D9) and answers `cover` for the frontend to set what `get_artwork_base64` serves.
-An image or `cover` answer carries an `sgdb_artwork` lease; the frontend sets it through `applyTabSlotImage` under the
-newest-apply-wins guard, then reports it as the replacing mode does. The tab reads its slots again as soon as the
-backend answered — the backend already holds the new state then — and once more when the press is done, since Steam's
-write may re-render the page before it returns. That re-render mounts Tender's section afresh, which Tender cannot
-prevent: Steam rebuilds the game page when its artwork changes. For 15 seconds after a press the panel therefore opens
-on the ARTWORK tab again, with the row pressed as its preferred focus (`keptArtworkSlot`, `openingTab` in
-`bigpicture/panelState.ts`); Steam's own scroll position of the page is not Tender's to keep. A change of game
-(`apply_sgdb_game_id`) reloads no cover itself: it leaves a chosen cover that is not set in Steam to the tab's
-`set_artwork_slot_automatic` call that follows (I3), and discards a chosen cover set in Steam outright. On the page the
-tab is the last in Tender's tab bar, always shown; each of the five rows is a focus stop of its own (`DialogButton`),
-drawn as a card whose focus is a ring in Steam's accent blue rather than Steam's white button face, so the row's text
-and its state pill stay readable. The game line is a stop only where it has a button ("Choose game…" / "Change game…"),
-which carries the same ring; with RomM's game the d-pad goes from the tab bar straight to the cover's row. The picker is
-a modal over the page: its grid is four tiles wide, and its first page — Automatic, 14 candidates and "Load more" —
-fills four rows; each "Load more" adds 16 candidates, asking SteamGridDB for the next page only once the held one runs
-out, so "Load more", a full tile, always closes the grid at its bottom right. A SteamGridDB page holding fewer than 16
-is topped up from the next one, so it stays there; while a page is fetched it stays in place with a spinner, and focus
-then moves to the first new tile, where it stood — or to the last tile, where the load brought nothing new. A page that
-cannot be listed shows nothing more and says why. Cancel and "Use this image" sit below the grid, outside its scrolling,
-so they are reached without walking past every candidate; a size SteamGridDB states as 0 is not shown. How the d-pad
-walks them is checked on the device. A row opens the picker only while the ROM has a SteamGridDB game and a key is
-configured, but for the cover's, which always does: without a game or a key its picker offers "Automatic — RomM cover"
-alone, says why no SteamGridDB cover is offered, and lists nothing (D19).
+Steam itself. Only the row whose image changed reloads. GAME INFO's cover carries the cover's token, the cover's
+signature once the tab's read is held for that ROM, and Steam's `v=` beside them: nothing reads the slots again after a
+cover set through Steam's own menu, so there only `v=` moves for it, and reloading GAME INFO's one image on another
+slot's write costs little. On the device (2026-10-22) the renderer kept showing the old image for minutes without a
+value of Tender's, and with Steam's `v=` in every URL a write to one slot reloaded all four. Measured on the desktop
+client in Desktop Mode (2026-10-21): each URL answered as many bytes as the named file holds, and a name without an
+extension answered 404; this paragraph is the one home of that measurement and of the `.jpg`-before-`.png` order.
+Pressing a row opens the picker (`bigpicture/ArtworkPickerModal.tsx`): `get_artwork_slot_candidates(rom_id, slot, page)`
+answers a page of the slot's candidates in SteamGridDB's order — the same query automatic draws from, the cover's being
+its three portrait sizes, so the picker shows every candidate of the slot's class (D7) — each with its `thumb` URL,
+which the tile loads straight from SteamGridDB, its size, and on page 0 `tenders_pick`, the one Tender's rule takes
+(none for the cover, whose automatic image is RomM's). `choose_artwork_slot_image(rom_id, slot, image_id)` downloads the
+chosen image into the cache, which makes it the slot's hand-over, records it in `artwork_slot_choices`, and serves it
+like the per-slot fetch, or `ready` for the icon; `set_artwork_slot_automatic(rom_id, slot)` serves Tender's pick
+downloaded anew and drops the choice once it is in the cache — where SteamGridDB has none it answers `none` and the
+choice stays, since Steam still shows the chosen image — or, for the cover, reloads RomM's cover at once
+(`refresh_cover_unchecked`, under its own update, migration and cleanup rules, D9) and answers `cover` for the frontend
+to set what `get_artwork_base64` serves. An image or `cover` answer carries an `sgdb_artwork` lease; the frontend sets
+it through `applyTabSlotImage` under the newest-apply-wins guard, then reports it as the replacing mode does. The tab
+reads its slots again as soon as the backend answered — the backend already holds the new state then — and once more
+when the press is done, since Steam's write may re-render the page before it returns. That re-render mounts Tender's
+section afresh, which Tender cannot prevent: Steam rebuilds the game page when its artwork changes. For 15 seconds after
+a press the panel therefore opens on the ARTWORK tab again, with the row pressed as its preferred focus
+(`keptArtworkSlot`, `openingTab` in `bigpicture/panelState.ts`); Steam's own scroll position of the page is not Tender's
+to keep. A change of game (`apply_sgdb_game_id`) reloads no cover itself: it leaves a chosen cover that is not set in
+Steam to the tab's `set_artwork_slot_automatic` call that follows (I3), and discards a chosen cover set in Steam
+outright. On the page the tab is the last in Tender's tab bar, always shown; each of the five rows is a focus stop of
+its own (`DialogButton`), drawn as a card whose focus is a ring in Steam's accent blue rather than Steam's white button
+face, so the row's text and its state pill stay readable. The game line is a stop only where it has a button ("Choose
+game…" / "Change game…"), which carries the same ring; with RomM's game the d-pad goes from the tab bar straight to the
+cover's row. The picker is a modal over the page: its grid is four tiles wide, and its first page — Automatic, 14
+candidates and "Load more" — fills four rows; each "Load more" adds 16 candidates, asking SteamGridDB for the next page
+only once the held one runs out, so "Load more", a full tile, always closes the grid at its bottom right. A SteamGridDB
+page holding fewer than 16 is topped up from the next one, so it stays there; while a page is fetched it stays in place
+with a spinner, and focus then moves to the first new tile, where it stood — or to the last tile, where the load brought
+nothing new. A page that cannot be listed shows nothing more and says why. Cancel and "Use this image" sit below the
+grid, outside its scrolling, so they are reached without walking past every candidate; a size SteamGridDB states as 0 is
+not shown. How the d-pad walks them is checked on the device. A row opens the picker only while the ROM has a
+SteamGridDB game and a key is configured, but for the cover's, which always does: without a game or a key its picker
+offers "Automatic — RomM cover" alone, says why no SteamGridDB cover is offered, and lists nothing (D19).
 
 ### Shortcut artwork
 

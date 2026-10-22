@@ -65,15 +65,31 @@ describe("GameInfoTab's cover (#2381 D18)", () => {
     expect(container.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,ROMM");
   });
 
-  it("signs the cover by the ARTWORK tab's read of the ROM showing, in place of Steam's v=", async () => {
+  it("signs the cover by the ARTWORK tab's read of the ROM showing, beside Steam's v=", async () => {
     vi.mocked(backend.getArtworkSlots).mockResolvedValue(slotsSigned("c1"));
     await loadArtworkSlots(5000, 42);
 
     const { container } = render(<GameInfoTab {...PROPS} appId={5000} romId={42} coverBase64="ROMM" />);
 
     expect(container.querySelector("img")?.getAttribute("src")).toMatch(
-      /^https:\/\/steamloopback\.host\/customimages\/5000p\.jpg\?s=c1&t=/,
+      /^https:\/\/steamloopback\.host\/customimages\/5000p\.jpg\?v=9&s=c1&t=/,
     );
+  });
+
+  it("loads a cover set through Steam's own menu anew after an ARTWORK visit, with no read to sign it", async () => {
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue(slotsSigned("c1"));
+    await loadArtworkSlots(5000, 42);
+    const { container, rerender } = render(<GameInfoTab {...PROPS} appId={5000} romId={42} coverBase64="ROMM" />);
+    const before = container.querySelector("img")?.getAttribute("src");
+
+    vi.stubGlobal("appStore", {
+      GetAppOverviewByAppID: vi.fn(() => ({ appid: 5000 })),
+      GetCustomVerticalCapsuleURLs: vi.fn(() => ["/customimages/5000p.jpg?v=10", "/customimages/5000p.png?v=10"]),
+      allApps: [],
+    });
+    rerender(<GameInfoTab {...PROPS} appId={5000} romId={42} coverBase64="ROMM" />);
+
+    expect(container.querySelector("img")?.getAttribute("src")).not.toBe(before);
   });
 
   it("keeps its cover when another slot is written, and loads it anew once the read signs the cover anew", async () => {
