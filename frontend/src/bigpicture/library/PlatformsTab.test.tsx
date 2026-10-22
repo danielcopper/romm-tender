@@ -5174,6 +5174,149 @@ describe("Library › Platforms", () => {
     });
   });
 
+  describe("Replace… on a row", () => {
+    const PLACE = "/r/bios/gba_bios.bin";
+    const BACKUP = "/d/backups/bios/2026-10-22_10-00-00/r/bios/gba_bios.bin";
+
+    beforeEach(() => {
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue({
+        success: true,
+        placed: 0,
+        left_in_place: 0,
+        removed: 0,
+        link_failures: [],
+      });
+      vi.mocked(showModal).mockClear();
+      mockFirmware([
+        firmwarePlatform({
+          backup_root: "/d/backups/bios",
+          files: [
+            firmwareFile({
+              local_path: PLACE,
+              downloaded: true,
+              satisfied: false,
+              link: "occupied",
+              replace_offered: true,
+              library: {
+                firmware_id: 7,
+                file_name: "gba_bios.bin",
+                platform_slug: "gba",
+                matched: "content",
+                md5: "a860e8c0b6d573d191e4ec7db1b1e4f6",
+                size: 16384,
+                no_checksum: false,
+              },
+            }),
+            // Another file lies here too, but no library copy is proven right.
+            firmwareFile({
+              file_name: "gb_bios.bin",
+              local_path: "/r/bios/gb_bios.bin",
+              downloaded: true,
+              satisfied: false,
+              link: "occupied",
+              replace_offered: false,
+            }),
+          ],
+        }),
+      ]);
+    });
+
+    const rowsOf = (container: HTMLElement) =>
+      [...container.querySelectorAll<HTMLElement>('[data-testid="disk-mark"]')].map(
+        (mark) => mark.parentElement?.parentElement as HTMLElement,
+      );
+    const pressReplace = async (container: HTMLElement) => {
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Replace…")!);
+        await Promise.resolve();
+      });
+    };
+
+    it("is offered only on the row the backend offers it on", async () => {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const offered = [...container.querySelectorAll("button")].filter((b) => b.textContent === "Replace…");
+      expect(offered).toHaveLength(1);
+      const row = rowsOf(container).find((r) => r.textContent.includes("Replace…"));
+      expect(row?.textContent).toContain("gba_bios.bin");
+      expect(row?.textContent).not.toContain("gb_bios.bin");
+    });
+
+    it("asks first, naming the place and where the old file goes, and Cancel replaces nothing", async () => {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await pressReplace(container);
+      const props = lastModalProps<{ strTitle: string; strDescription: string; onCancel?: () => void }>();
+      expect(props?.strTitle).toBe("Replace gba_bios.bin?");
+      expect(props?.strDescription).toBe(
+        `The file at ${PLACE} goes to /d/backups/bios, and Tender's copy is linked in its place.`,
+      );
+      expect(vi.mocked(backend.replaceBiosFile)).not.toHaveBeenCalled();
+
+      await act(async () => {
+        props?.onCancel?.();
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+      await flushAsync();
+      expect(vi.mocked(backend.replaceBiosFile)).not.toHaveBeenCalled();
+    });
+
+    it("replaces the file at the row's place for its platform once confirmed, and says where the old one went", async () => {
+      vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+        success: true,
+        placed: 1,
+        left_in_place: 0,
+        removed: 0,
+        link_failures: [],
+        backup_path: BACKUP,
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await pressReplace(container);
+      await confirmLastModal();
+      await flushAsync();
+
+      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("gba", PLACE);
+      expect(container.textContent).toContain(`Replaced. The old file is in ${BACKUP}.`);
+    });
+
+    it("says a refusal in the status line", async () => {
+      vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+        success: false,
+        reason: "replace_failed",
+        message: "Could not put Tender's copy in place; the old file is back.",
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await pressReplace(container);
+      await confirmLastModal();
+      await flushAsync();
+
+      expect(within(container).getByTestId("status-bios").textContent).toBe(
+        "Could not put Tender's copy in place; the old file is back.",
+      );
+      expect(container.textContent).not.toContain("Replaced. The old file is in");
+    });
+
+    it("says a failed call in the status line", async () => {
+      vi.mocked(backend.replaceBiosFile).mockRejectedValue(new Error("connection lost"));
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await pressReplace(container);
+      await confirmLastModal();
+      await flushAsync();
+
+      expect(within(container).getByTestId("status-bios").textContent).toBe(
+        "Failed to replace the file: Error: connection lost",
+      );
+    });
+  });
+
   // ------------------------------------------------------------------
   // Removing a platform's shortcuts and saves
   // ------------------------------------------------------------------
