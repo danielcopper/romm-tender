@@ -98,7 +98,7 @@ describe("useCopyToSlot", () => {
 
     expect(toaster.toast).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: "Save copied to slot 'promoted' on this device. The upload finishes on the next sync.",
+        body: "Save copied to slot 'promoted' on this device, but not uploaded to RomM yet. The next sync uploads it or asks you which to keep.",
       }),
     );
     expect(dataChanged).toHaveBeenCalled();

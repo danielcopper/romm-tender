@@ -148,10 +148,11 @@ describe("copyToSlotFeedback", () => {
     });
   });
 
-  it("formats upload_failed as a copy made on this device whose upload finishes on the next sync", () => {
+  it("formats upload_failed as a copy made on this device that the next sync uploads or asks about", () => {
     expect(copyToSlotFeedback({ status: "upload_failed", message: "server 500" }, "speedrun")).toEqual({
       kind: "toast",
-      message: "Save copied to slot 'speedrun' on this device. The upload finishes on the next sync.",
+      message:
+        "Save copied to slot 'speedrun' on this device, but not uploaded to RomM yet. The next sync uploads it or asks you which to keep.",
     });
   });
 });

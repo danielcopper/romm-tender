@@ -90,7 +90,7 @@ export function copyToSlotFeedback(
     case "upload_failed":
       return {
         kind: "toast",
-        message: `Save copied to slot '${displaySlot(targetSlot)}' on this device. The upload finishes on the next sync.`,
+        message: `Save copied to slot '${displaySlot(targetSlot)}' on this device, but not uploaded to RomM yet. The next sync uploads it or asks you which to keep.`,
       };
     case "invalid_slot_name":
       return { kind: "toast", message: "Enter a valid slot name." };
