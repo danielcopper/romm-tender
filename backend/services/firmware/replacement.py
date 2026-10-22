@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from domain.firmware_match import MATCHED_CONTENT, fills
 from domain.firmware_places import is_own_link, place_refusal
 from domain.firmware_rows import LibraryFirmware, library_file, library_match
-from lib.errors import Refused
+from lib.errors import Refused, with_system_text
 
 if TYPE_CHECKING:
     import asyncio
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
 # The reason a Replace whose conditions no longer hold is refused with.
 NOT_REPLACEABLE = "not_replaceable"
+REPLACE_FAILED = "replace_failed"
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,9 @@ class FirmwareReplacer:
 
         Refuses :data:`NOT_REPLACEABLE` where the conditions no longer hold,
         and as a download refuses where the copy cannot be fetched or checked
-        — before the file in the way is touched.
+        — before the file in the way is touched. Where the link cannot be
+        placed once the old file is in the backup folder, the old file goes
+        back to its place and the press refuses :data:`REPLACE_FAILED`.
         """
         system = (await self._loop.run_in_executor(None, self._platform_systems.platform_system, platform_slug)).taken
         firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
@@ -119,7 +122,15 @@ class FirmwareReplacer:
         if copy is None or not copy.present:
             raise _not_replaceable(place)
         backup = self._store.do_back_up(place)
-        self._store.do_place_link(place, copy.path, platform_slug, source)
+        try:
+            self._store.do_place_link(place, copy.path, platform_slug, source)
+        except OSError as exc:
+            self._logger.warning(f"Could not place a link at {place}: {exc}; putting the old file back")
+            self._files.move_aside(backup, place)
+            raise Refused(
+                REPLACE_FAILED,
+                with_system_text(f"Could not place a link at {place}, so the old file is back in place", exc),
+            ) from exc
         return backup
 
 

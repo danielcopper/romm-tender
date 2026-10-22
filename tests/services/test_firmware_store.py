@@ -493,6 +493,21 @@ class TestReplacingAWrongFile:
         assert backup.read_bytes() == b"a wrong image"
         assert os.readlink(place) == str(machine.store_path("saturn", "sega_101.bin"))
 
+    async def test_a_link_that_cannot_be_placed_puts_the_old_file_back(self, machine, monkeypatch):
+        place = self._wrong(machine)
+
+        def refuse(_target, _place):
+            raise PermissionError("simulated: read-only")
+
+        monkeypatch.setattr(machine.store._files, "symlink", refuse)
+        with pytest.raises(Refused) as refused:
+            await machine.service.replace_bios_file("saturn", str(place))
+
+        assert refused.value.reason == "replace_failed"
+        assert not place.is_symlink()
+        assert place.read_bytes() == b"a wrong image"
+        assert list((machine.data / "backups" / "bios").rglob("saturn_bios.bin")) == []
+
     async def test_no_replace_without_a_library_copy_proven_by_its_checksum(self, machine):
         place = machine.bios / "keys.txt"
         place.write_bytes(b"wrong")
