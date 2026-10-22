@@ -13,6 +13,7 @@ import hashlib
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -119,6 +120,21 @@ def _roots(bios: Path, provenance: str = "read") -> SourceRoots:
     return SourceRoots(
         roots=(SourceRoot(name="bios", path=str(bios), provenance=provenance, settings_file=None),), findings=()
     )
+
+
+def _zone(monkeypatch, zone: str):
+    """Run in *zone*, set back on the way out — ``tzset`` is what the C library reads ``TZ`` through."""
+    monkeypatch.setenv("TZ", zone)
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+@pytest.fixture(autouse=True)
+def _utc(monkeypatch):
+    """A backup folder is named on the machine's own clock; these tests read it at UTC unless one says otherwise."""
+    yield from _zone(monkeypatch, "UTC")
 
 
 @pytest.fixture
@@ -509,6 +525,18 @@ class TestReplacingAWrongFile:
         assert result["backup_path"] == str(backup)
         assert backup.read_bytes() == b"a wrong image"
         assert os.readlink(place) == str(machine.store_path("saturn", "sega_101.bin"))
+
+    async def test_the_backup_folder_is_named_on_the_machines_own_clock(self, machine, monkeypatch):
+        monkeypatch.setenv("TZ", "Europe/Berlin")
+        time.tzset()
+        place = self._wrong(machine)
+
+        result = await machine.service.replace_bios_file("saturn", str(place))
+
+        # 20:00 UTC on 21 October is 22:00 in Berlin, still on summer time.
+        backup = machine.data / "backups" / "bios" / "2026-10-21_22-00-00" / str(place).lstrip("/")
+        assert result["backup_path"] == str(backup)
+        assert backup.read_bytes() == b"a wrong image"
 
     async def test_a_link_that_cannot_be_placed_puts_the_old_file_back(self, machine, monkeypatch):
         place = self._wrong(machine)

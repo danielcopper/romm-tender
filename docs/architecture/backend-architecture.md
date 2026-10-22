@@ -1642,11 +1642,12 @@ platform page or a game's page opens and after an emulator switch.
 
 **A file the resolver reads as wrong is replaced only on the user's confirmation**, and only where the library copy is
 proven right by its checksum (D5): the copy is fetched and checked first, the file in the way goes to
-`<Tender's data folder>/backups/bios/<date and time>/<its original absolute path>` (D17), and the link takes its place.
-Where the link cannot be placed, the old file goes back only while its place is still free, and stays in the backup
-folder otherwise; the refusal (`replace_failed`) says which (D33, D34). Neither the backup nor the put-back lands over
-anything: the file adapter claims the new name by creating it — a link as itself, a file by a hardlink, or, where none
-can be made, by a copy flushed to disk — before the old name goes (`FirmwareFileAdapter.move_aside`). "Download
+`<Tender's data folder>/backups/bios/<date and time>/<its original absolute path>` (D17), the date and time on the
+machine's own clock, written `YYYY-MM-DD_HH-MM-SS` (`domain/firmware_store.py::backup_stamp`, D38), and the link takes
+its place. Where the link cannot be placed, the old file goes back only while its place is still free, and stays in the
+backup folder otherwise; the refusal (`replace_failed`) says which (D33, D34). Neither the backup nor the put-back lands
+over anything: the file adapter claims the new name by creating it — a link as itself, a file by a hardlink, or, where
+none can be made, by a copy flushed to disk — before the old name goes (`FirmwareFileAdapter.move_aside`). "Download
 required" never replaces anything.
 
 **Removing** takes Tender's own files and links only: a row's Delete removes the store file and every link of Tender's

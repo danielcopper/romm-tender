@@ -498,14 +498,15 @@ is the one the emulator expects, the row offers **Replace…**, on the platform'
 select the row itself and press A. Its confirmation names the exact path and where the old file goes: _The file at
 /home/deck/retrodeck/bios/scph5501.bin goes to /home/deck/.local/share/romm-tender/backups/bios, and Tender's copy is
 linked in its place._ Only once you confirm is the old file moved to Tender's backup folder — `backups/bios/` in
-[Tender's data folder](where-your-data-lives.md), under the date and time, followed by the file's original path — never
-deleted, and the link placed. Afterwards the row says _Replaced. The old file is in …_ until you leave the page. Where
-it cannot be done, Tender says _Failed to replace the file: …_ — in the line under the section on the platform's page,
-on the row on a game's page. Where the link could not be placed once the old file was moved, the old file goes back to
-its place, and the reason ends _The old file is back where it was._; where something else lies there by then, or it
-cannot be moved back, it stays in the backup folder, and the reason ends _The old file stays in …_ with its path.
-Without a proven-right copy in your library the row stays red with its sentence and nothing is offered, and a file the
-emulator accepts, or that could not be checked, is never replaced.
+[Tender's data folder](where-your-data-lives.md), under the date and time on your device's clock
+(`2026-10-22_14-18-11`), followed by the file's original path — never deleted, and the link placed. Afterwards the row
+says _Replaced. The old file is in …_ until you leave the page. Where it cannot be done, Tender says _Failed to replace
+the file: …_ — in the line under the section on the platform's page, on the row on a game's page. Where the link could
+not be placed once the old file was moved, the old file goes back to its place, and the reason ends _The old file is
+back where it was._; where something else lies there by then, or it cannot be moved back, it stays in the backup folder,
+and the reason ends _The old file stays in …_ with its path. Without a proven-right copy in your library the row stays
+red with its sentence and nothing is offered, and a file the emulator accepts, or that could not be checked, is never
+replaced.
 
 A file lying in the store folder that Tender has no record of — copied there by hand, say — is taken over without a
 download when its checksum is RomM's; otherwise it is moved to the same backup folder before the download, and the line

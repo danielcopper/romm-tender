@@ -22,8 +22,12 @@ Pure compute — no I/O, no state mutation outside the aggregates' own verbs.
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from domain._aggregate import cosmic_aggregate
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 # The store's folder inside Tender's folder, and the backups' inside Tender's data folder.
 STORE_FOLDER = "bios"
@@ -118,6 +122,15 @@ class FirmwareLink:
             source=source,
             placed_at=placed_at,
         )
+
+
+def backup_stamp(moment: datetime) -> str:
+    """*moment* as a backup folder's name: the date and time on this machine's own clock.
+
+    The machine's zone rather than UTC, because the folder is opened by a
+    person who just looked at that clock.
+    """
+    return moment.astimezone().strftime(BACKUP_STAMP_FORMAT)
 
 
 def backup_path(data_dir: str, stamp: str, original: str) -> str:

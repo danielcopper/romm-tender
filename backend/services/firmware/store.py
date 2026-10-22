@@ -28,11 +28,11 @@ from domain.firmware_places import place_refusal, plan_link_update, root_over
 from domain.firmware_rows import OwnedLinks, StoreCopy, wanted_links
 from domain.firmware_store import (
     BACKUP_FOLDER,
-    BACKUP_STAMP_FORMAT,
     STORE_FOLDER,
     FirmwareLink,
     StoredFirmware,
     backup_path,
+    backup_stamp,
 )
 from domain.rom_files import TMP_EXT
 from lib.errors import Refused, with_system_text
@@ -288,7 +288,7 @@ class FirmwareStore:
 
     def _backup(self, path: str) -> str:
         """Move the file at *path* to the backup folder under its whole path, and answer where it went."""
-        destination = backup_path(self._data_dir, self._clock.now().strftime(BACKUP_STAMP_FORMAT), path)
+        destination = backup_path(self._data_dir, backup_stamp(self._clock.now()), path)
         self._files.move_aside(path, destination)
         self._logger.info(f"Moved {path} to {destination}")
         return destination
