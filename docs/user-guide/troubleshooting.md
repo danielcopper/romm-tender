@@ -665,10 +665,11 @@ stores one when it asked SteamGridDB and found the game there. What a game witho
 
 Once RomM has the id, the next sync brings it over, and the background artwork job then gives the game its SteamGridDB
 wide grid and logo where it has none yet, and its SteamGridDB icon in place of Tender's logo; the hero comes when the
-game's page is opened. To have them at once, tap **Refresh Artwork** on the game's page: it asks RomM for the id,
-downloads Tender's pick anew for every image on automatic and applies it; an image you picked in the ARTWORK tab and one
-set in Steam stay. Opening the game's page for the first time in a session, once a sync has brought the id over from
-RomM, sets the hero banner, logo, wide grid and icon only where the game has none yet (Tender's logo counts as no icon).
+game's page is opened. **Refresh Artwork** stays greyed out until the game has a SteamGridDB game, so for a game without
+one it is that next sync that brings RomM's id over; from then on **Refresh Artwork** asks RomM for the id, downloads
+Tender's pick anew for every image on automatic and applies it, while an image you chose in the ARTWORK tab and one set
+in Steam stay. Opening the game's page for the first time in a session, once a sync has brought the id over from RomM,
+sets the hero banner, logo, wide grid and icon only where the game has none yet (Tender's logo counts as no icon).
 
 For a game SteamGridDB lists under another name, or not at all, a scan may find nothing. The game's **ARTWORK** tab then
 offers **Choose game…**, where you search SteamGridDB by name and apply a match; Tender remembers it until RomM has an
@@ -696,9 +697,12 @@ the first time you open that game's detail page, scroll it back into view, or th
 is already on disk; Steam just hasn't re-rendered the tile yet.
 
 **Fix**: If a tile stays blank after that, open the game's detail page and tap **Refresh Artwork** in the Tender panel.
-This downloads the cover from RomM again and the SteamGridDB images anew. **Refresh Metadata** changes no artwork: it
-shows the metadata Tender stored at the last sync again and asks RomM nothing. (Hero banners, logos, and wide grid
-images additionally need a [SteamGridDB API key](configuration.md#steamgriddb-api-key) — see above.)
+This downloads the cover from RomM again and the SteamGridDB images anew, for the images on automatic. For a game
+without a SteamGridDB game it is greyed out; there the next sync brings the cover, or setting the cover back to
+**Automatic** in the game's [ARTWORK tab](managing-games.md#the-artwork-tab) reloads it at once. **Refresh Metadata**
+changes no artwork: it shows the metadata Tender stored at the last sync again and asks RomM nothing. (Hero banners,
+logos, and wide grid images additionally need a [SteamGridDB API key](configuration.md#steamgriddb-api-key) — see
+above.)
 
 ## Shortcuts Appear on Other Devices
 
