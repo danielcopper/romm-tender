@@ -501,7 +501,7 @@ class TestRollbackToVersion:
         # A genuinely-synced local file: the baseline is the real on-disk md5, so the
         # pre-flight matrix treats local as unchanged (the placeholder "h" no longer
         # matches under the realistic fake). Tracked save 999 is gone from the server;
-        # the pre-flight POST 409s on the newer slot head and the backstop downloads it.
+        # this device has no sync row on the slot head, so the pre-flight downloads it.
         _create_save(tmp_path)
         local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
         self._setup_state(svc, tmp_path, tracked_id=999, last_sync_hash=local_hash)

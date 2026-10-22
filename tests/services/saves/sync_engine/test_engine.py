@@ -1870,7 +1870,7 @@ class TestRunRomSyncSession:
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
         # No local save created.
         _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-        # A server save in the slot this device has never synced (no device_syncs).
+        # A server save in the slot this device has never synced (no sync row stored).
         fake.saves[888] = _server_save_with_syncs(
             save_id=888, rom_id=42, filename="pokemon.srm", slot="default", device_syncs=[]
         )
@@ -1970,7 +1970,7 @@ class TestRunRomSyncSession:
         _enable_sync_with_device(svc, device_id="device-1")
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
         _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-        # Server-only save this device has never synced (no device_syncs) → download.
+        # Server-only save this device has never synced (no sync row stored) → download.
         fake.saves[888] = _server_save_with_syncs(
             save_id=888, rom_id=42, filename="pokemon.srm", slot="default", device_syncs=[]
         )
