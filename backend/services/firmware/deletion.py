@@ -14,11 +14,15 @@ register's BIOS-delete rule warns about, since the copies would drift silently.
 
 A Delete is never refused because a place cannot be reached. A link under a
 root the resolver only assumed — or under none it could judge — stays where it
-is, keeps its record, and the answer names it; so does an older download
-outside the BIOS folder RetroDECK names now, or while it names none, which
-stays counted so its Delete stays offered. Each kept entry names its ``kind``,
-its place, the folder it was kept in and the source whose settings could not
-be read; an older download also names its file.
+is, keeps its record, and the answer names it. An older download is removed
+only inside the BIOS folder RetroDECK names now; one whose file is gone loses
+its record without a word. Where RetroDECK's settings could not be read or
+RetroDECK is not installed, the file stays with its record, so its Delete stays
+offered; where it lies outside that folder, the file stays and its record goes.
+Each kept entry names its ``kind``, its place, the folder it was kept in and
+the source whose settings could not be read; an older download also names its
+file and ``why`` it was kept (``settings_unreadable``, ``not_installed`` or
+``outside_bios_folder``).
 """
 
 from __future__ import annotations
@@ -40,6 +44,20 @@ if TYPE_CHECKING:
     from services.firmware.listing import FirmwareListing
     from services.firmware.store import FirmwareStore
     from services.protocols import FirmwareFileStore, RetroDeckFolders, UnitOfWorkFactory
+
+
+KEPT_SETTINGS_UNREADABLE = "settings_unreadable"
+KEPT_NOT_INSTALLED = "not_installed"
+KEPT_OUTSIDE_BIOS_FOLDER = "outside_bios_folder"
+
+
+def _why_kept(bound: str | FolderRefused | None, path: str) -> str | None:
+    """Why an older download at *path* may not be removed under *bound*; ``None`` where it may."""
+    if isinstance(bound, FolderRefused):
+        return KEPT_SETTINGS_UNREADABLE
+    if bound is None:
+        return KEPT_NOT_INSTALLED
+    return None if is_inside_folder(path, bound) else KEPT_OUTSIDE_BIOS_FOLDER
 
 
 @dataclass(frozen=True)
@@ -92,7 +110,7 @@ class PlatformBiosDeleter:
         and the rows they leave behind dropped in one after their files go
         (ADR-0006). An older download whose file is already gone is not a
         deletion and not an error — its record is dropped and nothing is
-        counted.
+        counted or said, wherever it lay.
 
         Answers what was removed, what stays and why, and what could not be
         removed.
@@ -104,7 +122,11 @@ class PlatformBiosDeleter:
         for record in self._older_downloads(platform_slug):
             if names is not None and record.file_name not in names:
                 continue
-            if bound is None or isinstance(bound, FolderRefused) or not is_inside_folder(record.file_path, bound):
+            if not self._files.exists(record.file_path):
+                pruned.append((record.platform_slug, record.file_name))
+                continue
+            why = _why_kept(bound, record.file_path)
+            if why is not None:
                 kept.append(
                     {
                         "kind": "file",
@@ -112,17 +134,19 @@ class PlatformBiosDeleter:
                         "folder": os.path.dirname(record.file_path),
                         "source": RETRODECK,
                         "file_name": record.file_name,
+                        "why": why,
                     }
                 )
+                if why == KEPT_OUTSIDE_BIOS_FOLDER:
+                    pruned.append((record.platform_slug, record.file_name))
                 continue
-            if self._files.exists(record.file_path):
-                try:
-                    self._files.remove_file(record.file_path)
-                except OSError as e:
-                    self._logger.warning(f"Failed to remove BIOS file {record.file_name}: {e}")
-                    errors.append(f"{record.file_name}: {e}")
-                    continue
-                deleted += 1
+            try:
+                self._files.remove_file(record.file_path)
+            except OSError as e:
+                self._logger.warning(f"Failed to remove BIOS file {record.file_name}: {e}")
+                errors.append(f"{record.file_name}: {e}")
+                continue
+            deleted += 1
             pruned.append((record.platform_slug, record.file_name))
         if pruned:
             with self._uow_factory() as uow:

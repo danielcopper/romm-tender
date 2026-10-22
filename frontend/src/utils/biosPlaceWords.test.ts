@@ -201,6 +201,33 @@ describe("keptLines", () => {
     ]);
     expect(keptLines(undefined)).toEqual([]);
   });
+
+  it("says why an older download stayed where RetroDECK is not installed, and where it lies outside its BIOS folder", () => {
+    const lines = keptLines([
+      {
+        kind: "file",
+        place: "/r/bios/dc_boot.bin",
+        folder: "/r/bios",
+        source: "retrodeck",
+        file_name: "dc_boot.bin",
+        why: "not_installed",
+      },
+      {
+        kind: "file",
+        place: "/old/bios/scph5501.bin",
+        folder: "/old/bios",
+        source: "retrodeck",
+        file_name: "scph5501.bin",
+        why: "outside_bios_folder",
+      },
+    ]);
+
+    expect(lines).toEqual([
+      "Left dc_boot.bin in /r/bios: RetroDECK is not installed. Delete it again once it is.",
+      "Left scph5501.bin in /old/bios: it lies outside RetroDECK's BIOS folder, so Tender does not remove it. " +
+        "Delete it yourself if you no longer need it.",
+    ]);
+  });
 });
 
 describe("backupLines", () => {

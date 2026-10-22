@@ -259,11 +259,11 @@ export interface PlaceRefusal {
  */
 export type StoreOnly = "unsupported" | "no_source";
 
-/** What a Delete left in place, because the root it lies under could not be
- *  read: a link of Tender's into the store, or a file an older version
- *  downloaded into RetroDECK's BIOS folder. `folder` is the root a link lies
- *  under, where one is known, and the folder an older download lies in;
- *  `source` is the emulator source whose settings could not be read. */
+/** What a Delete left in place: a link of Tender's into the store under a
+ *  root that could not be read, or a file an older version downloaded that
+ *  Tender may not remove now (`why`). `folder` is the root a link lies under,
+ *  where one is known, and the folder an older download lies in; `source` is
+ *  the emulator source the reason is about. */
 export interface BiosKeptLink {
   kind: "link" | "file";
   place: string;
@@ -271,6 +271,10 @@ export interface BiosKeptLink {
   source: string;
   /** The older download's name in RomM; a link names none. */
   file_name?: string;
+  /** Why an older download stayed: RetroDECK's settings could not be read,
+   *  RetroDECK is not installed — in both it stays counted — or it lies
+   *  outside RetroDECK's BIOS folder, and Tender dropped its record. */
+  why?: "settings_unreadable" | "not_installed" | "outside_bios_folder";
 }
 
 /** A link a placement could not create, and the system's reason. */

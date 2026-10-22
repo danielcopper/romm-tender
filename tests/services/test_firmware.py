@@ -774,6 +774,7 @@ class TestWhileRetroDeckIsSwitchedOff:
                 "folder": str(bios.parent),
                 "source": "retrodeck",
                 "file_name": "dc_boot.bin",
+                "why": "settings_unreadable",
             }
         ]
         assert "Nothing to delete" not in result["message"]
@@ -781,6 +782,82 @@ class TestWhileRetroDeckIsSwitchedOff:
         assert firmware.uow.bios_files.get("dc", "dc_boot.bin") is not None
         # Still counted, so its Delete stays offered.
         assert entry["deletable_count"] == 1
+
+    def _older_download(self, firmware, path):
+        firmware.uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_slug="dc",
+                file_name="dc_boot.bin",
+                file_path=str(path),
+                downloaded_at="2026-01-01T00:00:00+00:00",
+                firmware_id=1,
+            )
+        )
+
+    @pytest.mark.asyncio
+    async def test_without_retrodeck_a_delete_leaves_the_older_download_counted_and_says_why(self, firmware, tmp_path):
+        bios = tmp_path / "bios" / "dc_boot.bin"
+        bios.parent.mkdir(parents=True)
+        bios.write_bytes(b"\x00")
+        self._older_download(firmware, bios)
+        fw = self._service(firmware, tmp_path, FakeFirmwareResolver(), FakeRetroDeckFolders())
+        fw._deletion._files = FirmwareFileAdapter()
+
+        result = await fw.delete_bios_file("dc", "dc_boot.bin")
+        entry = (await fw.get_platform_firmware_status("dc"))["platform"]
+
+        assert isinstance(result, dict)
+        assert [k["why"] for k in result["kept"]] == ["not_installed"]
+        assert bios.exists()
+        assert firmware.uow.bios_files.get("dc", "dc_boot.bin") is not None
+        assert entry["deletable_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_an_older_download_outside_retrodeck_s_bios_folder_stays_and_its_record_goes(
+        self, firmware, tmp_path
+    ):
+        elsewhere = tmp_path / "elsewhere" / "dc_boot.bin"
+        elsewhere.parent.mkdir(parents=True)
+        elsewhere.write_bytes(b"\x00")
+        (tmp_path / "bios").mkdir()
+        self._older_download(firmware, elsewhere)
+        fw = self._service(
+            firmware, tmp_path, FakeFirmwareResolver(), FakeRetroDeckFolders(bios=str(tmp_path / "bios"))
+        )
+        fw._deletion._files = FirmwareFileAdapter()
+
+        result = await fw.delete_bios_file("dc", "dc_boot.bin")
+        entry = (await fw.get_platform_firmware_status("dc"))["platform"]
+
+        assert isinstance(result, dict)
+        assert result["kept"] == [
+            {
+                "kind": "file",
+                "place": str(elsewhere),
+                "folder": str(elsewhere.parent),
+                "source": "retrodeck",
+                "file_name": "dc_boot.bin",
+                "why": "outside_bios_folder",
+            }
+        ]
+        assert elsewhere.exists()
+        assert firmware.uow.bios_files.get("dc", "dc_boot.bin") is None
+        assert entry["deletable_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_an_older_download_whose_file_is_gone_loses_its_record_without_a_word(self, firmware, tmp_path):
+        # Even while RetroDECK's settings cannot be read: a gone file is nothing to keep.
+        self._older_download(firmware, tmp_path / "bios" / "dc_boot.bin")
+        folders = FakeRetroDeckFolders(bios=str(tmp_path / "bios"), refusal=finding_refusal("marker-invalid", {}))
+        fw = self._service(firmware, tmp_path, FakeFirmwareResolver(), folders)
+        fw._deletion._files = FirmwareFileAdapter()
+
+        result = await fw.delete_bios_file("dc", "dc_boot.bin")
+
+        assert isinstance(result, dict)
+        assert result["kept"] == []
+        assert result["deleted_count"] == 0
+        assert firmware.uow.bios_files.get("dc", "dc_boot.bin") is None
 
 
 class TestDestinationReadingsReachBothSurfaces:

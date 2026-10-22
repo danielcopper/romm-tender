@@ -135,8 +135,8 @@ export function storeOnlySentence(
 /**
  * The delete's lines for what it left: one per folder for the links, which
  * Tender removes by itself once the source's settings can be read, and one per
- * older download, which stays until it is deleted again. A folder the answer
- * does not know is the one the link lies in.
+ * older download, saying why it stayed. A folder the answer does not know is
+ * the one the link lies in.
  */
 export function keptLines(kept: readonly BiosKeptLink[] | undefined): string[] {
   const links = new Map<string, string>();
@@ -144,9 +144,7 @@ export function keptLines(kept: readonly BiosKeptLink[] | undefined): string[] {
   for (const entry of kept ?? []) {
     const settings = `${sourceName(entry.source)}'s settings could not be read.`;
     if (entry.kind === "file") {
-      files.push(
-        `Left ${entry.file_name ?? entry.place} in ${entry.folder}: ${settings} Delete it again once they can be read.`,
-      );
+      files.push(`Left ${entry.file_name ?? entry.place} in ${entry.folder}: ${whyKept(entry, settings)}`);
       continue;
     }
     const folder = entry.folder ?? entry.place.slice(0, Math.max(entry.place.lastIndexOf("/"), 0));
@@ -156,6 +154,20 @@ export function keptLines(kept: readonly BiosKeptLink[] | undefined): string[] {
     );
   }
   return [...links.values(), ...files];
+}
+
+function whyKept(entry: BiosKeptLink, settings: string): string {
+  switch (entry.why) {
+    case "not_installed":
+      return `${sourceName(entry.source)} is not installed. Delete it again once it is.`;
+    case "outside_bios_folder":
+      return (
+        `it lies outside ${sourceName(entry.source)}'s BIOS folder, so Tender does not remove it. ` +
+        "Delete it yourself if you no longer need it."
+      );
+    default:
+      return `${settings} Delete it again once they can be read.`;
+  }
 }
 
 /** The download's lines for each file it found in the store without a record and moved aside before fetching. */
