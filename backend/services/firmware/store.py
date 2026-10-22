@@ -118,11 +118,11 @@ class LinkOutcome:
 class RemovalOutcome:
     """What removing store files did: how many went, the links kept, and what could not be removed.
 
-    A link is kept only because the root it lies under could not be read —
+        A link is kept only because the root it lies under could not be read —
     one the resolver only assumed, or any of a source whose roots could not be
-    asked. Each
-    kept entry names its ``kind`` (``link``), its place, the folder it was kept
-    in where one is known, and the source whose settings could not be read.
+    asked. Each kept entry names its ``kind`` (``link``), its place, the
+    folder it was kept in where one is known, and the source whose settings
+    could not be read.
     """
 
     deleted: int = 0

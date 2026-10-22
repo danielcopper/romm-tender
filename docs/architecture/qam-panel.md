@@ -1559,7 +1559,7 @@ it, for the focused platform:
   Under each row, beside the resolver's words, stand Tender's own (`utils/biosPlaceWords.ts`, the same on the game
   page's BIOS tab): a store copy not linked here yet, a link to another platform's copy ("Linked to Tender's copy for
   `<platform>`"), another file lying at the place, a file matched by name, RomM stating no checksum, a folder that does
-  not exist yet or lies under a root the row's source's settings do not name, or of a source whose roots could not be
+  not exist yet, a place under a root the row's source's settings do not name or of a source whose roots could not be
   asked (D32), and what the latest attempt on this page did — a link that could not be placed, a damaged download,
   "Replaced. The old file is in `<backup path>`." — kept until the page is left and never recorded (#2191 D22). The game
   page's BIOS tab says on its rows what the play row's "Download BIOS" did the same way — a link it could not place, and
@@ -1721,39 +1721,39 @@ it, for the focused platform:
   `Failed` as well only when every file the batch tried failed. The platform-wide delete still writes its result there
   on success too ("Deleted 3 BIOS file(s)"), which is the one outcome on this pane no row can show; a row's own Delete
   says it by the row changing. Either Delete adds one line per folder where it left a link of Tender's because the
-  folder lies under a root the source's settings did not name — "Left a link in `<folder>`: `<source>`'s settings could
-  not be read. Tender removes it once they can be read." (#2191 D20, D27), the source named as Settings › Emulator
-  sources names it — and one line per older download it left, saying why (D29): "Left `<file name>` in `<folder>`:
-  `<source>`'s settings could not be read. Delete it again once they can be read.", "… RetroDECK is not installed.
-  Delete it again once it is.", "… RetroDECK names no BIOS folder. Delete it again once it does." or "… it lies outside
-  RetroDECK's BIOS folder, so Tender does not remove it. Delete it yourself if you no longer need it." — and a download
-  adds one line per file it found in the store without a record and moved aside — "A different `<file name>` was already
-  in Tender's firmware store. It was moved to `<backup path>`." (D25, D27). After a batch in which a file failed, the
-  line names the failed files and still says what was left in place. These are lines of this status line alone, kept
-  until the pane is left. A delete that could not remove every file answers `delete_incomplete`: its line says so, and
-  the rows are re-read as after a success, because it may have removed files or dropped records before the file it
-  stopped on. The platform-wide one names no file; the rows still offering Delete after the re-read are the files that
-  stayed. An open game page is told of a BIOS change (`romm_data_changed`, `bios`) only when a run moved a file — a
-  download that fetched one, a delete that removed one — because each page that matches pays a live BIOS read for it.
-  The game page's own Download BIOS keeps that rule too, and its toast is the backend's sentence once a file failed,
-  "BIOS downloaded (_N_ files)" otherwise. The spinner is keyed on the run's slug as well as the button's identity, so
-  walking to another platform mid-download shows disabled buttons and the "Working on _X_" line rather than a spinner
-  that belongs elsewhere.
+  folder lies under a root the source's settings did not name, or the source's roots could not be asked — "Left a link
+  in `<folder>`: `<source>`'s settings could not be read. Tender removes it once they can be read." (#2191 D20, D27),
+  the source named as Settings › Emulator sources names it — and one line per older download it left, saying why (D29):
+  "Left `<file name>` in `<folder>`: `<source>`'s settings could not be read. Delete it again once they can be read.",
+  "… RetroDECK is not installed. Delete it again once it is.", "… RetroDECK names no BIOS folder. Delete it again once
+  it does." or "… it lies outside RetroDECK's BIOS folder, so Tender does not remove it. Delete it yourself if you no
+  longer need it." — and a download adds one line per file it found in the store without a record and moved aside — "A
+  different `<file name>` was already in Tender's firmware store. It was moved to `<backup path>`." (D25, D27). After a
+  batch in which a file failed, the line names the failed files and still says what was left in place. These are lines
+  of this status line alone, kept until the pane is left. A delete that could not remove every file answers
+  `delete_incomplete`: its line says so, and the rows are re-read as after a success, because it may have removed files
+  or dropped records before the file it stopped on. The platform-wide one names no file; the rows still offering Delete
+  after the re-read are the files that stayed. An open game page is told of a BIOS change (`romm_data_changed`, `bios`)
+  only when a run moved a file — a download that fetched one, a delete that removed one — because each page that matches
+  pays a live BIOS read for it. The game page's own Download BIOS keeps that rule too, and its toast is the backend's
+  sentence once a file failed, "BIOS downloaded (_N_ files)" otherwise. The spinner is keyed on the run's slug as well
+  as the button's identity, so walking to another platform mid-download shows disabled buttons and the "Working on _X_"
+  line rather than a spinner that belongs elsewhere.
 
   **The per-row Delete is authorised by Tender's own records and nothing else** — the row carries `deletable_count` and
   the `delete_name` the delete is asked by, which the backend derives from the same records the platform count comes
   from (`_stamp_deletable`): the firmware store's record of the file, or the `downloaded_bios` record of a download made
   before the store existed — of the library file that fills the row, or lying at the row's own place. The removal
   re-reads the record and takes the path it holds; a store file goes with every link of Tender's to it, and a link under
-  a root the resolver only assumed stays, named in the answer (#2191 D20), as does an older download Tender may not
-  remove now, with why: while RetroDECK's settings cannot be read, RetroDECK is not installed or it names no BIOS folder
-  it stays counted, so its Delete stays offered, and outside RetroDECK's BIOS folder its record goes (D29). `downloaded`
-  is whether a file is at the row's place and is equally true of firmware RetroDECK ships:
-  `dolphin-emu/Sys/codehandler.bin` sits one row above a real download on a GameCube pane, no RomM library can hand it
-  back, and authorising on presence destroyed exactly that file on a real device. Both buttons — the platform's and a
-  row's, a file of a folder's included, since each file there is a row of its own (#2191 D26) — run **one** removal loop
-  (`PlatformBiosDeleter._delete_io`) under different record predicates, because a second copy of that loop is exactly
-  what the register's BIOS-delete rule warns about.
+  a root the resolver only assumed, or of a source whose roots could not be asked, stays, named in the answer (#2191
+  D20), as does an older download Tender may not remove now, with why: while RetroDECK's settings cannot be read,
+  RetroDECK is not installed, or it names no BIOS folder, it stays counted, so its Delete stays offered, and outside
+  RetroDECK's BIOS folder its record goes (D29). `downloaded` is whether a file is at the row's place and is equally
+  true of firmware RetroDECK ships: `dolphin-emu/Sys/codehandler.bin` sits one row above a real download on a GameCube
+  pane, no RomM library can hand it back, and authorising on presence destroyed exactly that file on a real device. Both
+  buttons — the platform's and a row's, a file of a folder's included, since each file there is a row of its own (#2191
+  D26) — run **one** removal loop (`PlatformBiosDeleter._delete_io`) under different record predicates, because a second
+  copy of that loop is exactly what the register's BIOS-delete rule warns about.
 
   **`On disk` holds marks and never text**, and it is the only place presence is stated. A cell carries **one or two**
   of them.

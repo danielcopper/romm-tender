@@ -542,6 +542,8 @@ folder RetroDECK names now, and Tender says why where it leaves one:
   can be read._ — it keeps its **Delete**: Tender removes it only when you press it again.
 - _Left dc_boot.bin in /home/deck/retrodeck/bios/dc: RetroDECK is not installed. Delete it again once it is._ — it keeps
   its **Delete** too.
+- _Left dc_boot.bin in /home/deck/retrodeck/bios/dc: RetroDECK names no BIOS folder. Delete it again once it does._ —
+  RetroDECK is there but its settings name no BIOS folder; it keeps its **Delete** too.
 - _Left dc_boot.bin in /run/media/deck/old/bios/dc: it lies outside RetroDECK's BIOS folder, so Tender does not remove
   it. Delete it yourself if you no longer need it._ — Tender forgets the file and offers no **Delete** for it again.
 

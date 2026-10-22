@@ -92,9 +92,8 @@ class FirmwareResolver(Protocol):
     The whole-machine question, and it is the right one only where the caller
     has **no platform to name**: the RetroDECK-home migration's untracked-BIOS
     sweep. It enumerates installed cores, so it carries no standalone emulator
-    at all and can never say what one
-    wants — a platform-scoped answer asks :class:`FirmwarePlatformResolver`
-    instead.
+    at all and can never say what one wants — a platform-scoped answer asks
+    :class:`FirmwarePlatformResolver` instead.
 
     Implementations never raise and never guess: a reading that fails comes back
     as a catalogue with no placements and ``resolved`` clear, which classifies
@@ -158,10 +157,11 @@ class RetroDeckFolders(Protocol):
     system's own folder, which :meth:`rom_folders` answers for several systems
     at once; it refuses where :meth:`rom_root` cannot be named, in the words an
     uninstall says, and refuses one system alone where RetroDECK names no
-    folder for it. :meth:`bios_folder` and :meth:`saves_root` answer ``None``
-    where RetroDECK is not detected or names none. Every removal question
-    refuses where the resolver only assumed its root, and none minds the
-    switch. Where detecting the sources, or asking about RetroDECK's roots,
+    folder for it. :meth:`bios_folder` answers ``None`` only where RetroDECK
+    is not detected, and :func:`no_bios_root`'s refusal where a detected
+    RetroDECK names no BIOS folder; :meth:`saves_root` answers ``None`` for
+    both. Every removal question refuses where the resolver only assumed its
+    root, and none minds the switch. Where detecting the sources, or asking about RetroDECK's roots,
     raised, every question refuses — a download only once RetroDECK is not
     switched off, which it says first; a raise on a system's own folder
     refuses only that system's folder. A refusal comes back as a value; the

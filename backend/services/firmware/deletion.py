@@ -20,7 +20,8 @@ its record without a word. Where RetroDECK's settings could not be read,
 RetroDECK is not installed, or it names no BIOS folder, the file stays with its
 record, so its Delete stays offered; where it lies outside that folder, the
 file stays and its record goes. Each kept entry names its ``kind``, its place,
-the folder it was kept in and the emulator source the reason is about; an
+the folder it was kept in where one is known and the emulator source the
+reason is about; an
 older download also names its file and ``why`` it was kept
 (``settings_unreadable``, ``not_installed``, ``no_bios_folder`` or
 ``outside_bios_folder``).

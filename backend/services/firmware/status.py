@@ -349,9 +349,9 @@ class FirmwareStatusReader:
         """Stamp what a delete would take — per row, and for the platform.
 
         Two kinds of Tender's own files are deletable, and only those: a file
-        of this platform's store Tender has a record of, and a file Tender downloaded into an
-        emulator source's folder before the store existed, which its download
-        record names at the path it was written to. A row's Delete takes the
+        of this platform's store Tender has a record of, and a file Tender
+        downloaded into an emulator source's folder before the store existed,
+        which its download record names at the path it was written to. A row's Delete takes the
         store file that fills it, the older download of the library file that
         does, or the older download lying at the row's own place, by the name
         each carries, which is the file's name in RomM — ``delete_name``. The

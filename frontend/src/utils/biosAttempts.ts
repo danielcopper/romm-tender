@@ -1,9 +1,11 @@
 /**
  * What a BIOS press on a game's page did to the rows of its BIOS tab: a link it
  * could not place, a file it moved out of the store before the download, and
- * the file "Replace…" moved aside or why it could not. A later press replaces
- * the link failures and moved files an earlier one left; what a "Replace…" said
- * stays until the page is left. Forgotten when the page is left; never
+ * the file "Replace…" moved aside or why it could not. A download replaces
+ * every link failure and moved file an earlier press left; a "Replace…" that
+ * succeeds replaces every link failure, and one that fails only its own row's.
+ * What a "Replace…" said on its row stays until the page is left or another
+ * "Replace…" on that row says otherwise. Forgotten when the page is left; never
  * recorded, and never a toast (`docs/architecture/qam-panel.md`, the game
  * page's BIOS tab).
  */

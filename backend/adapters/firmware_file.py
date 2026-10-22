@@ -21,7 +21,8 @@ from domain.firmware_places import PlaceLook
 _MD5_CHUNK_SIZE = 8192
 
 # A hardlink these refuse is one the filesystem cannot make here — another
-# filesystem, or one without hardlinks — and the move copies instead.
+# filesystem, one without hardlinks, or a file it may not link again — and the
+# move copies instead.
 _LINK_UNSUPPORTED = frozenset({errno.EXDEV, errno.EPERM, errno.EOPNOTSUPP, errno.EMLINK})
 
 
@@ -99,8 +100,8 @@ class FirmwareFileAdapter:
         content is copied into the claimed name and flushed to disk with its
         folder before *src* goes, so a crash leaves the file whole at one name
         at least; where the copy fails, the claimed name is removed again and
-        *src* stays. Where removing *src* fails after that, the error is raised
-        with the file standing at both names.
+        *src* stays. Where removing *src* fails once *dst* holds the file, the
+        error is raised with the file standing at both names.
         """
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         if os.path.islink(src):
@@ -116,7 +117,10 @@ class FirmwareFileAdapter:
 
 
 def _copy_into_claimed(src: str, dst: str) -> None:
-    """Copy *src* into *dst*, claimed exclusively, and flush both to disk; remove the claim where it fails."""
+    """Copy *src* into *dst*, claimed exclusively, and flush the copy and its folder to disk.
+
+    Where any of it fails, the claimed name is removed again.
+    """
     fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
         with os.fdopen(fd, "wb") as out, open(src, "rb") as source:

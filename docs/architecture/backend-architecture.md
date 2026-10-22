@@ -1638,18 +1638,19 @@ proven right by its checksum (D5): the copy is fetched and checked first, the fi
 `<Tender's data folder>/backups/bios/<date and time>/<its original absolute path>` (D17), and the link takes its place.
 Where the link cannot be placed, the old file goes back only while its place is still free, and stays in the backup
 folder otherwise; the refusal (`replace_failed`) says which (D33, D34). Neither the backup nor the put-back lands over
-anything: the file adapter claims the new name by creating it — a hardlink, or where none can be made a copy flushed to
-disk — before the old name goes (`FirmwareFileAdapter.move_aside`). "Download required" never replaces anything.
+anything: the file adapter claims the new name by creating it — a link as itself, a file by a hardlink, or where none
+can be made by a copy flushed to disk — before the old name goes (`FirmwareFileAdapter.move_aside`). "Download required"
+never replaces anything.
 
 **Removing** takes Tender's own files and links only: a row's Delete removes the store file and every link of Tender's
 to it, the platform's Delete every store file of the platform and their links (D3). A Delete is never refused because a
-place cannot be reached: a link under a root the resolver only assumed stays with its record, the answer names it, and
-the next link update removes it or places it again once that root is read (D20). BIOS files Tender downloaded into an
-emulator source's folder before the store existed stay where they are with their download records, and their Delete
-removes exactly the recorded path, only inside the BIOS folder RetroDECK names now (D12, D29): a record whose file is
-gone is dropped without a word; while RetroDECK's settings cannot be read, or RetroDECK is not installed, the file stays
-with its record and stays counted; a file outside that folder stays and its record goes. The answer names each file it
-left and why.
+place cannot be reached: a link under a root the resolver only assumed, or of a source whose roots could not be asked,
+stays with its record, the answer names it, and the next link update removes it or places it again once that root is
+read (D20). BIOS files Tender downloaded into an emulator source's folder before the store existed stay where they are
+with their download records, and their Delete removes exactly the recorded path, only inside the BIOS folder RetroDECK
+names now (D12, D29): a record whose file is gone is dropped without a word; while RetroDECK's settings cannot be read,
+RetroDECK is not installed, or it names no BIOS folder (D35), the file stays with its record and stays counted; a file
+outside that folder stays and its record goes. The answer names each file it left and why.
 
 #### DownloadService notes
 
