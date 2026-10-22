@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shutil
+import stat
 
 import pytest
 
@@ -193,6 +195,38 @@ class TestLinks:
         assert not link.is_symlink()
         assert target.exists()
         assert plain.read_bytes() == b"y"
+
+    def test_moving_aside_never_moves_over_anything_and_leaves_both_where_they_are(self, fw_files, tmp_path):
+        (tmp_path / "old.bin").write_bytes(b"old")
+        (tmp_path / "place.bin").write_bytes(b"someone else's")
+        (tmp_path / "old.lnk").symlink_to(tmp_path / "elsewhere.bin")
+
+        with pytest.raises(FileExistsError):
+            fw_files.move_aside(str(tmp_path / "old.bin"), str(tmp_path / "place.bin"))
+        with pytest.raises(FileExistsError):
+            fw_files.move_aside(str(tmp_path / "old.lnk"), str(tmp_path / "place.bin"))
+
+        assert (tmp_path / "old.bin").read_bytes() == b"old"
+        assert (tmp_path / "old.lnk").is_symlink()
+        assert (tmp_path / "place.bin").read_bytes() == b"someone else's"
+
+    def test_moving_aside_keeps_the_mode_and_leaves_nothing_where_the_copy_failed(
+        self, fw_files, tmp_path, monkeypatch
+    ):
+        (tmp_path / "old.bin").write_bytes(b"old")
+        (tmp_path / "old.bin").chmod(0o640)
+
+        fw_files.move_aside(str(tmp_path / "old.bin"), str(tmp_path / "moved.bin"))
+        assert stat.S_IMODE((tmp_path / "moved.bin").stat().st_mode) == 0o640
+
+        def full(_source, _out):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(shutil, "copyfileobj", full)
+        with pytest.raises(OSError):
+            fw_files.move_aside(str(tmp_path / "moved.bin"), str(tmp_path / "again.bin"))
+        assert (tmp_path / "moved.bin").read_bytes() == b"old"
+        assert not (tmp_path / "again.bin").exists()
 
     def test_moving_aside_creates_the_folders_and_moves_a_link_as_itself(self, fw_files, tmp_path):
         (tmp_path / "f.bin").write_bytes(b"wrong")

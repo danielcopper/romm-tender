@@ -85,6 +85,25 @@ class FirmwareFileAdapter:
             os.unlink(place)
 
     def move_aside(self, src: str, dst: str) -> None:
-        """Move the file or link at *src* to *dst*, creating *dst*'s folders; a link moves as itself."""
+        """Move the file or link at *src* to *dst*, creating *dst*'s folders; a link moves as itself.
+
+        Never over anything: *dst* is claimed by creating it, which raises
+        ``FileExistsError`` where something lies there by then, and a rename
+        would replace it. The content is copied into the claimed name, so the
+        move works across filesystems too; where the copy fails, the claimed
+        name is removed again and *src* stays.
+        """
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        shutil.move(src, dst)
+        if os.path.islink(src):
+            os.symlink(os.readlink(src), dst)
+        else:
+            fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                with os.fdopen(fd, "wb") as out, open(src, "rb") as source:
+                    shutil.copyfileobj(source, out)
+                shutil.copystat(src, dst)
+            except OSError:
+                with contextlib.suppress(OSError):
+                    os.unlink(dst)
+                raise
+        os.unlink(src)

@@ -5297,7 +5297,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(within(container).getByTestId("status-bios").textContent).toBe(
-        "Could not put Tender's copy in place; the old file is back.",
+        "Failed to replace the file: Could not put Tender's copy in place; the old file is back.",
       );
       expect(container.textContent).not.toContain("Replaced. The old file is in");
     });

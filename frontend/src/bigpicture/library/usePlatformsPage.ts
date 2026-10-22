@@ -933,7 +933,7 @@ export function usePlatformsPage(): PlatformsPageState {
           try {
             const result = await replaceBiosFile(slug, place);
             if (!result.success) {
-              setStatus({ slug, scope: "bios", text: result.message });
+              setStatus({ slug, scope: "bios", text: `Failed to replace the file: ${result.message}` });
               return;
             }
             noteLinkFailures(slug, result.link_failures);

@@ -512,9 +512,58 @@ class TestReplacingAWrongFile:
             await machine.service.replace_bios_file("saturn", str(place))
 
         assert refused.value.reason == "replace_failed"
+        assert refused.value.message == (
+            f"Could not place a link at {place}: simulated: read-only. The old file is back where it was."
+        )
         assert not place.is_symlink()
         assert place.read_bytes() == b"a wrong image"
         assert list((machine.data / "backups" / "bios").rglob("saturn_bios.bin")) == []
+
+    async def test_the_old_file_stays_in_the_backup_where_its_place_is_taken_by_then(self, machine, monkeypatch):
+        place = self._wrong(machine)
+
+        def taken(_target, at):
+            # Something else lands at the place between the backup and the link.
+            Path(at).write_bytes(b"someone else's file")
+            raise FileExistsError(17, "File exists")
+
+        monkeypatch.setattr(machine.store._files, "symlink", taken)
+        with pytest.raises(Refused) as refused:
+            await machine.service.replace_bios_file("saturn", str(place))
+
+        backup = machine.data / "backups" / "bios" / "2026-10-21_20-00-00" / str(place).lstrip("/")
+        assert refused.value.reason == "replace_failed"
+        assert refused.value.message == (
+            f"Could not place a link at {place}: File exists. The old file stays in {backup}."
+        )
+        assert place.read_bytes() == b"someone else's file"
+        assert backup.read_bytes() == b"a wrong image"
+
+    async def test_the_old_file_stays_in_the_backup_where_it_cannot_be_put_back(self, machine, monkeypatch):
+        place = self._wrong(machine)
+        files = machine.store._files
+        move_aside = files.move_aside
+
+        def refuse(_target, _place):
+            raise PermissionError(13, "Permission denied")
+
+        def no_way_back(src, dst):
+            if dst == str(place):
+                raise OSError(18, "Invalid cross-device link")
+            move_aside(src, dst)
+
+        monkeypatch.setattr(files, "symlink", refuse)
+        monkeypatch.setattr(files, "move_aside", no_way_back)
+        with pytest.raises(Refused) as refused:
+            await machine.service.replace_bios_file("saturn", str(place))
+
+        backup = machine.data / "backups" / "bios" / "2026-10-21_20-00-00" / str(place).lstrip("/")
+        assert refused.value.reason == "replace_failed"
+        assert refused.value.message == (
+            f"Could not place a link at {place}: Permission denied. The old file stays in {backup}."
+        )
+        assert not os.path.lexists(place)
+        assert backup.read_bytes() == b"a wrong image"
 
     async def test_no_replace_without_a_library_copy_proven_by_its_checksum(self, machine):
         place = machine.bios / "keys.txt"
