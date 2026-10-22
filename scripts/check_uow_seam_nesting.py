@@ -264,6 +264,10 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # Tender's record. Its call site reaches it as a bound method, so the
         # entry is a statement of the rule rather than an enforcement of it.
         "read_grid_file",
+        # SteamConfigStore.grid_file_stamps — stats the files filling the
+        # ARTWORK tab's slots, so each thumbnail is loaded anew only when its
+        # own file changed. Called plainly, so this entry is enforced.
+        "grid_file_stamps",
         # FirmwarePlatformResolver (services/protocols/paths.py) — reads what
         # one system's emulators want, with content verification: it opens each
         # candidate in a declared folder and reads it the way the emulator does,

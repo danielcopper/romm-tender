@@ -43,12 +43,18 @@ class SlotSource(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SlotView:
-    """One slot as the tab shows it; *image_id* is the SteamGridDB image it shows, where Tender knows it."""
+    """One slot as the tab shows it; *image_id* is the SteamGridDB image it shows, where Tender knows it.
+
+    *signature* changes whenever a file filling the slot in Steam's grid
+    directory does, so the slot's thumbnail can be loaded anew for that slot
+    alone; empty where no file fills it.
+    """
 
     slot: ArtworkSlot
     state: SlotState
     source: SlotSource
     image_id: int | None
+    signature: str = ""
 
 
 def describe_slot(

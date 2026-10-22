@@ -10,10 +10,10 @@ the leases; nothing here does.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_set_in_steam, is_slot_filled, slot_stem
+from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_set_in_steam, is_slot_filled, slot_files, slot_stem
 from domain.artwork_slot_choice import ArtworkSlotChoice
 from domain.artwork_slot_handover import HANDED_SLOTS
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
@@ -33,7 +33,7 @@ from services.steamgrid._refusals import RATE_LIMITED, refusal_for
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable, Collection, Mapping
+    from collections.abc import Callable, Collection, Mapping, Sequence
 
     from domain.artwork_slot_handover import ArtworkSlotHandover
     from domain.rom import Rom
@@ -114,14 +114,17 @@ class ArtworkSlots:
     # -- reading ------------------------------------------------------------
 
     def read_io(self, rom_id: int, app_id: int, sgdb_id: int | None) -> list[SlotView]:
-        """The five slots of *rom_id*'s shortcut *app_id*, in :data:`TAB_SLOTS` order.
+        """The five slots of *rom_id*'s shortcut *app_id*, in :data:`TAB_SLOTS` order, each with its signature.
 
         Refuses with ``no_grid_dir`` when Steam's grid directory cannot be found or listed.
         """
         grid = self._grid_state_io(app_id)
         if grid.grid_dir is None:
             raise Refused("no_grid_dir", "Steam grid directory not found")
-        return self._views_io(rom_id, app_id, grid, has_game=sgdb_id is not None)
+        views = self._views_io(rom_id, app_id, grid, has_game=sgdb_id is not None)
+        files = {view.slot: slot_files(grid.file_names, app_id, view.slot) for view in views}
+        stamps = self._stamps_io([name for names in files.values() for name in names])
+        return [replace(view, signature=_signature(files[view.slot], stamps)) for view in views]
 
     def chosen_slots_io(self, rom_id: int) -> set[ArtworkSlot]:
         """The slots of *rom_id* the user chose an image for."""
@@ -183,6 +186,16 @@ class ArtworkSlots:
             return _GridState(None, frozenset(), None)
         icons = self._steam_config.read_shortcut_icons() or {}
         return _GridState(grid_dir, file_names, icons.get(app_id))
+
+    def _stamps_io(self, names: Sequence[str]) -> Mapping[str, str]:
+        """Each of *names* in Steam's grid directory with its stamp; none where they cannot be looked at (logged)."""
+        if not names:
+            return {}
+        try:
+            return self._steam_config.grid_file_stamps(names)
+        except (OSError, SteamGridDirMissingError) as e:
+            self._logger.warning(f"Could not look at Steam's grid files to sign the artwork thumbnails: {e}")
+            return {}
 
     def _views_io(self, rom_id: int, app_id: int, grid: _GridState, *, has_game: bool) -> list[SlotView]:
         with self._uow_factory() as uow:
@@ -480,11 +493,20 @@ class ArtworkSlots:
         return not self._cover.is_cover_set_in_steam(rom.rom_id, rom.shortcut_app_id)
 
 
+def _signature(names: Sequence[str], stamps: Mapping[str, str]) -> str:
+    """A short digest of *names* with their stamps; empty for no names."""
+    if not names:
+        return ""
+    listed = "\n".join(f"{name}:{stamps.get(name, '')}" for name in names)
+    return hashlib.sha256(listed.encode()).hexdigest()[:16]
+
+
 def views_payload(views: Collection[SlotView], chosen: Collection[ArtworkSlot]) -> list[Mapping[str, Any]]:
-    """The wire shape of *views*: per slot, its name, state, source, the SteamGridDB image it shows, and ``has_choice``.
+    """The wire shape of *views*: per slot, its name, state, source, the SteamGridDB image it shows, ``has_choice``.
 
     ``has_choice`` holds also where the slot reads set in Steam over the
-    choice, which a change of game still discards (#2381 D12).
+    choice, which a change of game still discards (#2381 D12). ``signature``
+    is the view's, which the panel's thumbnail of the slot carries.
     """
     return [
         {
@@ -493,6 +515,7 @@ def views_payload(views: Collection[SlotView], chosen: Collection[ArtworkSlot]) 
             "source": view.source.value,
             "image_id": view.image_id,
             "has_choice": view.slot in chosen,
+            "signature": view.signature,
         }
         for view in views
     ]

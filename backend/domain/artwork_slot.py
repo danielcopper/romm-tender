@@ -74,6 +74,12 @@ def is_slot_filled(file_names: Iterable[str], app_id: int, slot: ArtworkSlot) ->
     return bool(_slot_extensions(file_names, app_id, slot))
 
 
+def slot_files(file_names: Iterable[str], app_id: int, slot: ArtworkSlot) -> list[str]:
+    """The files among *file_names* filling *app_id*'s *slot*, as :func:`is_slot_filled` counts them, by name."""
+    stem = slot_stem(app_id, slot)
+    return sorted(f"{stem}.{extension}" for extension in _slot_extensions(file_names, app_id, slot))
+
+
 def is_set_in_steam(
     file_names: Iterable[str],
     app_id: int,

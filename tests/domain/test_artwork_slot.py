@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.artwork_slot import ArtworkSlot, is_set_in_steam, is_slot_filled
+from domain.artwork_slot import ArtworkSlot, is_set_in_steam, is_slot_filled, slot_files
 
 APP_ID = 3345678901
 # The 64-bit game id other tools name a shortcut's files by: the app id in the
@@ -153,3 +153,24 @@ class TestTheImageHandedToSteam:
         names = [f"{_stem(slot)}.png", f"{_stem(slot)}.jpg"]
 
         assert is_set_in_steam(names, APP_ID, slot, png_sha256="handed", tenders_sha256=None, handed_sha256="handed")
+
+
+class TestTheFilesFillingASlot:
+    def test_names_every_file_filling_the_slot_by_name(self):
+        names = [f"{APP_ID}_hero.png", f"{APP_ID}_hero.jpg", f"{APP_ID}_logo.png", f"{APP_ID}p.png"]
+
+        assert slot_files(names, APP_ID, ArtworkSlot.HERO) == [f"{APP_ID}_hero.jpg", f"{APP_ID}_hero.png"]
+
+    def test_the_logos_position_file_is_not_among_them(self):
+        names = [f"{APP_ID}_logo.png", f"{APP_ID}_logo.json"]
+
+        assert slot_files(names, APP_ID, ArtworkSlot.LOGO) == [f"{APP_ID}_logo.png"]
+
+    def test_the_icon_and_the_cover_are_named_by_their_own_stems(self):
+        names = [f"{APP_ID}_icon.png", f"{APP_ID}p.jpg", f"{APP_ID}.png"]
+
+        assert slot_files(names, APP_ID, ArtworkSlot.ICON) == [f"{APP_ID}_icon.png"]
+        assert slot_files(names, APP_ID, ArtworkSlot.COVER) == [f"{APP_ID}p.jpg"]
+
+    def test_an_empty_slot_has_none(self):
+        assert slot_files([f"{APP_ID}.png"], APP_ID, ArtworkSlot.HERO) == []

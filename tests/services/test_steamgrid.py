@@ -3311,6 +3311,62 @@ class TestTheArtworkTabReadsEachSlot:
         assert refused.value.reason == "no_grid_dir"
 
 
+def _signatures(answer: dict[str, Any]) -> dict[str, str]:
+    return {row["slot"]: row["signature"] for row in answer["slots"]}
+
+
+class TestEachSlotIsSignedByItsOwnFiles:
+    @pytest.mark.asyncio
+    async def test_a_changed_file_changes_only_its_own_slots_signature(self, steamgrid, slot_ready):
+        for name in (f"{_APP_ID}p.png", f"{_APP_ID}.png", f"{_APP_ID}_hero.png", f"{_APP_ID}_logo.png"):
+            (slot_ready / name).write_bytes(b"an image")
+            os.utime(slot_ready / name, ns=(1_000, 2_000))
+        before = _signatures(await steamgrid.service.get_artwork_slots(42, _APP_ID))
+        (slot_ready / f"{_APP_ID}_hero.png").write_bytes(b"another image")
+        os.utime(slot_ready / f"{_APP_ID}_hero.png", ns=(1_000, 3_000))
+
+        after = _signatures(await steamgrid.service.get_artwork_slots(42, _APP_ID))
+
+        assert after["hero"] != before["hero"]
+        assert {slot: after[slot] for slot in after if slot != "hero"} == {
+            slot: before[slot] for slot in before if slot != "hero"
+        }
+
+    @pytest.mark.asyncio
+    async def test_no_two_slots_share_a_signature_though_their_files_are_alike(self, steamgrid, slot_ready):
+        for name in (f"{_APP_ID}p.png", f"{_APP_ID}.png", f"{_APP_ID}_hero.png", f"{_APP_ID}_logo.png"):
+            (slot_ready / name).write_bytes(b"an image")
+            os.utime(slot_ready / name, ns=(1_000, 2_000))
+
+        signatures = _signatures(await steamgrid.service.get_artwork_slots(42, _APP_ID))
+
+        assert len({signatures[slot] for slot in ("cover", "grid", "hero", "logo")}) == 4
+
+    @pytest.mark.asyncio
+    async def test_an_empty_slot_has_no_signature(self, steamgrid, slot_ready):
+        (slot_ready / f"{_APP_ID}.png").write_bytes(b"an image")
+
+        signatures = _signatures(await steamgrid.service.get_artwork_slots(42, _APP_ID))
+
+        assert signatures["grid"] != ""
+        assert signatures["hero"] == ""
+
+    @pytest.mark.asyncio
+    async def test_files_that_cannot_be_looked_at_still_answer_the_slots(self, steamgrid, slot_ready, caplog):
+        (slot_ready / f"{_APP_ID}.png").write_bytes(b"an image")
+
+        def refuse(names):
+            raise PermissionError("denied")
+
+        steamgrid.steam_config.grid_file_stamps = refuse  # type: ignore[method-assign]
+
+        with caplog.at_level(logging.WARNING):
+            answer = await steamgrid.service.get_artwork_slots(42, _APP_ID)
+
+        assert _slot_rows(answer)["grid"] == ("automatic", "tender", None)
+        assert "sign the artwork thumbnails" in caplog.text
+
+
 class TestThePickersCandidates:
     @pytest.mark.asyncio
     async def test_page_zero_lists_steamgriddbs_order_with_tenders_pick(
