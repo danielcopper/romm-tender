@@ -3,8 +3,10 @@
 // gated on `isActive` — a panel test cannot tell "the pane rendered nothing"
 // apart from "the pane was never mounted".
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import type { ReactElement } from "react";
 import { act, fireEvent, render } from "@testing-library/react";
+import { showModal } from "@decky/ui";
 import { BiosTab } from "./BiosTab";
 import { EmulatorStepScope } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
@@ -1825,6 +1827,141 @@ describe("BiosTab", () => {
         expect(listOf(container)).toBeNull();
         const active = container.ownerDocument.activeElement as HTMLElement | null;
         expect(active?.querySelector('[data-testid="emulator-entry"]')?.textContent).toBe("Kronos");
+      });
+    });
+
+    describe("Replace… on a row", () => {
+      const settle = () =>
+        act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        });
+      const replaceable = (offered = true): BiosStatus => {
+        const status = saturn();
+        status.backup_root = "/data/backups/bios";
+        status.files = [
+          own("cart.bin", "yabasanshiro_libretro.so", { local_path: "/bios/cart.bin" }),
+          own("saturn_bios.bin", "yabasanshiro_libretro.so", {
+            local_path: "/bios/saturn_bios.bin",
+            downloaded: true,
+            replace_offered: offered,
+            ...(offered ? {} : { satisfied: true, place_link: "linked" as const }),
+          }),
+          own("mpr.bin", "yabasanshiro_libretro.so", { local_path: "/bios/mpr.bin" }),
+        ];
+        return status;
+      };
+      const stops = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>(".romm-panel-bios-list")];
+      const stopNames = (container: HTMLElement) => stops(container).map(names);
+      type ConfirmProps = {
+        strTitle: string;
+        strDescription: string;
+        strOKButtonText: string;
+        onOK: () => void;
+      };
+      const confirmation = () => {
+        const calls = vi.mocked(showModal).mock.calls;
+        return (calls[calls.length - 1]?.[0] as ReactElement<ConfirmProps> | undefined)?.props;
+      };
+
+      it("makes a row that offers it a focus stop of its own, between the rows before and after it", () => {
+        const { container } = render(
+          <BiosTab
+            biosStatus={replaceable()}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            isActive={true}
+            onReplace={vi.fn()}
+          />,
+        );
+        expect(stopNames(container)).toEqual([["cart.bin"], ["saturn_bios.bin"], ["mpr.bin"]]);
+        expect(stops(container).map((stop) => stop.textContent.includes("Replace…"))).toEqual([false, true, false]);
+      });
+
+      it("offers no Replace… where nothing answers the press", () => {
+        const { container } = render(
+          <BiosTab biosStatus={replaceable()} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+        );
+        expect(stopNames(container)).toEqual([["cart.bin", "saturn_bios.bin", "mpr.bin"]]);
+        expect(container.textContent).not.toContain("Replace…");
+      });
+
+      it("asks the platform page's confirmation, and replaces only once it is answered", async () => {
+        vi.mocked(showModal).mockClear();
+        const onReplace = vi.fn().mockResolvedValue(true);
+        const { container } = render(
+          <BiosTab
+            biosStatus={replaceable()}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            isActive={true}
+            onReplace={onReplace}
+          />,
+        );
+
+        fireEvent.click(stops(container)[1] as HTMLElement);
+
+        expect(confirmation()?.strTitle).toBe("Replace saturn_bios.bin?");
+        expect(confirmation()?.strDescription).toBe(
+          "The file at /bios/saturn_bios.bin goes to /data/backups/bios, and Tender's copy is linked in its place.",
+        );
+        expect(confirmation()?.strOKButtonText).toBe("Replace");
+        expect(onReplace).not.toHaveBeenCalled();
+        await act(async () => {
+          confirmation()?.onOK();
+        });
+        expect(onReplace).toHaveBeenCalledWith("/bios/saturn_bios.bin");
+      });
+
+      it("leaves the list with a step from the Replace… row, as with a step from its rows", async () => {
+        const status = replaceable();
+        const kronos = status.emulator_tabs?.[1];
+        if (kronos === undefined) throw new Error("fixture has no Kronos entry");
+        kronos.rows = [];
+        const { container } = render(
+          <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} onReplace={vi.fn()} />,
+        );
+        stops(container)[1]?.focus();
+        await act(async () => {
+          fireEvent.click(arrow(container, "Next emulator"));
+        });
+        await settle();
+
+        expect(stops(container)).toEqual([]);
+        const active = container.ownerDocument.activeElement as HTMLElement | null;
+        expect(active?.querySelector('[data-testid="emulator-entry"]')?.textContent).toBe("Kronos");
+      });
+
+      it("puts focus on the stop that holds the row once the re-read shows it linked", async () => {
+        vi.mocked(showModal).mockClear();
+        const onReplace = vi.fn().mockResolvedValue(true);
+        const { container, rerender } = render(
+          <BiosTab
+            biosStatus={replaceable()}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            isActive={true}
+            onReplace={onReplace}
+          />,
+        );
+        stops(container)[1]?.focus();
+        fireEvent.click(stops(container)[1] as HTMLElement);
+        await act(async () => {
+          confirmation()?.onOK();
+        });
+
+        rerender(
+          <BiosTab
+            biosStatus={replaceable(false)}
+            biosLevel="ok"
+            coreInfo={coreInfo}
+            isActive={true}
+            onReplace={onReplace}
+          />,
+        );
+        await settle();
+
+        expect(stopNames(container)).toEqual([["cart.bin", "saturn_bios.bin", "mpr.bin"]]);
+        expect(container.ownerDocument.activeElement).toBe(stops(container)[0]);
       });
     });
 

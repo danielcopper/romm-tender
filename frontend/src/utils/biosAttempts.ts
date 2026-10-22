@@ -43,9 +43,22 @@ export function noteBiosPress(result: {
   publish(attempts);
 }
 
-/** "Replace…" at *place* moved the old file to *backupPath*. */
-export function noteReplaced(place: string, backupPath: string): void {
-  publish({ ...held, [`place:${place}`]: { ...held[`place:${place}`], replacedTo: backupPath } });
+/**
+ * "Replace…" at *place* moved the old file to *backupPath*, and the links it
+ * could not place. Those replace the links an earlier press could not place;
+ * what else an earlier press said stays.
+ */
+export function noteReplaced(place: string, backupPath: string, linkFailures: readonly BiosLinkFailure[]): void {
+  const attempts: Record<string, RowAttempt> = {};
+  for (const [key, attempt] of Object.entries(held)) {
+    const { linkFailure: _replaced, ...rest } = attempt;
+    attempts[key] = rest;
+  }
+  for (const failure of linkFailures) {
+    attempts[`place:${failure.place}`] = { ...attempts[`place:${failure.place}`], linkFailure: failure.reason };
+  }
+  attempts[`place:${place}`] = { ...attempts[`place:${place}`], replacedTo: backupPath };
+  publish(attempts);
 }
 
 /** Forget every attempt — the page that made them is left. */

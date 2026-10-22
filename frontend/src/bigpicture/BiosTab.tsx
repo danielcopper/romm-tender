@@ -27,11 +27,16 @@
  * there, it reads as the distribution's own file rather than as a gap in a
  * library that will never hold it (`utils/biosFileNote`).
  *
+ * The one press it holds is "Replace…" on a row the backend offers it on
+ * (`replace_offered`): the same confirmation as on the platform page, then
+ * `onReplace`, which the panel answers.
+ *
  * CSS classes prefixed with `romm-panel-` are injected separately by
  * styleInjector.
  */
 
 import { FC, useEffect, useRef, useState, type ReactElement } from "react";
+import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
 import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, EmulatorTab } from "../types";
 import { BIOS_MISSING_RED, biosColorForLevel } from "../utils/biosColor";
 import { isFetchable } from "../utils/biosFetchable";
@@ -53,6 +58,8 @@ import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../utils/
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { ENTRY_FOCUS_DELAY_MS, firstBodyStop, placeEntryFocus } from "../utils/entryFocus";
 import { useIdentifications } from "../utils/firmwareIdentifications";
+import { detach } from "../utils/detach";
+import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { EmulatorSelector, SHOWN_ENTRY_ATTR } from "./EmulatorSelector";
 import { section } from "./panelSection";
 
@@ -74,6 +81,10 @@ interface BiosTabProps {
    *  said of. Empty where none is held, and the sentence names the system
    *  without it. */
   platformName?: string;
+  /** "Replace…" on the row whose place is the argument, once the user
+   *  confirmed it; true once the file was replaced. Without it no row offers
+   *  the press. */
+  onReplace?: (place: string) => Promise<boolean>;
 }
 
 /**
@@ -342,6 +353,18 @@ function rowBelongsOnThisPage(file: BiosFileStatus): boolean {
   return isFetchable(file);
 }
 
+/** Every focus stop of the file list carries it, so the list is found as one whatever its stops. */
+const LIST_PART_CLASS = "romm-panel-bios-list";
+
+/**
+ * One focus stop of the file list: a run of rows, or one row that offers
+ * "Replace…" and is pressed as a whole — a stop is a button, and a button
+ * inside it would be a button inside a button.
+ */
+type BiosListPart =
+  | { kind: "rows"; key: string; elements: ReactElement[] }
+  | { kind: "replace"; key: string; file: BiosFileStatus; place: string; element: ReactElement };
+
 /**
  * One row per firmware file the shown emulator asks for, a note for the rest,
  * and the library's files no emulator here declares in a section of their own.
@@ -361,7 +384,8 @@ function buildBiosFileList(
   launchingLabel: string | null,
   identifications: Readonly<Record<string, Identification>>,
   attemptFor: (place: string | null, fileName: string | null) => RowAttempt,
-): ReactElement[] {
+  replaceable: boolean,
+): BiosListPart[] {
   const files = bios.files ?? [];
   const otherTab = tab !== null && !tab.launching;
   const missingRegions = new Set(otherTab ? [] : (bios.one_of_groups ?? []).flatMap((group) => group.missing));
@@ -372,7 +396,7 @@ function buildBiosFileList(
   const emulatorName = tab !== null ? tabLabel(tab) : launchingLabel;
   const libraryFiles = files.filter(isUnclaimedLibraryRow);
 
-  const fileRow = (f: BiosFileStatus, named: string | null, library = false) => {
+  const fileRow = (f: BiosFileStatus, named: string | null, library = false, pressLabel: string | null = null) => {
     const words = biosFileNote(f, named);
     const note = words.note;
     // What Tender's own part in the row is: its store copy, the link at its
@@ -402,7 +426,7 @@ function buildBiosFileList(
     const dot = fileDotColor(f, missingRegions);
 
     return (
-      <div key={f.file_name} className="romm-panel-file-row">
+      <div key={f.file_name} className="romm-panel-file-row" data-bios-place={f.local_path}>
         <span key="dot" className="romm-status-dot" style={{ backgroundColor: dot }} />
         <span key="name" className="romm-panel-file-name">
           {f.declared_path || f.file_name}
@@ -418,11 +442,33 @@ function buildBiosFileList(
         <span key="need" data-testid="bios-need" style={NEED_WORD}>
           {`· ${needWords(f)}`}
         </span>
+        {pressLabel !== null && (
+          <span key="press" data-testid="bios-press" style={PRESS_LABEL}>
+            {pressLabel}
+          </span>
+        )}
         {fileLines(lines)}
       </div>
     );
   };
-  const fileElements = shownFiles.map((f) => fileRow(f, emulatorName));
+  const parts: BiosListPart[] = [];
+  // The run of rows the next row joins: the last part, unless that is a row
+  // pressed on its own.
+  const rows = (): ReactElement[] => {
+    const last = parts[parts.length - 1];
+    if (last?.kind === "rows") return last.elements;
+    const elements: ReactElement[] = [];
+    parts.push({ kind: "rows", key: `rows-${parts.length}`, elements });
+    return elements;
+  };
+  for (const f of shownFiles) {
+    if (replaceable && f.replace_offered && f.local_path) {
+      const element = fileRow(f, emulatorName, false, "Replace…");
+      parts.push({ kind: "replace", key: `replace-${f.local_path}`, file: f, place: f.local_path, element });
+    } else {
+      rows().push(fileRow(f, emulatorName));
+    }
+  }
 
   const summaryLine = (key: string, text: string) => (
     <div
@@ -446,7 +492,7 @@ function buildBiosFileList(
   if (elsewhere > 0) {
     const name = emulatorName ?? "the emulator";
     const notRequired = otherTab ? `not required by ${name}` : "not required for this launch";
-    fileElements.push(
+    rows().push(
       summaryLine(
         "elsewhere-note",
         `${elsewhere} more file${elsewhere === 1 ? "" : "s"} ${name} lists — ${notRequired}, ` +
@@ -456,7 +502,7 @@ function buildBiosFileList(
   }
 
   if (libraryFiles.length > 0) {
-    fileElements.push(
+    rows().push(
       <div key="library-heading" className="romm-panel-section-title" style={SUBHEADING_STYLE}>
         In your RomM library, asked for by no emulator here
       </div>,
@@ -464,15 +510,67 @@ function buildBiosFileList(
     );
   }
 
-  return fileElements;
+  return parts;
 }
 
-export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isActive, platformName }) => {
+/** The press a row pressed as a whole offers, at the end of its name line. */
+const PRESS_LABEL = {
+  marginLeft: "auto",
+  padding: "1px 10px",
+  borderRadius: "2px",
+  background: "rgba(255, 255, 255, 0.1)",
+  color: "#dcdedf",
+  fontSize: "12px",
+} as const;
+
+/**
+ * One focus stop of the file list, styled as a section rather than a button.
+ * The stops are spaced like the rows inside one, so the list reads as one.
+ */
+function listPart(part: BiosListPart, index: number, count: number, onPress: (() => void) | null): ReactElement {
+  const first = index === 0;
+  const last = index === count - 1;
+  return (
+    <DialogButton
+      key={part.key}
+      className={`romm-panel-section ${LIST_PART_CLASS}`}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: `${first ? 12 : 2}px 0 ${last ? 12 : 0}px`,
+        textAlign: "left" as const,
+        width: "100%",
+        cursor: "default",
+        display: "block",
+      }}
+      noFocusRing={false}
+      onFocus={scrollFocusedToCenter}
+      {...(onPress === null ? {} : { onClick: onPress })}
+    >
+      <div className="romm-panel-file-list" style={{ margin: `${first ? 8 : 0}px 0 ${last ? 8 : 0}px` }}>
+        {part.kind === "rows" ? part.elements : part.element}
+      </div>
+    </DialogButton>
+  );
+}
+
+/** The list's stop that holds the row whose place is *place*, or null. */
+function stopHolding(root: ParentNode, place: string): HTMLElement | null {
+  const row = [...root.querySelectorAll<HTMLElement>("[data-bios-place]")].find(
+    (el) => el.getAttribute("data-bios-place") === place,
+  );
+  return row?.closest<HTMLElement>(`.${LIST_PART_CLASS}`) ?? null;
+}
+
+export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isActive, platformName, onReplace }) => {
   // Which emulator the list shows: the launching one until another is chosen —
   // a view, never a change of what launches.
   const [tabKey, setTabKey] = useState<string | null>(null);
   const part = useRef<HTMLDivElement>(null);
   const [steppedFromList, setSteppedFromList] = useState(false);
+  // The place a replacement finished at, until focus has followed its row.
+  const [replacedPlace, setReplacedPlace] = useState<string | null>(null);
+  const [replacing, setReplacing] = useState(false);
   const attemptFor = useBiosPresses();
   // What the resolver knows each library file's content as, asked after the
   // page is shown, one file at a time.
@@ -495,6 +593,21 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
     }, ENTRY_FOCUS_DELAY_MS);
     return () => clearTimeout(timer);
   }, [steppedFromList]);
+  // A replaced row is pressed on its own only until the re-read shows it
+  // linked; then its stop is gone, and focus goes to the stop that now holds
+  // the row rather than Steam resetting it to the top of the page.
+  useEffect(() => {
+    if (replacedPlace === null) return;
+    const timer = setTimeout(() => {
+      const root = part.current;
+      const stop = root ? stopHolding(root, replacedPlace) : null;
+      if (!stop || stop.querySelector('[data-testid="bios-press"]')) return;
+      setReplacedPlace(null);
+      const active = stop.ownerDocument.activeElement;
+      if (active === null || active === stop.ownerDocument.body) placeEntryFocus(stop, () => stop);
+    }, ENTRY_FOCUS_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [replacedPlace, biosStatus]);
   if (!isActive || !biosStatus) return null;
 
   // Left column: BIOS status, the launching emulator's group. The header is the
@@ -528,13 +641,38 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
 
   const tabs = biosStatus.emulator_tabs;
   const tab = selectedTab(tabs, tabKey);
-  const fileElements = buildBiosFileList(
+  const parts = buildBiosFileList(
     biosStatus,
     tab,
     biosStatus.active_core_label ?? coreInfo?.active_core_label ?? null,
     identifications,
     attemptFor,
+    onReplace !== undefined,
   );
+  const backupRoot = biosStatus.backup_root ?? "the backup folder";
+  const confirmReplace = (file: BiosFileStatus, place: string) => {
+    if (replacing || !onReplace) return;
+    showModal(
+      <ConfirmModal
+        strTitle={`Replace ${file.file_name}?`}
+        strDescription={`The file at ${place} goes to ${backupRoot}, and Tender's copy is linked in its place.`}
+        strOKButtonText="Replace"
+        strCancelButtonText="Cancel"
+        onOK={() => {
+          setReplacing(true);
+          detach(
+            (async () => {
+              try {
+                if (await onReplace(place)) setReplacedPlace(place);
+              } finally {
+                setReplacing(false);
+              }
+            })(),
+          );
+        }}
+      />,
+    );
+  };
 
   // The selector and the list sit below the header, outside its section: a
   // section is itself a focusable button, and the selector's own buttons inside
@@ -561,19 +699,20 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
           maxWidth={GAME_PAGE_SELECTOR_WIDTH}
           onSelect={(chosen) => {
             const active = part.current?.ownerDocument.activeElement ?? null;
-            const list = part.current?.querySelector(".romm-panel-file-list")?.closest(".romm-panel-section");
-            if (list?.contains(active)) setSteppedFromList(true);
+            // The list's stops are one list: a step from any of them leaves it.
+            const stops = [...(part.current?.querySelectorAll(`.${LIST_PART_CLASS}`) ?? [])];
+            if (stops.some((stop) => stop.contains(active))) setSteppedFromList(true);
             setTabKey(chosen.launching ? null : chosen.emulator);
           }}
         />
-        {fileElements.length > 0 &&
-          section(
-            "bios-files",
-            null,
-            <div key="bios-file-list" className="romm-panel-file-list">
-              {fileElements}
-            </div>,
-          )}
+        {parts.map((listed, index) =>
+          listPart(
+            listed,
+            index,
+            parts.length,
+            listed.kind === "replace" ? () => confirmReplace(listed.file, listed.place) : null,
+          ),
+        )}
       </div>
     </>
   );
