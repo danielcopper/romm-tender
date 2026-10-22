@@ -1,7 +1,7 @@
 /**
  * What a BIOS press on a game's page did to the rows of its BIOS tab: a link it
  * could not place, a file it moved out of the store before the download, and
- * the file "Replace…" moved aside. Kept for the page that made the press and
+ * the file "Replace…" moved aside or why it could not. Kept for the page that made the press and
  * forgotten when that page is left; never recorded, and never a toast
  * (`docs/architecture/qam-panel.md`, the game page's BIOS tab).
  */
@@ -57,8 +57,15 @@ export function noteReplaced(place: string, backupPath: string, linkFailures: re
   for (const failure of linkFailures) {
     attempts[`place:${failure.place}`] = { ...attempts[`place:${failure.place}`], linkFailure: failure.reason };
   }
-  attempts[`place:${place}`] = { ...attempts[`place:${place}`], replacedTo: backupPath };
+  const { replaceFailure: _failed, ...earlier } = attempts[`place:${place}`] ?? {};
+  attempts[`place:${place}`] = { ...earlier, replacedTo: backupPath };
   publish(attempts);
+}
+
+/** "Replace…" at *place* was refused or failed, for *reason*. */
+export function noteReplaceFailed(place: string, reason: string): void {
+  const { replacedTo: _replaced, ...earlier } = held[`place:${place}`] ?? {};
+  publish({ ...held, [`place:${place}`]: { ...earlier, replaceFailure: reason } });
 }
 
 /** Forget every attempt — the page that made them is left. */

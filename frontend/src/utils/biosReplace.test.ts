@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { executeBiosReplace } from "./biosReplace";
-import { forgetBiosPresses, noteBiosPress, noteReplaced, useBiosPresses } from "./biosAttempts";
+import { forgetBiosPresses, noteBiosPress, noteReplaceFailed, noteReplaced, useBiosPresses } from "./biosAttempts";
 import * as backend from "../api/backend";
 import * as toast from "./toast";
 
@@ -63,7 +63,7 @@ describe("executeBiosReplace", () => {
     expect(toast.showToast).not.toHaveBeenCalled();
   });
 
-  it("toasts a refusal, notes nothing and re-reads nothing", async () => {
+  it("says a refusal on its row, never in a toast, and re-reads nothing", async () => {
     vi.mocked(backend.replaceBiosFile).mockResolvedValue({
       success: false,
       reason: "replace_failed",
@@ -75,9 +75,37 @@ describe("executeBiosReplace", () => {
     changes.stop();
 
     expect(done).toBe(false);
-    expect(toast.showToast).toHaveBeenCalledWith("Could not put Tender's copy in place; the old file is back.");
-    expect(attemptAt("/bios/saturn_bios.bin")).toEqual({});
+    expect(toast.showToast).not.toHaveBeenCalled();
+    expect(attemptAt("/bios/saturn_bios.bin")).toEqual({
+      replaceFailure: "Could not put Tender's copy in place; the old file is back.",
+    });
     expect(changes.slugs).toEqual([]);
+  });
+
+  it("says a failed call on its row, never in a toast", async () => {
+    vi.mocked(backend.replaceBiosFile).mockRejectedValue(new Error("connection lost"));
+
+    const done = await executeBiosReplace("saturn", "/bios/saturn_bios.bin");
+
+    expect(done).toBe(false);
+    expect(toast.showToast).not.toHaveBeenCalled();
+    expect(attemptAt("/bios/saturn_bios.bin").replaceFailure).toBe("Error: connection lost");
+  });
+
+  it("drops a failure an earlier press left on the row once the replacement succeeds", async () => {
+    noteReplaceFailed("/bios/saturn_bios.bin", "denied");
+    vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+      success: true,
+      placed: 1,
+      left_in_place: 0,
+      removed: 0,
+      link_failures: [],
+      backup_path: "/data/backups/bios/z/saturn_bios.bin",
+    });
+
+    await executeBiosReplace("saturn", "/bios/saturn_bios.bin");
+
+    expect(attemptAt("/bios/saturn_bios.bin")).toEqual({ replacedTo: "/data/backups/bios/z/saturn_bios.bin" });
   });
 });
 

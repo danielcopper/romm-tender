@@ -12,7 +12,7 @@ import { EmulatorStepScope } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
 import { libretroEmu, sharedBy, standaloneEmu } from "../test-utils/coreFixtures";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
-import { forgetBiosPresses, noteBiosPress } from "../utils/biosAttempts";
+import { forgetBiosPresses, noteBiosPress, noteReplaceFailed } from "../utils/biosAttempts";
 import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption, MissingConfiguredImage } from "../types";
 
 const coreInfo: CoreInfo = {
@@ -1910,6 +1910,22 @@ describe("BiosTab", () => {
           confirmation()?.onOK();
         });
         expect(onReplace).toHaveBeenCalledWith("/bios/saturn_bios.bin");
+      });
+
+      it("says on the row why its replacement failed", () => {
+        const { container } = render(
+          <BiosTab
+            biosStatus={replaceable()}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            isActive={true}
+            onReplace={vi.fn()}
+          />,
+        );
+        act(() => noteReplaceFailed("/bios/saturn_bios.bin", "the BIOS folder is read-only"));
+
+        expect(stops(container)[1]?.textContent).toContain("Failed to replace the file: the BIOS folder is read-only");
+        act(() => forgetBiosPresses());
       });
 
       it("leaves the list with a step from the Replace… row, as with a step from its rows", async () => {

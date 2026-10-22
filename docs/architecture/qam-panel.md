@@ -1568,10 +1568,11 @@ it, for the focused platform:
   **Replace…** is a focus stop of its own, pressed as a whole with the label at the end of its name line — the list's
   stops are buttons, so it cannot hold one — and the rows before and after it stand in stops of their own; A opens the
   platform page's confirmation, the replacement runs for the game's platform, and once the re-read shows the row linked
-  focus goes to the stop that now holds it. Above the table, a sentence says where a download lands in the store only
-  (`store_only`: an emulator the resolver does not cover, or no emulator source for the platform). The library's own
-  section words each row by what the resolver's identification says its content is — "Checking…" until the answer
-  arrives, then "Not recognised" or "Recognised as `<names>`" — asked one file at a time after the page is shown,
+  focus goes to the stop that now holds it. A replacement refused or failed says so on its row, "Failed to replace the
+  file: `<reason>`", until the page is left, never in a toast. Above the table, a sentence says where a download lands
+  in the store only (`store_only`: an emulator the resolver does not cover, or no emulator source for the platform). The
+  library's own section words each row by what the resolver's identification says its content is — "Checking…" until the
+  answer arrives, then "Not recognised" or "Recognised as `<names>`" — asked one file at a time after the page is shown,
   because the resolver's identification takes about 0.25 s a file on the reference machine, kept by MD5 for the page and
   at most thirty minutes (`utils/firmwareIdentifications.ts`), and a store copy no emulator uses reads "In Tender's
   firmware store, used by no emulator" with its Delete. When a platform's pane is first shown with an answer, and after
