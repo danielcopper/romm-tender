@@ -296,6 +296,16 @@ describe("computeSyncSummary", () => {
     expect(syncSummaryText).toBe("Save status unavailable");
   });
 
+  it("names a device that could not be registered, not an unreachable server", () => {
+    const status = makeStatus({
+      server_query_failed: true,
+      server_query_reason: "device_not_registered",
+      files: [],
+    });
+    const { syncSummaryText } = computeSyncSummary(true, status, []);
+    expect(syncSummaryText).toBe("Device not registered with RomM");
+  });
+
   it("does not claim unreachable when the query failed without a reason slug", () => {
     // Defensive: an older backend (or an unclassified failure) sends the flag
     // with no reason. Silence about the cause beats asserting the wrong one.

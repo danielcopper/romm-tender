@@ -36,7 +36,7 @@ export function resolveSaveSetupOutcome(info: SaveSetupInfo): SaveSetupOutcome {
   if (info.recommended_action === "romm_refused") {
     return { kind: "romm_refused", message: info.message ?? "" };
   }
-  // RomM answered the device's registration and still did not register it, so
+  // The device's registration failed other than by an unreachable RomM, so
   // nothing was listed: the same hold.
   if (info.recommended_action === "device_not_registered") {
     return { kind: "device_not_registered" };
@@ -72,7 +72,8 @@ export const SERVER_UNREACHABLE_TOAST_BODY =
 
 /** Copy for the `not_found` branch. Deliberately does NOT say the game has no
  *  saves: the 404 can come from this device's registration (a RomM database
- *  reset drops it), so that would swap one lie for a more specific one. */
+ *  reset drops it; Tender re-registers this device first, so this rarely
+ *  shows), so that would swap one lie for a more specific one. */
 export const NOT_FOUND_WIZARD_MESSAGE =
   "RomM couldn't find the save data for this setup — setup paused. The game or this device may no longer be on the server.";
 
@@ -90,10 +91,12 @@ export function rommRefusedToastBody(message: string): string {
   return `Cannot configure save slot — RomM did not list this game's saves. ${message}`;
 }
 
-/** Copy for the `device_not_registered` branch: RomM answered, but this device
- *  could not be registered with it, so its saves were not listed. */
+/** Copy for the `device_not_registered` branch: the registration failed other
+ *  than by an unreachable RomM — RomM, or a proxy in front of it, answered
+ *  without registering the device, or the stored token could not be sent — so
+ *  its saves were not listed. */
 export const DEVICE_NOT_REGISTERED_WIZARD_MESSAGE =
-  "This device could not be registered with RomM — setup paused. Retry in a moment.";
+  "This device could not be registered with RomM — setup paused. Retry, or sign in again if it keeps failing.";
 
 export const DEVICE_NOT_REGISTERED_TOAST_BODY =
   "Cannot configure save slot — this device could not be registered with RomM. Open the Saves tab to retry.";

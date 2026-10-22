@@ -548,6 +548,12 @@ describe("a device that could not be registered", () => {
 
   it("does not blame the connection", () => {
     expect(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE).not.toMatch(/unreachable|not reachable|offline/i);
+  });
+
+  it("the wizard copy offers a retry, and a fresh sign-in if it keeps failing", () => {
+    expect(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE).toBe(
+      "This device could not be registered with RomM — setup paused. Retry, or sign in again if it keeps failing.",
+    );
     expect(DEVICE_NOT_REGISTERED_TOAST_BODY).not.toMatch(/unreachable|not reachable|offline/i);
   });
 });

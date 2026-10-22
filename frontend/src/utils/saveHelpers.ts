@@ -139,7 +139,11 @@ export function computeSyncSummary(
 
   if (saveStatus.server_query_failed) {
     const text =
-      saveStatus.server_query_reason === "server_unreachable" ? "Server unreachable" : "Save status unavailable";
+      saveStatus.server_query_reason === "server_unreachable"
+        ? "Server unreachable"
+        : saveStatus.server_query_reason === "device_not_registered"
+          ? "Device not registered with RomM"
+          : "Save status unavailable";
     return { syncSummaryText: text, syncSummaryColor: MUTED_COLOR };
   }
 
