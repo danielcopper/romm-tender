@@ -996,6 +996,18 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   a status list, and is never authorised by `downloaded` or `on_server`; `deletable_count` (per platform and per row,
   distinct paths) counts records still on disk and alone gates the Delete offer, and a folder row's counts the distinct
   recorded files beneath it; the three buttons share `PlatformBiosDeleter._delete_recorded_io`, never a copy of it
+- **Every save operation sends RomM the device id `SyncEngine.live_device_id` answers — registered or healed a moment
+  before — and no other: `RommSaveApi.list_saves` and the sync logic (`do_sync_rom_saves`,
+  `MatrixExecutor.sync_rom_saves`, `do_download_save`, `do_upload_save`) take a `LiveDeviceId`, only that entry builds
+  one, and no save service but `SyncEngine` holds the `DeviceRegistry`** — check + test + prompt-only — basedpyright
+  refuses a stored id or `None` where a `LiveDeviceId` is taken; `scripts/check_live_device_id.py` fails on a
+  `LiveDeviceId(...)` or a `cast` to it outside the entry and on a renamed import (unseen: the name bound to a variable
+  and called through it, `getattr`, a `# pyright: ignore` on a plain `str`, and `tests/`);
+  `tests/services/saves/test_device_registry_holder.py` fails on an annotation naming `DeviceRegistry` outside
+  `SyncEngineConfig` and on a `DeviceRegistry(...)` kept on `self` (unseen: an unannotated parameter or attribute).
+  Prompt-only: each save operation calls the entry once, before its first request to RomM; a new request that names the
+  device (`upload_save`, `download_save_content`, `negotiate_sync` and `confirm_download` take a plain `str`) takes the
+  id from there
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

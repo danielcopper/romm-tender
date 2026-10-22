@@ -1584,6 +1584,28 @@ Format: **invariant** — tier — enforced by.
   predicate per button): a second copy of that loop is the shape this rule is about, because the copies would drift
   silently. **Nothing mechanical stands behind any of this.** A delete path looping a status list on `downloaded` alone
   would go green — which is exactly the shape this one had when it destroyed that file
+- **Every save operation sends RomM the device id `SyncEngine.live_device_id` answers — registered or healed a moment
+  before — and no other: `RommSaveApi.list_saves` and the sync logic (`do_sync_rom_saves`,
+  `MatrixExecutor.sync_rom_saves`, `do_download_save`, `do_upload_save`) take a `LiveDeviceId`, only that entry builds
+  one, and no save service but `SyncEngine` holds the `DeviceRegistry`** — check + test + prompt-only — RomM answers a
+  listing without a device id with no sync row for this device on any save, so the decision reads every save as one this
+  device never touched (the never-touched rows of the decision table, among them a conflict on a save this device is
+  current on); and a stored id the server has since lost (a RomM database wiped or restored) is answered with a 404. An
+  operation that reads the stored id instead sends exactly those, whenever the device is not registered or its id died.
+  The entry registers or heals the device on every call (one `PUT /api/devices/{id}`), under a lock no caller takes
+  anything beneath, and refuses `server_unreachable` or `device_not_registered`
+  (`docs/architecture/save-file-sync-architecture.md`, "`DeviceRegistry` owns device identity"). Three things keep the
+  rule. basedpyright, in the gate, refuses a stored id or `None` where a `LiveDeviceId` is taken.
+  `scripts/check_live_device_id.py` (AST) fails on a `LiveDeviceId(...)` call or a `typing.cast` naming it anywhere
+  under `backend/` but `SyncEngine.live_device_id`, and on `LiveDeviceId` imported under another name; it does not see
+  the name bound to a variable and called through it, a call reached through `getattr`, a `# pyright: ignore` that hands
+  a plain `str` to a parameter typed `LiveDeviceId`, or `tests/`, where building one is how a test hands an id over.
+  `tests/services/saves/test_device_registry_holder.py` reads every module under `services/saves/` and fails on an
+  annotation naming `DeviceRegistry` anywhere but `SyncEngineConfig` and on a `DeviceRegistry(...)` assigned to an
+  attribute of `self`; an unannotated parameter or attribute holding one passes it. Prompt-only: each save operation
+  calls the entry once, before its first request to RomM, and hands the id down; and a new request that names the device
+  takes the id from there — `upload_save`, `download_save_content`, `negotiate_sync` and `confirm_download` take a plain
+  `str`, and are reached today only through code that holds a `LiveDeviceId`
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

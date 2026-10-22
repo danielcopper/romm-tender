@@ -1950,10 +1950,13 @@ DELETE. The pairing code and the returned token are never logged.
 (`POST /api/devices`, its id stored in `kv_config["device_id"]`) is bound to the server it was registered against —
 RomM's `negotiate` save-sync transport hard-404s a foreign device id. So a successful sign-in that **genuinely changes
 origin** forgets the stored device id (`SaveService.forget_device` → `DeviceRegistry.forget_device`, wired as the
-`DeviceForgetFn` injected into `ConnectionService`), so the next save-sync run re-registers against the new server. The
-decision is `is_origin_change(old_token_origin, new_url)` in `lib/url_host` — both origins are normalized and the id is
-forgotten **only** when both are known (parseable) and differ. This is deliberately the _opposite_ failure posture to
-the old-token DELETE guard (`same_origin`, which fails closed): a **same-server re-sign-in keeps the device identity**,
+`DeviceForgetFn` injected into `ConnectionService`), and the sign-in then registers this device against the new server
+(`SaveService.ensure_device_registered`, the `DeviceRegisterFn`). Every successful sign-in registers the device that
+way, whether save sync is on or off, best-effort: a registration that fails is logged and the sign-in still succeeds,
+since every save operation registers again before its first request to RomM. The decision is
+`is_origin_change(old_token_origin, new_url)` in `lib/url_host` — both origins are normalized and the id is forgotten
+**only** when both are known (parseable) and differ. This is deliberately the _opposite_ failure posture to the
+old-token DELETE guard (`same_origin`, which fails closed): a **same-server re-sign-in keeps the device identity**,
 including a token swap on the unchanged URL, URL-formatting variants, and a `None`/unstamped old origin (an unknown old
 origin is treated as unknown, not different — never a change). Without this, a same-server token swap dropped the
 identity and the next post-exit sync flagged a spurious conflict for a save this device itself synced (#1437). The
