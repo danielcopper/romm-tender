@@ -229,6 +229,21 @@ def wanted_links(
     return wanted
 
 
+def wants_place(placements: Iterable[FirmwarePlacement], place: str, copy: StoreCopy | None) -> bool:
+    """Would any of *placements* place *copy* at *place*, as :func:`wanted_links` does for a platform holding it?
+
+    A file requirement wants its place whatever fills it; a folder declaration
+    wants a place in its folder only for a copy it recognises.
+    """
+    for placement in placements:
+        if not placement.declares_directory:
+            if placement.place == place:
+                return True
+        elif copy is not None and folder_place(placement, copy.file_name) == place and fills(placement, copy):
+            return True
+    return False
+
+
 def _want(place: str, copy: StoreCopy | None, platform_slug: str, source: str) -> WantedLink:
     return WantedLink(
         place=place,

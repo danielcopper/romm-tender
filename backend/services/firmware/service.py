@@ -256,9 +256,7 @@ class FirmwareService:
         """
         async with self._rules.hold("update_bios_links", update=True, folder=True, migration=True):
             system = await self._downloads.platform_system(platform_slug, rom_id)
-            outcome = await self._config.loop.run_in_executor(
-                None, self._store.do_update_links, platform_slug, system, self._downloads.do_platform_system
-            )
+            outcome = await self._config.loop.run_in_executor(None, self._store.do_update_links, platform_slug, system)
             return {"success": True, **outcome.payload()}
 
     async def replace_bios_file(self, platform_slug, place) -> dict[str, Any]:

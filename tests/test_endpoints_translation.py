@@ -1384,6 +1384,7 @@ def _dispatcher_over_firmware(
                     romm_api=romm_api,
                     firmware_file_store=store,
                     platform_firmware_resolver=resolver,
+                    platform_systems=FakePlatformSystems(),
                     prepare_folder=lambda: "/tender",
                     uow_factory=FakeUnitOfWorkFactory(uow),
                     clock=FakeClock(),

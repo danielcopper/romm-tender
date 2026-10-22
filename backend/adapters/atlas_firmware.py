@@ -119,6 +119,7 @@ from domain.firmware_wants import (
     FolderVerdict,
     MissingConfiguredImage,
     RefusedDeclaration,
+    SourceCatalogues,
 )
 from domain.source_roots import SourceRoot, SourceRoots
 
@@ -220,17 +221,19 @@ class AtlasPlatformFirmwareAdapter:
             return _unresolved()
         return self._read(system, kind, installation)
 
-    def every_source(self, system: str) -> tuple[FirmwareCatalogue, ...]:
+    def every_source(self, system: str) -> SourceCatalogues:
         """*system*'s firmware demand in each enabled source, in the user's order, to place links by.
 
-        A source not read is left out. A sealed emulator catalogue (EmuDeck's)
-        is read for its places all the same, and marked ``sealed``: where the
-        resolver states where a file goes, a link may go there, but its list
-        never decides that a link is unwanted, and the rows of such an answer
-        stay withheld (:func:`_catalogue`).
+        A source whose reading raised or named no root is named unread. A
+        sealed emulator catalogue (EmuDeck's) is read for its places all the
+        same, and marked ``sealed``: where the resolver states where a file
+        goes, a link may go there, but its list never decides that a link is
+        unwanted, and the rows of such an answer stay withheld
+        (:func:`_catalogue`).
         """
         reading = self._sources.read()
         catalogues: list[FirmwareCatalogue] = []
+        unread: set[str] = set()
         for source in reading.sources:
             installation = reading.installation(source.kind)
             if not source.enabled or installation is None:
@@ -238,7 +241,9 @@ class AtlasPlatformFirmwareAdapter:
             catalogue = self._read(system, source.kind, installation, for_links=True)
             if catalogue.resolved:
                 catalogues.append(catalogue)
-        return tuple(catalogues)
+            else:
+                unread.add(source.kind)
+        return SourceCatalogues(read=tuple(catalogues), unread=frozenset(unread))
 
     def source_roots(self) -> dict[str, SourceRoots | None]:
         """Every detected source's roots, switched on or off, by kind; ``None`` where they could not be asked."""

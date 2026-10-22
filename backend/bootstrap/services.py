@@ -212,6 +212,19 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         sync_in_flight=sync_in_flight_binding.get,
     )
 
+    # The system a RomM platform is in an emulator source, which every reader of
+    # a platform's system asks — the download, the emulator choice, the BIOS
+    # answers and the saves — so they all ask the same question.
+    platform_systems = PlatformSystemService(
+        config=PlatformSystemServiceConfig(
+            uow_factory=cfg.callbacks.uow_factory,
+            romm_api=cfg.adapters.romm_api,
+            source_platform_systems=cfg.adapters.source_platform_systems,
+            logger=cfg.runtime.logger,
+            log_debug=cfg.callbacks.log_debug,
+        ),
+    )
+
     # The firmware store records files under Tender's folder, which asks it
     # what is recorded there, while every write into the store goes through
     # the folder made ready for it — so the store is built first and reaches
@@ -222,6 +235,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             romm_api=cfg.adapters.romm_api,
             firmware_file_store=cfg.adapters.firmware_file_store,
             platform_firmware_resolver=cfg.adapters.platform_firmware_resolver,
+            platform_systems=platform_systems,
             prepare_folder=prepare_folder_binding.get,
             uow_factory=cfg.callbacks.uow_factory,
             clock=cfg.runtime.clock,
@@ -275,19 +289,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # (no service deps) so every per-game-core read consumer — migration, saves,
     # game-detail, cores — draws from the SAME seam and the read-path core never
     # diverges from the launched core.
-    # The system a RomM platform is in an emulator source, which every reader of
-    # a platform's system asks — the download, the emulator choice, the BIOS
-    # answers and the saves — so they all ask the same question.
-    platform_systems = PlatformSystemService(
-        config=PlatformSystemServiceConfig(
-            uow_factory=cfg.callbacks.uow_factory,
-            romm_api=cfg.adapters.romm_api,
-            source_platform_systems=cfg.adapters.source_platform_systems,
-            logger=cfg.runtime.logger,
-            log_debug=cfg.callbacks.log_debug,
-        ),
-    )
-
     active_core_resolver = ActiveCoreResolver(
         config=ActiveCoreResolverConfig(
             uow_factory=cfg.callbacks.uow_factory,

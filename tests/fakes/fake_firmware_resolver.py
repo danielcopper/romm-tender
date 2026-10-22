@@ -18,6 +18,7 @@ from domain.firmware_wants import (
     FolderFile,
     FolderVerdict,
     MissingConfiguredImage,
+    SourceCatalogues,
 )
 from domain.source_roots import SourceRoots
 
@@ -83,7 +84,7 @@ class FakeFirmwareResolver:
     names no root, and ``None`` a source whose roots could not be asked;
     :meth:`every_source` answers
     this one catalogue followed by each of ``other_sources``, a test's further
-    emulator sources, and :meth:`source_roots` every source's roots.
+    emulator sources, naming each one not resolved as unread, and :meth:`source_roots` every source's roots.
     """
 
     def __init__(
@@ -377,10 +378,14 @@ class FakeFirmwareResolver:
             roots=self.roots if self.resolved else None,
         )
 
-    def every_source(self, system: str) -> tuple[FirmwareCatalogue, ...]:
-        """This catalogue and each further source's, leaving out a reading that did not happen."""
-        catalogues = (self(system), *(other(system) for other in self.other_sources))
-        return tuple(catalogue for catalogue in catalogues if catalogue.resolved)
+    def every_source(self, system: str) -> SourceCatalogues:
+        """This catalogue and each further source's, a reading that did not happen named by its source instead."""
+        resolvers = (self, *self.other_sources)
+        catalogues = [(resolver.source, resolver(system)) for resolver in resolvers]
+        return SourceCatalogues(
+            read=tuple(catalogue for _source, catalogue in catalogues if catalogue.resolved),
+            unread=frozenset(source for source, catalogue in catalogues if not catalogue.resolved and source),
+        )
 
     def source_roots(self) -> dict[str, SourceRoots | None]:
         """Every source's roots by kind."""

@@ -35,7 +35,7 @@ from fakes.system_time import FakeClock
 from adapters.firmware_file import FirmwareFileAdapter
 from domain.bios_file import BiosFile
 from domain.firmware_wants import IDENTITY_ARCHIVE, IDENTITY_FILE, FolderFile
-from domain.platform_system import NO_SYSTEM, PlatformSystem
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, UNASKED, PlatformSystem
 from domain.source_roots import SourceRoot, SourceRoots
 from lib.errors import Refused
 from services.firmware import FirmwareService, FirmwareServiceConfig
@@ -87,15 +87,23 @@ class _Romm:
 
 class _LaunchReadingResolver(FakeFirmwareResolver):
     """The fake, with the source's launch reading — the emulators it states are not installed, per system where
-    ``not_installed_in`` names one — and whether its catalogue is sealed."""
+    ``not_installed_in`` names one — whether its catalogue is sealed, everywhere or for the systems in
+    ``sealed_in``, and the systems in ``unread_in`` whose reading did not happen."""
 
     not_installed: frozenset[str] = frozenset()
     not_installed_in: dict[str, frozenset[str]] = {}  # noqa: RUF012 - replaced whole by a test, never mutated
     sealed: bool = False
+    sealed_in: frozenset[str] = frozenset()
+    unread_in: frozenset[str] = frozenset()
 
     def __call__(self, system: str | None = None):
         missing = self.not_installed_in.get(system or "", self.not_installed)
-        return replace(super().__call__(system), not_installed=missing, sealed=self.sealed)
+        catalogue = replace(
+            super().__call__(system), not_installed=missing, sealed=self.sealed or system in self.sealed_in
+        )
+        if system in self.unread_in:
+            return replace(catalogue, placements=(), resolved=False, source=None, roots=None)
+        return catalogue
 
 
 @dataclass
@@ -155,11 +163,13 @@ def machine(tmp_path) -> _Machine:
     uows = FakeUnitOfWorkFactory(uow)
     clock = FakeClock(now=datetime(2026, 10, 21, 20, 0, 0, tzinfo=UTC))
     logger = logging.getLogger("test")
+    platform_systems = FakePlatformSystems()
     store = FirmwareStore(
         config=FirmwareStoreConfig(
             romm_api=romm,
             firmware_file_store=files,
             platform_firmware_resolver=resolver,
+            platform_systems=platform_systems,
             prepare_folder=lambda: str(tender),
             uow_factory=uows,
             clock=clock,
@@ -168,7 +178,6 @@ def machine(tmp_path) -> _Machine:
         )
     )
     core_info = FakeCoreInfoProvider(options=[libretro_option("yabasanshiro_libretro", "YabaSanshiro")])
-    platform_systems = FakePlatformSystems()
     service = FirmwareService(
         config=FirmwareServiceConfig(
             romm_api=romm,
@@ -879,6 +888,178 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         assert row["replace_offered"] is False
         assert refused.value.reason == "not_replaceable"
         assert place.read_bytes() == b"a wrong image"
+
+
+_BOOT = b"gb boot rom"
+
+
+class TestALinkAnotherPlatformMayStillWant:
+    """Game Boy's link at a place Game Boy Color's emulator wants too, once no emulator of Game Boy's wants it."""
+
+    async def _unwanted_on_gb(self, machine: _Machine) -> Path:
+        place = machine.bios / "gb_bios.bin"
+        machine.romm.add(1, "gb", "gb_bios.bin", _BOOT)
+        machine.resolver.declare(
+            "gb_bios.bin", required_by=[_YABA], place=str(place), identity_md5=_md5(_BOOT), identity_kind=IDENTITY_FILE
+        )
+        await machine.service.download_all_firmware("gb")
+        assert place.is_symlink()
+        machine.resolver.not_installed_in = {"gb": frozenset({_YABA})}
+        machine.platform_systems.library = frozenset({"gb", "gbc"})
+        return place
+
+    def _gbc_wants_nothing(self, machine: _Machine) -> None:
+        machine.resolver.not_installed_in = {"gb": frozenset({_YABA}), "gbc": frozenset({_YABA})}
+
+    def _stays(self, machine: _Machine, place: Path) -> None:
+        assert os.readlink(place) == str(machine.store_path("gb", "gb_bios.bin"))
+        assert str(place) in machine.links()
+
+    def _goes(self, machine: _Machine, place: Path) -> None:
+        assert not os.path.lexists(place)
+        assert str(place) not in machine.links()
+
+    async def test_a_listed_platform_without_store_files_that_wants_the_place_keeps_it(self, machine):
+        place = await self._unwanted_on_gb(machine)
+
+        await machine.service.update_bios_links("gb")
+
+        self._stays(machine, place)
+
+    async def test_it_goes_once_no_listed_platform_wants_it(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        self._gbc_wants_nothing(machine)
+
+        await machine.service.update_bios_links("gb")
+
+        self._goes(machine, place)
+
+    async def test_a_platform_whose_system_could_not_be_asked_keeps_it(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        self._gbc_wants_nothing(machine)
+        machine.platform_systems.answers["gbc"] = PlatformSystem(UNASKED, "gbc", "gbc", unasked="server_unreachable")
+
+        await machine.service.update_bios_links("gb")
+
+        self._stays(machine, place)
+
+    async def test_a_source_not_read_for_another_platforms_system_keeps_it(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        self._gbc_wants_nothing(machine)
+        machine.resolver.unread_in = frozenset({"gbc"})
+
+        await machine.service.update_bios_links("gb")
+
+        self._stays(machine, place)
+
+    async def test_without_a_kept_listing_of_the_librarys_platforms_it_stays(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        self._gbc_wants_nothing(machine)
+        machine.platform_systems.library = None
+
+        await machine.service.update_bios_links("gb")
+
+        self._stays(machine, place)
+
+    async def test_a_sealed_list_that_states_the_place_keeps_it(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        machine.resolver.sealed_in = frozenset({"gbc"})
+
+        await machine.service.update_bios_links("gb")
+
+        self._stays(machine, place)
+
+    async def test_a_platform_whose_system_is_switched_off_is_asked_all_the_same(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        machine.platform_systems.answers["gbc"] = PlatformSystem(SWITCHED_OFF, "gbc", "gbc", system="gbc")
+
+        await machine.service.update_bios_links("gb")
+
+        self._stays(machine, place)
+
+    async def test_a_platform_with_no_system_wants_nothing(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        machine.platform_systems.answers["gbc"] = PlatformSystem(NO_SYSTEM, "gbc", "gbc")
+
+        await machine.service.update_bios_links("gb")
+
+        self._goes(machine, place)
+
+    async def test_each_system_is_read_once_however_many_platforms_share_it(self, machine):
+        await self._unwanted_on_gb(machine)
+        self._gbc_wants_nothing(machine)
+        machine.platform_systems.library = frozenset({"gb", "gbc", "gbc-hacks"})
+        machine.platform_systems.mapping = {"gbc-hacks": "gbc"}
+        machine.resolver.calls.clear()
+
+        await machine.service.update_bios_links("gb")
+
+        assert machine.resolver.calls.count("gbc") == 1
+
+    async def test_the_asking_stops_once_every_link_is_known_to_be_wanted(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        machine.platform_systems.library = frozenset({"gb", "gbc", "sgb"})
+        machine.resolver.calls.clear()
+
+        await machine.service.update_bios_links("gb")
+
+        self._stays(machine, place)
+        assert "gbc" in machine.resolver.calls
+        assert "sgb" not in machine.resolver.calls
+
+    async def test_a_folder_another_platforms_emulator_reads_keeps_the_links_of_the_images_it_recognises(self, machine):
+        folder = machine.bios / "pcsx2" / "bios"
+        folder.mkdir(parents=True)
+        images = {"SCPH-39001.bin": b"usa", "SCPH-70004.bin": b"europe"}
+        machine.core_info.options = [libretro_option("pcsx2_libretro", "LRPS2")]
+        machine.resolver.declare(
+            "bios",
+            required_by=["pcsx2_libretro.so"],
+            place=str(folder),
+            relative_path="pcsx2/bios",
+            declares_directory=True,
+            folder_md5s=frozenset(_md5(data) for data in images.values()),
+        )
+        for firmware_id, (name, data) in enumerate(images.items(), start=1):
+            machine.romm.add(firmware_id, "ps2", name, data)
+        await machine.service.download_all_firmware("ps2")
+        machine.resolver.not_installed_in = {"ps2": frozenset({"pcsx2_libretro.so"})}
+        machine.platform_systems.library = frozenset({"ps2", "ps2-homebrew"})
+        # The folder another platform's emulator reads recognises the USA image only.
+        machine.resolver.placements = [
+            replace(placement, folder_md5s=frozenset({_md5(b"usa")})) for placement in machine.resolver.placements
+        ]
+
+        await machine.service.update_bios_links("ps2")
+
+        assert os.readlink(folder / "SCPH-39001.bin") == str(machine.store_path("ps2", "SCPH-39001.bin"))
+        assert not os.path.lexists(folder / "SCPH-70004.bin")
+
+    async def test_a_download_keeps_it_where_a_listed_platform_still_wants_it(self, machine):
+        place = await self._unwanted_on_gb(machine)
+
+        await machine.service.download_all_firmware("gb")
+
+        self._stays(machine, place)
+
+    async def test_a_replacement_keeps_it_where_a_listed_platform_still_wants_it(self, machine):
+        place = await self._unwanted_on_gb(machine)
+        other = machine.bios / "gb_colors.bin"
+        other.write_bytes(b"a wrong palette")
+        machine.romm.add(2, "gb", "gb_colors.bin", b"the right palette")
+        machine.resolver.declare(
+            "gb_colors.bin",
+            required_by=[_KRONOS],
+            place=str(other),
+            identity_md5=_md5(b"the right palette"),
+            identity_kind=IDENTITY_FILE,
+            checked="mismatch",
+        )
+
+        await machine.service.replace_bios_file("gb", str(other))
+
+        assert other.is_symlink()
+        self._stays(machine, place)
 
 
 class TestAPlaceAnotherPlatformsLinkServes:

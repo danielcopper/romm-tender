@@ -2537,9 +2537,10 @@ class TestEverySourceItIsPlacedIn:
             sources=_sources(traces, {"emulator_sources_off": ["emudeck"]}), log_debug=traces.append
         )
 
-        catalogues = adapter.every_source("gba")
+        reading = adapter.every_source("gba")
 
-        assert [catalogue.source for catalogue in catalogues] == ["retrodeck"]
+        assert [catalogue.source for catalogue in reading.read] == ["retrodeck"]
+        assert reading.unread == frozenset()
         assert emudeck.asked_for is None
 
     def test_a_sealed_catalogue_is_read_for_the_places_it_states(self, traces, monkeypatch):
@@ -2549,9 +2550,10 @@ class TestEverySourceItIsPlacedIn:
         _detect(monkeypatch, _detecting(retrodeck, emudeck))
         adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
-        catalogues = adapter.every_source("gba")
+        catalogues = adapter.every_source("gba").read
 
         assert [catalogue.source for catalogue in catalogues] == ["retrodeck", "emudeck"]
+        assert [catalogue.sealed for catalogue in catalogues] == [False, True]
         assert [placement.file_name for placement in catalogues[1].linkable()] == ["gba_bios.bin"]
 
     def test_the_rows_of_a_sealed_answering_catalogue_stay_withheld(self, traces, monkeypatch):
@@ -2587,7 +2589,7 @@ class TestEverySourceItIsPlacedIn:
         _detect(monkeypatch, _detecting(installation))
         adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
-        (catalogue,) = adapter.every_source("gba")
+        (catalogue,) = adapter.every_source("gba").read
 
         assert catalogue.not_installed == frozenset({"mgba_libretro.so"})
         assert sorted(placement.file_name for placement in catalogue.linkable()) == ["a.bin", "b.bin"]
@@ -2608,7 +2610,7 @@ class TestEverySourceItIsPlacedIn:
         _detect(monkeypatch, _detecting(_Launching(answer, availability={"cemu": rows})))
         adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
-        (catalogue,) = adapter.every_source("wiiu")
+        (catalogue,) = adapter.every_source("wiiu").read
 
         assert ("cemu" in catalogue.not_installed) is ruled_out
         assert [placement.file_name for placement in catalogue.linkable()] == ([] if ruled_out else ["keys.txt"])
@@ -2618,17 +2620,29 @@ class TestEverySourceItIsPlacedIn:
         _detect(monkeypatch, _detecting(installation))
         adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
-        (catalogue,) = adapter.every_source("gba")
+        (catalogue,) = adapter.every_source("gba").read
 
         assert catalogue.not_installed == frozenset()
         assert [placement.file_name for placement in catalogue.linkable()] == ["gba_bios.bin"]
 
-    def test_a_source_that_raised_is_left_out(self, traces, monkeypatch):
+    def test_a_source_that_raised_is_named_unread(self, traces, monkeypatch):
         retrodeck = _Installation(RuntimeError("boom"))
-        _detect(monkeypatch, _detecting(retrodeck))
+        emudeck = _Installation(_answer(_core(requirements=(_requirement(),))), kind="emudeck")
+        _detect(monkeypatch, _detecting(retrodeck, emudeck))
         adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
-        assert adapter.every_source("gba") == ()
+        reading = adapter.every_source("gba")
+
+        assert [catalogue.source for catalogue in reading.read] == ["emudeck"]
+        assert reading.unread == frozenset({"retrodeck"})
+
+    def test_a_source_that_names_no_root_is_named_unread(self, traces, monkeypatch):
+        _detect(monkeypatch, _detecting(_Installation(_answer(_core(requirements=(_requirement(),)), root=None))))
+        adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        reading = adapter.every_source("gba")
+
+        assert (reading.read, reading.unread) == ((), frozenset({"retrodeck"}))
 
 
 class TestIdentifyingContent:

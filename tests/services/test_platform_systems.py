@@ -198,3 +198,15 @@ class TestAnInstalledGame:
 
         assert service.rom_system("snes", None).state == NO_SYSTEM
         assert len(sources.asked) == 1
+
+
+class TestTheLibrarysPlatforms:
+    def test_they_are_every_platform_whose_ids_are_kept(self, service, uow_factory, romm):
+        _keep(uow_factory, json.dumps({"gb": {"igdb_id": 33}, "gbc": {"igdb_id": 22}}))
+
+        assert service.library_platforms() == frozenset({"gb", "gbc"})
+        assert _listing_reads(romm) == 0
+
+    def test_without_any_kept_there_is_no_answer(self, service, romm):
+        assert service.library_platforms() is None
+        assert _listing_reads(romm) == 0

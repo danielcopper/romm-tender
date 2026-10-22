@@ -25,7 +25,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from domain.firmware_places import place_refusal, plan_link_update, root_over
-from domain.firmware_rows import OwnedLinks, StoreCopy, wanted_links
+from domain.firmware_rows import OwnedLinks, StoreCopy, wanted_links, wants_place
 from domain.firmware_store import (
     BACKUP_FOLDER,
     STORE_FOLDER,
@@ -34,13 +34,15 @@ from domain.firmware_store import (
     backup_path,
     backup_stamp,
 )
+from domain.firmware_wants import SourceCatalogues
+from domain.platform_system import UNASKED
 from domain.rom_files import TMP_EXT
 from lib.errors import Refused, with_system_text
 from lib.path_safety import PathTraversalError, safe_join
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Mapping
 
     from domain.firmware_places import LinkUpdatePlan, PlaceLook, WantedLink
     from domain.source_roots import SourceRoots
@@ -48,6 +50,7 @@ if TYPE_CHECKING:
         Clock,
         FirmwareFileStore,
         FirmwarePlatformResolver,
+        PlatformSystems,
         PrepareTenderFolderFn,
         RommFirmwareApi,
         UnitOfWorkFactory,
@@ -63,7 +66,8 @@ class FirmwareStoreConfig:
 
     Holds the RomM API the bytes come from, the file store every look and
     write goes through, the resolver seam that answers each enabled source's
-    demand and roots, Tender's folder made ready for a write, the
+    demand and roots, the seam that answers which platforms the library holds
+    and the system each is, Tender's folder made ready for a write, the
     Unit-of-Work factory the records are kept through, the clock a record and
     a backup are stamped by, Tender's data folder the backups go under, and the
     logger.
@@ -72,6 +76,7 @@ class FirmwareStoreConfig:
     romm_api: RommFirmwareApi
     firmware_file_store: FirmwareFileStore
     platform_firmware_resolver: FirmwarePlatformResolver
+    platform_systems: PlatformSystems
     prepare_folder: PrepareTenderFolderFn
     uow_factory: UnitOfWorkFactory
     clock: Clock
@@ -137,6 +142,7 @@ class FirmwareStore:
         self._romm_api = config.romm_api
         self._files = config.firmware_file_store
         self._resolver = config.platform_firmware_resolver
+        self._platform_systems = config.platform_systems
         self._prepare_folder = config.prepare_folder
         self._uow_factory = config.uow_factory
         self._clock = config.clock
@@ -295,18 +301,16 @@ class FirmwareStore:
 
     # ── The links ────────────────────────────────────────────
 
-    def do_update_links(
-        self, platform_slug: str, system: str | None, system_of: Callable[[str], str | None]
-    ) -> LinkOutcome:
+    def do_update_links(self, platform_slug: str, system: str | None) -> LinkOutcome:
         """Bring *platform_slug*'s links up to date in every enabled source; download nothing.
 
         A platform with no system to ask about has no emulator to link for,
-        and only its records are looked at. *system_of* answers another
-        platform's system: before a link nobody on this platform wants goes,
-        the platforms Tender holds store files for are asked whether one of
-        their emulators still wants its place.
+        and only its records are looked at. Before a link nobody on this
+        platform wants goes, every other platform is asked whether it still
+        wants the place (:meth:`_kept_for_others`).
         """
-        catalogues = self._resolver.every_source(system) if system is not None else ()
+        reading = self._resolver.every_source(system) if system is not None else SourceCatalogues()
+        catalogues = reading.read
         records = self.do_read_records()
         copies = self.do_copies(records, platform_slug)
         owned = self.do_owned(records)
@@ -329,13 +333,14 @@ class FirmwareStore:
             catalogue.source for catalogue in catalogues if catalogue.source is not None and not catalogue.sealed
         )
         wanted_here = {want.place for want in wanted}
-        unwanted = any(
-            link.platform_slug == platform_slug
+        unwanted = {
+            (link.source, place): link
+            for place, link in records.links.items()
+            if link.platform_slug == platform_slug
             and link.source in judged
             and place not in blocked
             and place not in wanted_here
-            for place, link in records.links.items()
-        )
+        }
         plan = plan_link_update(
             platform_slug,
             wanted,
@@ -345,30 +350,54 @@ class FirmwareStore:
             records=records.links,
             blocked=frozenset(blocked),
             judged=judged,
-            wanted_elsewhere=self._wanted_elsewhere(platform_slug, records, system_of) if unwanted else frozenset(),
+            wanted_elsewhere=self._kept_for_others(platform_slug, system, records, unwanted),
         )
         return self._carry_out(plan)
 
-    def _wanted_elsewhere(
-        self, platform_slug: str, records: StoreRecords, system_of: Callable[[str], str | None]
+    def _kept_for_others(
+        self,
+        platform_slug: str,
+        system: str | None,
+        records: StoreRecords,
+        unwanted: Mapping[tuple[str, str], FirmwareLink],
     ) -> frozenset[tuple[str, str]]:
-        """Every place, by source, an emulator of another platform Tender holds store files for still wants.
+        """Which *unwanted* links, by source and place, another platform still wants — or might.
 
-        Only sources whose list was read whole are asked, and an emulator its
-        source states is not installed wants nothing.
+        Every platform RomM listed at the last sync is asked, and every one
+        Tender holds store files for, each system read once. An emulator its
+        source states is not installed wants nothing; a sealed list's places
+        are wanted. Where something could not be read — the listing was never
+        kept, a platform's system could not be asked, a source could not be
+        read — what it might want is kept, never counted as nothing.
         """
-        wanted: set[tuple[str, str]] = set()
-        for other in sorted({stored.platform_slug for stored in records.stored} - {platform_slug}):
-            system = system_of(other)
-            if system is None:
-                continue
-            copies = self.do_copies(records, other)
-            for catalogue in self._resolver.every_source(system):
-                if catalogue.sealed or catalogue.source is None:
-                    continue
-                for want, _placement in wanted_links(catalogue.linkable(), other, catalogue.source, copies):
-                    wanted.add((want.source, want.place))
-        return frozenset(wanted)
+        if not unwanted:
+            return frozenset()
+        listed = self._platform_systems.library_platforms()
+        if listed is None:
+            return frozenset(unwanted)
+        others = sorted((listed | {stored.platform_slug for stored in records.stored}) - {platform_slug})
+        systems: list[str] = []
+        for other in others:
+            answer = self._platform_systems.platform_system(other)
+            if answer.state == UNASKED:
+                return frozenset(unwanted)
+            if answer.system is not None and answer.system != system and answer.system not in systems:
+                systems.append(answer.system)
+        copies = {copy.file_name: copy for copy in self.do_copies(records, platform_slug)}
+        kept: set[tuple[str, str]] = set()
+        for other_system in systems:
+            reading = self._resolver.every_source(other_system)
+            kept.update(key for key in unwanted if key[0] in reading.unread)
+            for catalogue in reading.read:
+                placements = catalogue.linkable()
+                kept.update(
+                    (source, place)
+                    for (source, place), link in unwanted.items()
+                    if source == catalogue.source and wants_place(placements, place, copies.get(link.file_name))
+                )
+            if len(kept) == len(unwanted):
+                break
+        return frozenset(kept)
 
     def _carry_out(self, plan: LinkUpdatePlan) -> LinkOutcome:
         outcome = LinkOutcome(left_in_place=plan.left_in_place)

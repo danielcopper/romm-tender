@@ -111,6 +111,12 @@ class PlatformSystemService:
             return PlatformSystem(FOUND, platform_slug, platform_slug, system=install.system)
         return self.platform_system(platform_slug, reading=reading)
 
+    def library_platforms(self) -> frozenset[str] | None:
+        """Every platform whose ids are kept — each one RomM listed at the last sync — or ``None`` where none are."""
+        with self._uow_factory() as uow:
+            kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
+        return frozenset(kept) if kept is not None else None
+
     def _ids_and_name(self, platform_slug: str, *, ask_romm: bool) -> tuple[PlatformIds, str]:
         with self._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))

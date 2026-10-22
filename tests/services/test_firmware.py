@@ -204,6 +204,7 @@ def _make_firmware_service(
             romm_api=api,
             firmware_file_store=store,
             platform_firmware_resolver=resolver,
+            platform_systems=platform_systems if platform_systems is not None else FakePlatformSystems(),
             prepare_folder=prepare_folder,
             uow_factory=uows,
             clock=clock,

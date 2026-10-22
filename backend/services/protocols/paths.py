@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from domain.emulator_sources import ArrangedSource, SourceReport, SourcesReading
-    from domain.firmware_wants import FirmwareCatalogue
+    from domain.firmware_wants import FirmwareCatalogue, SourceCatalogues
     from domain.platform_system import PlatformIds, PlatformSystem
     from domain.retrodeck_folders import FolderRefused, MoveRoots
     from domain.rom_install import RomInstall
@@ -85,6 +85,10 @@ class PlatformSystems(Protocol):
         """The system a game is asked about: its install record's where it is installed, else the platform's."""
         ...
 
+    def library_platforms(self) -> frozenset[str] | None:
+        """Every platform RomM listed at the last sync, by slug; ``None`` where no listing was ever kept."""
+        ...
+
 
 class FirmwareResolver(Protocol):
     """Read what every installed libretro core wants, live off the machine.
@@ -128,8 +132,8 @@ class FirmwarePlatformResolver(Protocol):
         """*system*'s demand in the emulator source that answers for it."""
         ...
 
-    def every_source(self, system: str) -> tuple[FirmwareCatalogue, ...]:
-        """*system*'s demand in each enabled source whose answer could be read, in the user's order."""
+    def every_source(self, system: str) -> SourceCatalogues:
+        """*system*'s demand in each enabled source, in the user's order, and the sources that could not be read."""
         ...
 
     def source_roots(self) -> dict[str, SourceRoots | None]:

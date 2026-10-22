@@ -698,6 +698,18 @@ class FirmwareCatalogue:
         return emulator in self.emulator_verdicts and emulator not in self.unread_emulators
 
 
+@dataclass(frozen=True)
+class SourceCatalogues:
+    """One system's demand in each enabled source: the catalogues read, in the user's order, and the sources not read.
+
+    A source is not read where its reading raised or named no root. Nothing
+    it wants is known then, so nothing it might want may be ruled out.
+    """
+
+    read: tuple[FirmwareCatalogue, ...] = ()
+    unread: frozenset[str] = frozenset()
+
+
 def classify_wanted(placement: FirmwarePlacement | None, complete: bool) -> str:
     """Classify one server file against the catalogue — one of :data:`WANTED_VALUES`.
 
