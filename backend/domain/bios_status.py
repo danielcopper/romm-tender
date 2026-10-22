@@ -342,7 +342,7 @@ def build_file_entry(
         one_of=active.one_of,
         fetch_for_required=fetched_as_required(placement, launching_emulator, _groups_of(groups, launching_emulator)),
         supplied_by=placement.supplied_by if placement is not None else None,
-        satisfied=_row_verdict(placement, downloaded, dest),
+        satisfied=_row_verdict(placement),
         declared_kind=placement.declared_kind if placement is not None else DECLARED_FILE,
         declaration=placement.declaration if placement is not None else None,
         caveats=placement.caveats if placement is not None else (),
@@ -432,7 +432,7 @@ def _active_core_answer(cores: Mapping[str, dict[str, Any]], launching_emulator:
     )
 
 
-def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool, dest: str | None) -> bool | None:
+def _row_verdict(placement: FirmwarePlacement | None) -> bool | None:
     """Is this row's requirement met? ``None`` where nothing established it.
 
     Wherever an emulator declared the file it is the resolver's own verdict over
@@ -443,15 +443,9 @@ def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool, dest: st
     the folder HOLDS, never by the folder being there.
 
     A library file no emulator declared is no requirement of anything, so the
-    resolver has no verdict to give; with no *dest* to look at either — a library
-    row has no place — the verdict is withheld. Given a *dest* and no
-    declaration, it is whether a file was found there.
+    resolver has no verdict to give, and the verdict is withheld.
     """
-    if placement is not None:
-        return placement.satisfied
-    if dest is None:
-        return None
-    return downloaded
+    return placement.satisfied if placement is not None else None
 
 
 def count_required(
