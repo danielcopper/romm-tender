@@ -161,11 +161,11 @@ class RetroDeckFolders(Protocol):
     is not detected, and :func:`no_bios_root`'s refusal where a detected
     RetroDECK names no BIOS folder; :meth:`saves_root` answers ``None`` for
     both. Every removal question refuses where the resolver only assumed its
-    root, and none minds the switch. Where detecting the sources, or asking about RetroDECK's roots,
-    raised, every question refuses — a download only once RetroDECK is not
-    switched off, which it says first; a raise on a system's own folder
-    refuses only that system's folder. A refusal comes back as a value; the
-    caller that needed the folder raises it.
+    root, and none minds the switch. Where detecting the sources, or asking
+    about RetroDECK's roots, raised, every question refuses — a download only
+    once RetroDECK is not switched off, which it says first; a raise on a
+    system's own folder refuses only that system's folder. A refusal comes
+    back as a value; the caller that needed the folder raises it.
     :meth:`move_roots` is the move code's, ``None`` where RetroDECK is not
     detected. Every path is symlink-resolved.
     """

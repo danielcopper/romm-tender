@@ -30,8 +30,9 @@ function publish(attempts: Attempts): void {
 /**
  * What a download said about the rows: each link it could not place, by its
  * place, and each file it moved out of the store, by the file's name in RomM.
- * Replaces what an earlier download on the page said, as the latest attempt
- * is the one a row shows; what a "Replace…" said stays until the page is left.
+ * Replaces every link failure and moved file an earlier press left, as the
+ * latest attempt is the one a row shows; what a "Replace…" said stays until the
+ * page is left or another "Replace…" on that row says otherwise.
  */
 export function noteBiosPress(result: {
   link_failures?: readonly BiosLinkFailure[];
@@ -57,7 +58,7 @@ export function noteBiosPress(result: {
 /**
  * "Replace…" at *place* moved the old file to *backupPath*, and the links it
  * could not place. Those replace the links an earlier press could not place;
- * what else an earlier press said stays.
+ * what else an earlier press said stays, but an earlier failure on its own row.
  */
 export function noteReplaced(place: string, backupPath: string, linkFailures: readonly BiosLinkFailure[]): void {
   const attempts: Record<string, RowAttempt> = {};

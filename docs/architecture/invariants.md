@@ -1573,24 +1573,25 @@ Format: **invariant** — tier — enforced by.
   without making a new one: the RetroDECK home migration (`BiosFile.relocate`) and the refiling
   (`services/firmware/refiling.py`). A link is removed only while it still points at the store path its record names, so
   a link someone replaced by a file of their own is left alone; and only where its place may be touched — under a root
-  the resolver read, never under one it only assumed (D11, D20) — while an older download is removed only inside the
-  BIOS folder RetroDECK names now: one whose file is gone loses its record, one Tender may not reach keeps it while
-  RetroDECK's settings cannot be read, RetroDECK is not installed or it names no BIOS folder (D35), and one outside that
-  folder loses it and stays (D29). So the records are the delete's whole input: it iterates them, not a status listing.
-  The authorisations a reader reaches for instead are wrong in opposite directions. `downloaded` is the resolver's
-  presence at the row's place, equally true of firmware RetroDECK ships with its own components, which no RomM library
-  holds and nothing here can fetch back — an older delete authorised on presence did exactly that to
-  `<bios>/dolphin-emu/Sys/codehandler.bin` on a real device. `on_server` describes what the library holds _now_, not who
-  wrote the file: authorise on it and a file dropped from RomM after we downloaded it is stranded on disk. The count the
-  UI offers is bound to the same set: `deletable_count` on the `get_platform_firmware_status` payload counts every file
-  of this platform's store that Tender has a record of and that is on disk — a copy only another emulator uses and a
-  second copy of the same bytes included — and the older downloads still on disk, one a Delete could not reach included
-  (#2191 D29); each row carries the name its Delete is addressed by (`delete_name`) — its store file, the older download
-  of the library file that fills it, or the older download lying at its own place — which alone gates the row's Delete.
-  **Both buttons reach one removal** (`PlatformBiosDeleter._delete_io` over `FirmwareStore.do_remove`, under a name
-  selection per button): a second copy of that loop is the shape this rule is about, because the copies would drift
-  silently. **Nothing mechanical stands behind any of this.** A delete path looping a status list on `downloaded` alone
-  would go green — which is exactly the shape the older one had when it destroyed that file
+  the resolver read, never under one it only assumed or of a source whose roots could not be asked (D11, D20) — while an
+  older download is removed only inside the BIOS folder RetroDECK names now: one whose file is gone loses its record,
+  one Tender may not reach keeps it while RetroDECK's settings cannot be read, RetroDECK is not installed or it names no
+  BIOS folder (D35), and one outside that folder loses it and stays (D29). So the records are the delete's whole input:
+  it iterates them, not a status listing. The authorisations a reader reaches for instead are wrong in opposite
+  directions. `downloaded` is the resolver's presence at the row's place, equally true of firmware RetroDECK ships with
+  its own components, which no RomM library holds and nothing here can fetch back — an older delete authorised on
+  presence did exactly that to `<bios>/dolphin-emu/Sys/codehandler.bin` on a real device. `on_server` describes what the
+  library holds _now_, not who wrote the file: authorise on it and a file dropped from RomM after we downloaded it is
+  stranded on disk. The count the UI offers is bound to the same set: `deletable_count` on the
+  `get_platform_firmware_status` payload counts every file of this platform's store that Tender has a record of and that
+  is on disk — a copy only another emulator uses and a second copy of the same bytes included — and the older downloads
+  still on disk, one a Delete could not reach included (#2191 D29); each row carries the name its Delete is addressed by
+  (`delete_name`) — its store file, the older download of the library file that fills it, or the older download lying at
+  its own place — which alone gates the row's Delete. **Both buttons reach one removal**
+  (`PlatformBiosDeleter._delete_io` over `FirmwareStore.do_remove`, under a name selection per button): a second copy of
+  that loop is the shape this rule is about, because the copies would drift silently. **Nothing mechanical stands behind
+  any of this.** A delete path looping a status list on `downloaded` alone would go green — which is exactly the shape
+  the older one had when it destroyed that file
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

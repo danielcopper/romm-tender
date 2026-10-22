@@ -1638,9 +1638,9 @@ proven right by its checksum (D5): the copy is fetched and checked first, the fi
 `<Tender's data folder>/backups/bios/<date and time>/<its original absolute path>` (D17), and the link takes its place.
 Where the link cannot be placed, the old file goes back only while its place is still free, and stays in the backup
 folder otherwise; the refusal (`replace_failed`) says which (D33, D34). Neither the backup nor the put-back lands over
-anything: the file adapter claims the new name by creating it — a link as itself, a file by a hardlink, or where none
-can be made by a copy flushed to disk — before the old name goes (`FirmwareFileAdapter.move_aside`). "Download required"
-never replaces anything.
+anything: the file adapter claims the new name by creating it — a link as itself, a file by a hardlink, or, where none
+can be made, by a copy flushed to disk — before the old name goes (`FirmwareFileAdapter.move_aside`). "Download
+required" never replaces anything.
 
 **Removing** takes Tender's own files and links only: a row's Delete removes the store file and every link of Tender's
 to it, the platform's Delete every store file of the platform and their links (D3). A Delete is never refused because a

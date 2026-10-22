@@ -351,13 +351,13 @@ class FirmwareStatusReader:
         Two kinds of Tender's own files are deletable, and only those: a file
         of this platform's store Tender has a record of, and a file Tender
         downloaded into an emulator source's folder before the store existed,
-        which its download record names at the path it was written to. A row's Delete takes the
-        store file that fills it, the older download of the library file that
-        does, or the older download lying at the row's own place, by the name
-        each carries, which is the file's name in RomM — ``delete_name``. The
-        platform count is the distinct paths of both kinds still on disk.
-        Nothing here is ``downloaded``: that is the resolver's presence at the
-        row's place, equally true of a file the user placed.
+        which its download record names at the path it was written to. A row's
+        Delete takes the store file that fills it, the older download of the
+        library file that does, or the older download lying at the row's own
+        place, by the name each carries, which is the file's name in RomM —
+        ``delete_name``. The platform count is the distinct paths of both kinds
+        still on disk. Nothing here is ``downloaded``: that is the resolver's
+        presence at the row's place, equally true of a file the user placed.
         """
         mine = [record for record in records if record.platform_slug == platform_slug]
         present = [record for record in mine if self._firmware_file_store.exists(record.file_path)]
