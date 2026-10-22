@@ -5082,7 +5082,7 @@ describe("Library › Platforms", () => {
         success: true,
         deleted_count: 1,
         message: "Deleted 1 BIOS file(s)",
-        kept: [{ kind: "link", place: "/r/bios/gba_bios.bin", folder: "/r/bios" }],
+        kept: [{ kind: "link", place: "/r/bios/gba_bios.bin", folder: "/r/bios", source: "retrodeck" }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -5095,6 +5095,28 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(within(container).getByTestId("status-bios").textContent).toBe(`Deleted 1 BIOS file(s)\n${KEPT}`);
+    });
+
+    it("says after a batch with a failure what it left in place too", async () => {
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
+        success: true,
+        message: "Downloaded 1 firmware files (1 failed: b.bin)",
+        downloaded: 1,
+        failed: ["b.bin"],
+        placed: 2,
+        left_in_place: 1,
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download all")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(within(container).getByTestId("status-bios").textContent).toBe(
+        "Downloaded 1 firmware files (1 failed: b.bin)\n2 placed, 1 left in place: another file lies there",
+      );
     });
 
     it("says after a download which file it moved aside", async () => {

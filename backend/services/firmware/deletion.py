@@ -10,20 +10,24 @@ elsewhere, or what the library currently offers.
 
 A row's Delete and the platform-wide Delete share the ONE removal below, and
 differ only in which names they select: a second copy of the loop is what the
-register's BIOS-delete rule warns about, since the copies would drift silently,
-and this is the loop that once destroyed a user's file.
+register's BIOS-delete rule warns about, since the copies would drift silently.
 
 A Delete is never refused because a place cannot be reached. A link under a
 root the resolver only assumed — or under none it could judge — stays where it
 is, keeps its record, and the answer names it; so does an older download
-outside the BIOS folder RetroDECK names now, or while it names none.
+outside the BIOS folder RetroDECK names now, or while it names none, which
+stays counted so its Delete stays offered. Each kept entry names its ``kind``,
+its place, the folder it was kept in and the source whose settings could not
+be read; an older download also names its file.
 """
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import FolderRefused
 from lib.partial_failure import PartialFailure
 from lib.path_safety import is_inside_folder
@@ -83,11 +87,12 @@ class PlatformBiosDeleter:
         """Remove *platform_slug*'s store files and older downloads named in *names* — every one for ``None``.
 
         The one removal, deliberately: both buttons reach it, and they differ
-        only in which names they select. Runs in an executor; the older records
-        are read in one short UoW before any file is touched and the rows they
-        leave behind dropped in one after it (ADR-0006). An older download
-        whose file is already gone is not a deletion and not an error — its
-        record is dropped and nothing is counted.
+        only in which names they select. Runs in an executor: the store's files
+        and links go first, then the older records are read in one short UoW
+        and the rows they leave behind dropped in one after their files go
+        (ADR-0006). An older download whose file is already gone is not a
+        deletion and not an error — its record is dropped and nothing is
+        counted.
 
         Answers what was removed, what stays and why, and what could not be
         removed.
@@ -101,7 +106,13 @@ class PlatformBiosDeleter:
                 continue
             if bound is None or isinstance(bound, FolderRefused) or not is_inside_folder(record.file_path, bound):
                 kept.append(
-                    {"kind": "file", "place": record.file_path, "folder": bound if isinstance(bound, str) else None}
+                    {
+                        "kind": "file",
+                        "place": record.file_path,
+                        "folder": os.path.dirname(record.file_path),
+                        "source": RETRODECK,
+                        "file_name": record.file_name,
+                    }
                 )
                 continue
             if self._files.exists(record.file_path):
@@ -138,7 +149,12 @@ class PlatformBiosDeleter:
             return FirmwareDeletionIncomplete(
                 reason="delete_incomplete", message=f"Could not delete {errors[0]}", deleted_count=deleted
             )
-        message = f"Deleted {file_name}" if deleted else f"Nothing to delete for {file_name}"
+        if deleted:
+            message = f"Deleted {file_name}"
+        elif kept:
+            message = f"Left {file_name} where it is"
+        else:
+            message = f"Nothing to delete for {file_name}"
         return {"success": True, "deleted_count": deleted, "message": message, "kept": kept}
 
     async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
@@ -151,5 +167,5 @@ class PlatformBiosDeleter:
                 message=f"Deleted {deleted} file(s), {len(errors)} error(s)",
                 deleted_count=deleted,
             )
-        message = f"Deleted {deleted} BIOS file(s)" if deleted else "No BIOS files for this platform"
+        message = f"Deleted {deleted} BIOS file(s)" if deleted or kept else "No BIOS files for this platform"
         return {"success": True, "deleted_count": deleted, "message": message, "kept": kept}

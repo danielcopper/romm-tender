@@ -671,7 +671,7 @@ class TestDeleting:
 
         assert not machine.store_path("saturn", "sega_101.bin").exists()
         assert os.path.lexists(machine.bios / "saturn_bios.bin")
-        assert {kept["kind"] for kept in result["kept"]} == {"link"}
+        assert {(kept["kind"], kept["source"]) for kept in result["kept"]} == {("link", "retrodeck")}
         assert {kept["place"] for kept in result["kept"]} == {
             str(machine.bios / "saturn_bios.bin"),
             str(machine.bios / "kronos" / "saturn_bios.bin"),

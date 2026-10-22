@@ -13,6 +13,7 @@
  */
 
 import type { BiosFileStatus, BiosKeptLink, StoreOnly } from "../types";
+import { sourceName } from "./emulatorSourceWording";
 
 /** The fields the lines are read off — both surfaces' row shapes carry them. */
 export type PlaceRow = Pick<
@@ -125,20 +126,29 @@ export function storeOnlySentence(
 }
 
 /**
- * The delete's lines for the links it left, one per folder: a link under a
- * root RetroDECK's settings did not name stays until they can be read. A
- * folder the answer does not know is the one the link lies in.
+ * The delete's lines for what it left: one per folder for the links, which
+ * Tender removes by itself once the source's settings can be read, and one per
+ * older download, which stays until it is deleted again. A folder the answer
+ * does not know is the one the link lies in.
  */
-export function keptLinkLines(kept: readonly BiosKeptLink[] | undefined): string[] {
-  const folders = new Set<string>();
+export function keptLines(kept: readonly BiosKeptLink[] | undefined): string[] {
+  const links = new Map<string, string>();
+  const files: string[] = [];
   for (const entry of kept ?? []) {
-    if (entry.kind !== "link") continue;
-    folders.add(entry.folder ?? entry.place.slice(0, Math.max(entry.place.lastIndexOf("/"), 0)));
+    const settings = `${sourceName(entry.source)}'s settings could not be read.`;
+    if (entry.kind === "file") {
+      files.push(
+        `Left ${entry.file_name ?? entry.place} in ${entry.folder}: ${settings} Delete it again once they can be read.`,
+      );
+      continue;
+    }
+    const folder = entry.folder ?? entry.place.slice(0, Math.max(entry.place.lastIndexOf("/"), 0));
+    links.set(
+      `${entry.source}|${folder}`,
+      `Left a link in ${folder}: ${settings} Tender removes it once they can be read.`,
+    );
   }
-  return [...folders].map(
-    (folder) =>
-      `Left a link in ${folder}: RetroDECK's settings could not be read. Tender removes it once they can be read.`,
-  );
+  return [...links.values(), ...files];
 }
 
 /** The download's lines for each file it found in the store without a record and moved aside before fetching. */

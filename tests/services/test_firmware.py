@@ -764,11 +764,23 @@ class TestWhileRetroDeckIsSwitchedOff:
         fw._deletion._files = FirmwareFileAdapter()
 
         result = await fw.delete_bios_file("dc", "dc_boot.bin")
+        entry = (await fw.get_platform_firmware_status("dc"))["platform"]
 
         assert isinstance(result, dict)
-        assert result["kept"] == [{"kind": "file", "place": str(bios), "folder": None}]
+        assert result["kept"] == [
+            {
+                "kind": "file",
+                "place": str(bios),
+                "folder": str(bios.parent),
+                "source": "retrodeck",
+                "file_name": "dc_boot.bin",
+            }
+        ]
+        assert "Nothing to delete" not in result["message"]
         assert bios.exists()
         assert firmware.uow.bios_files.get("dc", "dc_boot.bin") is not None
+        # Still counted, so its Delete stays offered.
+        assert entry["deletable_count"] == 1
 
 
 class TestDestinationReadingsReachBothSurfaces:

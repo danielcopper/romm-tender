@@ -116,8 +116,8 @@ class LinkOutcome:
 class RemovalOutcome:
     """What removing store files did: how many went, the links kept and why, and what could not be removed.
 
-    Each kept entry names its ``kind`` (``link``), its place and the folder it
-    was kept in, where one is known.
+    Each kept entry names its ``kind`` (``link``), its place, the folder it was
+    kept in where one is known, and the source the link lies in.
     """
 
     deleted: int = 0
@@ -424,7 +424,12 @@ class FirmwareStore:
                 source_roots = roots.get(link.source)
                 if _blocked(link.place, source_roots):
                     outcome.kept.append(
-                        {"kind": "link", "place": link.place, "folder": _assumed_folder(link.place, source_roots)}
+                        {
+                            "kind": "link",
+                            "place": link.place,
+                            "folder": _assumed_folder(link.place, source_roots),
+                            "source": link.source,
+                        }
                     )
                     continue
                 if self._files.look(link.place).link_target == path:

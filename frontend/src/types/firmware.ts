@@ -256,14 +256,18 @@ export interface PlaceRefusal {
  */
 export type StoreOnly = "unsupported" | "no_source";
 
-/** What a Delete left in place, because its folder may not be touched now: a
- *  link of Tender's into the store, or a file an older version downloaded into
- *  RetroDECK's BIOS folder. `folder` is the root it lies under, where one is
- *  known. */
+/** What a Delete left in place, because the root it lies under could not be
+ *  read: a link of Tender's into the store, or a file an older version
+ *  downloaded into RetroDECK's BIOS folder. `folder` is the root a link lies
+ *  under, where one is known, and the folder an older download lies in;
+ *  `source` is the emulator source whose settings could not be read. */
 export interface BiosKeptLink {
   kind: "link" | "file";
   place: string;
   folder: string | null;
+  source: string;
+  /** The older download's name in RomM; a link names none. */
+  file_name?: string;
 }
 
 /** A link a placement could not create, and the system's reason. */

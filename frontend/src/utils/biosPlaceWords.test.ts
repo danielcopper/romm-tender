@@ -8,7 +8,7 @@ import {
   DOWNLOAD_DAMAGED,
   backupLines,
   biosPlaceLines,
-  keptLinkLines,
+  keptLines,
   libraryRowLines,
   placedSentence,
   storeOnlySentence,
@@ -168,23 +168,29 @@ describe("placedSentence", () => {
   });
 });
 
-describe("keptLinkLines", () => {
-  it("says once per folder that a link stays until RetroDECK's settings can be read", () => {
-    const lines = keptLinkLines([
-      { kind: "link", place: "/r/bios/a.bin", folder: "/r/bios" },
-      { kind: "link", place: "/r/bios/kronos/b.bin", folder: "/r/bios" },
-      { kind: "link", place: "/e/bios/c.bin", folder: null },
+describe("keptLines", () => {
+  it("says once per folder that a link stays until the source's settings can be read", () => {
+    const lines = keptLines([
+      { kind: "link", place: "/r/bios/a.bin", folder: "/r/bios", source: "retrodeck" },
+      { kind: "link", place: "/r/bios/kronos/b.bin", folder: "/r/bios", source: "retrodeck" },
+      { kind: "link", place: "/e/bios/c.bin", folder: null, source: "emudeck" },
     ]);
 
     expect(lines).toEqual([
       "Left a link in /r/bios: RetroDECK's settings could not be read. Tender removes it once they can be read.",
-      "Left a link in /e/bios: RetroDECK's settings could not be read. Tender removes it once they can be read.",
+      "Left a link in /e/bios: EmuDeck's settings could not be read. Tender removes it once they can be read.",
     ]);
   });
 
-  it("says nothing of a file it kept, or where it kept nothing", () => {
-    expect(keptLinkLines([{ kind: "file", place: "/r/bios/a.bin", folder: null }])).toEqual([]);
-    expect(keptLinkLines(undefined)).toEqual([]);
+  it("says an older download stays until it is deleted again", () => {
+    const lines = keptLines([
+      { kind: "file", place: "/r/bios/dc_boot.bin", folder: "/r/bios", source: "retrodeck", file_name: "dc_boot.bin" },
+    ]);
+
+    expect(lines).toEqual([
+      "Left dc_boot.bin in /r/bios: RetroDECK's settings could not be read. Delete it again once they can be read.",
+    ]);
+    expect(keptLines(undefined)).toEqual([]);
   });
 });
 

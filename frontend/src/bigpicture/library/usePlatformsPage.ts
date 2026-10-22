@@ -59,7 +59,7 @@ import type {
   SystemCoreInfo,
 } from "../../types";
 import type { RowAttempt } from "../../utils/biosPlaceWords";
-import { backupLines, keptLinkLines, placedSentence } from "../../utils/biosPlaceWords";
+import { backupLines, keptLines, placedSentence } from "../../utils/biosPlaceWords";
 import { detach } from "../../utils/detach";
 import { emulatorName } from "../../utils/emulatorEntries";
 import { batchConfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
@@ -870,7 +870,8 @@ export function usePlatformsPage(): PlatformsPageState {
               if (result.downloaded > 0 || (result.placed ?? 0) > 0) announceBiosChange(slug);
               const failed = result.failed ?? [];
               const lines = [
-                failed.length > 0 ? result.message : placedSentence(result),
+                failed.length > 0 ? result.message : null,
+                placedSentence(result),
                 ...backupLines(result.backups),
               ].filter((line) => line !== null);
               if (lines.length > 0) setStatus({ slug, scope: "bios", text: lines.join("\n") });
@@ -970,7 +971,7 @@ export function usePlatformsPage(): PlatformsPageState {
         (async () => {
           try {
             const result = await deletePlatformBios(slug);
-            const kept = result.success ? keptLinkLines(result.kept) : [];
+            const kept = result.success ? keptLines(result.kept) : [];
             setStatus({ slug, scope: "bios", text: [result.message, ...kept].join("\n") });
             // A `delete_incomplete` may have removed files or dropped records
             // before the file it stopped on, so the rows are re-read as after a
@@ -1001,7 +1002,7 @@ export function usePlatformsPage(): PlatformsPageState {
         (async () => {
           try {
             const result = await work();
-            const kept = result.success ? keptLinkLines(result.kept) : [];
+            const kept = result.success ? keptLines(result.kept) : [];
             if (!result.success) setStatus({ slug, scope: "bios", text: result.message });
             else if (kept.length > 0) setStatus({ slug, scope: "bios", text: kept.join("\n") });
             if (result.success || result.reason === "delete_incomplete") {
