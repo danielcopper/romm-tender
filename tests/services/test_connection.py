@@ -6,7 +6,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts, _refused_by_conflict_rule
@@ -90,6 +90,7 @@ def _make_service(
     settings_persister: MagicMock | None = None,
     min_required_version: tuple[int, ...] = _MIN_VERSION,
     forget_device: MagicMock | None = None,
+    register_device: AsyncMock | None = None,
     clear_playtime_scope_notice: MagicMock | None = None,
     conflict_rules: ConflictRuleSet | None = None,
 ) -> ConnectionService:
@@ -102,6 +103,7 @@ def _make_service(
             logger=logger,
             min_required_version=min_required_version,
             forget_device=forget_device if forget_device is not None else MagicMock(),
+            register_device=register_device if register_device is not None else AsyncMock(),
             clear_playtime_scope_notice=(
                 clear_playtime_scope_notice if clear_playtime_scope_notice is not None else MagicMock()
             ),

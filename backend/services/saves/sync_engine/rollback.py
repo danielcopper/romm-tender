@@ -23,21 +23,21 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import parse_iso_to_epoch
-from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_path import sanitize_save_filename
 from domain.save_slot import filter_saves_to_slot
-from lib.errors import DeviceNotRegisteredError, NamedRefused, NotInstalled, Refused
+from lib.errors import NamedRefused, NotInstalled, Refused
 from services.saves._helpers import local_save_target
-from services.saves._messages import DEVICE_NOT_REGISTERED
 from services.saves._refusals import shape_refusal
-from services.saves._save_state import write_save_state
+from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import resolve_default_slot
 
 if TYPE_CHECKING:
     import asyncio
     import logging
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
+    from domain.live_device_id import LiveDeviceId
+    from domain.rom_save_sync_state import RomSaveSyncState
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         Clock,
@@ -48,7 +48,6 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
-    from services.saves.sync_engine.devices import DeviceRegistry
     from services.saves.sync_engine.matrix import MatrixExecutor
 
 
@@ -75,7 +74,7 @@ class RollbackOrchestrator:
         *,
         uow_factory: UnitOfWorkFactory,
         rom_info: RomInfoService,
-        device_registry: DeviceRegistry,
+        live_device_id: Callable[[], Awaitable[LiveDeviceId]],
         romm_api: RommSyncApi,
         matrix: MatrixExecutor,
         retry: RetryStrategy,
@@ -88,7 +87,7 @@ class RollbackOrchestrator:
     ) -> None:
         self._uow_factory = uow_factory
         self._rom_info = rom_info
-        self._device_registry = device_registry
+        self._live_device_id = live_device_id
         self._romm_api = romm_api
         self._matrix = matrix
         self._retry = retry
@@ -98,12 +97,6 @@ class RollbackOrchestrator:
         self._log_debug = log_debug
         self._resolve_core = resolve_core
         self._settings = settings
-
-    def _read_inputs(self, rom_id: int) -> tuple[RomSaveSyncState, str | None]:
-        """Short read UoW: load the ROM's save state + device id."""
-        with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
-        return state, self._device_registry.get_device_id()
 
     async def resolve(
         self,
@@ -124,7 +117,8 @@ class RollbackOrchestrator:
         through ``SyncEngine.rom_lock(rom_id)``. *save_answer* is the reading
         the caller's entry gate took, used here instead of a second one.
 
-        Raises its refusals; a RomM error from listing the server's saves or
+        Raises its refusals, ``SyncEngine.live_device_id``'s among them, taken
+        before the server's saves are listed; a RomM error from listing them or
         from the transfer propagates, and an ``OSError`` from the local side
         refuses with ``resolve_failed``.
         """
@@ -147,7 +141,8 @@ class RollbackOrchestrator:
         if saves_dir is None:
             raise shape_refusal(info["save_answer"])
 
-        save_state, device_id = await loop.run_in_executor(None, self._read_inputs, rom_id)
+        save_state = await loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
+        device_id = await self._live_device_id()
 
         server_saves = await loop.run_in_executor(
             None,
@@ -216,15 +211,6 @@ class RollbackOrchestrator:
                 action,
             )
             return {"success": True, "action": action}
-        except DeviceNotRegisteredError as e:
-            # keep_local's POST hit the do_upload_save device-registration guard:
-            # refuse with the reason and message the automatic pre-flight uses.
-            self._logger.warning(
-                "resolve_sync_conflict(rom_id=%d, action=%s): no registered device — refusing keep_local upload",
-                rom_id,
-                action,
-            )
-            raise Refused("device_not_registered", DEVICE_NOT_REGISTERED) from e
         except OSError as e:
             self._logger.error(f"resolve_sync_conflict({rom_id}, {filename}, {action}) failed: {e}")
             raise Refused("resolve_failed", str(e)) from e
@@ -252,7 +238,7 @@ class RollbackOrchestrator:
     def _resolve_conflict_use_server(
         self,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         server: dict[str, Any],
         saves_dir: str,
         system: str,
@@ -274,7 +260,7 @@ class RollbackOrchestrator:
         self,
         rom_id: int,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         core_so: str | None,
         server: dict[str, Any],
         saves_dir: str,

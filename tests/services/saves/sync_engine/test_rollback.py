@@ -152,42 +152,6 @@ class TestResolveSyncConflict:
         assert file_state.last_sync_hash == local_hash
 
     @pytest.mark.asyncio
-    async def test_resolve_keep_local_refuses_without_device_id(self, tmp_path):
-        """keep_local with no registered device refuses with ``device_not_registered``.
-
-        The refusal carries that reason and its message, and ``upload_save`` is
-        never called.
-        """
-        svc, fake = make_service(tmp_path)
-        # No device registered — get_device_id() returns None.
-        _install_rom(svc, tmp_path)
-        _seed_save_state(svc, 42, RomSaveSyncState(system="gba", active_slot="default", slot_confirmed=True))
-        _create_save(tmp_path, content=b"local-edited")  # on-disk local save keep_local reads
-
-        ss = _server_save_with_syncs(
-            slot="default",
-            device_syncs=[{"device_id": "device-1", "is_current": False}],
-        )
-        # Server content differs from local → keep_local proceeds to the upload.
-        other = tmp_path / "other.bin"
-        other.write_bytes(b"server-flavor")
-        fake.saves[100] = ss
-        fake.uploaded_files[100] = str(other)
-
-        resolving = svc.resolve_sync_conflict(
-            rom_id=42,
-            filename="pokemon.srm",
-            server_save_id=100,
-            action="keep_local",
-        )
-
-        with pytest.raises(Refused) as caught:
-            await resolving
-
-        assert (caught.value.reason, caught.value.message) == ("device_not_registered", "Device not registered")
-        assert not any(c[0] == "upload_save" for c in fake.call_log)
-
-    @pytest.mark.asyncio
     async def test_resolve_keep_local_falls_back_when_server_hash_fetch_raises(self, tmp_path):
         """When ``_get_server_save_hash`` raises out of retry (retries exhausted),
         the keep_local resolver swallows it and treats ``server_hash`` as ``None``.
@@ -347,7 +311,7 @@ class TestResolveSyncConflict:
         _seed_save_state(svc, 42, original_state)
 
         failure = RommApiError("network")
-        fake.fail_on_next(failure)
+        fake.fail_next_list_saves(failure)
         resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
@@ -375,7 +339,7 @@ class TestResolveSyncConflict:
         )
         _seed_save_state(svc, 42, original_state)
 
-        fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        fake.fail_next_list_saves(RommNotFoundError("HTTP 404: Not Found"))
         resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",

@@ -235,24 +235,6 @@ class DeviceWriteError(OSError):
     """
 
 
-class DeviceNotRegisteredError(Exception):
-    """A save upload was attempted with no registered device id.
-
-    A client-side precondition failure, not a RomM HTTP error (hence a plain
-    ``Exception``, outside the :class:`RommApiError` hierarchy). Every RomM
-    version Tender accepts has Device Sync, so a registered device is the norm and a
-    missing id is a fault. RomM runs ``add_save``'s write-time 409 gates, and
-    records the calling device's sync row on ``add_save`` and ``update_save``,
-    only when a device is named (``endpoints/saves.py``, read at 5.3.0), so a
-    device-less upload would skip the conflict backstop the save sync relies on
-    and leave this device's sync row unwritten; the upload is refused rather
-    than sent. Save-sync funnels catch it and surface the
-    ``device_not_registered`` reason slug — they own the slug/message (a
-    save-sync concern) since ``lib`` cannot import the service-layer message
-    constants.
-    """
-
-
 def with_system_text(sentence: str, exc: OSError) -> str:
     """*sentence* with the system's own words for *exc* appended — ``… (No space left on device)``.
 

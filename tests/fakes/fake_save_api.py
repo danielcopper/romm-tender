@@ -72,6 +72,7 @@ class FakeSaveApi:
         self._next_save_id = 1000
         self._next_play_session_id = 3000
         self._fail_on_next: Exception | None = None
+        self._fail_next_list_saves: Exception | None = None
         self._fail_download_on: dict[int, Exception] = {}  # save_id -> exc for download_save_content
         # save_id -> (exc, bytes written to the destination before it is raised)
         self._break_download_on: dict[int, tuple[Exception, bytes]] = {}
@@ -97,6 +98,14 @@ class FakeSaveApi:
     def fail_on_next(self, exc: Exception) -> None:
         """Make the next call raise the given exception."""
         self._fail_on_next = exc
+
+    def fail_next_list_saves(self, exc: Exception) -> None:
+        """Make the next ``list_saves`` raise *exc*, whatever is asked of RomM before it.
+
+        ``fail_on_next`` fails the next call of any kind, and every save operation
+        touches the device registration first, so it cannot reach the listing.
+        """
+        self._fail_next_list_saves = exc
 
     def fail_download_on(self, save_id: int, exc: Exception) -> None:
         """Make ``download_save_content`` raise *exc* for a specific *save_id*.
@@ -572,6 +581,9 @@ class FakeSaveApi:
         slot: str | None = None,
     ) -> list[dict[str, Any]]:
         self.call_log.append(("list_saves", (rom_id,), {"device_id": device_id, "slot": slot}))
+        if self._fail_next_list_saves is not None:
+            exc, self._fail_next_list_saves = self._fail_next_list_saves, None
+            raise exc
         self._check_fail()
         saves = [s for s in self.saves.values() if s.get("rom_id") == rom_id]
         if slot is not None:

@@ -758,7 +758,7 @@ class TestGetSaveSetupInfo:
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
-        fake.fail_on_next(RommApiError(500, "Server error"))
+        fake.fail_next_list_saves(RommApiError(500, "Server error"))
 
         result = await svc.get_save_setup_info(42)
         assert result["has_local_saves"] is True
@@ -775,7 +775,7 @@ class TestGetSaveSetupInfo:
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
-        fake.fail_on_next(OSError("Connection refused"))
+        fake.fail_next_list_saves(OSError("Connection refused"))
 
         result = await svc.get_save_setup_info(42)
         assert result["recommended_action"] == "server_unreachable"
@@ -789,7 +789,7 @@ class TestGetSaveSetupInfo:
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
-        fake.fail_on_next(RommRateLimitedError("Rate limited"))
+        fake.fail_next_list_saves(RommRateLimitedError("Rate limited"))
 
         result = await svc.get_save_setup_info(42)
         assert result["recommended_action"] == "romm_refused"
@@ -812,7 +812,7 @@ class TestGetSaveSetupInfo:
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
-        fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        fake.fail_next_list_saves(RommNotFoundError("HTTP 404: Not Found"))
 
         result = await svc.get_save_setup_info(42)
 
@@ -1335,14 +1335,15 @@ class TestConfirmSlotChoice:
 
     @pytest.mark.asyncio
     async def test_confirm_migration_no_device_holds_wizard(self, tmp_path):
-        """No registered device → the migration is refused before any mutation (#1494/#1498).
+        """A device that cannot be registered → the migration is refused before any mutation (#1494/#1498).
 
-        The #1478 upload guard would otherwise fire only AFTER local files were
-        touched; prechecking the device at the top keeps the wizard clean.
+        The device is registered at the top, before anything is listed or
+        touched, so a registration that fails keeps the wizard clean.
         """
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        # No device registered (no _set_device_id).
+        # No device registered (no _set_device_id), and RomM answers the registration without an id.
+        fake.arm_register_device_without_id()
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"L" * 100)
         fake.saves[1] = _server_save(save_id=1, slot=None)
@@ -1482,7 +1483,7 @@ class TestGetSlotSaves:
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "server-dev-1")
         failure = RommApiError("connection timeout")
-        fake.fail_on_next(failure)
+        fake.fail_next_list_saves(failure)
         listing = svc.get_slot_saves(42, "default")
 
         with pytest.raises(RommApiError) as raised:
@@ -1496,7 +1497,7 @@ class TestGetSlotSaves:
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "server-dev-1")
-        fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        fake.fail_next_list_saves(RommNotFoundError("HTTP 404: Not Found"))
         listing = svc.get_slot_saves(42, "default")
 
         with pytest.raises(RommNotFoundError):
@@ -1668,7 +1669,7 @@ class TestSwitchSlot:
         _seed_save_state(svc, 42, self._synced_state(local_hash))
 
         failure = RommApiError(503, "Service unavailable")
-        fake.fail_on_next(failure)
+        fake.fail_next_list_saves(failure)
         switching = svc.switch_slot(42, "desktop")
 
         with pytest.raises(RommApiError) as raised:
@@ -1687,7 +1688,7 @@ class TestSwitchSlot:
         local_hash = _file_md5(str(save_path))
         _seed_save_state(svc, 42, self._synced_state(local_hash))
 
-        fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        fake.fail_next_list_saves(RommNotFoundError("HTTP 404: Not Found"))
         switching = svc.switch_slot(42, "desktop")
 
         with pytest.raises(RommNotFoundError):
@@ -2493,7 +2494,7 @@ class TestDeleteSlot:
             },
         )
         failure = RommConnectionError("connection refused")
-        fake.fail_on_next(failure)
+        fake.fail_next_list_saves(failure)
         info = svc.get_slot_delete_info(42, "save1")
 
         with pytest.raises(RommConnectionError) as raised:
@@ -2517,7 +2518,7 @@ class TestDeleteSlot:
                 "pokemon.srm": {"tracked_save_id": 10, "last_sync_hash": "abc"},
             },
         )
-        fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        fake.fail_next_list_saves(RommNotFoundError("HTTP 404: Not Found"))
         info = svc.get_slot_delete_info(42, "save1")
 
         with pytest.raises(RommNotFoundError):

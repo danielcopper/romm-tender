@@ -28,7 +28,6 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
     from services.saves.sync_engine import SyncEngine
-    from services.saves.sync_engine.devices import DeviceRegistry
 
 
 class SlotListing:
@@ -39,7 +38,6 @@ class SlotListing:
         *,
         settings: dict[str, Any],
         uow_factory: UnitOfWorkFactory,
-        device_registry: DeviceRegistry,
         romm_api: RommSaveApi,
         retry: RetryStrategy,
         loop: asyncio.AbstractEventLoop,
@@ -48,7 +46,6 @@ class SlotListing:
     ) -> None:
         self._settings = settings
         self._uow_factory = uow_factory
-        self._device_registry = device_registry
         self._romm_api = romm_api
         self._retry = retry
         self._loop = loop
@@ -169,7 +166,8 @@ class SlotListing:
 
         Used by the frontend to show save files when expanding an inactive slot panel.
         Lightweight — no local file scanning or conflict detection. Refuses with
-        ``sync_disabled`` while save sync is off; a RomM error propagates.
+        ``sync_disabled`` while save sync is off, and as
+        ``SyncEngine.live_device_id`` does; a RomM error propagates.
         """
         rom_id = int(rom_id)
         slot = str(slot).strip() if slot else ""
@@ -177,7 +175,7 @@ class SlotListing:
         if not save_sync_enabled(self._settings):
             raise Refused("sync_disabled", SAVE_SYNC_DISABLED)
 
-        device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
+        device_id = await self._sync_engine.live_device_id()
 
         # Legacy slot ("" → null on the server) can't be addressed by any
         # ``slot=`` value, so omit the param (slot_query_param → None) and

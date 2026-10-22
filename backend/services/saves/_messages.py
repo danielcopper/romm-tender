@@ -8,12 +8,6 @@ literals in service code.
 
 SAVE_SYNC_DISABLED = "Save sync is disabled"
 DEVICE_NOT_REGISTERED = "Device not registered"
-# Wizard legacy-migration precheck: no device is registered yet, so the migration
-# can't upload into the slot. Refused before any local/server mutation so the
-# wizard just stays open and the user can retry (#1498 review).
-MIGRATION_DEVICE_NOT_REGISTERED = (
-    "This device isn't registered with RomM yet — retry in a moment (it registers automatically on the next save sync)."
-)
 # The wizard's legacy migration (``confirm_slot_choice``).
 MIGRATION_LOCAL_FILES_FAILED = (
     "The saves could not be migrated: a save file on this device could not be read or written,"

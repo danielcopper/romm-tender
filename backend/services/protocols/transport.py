@@ -16,6 +16,7 @@ from lib.romm_paging import LIST_PAGE_SIZE
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
 
+    from domain.live_device_id import LiveDeviceId
     from domain.update_release import LatestRelease
     from lib.steam_input_apply import SteamInputApply
     from models.cover import CoverRevalidation
@@ -334,10 +335,14 @@ class RommSaveApi(Protocol):
         self,
         rom_id: int,
         *,
-        device_id: str | None = None,
+        device_id: LiveDeviceId,
         slot: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return saves for ``rom_id``; ``device_id`` enriches with device_syncs and ``slot`` filters."""
+        """Return saves for ``rom_id``, with this device's ``device_syncs``; ``slot`` filters.
+
+        Takes only the id ``SyncEngine.live_device_id`` answers, so no listing
+        goes out with a stored id or none.
+        """
         ...
 
     def upload_save(

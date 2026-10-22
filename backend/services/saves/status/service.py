@@ -17,7 +17,7 @@ from domain.save_status_builders import (
 )
 from domain.save_stranding import stranding_verdict
 from domain.sync_action import Conflict, Skip
-from lib.errors import classify_error
+from lib.errors import Refused, classify_error
 from services.saves._local_changes import changed_since_last_sync
 from services.saves._save_state import read_save_state
 from services.saves._settings import save_sync_enabled
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     import asyncio
     import logging
 
+    from domain.live_device_id import LiveDeviceId
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
@@ -38,7 +39,6 @@ if TYPE_CHECKING:
     )
     from services.saves.rom_info import RomInfoService
     from services.saves.sync_engine import MatrixOutcome, SyncEngine
-    from services.saves.sync_engine.devices import DeviceRegistry
 
 
 @dataclass(frozen=True)
@@ -47,9 +47,9 @@ class StatusServiceConfig:
 
     Holds the live ``settings.json`` dict (save-sync enabled toggle), the
     Unit-of-Work factory (the transactional seam over the SQLite
-    repositories), the peer save sub-services (sync_engine, rom_info, and
-    the shared :class:`DeviceRegistry` that owns the server device id),
-    the Protocol-typed RomM adapter and retry strategy, the backend's
+    repositories), the peer save sub-services (sync_engine, whose
+    ``live_device_id`` answers the device id, and rom_info), the
+    Protocol-typed RomM adapter and retry strategy, the backend's
     event loop, the standard-library logger, the ``DebugLogger`` seam, the
     per-ROM active-core resolver, the event emitter used to push background
     status updates to the frontend, and the save-file store that hashes local
@@ -59,7 +59,6 @@ class StatusServiceConfig:
     settings: dict[str, Any]
     uow_factory: UnitOfWorkFactory
     sync_engine: SyncEngine
-    device_registry: DeviceRegistry
     rom_info: RomInfoService
     romm_api: RommSaveApi
     retry: RetryStrategy
@@ -79,7 +78,6 @@ class StatusService:
         self._settings = config.settings
         self._uow_factory = config.uow_factory
         self._sync_engine = config.sync_engine
-        self._device_registry = config.device_registry
         self._rom_info = config.rom_info
         self._romm_api = config.romm_api
         self._retry = config.retry
@@ -179,6 +177,7 @@ class StatusService:
         rom_id: int,
         server_saves: list[dict[str, Any]],
         *,
+        device_id: LiveDeviceId | None,
         server_query_failed: bool = False,
         server_query_reason: str | None = None,
         save_answer: SaveAnswer | None = None,
@@ -210,8 +209,10 @@ class StatusService:
         the action requests it (``Skip(adopt_baseline=True)``) — pure state
         hygiene, persisted via a short write UoW only when it actually fires.
 
-        When *server_query_failed* is True the caller's ``list_saves`` call
-        raised before *server_saves* was populated. Matrix evaluation runs
+        *device_id* is the one ``SyncEngine.live_device_id`` answered the
+        caller, ``None`` where it refused. When *server_query_failed* is True
+        the caller's ``list_saves`` call raised, or was never sent for want of a
+        device id, before *server_saves* was populated. Matrix evaluation runs
         as usual against the empty list (so local-file rows still appear
         with paths/sizes/hashes), but each resulting status is rewritten
         to ``"unknown"`` and server-side fields are nulled out — the empty
@@ -240,7 +241,6 @@ class StatusService:
         with self._uow_factory() as uow:
             save_state = uow.rom_save_sync_states.get(rom_id)
             playtime = uow.playtime.get(rom_id)
-        device_id = self._device_registry.get_device_id()
 
         active_slot = save_state.active_slot if save_state else None
         server_in_slot = filter_saves_to_slot(server_saves, active_slot)
@@ -366,7 +366,11 @@ class StatusService:
         list would otherwise produce — see ``_get_save_status_io``.
 
         ``server_query_reason`` carries the :func:`classify_error` slug for
-        that failure (``None`` on success). The flag and the slug answer
+        that failure (``None`` on success). The device id comes from
+        ``SyncEngine.live_device_id``, asked before the listing; its refusal
+        fails the query the same way, with its own reason
+        (``server_unreachable`` or ``device_not_registered``), and nothing is
+        listed. The flag and the slug answer
         different questions: the flag says the server's view is unknown —
         true for a 404 as much as for an outage, and what keeps the matrix
         from acting on an empty list — while the slug says *why*, so only an
@@ -390,12 +394,18 @@ class StatusService:
         server_saves: list[dict[str, Any]] = []
         server_query_failed = False
         server_query_reason: str | None = None
+        device_id: LiveDeviceId | None = None
         try:
-            device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
+            live_id = await self._sync_engine.live_device_id()
+            device_id = live_id
             server_saves = await self._loop.run_in_executor(
                 None,
-                lambda: self._retry.with_retry(lambda: self._romm_api.list_saves(rom_id, device_id=device_id)),
+                lambda: self._retry.with_retry(lambda: self._romm_api.list_saves(rom_id, device_id=live_id)),
             )
+        except Refused as e:
+            self._log_debug(f"No live device id for rom {rom_id}: {e.reason}")
+            server_query_failed = True
+            server_query_reason = e.reason
         except Exception as e:
             self._log_debug(f"Failed to fetch saves for rom {rom_id}: {e}")
             server_query_failed = True
@@ -413,6 +423,7 @@ class StatusService:
                 lambda: self._get_save_status_io(
                     rom_id,
                     server_saves,
+                    device_id=device_id,
                     server_query_failed=server_query_failed,
                     server_query_reason=server_query_reason,
                     save_answer=save_answer,

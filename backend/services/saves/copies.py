@@ -16,7 +16,6 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import (
     SAVE_SHAPE_UNSUPPORTED_REASON,
     SAVE_SYNC_CONTENT_DIR_REASON,
@@ -27,7 +26,7 @@ from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
 from lib.errors import RommApiError, RommConflictError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target, newest_server_saves_by_target
-from services.saves._save_state import write_save_state
+from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import resolve_default_slot
 
 if TYPE_CHECKING:
@@ -35,10 +34,11 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
+    from domain.live_device_id import LiveDeviceId
+    from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import DebugLogger, RetryStrategy, RommSaveApi, UnitOfWorkFactory
     from services.saves.rom_info import RomInfoService
     from services.saves.sync_engine import SyncEngine
-    from services.saves.sync_engine.devices import DeviceRegistry
 
 
 @dataclass(frozen=True)
@@ -51,8 +51,8 @@ class SaveCopyServiceConfig:
     routes through ``sync_engine``. Holds the live ``settings.json`` dict
     (default-slot seeding), the Unit-of-Work factory (the transactional seam
     over the SQLite repositories), the peer save sub-services consumed during
-    orchestration (sync_engine, rom_info, and the shared :class:`DeviceRegistry`
-    that owns the server device id), the core resolver used to stamp the upload
+    orchestration (sync_engine, whose ``live_device_id`` answers the device id,
+    and rom_info), the core resolver used to stamp the upload
     emulator tag, the Protocol-typed RomM adapter and retry strategy, the
     backend's event loop, the standard-library logger, and the ``DebugLogger`` seam.
     """
@@ -60,7 +60,6 @@ class SaveCopyServiceConfig:
     settings: dict[str, Any]
     uow_factory: UnitOfWorkFactory
     sync_engine: SyncEngine
-    device_registry: DeviceRegistry
     rom_info: RomInfoService
     resolve_core: Callable[[int], str | None]
     romm_api: RommSaveApi
@@ -83,7 +82,6 @@ class SaveCopyService:
         self._settings = config.settings
         self._uow_factory = config.uow_factory
         self._sync_engine = config.sync_engine
-        self._device_registry = config.device_registry
         self._rom_info = config.rom_info
         self._resolve_core = config.resolve_core
         self._romm_api = config.romm_api
@@ -91,15 +89,6 @@ class SaveCopyService:
         self._loop = config.loop
         self._logger = config.logger
         self._log_debug = config.log_debug
-
-    # ------------------------------------------------------------------
-    # Narrow-UoW read/write helpers (ADR-0006)
-    # ------------------------------------------------------------------
-
-    def _read_inputs(self, rom_id: int) -> tuple[RomSaveSyncState, str | None]:
-        with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
-        return state, self._device_registry.get_device_id()
 
     def _local_component_filenames(self, rom_id: int) -> list[str]:
         """Distinct local save filenames on disk for the ROM (one per extension).
@@ -194,7 +183,7 @@ class SaveCopyService:
         self,
         rom_id: int,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         core_so: str | None,
         save_id: int,
         target_slot: str,
@@ -319,16 +308,19 @@ class SaveCopyService:
         4. ``rom_not_installed`` when the ROM has no install record.
         5. Multi-file (#908) saves, saves beside the game file (#239) and any other
            answer a sync would not carry are ``unsupported``.
-        6. Pre-flight ``do_sync_rom_saves`` on the current (confirmed) slot,
+        6. Take the device id from ``SyncEngine.live_device_id``, which registers
+           or heals the device first; its refusal (``device_not_registered`` or
+           ``server_unreachable``) is raised, before anything is synced.
+        7. Pre-flight ``do_sync_rom_saves`` on the current (confirmed) slot,
            unconditionally, to protect its dirty local before the copy overwrites
            it — ``conflict_blocked`` / ``preflight_failed`` on a bad pre-flight.
-        7. ``list_saves`` with no slot filter (the source may be in any slot);
+        8. ``list_saves`` with no slot filter (the source may be in any slot);
            a transport failure is ``server_unreachable``, a definitive 404 (the
            server answered that it has no such ROM or device id) is ``not_found``
            — distinct so the copy surface never reports an answering server
            offline (#1570) — and any other RomM answer ``classify_error`` does
            not call unreachable is ``copy_failed`` with its message.
-        8. The copy proper runs in :meth:`_copy_save_to_slot_io`.
+        9. The copy proper runs in :meth:`_copy_save_to_slot_io`.
 
         A dedup pre-check between the ``list_saves`` and the copy short-circuits
         with ``already_present{existing_id}`` when the chosen save's content is
@@ -350,7 +342,7 @@ class SaveCopyService:
             return {"status": "invalid_slot_name"}
 
         async with self._sync_engine.rom_lock(rom_id):
-            save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
+            save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
 
             # Configured ROMs only: the current slot must be a confirmed named
             # slot. An unconfirmed slot, ``active_slot`` None, or the legacy
@@ -395,6 +387,7 @@ class SaveCopyService:
 
             core_so = await self._loop.run_in_executor(None, self._resolve_core, rom_id)
             default_slot = resolve_default_slot(self._settings)
+            device_id = await self._sync_engine.live_device_id()
 
             # Matrix pre-flight on the CURRENT slot: get its tracked save in sync
             # first (or surface a conflict), so the download below never overwrites

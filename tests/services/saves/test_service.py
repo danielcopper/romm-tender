@@ -25,6 +25,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.identity import VERSION
 from domain.iso_time import epoch_to_iso
+from domain.live_device_id import LiveDeviceId
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from lib.errors import Refused, RommConnectionError, RommNotFoundError, ServerUnreachable
 from services.saves import SaveService
@@ -93,16 +94,14 @@ class TestDeviceRegistration:
         assert result["server_device_id"] == "existing"
 
     @pytest.mark.asyncio
-    async def test_disabled_refuses(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        # save_sync_enabled defaults to False
-        ensure = svc.ensure_device_registered()
+    async def test_disabled_still_registers(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        # save_sync_enabled defaults to False; cross-device playtime needs the id too.
+        result = await svc.ensure_device_registered()
 
-        with pytest.raises(Refused) as refused:
-            await ensure
-
-        assert (refused.value.reason, refused.value.message) == ("sync_disabled", "Save sync is disabled")
-        assert refused.value.details == {}
+        assert result["success"] is True
+        assert result["device_id"] == "device-1"
+        assert sum(1 for c in fake.call_log if c[0] == "register_device") == 1
 
 
 class TestGetDeviceId:
@@ -287,8 +286,8 @@ class TestDeviceRegistrationServer:
         assert fake.get_version() is None
 
     @pytest.mark.asyncio
-    async def test_probe_skipped_when_disabled(self, tmp_path):
-        """Disabled save sync short-circuits before any probe."""
+    async def test_probe_runs_when_disabled(self, tmp_path):
+        """Disabled save sync no longer short-circuits: the probe runs before the registration."""
 
         class VersionedFakeApi(FakeSaveApi):
             def __init__(self) -> None:
@@ -302,12 +301,11 @@ class TestDeviceRegistrationServer:
         fake = VersionedFakeApi()
         svc, _ = make_service(tmp_path, fake_api=fake)
         # save_sync_enabled defaults to False
-        ensure = svc.ensure_device_registered()
+        result = await svc.ensure_device_registered()
 
-        with pytest.raises(Refused):
-            await ensure
-
-        assert fake.heartbeat_calls == 0
+        assert result["success"] is True
+        assert fake.heartbeat_calls == 1
+        assert fake.get_version() == "4.8.5"
 
 
 class TestEnsureDeviceRegistered:
@@ -764,15 +762,13 @@ class TestSaveSyncFeatureFlag:
 
     @pytest.mark.asyncio
     async def test_ensure_device_disabled(self, saves):
-        """ensure_device_registered refuses with sync_disabled when save sync is off."""
+        """ensure_device_registered registers with save sync off — cross-device playtime sends the id too."""
         saves.settings["save_sync_enabled"] = False
-        ensure = saves.service.ensure_device_registered()
 
-        with pytest.raises(Refused) as refused:
-            await ensure
+        result = await saves.service.ensure_device_registered()
 
-        assert refused.value.reason == "sync_disabled"
-        assert _get_device_id(saves.service) is None
+        assert result["success"] is True
+        assert _get_device_id(saves.service) == result["device_id"]
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_disabled(self, saves):
@@ -1248,7 +1244,7 @@ class TestEmulatorTag:
             str(tmp_path / "saves" / "gba" / "pokemon.srm"),
             "pokemon.srm",
             RomSaveSyncState(),
-            "dev-1",
+            LiveDeviceId("dev-1"),
             "gba",
             "mgba_libretro",
         )
@@ -1270,7 +1266,7 @@ class TestEmulatorTag:
             str(tmp_path / "saves" / "gba" / "pokemon.srm"),
             "pokemon.srm",
             RomSaveSyncState(),
-            "dev-1",
+            LiveDeviceId("dev-1"),
             "gba",
             None,
         )
@@ -1831,7 +1827,7 @@ class TestDeviceVersionResolution:
 
         service, _ = make_service(tmp_path)
 
-        assert service._device_registry._version == "9.9.9"
+        assert service._sync_engine._devices._version == "9.9.9"
 
 
 class TestBuildSaveInventory:

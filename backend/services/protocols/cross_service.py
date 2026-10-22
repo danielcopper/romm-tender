@@ -785,6 +785,19 @@ class DeviceForgetFn(Protocol):
     def __call__(self) -> None: ...
 
 
+class DeviceRegisterFn(Protocol):
+    """Device registration consumed by ConnectionService.
+
+    The composition root satisfies this with
+    ``SaveService.ensure_device_registered``. ConnectionService awaits it after
+    every successful sign-in, whether save sync is on or off, so the device id
+    the cross-device playtime and the save operations send exists from the
+    sign-in on; whatever it raises is the sign-in's to log, never to fail on.
+    """
+
+    async def __call__(self) -> dict[str, Any]: ...
+
+
 class PlaytimeScopeNoticeClearFn(Protocol):
     """Playtime read-scope re-sign-in notice reset consumed by ConnectionService.
 
