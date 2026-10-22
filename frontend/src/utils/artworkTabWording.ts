@@ -26,9 +26,14 @@ export const SOURCE_LINES: Readonly<Record<ArtworkSlotSource, string>> = {
 /** An icon set in Steam: a path the shortcut's properties name, not Steam's grid folder. */
 export const ICON_SET_IN_STEAM = "Set in the shortcut's properties";
 
+/** An automatic cover from SteamGridDB: Tender's pick stands in for RomM's cover (#2381 D1). */
+export const COVER_FROM_STEAMGRIDDB = "SteamGridDB — Tender's pick, while RomM has no cover";
+
 /** The source line of *slot*, whose source is *source*. */
 export function sourceLine(slot: ArtworkTabSlot, source: ArtworkSlotSource): string {
-  return slot === "icon" && source === "steam" ? ICON_SET_IN_STEAM : SOURCE_LINES[source];
+  if (slot === "icon" && source === "steam") return ICON_SET_IN_STEAM;
+  if (slot === "cover" && source === "tender") return COVER_FROM_STEAMGRIDDB;
+  return SOURCE_LINES[source];
 }
 
 /** What the tab says where no SteamGridDB API key is configured, so no image can be chosen. */

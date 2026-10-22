@@ -3,7 +3,8 @@
  * its Steam shortcut. Shared by the game page — `useAutoArtwork`'s fill of the
  * empty slots on a first visit and replacing apply after a version switch,
  * RomMPlaySection's Refresh Artwork and SgdbGamePickerModal's change of game
- * (both on the slots on automatic only), and the ARTWORK tab's one-slot writes —
+ * (both on the slots on automatic only), the ARTWORK tab's one-slot writes and
+ * the writes of keeping the automatic artwork current —
  * so it lives here rather than on any one component to keep their import graph
  * acyclic. The shortcut artwork job's
  * writes (`utils/shortcutArtwork.ts`) ask it whether an apply is under way, and
@@ -584,6 +585,81 @@ export async function applyTabSlotImage(
       admission,
     ),
   );
+}
+
+/**
+ * Hand Steam the images keeping current put into the artwork cache for *slots* (#2381 D5): each is fetched through the
+ * per-slot endpoint, set under its lease and reported as a replacing apply sets an image. It yields to any apply for the
+ * shortcut started since it began, and to leaving the game page, by writing nothing more. Answers the slots Steam took.
+ */
+export async function applyKeptCurrentArtwork(
+  romId: number,
+  appId: number,
+  slots: readonly ArtworkTabSlot[],
+): Promise<ArtworkTabSlot[]> {
+  const leaseOwner = `artwork:${appId}`;
+  mountPruneLeaseOwner(leaseOwner);
+  const admission = capturePruneLeaseAdmission(leaseOwner);
+  const overtaken = watchGeneration(appId);
+  return whileInFlight(appId, async () => {
+    const set: ArtworkTabSlot[] = [];
+    // One image at a time, as the fill sets them; S9382 is raised on the await line, so its NOSONAR stays there.
+    for (const slot of slots) {
+      if (overtaken()) break;
+      const write = { romId, appId, slot, overtaken, leaseOwner, admission };
+      if (await setKeptCurrentSlot(write)) set.push(slot); // NOSONAR(typescript:S9382)
+    }
+    return set;
+  });
+}
+
+/** One slot keeping current replaced, with what its write yields to. */
+interface KeptCurrentWrite {
+  romId: number;
+  appId: number;
+  slot: ArtworkTabSlot;
+  overtaken: () => boolean;
+  leaseOwner: string;
+  admission: PruneLeaseAdmission;
+}
+
+/** Fetch and set one slot keeping current replaced; answers whether Steam took it. */
+async function setKeptCurrentSlot(write: KeptCurrentWrite): Promise<boolean> {
+  const { romId, appId, slot, overtaken } = write;
+  const answer = await getSgdbSlotArtwork(romId, appId, slot, true).catch((e): SgdbSlotArtwork => {
+    detach(debugLog(`Keeping artwork current: the ${slot} fetch for appId ${appId} rejected: ${e}`));
+    return { status: "failed" };
+  });
+  if (isEndpointFailure(answer)) {
+    detach(debugLog(`Keeping artwork current: the ${slot} fetch for appId ${appId} refused: ${answer.message}`));
+    return false;
+  }
+  if (answer.status !== "image" && answer.status !== "ready") return false;
+  return withPruneLeases(
+    [answer.prune_lease_token],
+    "Artwork apply",
+    async (signal) => {
+      if (isPruneLeaseCancelled(signal) || overtaken()) return false;
+      try {
+        if (answer.status === "ready" || slot === "icon") return await setReplacedIcon(romId, appId, signal);
+        const assetType = STEAM_ASSET_TYPES[slot];
+        await setReplacedSlot(romId, slot, answer, () =>
+          writeSlotArtwork(appId, slot, () =>
+            SteamClient.Apps.SetCustomArtworkForApp(appId, answer.base64, "png", assetType),
+          ),
+        );
+        return true;
+      } catch (e) {
+        detach(debugLog(`Keeping artwork current: Steam refused the ${slot} for appId ${appId}: ${e}`));
+        return false;
+      }
+    },
+    write.leaseOwner,
+    write.admission,
+  ).catch((e: unknown) => {
+    detach(debugLog(`Keeping artwork current: the ${slot} for appId ${appId} was not set: ${e}`));
+    return false;
+  });
 }
 
 export async function cancelArtworkApply(appId: number): Promise<void> {
