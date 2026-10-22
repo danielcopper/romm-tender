@@ -3068,7 +3068,7 @@ class TestUninstall:
         # other path in the list is printed with `~` for the home.
         assert "~/Tender, or the place you chose" in result.stdout
         assert "Tender's folder: recovery bundles and BIOS downloads" in result.stdout
-        (replaced,) = [line for line in result.stdout.splitlines() if "BIOS files you replaced" in line]
+        (replaced,) = [line for line in result.stdout.splitlines() if "BIOS files Tender moved aside" in line]
         assert str(machine.data / "backups" / "bios") in replaced
         assert "romm-tender-recovery" not in result.stdout
         assert str(machine.home) not in result.stdout
