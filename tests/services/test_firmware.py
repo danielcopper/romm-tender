@@ -37,6 +37,7 @@ from domain.emulator_commands import EmulatorOption, option_to_invocation, selec
 from domain.firmware_cache import FirmwareCacheEntry
 from domain.firmware_store import StoredFirmware
 from domain.firmware_wants import (
+    IDENTITY_FILE,
     SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
     SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
     SYSTEM_FIRMWARE_OPEN,
@@ -6396,21 +6397,21 @@ class TestFirmwareCachePersistence:
             uow,
             [
                 FirmwareCacheEntry.cached(
-                    id=1, name="bios.bin", platform_slug="dc", file_size_bytes=512, cached_at=1000.0
+                    id=1, name="bios.bin", platform_slug="dc", file_size_bytes=512, cached_at=1000.0, md5_hash="ab12"
                 )
             ],
         )
 
         fw = _make_firmware_service(uow_factory=FakeUnitOfWorkFactory(uow))
 
-        # Reconstructed thin dict: the file's platform kept, md5 dropped.
+        # Reconstructed thin dict: the file's platform and its checksum kept.
         assert fw._listing._firmware_cache == [
             {
                 "id": 1,
                 "file_name": "bios.bin",
                 "platform_slug": "dc",
                 "file_size_bytes": 512,
-                "md5_hash": "",
+                "md5_hash": "ab12",
             }
         ]
         assert fw._listing._firmware_cache_epoch == 1000.0
@@ -6429,7 +6430,9 @@ class TestFirmwareCachePersistence:
 
     def test_cache_persisted_after_http_fetch(self, firmware, fw):
         """Firmware cache written to the DB after a successful HTTP fetch."""
-        firmware_list = [{"id": 1, "file_name": "bios.bin", "platform_slug": "dc", "file_size_bytes": 512}]
+        firmware_list = [
+            {"id": 1, "file_name": "bios.bin", "platform_slug": "dc", "file_size_bytes": 512, "md5_hash": "ab12"}
+        ]
         _stub_listing(fw, firmware_list)
         fw._listing._firmware_cache = None  # Force refetch
 
@@ -6442,7 +6445,47 @@ class TestFirmwareCachePersistence:
         assert stored is not None
         assert stored.id == 1
         assert stored.file_size_bytes == 512
+        assert stored.md5_hash == "ab12"
         assert stored.cached_at == fw._listing._firmware_cache_epoch
+
+    @pytest.mark.asyncio
+    async def test_a_restored_listing_still_matches_a_library_file_by_content(self, firmware, fw):
+        """After a restart with the server unreachable, the cached checksum is what fills a requirement."""
+        content = b"saturn bios"
+        _resolver(fw).declare(
+            "saturn_bios.bin",
+            required_by=[_id(_TEST_CORE)],
+            identity_md5=hashlib.md5(content).hexdigest(),
+            identity_kind=IDENTITY_FILE,
+        )
+        _stub_listing(
+            fw,
+            [
+                {
+                    "id": 1,
+                    "file_name": "sega_100.bin",
+                    "platform_slug": "saturn",
+                    "file_size_bytes": len(content),
+                    "md5_hash": hashlib.md5(content).hexdigest(),
+                }
+            ],
+        )
+        _inline_executor(fw)
+        fw._listing.get_firmware_list()
+        restarted = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            firmware_resolver=_resolver(fw),
+            core_info=_test_core_info(),
+        )
+        _inline_executor(restarted)
+        firmware.romm_api.list_platforms.side_effect = RommConnectionError("connection refused")
+
+        rows = (await _entries(restarted, "saturn"))["saturn"]["files"]
+
+        (row,) = [f for f in rows if f["file_name"] == "saturn_bios.bin"]
+        assert row["library"]["file_name"] == "sega_100.bin"
+        assert row["library"]["matched"] == "content"
 
     def test_invalidate_clears_persisted_cache(self, firmware, fw):
         """invalidate_firmware_cache drops every DB cache row."""

@@ -67,9 +67,9 @@ class FirmwareListing:
         """Rebuild the in-memory firmware cache from the SQLite cache table.
 
         The ``firmware_cache`` table is a thin record per ADR-0003: it carries
-        each file's id, name, platform and size, so a restart still has a
-        listing to answer from while the server is unreachable. It does not
-        carry ``md5_hash``, which a restored row answers as empty.
+        each file's id, name, platform, size and the checksum RomM states for
+        it, so a restart still has a listing to answer from — and to match the
+        library's files by content with — while the server is unreachable.
         """
         try:
             with self._uow_factory() as uow:
@@ -94,7 +94,7 @@ class FirmwareListing:
             "file_name": entry.name,
             "platform_slug": entry.platform_slug,
             "file_size_bytes": entry.file_size_bytes,
-            "md5_hash": "",
+            "md5_hash": entry.md5_hash,
         }
 
     def _persist_firmware_cache(self) -> None:
@@ -112,6 +112,7 @@ class FirmwareListing:
                 platform_slug=fw["platform_slug"],
                 file_size_bytes=fw.get("file_size_bytes", 0),
                 cached_at=self._firmware_cache_epoch,
+                md5_hash=str(fw.get("md5_hash") or ""),
             )
             for fw in self._firmware_cache
         ]
