@@ -776,15 +776,15 @@ does not load.
 Pressing a slot opens a picker with SteamGridDB's images for it, in SteamGridDB's order, each labelled with its size.
 The first tile is **Automatic**; the image the slot shows is marked **CURRENT** — the Automatic tile while the slot is
 on automatic, the chosen image while you chose one — and the one Tender's own rule takes today **Tender's pick today**.
-The grid shows 15 images at a time; its last tile, **Load more**, shows 15 more. Select a tile and press **Use this
-image**, which stays below the grid. An image SteamGridDB gives no size for shows none. The previews load straight from
-SteamGridDB; only the image you choose is downloaded in full. The cover can be chosen from SteamGridDB's portrait
-covers; setting it back to **Automatic** reloads RomM's cover at once. Choosing images needs a
-[SteamGridDB API key](configuration.md#steamgriddb-api-key); without one the tab says so. The cover's slot opens either
-way: without a key or a SteamGridDB game its picker offers **Automatic — RomM cover** alone and says why no SteamGridDB
-covers are offered, so RomM's cover is always one press away. If Steam does not take an image you chose, the tab says
-"Steam did not take the image" and the slot stays as it was before: the image you had chosen there earlier, if any, is
-chosen again.
+The grid shows 14 images after **Automatic**; its last tile, **Load more**, adds 16 more and moves you to the first new
+one. Select a tile and press **Use this image**, which stays below the grid. An image SteamGridDB gives no size for
+shows none. The previews load straight from SteamGridDB; only the image you choose is downloaded in full. The cover can
+be chosen from SteamGridDB's portrait covers; setting it back to **Automatic** reloads RomM's cover at once. Choosing
+images needs a [SteamGridDB API key](configuration.md#steamgriddb-api-key); without one the tab says so. The cover's
+slot opens either way: without a key or a SteamGridDB game its picker offers **Automatic — RomM cover** alone and says
+why no SteamGridDB covers are offered, so RomM's cover is always one press away. If Steam does not take an image you
+chose, the tab says "Steam did not take the image" and the slot stays as it was before: the image you had chosen there
+earlier, if any, is chosen again.
 
 Over an image set in Steam the picker asks once more: "This image was set through Steam. Replacing it removes it; Tender
 keeps no copy." **Replace** has Steam remove its image and sets yours — whether Steam's call removes its file in every
