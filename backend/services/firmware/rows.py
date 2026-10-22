@@ -153,6 +153,9 @@ def _folder_rows(
 ) -> list[BiosFileEntry]:
     """One row per file the folder declaration takes: each recognised library file or store copy, and each other file.
 
+    Where that leaves no row, one row stands for the folder itself
+    (:func:`_empty_folder_row`).
+
     Each row's verdict is the resolver's over that file. A recognised file not
     in the folder yet is not in place; one that is but drew no statement is not
     established. "Download required" fetches the alphabetically first
@@ -222,7 +225,32 @@ def _folder_rows(
             satisfied=statement.satisfied,
         )
         rows.append(replace(entry, **facts))
+    if not rows:
+        rows.append(_empty_folder_row(inputs, placement, emulator, complete))
     return rows
+
+
+def _empty_folder_row(
+    inputs: RowInputs, placement: FirmwarePlacement, emulator: str | None, complete: bool
+) -> BiosFileEntry:
+    """The one row standing for a folder declaration nothing lies in and no library file is recognised for.
+
+    It carries the resolver's verdict over the folder and the codes it states
+    about it; it offers nothing to fetch or delete, and goes as soon as a file
+    of the folder has a row of its own. The folder counts as one requirement
+    through :func:`required_folders`, so the row adds none.
+    """
+    entry = build_file_entry(
+        placement.file_name,
+        placement.present is True,
+        placement.place,
+        placement,
+        complete,
+        emulator,
+        on_server=False,
+        groups=inputs.catalogue.groups,
+    )
+    return replace(entry, satisfied=placement.satisfied, required_by_active=False, fetch_for_required=False)
 
 
 def _in_folder(

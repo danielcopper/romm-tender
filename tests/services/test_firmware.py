@@ -1234,8 +1234,12 @@ class TestAFolderRequirementIsAnsweredByItsContents:
         assert result["bios_level"] == "missing"
 
     @pytest.mark.asyncio
-    async def test_a_folder_holding_no_candidate_is_one_unmet_requirement_and_no_row(self, firmware, tmp_path):
-        """With nothing in the folder there is no file to make a row of; the folder still counts, once, unmet."""
+    async def test_a_folder_holding_nothing_is_one_row_with_its_verdict_and_its_code(self, firmware, tmp_path):
+        """With nothing in the folder and no library file for it, one row stands for the folder, counted once, unmet.
+
+        The row carries the code that words why, and offers nothing to fetch
+        or delete.
+        """
         resolver = FakeFirmwareResolver()
         resolver.declare(
             "bios",
@@ -1250,9 +1254,22 @@ class TestAFolderRequirementIsAnsweredByItsContents:
 
         result = await fw.check_platform_bios("ps2")
 
-        assert result["files"] == []
+        (row,) = result["files"]
+        assert (row["declared_kind"], row["declared_path"]) == ("directory", "pcsx2/bios")
+        assert row["satisfied"] is False
+        assert row["caveats"] == ("firmware-directory-holds-no-candidate",)
+        assert (row["fetch_for_required"], row["required_by_active"]) == (False, False)
         assert (result["required_count"], result["required_downloaded"]) == (1, 0)
         assert result["bios_level"] == "missing"
+
+    @pytest.mark.asyncio
+    async def test_the_folders_own_row_goes_once_a_file_lies_there(self, firmware, tmp_path):
+        image = FolderFile(path=self._in_folder(tmp_path, "scph70004.bin"), satisfied=True, description=self._IMAGES[0])
+        fw = self._service(firmware, tmp_path, self._resolver(FolderVerdict(satisfied=True), folder_files=(image,)))
+
+        result = await fw.check_platform_bios("ps2")
+
+        assert [row["file_name"] for row in result["files"] if row["declared_kind"] == "directory"] == []
 
     @pytest.mark.asyncio
     async def test_the_system_page_and_the_game_page_read_one_verdict(self, firmware, tmp_path):
@@ -1284,7 +1301,8 @@ class TestAFolderRequirementIsAnsweredByItsContents:
 
         result = await fw.check_platform_bios("ps2")
 
-        assert result == {"needs_bios": False}
+        assert result["required_withheld"] == 0
+        assert result["bios_level"] == "ok"
 
 
 class TestAFileWithSomethingElseAtItsDestination:
