@@ -25,6 +25,7 @@ from domain.retrodeck_folders import GAME_DOWNLOAD, switched_off
 from domain.rom_save_sync_state import FileSyncState
 from services.achievements import AchievementsService, AchievementsServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
+from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 
 # RetroDECK ROMs root the target-path probe resolves against. Never touched on
@@ -104,6 +105,7 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
         ),
     )
 
+    firmware_resolver = FakeFirmwareResolver()
     firmware = FirmwareService(
         config=FirmwareServiceConfig(
             romm_api=MagicMock(),
@@ -111,8 +113,20 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
             logger=logging.getLogger("test"),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             firmware_file_store=FirmwareFileAdapter(),
-            firmware_resolver=FakeFirmwareResolver(),
-            platform_firmware_resolver=FakeFirmwareResolver(),
+            platform_firmware_resolver=firmware_resolver,
+            firmware_identifier=lambda md5: None,
+            store=FirmwareStore(
+                config=FirmwareStoreConfig(
+                    romm_api=MagicMock(),
+                    firmware_file_store=FirmwareFileAdapter(),
+                    platform_firmware_resolver=firmware_resolver,
+                    prepare_folder=lambda: "/home/deck/Tender",
+                    uow_factory=FakeUnitOfWorkFactory(),
+                    clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
+                    data_dir="/home/deck/.local/share/romm-tender",
+                    logger=logging.getLogger("test"),
+                )
+            ),
             retrodeck_folders=FakeRetroDeckFolders(),
             core_info=FakeCoreInfoProvider(),
             platform_systems=FakePlatformSystems(),
@@ -764,7 +778,7 @@ class TestGetCachedGameDetailCarriesNoBiosAnswer:
         ]
         listing._firmware_cache_epoch = 99.0
 
-        with patch.object(game_detail.firmware._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path))):
+        with patch.object(game_detail.firmware._demand._platform_firmware_resolver, "bios_root", str(tmp_path)):
             result = await game_detail.service.get_cached_game_detail(50000)
 
         assert result["bios_status"] is None

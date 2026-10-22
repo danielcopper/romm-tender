@@ -105,6 +105,7 @@ from services.connection import ConnectionService, ConnectionServiceConfig
 from services.cores import CoreService, CoreServiceConfig
 from services.downloads import DownloadService, DownloadServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
+from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
@@ -1367,6 +1368,7 @@ def _dispatcher_over_firmware(
     romm_api: FakeRommApi, store: FakeFirmwareFileStore, uow: FakeUnitOfWork
 ) -> CallDispatcher:
     """The real dispatcher over ``Endpoints`` whose firmware use cases are the real ``FirmwareService`` over fakes."""
+    resolver = FakeFirmwareResolver()
     service = FirmwareService(
         config=FirmwareServiceConfig(
             romm_api=romm_api,
@@ -1374,8 +1376,20 @@ def _dispatcher_over_firmware(
             logger=LOGGER,
             clock=FakeClock(),
             firmware_file_store=store,
-            firmware_resolver=FakeFirmwareResolver(),
-            platform_firmware_resolver=FakeFirmwareResolver(),
+            platform_firmware_resolver=resolver,
+            firmware_identifier=lambda md5: None,
+            store=FirmwareStore(
+                config=FirmwareStoreConfig(
+                    romm_api=romm_api,
+                    firmware_file_store=store,
+                    platform_firmware_resolver=resolver,
+                    prepare_folder=lambda: "/tender",
+                    uow_factory=FakeUnitOfWorkFactory(uow),
+                    clock=FakeClock(),
+                    data_dir="/data",
+                    logger=LOGGER,
+                )
+            ),
             retrodeck_folders=FakeRetroDeckFolders(bios="/retrodeck/bios"),
             core_info=FakeCoreInfoProvider(),
             platform_systems=FakePlatformSystems(),
@@ -1431,9 +1445,7 @@ class TestTheFirmwareAnswersOnTheWire:
         ]
         dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
 
-        message = json.loads(
-            await dispatcher.dispatch(1, "download_platform_firmware_file", ["n64", "dc_boot.bin", None])
-        )
+        message = json.loads(await dispatcher.dispatch(1, "download_platform_firmware_file", ["n64", "dc_boot.bin"]))
 
         assert message["type"] == TYPE_REPLY
         assert message["result"] == {

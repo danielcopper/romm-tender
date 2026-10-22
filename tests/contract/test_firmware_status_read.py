@@ -80,6 +80,11 @@ _ENTRY_KEYS = {
     "content_search",
     # Not in a5777746: one entry per emulator the resolver answered for.
     "emulator_tabs",
+    # Why a download here lands in Tender's firmware store only, where the
+    # replaced files go, and the platform's store files.
+    "store_only",
+    "backup_root",
+    "store_files",
 }
 
 # And every key a row carried: the server's own fields, the destination and its
@@ -116,6 +121,18 @@ _ROW_KEYS = {
     # Not in a5777746: the emulator whose requirement the row is, which a
     # surface shows it with.
     "declared_by",
+    # The library file that fills the row and how, Tender's store copy, what
+    # lies at the place and whose link it is, why no link may go there, whether
+    # "Replace…" is offered, the declared folder a file lies in, and the name a
+    # Delete is asked by.
+    "library",
+    "store_file",
+    "link",
+    "linked_for",
+    "place_refusal",
+    "replace_offered",
+    "in_folder",
+    "delete_name",
 }
 
 
