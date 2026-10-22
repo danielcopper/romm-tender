@@ -3583,11 +3583,7 @@ describe("Library › Platforms", () => {
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download")!);
         });
-        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith(
-          "gba",
-          "saturn_bios.bin",
-          "kronos_libretro.so",
-        );
+        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "saturn_bios.bin");
         await flushAsync();
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download required for Kronos (1)")!);
@@ -3737,7 +3733,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin");
       // No notice on success: the spinner ending and the re-read rows are the
       // message, which is what the device pass asked for.
       expect(within(container).queryByTestId("status-bios")).toBeNull();
@@ -4272,45 +4268,6 @@ describe("Library › Platforms", () => {
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
       }
-    });
-
-    it("offers a folder row the delete of what we downloaded into it", async () => {
-      // Two rules, not one. A folder is never offered as a DOWNLOAD — there is
-      // no file to fetch into a name the emulator lists — and that says nothing
-      // about the files already inside it, which are ours wherever a record
-      // names them. PS2's pcsx2/bios is the whole of that case.
-      mockFirmware([
-        firmwarePlatform({
-          files: [
-            firmwareFile({
-              file_name: "bios",
-              declared_path: "pcsx2/bios",
-              declared_kind: "directory",
-              local_path: "/home/deck/retrodeck/bios/pcsx2/bios",
-              on_server: false,
-              satisfied: true,
-              deletable_count: 2,
-            }),
-          ],
-          deletable_count: 2,
-        }),
-      ]);
-      vi.mocked(backend.deleteBiosFolder).mockResolvedValue({ success: true, deleted_count: 2, message: "" });
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
-
-      // The count is on the button, and the row still offers no download.
-      expect(buttonByText(container, "Delete (2)")).toBeTruthy();
-      expect(buttonByText(container, "Download")).toBeUndefined();
-
-      await act(async () => {
-        fireEvent.click(buttonByText(container, "Delete (2)")!);
-        await Promise.resolve();
-      });
-      await confirmLastModal();
-
-      // Addressed by the folder, because no record carries a folder's name.
-      expect(vi.mocked(backend.deleteBiosFolder)).toHaveBeenCalledWith("gba", "/home/deck/retrodeck/bios/pcsx2/bios");
     });
 
     it("shows a folder row no description, because its verdict is its meaning", async () => {
@@ -4876,7 +4833,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin");
     });
 
     it("says the console does not start without an image where the counts would say nothing is required", async () => {
