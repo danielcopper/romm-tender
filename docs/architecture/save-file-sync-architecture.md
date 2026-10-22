@@ -146,8 +146,8 @@ detection-handoff of [ADR-0016](../adr/0016-save-sync-hands-detection-to-romm-ne
 1. Load the ROM's `RomSaveSyncState`.
 2. Fetch the slot's server saves with `list_saves`.
 3. Run `compute_sync_action` per file (the decision matrix below).
-4. Dispatch each outcome through `_dispatch_sync_action` — POST / PUT / GET plus the `.romm-backup` quarantine, the
-   #1062 shrink guard, and the per-file baseline writes (`update_file_sync_state`).
+4. Dispatch each outcome through `_dispatch_sync_action` — POST / GET plus the `.romm-backup` quarantine, the #1062
+   shrink guard, and the per-file baseline writes (`update_file_sync_state`).
 
 A download (`MatrixExecutor.do_download_save`, the one used here and by a restore, a copy to another slot, a conflict
 resolution and a slot switch) lands in `<save>.tmp` and replaces the local file only once complete. On any failure up to
@@ -597,9 +597,9 @@ Dimensions:
   _current=false_.
 - **Local vs `last_sync_hash`** — _unchanged_, _changed_, or _no baseline_ (key missing in state). A `local_hash` that
   is `None` or empty is _unknown_: it never proves a change, so the core takes the unchanged exit — rows 7 and 10, and
-  rows 6b / 6e in the never-touched branch — and with no baseline it lands on row 8 as a known hash does, and on row
-  11b, since an unknown hash never matches the head. Tender hashes every save file it finds on disk before it asks
-  (`MatrixExecutor.iter_matrix_outcomes`), so it never passes an unknown hash itself.
+  rows 6b / 6e in the never-touched branch, with or without a baseline — and with no baseline it lands on row 8 as a
+  known hash does, and on row 11b, since an unknown hash never matches the head. Tender hashes every save file it finds
+  on disk before it asks (`MatrixExecutor.iter_matrix_outcomes`), so it never passes an unknown hash itself.
 - **Local mtime vs server `updated_at`** — only consulted in the `never touched` branch, and there only when the local
   file is unchanged since the baseline or its hash is unknown (rows 6b / 6e) — the one case where nothing else orders
   the two sides. A time that is missing or unreadable on either side never reads as local-newer, so the head is
@@ -626,7 +626,7 @@ Dimensions:
 | 8   | yes        | ≥1             | current=true  | no baseline                     | n/a                                          | `Skip(synced, adopt_baseline=true)` | trust server's `is_current=true`, write `last_sync_hash := local_hash` so future drift can be detected                                                                                        |
 | 9   | yes        | ≥1             | current=true  | changed                         | n/a                                          | `Upload(supersede picked.id)`       | offline edit (plausible size) — POST our changes as a new version that supersedes the save the server still considers ours                                                                    |
 | 9b  | yes        | ≥1             | current=true  | changed                         | n/a                                          | **`Conflict(picked)`**              | diverged local is 0-byte or shrunk past the baseline (crash / full disk) — refuse the upload, let the user decide (#1062)                                                                     |
-| 10  | yes        | ≥1             | current=false | unchanged or local hash unknown | n/a                                          | `Download(picked)`                  | another device synced; we did nothing — adopt their version                                                                                                                                   |
+| 10  | yes        | ≥1             | current=false | unchanged or local hash unknown | n/a                                          | `Download(picked)`                  | another device synced, and nothing shows a change of ours — adopt their version                                                                                                               |
 | 11a | yes        | ≥1             | current=false | no baseline                     | n/a                                          | `Download(picked)`                  | no baseline (so parity only, #1468), but `server.content_hash == local_hash` — byte-identical, adopt the server head safely                                                                   |
 | 11b | yes        | ≥1             | current=false | no baseline                     | n/a                                          | **`Conflict(picked)`**              | no baseline and content differs from the server head — cannot prove which side is newer; refuse the silent overwrite (#1276)                                                                  |
 | 12a | yes        | ≥1             | current=false | changed                         | n/a                                          | `Download(picked)`                  | both sides moved off the baseline but landed on the SAME bytes (`server.content_hash == local_hash`, parity only) — adopt the head, nothing to reconcile (#1480)                              |
@@ -1145,8 +1145,8 @@ endpoint calls. The façade delegates to `SyncEngine.resolve_sync_conflict`, who
 3. **Round-trips `server_save_id`**: the caller passes the id the user was shown in the modal. If the freshly-picked
    head's id doesn't match, a third device has uploaded a newer save into the slot between the modal opening and the
    click. The backend returns `{success: False, reason: "stale_conflict", message: ...}` instead of dispatching —
-   silently PUTting local content over the third device's work would be a write-loss. The frontend surfaces an error and
-   the user cancels + retries; the next sync re-evaluates the matrix with the fresh head.
+   silently POSTing local content over the third device's work with `overwrite=true` would be a write-loss. The frontend
+   surfaces an error and the user cancels + retries; the next sync re-evaluates the matrix with the fresh head.
 4. Dispatches:
    - `keep_local` → `_resolve_conflict_keep_local` reads the server save's content hash. If it matches local (rare, but
      possible — both devices ended up at the same content via different paths), the server's id is adopted into state
