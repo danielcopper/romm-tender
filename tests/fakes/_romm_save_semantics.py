@@ -21,8 +21,8 @@ Modeled from RomM 5.3.0's ``backend/endpoints/saves.py``:
   onto a slot whose latest save the calling device has not synced —
   including a device that has NEVER synced a non-empty slot.
 
-Not modeled: RomM answers 404 for a device id it has no device for, and the
-fakes accept any id; a row's ``device_name`` is then None.
+Not modeled: RomM answers 404 for a device id it has no device for; the fakes
+accept any id, and an entry for it carries ``device_name`` None.
 """
 
 from __future__ import annotations

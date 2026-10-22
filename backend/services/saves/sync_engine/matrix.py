@@ -384,21 +384,12 @@ class MatrixExecutor:
     def _confirm_upload_sync(self, response: dict[str, Any], device_id: str | None) -> None:
         """Ack the uploaded save on the server's DeviceSaveSync row, unless redundant.
 
-        ``add_save`` (POST) and ``update_save`` (PUT) upsert the calling device's
-        DeviceSaveSync row (``synced_at = updated_at``) when the request names a
-        device, and serialize it into the response's ``device_syncs`` — so the
-        ack is redundant on the normal upload path and is skipped when *response*
-        already shows this device ``is_current`` (one fewer round-trip per
-        uploaded file, #1458). ``add_save``'s content-dedup early-return answers
-        before the upsert, but RomM reaches it only past its slot gate, so this
-        device is current on the slot's newest save: a dedup onto that save
-        answers current and is skipped too. Only a dedup onto an older save
-        answers not current; the automatic path refuses that one first
-        (:func:`_dedup_returned_non_head`), so the ack fires for it only from a
-        caller that passes no ``planned_group`` — the copy into another slot and
-        the legacy-save migration — where it is the only writer of our sync row.
-        Fail-open — any non-current / missing / unexpected response confirms.
-        Non-fatal: a failed ack is debug-logged and swallowed.
+        Skipped when *response* already shows this device ``is_current`` (#1458);
+        otherwise sent. When RomM's answers make the ack redundant and when it is
+        the only writer of the row: docs/architecture/save-file-sync-architecture.md,
+        "POST and PUT both upsert the calling device's sync row". Fail-open — any
+        non-current / missing / unexpected response confirms. Non-fatal: a failed
+        ack is debug-logged and swallowed.
         """
         upload_id = response.get("id")
         if not device_id or not upload_id:
@@ -441,8 +432,10 @@ class MatrixExecutor:
         race (ADR-0017).
 
         *planned_group* is the automatic POST path's pre-upload ``list_saves``
-        snapshot for this file (``None`` for the PUT / explicit-action callers,
-        who never dedup): when the POST response deduped to a pre-existing
+        snapshot for this file — ``None`` for the callers that plan no listing:
+        the PUT, ``keep_local``, the copy into another slot and the legacy
+        migration, for which the guard is inert. When the POST response deduped
+        to a pre-existing
         non-head save (:func:`_dedup_returned_non_head`, #1482), this raises
         ``RommConflictError`` BEFORE any baseline / own-upload / confirm write so
         the same 409 backstop that catches a write-time stale-current race
@@ -1077,11 +1070,6 @@ def _dedup_returned_non_head(response: dict[str, Any], planned_group: list[dict[
 def _upload_response_proves_current(response: dict[str, Any], device_id: str) -> bool:
     """Whether *response* proves *device_id* already holds the current save.
 
-    RomM's ``add_save`` / ``update_save`` upsert the uploading device's
-    DeviceSaveSync row (``synced_at = updated_at``) and serialize it into the
-    response's ``device_syncs`` with ``is_current=true`` — except ``add_save``'s
-    content-dedup early-return, which returns the pre-existing save (its stale
-    row, or a synthesized ``is_current=false`` placeholder) *before* the upsert.
     Reads the same ``device_syncs`` shape ``domain.sync_action`` reads. Fail-open:
     only an entry for *device_id* whose ``is_current`` is exactly ``True`` counts;
     any missing / non-list / otherwise-unexpected shape returns ``False`` so the

@@ -200,14 +200,12 @@ On the automatic path there is no PUT-in-place to bump, so the #748 "drop the PU
 `add_save` (POST) already upserts this device's `device_save_sync` row (`last_synced_at = updated_at`) and serializes it
 into the response's `device_syncs`, so `is_current` is true for us the moment the POST returns — the follow-up
 `confirm_download` ack is redundant and is **skipped** when the response proves us current (`_confirm_upload_sync`,
-\#1458). The one path that still needs the ack is `add_save`'s content-dedup early-return: a POST returns the matching
-save **before** the upsert with `is_current=false`, so the ack is the only writer of our sync row there. On the
-automatic path this only fires for a **benign** dedup where the returned save is the slot head (e.g. the empty-slot
-race) — a dedup to an older, non-head save is guarded away first and routed to a conflict, never acked (see
-[Dedup-to-non-head](#upload-time-conflicts-the-409-backstop) below). The version-switch flow (`versions.py`) routes
-through the same `_confirm_upload_sync` after its PUT — the PUT upserts too, so the ack is at most an idempotent re-ack
-(and is skipped if the PUT response already proves us current) — and is out of scope here — see
-[Version Switch Flow](#version-switch-flow-rollback).
+\#1458). When `add_save` answers with a save its content matched instead of a new version, what that answer reports and
+when the ack is still sent are under
+[POST and PUT both upsert the calling device's sync row](#post-and-put-both-upsert-the-calling-devices-sync-row). The
+version-switch flow (`versions.py`) routes through the same `_confirm_upload_sync` after its PUT — the PUT upserts too,
+so the ack is at most an idempotent re-ack (and is skipped if the PUT response already proves us current) — and is out
+of scope here — see [Version Switch Flow](#version-switch-flow-rollback).
 
 ## Save Slots
 
@@ -1482,10 +1480,14 @@ the answer by `_build_save_schema`, and depends on whether the request names a d
   synced reads as not current.
 - **Without `device_id`** — `device_syncs` is empty, whatever rows are stored.
 
-The rows that make a save current for a device are written only by an upload, a download and the ack — see the sections
-below — by RomM's own background sync tasks, which act only on devices registered for file-transfer or push-pull sync
-(Tender registers its device in RomM's default API mode), and by `POST /api/saves/{id}/untrack`, which Tender does not
-call. Which decision rows a `list_saves` without a device id reaches is under
+The rows that make a save current for a device are written only by:
+
+- an upload, a download, and the `POST /api/saves/{id}/downloaded` ack — see the sections below;
+- RomM's own background sync tasks, which act only on devices registered for file-transfer or push-pull sync — Tender
+  registers its device in RomM's default API mode;
+- `POST /api/saves/{id}/untrack`, which Tender does not call.
+
+Which decision rows a `list_saves` without a device id reaches is under
 [Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached).
 
 ### The `add_save` POST 409-gate
@@ -1522,14 +1524,19 @@ skips it when the upload response already shows this device `is_current` (`_conf
 round-trip per uploaded file.
 
 **`add_save`'s content-dedup early-return.** A named-slot `overwrite=false` POST whose content hash matches an existing
-save in the slot returns that pre-existing save **before** the `device_save_sync` upsert. RomM looks for that match only
-past its [409-gate](#the-add_save-post-409-gate), so the device is already current on the slot's newest save: a dedup
-onto that save answers current, and the ack is skipped. Only a dedup onto an older save answers not current (a stale
-row, or RomM's placeholder). On the automatic sync path that case never reaches the ack: the dedup-to-non-head guard
-refuses it first ([Upload-time conflicts](#upload-time-conflicts-the-409-backstop)). Copying a save into another slot
-and migrating legacy saves into a slot post without the planned listing that guard needs, so there a dedup onto an older
-save is acked, and the ack is the only writer of this device's sync row on that save. The ack stays best-effort —
-failures are logged at debug and never fail the upload.
+save in the same slot returns that pre-existing save **before** the `device_save_sync` upsert. For a request that names
+a device, RomM runs its [409-gate](#the-add_save-post-409-gate) before it looks for that match, so the device is already
+current on the slot's newest save: a dedup onto that save answers current, and the ack is skipped. A dedup onto an older
+save answers what this device's row on that save says — current for a version it synced itself that nobody has changed
+since, otherwise not current (a stale row, or RomM's placeholder).
+
+On the automatic sync path a dedup onto an older save never reaches the ack: the dedup-to-non-head guard refuses it
+first, from the listing the upload was planned against
+([Upload-time conflicts](#upload-time-conflicts-the-409-backstop)). Two callers POST with `overwrite=false` and no
+planned listing (`planned_group`), so the guard is inert for them: copying a save into another slot, and migrating
+legacy saves into a slot. There a dedup onto an older save is acked when it answers not current, and the ack is the only
+writer of this device's sync row on that save. The ack stays best-effort — failures are logged at debug and never fail
+the upload.
 
 ### GET `/content?optimistic=true` auto-upserts the sync row
 
@@ -2461,9 +2468,9 @@ A local save whose bytes equal a slot head this device is not current on is answ
 local is unchanged since its baseline, row 11a with no baseline, row 12a when it has moved off its baseline. The local
 file goes to `.romm-backup` first and the same bytes come back. The common case is a fresh install, a copied card or a
 restored backup (row 11a). Nothing is lost, but the bytes are transferred for nothing, and that is a defect. gavel 2.0.0
-([romm-gavel#55](https://github.com/danielcopper/romm-gavel/issues/55)) answers all three rows with an adopt when the
-bytes are identical, and Tender then has to acknowledge the head with `POST /api/saves/{id}/downloaded`, which makes the
-device current on it without a transfer; that lands with Tender's adoption of gavel 2.0.0.
+([romm-gavel#55](https://github.com/danielcopper/romm-gavel/issues/55)) is to answer all three rows with an adopt when
+the bytes are identical, and Tender then has to acknowledge the head with `POST /api/saves/{id}/downloaded`, which makes
+the device current on it without a transfer; that lands with Tender's adoption of gavel 2.0.0.
 
 ### A device clock decides one case without a device id
 

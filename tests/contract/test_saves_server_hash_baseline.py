@@ -1,12 +1,13 @@
 """Contract tests for the server-hash baseline identity check (#1468), at the wire.
 
 Drives the real ``Endpoints`` over the real ``bootstrap`` with a registered
-device, as the sync entry points reach RomM. The provenance route is consulted
-only in the decision's never-touched branch and in the 409 backstop, and RomM
-never sends a registered device into that branch: for a save the device has no
-sync row on, ``GET /api/saves`` answers a placeholder entry that is not
-current. The parity route also decides rows 11a and 12a. So the two cases below
-land on the not-current rows:
+device, as the sync entry points reach RomM. The provenance route can match
+only in the decision's never-touched branch (row 6d): everywhere else a local
+file unchanged since its baseline — the only kind provenance can prove — is
+answered before the identity check. RomM never sends a registered device into
+that branch: for a save the device has no sync row on, ``GET /api/saves``
+answers a placeholder entry that is not current. The parity route also decides
+rows 11a and 12a. So the two cases below land on the not-current rows:
 
 - **Provenance**: a file with sync history whose stored server hash
   (``last_sync_server_hash``) matches the head's ``content_hash`` while the
