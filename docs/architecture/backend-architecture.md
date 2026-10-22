@@ -2194,10 +2194,10 @@ swaps the tree and rolls back what does not answer
   first); every other reader is the owning service's own. A claim counts toward the reason that names its work —
   `domain/update_install.py` maps each endpoint and lease key to one, the save use cases to the save sync among them and
   the rest of the work to `other_work` — except a claim whose own work only reads, or writes nothing a restart can cut
-  short (`READ_ONLY_CLAIMS` there: a cache it can build again, an artwork slot's `none` record, or the record of an
-  artwork image written before that image goes out), which makes no press wait; a lease such a read hands out is a claim
-  of its own. A test reads every claim name the source takes and fails on one in neither list, and a claim neither names
-  still counts as `other_work`, so work nobody classified makes a press wait rather than slipping through.
+  short (`READ_ONLY_CLAIMS` there, whose comment is the one list of the writes they may make), which makes no press
+  wait; a lease such a read hands out is a claim of its own. A test reads every claim name the source takes and fails on
+  one in neither list, and a claim neither names still counts as `other_work`, so work nobody classified makes a press
+  wait rather than slipping through.
 - **The press** (`install_update`, naming the version it means) is refused while an attempt holds the rule
   (`update_in_progress`), where nothing is offered (`not_offered`), for a version that is not the stored one
   (`version_changed`), and while any reason holds (`update_waiting`, carrying `wait_reasons`). The reasons are asked

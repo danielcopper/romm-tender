@@ -782,12 +782,15 @@ image it names, and only that one, so a late answer for an older image leaves a 
 slot's `set` row; `refused` forgets the hand-over and never replaces a `set` row. The hand-over also keeps the image the
 user had chosen for the slot at the press, or none (D20): where Steam refuses the handed-over image while it is the
 slot's choice, that earlier choice comes back — chosen A, then B refused, is chosen A again; the same image chosen again
-and refused stays chosen; nothing chosen before is nothing chosen — and the refused image leaves the slot's cache, so it
-is never served afterwards as Tender's automatic image. A refusal for an image that is no longer the hand-over or the
-choice changes no choice. So the slot is as it was before the press, and the tab says Steam did not take the image. The
-icon, judged by its path, has no hand-over. A version switch writes the chosen cover where there is one, RomM's where
-there is none, and no cover at all where a chosen cover exists but cannot be served now (the cache lost it and it cannot
-be downloaded): `get_sgdb_artwork_base64(rom_id, 0)` says which in `chosen`, and the switch logs why it left the cover
+and refused stays chosen; nothing chosen before is nothing chosen — and that refused image's file leaves the cache, so
+it is never served afterwards as Tender's automatic image. The tab reads the choice before it stores anything and hands
+it to the hand-over itself. A refusal for an image that is no longer the hand-over or the choice changes no choice, and
+neither does a refusal of a chosen image served as itself — by a version switch, the fill or the job — which stays
+chosen and cached. So the slot is as it was before the press, and the tab says Steam did not take the image. The icon,
+judged by its path, has no hand-over. A version switch writes the chosen cover where there is one, RomM's where there is
+none, and no cover at all where a chosen cover exists but cannot be served now (the cache lost it and it cannot be
+downloaded, or the download was refused): `get_sgdb_artwork_base64(rom_id, 0)` says which in `chosen`. A read of it that
+fails or is refused writes no cover either, since it cannot rule a choice out; the switch logs why it left the cover
 Steam shows.
 
 **Which image** (`domain/sgdb_artwork.py`, `choose_candidate`), in the one download path the game page, Refresh Artwork,
