@@ -432,10 +432,8 @@ class MatrixExecutor:
         race (ADR-0017).
 
         *planned_group* is the automatic POST path's pre-upload ``list_saves``
-        snapshot for this file — ``None`` for the callers that plan no listing:
-        the PUT, ``keep_local``, the copy into another slot and the legacy
-        migration, for which the guard is inert. When the POST response deduped
-        to a pre-existing
+        snapshot for this file; every other caller passes ``None``, and the guard
+        is inert for it. When the POST response deduped to a pre-existing
         non-head save (:func:`_dedup_returned_non_head`, #1482), this raises
         ``RommConflictError`` BEFORE any baseline / own-upload / confirm write so
         the same 409 backstop that catches a write-time stale-current race

@@ -797,8 +797,7 @@ class TestDedupToNonHeadUploadGuard:
     while a newer, different head still leads the slot — no new version, the
     foreign head stays authoritative. The automatic POST path passes its
     pre-upload ``list_saves`` snapshot as ``planned_group`` so the response can
-    be classified; the callers that plan no listing (the PUT, keep_local, the
-    copy into another slot, the legacy migration) pass none and are inert.
+    be classified; every other caller passes none and is inert.
     """
 
     def test_dedup_to_non_head_raises_conflict_without_baseline_or_confirm(self, tmp_path):
