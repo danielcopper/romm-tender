@@ -294,7 +294,6 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # RetroDECK's settings file and ES-DE's, and resolves the answer with
         # realpath.
         "download_folder",
-        "bios_download_folder",
         "rom_root",
         "bios_folder",
         "saves_root",
@@ -306,16 +305,13 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # named. RomRemovalService and RomAdoptionService ask a system's folder
         # (``_rom_folder``, ``_rom_folders``), the adoption its target
         # (``_resolve_target``), the candidate search its platform folder
-        # (``_platform_dir``), the cleanup's save step the saves root
-        # (``_saves_root``), and FirmwareDemand where a BIOS download lands and
-        # where the status looks (``download_root``, ``status_root``).
+        # (``_platform_dir``), and the cleanup's save step the saves root
+        # (``_saves_root``).
         "_rom_folder",
         "_rom_folders",
         "_resolve_target",
         "_platform_dir",
         "_saves_root",
-        "download_root",
-        "status_root",
         # RecoveryBundleInventoryReader (services/protocols/files.py) — lists the
         # recovery root and measures every bundle under it, one descriptor walk
         # per bundle. Object-shaped, so the method name is the whole entry.

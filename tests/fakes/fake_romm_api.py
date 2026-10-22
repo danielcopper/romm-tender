@@ -140,7 +140,6 @@ class FakeRommApi:
         self._fail_on_next: Exception | None = None
         self.heartbeat_side_effect: Exception | None = None
         self.list_platforms_side_effect: Exception | None = None
-        self.get_firmware_side_effect: Exception | None = None
         self.download_firmware_side_effect: Exception | None = None
         self.get_rom_side_effect: Exception | None = None
         self.get_rom_simple_side_effect: Exception | None = None
@@ -542,14 +541,6 @@ class FakeRommApi:
     # ------------------------------------------------------------------
     # RommFirmwareApi
     # ------------------------------------------------------------------
-
-    def get_firmware(self, firmware_id: int) -> dict[str, Any]:
-        self._log("get_firmware", (firmware_id,))
-        self._check_fail(self.get_firmware_side_effect)
-        for fw in self.firmware_files:
-            if fw.get("id") == firmware_id:
-                return dict(fw)
-        return {"id": firmware_id}
 
     def download_firmware(self, firmware_id: int, filename: str, dest: str) -> None:
         self._log("download_firmware", (firmware_id, filename, dest))

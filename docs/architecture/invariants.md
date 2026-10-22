@@ -972,10 +972,10 @@ Format: **invariant** — tier — enforced by.
   question: `download_folder`, `rom_root`, `rom_folders`, `bios_folder`, `saves_root` and `move_roots`, each a fresh
   reading of the emulator sources and a question to the resolver, which reads RetroDECK's settings file and ES-DE's, and
   a `realpath` of the answer — together with the services' own wrappers around them (`_rom_folder`, `_rom_folders`,
-  `_resolve_target`, `_platform_dir`, `_saves_root`, `download_root`), which are what the services call. The firmware
-  timing is the only entry a cost was measured for; every other one is listed from reading its implementation. One other
-  real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is
-  it an inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
+  `_resolve_target`, `_platform_dir`, `_saves_root`), which are what the services call. The firmware timing is the only
+  entry a cost was measured for; every other one is listed from reading its implementation. One other real I/O seam was
+  weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of
+  what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
   `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
   in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
   fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.

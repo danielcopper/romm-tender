@@ -307,7 +307,6 @@ class TestIoSeamsViolations:
         "getter",
         [
             "download_folder",
-            "bios_download_folder",
             "rom_root",
             "bios_folder",
             "saves_root",
@@ -337,8 +336,6 @@ class TestIoSeamsViolations:
             ("self", "_resolve_target"),
             ("self", "_platform_dir"),
             ("self", "_saves_root"),
-            ("self._demand", "download_root"),
-            ("self._demand", "status_root"),
         ],
     )
     def test_every_service_wrapper_around_a_retrodeck_folder_question_inside_uow_is_flagged(

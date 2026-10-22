@@ -133,6 +133,8 @@ _ROW_KEYS = {
     "replace_offered",
     "in_folder",
     "delete_name",
+    # The name the platform a link of Tender's serves the row for is shown under.
+    "linked_for_name",
 }
 
 

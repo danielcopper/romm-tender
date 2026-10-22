@@ -295,9 +295,6 @@ class RommApiAdapter:
 
     # ── Firmware / BIOS ───────────────────────────────────────────────
 
-    def get_firmware(self, firmware_id: int) -> dict[str, Any]:
-        return self._client.request(f"/api/firmware/{firmware_id}")
-
     def download_firmware(self, firmware_id: int, filename: str, dest: str) -> None:
         quoted_filename = urllib.parse.quote(filename, safe="")
         self._client.download(
