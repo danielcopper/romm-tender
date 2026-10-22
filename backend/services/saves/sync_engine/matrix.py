@@ -384,15 +384,19 @@ class MatrixExecutor:
     def _confirm_upload_sync(self, response: dict[str, Any], device_id: str | None) -> None:
         """Ack the uploaded save on the server's DeviceSaveSync row, unless redundant.
 
-        ``add_save`` (POST) and ``update_save`` (PUT) both upsert this device's
-        DeviceSaveSync row (``synced_at = updated_at``) on every supported RomM
-        version and serialize it into the response's ``device_syncs`` — so the
+        ``add_save`` (POST) and ``update_save`` (PUT) upsert the calling device's
+        DeviceSaveSync row (``synced_at = updated_at``) when the request names a
+        device, and serialize it into the response's ``device_syncs`` — so the
         ack is redundant on the normal upload path and is skipped when *response*
         already shows this device ``is_current`` (one fewer round-trip per
-        uploaded file, #1458). The one path that still needs it is ``add_save``'s
-        content-dedup early-return: a named-slot ``overwrite=false`` POST whose
-        content matches an existing save returns *before* the upsert, reporting
-        ``is_current=false``, so the ack is the only writer of our sync row there.
+        uploaded file, #1458). ``add_save``'s content-dedup early-return answers
+        before the upsert, but RomM reaches it only past its slot gate, so this
+        device is current on the slot's newest save: a dedup onto that save
+        answers current and is skipped too. Only a dedup onto an older save
+        answers not current; the automatic path refuses that one first
+        (:func:`_dedup_returned_non_head`), so the ack fires for it only from a
+        caller that passes no ``planned_group`` — the copy into another slot and
+        the legacy-save migration — where it is the only writer of our sync row.
         Fail-open — any non-current / missing / unexpected response confirms.
         Non-fatal: a failed ack is debug-logged and swallowed.
         """
@@ -1060,8 +1064,7 @@ def _dedup_returned_non_head(response: dict[str, Any], planned_group: list[dict[
     evaluated): the response is a member of that snapshot (an existing save, not
     a freshly minted version whose id is absent from it) that is not the newest
     save in it. Benign — today's baseline write stands — for an empty planned
-    slot (no head to bypass, e.g. an empty-slot race whose only signal is the
-    dedup response itself), a freshly created version, or the head coming back.
+    slot (no head to bypass), a freshly created version, or the head coming back.
     """
     response_id = response.get("id")
     if response_id is None or not planned_group:

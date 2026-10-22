@@ -765,7 +765,7 @@ class TestDedupReturnedNonHeadPredicate:
     POST that deduped to a pre-existing NON-head save (#1482)."""
 
     def test_empty_planned_group_is_benign(self):
-        """No planned head to bypass (e.g. an empty-slot race) → benign."""
+        """No planned head to bypass → benign."""
         assert _dedup_returned_non_head({"id": 100}, []) is False
 
     def test_missing_response_id_is_benign(self):

@@ -1511,21 +1511,25 @@ for its automatic-upload conflict path (see
 ### POST and PUT both upsert the calling device's sync row
 
 Read in RomM's source at 5.3.0: both `POST /api/saves` (`add_save`) and `PUT /api/saves/{id}` (`update_save`) bump
-`save.updated_at` to the server's NOW **and** upsert the calling device's
-`device_save_sync.last_synced_at = updated_at`. Both build their response **after** that upsert, so the body's
-`device_syncs` shows us `is_current = true` (equality counts) the moment it returns. The skip logic is fail-open
-regardless: a response that proves us current skips the ack, anything else (including a bare body) still sends the
-idempotent ack.
+`save.updated_at` to the server's NOW **and**, for a request that names a device — every upload Tender sends does —
+upsert the calling device's `device_save_sync.last_synced_at = updated_at`. Both build their response **after** that
+upsert, so the body's `device_syncs` shows us `is_current = true` (equality counts) the moment it returns. The skip
+logic is fail-open regardless: a response that proves us current skips the ack, anything else (including a bare body)
+still sends the idempotent ack.
 
 This makes the dedicated `POST /api/saves/{id}/downloaded` ack **redundant on the normal upload path** — the sync engine
 skips it when the upload response already shows this device `is_current` (`_confirm_upload_sync`, #1458), saving one
 round-trip per uploaded file.
 
-**The one exception — `add_save`'s content-dedup early-return.** A named-slot `overwrite=false` POST whose content hash
-matches an existing save in the slot returns that pre-existing save **before** the `device_save_sync` upsert (a stale
-row, or a synthesized `is_current=false` placeholder). On that path the ack is the only writer of our sync row, so
-`_confirm_upload_sync` fails open (any non-`is_current` response) and still fires. The ack stays best-effort — failures
-are logged at debug and never fail the upload.
+**`add_save`'s content-dedup early-return.** A named-slot `overwrite=false` POST whose content hash matches an existing
+save in the slot returns that pre-existing save **before** the `device_save_sync` upsert. RomM looks for that match only
+past its [409-gate](#the-add_save-post-409-gate), so the device is already current on the slot's newest save: a dedup
+onto that save answers current, and the ack is skipped. Only a dedup onto an older save answers not current (a stale
+row, or RomM's placeholder). On the automatic sync path that case never reaches the ack: the dedup-to-non-head guard
+refuses it first ([Upload-time conflicts](#upload-time-conflicts-the-409-backstop)). Copying a save into another slot
+and migrating legacy saves into a slot post without the planned listing that guard needs, so there a dedup onto an older
+save is acked, and the ack is the only writer of this device's sync row on that save. The ack stays best-effort —
+failures are logged at debug and never fail the upload.
 
 ### GET `/content?optimistic=true` auto-upserts the sync row
 
