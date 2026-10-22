@@ -428,6 +428,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             conflict_rules=conflict_rules,
             downscale_icon=cfg.adapters.downscale_icon,
             clock=cfg.runtime.clock,
+            cover=artwork_service,
         ),
     )
 

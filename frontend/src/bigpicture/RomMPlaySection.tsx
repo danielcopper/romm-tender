@@ -31,8 +31,10 @@ import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
 import { useTriggerHandler } from "./emulatorStepping";
-import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
-import { applyArtwork, cancelArtworkApply } from "../utils/artwork";
+import { applyAutomaticArtwork, cancelArtworkApply } from "../utils/artwork";
+import { settleArtworkGame } from "../utils/artworkGameChange";
+import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
+import { CHOOSE_GAME_FIRST } from "../utils/artworkTabWording";
 import { useAutoArtwork } from "../utils/autoArtwork";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
 import { hasAnySaveConflict } from "../utils/saveStatus";
@@ -126,6 +128,30 @@ async function readAndBroadcastSaveStatus(appId: number, isCancelled: () => bool
   } catch (e) {
     detach(debugLog(`RomMPlaySection: background save check error: ${e}`));
   }
+}
+
+/** Reload RomM's cover for *romId* and tell the game info panel; answers why it failed, or `null` once reloaded. */
+async function refreshRommCover(romId: number): Promise<string | null> {
+  // Re-download the RomM cover, rename to {app_id}p.png, and patch
+  // cover_path on the registry row so the game info panel can render the
+  // refreshed image.
+  const coverResult = await refreshCoverArtwork(romId).catch(
+    (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
+      detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
+      return { success: false, reason: "exception", message: "the request did not complete" };
+    },
+  );
+  if (!coverResult.success) {
+    detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
+    return coverResult.message;
+  }
+  // Notify the game info panel so it can re-render the cover image.
+  globalThis.dispatchEvent(
+    new CustomEvent("romm_data_changed", {
+      detail: { type: "cover_refreshed", rom_id: romId },
+    }),
+  );
+  return null;
 }
 
 interface RomMPlaySectionProps {
@@ -376,6 +402,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   }, [appId]);
 
   const playtimeInfo = useGamePlaytime(appId, detail.romId, "RomMPlaySection");
+  // Refresh Artwork is offered only once the ROM has a SteamGridDB game (#2381 D3); the visit's read also settles a
+  // game RomM's id replaced (D17).
+  useArtworkSlotsChanges(appId);
+  useEffect(() => {
+    if (detail.romId) detach(settleArtworkGame(appId, detail.romId));
+  }, [appId, detail.romId]);
+  const withoutSgdbGame = isKnownWithoutSgdbGame(appId, detail.romId);
 
   // Helper: create an info item with header and value (Steam's two-line pattern)
   const infoItem = (key: string, header: string, value: string, extraClass?: string) => (
@@ -405,25 +438,20 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       showToast(`${sgdbResult.replace(/\.$/, "")}. The RomM cover could not be updated: ${coverFailure}`);
     };
     try {
-      // Re-download the RomM cover, rename to {app_id}p.png, and patch
-      // cover_path on the registry row so the game info panel can render the
-      // refreshed image.
-      const coverResult = await refreshCoverArtwork(romId).catch(
-        (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
-          detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
-          return { success: false, reason: "exception", message: "the request did not complete" };
-        },
-      );
-      if (coverResult.success) {
-        // Notify the game info panel so it can re-render the cover image.
-        globalThis.dispatchEvent(
-          new CustomEvent("romm_data_changed", {
-            detail: { type: "cover_refreshed", rom_id: romId },
-          }),
-        );
-      } else {
-        detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
-        coverFailure = coverResult.message;
+      // What each slot is decides what Refresh Artwork may replace: the cover
+      // only on automatic, the SteamGridDB slots only on automatic, never a
+      // slot the user chose or one set in Steam (#2381 D6).
+      const slots = await loadArtworkSlots(appId, romId);
+      if (!slots) {
+        showToast("Failed to refresh artwork");
+        return;
+      }
+      if (slots.game.sgdb_id === null) {
+        showToast(CHOOSE_GAME_FIRST);
+        return;
+      }
+      if (slots.slots.some((row) => row.slot === "cover" && row.state === "automatic")) {
+        coverFailure = await refreshRommCover(romId);
       }
 
       const resolution = await getSgdbResolution(romId).catch((e): null => {
@@ -449,20 +477,12 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
             say(refreshed.message);
             break;
           }
-          say(artworkApplyMessage(await applyArtwork(romId, appId)));
+          say(artworkApplyMessage(await applyAutomaticArtwork(romId, appId)));
           break;
         }
         case "needs_pick":
-          if (coverFailure) showToast(`The RomM cover could not be updated: ${coverFailure}`);
-          showModal(
-            <SgdbGamePickerModalContent
-              romId={romId}
-              appId={appId}
-              romName={detail.romName}
-              candidates={resolution.candidates}
-              onApplied={() => {}}
-            />,
-          );
+          // The game is chosen in the ARTWORK tab alone (#2381 D3).
+          say(CHOOSE_GAME_FIRST);
           break;
       }
     } catch (e) {
@@ -475,6 +495,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       say("Failed to refresh artwork");
     } finally {
       setActionPending(null);
+      detach(loadArtworkSlots(appId, romId));
     }
   };
 
@@ -654,11 +675,19 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       <Menu label="RomM Actions">
         <MenuItem
           key="refresh-artwork"
+          disabled={withoutSgdbGame}
           onClick={() => {
             detach(handleRefreshArtwork());
           }}
         >
-          Refresh Artwork
+          {withoutSgdbGame ? (
+            <div>
+              <div>Refresh Artwork</div>
+              <div style={{ fontSize: "12px", opacity: 0.7 }}>{CHOOSE_GAME_FIRST}</div>
+            </div>
+          ) : (
+            "Refresh Artwork"
+          )}
         </MenuItem>
         <MenuItem
           key="refresh-metadata"

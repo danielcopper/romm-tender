@@ -151,16 +151,17 @@ Format: **invariant** — tier — enforced by.
   starts after the press is cut short where it stands: a download leaves a partial file the next start removes, a save
   sync leaves a run half done, a file move leaves a record naming where the files no longer are. The press checks that
   no work of this process is in flight — each kind the panel names, and every claim held on the prune conflicts but
-  those of endpoints that only read, or write a cache they can build again (`READ_ONLY_CLAIMS`, which a restart cuts
-  nothing short of), which covers every other endpoint that names the prune rule and every lease a frontend still holds;
-  this rule keeps anything new from starting behind that check, and a use case that names both rules asks the update
-  rule again once its operation is registered, so a press that came while it waited to register cannot slip in between.
-  The migration rule already names every endpoint that touches local game data, so the update rule rides on it rather
-  than keeping a list of its own, and it is asked first because an update in progress is the answer the user can do
-  nothing about but wait. The migration itself names no migration rule — it is what that rule waits for — yet starting
-  it is new work, so it names the update rule alone; `UPDATE_ONLY` in `tests/contract/test_conflict_refusals.py` pins it
-  as the one such site (`test_the_update_rule_stands_without_the_migration_rule_only_where_pinned`). Source readers hold
-  the two together: `tests/_conflict_rules.py::call_sites_with_rule` compares the `hold` / `hold_start` calls one by one
+  those of endpoints that only read, or write nothing a restart can cut short (`READ_ONLY_CLAIMS` in
+  `domain/update_install.py`, whose comment is the one list of the writes they may make), which covers every other
+  endpoint that names the prune rule and every lease a frontend still holds; this rule keeps anything new from starting
+  behind that check, and a use case that names both rules asks the update rule again once its operation is registered,
+  so a press that came while it waited to register cannot slip in between. The migration rule already names every
+  endpoint that touches local game data, so the update rule rides on it rather than keeping a list of its own, and it is
+  asked first because an update in progress is the answer the user can do nothing about but wait. The migration itself
+  names no migration rule — it is what that rule waits for — yet starting it is new work, so it names the update rule
+  alone; `UPDATE_ONLY` in `tests/contract/test_conflict_refusals.py` pins it as the one such site
+  (`test_the_update_rule_stands_without_the_migration_rule_only_where_pinned`). Source readers hold the two together:
+  `tests/_conflict_rules.py::call_sites_with_rule` compares the `hold` / `hold_start` calls one by one
   (`test_every_call_site_naming_the_migration_rule_names_the_update_rule`), and
   `functions_checking_migration_without_update` finds any function under `backend/services/` that reads the migration
   check directly without also reading the update one, and finds none
@@ -952,41 +953,44 @@ Format: **invariant** — tier — enforced by.
   settle. **Listing them changes nothing at their call sites**: each service reaches its reading through
   `run_in_executor` as a bound method, which is this checker's documented blind spot, so the entries are a statement of
   the rule rather than an enforcement of it. They are also not the store's only real I/O — `grid_dir()` is called from
-  `services/artwork/` (seven sites), `services/shortcut_removal.py` and `services/library/reporter.py`,
-  `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
-  `services/library/reporter.py`, `write_shortcut_icon()` from `services/steamgrid.py`, and `ensure_grid_file()` from
-  `services/shortcut_artwork.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
-  `.read_shortcut_icons` (the same whole-file parse, for the shortcut artwork job's worklist, called plainly, so its
-  entry is enforced), `.grid_file_names` (lists Steam's grid directory to answer which artwork slots a shortcut has),
-  the shortcut artwork job's reading of Steam's renderer memory before each batch (`_renderer_above_ceiling`, with
-  `LibraryService.renderer_above_ceiling` beside it: a `/proc` read, and at or above `GC_SKIP_BELOW_KB` a garbage
-  collection over Steam's debugger, bounded at about 5 s, and a second read), `FirmwarePlatformResolver` (reads what one
-  system's emulators want WITH content verification: it opens each candidate in a declared folder and reads it the way
-  the emulator does — 59-173 ms per system on the reference machine at emu-atlas 0.22) and its whole-machine sibling
-  `FirmwareResolver`, the save answer — `resolve_save_answer` and the saves package's own `save_answer` wrapper, a full
-  read of the machine per ROM (the first ask about a core also runs that core's probe) — the savestate question put to
-  the same catalogue entry (`resolve_savestate_location`) and the seam's detection question (`installation_detected`,
-  which detects the emulator sources afresh and reads the answering one's health), the two path resolvers —
-  `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on the SD card the
-  marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison,
-  so a call site costs what the rows it checks cost, not what it checks them against) — and every `RetroDeckFolders`
-  question: `download_folder`, `rom_root`, `rom_folders`, `bios_folder`, `saves_root` and `move_roots`, each a fresh
-  reading of the emulator sources and a question to the resolver, which reads RetroDECK's settings file and ES-DE's, and
-  a `realpath` of the answer — together with the services' own wrappers around them (`_rom_folder`, `_rom_folders`,
-  `_resolve_target`, `_platform_dir`, `_saves_root`), which are what the services call. The firmware timing is the only
-  entry a cost was measured for; every other one is listed from reading its implementation. One other real I/O seam was
-  weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of
-  what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
-  `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
-  in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
-  fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.
-  Six call sites had drifted across the rule before anything looked (#1779), for the reason the check exists: nothing at
-  a call site reveals that an injected seam touches the disk. **The rule and the gate come from reading code — no
-  measurement of how long any of those transactions actually held the lock exists, and nothing here should be read as
-  one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a listed seam,
-  lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of
-  that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name does not end in
-  `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
+  `services/artwork/` (seven sites), `services/steamgrid/` (`service.py` and `_slots.py`),
+  `services/shortcut_removal.py` and `services/library/reporter.py`, `set_steam_input_config()` from
+  `services/settings.py`, `services/shortcut_removal.py` and `services/library/reporter.py`, `write_shortcut_icon()`
+  from `services/steamgrid/service.py`, and `ensure_grid_file()` from `services/shortcut_artwork.py` — those are
+  unlisted, and their being unlisted is a gap, not a judgement), `.read_shortcut_icons` (the same whole-file parse, for
+  the shortcut artwork job's worklist, called plainly, so its entry is enforced), `.grid_file_names` (lists Steam's grid
+  directory to answer which artwork slots a shortcut has), `.read_grid_file` (reads one grid file whole, for the ARTWORK
+  tab to hash a slot's image; reached as a bound method, so listed rather than enforced), `.grid_file_stamps` (stats the
+  files filling the ARTWORK tab's slots, for each thumbnail's signature), the shortcut artwork job's reading of Steam's
+  renderer memory before each batch (`_renderer_above_ceiling`, with `LibraryService.renderer_above_ceiling` beside it:
+  a `/proc` read, and at or above `GC_SKIP_BELOW_KB` a garbage collection over Steam's debugger, bounded at about 5 s,
+  and a second read), `FirmwarePlatformResolver` (reads what one system's emulators want WITH content verification: it
+  opens each candidate in a declared folder and reads it the way the emulator does — 59-173 ms per system on the
+  reference machine at emu-atlas 0.22) and its whole-machine sibling `FirmwareResolver`, the save answer —
+  `resolve_save_answer` and the saves package's own `save_answer` wrapper, a full read of the machine per ROM (the first
+  ask about a core also runs that core's probe) — the savestate question put to the same catalogue entry
+  (`resolve_savestate_location`) and the seam's detection question (`installation_detected`, which detects the emulator
+  sources afresh and reads the answering one's health), the two path resolvers — `MigrationFileStore.realpath` (one walk
+  per stored RetroDECK-home marker, a directory that may sit on the SD card the marker is pending a migration away from)
+  and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison, so a call site costs what the rows it
+  checks cost, not what it checks them against) — and every `RetroDeckFolders` question: `download_folder`, `rom_root`,
+  `rom_folders`, `bios_folder`, `saves_root` and `move_roots`, each a fresh reading of the emulator sources and a
+  question to the resolver, which reads RetroDECK's settings file and ES-DE's, and a `realpath` of the answer — together
+  with the services' own wrappers around them (`_rom_folder`, `_rom_folders`, `_resolve_target`, `_platform_dir`,
+  `_saves_root`), which are what the services call. The firmware timing is the only entry a cost was measured for; every
+  other one is listed from reading its implementation. One other real I/O seam was weighed and kept out — the reason is
+  in the script's docstring, and it is not an exemption; nor is it an inventory of what else touches the disk. **"It's
+  only a read" is the reasoning this rule exists to refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so
+  even a read-only UoW takes the write lock. The database is in WAL, so readers are unaffected — but every other
+  **writer** waits on the lock for up to `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and
+  `FakeUnitOfWork` shares no connection, so no unit test notices. Six call sites had drifted across the rule before
+  anything looked (#1779), for the reason the check exists: nothing at a call site reveals that an injected seam touches
+  the disk. **The rule and the gate come from reading code — no measurement of how long any of those transactions
+  actually held the lock exists, and nothing here should be read as one.** What the check sees is the deadlock rule's
+  matcher unchanged — an **attribute** call naming a listed seam, lexically inside a `with <...>uow_factory()` block in
+  the same function scope — so it inherits every blind spot of that half: a seam behind a helper one level down, an
+  alias to a local, a factory attribute whose name does not end in `uow_factory`, a nested `def`/`lambda` (which resets
+  the scope by design), a seam **passed as a bound method**
   (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
   `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam
@@ -1515,14 +1519,20 @@ Format: **invariant** — tier — enforced by.
   The adopt dialog's **replace** exit is the second such case, and it does **not** rest on that justification: the
   premise is that the content is the user's own — a different rip, a patch, a romhack — which is exactly what the server
   cannot hand back. What carries it instead is that the user is shown both sides, offered a content check, and chooses
-  between two named outcomes behind a second confirmation ([ADR-0028](../adr/0028-adopted-install-is-an-install.md)).
-  That reasoning covers the **ROM** only: an adoption's Overwrite also replaces save and savestate files, and those take
-  the **backup** leg through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not
-  quarantining a ROM (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is
-  synced nowhere at all. It is the first caller to hand that funnel a directory outside the saves root: it takes the
-  directory it is given, so a savestate's backup lands in `<states>/.romm-backup/`. A BIOS file at an emulator's place
-  is changed only by a "Replace…" the user confirmed on its row. It takes the **backup** leg too, by a path of its own
-  rather than that funnel: once Tender's copy has passed RomM's checksum, the file moves to
+  between two named outcomes behind a second confirmation ([ADR-0028](../adr/0028-adopted-install-is-an-install.md)). A
+  choice in the game page's ARTWORK tab over an image set in Steam is the third: Steam's copy of the image the user set
+  is cleared before Tender's goes in, and that copy may exist nowhere else, so the picker asks once more — Replace or
+  Cancel — and Cancel changes nothing ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D13;
+  `frontend/src/bigpicture/ArtworkPickerModal.test.tsx`, "asks once more before it replaces an image set in Steam, and
+  answers to replace it" and "Cancel on the second question replaces nothing"). The icon is not asked about: Tender
+  repoints the shortcut and the file the user set stays where it was. That reasoning about the adopt dialog covers the
+  **ROM** only: an adoption's Overwrite also replaces save and savestate files, and those take the **backup** leg
+  through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not quarantining a ROM
+  (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is synced nowhere at
+  all. It is the first caller to hand that funnel a directory outside the saves root: it takes the directory it is
+  given, so a savestate's backup lands in `<states>/.romm-backup/`. A BIOS file at an emulator's place is changed only
+  by a "Replace…" the user confirmed on its row. It takes the **backup** leg too, by a path of its own rather than that
+  funnel: once Tender's copy has passed RomM's checksum, the file moves to
   `<data>/backups/bios/<date and time>/<its original absolute path>`, where it stays until the user deletes it. Where
   the link then cannot be placed, it moves back only while its place is still free, never over anything that lies there
   by then, and stays in the backup folder otherwise ([#2191](https://github.com/danielcopper/romm-tender/issues/2191)

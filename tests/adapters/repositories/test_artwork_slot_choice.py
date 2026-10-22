@@ -76,3 +76,49 @@ class TestTheRowsBelongToTheirRom:
             _seed_rom(uow, 5)
         with SqliteUnitOfWork(db) as uow:
             assert uow.artwork_slot_choices.get(5, ArtworkSlot.LOGO) == _choice()
+
+
+class TestSettingASlotBackToAutomatic:
+    def test_deleting_a_slot_drops_its_choice_only(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        uow.artwork_slot_choices.save(_choice(slot=ArtworkSlot.LOGO))
+        uow.artwork_slot_choices.save(_choice(slot=ArtworkSlot.HERO))
+
+        uow.artwork_slot_choices.delete_slot(5, ArtworkSlot.LOGO)
+
+        assert uow.artwork_slot_choices.get(5, ArtworkSlot.LOGO) is None
+        assert uow.artwork_slot_choices.get(5, ArtworkSlot.HERO) == _choice(slot=ArtworkSlot.HERO)
+
+    def test_deleting_a_slot_without_a_choice_is_a_no_op(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+
+        uow.artwork_slot_choices.delete_slot(5, ArtworkSlot.LOGO)
+
+        assert uow.artwork_slot_choices.get_all_for_rom(5) == []
+
+    def test_deleting_a_roms_choices_leaves_another_roms(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        _seed_rom(uow, 6)
+        uow.artwork_slot_choices.save(_choice(rom_id=5))
+        uow.artwork_slot_choices.save(_choice(rom_id=6))
+
+        uow.artwork_slot_choices.delete_for_rom(5)
+
+        assert uow.artwork_slot_choices.get_all_for_rom(5) == []
+        assert uow.artwork_slot_choices.get_all_for_rom(6) == [_choice(rom_id=6)]
+
+
+class TestListForRom:
+    def test_lists_every_slot_of_that_rom_only(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        _seed_rom(uow, 6)
+        for slot in (ArtworkSlot.LOGO, ArtworkSlot.COVER):
+            uow.artwork_slot_choices.save(_choice(slot=slot))
+        uow.artwork_slot_choices.save(_choice(rom_id=6))
+
+        listed = uow.artwork_slot_choices.get_all_for_rom(5)
+
+        assert sorted(listed, key=lambda choice: choice.slot.value) == [
+            _choice(slot=ArtworkSlot.COVER),
+            _choice(slot=ArtworkSlot.LOGO),
+        ]

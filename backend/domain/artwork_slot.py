@@ -21,8 +21,8 @@ class ArtworkSlot(StrEnum):
     """A slot of a shortcut's artwork.
 
     The four SteamGridDB fills are spelled as Tender's asset-type name
-    (``domain.sgdb_artwork``); the cover, which the sync takes from RomM, is
-    ``cover``.
+    (``domain.sgdb_artwork``); the cover, which the sync takes from RomM unless
+    the user chose one from SteamGridDB, is ``cover``.
     """
 
     WIDE_GRID = "grid"
@@ -32,11 +32,16 @@ class ArtworkSlot(StrEnum):
     COVER = "cover"
 
 
-# The slots whose outcome is recorded: the four Tender fills from SteamGridDB.
-# No outcome is recorded for the cover.
+# The slots whose every outcome is recorded: the four Tender fills from
+# SteamGridDB. The cover is recorded only as ``set`` (SET_RECORDED_SLOTS).
 RECORDED_SLOTS: frozenset[ArtworkSlot] = frozenset(
     {ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO, ArtworkSlot.HERO, ArtworkSlot.ICON}
 )
+
+# The slots an image Tender set can be recorded for, with its hash: the four
+# above, and the cover where its image came from SteamGridDB. A cover is never
+# recorded as having no image or a refused one.
+SET_RECORDED_SLOTS: frozenset[ArtworkSlot] = RECORDED_SLOTS | {ArtworkSlot.COVER}
 
 # The extension Steam keeps the logo's position under, beside the logo itself.
 _NOT_AN_IMAGE_EXTENSION = "json"
@@ -69,6 +74,12 @@ def is_slot_filled(file_names: Iterable[str], app_id: int, slot: ArtworkSlot) ->
     return bool(_slot_extensions(file_names, app_id, slot))
 
 
+def slot_files(file_names: Iterable[str], app_id: int, slot: ArtworkSlot) -> list[str]:
+    """The files among *file_names* filling *app_id*'s *slot*, as :func:`is_slot_filled` counts them, by name."""
+    stem = slot_stem(app_id, slot)
+    return sorted(f"{stem}.{extension}" for extension in _slot_extensions(file_names, app_id, slot))
+
+
 def is_set_in_steam(
     file_names: Iterable[str],
     app_id: int,
@@ -76,6 +87,7 @@ def is_set_in_steam(
     *,
     png_sha256: str | None,
     tenders_sha256: str | None,
+    handed_sha256: str | None = None,
 ) -> bool:
     """Whether Steam's grid directory holds an image for *app_id*'s *slot* that is not Tender's.
 
@@ -83,20 +95,24 @@ def is_set_in_steam(
     reads them. A file filling the slot under any extension but ``png`` is not
     Tender's (why: "Set in Steam" in
     docs/architecture/steam-non-steam-shortcuts.md). The ``<stem>.png`` is not
-    Tender's when *png_sha256*, the hash of its bytes, differs from
+    Tender's when *png_sha256*, the hash of its bytes, is neither
     *tenders_sha256*, the hash of what Tender set — the slot's recorded hash,
-    else Tender's cached copy. Where either hash is ``None`` there is nothing to compare, and the
-    ``.png`` is taken as Tender's. Raises ``ValueError`` for the icon, which is
-    judged by its path (:func:`domain.shortcut_icon.is_icon_set_in_steam`).
+    else Tender's cached copy — nor *handed_sha256*, the hash of the image
+    Tender last handed to Steam whose answer is outstanding (#2381 D15). Where
+    *png_sha256* is ``None``, or both references are, there is nothing to
+    compare, and the ``.png`` is taken as Tender's. Raises ``ValueError`` for
+    the icon, which is judged by its path
+    (:func:`domain.shortcut_icon.is_icon_set_in_steam`).
     """
     if slot is ArtworkSlot.ICON:
         raise ValueError("the icon is judged by its path in shortcuts.vdf")
     extensions = _slot_extensions(file_names, app_id, slot)
     if any(extension != _TENDERS_EXTENSION for extension in extensions):
         return True
-    if _TENDERS_EXTENSION not in extensions or png_sha256 is None or tenders_sha256 is None:
+    references = {reference for reference in (tenders_sha256, handed_sha256) if reference is not None}
+    if _TENDERS_EXTENSION not in extensions or png_sha256 is None or not references:
         return False
-    return png_sha256 != tenders_sha256
+    return png_sha256 not in references
 
 
 def _slot_extensions(file_names: Iterable[str], app_id: int, slot: ArtworkSlot) -> set[str]:

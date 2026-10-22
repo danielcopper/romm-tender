@@ -46,7 +46,7 @@ _Named after the railway car behind a steam locomotive, or the boat that shuttle
 - **Library sync** — Pulls the platforms and collections you pick from your RomM server into Steam as non-steam
   shortcuts with RomM cover art; later runs are incremental and preview what will change before touching anything
 - **SteamGridDB artwork** — Add a free [SteamGridDB](https://www.steamgriddb.com/) key to get hero banners, logos, wide
-  capsules and custom icons, with a manual picker for games that don't match automatically
+  capsules and custom icons, and an ARTWORK tab on each game page to choose the game or any image yourself
 - **Save sync** — Opt-in save syncing across devices through your RomM server, automatically before launch and after you
   quit; identical saves resolve silently, and if both sides genuinely changed you decide which one wins
   ([not every system syncs yet](https://danielcopper.github.io/romm-tender/user-guide/save-sync-support-matrix/))

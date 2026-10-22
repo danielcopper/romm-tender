@@ -7,6 +7,7 @@
  * one image at a time.
  */
 
+import { noteArtworkWritten } from "./artworkSlotsStore";
 import { logError } from "../api/backend";
 import type { ShortcutArtworkData } from "../types";
 import { isArtworkApplyInFlight, reportSlotOutcome, setJobSlotArtwork } from "./artwork";
@@ -53,6 +54,8 @@ async function setIcons(data: ShortcutArtworkData, stopped: () => boolean): Prom
     } catch (e) {
       outcome = "refused";
       logError(`Shortcut artwork: could not set the icon of appId ${appId}: ${e}`);
+    } finally {
+      noteArtworkWritten(appId, ["icon"]);
     }
     if (record) reports.push(reportSlotOutcome(record.rom_id, "icon", outcome, record));
   }

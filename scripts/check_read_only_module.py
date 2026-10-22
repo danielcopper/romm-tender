@@ -85,6 +85,7 @@ REPOSITORY_ATTRS: frozenset[str] = frozenset(
         "answered_save_directories",
         "artwork_slot_outcomes",
         "artwork_slot_choices",
+        "artwork_slot_handovers",
         "bios_files",
         "firmware_cache",
         "firmware_store",

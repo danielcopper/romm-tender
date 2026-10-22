@@ -980,25 +980,26 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every destructive op has backup-or-confirm; never delete data that exists nowhere else** — test + prompt-only —
   save-file removals route through the `.romm-backup` funnel (`MatrixExecutor.quarantine_local_file`; the removed-game
   cleanup's claimed variant is `PruneSaveSupport.quarantine_prune_saves`); every other delete path carries the rule
-  unmechanized. Two deletes take the confirm leg: the removed-game cleanup's unselected installed ROM content
-  (per-candidate opt-in stated in the dialog; the row goes only after a fresh 404), and the adopt dialog's **replace**
-  exit for the ROM (both sides shown, a content check offered, a second confirmation); an adoption's Overwrite of save
-  and savestate files, and a collision while following a moved save directory (`services/saves/save_directory.py`), take
-  the backup leg through the same funnel. A BIOS file a "Replace…" the user confirmed moves aside, and a file lying in
-  the firmware store without a record of Tender's whose checksum does not match, take the backup leg to
-  `<data>/backups/bios/<date and time>/<original absolute path>` (`FirmwareStore.do_back_up`,
-  `tests/services/test_firmware_store.py`, `TestReplacingAWrongFile` and `TestAStoreFileWithoutARecord`). The
-  installer's two rollbacks: one by hand takes the backup leg — the database files and `settings.json` it replaces are
-  copied to `rollback-backup/` under the data root first, and a copy that cannot be made refuses it — while the
-  automatic one discards only what a version never seen to answer wrote (`tests/scripts/test_install_sh.py`,
-  `TestRollingBackByHand` and `TestAnUpdateThatDoesNotStart`). A settings file Tender does not read (older than version
-  13, or without a usable version) is written over with the defaults and takes neither leg: 1.0.0 is a breaking release,
-  and everything it held can be entered again. An install record goes only by something the user does (Uninstall,
-  Uninstall all ROM files, "Forget this download", a download or adoption of another version of the game, Clean Up
-  Removed RomM Games), never by the start-up step, which only reports a missing file; Forget deletes no file and refuses
-  while the file or folder exists (`tests/services/test_startup_healing.py::TestReportMissingInstalls`,
-  `tests/contract/test_missing_download.py`). Prompt-only: a new path that deletes `rom_installs` rows is one the user
-  starts
+  unmechanized. Three deletes take the confirm leg: the removed-game cleanup's unselected installed ROM content
+  (per-candidate opt-in stated in the dialog; the row goes only after a fresh 404), the adopt dialog's **replace** exit
+  for the ROM (both sides shown, a content check offered, a second confirmation), and a choice in the ARTWORK tab over
+  an image set in Steam (a second question, Replace or Cancel, before Steam's copy is cleared; the icon's file stays and
+  is not asked about); an adoption's Overwrite of save and savestate files, and a collision while following a moved save
+  directory (`services/saves/save_directory.py`), take the backup leg through the same funnel. A BIOS file a "Replace…"
+  the user confirmed moves aside, and a file lying in the firmware store without a record of Tender's whose checksum
+  does not match, take the backup leg to `<data>/backups/bios/<date and time>/<original absolute path>`
+  (`FirmwareStore.do_back_up`, `tests/services/test_firmware_store.py`, `TestReplacingAWrongFile` and
+  `TestAStoreFileWithoutARecord`). The installer's two rollbacks: one by hand takes the backup leg — the database files
+  and `settings.json` it replaces are copied to `rollback-backup/` under the data root first, and a copy that cannot be
+  made refuses it — while the automatic one discards only what a version never seen to answer wrote
+  (`tests/scripts/test_install_sh.py`, `TestRollingBackByHand` and `TestAnUpdateThatDoesNotStart`). A settings file
+  Tender does not read (older than version 13, or without a usable version) is written over with the defaults and takes
+  neither leg: 1.0.0 is a breaking release, and everything it held can be entered again. An install record goes only by
+  something the user does (Uninstall, Uninstall all ROM files, "Forget this download", a download or adoption of another
+  version of the game, Clean Up Removed RomM Games), never by the start-up step, which only reports a missing file;
+  Forget deletes no file and refuses while the file or folder exists
+  (`tests/services/test_startup_healing.py::TestReportMissingInstalls`, `tests/contract/test_missing_download.py`).
+  Prompt-only: a new path that deletes `rom_installs` rows is one the user starts
 - **A BIOS file is deleted only where Tender holds a record of it, and only at the path that record holds: a store file
   of the platform with every link of Tender's to it, or a download made into an emulator source's folder before the
   store, at its `downloaded_bios` path; a link only while it still points at its store file and its place may be

@@ -31,6 +31,9 @@ class FakeArtworkSlotOutcomeRepository:
     def delete_for_rom(self, rom_id: int) -> None:
         self._records.pop(rom_id, None)
 
+    def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:
+        self._records.get(rom_id, {}).pop(slot, None)
+
     def delete(self, rom_id: int) -> None:
         """The cascade's entry point, as every per-ROM fake repository names it."""
         self.delete_for_rom(rom_id)

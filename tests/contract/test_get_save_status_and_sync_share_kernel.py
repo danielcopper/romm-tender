@@ -6,14 +6,14 @@ Before the collapse, a confirmed non-legacy ROM's ``sync_rom_saves`` handed
 detection to RomM's ``negotiate`` operation list while ``get_save_status`` used
 the matrix — so the two could disagree.
 
-This is the regression guard for the divergence the phase closes. It seeds the
-branch-6d adopt case (the compiled core's ``gavel_decide_when_no_entry``): a server save
-whose ``content_hash`` is byte-identical to the local file, with NO
-``device_syncs`` entry for this device. The matrix verdict is
+This is the regression guard for the divergence the phase closes. It seeds row 8
+of the decision table: a server save with a current ``device_syncs`` entry for
+this device on it, and no baseline. The save's ``content_hash`` equals the local
+file's, which plays no part in row 8. The matrix verdict is
 ``Skip(adopt_baseline=True)`` — nothing to transfer, no conflict, adopt the local
-hash as the baseline. Under the old fork the ``FakeRommApi.negotiate`` empty plan
-would have dispatched nothing (no baseline adopted), diverging from the status
-view. Now both derive from the one kernel, so they agree: status reports
+hash as the baseline. Under the old fork the ``FakeRommApi.negotiate`` empty
+plan would have dispatched nothing (no baseline adopted), diverging from the
+status view. Now both derive from the one kernel, so they agree: status reports
 ``synced`` / no conflict, sync transfers nothing / raises no conflict, and BOTH
 adopt the baseline.
 """
@@ -52,13 +52,14 @@ async def test_get_save_status_and_sync_share_kernel(harness):
     _write_local_save(harness, system="gba", content=content, filename="game.srm")
     local_hash = hashlib.md5(content).hexdigest()
 
-    # Confirmed non-legacy slot, no per-file baseline yet (never synced this file).
+    # Confirmed non-legacy slot, no per-file baseline yet.
     seed_save_state(harness, 42, RomSaveSyncState(active_slot="default", slot_confirmed=True, system="gba"))
 
-    # A server save in the slot with content_hash == local_hash and NO device_syncs
-    # entry for this device (no ledger row) → branch 6 adopt case.
+    # A server save in the slot with content_hash == local_hash that RomM records
+    # this device as current on → row 8, adopt.
     entry = seed_server_save(harness, save_id=100, rom_id=42, slot="default", file_name="game.srm")
     entry["content_hash"] = local_hash
+    harness.romm.stage_device_sync(100, "device-1", entry["updated_at"])
 
     # 1. The status view: the matrix says "synced", no conflict surfaced.
     status = await harness.endpoints.get_save_status(42)

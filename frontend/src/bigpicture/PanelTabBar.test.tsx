@@ -27,7 +27,13 @@ describe("PanelTabBar", () => {
     const { getAllByRole } = render(
       <PanelTabBar activeTab="info" hasAchievements hasSaves hasBios onSelect={vi.fn()} />,
     );
-    expect(getAllByRole("button").map((b) => b.textContent)).toEqual(["GAME INFO", "ACHIEVEMENTS", "SAVES", "BIOS"]);
+    expect(getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "GAME INFO",
+      "ACHIEVEMENTS",
+      "SAVES",
+      "BIOS",
+      "ARTWORK",
+    ]);
   });
 
   it("drops the tabs whose pane has nothing to show", () => {
@@ -38,5 +44,12 @@ describe("PanelTabBar", () => {
     expect(queryByText("ACHIEVEMENTS")).toBeNull();
     expect(queryByText("SAVES")).toBeNull();
     expect(queryByText("BIOS")).toBeNull();
+  });
+
+  it("shows ARTWORK with every other pane absent", () => {
+    const { getAllByRole } = render(
+      <PanelTabBar activeTab="info" hasAchievements={false} hasSaves={false} hasBios={false} onSelect={vi.fn()} />,
+    );
+    expect(getAllByRole("button").map((b) => b.textContent)).toEqual(["GAME INFO", "ARTWORK"]);
   });
 });

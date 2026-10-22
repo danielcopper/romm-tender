@@ -105,17 +105,18 @@ time** line, shown as "up to X min".
 
 Cover changes count too: if you replaced a game's cover on the server but nothing else changed, the page reads "No
 shortcut changes — N cover updates" in place of the table and still offers **Apply Sync** — applying refreshes those
-tiles without touching the shortcuts. A cover you set yourself in Steam is left as it is and not counted, and a sync
-does not bring the server's new cover later on its own; **Refresh Artwork** on the game's page loads it. A cover you set
-in Steam from a JPEG keeps showing even then: Steam keeps it beside Tender's PNG and shows yours. A platform or a
-collection Tender has to read in full again although none of its shortcuts change reads "No shortcut changes — recording
-what RomM has now." and offers **Apply Sync** as well: applying records what RomM serves on that platform or in that
-collection, so the next sync can skip it again. You see it once after an update that introduced this check, while every
-platform or collection is read in full one time; after a game was hidden or deleted in RomM; after a game was changed in
-RomM in a way none of its shortcuts shows, such as a metadata edit or a rescan, since the last sync or shortly before
-it; and after a sync that stopped before it finished. With **Skip preview** on there is no preview to show it in: the
-sync records what RomM has now by itself. Only when there is truly nothing to do does the page read "Everything is up to
-date."
+tiles without touching the shortcuts. A cover you set yourself in Steam, and one you chose from SteamGridDB in the
+game's **ARTWORK** tab, is left as it is and not counted, and a sync does not bring the server's new cover later on its
+own: setting the cover back to **Automatic** in the ARTWORK tab loads it — the cover's slot offers that even without a
+SteamGridDB game or key — after asking before it replaces a cover set in Steam
+([The ARTWORK tab](managing-games.md#the-artwork-tab)). A platform or a collection Tender has to read in full again
+although none of its shortcuts change reads "No shortcut changes — recording what RomM has now." and offers **Apply
+Sync** as well: applying records what RomM serves on that platform or in that collection, so the next sync can skip it
+again. You see it once after an update that introduced this check, while every platform or collection is read in full
+one time; after a game was hidden or deleted in RomM; after a game was changed in RomM in a way none of its shortcuts
+shows, such as a metadata edit or a rescan, since the last sync or shortly before it; and after a sync that stopped
+before it finished. With **Skip preview** on there is no preview to show it in: the sync records what RomM has now by
+itself. Only when there is truly nothing to do does the page read "Everything is up to date."
 
 A preview stays good for **30 minutes**, and it belongs to Tender rather than to the page you are looking at: you can
 leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That
@@ -458,15 +459,16 @@ Steam collections, holding the games the sync puts in them.
 
 Each synced game gets up to five types of artwork:
 
-| Type                  | Source      | Where It Appears                |
-| --------------------- | ----------- | ------------------------------- |
-| Portrait Grid (cover) | RomM        | Library grid tiles, collections |
-| Hero Banner           | SteamGridDB | Game detail page background     |
-| Logo                  | SteamGridDB | Title overlay on hero banner    |
-| Wide Grid             | SteamGridDB | Recent games shelf, list view   |
-| Icon                  | SteamGridDB | Taskbar, small UI elements      |
+| Type                  | Source                                   | Where It Appears                |
+| --------------------- | ---------------------------------------- | ------------------------------- |
+| Portrait Grid (cover) | RomM, or SteamGridDB where you chose one | Library grid tiles, collections |
+| Hero Banner           | SteamGridDB                              | Game detail page background     |
+| Logo                  | SteamGridDB                              | Title overlay on hero banner    |
+| Wide Grid             | SteamGridDB                              | Recent games shelf, list view   |
+| Icon                  | SteamGridDB                              | Taskbar, small UI elements      |
 
-Cover art is always applied from RomM. The other four types require a
+Cover art is applied from RomM, unless you chose a cover from SteamGridDB in the game's
+[ARTWORK tab](managing-games.md#the-artwork-tab). The other four types require a
 [SteamGridDB API key](configuration.md#steamgriddb-api-key); games without a SteamGridDB match show Steam's default
 placeholders for hero, logo and wide grid, and Tender's logo as their icon.
 
@@ -489,12 +491,13 @@ between Game Mode and Desktop Mode does.
 The hero banner is set the first time a game's page is opened in a session, and so are an icon, a logo and a wide grid
 the background job has not set yet; each only where the game has none (Tender's logo counts as no icon): an image you
 set yourself, in Steam's own artwork options or with another tool, stays, until you switch the game to another version,
-which replaces all four. When SteamGridDB has no icon, logo or wide grid for a game, or Steam does not accept the image,
-neither the background job nor opening the page asks again for a week, or until the game's SteamGridDB match changes.
+which replaces all four with that version's — an image you chose for that version comes back with it. When SteamGridDB
+has no icon, logo or wide grid for a game, or Steam does not accept the image, neither the background job nor opening
+the page asks again for a week, or until the game's SteamGridDB match changes.
 
-You can refresh artwork for any individual game from its
-[game detail page](managing-games.md#refreshing-artwork-and-metadata); that downloads every image anew and replaces it,
-one you set yourself included.
+You can refresh artwork for any individual game from its game detail page; that reloads RomM's cover and downloads
+Tender's pick anew for every image on automatic, while an image you chose and one set in Steam stay
+([Refresh Artwork](managing-games.md#refresh-artwork)).
 
 ## Re-Syncing
 

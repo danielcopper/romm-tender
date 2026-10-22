@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
+import { _resetArtworkSlotsForTests, artworkThumbToken } from "./artworkSlotsStore";
 import {
   applyArtwork,
+  applyAutomaticArtwork,
+  applyTabSlotImage,
   cancelArtworkApply,
   fillEmptyArtwork,
   isArtworkApplyInFlight,
+  setChosenCover,
   setJobSlotArtwork,
 } from "./artwork";
 
@@ -920,5 +924,307 @@ describe("the icon through the per-slot fetch", () => {
     await applyArtwork(42, 5000);
 
     expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls.map(([, assetType]) => assetType)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("the ARTWORK tab's writes", () => {
+  const SLOTS = (states: Partial<Record<backend.ArtworkTabSlot, backend.ArtworkSlotState>>): backend.ArtworkSlots => ({
+    success: true,
+    has_api_key: true,
+    game: { sgdb_id: 9999, source: "romm", name: "Game" },
+    slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
+      slot,
+      state: states[slot] ?? "automatic",
+      source: "tender",
+      image_id: null,
+      has_choice: false,
+      signature: "",
+    })),
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        ClearCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+      },
+    });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AA==", no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(SAVED_ICON);
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+  });
+
+  const IMAGE: backend.ArtworkSlotImage = {
+    status: "image",
+    base64: "IMG=",
+    image_id: 12,
+    sha256: "sha",
+    sgdb_id: 9999,
+    prune_lease_token: "lease",
+  };
+
+  it("applies only the slots on automatic, leaving a chosen slot and one set in Steam", async () => {
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue(SLOTS({ logo: "chosen", hero: "set_in_steam" }));
+
+    await expect(applyAutomaticArtwork(42, 5000)).resolves.toBe(2);
+
+    expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 3);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "AA==", "png", 3);
+    expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(5000, 42);
+  });
+
+  it("applies nothing and answers the read's refusal where the slots cannot be read", async () => {
+    const refused: backend.EndpointFailure = { success: false, reason: "no_grid_dir", message: "no grid" };
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue(refused);
+
+    await expect(applyAutomaticArtwork(42, 5000)).resolves.toEqual(refused);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("sets a picked image and reports it as set", async () => {
+    await expect(applyTabSlotImage(42, 5000, "logo", IMAGE, false)).resolves.toBe("set");
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "IMG=", "png", 2);
+    expect(vi.mocked(SteamClient.Apps.ClearCustomArtworkForApp)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "logo", "set", 9999, 12, "sha");
+  });
+
+  it("removes the image set in Steam first, and only after the user confirmed it", async () => {
+    await applyTabSlotImage(42, 5000, "hero", IMAGE, true);
+
+    const clear = vi.mocked(SteamClient.Apps.ClearCustomArtworkForApp);
+    const set = vi.mocked(SteamClient.Apps.SetCustomArtworkForApp);
+    expect(clear).toHaveBeenCalledWith(5000, 1);
+    expect(clear.mock.invocationCallOrder[0]).toBeLessThan(set.mock.invocationCallOrder[0]!);
+  });
+
+  it("sets a chosen cover as Steam's portrait and reports it", async () => {
+    await applyTabSlotImage(42, 5000, "cover", IMAGE, false);
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "IMG=", "png", 0);
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "cover", "set", 9999, 12, "sha");
+  });
+
+  it("sets RomM's cover again for an automatic cover, and reports nothing", async () => {
+    vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "ROMM=" });
+
+    await applyTabSlotImage(42, 5000, "cover", { status: "cover", prune_lease_token: "lease" }, false);
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "ROMM=", "png", 0);
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).not.toHaveBeenCalled();
+  });
+
+  it("writes a chosen icon through the backend and points the shortcut at it, removing nothing", async () => {
+    const ready: backend.ArtworkSlotImage = { status: "ready", image_id: 4, sgdb_id: 9999, prune_lease_token: "l" };
+
+    await expect(applyTabSlotImage(42, 5000, "icon", ready, false)).resolves.toBe("set");
+
+    expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(5000, 42);
+    expect(vi.mocked(SteamClient.Apps.SetShortcutIcon)).toHaveBeenCalledWith(5000, "/grid/5000_icon.png");
+    expect(vi.mocked(SteamClient.Apps.ClearCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("answers refused where Steam does not take the image, and reports it so a chosen image's choice goes", async () => {
+    vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockRejectedValue(new Error("refused"));
+
+    await expect(applyTabSlotImage(42, 5000, "logo", IMAGE, false)).resolves.toBe("refused");
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "logo", "refused", 9999, 12, "sha");
+  });
+
+  it("sets the cover the user chose for a version and reports it (D16)", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
+      base64: "CHOSEN=",
+      no_api_key: false,
+      image_id: 6,
+      sha256: "sha6",
+      sgdb_id: 9999,
+      prune_lease_token: "lease",
+    });
+    const onCover = vi.fn();
+
+    await expect(setChosenCover(42, 5000, onCover)).resolves.toEqual({ kind: "set" });
+
+    expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 0);
+    expect(onCover).toHaveBeenCalledWith("CHOSEN=");
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "CHOSEN=", "png", 0);
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "cover", "set", 9999, 6, "sha6");
+  });
+
+  it("leaves the cover to RomM's where none was chosen for the version", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+
+    await expect(setChosenCover(42, 5000)).resolves.toEqual({ kind: "none" });
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("answers unavailable for a chosen cover that cannot be had now, and writes nothing", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: true, chosen: true });
+
+    await expect(setChosenCover(42, 5000)).resolves.toEqual({ kind: "unavailable" });
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("answers unread with the reason where the chosen-cover read is refused or fails, and writes nothing", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValueOnce({
+      success: false,
+      reason: "auth_failed",
+      message: "refused",
+    });
+    await expect(setChosenCover(42, 5000)).resolves.toEqual({ kind: "unread", reason: "refused" });
+    vi.mocked(backend.getSgdbArtworkBase64).mockRejectedValueOnce(new Error("connection lost"));
+    await expect(setChosenCover(42, 5000)).resolves.toEqual({ kind: "unread", reason: "Error: connection lost" });
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("sets nothing for a slot SteamGridDB has nothing for", async () => {
+    await expect(applyTabSlotImage(42, 5000, "logo", { status: "none" }, false)).resolves.toBe("none");
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("is overtaken by a later apply for the shortcut and writes nothing", async () => {
+    const lease = deferred<void>();
+    vi.mocked(backend.renewPruneConflictLease).mockReturnValue(lease.promise as never);
+    const first = applyTabSlotImage(42, 5000, "logo", IMAGE, false);
+    await cancelArtworkApply(5000);
+    lease.resolve();
+
+    await expect(first).resolves.toBe("left");
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+});
+
+describe("every write moves its own slot's thumbnail token (#2381)", () => {
+  const tokens = () =>
+    Object.fromEntries(
+      (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => [slot, artworkThumbToken(5000, slot)]),
+    );
+  const moved = (before: Record<string, string>) =>
+    Object.entries(tokens())
+      .filter(([slot, token]) => before[slot] !== token)
+      .map(([slot]) => slot)
+      .sort();
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    _resetArtworkSlotsForTests();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        ClearCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+      },
+    });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AA==", no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready", prune_lease_token: "l" });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(SAVED_ICON);
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+  });
+
+  it("the game picker's and a superseded game's automatic apply moves the slots it set", async () => {
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue({
+      success: true,
+      has_api_key: true,
+      game: { sgdb_id: 9999, source: "romm", name: "Game" },
+      slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
+        slot,
+        state: slot === "logo" ? ("chosen" as const) : ("automatic" as const),
+        source: "tender" as const,
+        image_id: null,
+        has_choice: slot === "logo",
+        signature: "",
+      })),
+    });
+    const before = tokens();
+
+    await applyAutomaticArtwork(42, 5000);
+
+    expect(moved(before)).toEqual(["grid", "hero", "icon"]);
+  });
+
+  it("the game picker's chosen cover set back to RomM's moves the cover's", async () => {
+    vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "ROMM=" });
+    const before = tokens();
+
+    await applyTabSlotImage(42, 5000, "cover", { status: "cover", prune_lease_token: "lease" }, false);
+
+    expect(moved(before)).toEqual(["cover"]);
+  });
+
+  it("the first visit's fill moves the slots it filled", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_rom, _app, slot) =>
+      slot === "logo"
+        ? { status: "image", base64: "LG==", image_id: 5, sha256: "s", sgdb_id: 9999, prune_lease_token: "l" }
+        : { status: "skip" },
+    );
+    const before = tokens();
+
+    await fillEmptyArtwork(42, 5000);
+
+    expect(moved(before)).toEqual(["logo"]);
+  });
+
+  it("the replacing apply after a version switch moves every slot it set", async () => {
+    const before = tokens();
+
+    await applyArtwork(42, 5000);
+
+    expect(moved(before)).toEqual(["grid", "hero", "icon", "logo"]);
+  });
+
+  it("a version's chosen cover moves the cover's", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
+      base64: "CHOSEN=",
+      no_api_key: false,
+      image_id: 6,
+      sha256: "sha6",
+      sgdb_id: 9999,
+      prune_lease_token: "lease",
+    });
+    const before = tokens();
+
+    await setChosenCover(42, 5000);
+
+    expect(moved(before)).toEqual(["cover"]);
+  });
+
+  it("the shortcut artwork job's slot moves that slot's", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({
+      status: "image",
+      base64: "HR==",
+      image_id: 12,
+      sha256: "s",
+      sgdb_id: 9999,
+      prune_lease_token: "l",
+    });
+    const before = tokens();
+
+    await setJobSlotArtwork(42, 5000, "logo", () => false);
+
+    expect(moved(before)).toEqual(["logo"]);
+  });
+
+  it("a slot Steam refuses moves that slot's all the same", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({
+      status: "image",
+      base64: "HR==",
+      image_id: 12,
+      sha256: "s",
+      sgdb_id: 9999,
+      prune_lease_token: "l",
+    });
+    vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockRejectedValue(new Error("refused"));
+    const before = tokens();
+
+    await expect(setJobSlotArtwork(42, 5000, "logo", () => false)).resolves.toBe(false);
+
+    expect(moved(before)).toEqual(["logo"]);
   });
 });

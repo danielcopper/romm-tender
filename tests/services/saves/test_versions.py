@@ -262,6 +262,7 @@ class TestListFileVersions:
     async def test_result_shape(self, tmp_path):
         """Each entry contains the required fields: id, updated_at, file_size_bytes, device_syncs."""
         svc, fake = make_service(tmp_path)
+        _set_device_id(svc, "abc")
 
         fake.saves[100] = _server_save(save_id=100, rom_id=42, slot="default", updated_at="2026-03-10T10:00:00Z")
         fake.saves[50] = {
@@ -273,7 +274,13 @@ class TestListFileVersions:
             "updated_at": "2026-03-01T10:00:00Z",
             "file_size_bytes": 2048,
             "device_syncs": [
-                {"device_id": "abc", "device_name": "steamdeck", "is_current": True, "last_synced_at": None}
+                {
+                    "device_id": "abc",
+                    "device_name": "steamdeck",
+                    "last_synced_at": "2026-03-01T10:00:00Z",
+                    "is_untracked": False,
+                    "is_current": True,
+                }
             ],
             "slot": "default",
             "download_path": "/saves/pokemon.srm",
@@ -494,7 +501,7 @@ class TestRollbackToVersion:
         # A genuinely-synced local file: the baseline is the real on-disk md5, so the
         # pre-flight matrix treats local as unchanged (the placeholder "h" no longer
         # matches under the realistic fake). Tracked save 999 is gone from the server;
-        # the pre-flight POST 409s on the newer slot head and the backstop downloads it.
+        # this device has no sync row on the slot head, so the pre-flight downloads it.
         _create_save(tmp_path)
         local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
         self._setup_state(svc, tmp_path, tracked_id=999, last_sync_hash=local_hash)

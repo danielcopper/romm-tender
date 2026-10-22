@@ -25,7 +25,7 @@ from services import shortcut_artwork
 from services.shortcut_artwork import ShortcutArtworkService, ShortcutArtworkServiceConfig
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Collection
 
     from lib.prune_conflicts import PruneConflicts
 
@@ -62,6 +62,9 @@ class _FakeSteamConfig:
         if self.grid_unlistable:
             raise PermissionError("grid directory not readable")
         return self.grid_files
+
+    def grid_file_stamps(self, names: Collection[str]) -> dict[str, str]:
+        raise NotImplementedError
 
 
 class _FakeArtworkSource:

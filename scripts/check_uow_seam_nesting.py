@@ -242,10 +242,11 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # nothing today and are here for the call site that writes one plainly.
         # The store's other I/O is unlisted and that is a gap rather than a
         # judgement: grid_dir() is called from services/artwork/ (seven sites),
+        # services/steamgrid/ (service.py and _slots.py),
         # services/shortcut_removal.py and services/library/reporter.py,
         # set_steam_input_config() from services/settings.py,
         # services/shortcut_removal.py and services/library/reporter.py,
-        # write_shortcut_icon() from services/steamgrid.py, and
+        # write_shortcut_icon() from services/steamgrid/service.py, and
         # ensure_grid_file() from services/shortcut_artwork.py.
         "read_shortcut_exes",
         "read_shortcut_launch_options",
@@ -258,6 +259,15 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # stats every entry that is a link, to answer which artwork slots a
         # shortcut already has.
         "grid_file_names",
+        # SteamConfigStore.read_grid_file — reads one file of Steam's grid
+        # directory whole, for the ARTWORK tab to hash a slot's image against
+        # Tender's record. Its call site reaches it as a bound method, so the
+        # entry is a statement of the rule rather than an enforcement of it.
+        "read_grid_file",
+        # SteamConfigStore.grid_file_stamps — stats the files filling the
+        # ARTWORK tab's slots, so each thumbnail is loaded anew only when its
+        # own file changed. Called plainly, so this entry is enforced.
+        "grid_file_stamps",
         # FirmwarePlatformResolver (services/protocols/paths.py) — reads what
         # one system's emulators want, with content verification: it opens each
         # candidate in a declared folder and reads it the way the emulator does,

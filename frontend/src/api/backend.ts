@@ -558,6 +558,8 @@ export const getSgdbArtworkBase64 = endpoint<
       image_id?: number;
       sha256?: string;
       sgdb_id?: number | null;
+      /** Asset type 0 only: whether the user chose a cover — `true` without an image is one that cannot be served now. */
+      chosen?: boolean;
     }
   | EndpointFailure
 >("get_sgdb_artwork_base64");
@@ -591,11 +593,11 @@ export const getSgdbSlotArtwork = endpoint<
 >("get_sgdb_slot_artwork");
 
 /**
- * Report what Steam made of a wide grid, logo or hero the fetch served (`SetCustomArtworkForApp`), or of an icon the
- * backend wrote (`SetShortcutIcon`), passing what the backend answered back.
+ * Report what Steam made of a wide grid, logo or hero the fetch served (`SetCustomArtworkForApp`), of an icon the
+ * backend wrote (`SetShortcutIcon`), or of a cover chosen from SteamGridDB, passing what the backend answered back.
  */
 export const reportSgdbSlotArtwork = endpoint<
-  [number, SgdbArtworkSlot, "set" | "refused", number | null, number | null, string | null],
+  [number, SgdbArtworkSlot | "cover", "set" | "refused", number | null, number | null, string | null],
   { success: boolean }
 >("report_sgdb_slot_artwork");
 
@@ -625,6 +627,103 @@ export const applySgdbGameId = endpoint<[number, number], { success: true } | En
  */
 export const refreshSgdbArtwork = endpoint<[number, number], { success: true } | EndpointFailure>(
   "refresh_sgdb_artwork",
+);
+/** One of the five slots the game page's ARTWORK tab lists. */
+export type ArtworkTabSlot = "cover" | "grid" | "hero" | "logo" | "icon";
+
+/** Who decides a slot's image: Tender's rule, the user's choice, or an image set through Steam. */
+export type ArtworkSlotState = "automatic" | "chosen" | "set_in_steam";
+
+/**
+ * Where a slot's image comes from: RomM (the cover on automatic), the user's choice, Tender's pick, Steam's own
+ * "Set custom artwork", or — with no image — a SteamGridDB game still to choose, nothing on SteamGridDB, or not set yet.
+ */
+export type ArtworkSlotSource = "romm" | "chosen" | "tender" | "steam" | "needs_game" | "none" | "empty";
+
+export interface ArtworkSlotRow {
+  slot: ArtworkTabSlot;
+  state: ArtworkSlotState;
+  source: ArtworkSlotSource;
+  /** The SteamGridDB image the slot shows, where Tender knows it. */
+  image_id: number | null;
+  /** The user chose an image for the slot — also where it now reads set in Steam over that choice. */
+  has_choice: boolean;
+  /** Moves whenever a file filling the slot in Steam's grid folder changes; empty where none fills it. */
+  signature: string;
+}
+
+/** The ARTWORK tab: the ROM's SteamGridDB game — RomM's, the user's choice, or none — and its five slots. */
+export interface ArtworkSlots {
+  success: true;
+  has_api_key: boolean;
+  game: { sgdb_id: number | null; source: "romm" | "chosen" | null; name: string | null };
+  slots: ArtworkSlotRow[];
+}
+
+export const getArtworkSlots = endpoint<[number, number], ArtworkSlots | EndpointFailure>("get_artwork_slots");
+
+/** RomM's SteamGridDB game took the place of the user's: the slots whose chosen image went back to automatic. */
+export interface SupersededGame {
+  /** RomM's game's name on SteamGridDB, where it could be asked. */
+  name: string | null;
+  slots: ArtworkTabSlot[];
+}
+
+/** The game the artwork comes from, as the game page asks on every visit; no name is asked for it. */
+export interface ArtworkGame {
+  success: true;
+  has_api_key: boolean;
+  game: { sgdb_id: number | null; source: "romm" | "chosen" | null; name: null };
+  /** Set once, where RomM's id has just replaced the game the user chose (#2381 D17). */
+  superseded: SupersededGame | null;
+}
+
+export const getArtworkGame = endpoint<[number], ArtworkGame | EndpointFailure>("get_artwork_game");
+
+/** One SteamGridDB candidate in the picker; its thumbnail loads straight from SteamGridDB. */
+export interface ArtworkCandidate {
+  image_id: number;
+  thumb: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+export interface ArtworkCandidatePage {
+  success: true;
+  candidates: ArtworkCandidate[];
+  has_more: boolean;
+  /** On page 0, the candidate Tender's own rule takes; `null` for the cover and on later pages. */
+  tenders_pick: number | null;
+}
+
+export const getArtworkSlotCandidates = endpoint<
+  [number, ArtworkTabSlot, number],
+  ArtworkCandidatePage | EndpointFailure
+>("get_artwork_slot_candidates");
+
+/**
+ * What choosing a slot's image, or setting it back to automatic, answers: the image to set through
+ * `SetCustomArtworkForApp`, `ready` for the icon `saveShortcutIcon` writes, `cover` for the RomM cover reloaded for
+ * `getArtworkBase64` to serve, or `none` where SteamGridDB has nothing for an automatic slot.
+ */
+export type ArtworkSlotImage =
+  | {
+      status: "image";
+      base64: string;
+      image_id: number;
+      sha256: string;
+      sgdb_id: number | null;
+      prune_lease_token: string;
+    }
+  | { status: "ready"; image_id: number; sgdb_id: number | null; prune_lease_token: string }
+  | { status: "cover"; prune_lease_token: string }
+  | { status: "none" };
+
+export const chooseArtworkSlotImage = endpoint<[number, ArtworkTabSlot, number], ArtworkSlotImage | EndpointFailure>(
+  "choose_artwork_slot_image",
+);
+export const setArtworkSlotAutomatic = endpoint<[number, ArtworkTabSlot], ArtworkSlotImage | EndpointFailure>(
+  "set_artwork_slot_automatic",
 );
 export const reportUnitResults = endpoint<
   [Record<string, number>, string, number | string, number],

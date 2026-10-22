@@ -5,6 +5,8 @@ import {
   logWarn,
   type SwitchVersionSuccess,
 } from "../api/backend";
+import { setChosenCover } from "./artwork";
+import { writeSlotArtwork } from "./artworkSlotsStore";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from "./pruneLease";
 import { refreshAppIdMap } from "./sessionManager";
@@ -51,11 +53,22 @@ export async function publishCommittedVersionSwitch(
   signal?: AbortSignal,
 ): Promise<void> {
   try {
-    const cover = await fetchCoverBase64(romId);
+    // A cover the user chose for this version is its cover; RomM's only where there is none (#2381 D16).
+    const chosen = await setChosenCover(romId, appId, (base64) => onCover?.(romId, base64));
+    if (chosen.kind === "unavailable") {
+      logWarn(`Version switch: the cover chosen for rom ${romId} cannot be served now; the cover Steam shows stays`);
+    } else if (chosen.kind === "unread") {
+      logWarn(
+        `Version switch: whether a cover was chosen for rom ${romId} could not be read (${chosen.reason}); ` +
+          "the cover Steam shows stays",
+      );
+    }
+    const cover = chosen.kind === "none" ? await fetchCoverBase64(romId) : null;
     if (signal?.aborted) return;
-    if (cover.base64) {
+    if (cover?.base64) {
       onCover?.(romId, cover.base64);
-      await SteamClient.Apps.SetCustomArtworkForApp(appId, cover.base64, "png", 0);
+      const base64 = cover.base64;
+      await writeSlotArtwork(appId, "cover", () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", 0));
     }
   } catch (e) {
     logWarn(`Version switch: cover apply after switch failed for rom ${romId}: ${e}`);

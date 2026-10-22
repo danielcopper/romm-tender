@@ -1,7 +1,8 @@
 """SQLite adapter for the ``ArtworkSlotChoice`` aggregate over ``artwork_slot_choices``.
 
 One row per ROM and slot, keyed by ``(rom_id, slot)``. A leaf table whose rows
-go with their ``roms`` row (``ON DELETE CASCADE``); ``save`` upserts.
+go with their ``roms`` row (``ON DELETE CASCADE``); ``save`` upserts, and
+``delete_slot`` sets a slot back to automatic.
 """
 
 from __future__ import annotations
@@ -42,3 +43,13 @@ class SqliteArtworkSlotChoiceRepository(BaseRepository):
             f"INSERT OR REPLACE INTO artwork_slot_choices ({_COLUMNS}) VALUES (?, ?, ?, ?)",
             (choice.rom_id, choice.slot.value, choice.image_id, choice.chosen_at),
         )
+
+    def get_all_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
+        rows = self._conn.execute(f"SELECT {_COLUMNS} FROM artwork_slot_choices WHERE rom_id = ?", (rom_id,))
+        return [_row_to_choice(row) for row in rows.fetchall()]
+
+    def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:
+        self._conn.execute("DELETE FROM artwork_slot_choices WHERE rom_id = ? AND slot = ?", (rom_id, slot.value))
+
+    def delete_for_rom(self, rom_id: int) -> None:
+        self._conn.execute("DELETE FROM artwork_slot_choices WHERE rom_id = ?", (rom_id,))

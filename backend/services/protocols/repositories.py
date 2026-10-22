@@ -16,8 +16,9 @@ completion stamp, ADR-0023), its per-collection sibling ``CollectionSyncState``,
 ``AnsweredSaveDirectory`` (the save directory the resolver last answered per ROM,
 ADR-0041), ``ArtworkSlotOutcome`` (what was last found for one of a ROM's
 artwork slots), ``ArtworkSlotChoice`` (the image a user chose for one),
-``StoredFirmware`` and ``FirmwareLink`` (a file in Tender's firmware store, and a
-link Tender placed to one) and the ``kv_config`` key-value surface.
+``ArtworkSlotHandover`` (the image last handed to Steam for one), ``StoredFirmware``
+and ``FirmwareLink`` (a file in Tender's firmware store, and a link Tender placed to
+one) and the ``kv_config`` key-value surface.
 ``SyncSettings``/``Platform``/``Device`` are NOT repositories — ADR-0003 dropped
 those aggregates.
 
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from domain.answered_save_directory import AnsweredSaveDirectory
     from domain.artwork_slot import ArtworkSlot
     from domain.artwork_slot_choice import ArtworkSlotChoice
+    from domain.artwork_slot_handover import ArtworkSlotHandover
     from domain.artwork_slot_outcome import ArtworkSlotOutcome
     from domain.bios_file import BiosFile
     from domain.collection_sync_state import CollectionSyncState
@@ -304,7 +306,7 @@ class AnsweredSaveDirectoryRepository(Protocol):
 class ArtworkSlotOutcomeRepository(Protocol):
     """Persistence seam for the ``ArtworkSlotOutcome`` aggregate (per-ROM wide grid, logo, hero and icon outcomes).
 
-    Keyed by ``(rom_id, slot)``. (steamgrid.py reads and writes it; shortcut_artwork.py and
+    Keyed by ``(rom_id, slot)``. (the steamgrid package reads and writes it; shortcut_artwork.py and
     artwork/_cover_set_in_steam.py read it)
     """
 
@@ -320,6 +322,10 @@ class ArtworkSlotOutcomeRepository(Protocol):
         """Drop every slot's record of *rom_id*. A no-op when none exists."""
         ...
 
+    def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:
+        """Drop the record of *rom_id*'s *slot*. A no-op when none exists."""
+        ...
+
 
 class ArtworkSlotChoiceRepository(Protocol):
     """Persistence seam for the ``ArtworkSlotChoice`` aggregate (the image a user chose per ROM and slot).
@@ -333,6 +339,37 @@ class ArtworkSlotChoiceRepository(Protocol):
 
     def save(self, choice: ArtworkSlotChoice) -> None:
         """Upsert *choice* under its ``(rom_id, slot)``."""
+        ...
+
+    def get_all_for_rom(self, rom_id: int) -> list[ArtworkSlotChoice]:
+        """Every slot choice of *rom_id*, in no particular order."""
+        ...
+
+    def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:
+        """Drop the choice of *rom_id*'s *slot*, setting it back to automatic. A no-op when none exists."""
+        ...
+
+    def delete_for_rom(self, rom_id: int) -> None:
+        """Drop every slot choice of *rom_id*. A no-op when none exists."""
+        ...
+
+
+class ArtworkSlotHandoverRepository(Protocol):
+    """Persistence seam for the ``ArtworkSlotHandover`` aggregate (the image last handed to Steam per ROM and slot).
+
+    Keyed by ``(rom_id, slot)``; no row is a slot with no answer from Steam outstanding.
+    """
+
+    def get(self, rom_id: int, slot: ArtworkSlot) -> ArtworkSlotHandover | None:
+        """Return the image last handed to Steam for *rom_id*'s *slot*, or ``None`` when none is outstanding."""
+        ...
+
+    def save(self, handover: ArtworkSlotHandover) -> None:
+        """Upsert *handover* under its ``(rom_id, slot)``."""
+        ...
+
+    def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:
+        """Drop the hand-over of *rom_id*'s *slot*. A no-op when none exists."""
         ...
 
 

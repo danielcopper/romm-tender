@@ -628,6 +628,7 @@ describe("VersionPicker — per-version covers (#1346)", () => {
     captured.menu = null;
     vi.mocked(backend.getVersionList).mockReset().mockResolvedValue(multiVersionList());
     vi.mocked(backend.fetchCoverBase64).mockReset();
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
     vi.mocked(backend.switchVersion).mockReset();
     vi.mocked(setLaunchOptionsConfirmed).mockReset().mockResolvedValue(true);
     vi.mocked(invalidateCachedGameDetail).mockReset();

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
 import { applyArtwork } from "./artwork";
+import { artworkThumbToken } from "./artworkSlotsStore";
 import { releasePruneLeasesByOwner } from "./pruneLease";
 import { applyShortcutArtwork } from "./shortcutArtwork";
 
@@ -210,6 +211,26 @@ describe("applyShortcutArtwork — what Steam made of a SteamGridDB icon", () =>
     await expect(applyShortcutArtwork(batch)).resolves.toBe(2);
 
     expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([[1, "icon", "set", 9999, 31, "sha-31"]]);
+  });
+
+  it("moves the thumbnail token of each icon it sets, and of one Steam refuses", async () => {
+    vi.spyOn(backend, "logError").mockImplementation(() => {});
+    setShortcutIcon.mockImplementationOnce(() => {
+      throw new Error("no such app");
+    });
+    const tokens = () => [
+      artworkThumbToken(100, "icon"),
+      artworkThumbToken(200, "icon"),
+      artworkThumbToken(100, "hero"),
+    ];
+    const [first, second, hero] = tokens();
+
+    await applyShortcutArtwork(batch);
+
+    const [firstAfter, secondAfter, heroAfter] = tokens();
+    expect(firstAfter).not.toBe(first);
+    expect(secondAfter).not.toBe(second);
+    expect(heroAfter).toBe(hero);
   });
 
   it("reports an icon SetShortcutIcon throws on as refused", async () => {

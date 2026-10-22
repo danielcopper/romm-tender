@@ -12,9 +12,9 @@ than a false ``synced`` (#1482) — no ack fires on that path. The #1458 ack its
 (fail-open on a not-provably-current dedup response) is exercised at the unit tier
 (``TestConfirmUploadSyncDiscriminator``), where the guard is inert.
 
-Both scenarios stay on the legacy ``compute_sync_action`` matrix path
-(``active_slot`` set, ``slot_confirmed`` unset) so the POST is actually
-dispatched, matching the ``test_saves_upload_409`` fixtures.
+Every ROM decides through the same ``compute_sync_action`` matrix, so the
+unconfirmed slot these tests seed (``active_slot`` set, ``slot_confirmed=False``)
+is decided as a confirmed one would be.
 """
 
 from __future__ import annotations

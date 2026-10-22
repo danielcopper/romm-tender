@@ -1,3 +1,4 @@
+import { noteArtworkWritten, writeSlotArtwork } from "./artworkSlotsStore";
 import { addEventListener } from "../api/host";
 import type { SyncAddItem, SyncApplyUnitData } from "../types";
 import {
@@ -254,7 +255,7 @@ async function applyCoverArtwork(appId: number, romId: number): Promise<void> {
   try {
     const { base64 } = await getArtworkBase64(romId);
     if (base64) {
-      await SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", 0);
+      await writeSlotArtwork(appId, "cover", () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", 0));
     }
   } catch (e) {
     logError(`Per-unit: failed to apply cover for rom ${romId} (appId ${appId}): ${e}`);
@@ -270,6 +271,8 @@ function applyPlaceholderIcon(appId: number, iconPath: string): void {
     SteamClient.Apps.SetShortcutIcon(appId, iconPath);
   } catch (e) {
     logError(`Per-unit: failed to set the placeholder icon for appId ${appId}: ${e}`);
+  } finally {
+    noteArtworkWritten(appId, ["icon"]);
   }
 }
 

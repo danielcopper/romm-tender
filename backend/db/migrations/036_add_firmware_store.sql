@@ -1,5 +1,5 @@
 -- =============================================================================
--- 035_add_firmware_store.sql — Tender's firmware store and the links into it
+-- 036_add_firmware_store.sql — Tender's firmware store and the links into it
 -- #2191 (D2, D3, D24)
 -- =============================================================================
 --
@@ -23,7 +23,7 @@
 -- source's folder before it.
 --
 -- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
--- BEGIN/COMMIT and stamps PRAGMA user_version = 35.
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 36.
 -- -----------------------------------------------------------------------------
 DELETE FROM firmware_cache;
 

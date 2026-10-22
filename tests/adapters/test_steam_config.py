@@ -624,3 +624,76 @@ class TestGridFileNames:
 
     def test_no_steam_user_directory_is_no_listing(self, adapter):
         assert adapter.grid_file_names() is None
+
+
+class TestReadGridFile:
+    """The bytes of a file in Steam's grid directory, read to tell whether a slot's image is Tender's."""
+
+    @staticmethod
+    def _grid(tmp_path):
+        grid = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config" / "grid"
+        grid.mkdir(parents=True)
+        return grid
+
+    def test_reads_the_named_file(self, tmp_path, adapter):
+        (self._grid(tmp_path) / "100_hero.png").write_bytes(b"hero bytes")
+
+        assert adapter.read_grid_file("100_hero.png") == b"hero bytes"
+
+    def test_a_name_with_a_directory_reads_only_inside_the_grid_directory(self, tmp_path, adapter):
+        (self._grid(tmp_path) / "100.png").write_bytes(b"in the grid")
+        (tmp_path / "100.png").write_bytes(b"outside")
+
+        assert adapter.read_grid_file("../../../../../../../100.png") == b"in the grid"
+
+    def test_a_missing_file_raises(self, tmp_path, adapter):
+        self._grid(tmp_path)
+
+        with pytest.raises(FileNotFoundError):
+            adapter.read_grid_file("100_logo.png")
+
+    def test_without_a_steam_user_the_grid_directory_is_missing(self, adapter):
+        with pytest.raises(SteamGridDirMissingError):
+            adapter.read_grid_file("100.png")
+
+
+class TestGridFileStamps:
+    """Each named grid file's size and modification time, which an ARTWORK tab thumbnail's signature is made of."""
+
+    @staticmethod
+    def _grid(tmp_path):
+        grid = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config" / "grid"
+        grid.mkdir(parents=True)
+        return grid
+
+    def test_stamps_each_named_file_with_its_size_and_modification_time(self, tmp_path, adapter):
+        hero = self._grid(tmp_path) / "100_hero.png"
+        hero.write_bytes(b"hero bytes")
+        os.utime(hero, ns=(1_000, 2_000))
+
+        assert adapter.grid_file_stamps(["100_hero.png"]) == {"100_hero.png": "10-2000"}
+
+    def test_a_file_written_again_is_stamped_anew(self, tmp_path, adapter):
+        hero = self._grid(tmp_path) / "100_hero.png"
+        hero.write_bytes(b"hero bytes")
+        os.utime(hero, ns=(1_000, 2_000))
+        before = adapter.grid_file_stamps(["100_hero.png"])
+        hero.write_bytes(b"other hero")
+        os.utime(hero, ns=(1_000, 3_000))
+
+        assert adapter.grid_file_stamps(["100_hero.png"]) != before
+
+    def test_a_missing_file_and_a_directory_are_left_out(self, tmp_path, adapter):
+        (self._grid(tmp_path) / "100.png").mkdir()
+
+        assert adapter.grid_file_stamps(["100.png", "100_logo.png"]) == {}
+
+    def test_a_name_with_a_directory_stamps_only_inside_the_grid_directory(self, tmp_path, adapter):
+        self._grid(tmp_path)
+        (tmp_path / "100.png").write_bytes(b"outside")
+
+        assert adapter.grid_file_stamps(["../../../../../../../100.png"]) == {}
+
+    def test_without_a_steam_user_the_grid_directory_is_missing(self, adapter):
+        with pytest.raises(SteamGridDirMissingError):
+            adapter.grid_file_stamps(["100.png"])

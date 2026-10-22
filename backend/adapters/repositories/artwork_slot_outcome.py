@@ -2,7 +2,7 @@
 
 One row per ROM and slot, keyed by ``(rom_id, slot)``. A leaf table whose rows
 also go with their ``roms`` row (``ON DELETE CASCADE``); ``save`` upserts and
-``delete_for_rom`` drops a ROM's rows.
+``delete_for_rom`` drops a ROM's rows, ``delete_slot`` one of them.
 """
 
 from __future__ import annotations
@@ -57,3 +57,6 @@ class SqliteArtworkSlotOutcomeRepository(BaseRepository):
 
     def delete_for_rom(self, rom_id: int) -> None:
         self._conn.execute("DELETE FROM artwork_slot_outcomes WHERE rom_id = ?", (rom_id,))
+
+    def delete_slot(self, rom_id: int, slot: ArtworkSlot) -> None:
+        self._conn.execute("DELETE FROM artwork_slot_outcomes WHERE rom_id = ? AND slot = ?", (rom_id, slot.value))

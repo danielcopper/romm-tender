@@ -327,6 +327,10 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "search_sgdb_games",
     "apply_sgdb_game_id",
     "refresh_sgdb_artwork",
+    "get_artwork_game",
+    "get_artwork_slots",
+    "get_artwork_slot_candidates",
+    "choose_artwork_slot_image",
     # Metadata cache reads.
     "get_rom_metadata",
     "get_metadata_cache_page",

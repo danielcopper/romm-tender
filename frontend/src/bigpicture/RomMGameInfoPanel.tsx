@@ -22,7 +22,7 @@ import { AchievementsTab } from "./AchievementsTab";
 import { BiosTab } from "./BiosTab";
 import { useTriggerHandler } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
-import { bindRomInState, loadData, type PanelReadSeqs, type PanelState } from "./panelState";
+import { bindRomInState, loadData, openingTab, type PanelReadSeqs, type PanelState } from "./panelState";
 import { wirePanelEvents } from "./panelEvents";
 import { useSaveSlotsLoad } from "./panelSlotsLoad";
 import { buildTabContent } from "./panelTabContent";
@@ -63,7 +63,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     saveStatus: null,
     conflicts: [],
     error: false,
-    activeTab: "info",
+    activeTab: openingTab(appId),
     raId: null,
     slotConfirmed: false,
     activeSlot: "default",
