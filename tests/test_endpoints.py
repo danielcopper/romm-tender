@@ -210,6 +210,9 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_platform_core_info",
     "get_system_core_info",
     "count_platform_saves",
+    # What the resolver knows a library file's content as: a read of its tables
+    # and nothing on the machine.
+    "identify_library_firmware",
     # Settings → Emulator sources: the listing and the launch check's read of
     # the switch ask the resolver, and the switch and the move write only the
     # sources' order and switches in settings.json, never a RetroDECK path.

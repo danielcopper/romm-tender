@@ -87,13 +87,14 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 029_add_rom_delivered_through + 030_add_rom_gone_from_romm
 # + 031_add_platform_skip_fetch_start_and_checksum
 # + 032_add_collection_skip_fetch_start_and_checksum
-# + 033_add_artwork_slot_choices + 034_clear_firmware_cache_filed_by_folder).
-_SHIPPED_VERSION = 34
+# + 033_add_artwork_slot_choices + 034_clear_firmware_cache_filed_by_folder
+# + 035_add_firmware_store).
+_SHIPPED_VERSION = 35
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
-# 024's answered save directories, 027's artwork slot outcomes and 033's artwork
-# slot choices, with 018 renaming the save-sync scalar table rom_save_states ->
+# 024's answered save directories, 027's artwork slot outcomes, 033's artwork
+# slot choices and 035's firmware store and links, with 018 renaming the save-sync scalar table rom_save_states ->
 # rom_save_sync_states.
 _SHIPPED_TABLES = (_V1_TABLES - {"rom_save_states"}) | {
     "rom_save_sync_states",
@@ -103,6 +104,8 @@ _SHIPPED_TABLES = (_V1_TABLES - {"rom_save_states"}) | {
     "answered_save_directories",
     "artwork_slot_outcomes",
     "artwork_slot_choices",
+    "firmware_store",
+    "firmware_links",
 }
 
 

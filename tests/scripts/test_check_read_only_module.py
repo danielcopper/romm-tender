@@ -46,6 +46,7 @@ _EXPECTED_READS = frozenset(
         "get_bound_platform_slugs",
         "get_by_app_id",
         "get_cache_epoch",
+        "get_folders",
         "get_latest_completed",
         "get_latest_terminal",
         "get_running",

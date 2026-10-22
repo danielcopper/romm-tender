@@ -7,9 +7,9 @@ installed (``blocked_by_update``), Tender's folder unreachable
 removed-game cleanup holding its run claim (``prune_active``), and — for
 ``start_prune`` alone — another local-data operation still running or holding a
 lease (``operation_active``). Where more than one applies, they are asked in the
-order exclusive start, update, folder, migration, sync, prune active. No
-endpoint names the folder rule yet; ``FOLDER`` keeps the list for the first
-that does.
+order exclusive start, update, folder, migration, sync, prune active. The
+firmware endpoints that write into Tender's firmware store or link into it name
+the folder rule; ``FOLDER`` lists them.
 
 Every test here but the eleven at the bottom drives ``harness.endpoints.<endpoint>``
 with frontend-shaped arguments and reads the answer, so it holds wherever the
@@ -91,13 +91,12 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "connect_with_token": ("https://server.example", "token", False),
     "copy_save_to_slot": (41, 7, "default"),
     "delete_bios_file": ("n64", "pifdata.bin"),
-    "delete_bios_folder": ("n64", "bios"),
     "delete_local_saves": (41,),
     "delete_platform_bios": ("n64",),
     "delete_platform_saves": ("n64",),
     "delete_slot": (41, "default"),
     "download_all_firmware": ("n64", None),
-    "download_platform_firmware_file": ("n64", "pifdata.bin", None),
+    "download_platform_firmware_file": ("n64", "pifdata.bin"),
     "download_required_firmware": ("n64", None),
     "fetch_cover_base64": (41,),
     "finalize_game_session": (41,),
@@ -122,6 +121,7 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "remove_all_shortcuts": (),
     "remove_platform_shortcuts": ("n64",),
     "remove_rom": (41,),
+    "replace_bios_file": ("n64", "/retrodeck/bios/pifdata.bin"),
     "report_removal_results": ([], None),
     "report_sgdb_slot_artwork": (41, "grid", "set", 7, 12, "ab"),
     "report_unit_results": ({}, "run", "unit", 0),
@@ -150,6 +150,7 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "sync_rom_saves": (41,),
     "test_connection": (),
     "uninstall_all_roms": (),
+    "update_bios_links": ("n64", None),
     "update_save_sync_settings": (_SAVE_SYNC_SETTINGS,),
     "use_recorded_tender_folder": ("/run/media/deck/SD/Tender",),
 }
@@ -226,7 +227,6 @@ MIGRATION = (
     "confirm_slot_choice",
     "copy_save_to_slot",
     "delete_bios_file",
-    "delete_bios_folder",
     "delete_local_saves",
     "delete_platform_bios",
     "delete_platform_saves",
@@ -242,6 +242,7 @@ MIGRATION = (
     "remove_all_shortcuts",
     "remove_platform_shortcuts",
     "remove_rom",
+    "replace_bios_file",
     "resolve_sync_conflict",
     "resume_download",
     "save_collection_sync",
@@ -262,6 +263,7 @@ MIGRATION = (
     "sync_preview",
     "sync_rom_saves",
     "uninstall_all_roms",
+    "update_bios_links",
     "update_save_sync_settings",
 )
 
@@ -276,7 +278,15 @@ SYNC_ACTIVE = (
 
 EXCLUSIVE_START = ("start_prune",)
 
-FOLDER: tuple[str, ...] = ()
+FOLDER = (
+    "delete_bios_file",
+    "delete_platform_bios",
+    "download_all_firmware",
+    "download_platform_firmware_file",
+    "download_required_firmware",
+    "replace_bios_file",
+    "update_bios_links",
+)
 
 # Refused while an update is being installed, beside every endpoint a pending
 # migration refuses: work that would start after the press. The migration

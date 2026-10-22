@@ -691,6 +691,7 @@ class TestWireServices:
                 firmware_file_store=deps["firmware_file_store"],
                 firmware_resolver=deps["firmware_resolver"],
                 platform_firmware_resolver=deps["platform_firmware_resolver"],
+                firmware_identifier=lambda md5: None,
                 migration_file_store=deps["migration_file_store"],
                 rom_file_store=deps["rom_file_store"],
                 save_file_store=deps["save_file_store"],
