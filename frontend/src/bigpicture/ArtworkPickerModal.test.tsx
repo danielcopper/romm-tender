@@ -162,3 +162,33 @@ describe("ArtworkPickerModal", () => {
     expect(container.textContent).toContain("SteamGridDB is rate-limiting requests — try again in a moment");
   });
 });
+
+describe("ArtworkPickerModal with Automatic alone (#2381 D19)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(backend.getArtworkSlotCandidates).mockResolvedValue(PAGE);
+  });
+
+  it("offers RomM's cover alone, says why, and asks SteamGridDB nothing", async () => {
+    const onPick = vi.fn();
+    const { container } = render(
+      <ArtworkPickerModal
+        romId={42}
+        row={row({ slot: "cover", source: "romm", image_id: null })}
+        gameName="#null"
+        onlyAutomatic="Choose a SteamGridDB game to see its covers."
+        onPick={onPick}
+        closeModal={vi.fn()}
+      />,
+    );
+    await flush();
+
+    expect(container.textContent).toContain("Choose a SteamGridDB game to see its covers.");
+    expect(container.textContent).not.toContain("SteamGridDB · ");
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+    expect(vi.mocked(backend.getArtworkSlotCandidates)).not.toHaveBeenCalled();
+    fireEvent.click(button(container, "Automatic — RomM cover"));
+    fireEvent.click(button(container, "Use this image"));
+    expect(onPick).toHaveBeenCalledWith({ kind: "automatic" }, false);
+  });
+});

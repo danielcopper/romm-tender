@@ -7,6 +7,7 @@ import {
   cancelArtworkApply,
   fillEmptyArtwork,
   isArtworkApplyInFlight,
+  setChosenCover,
   setJobSlotArtwork,
 } from "./artwork";
 
@@ -930,7 +931,6 @@ describe("the ARTWORK tab's writes", () => {
     success: true,
     has_api_key: true,
     game: { sgdb_id: 9999, source: "romm", name: "Game" },
-    superseded: null,
     slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
       slot,
       state: states[slot] ?? "automatic",
@@ -1024,6 +1024,41 @@ describe("the ARTWORK tab's writes", () => {
     expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(5000, 42);
     expect(vi.mocked(SteamClient.Apps.SetShortcutIcon)).toHaveBeenCalledWith(5000, "/grid/5000_icon.png");
     expect(vi.mocked(SteamClient.Apps.ClearCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("answers refused where Steam does not take the image, and reports it so a chosen image's choice goes", async () => {
+    vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockRejectedValue(new Error("refused"));
+
+    await expect(applyTabSlotImage(42, 5000, "logo", IMAGE, false)).resolves.toBe("refused");
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "logo", "refused", 9999, 12, "sha");
+  });
+
+  it("sets the cover the user chose for a version and reports it (D16)", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
+      base64: "CHOSEN=",
+      no_api_key: false,
+      image_id: 6,
+      sha256: "sha6",
+      sgdb_id: 9999,
+      prune_lease_token: "lease",
+    });
+    const onCover = vi.fn();
+
+    await expect(setChosenCover(42, 5000, onCover)).resolves.toBe(true);
+
+    expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 0);
+    expect(onCover).toHaveBeenCalledWith("CHOSEN=");
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "CHOSEN=", "png", 0);
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "cover", "set", 9999, 6, "sha6");
+  });
+
+  it("leaves the cover to RomM's where none was chosen for the version", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+
+    await expect(setChosenCover(42, 5000)).resolves.toBe(false);
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
   });
 
   it("sets nothing for a slot SteamGridDB has nothing for", async () => {

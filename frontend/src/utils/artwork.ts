@@ -478,6 +478,30 @@ export const STEAM_ASSET_TYPES: Readonly<Record<Exclude<ArtworkTabSlot, "icon">,
 };
 
 /**
+ * Set the cover the user chose from SteamGridDB for *romId*, as a version switch does (#2381 D16), and report what Steam
+ * made of it; *onCover* hears the image first. Answers whether there was a chosen cover to set: `false` leaves the
+ * caller to set RomM's.
+ */
+export async function setChosenCover(
+  romId: number,
+  appId: number,
+  onCover?: (base64: string) => void,
+): Promise<boolean> {
+  const answer = await getSgdbArtworkBase64(romId, STEAM_ASSET_TYPES.cover).catch(() => NO_IMAGE);
+  if (isEndpointFailure(answer) || !answer.base64) return false;
+  const base64 = answer.base64;
+  onCover?.(base64);
+  await withPruneLeases([answer.prune_lease_token], "Version switch", async (signal) => {
+    if (isPruneLeaseCancelled(signal)) return;
+    const write = () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", STEAM_ASSET_TYPES.cover);
+    await setReplacedSlot(romId, "cover", answer, write).catch((e: unknown) => {
+      detach(debugLog(`Version switch: Steam refused the chosen cover for appId ${appId}: ${e}`));
+    });
+  });
+  return true;
+}
+
+/**
  * Remove the image set through Steam for *appId*'s slot *assetType* before Tender sets its own (#2381 D13): Steam
  * shows a `.jpg` before a `.png` (D14), so Tender's image would not show while Steam's stays. What Steam's call
  * removes is not measured yet; if it leaves the hand-set file, this is the one place that changes.
@@ -493,7 +517,8 @@ export type TabSlotOutcome = "set" | "refused" | "none" | "left";
  * Set the image the ARTWORK tab's pick or "Automatic" answered for *slot*, under the answer's lease and the
  * newest-apply-wins guard, and report what Steam made of it. *replaceSetInSteam* removes the image set through Steam
  * first — only after the user confirmed it, and never for the icon, which is repointed and whose file stays. `none`
- * where there was nothing to set, `left` where the apply was cancelled or overtaken.
+ * where there was nothing to set, `refused` where Steam did not take it (reported, so a chosen image's choice goes,
+ * #2381 D15), `left` where the apply was cancelled or overtaken.
  */
 export async function applyTabSlotImage(
   romId: number,
@@ -523,11 +548,12 @@ export async function applyTabSlotImage(
         if (replaceSetInSteam) await removeImageSetInSteam(appId, assetType);
         const base64 = image.base64;
         const write = () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType);
-        if (answer.status === "cover") {
-          await write();
-          return "set";
+        try {
+          await (answer.status === "cover" ? write() : setReplacedSlot(romId, slot, answer, write));
+        } catch (e) {
+          detach(debugLog(`Artwork: Steam refused the ${slot} for appId ${appId}: ${e}`));
+          return "refused";
         }
-        await setReplacedSlot(romId, slot, answer, write);
         return "set";
       },
       leaseOwner,

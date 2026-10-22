@@ -322,7 +322,6 @@ const ALL_AUTOMATIC: ArtworkSlots = {
   success: true,
   has_api_key: true,
   game: { sgdb_id: 42, source: "romm", name: "Test Game" },
-  superseded: null,
   slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
     slot,
     state: "automatic" as const,

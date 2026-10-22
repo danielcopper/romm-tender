@@ -649,7 +649,6 @@ export interface ArtworkSlots {
   success: true;
   has_api_key: boolean;
   game: { sgdb_id: number | null; source: "romm" | "chosen" | null; name: string | null };
-  superseded: SupersededGame | null;
   slots: ArtworkSlotRow[];
 }
 

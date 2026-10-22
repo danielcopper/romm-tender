@@ -11,7 +11,6 @@ const slots = (sgdbId: number | null): backend.ArtworkSlots => ({
   success: true,
   has_api_key: true,
   game: { sgdb_id: sgdbId, source: sgdbId === null ? null : "romm", name: null },
-  superseded: null,
   slots: [],
 });
 

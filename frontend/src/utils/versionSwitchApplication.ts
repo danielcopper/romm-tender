@@ -5,6 +5,7 @@ import {
   logWarn,
   type SwitchVersionSuccess,
 } from "../api/backend";
+import { setChosenCover } from "./artwork";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from "./pruneLease";
 import { refreshAppIdMap } from "./sessionManager";
@@ -51,9 +52,11 @@ export async function publishCommittedVersionSwitch(
   signal?: AbortSignal,
 ): Promise<void> {
   try {
-    const cover = await fetchCoverBase64(romId);
+    // A cover the user chose for this version is its cover; RomM's only where there is none (#2381 D16).
+    const chosen = await setChosenCover(romId, appId, (base64) => onCover?.(romId, base64));
+    const cover = chosen ? null : await fetchCoverBase64(romId);
     if (signal?.aborted) return;
-    if (cover.base64) {
+    if (cover?.base64) {
       onCover?.(romId, cover.base64);
       await SteamClient.Apps.SetCustomArtworkForApp(appId, cover.base64, "png", 0);
     }

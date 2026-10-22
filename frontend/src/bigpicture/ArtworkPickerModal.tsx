@@ -7,6 +7,9 @@
  * candidates come a page at a time. The user selects a tile and presses "Use this image"; over a slot set in Steam the
  * picker asks once more before anything is replaced (D13), except for the icon, whose file stays where it is.
  *
+ * For a cover without a SteamGridDB game or key the picker offers "Automatic" alone, with the reason why no
+ * SteamGridDB cover is listed (D19), and asks SteamGridDB nothing.
+ *
  * The picker only answers what was chosen; the tab sets it.
  */
 
@@ -32,6 +35,8 @@ export interface ArtworkPickerModalProps {
   romId: number;
   row: ArtworkSlotRow;
   gameName: string;
+  /** Why only "Automatic" is offered; the picker then lists no SteamGridDB image (#2381 D19). */
+  onlyAutomatic?: string | null;
   onPick: (pick: ArtworkPick, replaceSetInSteam: boolean) => void;
   /** Injected by showModal. */
   closeModal?: () => void;
@@ -57,12 +62,19 @@ const MARK_STYLE = {
   textTransform: "uppercase" as const,
 };
 
-export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({ romId, row, gameName, onPick, closeModal }) => {
+export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
+  romId,
+  row,
+  gameName,
+  onlyAutomatic = null,
+  onPick,
+  closeModal,
+}) => {
   const [candidates, setCandidates] = useState<ArtworkCandidate[]>([]);
   const [tendersPick, setTendersPick] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(onlyAutomatic === null);
   const [failure, setFailure] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | typeof AUTOMATIC | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -89,6 +101,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({ romId, row, ga
   };
 
   useEffect(() => {
+    if (onlyAutomatic !== null) return;
     let open = true;
     detach(
       listPage(0).then((answer) => {
@@ -98,7 +111,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({ romId, row, ga
     return () => {
       open = false;
     };
-  }, [listPage]);
+  }, [listPage, onlyAutomatic]);
 
   const loadMore = async () => {
     setLoading(true);
@@ -131,7 +144,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({ romId, row, ga
       <div style={{ padding: "16px", minWidth: "560px" }}>
         <div style={{ fontSize: "16px", fontWeight: "bold", color: "#fff" }}>{`${name} — choose an image`}</div>
         <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginBottom: "12px" }}>
-          {`SteamGridDB · ${gameName} · in SteamGridDB's order`}
+          {onlyAutomatic ?? `SteamGridDB · ${gameName} · in SteamGridDB's order`}
         </div>
         {confirming ? (
           <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

@@ -5,7 +5,8 @@
  * each a row that can take focus: Steam's own copy of its image (D14), its name, where the image comes from and its
  * state. Pressing a row opens the picker; what the user picks is downloaded, recorded and set here, under the
  * artwork lease and the newest-apply-wins guard (`utils/artwork`). Without a SteamGridDB game the rows that need one
- * say so and the cover's says it comes from RomM; "Choose game…" / "Change game…" opens the game picker.
+ * say so and the cover's says it comes from RomM; the cover's row still opens a picker that offers "Automatic" alone
+ * (D19). "Choose game…" / "Change game…" opens the game picker.
  */
 
 import { FC, useEffect, useState } from "react";
@@ -22,8 +23,15 @@ import {
 import { applyTabSlotImage, type TabSlotOutcome } from "../utils/artwork";
 import { loadArtworkSlots, useArtworkSlots } from "../utils/artworkSlotsStore";
 import { slotThumbnailUrls } from "../utils/artworkThumbs";
-import { NO_API_KEY, SLOT_NAMES, SOURCE_LINES, STATE_CHIPS, gameLine, sourceLine } from "../utils/artworkTabWording";
-import { applySupersededGame } from "../utils/artworkGameChange";
+import {
+  NO_API_KEY,
+  SLOT_NAMES,
+  SOURCE_LINES,
+  STATE_CHIPS,
+  coverOnlyAutomatic,
+  gameLine,
+  sourceLine,
+} from "../utils/artworkTabWording";
 import { detach } from "../utils/detach";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { showToast } from "../utils/toast";
@@ -74,6 +82,11 @@ function canPick(slots: ArtworkSlots): boolean {
   return slots.has_api_key && slots.game.sgdb_id !== null;
 }
 
+/** Whether *row*'s press opens a picker: every row where candidates can be listed, and the cover's always (D19). */
+function opensPicker(slots: ArtworkSlots, row: ArtworkSlotRow): boolean {
+  return canPick(slots) || row.slot === "cover";
+}
+
 export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   const held = useArtworkSlots(appId, romId);
   const [busy, setBusy] = useState(false);
@@ -81,13 +94,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   useEffect(() => {
     // The tab always reads afresh on opening: an image set through Steam since
     // the last read changes a row's state, and only the read sees it.
-    detach(
-      loadArtworkSlots(appId, romId).then(async (read) => {
-        if (!read?.superseded) return;
-        await applySupersededGame(appId, romId, read.superseded);
-        await loadArtworkSlots(appId, romId);
-      }),
-    );
+    detach(loadArtworkSlots(appId, romId));
   }, [appId, romId]);
 
   const slots = held?.slots ?? null;
@@ -120,11 +127,12 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   };
 
   const openPicker = (row: ArtworkSlotRow) => {
-    if (!slots || !canPick(slots) || busy) return;
+    if (!slots || !opensPicker(slots, row) || busy) return;
     showArtworkPicker({
       romId,
       row,
       gameName: slots.game.name ?? `#${slots.game.sgdb_id}`,
+      onlyAutomatic: canPick(slots) ? null : coverOnlyAutomatic(slots),
       onPick: (pick, replaceSetInSteam) => {
         detach(setPicked(row, pick, replaceSetInSteam));
       },
@@ -140,8 +148,8 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
         romName={romName}
         discardsChoices={current.slots.some((row) => row.has_choice)}
         onApplied={() => {
-          // The backend reloaded RomM's cover in place of a chosen one; it is
-          // set back to automatic here once more so Steam shows it in this session.
+          // A change of game keeps a chosen cover's choice (D12): setting the
+          // cover back to automatic here reloads RomM's cover and sets it in Steam.
           if (coverWasChosen) {
             const cover = current.slots.find((row) => row.slot === "cover");
             if (cover) detach(setPicked({ ...cover, state: "automatic" }, { kind: "automatic" }, false));
@@ -218,7 +226,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
           <div className={`romm-artwork-chip romm-artwork-chip-${row.state}`} style={{ fontSize: "11px" }}>
             {STATE_CHIPS[row.state]}
           </div>
-          {canPick(slots) && <div style={{ fontSize: "12px", color: "#1a9fff" }}>Choose…</div>}
+          {opensPicker(slots, row) && <div style={{ fontSize: "12px", color: "#1a9fff" }}>Choose…</div>}
         </DialogButton>
       ))}
     </Focusable>

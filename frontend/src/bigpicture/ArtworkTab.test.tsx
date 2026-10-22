@@ -25,7 +25,6 @@ function answer(
     success: true,
     has_api_key: true,
     game,
-    superseded: null,
     slots: (["cover", "grid", "hero", "logo", "icon"] as const).map((slot) => ({
       slot,
       state: rows[slot]?.state ?? "automatic",
@@ -249,16 +248,58 @@ describe("ArtworkTab", () => {
       fireEvent.click(Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Change game…")!);
       expect(lastModal<SgdbGamePickerModalProps>().discardsChoices).toBe(true);
     });
+  });
 
-    it("on a read that finds RomM's game replaced the chosen one, says so and applies automatic", async () => {
-      vi.mocked(artwork.applyAutomaticArtwork).mockResolvedValue(1);
-      await renderTab({ ...answer(FROM_ROMM), superseded: { name: "Mario Golf", slots: ["logo"] } });
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          body: "RomM now maps this game to Mario Golf; your chosen images went back to automatic.",
-        }),
+  describe("the cover without a SteamGridDB game or key (#2381 D19)", () => {
+    it("without a game the cover's row opens a picker offering Automatic alone, and why", async () => {
+      const { container } = await renderTab(answer(NONE));
+      expect(rowButton(container, "Cover").textContent).toContain("Choose…");
+      expect(rowButton(container, "Logo").textContent).not.toContain("Choose…");
+      fireEvent.click(rowButton(container, "Cover"));
+      const props = lastModal<ArtworkPickerModalProps>();
+      expect(props.row.slot).toBe("cover");
+      expect(props.onlyAutomatic).toBe("Choose a SteamGridDB game to see its covers.");
+    });
+
+    it("without a key the cover's picker says a key is needed, and the other rows stay locked", async () => {
+      const { container } = await renderTab({ ...answer(FROM_ROMM), has_api_key: false });
+      fireEvent.click(rowButton(container, "Hero"));
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+      fireEvent.click(rowButton(container, "Cover"));
+      expect(lastModal<ArtworkPickerModalProps>().onlyAutomatic).toBe(
+        "A SteamGridDB API key is needed for its covers.",
       );
-      expect(vi.mocked(artwork.applyAutomaticArtwork)).toHaveBeenCalledWith(42, APP_ID);
+    });
+
+    it("with a game and a key the cover's picker lists SteamGridDB's covers", async () => {
+      const { container } = await renderTab(answer(FROM_ROMM));
+      fireEvent.click(rowButton(container, "Cover"));
+      expect(lastModal<ArtworkPickerModalProps>().onlyAutomatic).toBeNull();
+    });
+  });
+
+  describe("an image Steam did not take (#2381 D15)", () => {
+    it("says Steam did not take the image", async () => {
+      vi.mocked(backend.chooseArtworkSlotImage).mockResolvedValue({
+        status: "image",
+        base64: "IMG=",
+        image_id: 12,
+        sha256: "sha",
+        sgdb_id: 7,
+        prune_lease_token: "lease",
+      });
+      vi.mocked(artwork.applyTabSlotImage).mockResolvedValue("refused");
+      const { container } = await renderTab(answer(FROM_ROMM));
+      fireEvent.click(rowButton(container, "Logo"));
+
+      await act(async () => {
+        lastModal<ArtworkPickerModalProps>().onPick({ kind: "image", imageId: 12 }, false);
+      });
+      await flush();
+
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Steam did not take the image" }),
+      );
     });
   });
 

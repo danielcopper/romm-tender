@@ -47,6 +47,16 @@ export function automaticTileLabel(slot: ArtworkTabSlot): string {
     : "Automatic — Tender picks by its own rule";
 }
 
+/**
+ * Why the cover's picker offers only "Automatic" (#2381 D19): without a key or a SteamGridDB game no SteamGridDB cover
+ * can be listed, and RomM's cover needs neither. `null` where SteamGridDB's covers can be listed.
+ */
+export function coverOnlyAutomatic(slots: Pick<ArtworkSlots, "has_api_key" | "game">): string | null {
+  if (!slots.has_api_key) return "A SteamGridDB API key is needed for its covers.";
+  if (slots.game.sgdb_id === null) return "Choose a SteamGridDB game to see its covers.";
+  return null;
+}
+
 /** The sentence the picker asks before it replaces an image set through Steam (#2381 D13). */
 export const REPLACE_SET_IN_STEAM = "This image was set through Steam. Replacing it removes it; Tender keeps no copy.";
 
