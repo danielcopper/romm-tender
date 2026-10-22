@@ -124,6 +124,14 @@ describe("biosPlaceLines", () => {
     ]);
   });
 
+  it("says the emulator is not installed instead of what lies at its place", () => {
+    const refusal = { reason: "not_installed" as const, folder: null, source: "emudeck" };
+
+    expect(biosPlaceLines(row({ place_refusal: refusal, link: "not_linked" }), "Kronos")).toEqual([
+      "Kronos is not installed here, so Tender links nothing for it.",
+    ]);
+  });
+
   it("names the source whose settings could not be read", () => {
     const refusal = { reason: "root_assumed" as const, folder: "/home/deck/Emulation/bios", source: "emudeck" };
 

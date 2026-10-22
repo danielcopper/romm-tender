@@ -78,7 +78,12 @@ export function biosPlaceLines(
     const source = sourceName(refusal.source);
     lines.push(`${source}'s settings could not be read, so Tender places nothing in ${refusal.folder}.`);
   }
-  lines.push(...linkLines(row, platformName));
+  if (refusal?.reason === "not_installed") {
+    // Nothing is linked for it, so what lies at the place is no link of Tender's to speak of.
+    lines.push(`${emulator ?? "The emulator"} is not installed here, so Tender links nothing for it.`);
+  } else {
+    lines.push(...linkLines(row, platformName));
+  }
   if (attempt.linkFailure) lines.push(`Could not place a link at ${row.local_path}: ${attempt.linkFailure}`);
   if (attempt.damaged) lines.push(DOWNLOAD_DAMAGED);
   if (attempt.replacedTo) lines.push(`Replaced. The old file is in ${attempt.replacedTo}.`);

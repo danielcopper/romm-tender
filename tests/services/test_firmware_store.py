@@ -778,6 +778,19 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         assert (other_bios / "saturn_bios.bin").is_symlink()
         assert str(other_bios / "saturn_bios.bin") in machine.links()
 
+    async def test_its_row_says_the_emulator_is_not_installed_rather_than_not_linked_yet(self, machine):
+        _saturn(machine)
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        await machine.service.download_all_firmware("saturn")
+        machine.resolver.not_installed = frozenset({_KRONOS})
+
+        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+
+        rows = [*entry["files"], *(row for tab in entry["emulator_tabs"] for row in tab.get("rows") or ())]
+        refusals = {row["declared_by"]: row["place_refusal"] for row in rows}
+        assert refusals[_KRONOS] == {"reason": "not_installed", "folder": None, "source": "retrodeck"}
+        assert refusals[_YABA] is None
+
     async def test_no_replace_for_an_emulator_its_source_states_is_not_installed(self, machine):
         place = machine.bios / "saturn_bios.bin"
         place.write_bytes(b"a wrong image")

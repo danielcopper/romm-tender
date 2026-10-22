@@ -133,15 +133,14 @@ def place_facts(
     source: str,
     owned: OwnedLinks,
     satisfied: bool | None,
-    linkable: bool = True,
 ) -> dict[str, Any]:
     """Tender's own fields on one row: its place, what fills it, what lies there, and whether Replace is offered.
 
     *satisfied* is the resolver's verdict over what lies at the place; Replace
     is offered only where that is ``False`` and the library copy is proven
     right by its checksum — never over a folder, never at a place that may not
-    be used, and never for an emulator the source states is not installed
-    (*linkable* false), since no link goes there.
+    be used, which is also every place of an emulator its source states is
+    not installed.
     """
     link, linked_for = None, None
     if place is not None and look is not None:
@@ -156,8 +155,7 @@ def place_facts(
             want, look, store_targets=owned.store_targets, present=owned.present, records=owned.records
         )
     replace = (
-        linkable
-        and link == LINK_OCCUPIED
+        link == LINK_OCCUPIED
         and refusal is None
         and satisfied is False
         and look is not None

@@ -37,11 +37,13 @@ if TYPE_CHECKING:
 # only assumed, or the source's roots could not be asked. ``folder_missing``:
 # the folder it lies in is not there, and Tender creates none. ``unreadable``:
 # the resolver could not look at it. ``no_place``: the answer names no place
-# for the file.
+# for the file. ``not_installed``: the source states the emulator is not
+# installed, so nothing is linked for it.
 REFUSED_ROOT_ASSUMED = "root_assumed"
 REFUSED_FOLDER_MISSING = "folder_missing"
 REFUSED_UNREADABLE = "unreadable"
 REFUSED_NO_PLACE = "no_place"
+REFUSED_NOT_INSTALLED = "not_installed"
 
 # What lies at a place, as a row states it. ``linked``: Tender's link to this
 # platform's store copy. ``linked_elsewhere``: Tender's link to another

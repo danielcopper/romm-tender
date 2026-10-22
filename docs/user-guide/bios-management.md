@@ -472,6 +472,9 @@ still offers a download into this platform's own folder.
 
 Some places are left alone for a reason the row names:
 
+- _Kronos is not installed here, so Tender links nothing for it._ — the emulator source does not have that emulator
+  installed, so no link goes to its places; once you install it, Tender links it the next time it brings its links up to
+  date.
 - _/home/deck/retrodeck/bios/dc does not exist yet. Start Flycast once, then try again._ — the folder the emulator opens
   is created by the emulator, not by Tender.
 - _RetroDECK's settings could not be read, so Tender places nothing in /home/deck/retrodeck/bios._ — the row names the

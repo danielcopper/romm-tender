@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from domain.bios_status import BiosFileEntry, build_file_entry
 from domain.firmware_groups import fetched_as_required
 from domain.firmware_match import MATCHED_CONTENT
-from domain.firmware_places import place_refusal
+from domain.firmware_places import REFUSED_NOT_INSTALLED, PlaceRefusal, place_refusal
 from domain.firmware_rows import (
     LibraryFirmware,
     OwnedLinks,
@@ -139,16 +139,24 @@ def _file_row(inputs: RowInputs, placement: FirmwarePlacement, emulator: str | N
     facts = place_facts(
         place=place,
         look=look,
-        refusal=place_refusal(place, look, catalogue.roots, unreadable=placement.place_unreadable),
+        refusal=_refusal(catalogue, placement, place, look),
         library=library,
         copy=store_copy(placement, inputs.copies),
         platform_slug=inputs.platform_slug,
         source=catalogue.source or "",
         owned=inputs.owned,
         satisfied=placement.satisfied,
-        linkable=placement.emulator not in catalogue.not_installed,
     )
     return entry.with_changes(**facts)
+
+
+def _refusal(
+    catalogue: FirmwareCatalogue, placement: FirmwarePlacement, place: str | None, look: PlaceLook | None
+) -> PlaceRefusal | None:
+    """Why no link goes to *place*: first that the source states the emulator is not installed, then the place's own."""
+    if placement.emulator in catalogue.not_installed:
+        return PlaceRefusal(REFUSED_NOT_INSTALLED)
+    return place_refusal(place, look, catalogue.roots, unreadable=placement.place_unreadable)
 
 
 def _folder_rows(
@@ -206,14 +214,13 @@ def _recognised_folder_rows(
         facts = place_facts(
             place=place,
             look=look,
-            refusal=place_refusal(place, look, catalogue.roots, unreadable=placement.place_unreadable),
+            refusal=_refusal(catalogue, placement, place, look),
             library=library,
             copy=copy,
             platform_slug=inputs.platform_slug,
             source=catalogue.source or "",
             owned=inputs.owned,
             satisfied=satisfied,
-            linkable=placement.emulator not in catalogue.not_installed,
         )
         rows.append(entry.with_changes(**facts))
     return rows
