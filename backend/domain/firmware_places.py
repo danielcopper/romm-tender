@@ -34,9 +34,10 @@ if TYPE_CHECKING:
     from domain.source_roots import SourceRoot, SourceRoots
 
 # Why a place gets no link. ``root_assumed``: it lies under a root the resolver
-# only assumed, or the source's roots could not be asked. ``folder_missing``: the folder it lies in is not there, and
-# Tender creates none. ``unreadable``: the resolver could not look at it.
-# ``no_place``: the answer names no place for the file.
+# only assumed, or the source's roots could not be asked. ``folder_missing``:
+# the folder it lies in is not there, and Tender creates none. ``unreadable``:
+# the resolver could not look at it. ``no_place``: the answer names no place
+# for the file.
 REFUSED_ROOT_ASSUMED = "root_assumed"
 REFUSED_FOLDER_MISSING = "folder_missing"
 REFUSED_UNREADABLE = "unreadable"

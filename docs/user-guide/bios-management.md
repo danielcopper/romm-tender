@@ -129,23 +129,23 @@ files, exactly where it opens them and with its own verdict for each: with YabaS
 `saturn_bios.bin` directly in the BIOS folder, and with Kronos chosen `kronos/saturn_bios.bin`. Choosing another
 emulator changes only the list — never which emulator launches. The line above and the **BIOS** badge beside Play stay
 those of the emulator you launch with. A per-region image another emulator lacks shows a grey dot here, not a red one:
-only the emulator you launch with is checked against this game's region. This page downloads and deletes no BIOS file
-itself — its one press is **Replace…** on a row where a wrong file is in the way (see below): **Download BIOS** in the
-game's RomM Actions menu fetches every file your library holds for the platform into Tender's firmware store and links
-it for every emulator that asks for it — its notification says how many files it downloaded, and what it could not link
-or moved aside is said under the rows here — and every file of every emulator can be downloaded or deleted on the
-platform's page (see **Library › Platforms** below). Files in your RomM library that no emulator was found to ask for
-are listed in a section of their own under the list, the same whichever emulator is chosen (see below). A row is headed
-by the file the emulator declares, with its folder where it asks for one (`dc/dc_boot.bin`) — that is where the file has
-to go, and it is the one thing you need when placing one by hand. Whatever the emulator's packager wrote about the file
-follows the name on the same line, in the packager's own wording and punctuation — `scph5500.bin (PS1 JP BIOS)` — and
-only where it says something the name does not: those descriptions usually repeat the file name, and many are nothing
-else. Where the file also has something to say about its state, that comes last, behind a dash:
-`scph5500.bin (PS1 JP BIOS) — missing, not in
-your RomM library`. It is the **emulator's own** wording — a RetroArch
-core's description file — and it is shown for no other source. Where Tender's own card stands in for an emulator that
-ships no description of its own, that card explains the requirement in full sentences, which is a paragraph on a line
-meant for a few words; the row shows the file and its state instead.
+only the emulator you launch with is checked against this game's region. This page deletes no BIOS file, and its one
+press, **Replace…** on a row where a wrong file is in the way (see below), downloads only the copy it links in its
+place. **Download BIOS** in the game's RomM Actions menu fetches every file your library holds for the platform into
+Tender's firmware store and links it for every emulator that asks for it — its notification says how many files it
+downloaded, and what it could not link or moved aside is said under the rows here — and every file of every emulator can
+be downloaded or deleted on the platform's page (see **Library › Platforms** below). Files in your RomM library that no
+emulator was found to ask for are listed in a section of their own under the list, the same whichever emulator is chosen
+(see below). A row is headed by the file the emulator declares, with its folder where it asks for one (`dc/dc_boot.bin`)
+— that is where the file has to go, and it is the one thing you need when placing one by hand. Whatever the emulator's
+packager wrote about the file follows the name on the same line, in the packager's own wording and punctuation —
+`scph5500.bin (PS1 JP BIOS)` — and only where it says something the name does not: those descriptions usually repeat the
+file name, and many are nothing else. Where the file also has something to say about its state, that comes last, behind
+a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
+your RomM library`. It is the **emulator's own** wording — a
+RetroArch core's description file — and it is shown for no other source. Where Tender's own card stands in for an
+emulator that ships no description of its own, that card explains the requirement in full sentences, which is a
+paragraph on a line meant for a few words; the row shows the file and its state instead.
 
 Under every name a small line says what the chosen emulator needs of the file — _required_, _optional_, or _one of these
 · for USA discs_ for one of the per-region images below — so a file the launch needs and one it can do without read
@@ -483,7 +483,8 @@ _Ryubing is not supported yet. Downloads are kept in Tender's firmware store and
 source is set up for PC-98. Downloads are kept in Tender's firmware store and linked once one is._
 
 BIOS files Tender downloaded straight into RetroDECK's BIOS folder before the firmware store existed stay where they
-are, and their **Delete** still removes them there.
+are, and their **Delete** still removes them there — only inside the BIOS folder RetroDECK names now (see _Deleting BIOS
+Files_).
 
 ### When a wrong file is in the way
 
@@ -563,9 +564,9 @@ if Tender downloaded it — otherwise its own downloads would be stranded on dis
 file that is in your library but arrived some other way is left where it is. If you want one of those gone, delete it in
 the file manager.
 
-The count on the button is the same set: it counts every file Tender downloaded into the platform's firmware store and
-every older download of Tender's still on disk — a copy only another emulator uses, and a second copy of the same bytes,
-included — so it matches what the delete reports.
+The count on the button is the same set: it counts every file of the platform's firmware store Tender has a record of
+and every older download of Tender's still on disk — a copy only another emulator uses, and a second copy of the same
+bytes, included — so it matches what the delete reports.
 
 This is the only place a platform's BIOS files are deleted. The Data Management page used to offer the same action
 without a confirmation; that copy is gone.

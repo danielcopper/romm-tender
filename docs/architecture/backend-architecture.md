@@ -1614,10 +1614,10 @@ link goes in for every emulator of the platform whose requirement the file fills
 its own, and changes nothing there (D13). For a folder an emulator lists (LRPS2's `pcsx2/bios`) every store file the
 resolver recognises for it is linked into it under its name in RomM (D26). A place under a root the resolver only
 assumed gets no link, nor does any place of a source whose roots could not be asked, and nor does a place whose folder
-is not there — Tender creates none (D11, #2219 D6). The row says so naming that source (D32). Which file fills which
-requirement is `domain/firmware_match.py`: its MD5 against the checksum the resolver pins for the requirement, by its
-declared name only for an archive or where no checksum is known (D2, D8, D16); where several fill one, the
-alphabetically first is linked.
+is not there — Tender creates none (D11, #2219 D6). For the first two the row says so, naming that source (D32). Which
+file fills which requirement is `domain/firmware_match.py`: its MD5 against the checksum the resolver pins for the
+requirement, by its declared name only for an archive or where no checksum is known (D2, D8, D16); where several fill
+one, the alphabetically first is linked.
 
 **Two records.** `firmware_store` holds one row per store file; `firmware_links` one row per link, keyed by its place,
 naming the store path it points at rather than the store row (`domain/firmware_store.py`). A link is Tender's own when
@@ -1637,9 +1637,9 @@ the panel asks for it (`update_bios_links`) when a platform page or a game's pag
 proven right by its checksum (D5): the copy is fetched and checked first, the file in the way goes to
 `<Tender's data folder>/backups/bios/<date and time>/<its original absolute path>` (D17), and the link takes its place.
 Where the link cannot be placed, the old file goes back only while its place is still free, and stays in the backup
-folder otherwise; the refusal (`replace_failed`) says which (D33, D34). No move of Tender's lands over anything: the
-file adapter claims the new name by creating it (`FirmwareFileAdapter.move_aside`). "Download required" never replaces
-anything.
+folder otherwise; the refusal (`replace_failed`) says which (D33, D34). Neither the backup nor the put-back lands over
+anything: the file adapter claims the new name by creating it — a hardlink, or where none can be made a copy flushed to
+disk — before the old name goes (`FirmwareFileAdapter.move_aside`). "Download required" never replaces anything.
 
 **Removing** takes Tender's own files and links only: a row's Delete removes the store file and every link of Tender's
 to it, the platform's Delete every store file of the platform and their links (D3). A Delete is never refused because a
@@ -3017,22 +3017,26 @@ threads them through rather than re-deriving over the payload.
 and nothing else. A file of the platform's firmware store goes through `FirmwareStore.do_remove`, which takes the path
 the store record holds, removes every link of Tender's to it, and drops both records. A file Tender downloaded into an
 emulator source's folder before the store existed goes by its `downloaded_bios` row: the row's own `file_path` is
-unlinked and the row pruned. Both halves matter. Authority comes from having placed the file, and the record is the only
-evidence of that, so a status listing cannot gate it — that gate hid the button entirely for a platform whose downloads
-had all left the RomM library. And the record's path is where the download actually wrote, where a status row's
-`local_path` is recomputed from today's placement: for a file fetched before an emu-atlas bump moved it, the recomputed
-path names whatever now occupies the new destination. An older download whose file is already gone is pruned without
-counting as a deletion or an error. `get_platform_firmware_status` ships `deletable_count` — every store file of the
-platform Tender has a record of that is on disk, whichever row it fills or none, and the older downloads still on disk,
-distinct paths — so the button's number is the same set the delete acts on; `local_count` is the library's progress
-ratio and is wrong for it in both directions.
+unlinked, only inside the BIOS folder RetroDECK names now, and the row pruned. Both halves matter. Authority comes from
+having placed the file, and the record is the only evidence of that, so a status listing cannot gate it — that gate hid
+the button entirely for a platform whose downloads had all left the RomM library. And the record's path is where the
+download actually wrote, where a status row's `local_path` is recomputed from today's placement: for a file fetched
+before an emu-atlas bump moved it, the recomputed path names whatever now occupies the new destination. An older
+download whose file is already gone is pruned without counting as a deletion or an error, and without a word.
+`get_platform_firmware_status` ships `deletable_count` — every store file of the platform Tender has a record of that is
+on disk, whichever row it fills or none, and the older downloads still on disk, distinct paths — so the button's number
+is the same set the delete acts on; `local_count` is the library's progress ratio and is wrong for it in both
+directions.
 
 **A delete is never refused because a place cannot be reached** (#2191 D20). A link under a root the resolver only
 assumed, or under none it could judge, stays where it is and keeps its record, and the link update removes it once the
-root is read. An older download outside the BIOS folder RetroDECK names now, or while it names none, stays too
-(`RetroDeckFolders.bios_folder`, `is_inside_folder`) and stays counted, so its row keeps its Delete — nothing but a
-second press removes it (D29). The answer names each under `kept` with its kind, place, folder and source (and an older
-download's file name), and the status line words each (D27, D29).
+root is read. An older download stays too where Tender may not remove it now (`RetroDeckFolders.bios_folder`,
+`is_inside_folder`; D29): while RetroDECK's settings cannot be read, RetroDECK is not installed, or it names no BIOS
+folder, the file keeps its record and stays counted, so its row keeps its Delete — nothing but a second press removes
+it; outside the BIOS folder RetroDECK names now, the file stays and its record goes, so it is counted no more. The
+answer names each under `kept` with its kind, place, folder and source — an older download also with its file name and
+`why` (`settings_unreadable`, `not_installed`, `no_bios_folder`, `outside_bios_folder`) — and the status line words each
+(D27, D29).
 
 **Two buttons reach that one loop**, and they differ only in which names they select: the platform-wide
 `Delete downloads (N)` (every record, #2190 D24) and a row's Delete (`delete_bios_file`, the records naming the row's

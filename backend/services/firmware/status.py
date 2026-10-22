@@ -338,9 +338,9 @@ class FirmwareStatusReader:
         """Every recorded file of *platform_slug*'s store that is on disk, by its name in RomM. Blocking.
 
         A file in the store folder without a record is not Tender's to count.
-        All the recorded ones, whichever row they fill or none: a copy only another
-        emulator uses, and a second copy of the same bytes, are Tender's to
-        delete as much as the one a row shows.
+        All the recorded ones, whichever row they fill or none: a copy only
+        another emulator uses, and a second copy of the same bytes, are
+        Tender's to delete as much as the one a row shows.
         """
         copies = self._store.do_copies(self._store.do_read_records(), platform_slug)
         return sorted(copy.file_name for copy in copies if copy.present)
@@ -349,7 +349,7 @@ class FirmwareStatusReader:
         """Stamp what a delete would take — per row, and for the platform.
 
         Two kinds of Tender's own files are deletable, and only those: a file
-        in this platform's store folder, and a file Tender downloaded into an
+        of this platform's store Tender has a record of, and a file Tender downloaded into an
         emulator source's folder before the store existed, which its download
         record names at the path it was written to. A row's Delete takes the
         store file that fills it, the older download of the library file that

@@ -1,9 +1,11 @@
 /**
  * What a BIOS press on a game's page did to the rows of its BIOS tab: a link it
  * could not place, a file it moved out of the store before the download, and
- * the file "Replace…" moved aside or why it could not. Kept for the page that made the press and
- * forgotten when that page is left; never recorded, and never a toast
- * (`docs/architecture/qam-panel.md`, the game page's BIOS tab).
+ * the file "Replace…" moved aside or why it could not. A later press replaces
+ * the link failures and moved files an earlier one left; what a "Replace…" said
+ * stays until the page is left. Forgotten when the page is left; never
+ * recorded, and never a toast (`docs/architecture/qam-panel.md`, the game
+ * page's BIOS tab).
  */
 
 import { useSyncExternalStore } from "react";

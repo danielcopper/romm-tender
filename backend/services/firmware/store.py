@@ -118,7 +118,9 @@ class LinkOutcome:
 class RemovalOutcome:
     """What removing store files did: how many went, the links kept, and what could not be removed.
 
-    A link is kept only because the root it lies under could not be read. Each
+    A link is kept only because the root it lies under could not be read —
+    one the resolver only assumed, or any of a source whose roots could not be
+    asked. Each
     kept entry names its ``kind`` (``link``), its place, the folder it was kept
     in where one is known, and the source whose settings could not be read.
     """
@@ -207,10 +209,10 @@ class FirmwareStore:
         match the checksum, and otherwise moved to the backup folder first.
 
         Refuses ``folder_unreachable`` (Tender's folder), ``no_checksum`` where
-        RomM states none, ``path_traversal`` for a name or a platform that leaves the store,
-        ``bios_download_failed`` where this device could not write the file and
-        :data:`DOWNLOAD_DAMAGED` where the bytes did not match. A RomM error
-        propagates as it was raised.
+        RomM states none, ``path_traversal`` for a name or a platform that
+        leaves the store, ``bios_download_failed`` where this device could not
+        write the file and :data:`DOWNLOAD_DAMAGED` where the bytes did not
+        match. A RomM error propagates as it was raised.
         """
         name = firmware.get("file_name", "")
         md5 = str(firmware.get("md5_hash") or "").lower()
@@ -471,8 +473,9 @@ class FirmwareStore:
         """Forget every store file recorded under *folder*, and remove Tender's links to them; delete no file.
 
         A link goes only while it still points at the recorded store path and
-        its place may be touched; one under a root the resolver only assumed
-        stays, its record forgotten with the rest.
+        its place may be touched; one under a root the resolver only assumed,
+        or of a source whose roots could not be asked, stays, its record
+        forgotten with the rest.
         """
         records = self.do_read_records()
         roots = self._resolver.source_roots()

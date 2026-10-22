@@ -510,12 +510,11 @@ export interface FirmwarePlatformExt extends EmulatorAnswer {
   ratio_local_count?: number;
   known_count?: number;
   unknown_count?: number;
-  /** How many files the platform-wide delete would remove: every file of this
+  /** How many files the platform-wide delete would act on: every file of this
    *  platform's store Tender has a record of and that is on disk, whichever
-   *  row it fills or none, and the older
-   *  downloads still on disk. Deliberately not
-   *  `local_count` — that is the library's progress ratio, which counts files
-   *  nothing here put on disk. */
+   *  row it fills or none, and the older downloads still on disk. Deliberately
+   *  not `local_count` — that is the library's progress ratio, which counts
+   *  files nothing here put on disk. */
   deletable_count?: number;
   /** See {@link StoreOnly}; absent or `null` where a download is linked. */
   store_only?: StoreOnly | null;

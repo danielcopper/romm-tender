@@ -4,7 +4,7 @@ The package's public API is the :class:`FirmwareService` façade. It owns every
 status-bearing BIOS query the QAM panel runs: what the RomM server holds, what
 the installed emulators want, where each file goes, and what is on disk. What an
 emulator wants is never stored — it is read per query through the
-``FirmwareResolver`` seam, because it changes with every RetroDECK update and a
+``FirmwarePlatformResolver`` seam, because it changes with every RetroDECK update and a
 stored answer would drift silently. Raw filesystem I/O is delegated to the
 ``FirmwareFileStore`` Protocol and HTTP traffic flows through ``RommFirmwareApi``;
 the classification scope, the destination layout, and the per-core filtering

@@ -7,8 +7,9 @@
  * firmware store and the links into the emulator sources, which the backend
  * states as fields (`library`, `link`, `place_refusal`) and this module only
  * words. What happened on this page — a link that could not be placed, a file
- * replaced, a download that arrived damaged — comes from the latest result and
- * is kept by the page, never recorded (`docs/architecture/qam-panel.md`,
+ * replaced or not, a download that arrived damaged — the page hands in as a
+ * `RowAttempt`, which it keeps until it is left and never records; which
+ * press replaces which line is the page's (`docs/architecture/qam-panel.md`,
  * Library, "BIOS files").
  */
 
