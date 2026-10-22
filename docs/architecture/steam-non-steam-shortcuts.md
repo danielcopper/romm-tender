@@ -779,9 +779,16 @@ that was cancelled or overtaken, or whose report was lost, leaves Tender's image
 judged by Tender's cached copy, which a download replaces; so before it does, a grid `.png` holding that copy's bytes is
 recorded as `set`, or the file would read "Set in Steam" once the copy goes. Steam's answer settles the hand-over of the
 image it names, and only that one, so a late answer for an older image leaves a newer hand-over: `set` becomes the
-slot's `set` row; `refused` forgets the hand-over, never replaces a `set` row, and for an image the user chose discards
-the choice, so the slot is as it was before the press — the tab says Steam did not take the image. The icon, judged by
-its path, has no hand-over.
+slot's `set` row; `refused` forgets the hand-over and never replaces a `set` row. The hand-over also keeps the image the
+user had chosen for the slot at the press, or none (D20): where Steam refuses the handed-over image while it is the
+slot's choice, that earlier choice comes back — chosen A, then B refused, is chosen A again; the same image chosen again
+and refused stays chosen; nothing chosen before is nothing chosen — and the refused image leaves the slot's cache, so it
+is never served afterwards as Tender's automatic image. A refusal for an image that is no longer the hand-over or the
+choice changes no choice. So the slot is as it was before the press, and the tab says Steam did not take the image. The
+icon, judged by its path, has no hand-over. A version switch writes the chosen cover where there is one, RomM's where
+there is none, and no cover at all where a chosen cover exists but cannot be served now (the cache lost it and it cannot
+be downloaded): `get_sgdb_artwork_base64(rom_id, 0)` says which in `chosen`, and the switch logs why it left the cover
+Steam shows.
 
 **Which image** (`domain/sgdb_artwork.py`, `choose_candidate`), in the one download path the game page, Refresh Artwork,
 a game change, "Automatic" in the ARTWORK tab and the shortcut artwork job's icons, wide grids and logos share

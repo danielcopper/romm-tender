@@ -782,7 +782,8 @@ covers; setting it back to **Automatic** reloads RomM's cover at once. Choosing 
 [SteamGridDB API key](configuration.md#steamgriddb-api-key); without one the tab says so. The cover's slot opens either
 way: without a key or a SteamGridDB game its picker offers **Automatic — RomM cover** alone and says why no SteamGridDB
 covers are offered, so RomM's cover is always one press away. If Steam does not take an image you chose, the tab says
-"Steam did not take the image" and the slot stays as it was before.
+"Steam did not take the image" and the slot stays as it was before: the image you had chosen there earlier, if any, is
+chosen again.
 
 Over an image set in Steam the picker asks once more: "This image was set through Steam. Replacing it removes it; Tender
 keeps no copy." **Replace** has Steam remove its image and sets yours — whether Steam's call removes its file in every
