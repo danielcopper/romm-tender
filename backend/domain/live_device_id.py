@@ -2,9 +2,10 @@
 
 A ``LiveDeviceId`` is an id this device's registration answered for during the
 operation that holds it: registered, or touched without the server answering
-that it is gone, a moment before. Only ``SyncEngine.live_device_id`` builds one, and
-``scripts/check_live_device_id.py`` fails on a construction anywhere else; the
-places that take one are where the type checker refuses a stored id or ``None``.
+that it is gone, a moment before. Only ``SyncEngine.live_device_id`` builds
+one, and ``scripts/check_live_device_id.py`` fails on a construction anywhere
+else; the places that take one are where the type checker refuses a stored id
+or ``None``.
 
 Why a save request must name a live device: RomM runs ``add_save``'s
 write-time 409 gates, records the calling device's sync row on ``add_save``

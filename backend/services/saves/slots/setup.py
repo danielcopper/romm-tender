@@ -146,17 +146,14 @@ class SetupWizard:
         ``recommended_action`` carries the failure cause when the server-saves
         query raises: ``server_unreachable`` for a transport failure,
         ``not_found`` when the server answered that it has no such ROM or
-        device id (Tender re-registers this device first, so the latter rarely
-        shows), and ``romm_refused`` with ``classify_error``'s ``message``
+        device id, and ``romm_refused`` with ``classify_error``'s ``message``
         for any other RomM answer it does not call unreachable. It carries the
         refusal of ``SyncEngine.live_device_id``, asked before the query, the
         same way: ``server_unreachable`` when the registration could not reach
-        RomM, ``device_not_registered`` when it failed any other way — RomM, or
-        a proxy in front of it, answered without registering the device (the
-        id-less answer included), or the stored token could not be sent — and
-        the query is not sent. All of them hold the
-        wizard identically — only the copy and the frontend's reachability
-        verdict differ (#1570).
+        RomM, ``device_not_registered`` for any other failure, as
+        ``SyncEngine.live_device_id`` refuses, and the query is not sent. All
+        of them hold the wizard identically — only the copy and the frontend's
+        reachability verdict differ (#1570).
         """
         rom_id = int(rom_id)
 
@@ -363,8 +360,8 @@ class SetupWizard:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 raise shape_refusal(info["save_answer"])
 
-            # The last precondition, after the local ones: a ROM refused here
-            # never costs a registration request.
+            # Asked only once the local checks above have passed, so a ROM they
+            # refuse never costs a registration request.
             device_id = await self._sync_engine.live_device_id()
 
             # Confirm in memory so the migration uploads resolve to the chosen

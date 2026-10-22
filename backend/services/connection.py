@@ -248,12 +248,12 @@ class ConnectionService:
         (best-effort) — it is bound to its minting origin and would otherwise
         404 against the new server's negotiate — and every successful sign-in
         then registers this device (best-effort, whether save sync is on or
-        off). Raises ``NotConfigured`` for a
-        missing or invalid URL or one carrying a user name or password,
-        ``VersionUnsupported`` as :meth:`test_connection` does, ``AuthFailed``
-        when RomM answers the mint with a 403, ``ServerUnreachable`` when RomM
-        answers no usable token, and ``Refused`` with ``save_failed`` when the
-        settings file cannot be written; a RomM error propagates as it is.
+        off). Raises ``NotConfigured`` for a missing or invalid URL or one
+        carrying a user name or password, ``VersionUnsupported`` as
+        :meth:`test_connection` does, ``AuthFailed`` when RomM answers the mint
+        with a 403, ``ServerUnreachable`` when RomM answers no usable token, and
+        ``Refused`` with ``save_failed`` when the settings file cannot be
+        written; a RomM error propagates as it is.
         """
         async with self._rules.hold("connect_with_credentials", prune=True):
             return await self._establish_token(romm_url, username, password, allow_insecure_ssl)
@@ -586,10 +586,10 @@ class ConnectionService:
 
         A device id is bound to the origin it was minted against, so a real
         server switch must drop it (RomM's negotiate hard-404s a foreign id), and
-        the sign-in then registers this device against the new server. A same-server re-sign-in — including a
-        token swap on the unchanged URL — must KEEP the id, or the next post-exit
-        sync flags a spurious conflict for a save this device itself synced
-        (#1437). An *unknown* old origin (``None`` — a legacy/unstamped token, or
+        the sign-in then registers this device against the new server. A
+        same-server re-sign-in — including a token swap on the unchanged URL —
+        must KEEP the id, or the next post-exit sync flags a spurious conflict
+        for a save this device itself synced (#1437). An *unknown* old origin (``None`` — a legacy/unstamped token, or
         the origin cleared by a prior sign-out) is treated as unknown, not
         different, and never forgets; only two known, differing normalized
         origins are a real change (:func:`is_origin_change`). *old_token_origin*

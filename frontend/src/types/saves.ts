@@ -89,10 +89,9 @@ export interface SaveStatus {
   /** Why it failed (`null` when it didn't). The flag says the server's view is
    *  unknown — true for a 404 as much as for an outage; this says why, so only
    *  `"server_unreachable"` may drive the connection store (#1570).
-   *  `"device_not_registered"`: the device's registration failed other than
-   *  by an unreachable RomM — RomM, or a proxy in front of it, answered without
-   *  registering the device (the id-less answer included), or the stored token
-   *  could not be sent — so nothing was listed. */
+   *  `"device_not_registered"`: the device could not be registered for a
+   *  reason other than an unreachable RomM (backend `SyncEngine.live_device_id`),
+   *  so nothing was listed. */
   server_query_reason?: RommErrorReason | "device_not_registered" | null;
   /** True when the active slot's current save spans more than one distinct
    *  file (e.g. Sega Saturn `.bkr`/`.bcr`/`.smpc`). Those siblings are
@@ -183,10 +182,9 @@ export interface SaveSetupInfo {
   // is the server ANSWERING that it has no such ROM or device id, so it must
   // not report the server offline (#1570). "romm_refused" holds the same way
   // for any other answer RomM gave, worded in `message`, and
-  // "device_not_registered" where the device's registration failed other than
-  // by an unreachable RomM — RomM, or a proxy in front of it, answered without
-  // registering the device (the id-less answer included), or the stored token
-  // could not be sent — so nothing was listed. See backend
+  // "device_not_registered" where the device could not be registered for a
+  // reason other than an unreachable RomM (backend `SyncEngine.live_device_id`),
+  // so nothing was listed. See backend
   // `get_save_setup_info`.
   recommended_action:
     | "auto_confirm_default"
@@ -273,10 +271,8 @@ export type ListFileVersionsResult =
   | { status: "not_found"; message: string }
   // Any other answer RomM gave to the listing, worded by `classify_error`.
   | { status: "romm_refused"; message: string }
-  // The device's registration failed other than by an unreachable RomM — RomM,
-  // or a proxy in front of it, answered without registering the device (the
-  // id-less answer included), or the stored token could not be sent — so
-  // nothing was listed.
+  // The device could not be registered for a reason other than an unreachable
+  // RomM (backend `SyncEngine.live_device_id`), so nothing was listed.
   | { status: "device_not_registered"; message: string };
 
 /** Discriminated-status result of `copySaveToSlot` — copies one server save into
