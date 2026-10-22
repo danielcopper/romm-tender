@@ -10,6 +10,7 @@ from fakes._romm_save_semantics import (
     check_add_save_conflict,
     compute_is_current,
     device_syncs_answer,
+    order_sync_rows,
     tag_filename,
 )
 from lib.errors import RommSyncDisabledError
@@ -223,7 +224,7 @@ class FakeSaveApi:
         """
         save_id = save.get("id")
         updated_at = save.get("updated_at", "")
-        return [
+        rows = [
             {
                 "device_id": d_id,
                 "device_name": self._device_name(d_id),
@@ -234,6 +235,7 @@ class FakeSaveApi:
             for (d_id, s_id), last_synced_at in self._device_sync_ledger.items()
             if s_id == save_id
         ]
+        return order_sync_rows(rows)
 
     def _device_syncs_answer(
         self, save: dict[str, Any], rows: list[dict[str, Any]], device_id: str | None

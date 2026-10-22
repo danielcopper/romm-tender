@@ -1,8 +1,7 @@
 """Both save fakes answer ``device_syncs`` the way RomM 5.3.0 does.
 
-``_romm_save_semantics`` holds the one model both fakes import, so every case
-runs against each fake: a fake that skipped the model would pass a test that
-only built the list itself.
+Every case runs against each fake, because each fake has to route its own
+answers through the shared model in ``_romm_save_semantics``.
 """
 
 from __future__ import annotations
@@ -61,14 +60,16 @@ class TestTheCallersPlaceholder:
             }
         ]
 
-    def test_the_placeholder_comes_first_and_the_other_rows_keep_their_order(self, fake) -> None:
+    def test_the_placeholder_comes_first_and_the_others_follow_newest_sync_first(self, fake) -> None:
         device_id = _register(fake)
-        fake.seed_foreign_save(ROM_ID, save_id=100, uploaded_by="device-B", updated_at=UPDATED_AT)
-        fake.stage_device_sync(100, "device-C", "2026-02-01T00:00:00Z")
+        _seed_unsynced_save(fake)
+        fake.stage_device_sync(100, "device-B", "2026-02-01T00:00:00Z")
+        fake.stage_device_sync(100, "device-D", "2026-02-15T00:00:00Z")
+        fake.stage_device_sync(100, "device-C", "2026-02-15T00:00:00Z")
 
         syncs = _syncs(fake, device_id)
 
-        assert [ds["device_id"] for ds in syncs] == [device_id, "device-B", "device-C"]
+        assert [ds["device_id"] for ds in syncs] == [device_id, "device-C", "device-D", "device-B"]
         assert syncs[0]["is_current"] is False
         assert syncs[0]["last_synced_at"] == UPDATED_AT
 
@@ -104,15 +105,6 @@ class TestTheCallersPlaceholder:
         assert [ds["device_id"] for ds in syncs] == [device_id, "device-B"]
         assert syncs[0]["is_current"] is False
         assert syncs[1] == seeded
-
-    def test_an_id_the_fake_never_registered_has_no_device_name(self, fake) -> None:
-        _seed_unsynced_save(fake)
-
-        (placeholder,) = _syncs(fake, "device-unknown")
-
-        assert placeholder["device_id"] == "device-unknown"
-        assert placeholder["device_name"] is None
-        assert placeholder["is_current"] is False
 
     def test_listing_writes_no_sync_row(self, fake) -> None:
         device_id = _register(fake)

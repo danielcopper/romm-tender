@@ -11,18 +11,18 @@ Modeled from RomM 5.3.0's ``backend/endpoints/saves.py``:
   ``last_synced_at >= save.updated_at`` (``>=``, not ``>``): a device is
   current once its recorded sync is at or after the save's last change.
 - Every save in an answer carries ``device_syncs`` built by
-  ``_build_save_schema``: empty without a device id; with one, a placeholder
-  for a calling device that has no sync row, and the caller's entry first.
+  ``_build_save_schema``: empty without a device id; with one, the stored
+  sync rows newest ``last_synced_at`` first (ties by ``device_id``), a
+  placeholder for a calling device that has no sync row, and the caller's
+  entry first.
 - A slot POST tags the stored filename with a timestamp marker
   (``Name [YYYY-MM-DD_HH-MM-SS].ext``) so slot versions never collide.
 - ``add_save`` refuses (409) an ``overwrite=false`` POST that would stack
   onto a slot whose latest save the calling device has not synced —
   including a device that has NEVER synced a non-empty slot.
 
-Keeping these rules in one place is the point: before this module a
-fake's ``upload_save`` unconditionally succeeded and its ``list_saves``
-stamped ``is_current=True`` for any querying device, so a test could not
-tell a working 409 backstop from a missing one.
+Not modeled: RomM answers 404 for a device id it has no device for, and the
+fakes accept any id; a row's ``device_name`` is then None.
 """
 
 from __future__ import annotations
@@ -79,6 +79,15 @@ def device_syncs_answer(
     return entries
 
 
+def order_sync_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Stored sync rows in RomM's order: newest ``last_synced_at`` first, ties by ``device_id``.
+
+    Models ``get_syncs_for_saves``' ``ORDER BY last_synced_at DESC, device_id``.
+    """
+    by_device = sorted(rows, key=lambda ds: str(ds.get("device_id")))
+    return sorted(by_device, key=lambda ds: str(ds.get("last_synced_at") or ""), reverse=True)
+
+
 def tag_filename(filename: str, ts: str) -> str:
     """Insert a ``[ts]`` marker before the extension (slot POST filename tagging).
 
@@ -102,16 +111,16 @@ def check_add_save_conflict(
 ) -> None:
     """Raise ``RommConflictError`` if an ``overwrite=false`` slot POST would stack unsafely.
 
-    Mirrors the RomM 5.3.0 ``add_save`` gate: with a device and a slot, the
-    server takes the latest save in the slot and refuses the create unless the
-    calling device has synced that save to its current version
-    (``last_synced_at >= latest.updated_at``). A device with no sync row for
-    the latest save (never synced this non-empty slot) is refused too — the
-    ``compute_is_current`` False branch covers both the missing-row and the
-    stale-row case.
+    Mirrors RomM 5.3.0's slot gate in ``add_save``, which runs only for a
+    POST with a device, a slot and no ``overwrite``: it takes the latest save
+    in the slot and refuses unless the calling device has synced that save to
+    its current version (``last_synced_at >= latest.updated_at``). A device
+    with no sync row for the latest save (never synced this non-empty slot) is
+    refused too — the ``compute_is_current`` False branch covers both the
+    missing-row and the stale-row case. An empty slot passes.
 
-    A first save into an empty slot, an ``overwrite=true`` POST, or a POST
-    with no device/slot is always allowed — there is nothing to stack on.
+    RomM's other check — a POST without a slot over a same-named save whose
+    sync row is stale — is not modeled.
     """
     if overwrite or not device_id or not slot or not slot_saves:
         return
