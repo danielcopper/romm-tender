@@ -1,10 +1,11 @@
 """Pure decoding of the ``platform_slug → display_name`` cache.
 
 The cache is a JSON object stored as a single ``kv_config`` TEXT value, refreshed
-each sync so three readers get a platform's name without asking RomM: the game-detail
+each sync so four readers get a platform's name without asking RomM: the game-detail
 page's platform name, a platform removal's answer, whose name the frontend uses
-to find that platform's Steam collection, and the next sync, which names the Steam
-collection of a platform RomM no longer lists by it. Anything that turns the stored
+to find that platform's Steam collection, the next sync, which names the Steam
+collection of a platform RomM no longer lists by it, and a BIOS row a link of
+Tender's into another platform's store folder serves. Anything that turns the stored
 string back into the ``slug → name`` mapping belongs here; reading the value out
 of ``kv_config`` stays in the service.
 """

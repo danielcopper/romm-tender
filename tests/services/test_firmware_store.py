@@ -10,6 +10,7 @@ it the way it does on a machine.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -626,9 +627,10 @@ class TestAPlaceAnotherPlatformsLinkServes:
         await machine.service.download_all_firmware("gb")
         await machine.service.download_all_firmware("gbc")
 
+        machine.uow.kv_config.set("platform_names", json.dumps({"gb": "Game Boy", "gbc": "Game Boy Color"}))
         gbc = (await machine.service.get_platform_firmware_status("gbc"))["platform"]
         (row,) = [f for f in gbc["files"] if f["declared_by"] == _YABA]
-        assert (row["link"], row["linked_for"]) == ("linked_elsewhere", "gb")
+        assert (row["link"], row["linked_for"], row["linked_for_name"]) == ("linked_elsewhere", "gb", "Game Boy")
 
         await machine.service.delete_platform_bios("gb")
         await machine.service.update_bios_links("gbc")

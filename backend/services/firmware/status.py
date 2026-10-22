@@ -28,7 +28,7 @@ for, says nothing about a launch that does not use it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from domain.bios_status import (
@@ -43,6 +43,7 @@ from domain.bios_status import (
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.firmware_groups import console_regions_of, judge_groups
 from domain.firmware_rows import leaves_its_folder, library_file
+from domain.platform_names import decode_platform_names
 from services.firmware.emulator_answers import (
     EMULATOR_FIELDS,
     EmulatorAnswer,
@@ -74,6 +75,10 @@ if TYPE_CHECKING:
         PlatformSystems,
         UnitOfWorkFactory,
     )
+
+# kv_config key for the ``platform_slug → display_name`` cache the library sync
+# refreshes every run. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
+_PLATFORM_NAMES_KEY = "platform_names"
 
 
 @dataclass(frozen=True)
@@ -163,7 +168,17 @@ class FirmwareStatusReader:
             for other in catalogue.emulator_verdicts
             if other != emulator
         }
-        return catalogue, rows, others
+        names = self._platform_names()
+        return (
+            catalogue,
+            _named(rows, names),
+            {other: _named(other_rows, names) for other, other_rows in others.items()},
+        )
+
+    def _platform_names(self) -> dict[str, str]:
+        """The names the library sync last recorded for RomM's platforms, by slug. Blocking."""
+        with self._uow_factory() as uow:
+            return decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
 
     async def _emulator_options(self, platform: PlatformSystem) -> dict[str, Any]:
         """The emulator options for *platform*'s system, or the unavailable answer where it has none."""
@@ -580,6 +595,14 @@ class FirmwareStatusReader:
             catalogue, identity, pick.label if pick is not None else None, options["options"], others
         )
         return payload
+
+
+def _named(rows: list[BiosFileEntry], names: dict[str, str]) -> list[BiosFileEntry]:
+    """*rows* with the name of the platform a link of Tender's serves them for, its slug where none is recorded."""
+    return [
+        replace(row, linked_for_name=names.get(row.linked_for, row.linked_for)) if row.linked_for else row
+        for row in rows
+    ]
 
 
 def _overview_payload(entry: BiosFileEntry) -> dict[str, Any]:

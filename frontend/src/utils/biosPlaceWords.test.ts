@@ -70,6 +70,15 @@ describe("biosPlaceLines", () => {
     expect(lines).toEqual(["Linked to Tender's copy for Game Boy"]);
   });
 
+  it("names that platform by the name the row carries, where no page names it", () => {
+    const lines = biosPlaceLines(
+      row({ link: "linked_elsewhere", linked_for: "gb", linked_for_name: "Game Boy" }),
+      null,
+    );
+
+    expect(lines).toEqual(["Linked to Tender's copy for Game Boy"]);
+  });
+
   it("says another file lies at the place, by the resolver's verdict over it", () => {
     expect(biosPlaceLines(row({ link: "occupied", satisfied: false }), null)).toEqual([
       "Another file lies here, and the emulator does not accept it",

@@ -186,11 +186,13 @@ class BiosFileEntry:
     # library file that fills it, this platform's store copy that does, what
     # lies at its place, why no link may go there, and whether "Replace…" is
     # offered. ``in_folder`` is the folder declaration a row stands in, for one
-    # file inside the folder an emulator lists.
+    # file inside the folder an emulator lists. ``linked_for_name`` is the name
+    # the platform ``linked_for`` slugs is shown under.
     library: dict[str, Any] | None = None
     store_file: str | None = None
     link: str | None = None
     linked_for: str | None = None
+    linked_for_name: str | None = None
     place_refusal: dict[str, Any] | None = None
     replace_offered: bool = False
     in_folder: str | None = None

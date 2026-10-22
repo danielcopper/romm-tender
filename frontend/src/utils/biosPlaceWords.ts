@@ -21,6 +21,7 @@ export type PlaceRow = Pick<
   | "library"
   | "link"
   | "linked_for"
+  | "linked_for_name"
   | "place_refusal"
   | "satisfied"
   | "local_path"
@@ -83,7 +84,7 @@ function linkLines(row: PlaceRow, platformName: (slug: string) => string): strin
     case "not_linked":
       return ["In Tender's firmware store, not linked here yet"];
     case "linked_elsewhere":
-      return [`Linked to Tender's copy for ${platformName(row.linked_for ?? "")}`];
+      return [`Linked to Tender's copy for ${row.linked_for_name ?? platformName(row.linked_for ?? "")}`];
     case "occupied":
       if (row.satisfied === false) return ["Another file lies here, and the emulator does not accept it"];
       return row.satisfied === null ? ["Another file lies here; it could not be checked"] : [];
