@@ -623,9 +623,8 @@ class FirmwareCatalogue:
     def by_file_name(self) -> dict[str, FirmwarePlacement]:
         """The placements indexed by file name, the first declarer of each name standing for it.
 
-        The index for a caller with no launching emulator to scope to — one
-        firmware id, the home migration's sweep. A caller that has one asks
-        :meth:`placements_for` instead.
+        The index for a caller with no launching emulator to scope to. A caller
+        that has one asks :meth:`placements_for` instead.
         """
         index: dict[str, FirmwarePlacement] = {}
         for placement in self.placements:

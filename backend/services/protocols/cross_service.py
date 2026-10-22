@@ -889,8 +889,9 @@ class TenderFolderRecordReader(Protocol):
     one. ``recorded_folders`` answers every Tender folder the store holds a
     record under, as the folder path it was given; ``forget_records_under``
     forgets every record under *folder* and deletes no file — the firmware
-    store also removes each of its links into a file it forgets, so none is
-    left pointing at what is no longer recorded. Both are called
+    store also removes its links into a file it forgets, except one under a
+    root the resolver only assumed or whose source's roots could not be
+    asked, which stays with its record forgotten. Both are called
     from a worker thread, and ``recorded_folders`` also from the event loop,
     by the folder rule (GLOSSARY.md → Conflict rules), so it answers from one
     short query.

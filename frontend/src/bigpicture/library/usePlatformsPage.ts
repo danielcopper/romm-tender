@@ -267,7 +267,7 @@ export interface PlatformsPageState {
   /** The shown emulator's required files, where that emulator opens them. */
   downloadRequired: (slug: string, emulator: string | null) => void;
   downloadAll: (slug: string) => void;
-  /** One library file, by its name in RomM, into the platform's store folder and linked. */
+  /** One library file, by its name in RomM and the id of the one the row shows, into the platform's store folder and linked. */
   downloadOne: (slug: string, fileName: string, firmwareId: number | null) => void;
   /** "Replace…" on the row whose place is *place*, once the user confirmed it. */
   replaceBios: (slug: string, place: string) => void;

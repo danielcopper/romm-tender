@@ -111,8 +111,9 @@ class FirmwareDownloader:
         """Fetch the library file *file_name* into *platform_slug*'s store folder, and link it.
 
         *firmware_id* is the library file the row shows, so the file fetched is
-        that one even where two files share its name; it must carry the name.
-        Without it the name — the file's name in RomM — is looked up among the
+        that one even where two files share its name. An id the listing does
+        not hold under *file_name* counts for nothing, and neither does a missing
+        one: the name — the file's name in RomM — is then looked up among the
         files RomM lists for the platform first, and then in the whole library,
         since a file fills a requirement wherever RomM files it. A name the
         library does not hold is a ``not_in_library`` refusal, never a silent

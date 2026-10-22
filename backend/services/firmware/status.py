@@ -335,9 +335,10 @@ class FirmwareStatusReader:
             return uow.roms.get_bound_platform_slugs()
 
     def _store_files(self, platform_slug: str) -> list[str]:
-        """Every file of *platform_slug*'s store folder that is on disk, by its name in RomM. Blocking.
+        """Every recorded file of *platform_slug*'s store that is on disk, by its name in RomM. Blocking.
 
-        All of them, whichever row they fill or none: a copy only another
+        A file in the store folder without a record is not Tender's to count.
+        All the recorded ones, whichever row they fill or none: a copy only another
         emulator uses, and a second copy of the same bytes, are Tender's to
         delete as much as the one a row shows.
         """

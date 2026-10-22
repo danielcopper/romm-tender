@@ -1,7 +1,7 @@
 """Pure decoding of the ``platform_slug → display_name`` cache.
 
 The cache is a JSON object stored as a single ``kv_config`` TEXT value, refreshed
-each sync so four readers get a platform's name without asking RomM: the game-detail
+each sync so its readers get a platform's name without asking RomM — among them the game-detail
 page's platform name, a platform removal's answer, whose name the frontend uses
 to find that platform's Steam collection, the next sync, which names the Steam
 collection of a platform RomM no longer lists by it, and a BIOS row a link of

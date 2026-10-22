@@ -697,14 +697,15 @@ download or a progress ratio, because nothing in Tender can fetch it.
 
 Whether one row's requirement is met: the resolver's own verdict over that file, read at the place the launching
 emulator opens it — never presence. A wrong image is there and unmet; a file the resolver could not compare is there and
-withheld. A **folder declaration** is one row per file of it, each with the resolver's verdict over that file, and the
-folder's own verdict — what it _holds_ — counts once as one requirement; RetroDECK links LRPS2's `pcsx2/bios` onto the
-BIOS root, so the folder is there on every install, and with nothing in it one row stands for the folder with that
-verdict. The rows a launch reads are the **launching emulator**'s own requirements, each at the place the resolver names
-for that emulator: with YabaSanshiro launching Saturn, `saturn_bios.bin` is the file directly under the BIOS root,
-whatever lies under Kronos's `kronos/`. Every statement below is scoped to a **required by the launching emulator** row
-first, and the library's own held/offered ratio is a third axis again, counting what the RomM library holds rather than
-what is met.
+withheld. A **folder declaration** is one row per file of it — each library file the resolver recognises for the folder,
+and each file lying in it that the resolver makes a statement about — each with the resolver's verdict over that file,
+and the folder's own verdict — what it _holds_ — counts once as one requirement; RetroDECK links LRPS2's `pcsx2/bios`
+onto the BIOS root, so the folder is there on every install, and where nothing lies in it and no library file is
+recognised for it, one row stands for the folder with that verdict, until a file of the folder has a row of its own. The
+rows a launch reads are the **launching emulator**'s own requirements, each at the place the resolver names for that
+emulator: with YabaSanshiro launching Saturn, `saturn_bios.bin` is the file directly under the BIOS root, whatever lies
+under Kronos's `kronos/`. Every statement below is scoped to a **required by the launching emulator** row first, and the
+library's own held/offered ratio is a third axis again, counting what the RomM library holds rather than what is met.
 
 - **met** — raises `required_downloaded`, the "in place" a sentence counts. The resolver established that the right file
   is where the emulator opens it — or, for a declared folder, that an image inside passes the emulator's own check. A

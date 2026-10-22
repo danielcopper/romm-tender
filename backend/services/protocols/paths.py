@@ -91,7 +91,7 @@ class FirmwareResolver(Protocol):
 
     The whole-machine question, and it is the right one only where the caller
     has **no platform to name**: the RetroDECK-home migration's untracked-BIOS
-    sweep, and the download of one firmware id. It enumerates installed cores,
+    sweep. It enumerates installed cores,
     so it carries no standalone emulator at all and can never say what one
     wants — a platform-scoped answer asks :class:`FirmwarePlatformResolver`
     instead.

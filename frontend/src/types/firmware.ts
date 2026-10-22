@@ -510,7 +510,8 @@ export interface FirmwarePlatformExt extends EmulatorAnswer {
   known_count?: number;
   unknown_count?: number;
   /** How many files the platform-wide delete would remove: every file of this
-   *  platform's store on disk, whichever row it fills or none, and the older
+   *  platform's store Tender has a record of and that is on disk, whichever
+   *  row it fills or none, and the older
    *  downloads still on disk. Deliberately not
    *  `local_count` — that is the library's progress ratio, which counts files
    *  nothing here put on disk. */

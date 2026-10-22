@@ -242,13 +242,14 @@ Format: **invariant** — tier — enforced by.
   three conditions), `TestCreatingTheFolder` (start, id file, a drive that is gone, a recorded folder),
   `TestPreparingAWrite` and `TestTheFolderRule`. The firmware store is the first store that records something under the
   folder: `FirmwareStore` answers `TenderFolderRecordReader` off its `firmware_store` rows, forgets its records under a
-  folder by removing Tender's links to those files and deleting no file, and every firmware use case that writes into
-  the store or links into it names the folder rule (`tests/services/test_firmware_store.py::TestTendersFolderRecords`
-  and `::TestFolderRule`). That it makes every write ready through `do_prepare_for_write` is prompt-only: its tests hand
-  it a stub in that function's place. Prompt-only: a new store that writes there must call `do_prepare_for_write` first,
-  answer `TenderFolderRecordReader` and join the `records` tuple in `bootstrap/services.py`, and a use case that touches
-  the folder's files names the folder rule (`folder=True`); a recovery bundle is never a record — Tender lists bundles
-  from the folder and keeps no record of them
+  folder by removing Tender's links to those files — except one under a root the resolver only assumed or whose source's
+  roots could not be asked — and deleting no file, and every firmware use case that writes into the store or links into
+  it names the folder rule (`tests/services/test_firmware_store.py::TestTendersFolderRecords` and `::TestFolderRule`).
+  That it makes every write ready through `do_prepare_for_write` is prompt-only: its tests hand it a stub in that
+  function's place. Prompt-only: a new store that writes there must call `do_prepare_for_write` first, answer
+  `TenderFolderRecordReader` and join the `records` tuple in `bootstrap/services.py`, and a use case that touches the
+  folder's files names the folder rule (`folder=True`); a recovery bundle is never a record — Tender lists bundles from
+  the folder and keeps no record of them
 - **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
   with its reason** — check — Tender stopped being a Decky Loader plugin when the backend began hosting itself, and a
   name that still says "plugin" teaches its reader the old model: that something loads Tender and owns its life cycle,
@@ -688,8 +689,8 @@ Format: **invariant** — tier — enforced by.
   place ("Tender could not look into bios/kronos/, so whether saturn_bios.bin is there is not known"). The backend reads
   it as one property, `FirmwarePlacement.place_unreadable`, and four callers ask it:
   `domain/firmware_groups.py::fetched_as_required` (so `Download required` neither counts nor fetches it), and
-  `domain/firmware_places.py::place_refusal` as the link update (`services/firmware/store.py`), the rows
-  (`services/firmware/rows.py`) and "Replace…" (`services/firmware/replacement.py`) call it, whose `unreadable` refusal
+  `domain/firmware_places.py::place_refusal`, which the link update (`services/firmware/store.py`), the rows
+  (`services/firmware/rows.py`) and "Replace…" (`services/firmware/replacement.py`) call and whose `unreadable` refusal
   none of them passes; the frontend's `isFetchable` reads the same caveat code and that refusal, so neither page points
   at the row as something to download. A download itself lands in Tender's firmware store, never at the place, so the
   place's reading decides only the link. Pinned by `tests/domain/test_firmware_places.py`,
@@ -1520,22 +1521,23 @@ Format: **invariant** — tier — enforced by.
   quarantining a ROM (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is
   synced nowhere at all. It is the first caller to hand that funnel a directory outside the saves root: it takes the
   directory it is given, so a savestate's backup lands in `<states>/.romm-backup/`. A BIOS file at an emulator's place
-  is changed only by a "Replace…" the user confirmed on its row, and it takes the **backup** leg too, by a path of its
-  own rather than that funnel: once Tender's copy has passed RomM's checksum, the file moves to
-  `<data>/backups/bios/<date and time>/<its original absolute path>`, where it stays until the user deletes it, and
-  moves back where the link cannot be placed ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D5, D17);
-  so does a file lying in the firmware store without a record of Tender's whose checksum is not RomM's, before a
-  download takes its name (D25). Both go through `FirmwareStore.do_back_up` and are pinned by
-  `tests/services/test_firmware_store.py` (`TestReplacingAWrongFile`, `TestAStoreFileWithoutARecord`). Following a moved
-  save directory (`services/saves/save_directory.py`) takes the same **backup** leg on a collision — detail:
-  [Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory). The installer
-  replaces the user's database and settings on two paths, and they are held to the rule differently. A **rollback by
-  hand** (`install.sh --rollback`) takes the **backup** leg: it stops the unit and copies the database files and
-  `settings.json` it is about to replace into `rollback-backup/` under the data root — put in place over the previous
-  copy the same way as the update's backup, and never touched by an update — and a copy that cannot be made refuses the
-  rollback with nothing changed. No prompt: the copy is what makes asking unnecessary. The **automatic rollback** of an
-  update whose new version did not answer makes no such copy, because all it discards is what that version wrote while
-  the installer waited for it, and that version was never seen to answer. Both are pinned in
+  is changed only by a "Replace…" the user confirmed on its row. It takes the **backup** leg too, by a path of its own
+  rather than that funnel: once Tender's copy has passed RomM's checksum, the file moves to
+  `<data>/backups/bios/<date and time>/<its original absolute path>`, where it stays until the user deletes it. Where
+  the link then cannot be placed, it moves back only while its place is still free, never over anything that lies there
+  by then, and stays in the backup folder otherwise ([#2191](https://github.com/danielcopper/romm-tender/issues/2191)
+  D5, D17, D33, D34). The backup leg is also taken by a file lying in the firmware store without a record of Tender's
+  whose checksum is not RomM's, before a download takes its name (D25). Both go through `FirmwareStore.do_back_up` and
+  are pinned by `tests/services/test_firmware_store.py` (`TestReplacingAWrongFile`, `TestAStoreFileWithoutARecord`).
+  Following a moved save directory (`services/saves/save_directory.py`) takes the same **backup** leg on a collision —
+  detail: [Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory). The
+  installer replaces the user's database and settings on two paths, and they are held to the rule differently. A
+  **rollback by hand** (`install.sh --rollback`) takes the **backup** leg: it stops the unit and copies the database
+  files and `settings.json` it is about to replace into `rollback-backup/` under the data root — put in place over the
+  previous copy the same way as the update's backup, and never touched by an update — and a copy that cannot be made
+  refuses the rollback with nothing changed. No prompt: the copy is what makes asking unnecessary. The **automatic
+  rollback** of an update whose new version did not answer makes no such copy, because all it discards is what that
+  version wrote while the installer waited for it, and that version was never seen to answer. Both are pinned in
   `tests/scripts/test_install_sh.py` (`TestRollingBackByHand`, and
   `TestAnUpdateThatDoesNotStart::test_it_keeps_no_copy_of_what_the_failed_version_wrote`); what an update and a rollback
   do, in order: [Running an installed one](../contributing/development.md#running-an-installed-one). A settings file
@@ -1580,11 +1582,11 @@ Format: **invariant** — tier — enforced by.
   can fetch back — an older delete authorised on presence did exactly that to `<bios>/dolphin-emu/Sys/codehandler.bin`
   on a real device. `on_server` describes what the library holds _now_, not who wrote the file: authorise on it and a
   file dropped from RomM after we downloaded it is stranded on disk. The count the UI offers is bound to the same set:
-  `deletable_count` on the `get_platform_firmware_status` payload counts every file of this platform's store on disk — a
-  copy only another emulator uses and a second copy of the same bytes included — and the older downloads still on disk,
-  one a Delete could not reach included (#2191 D29); each row carries the name its Delete is addressed by
-  (`delete_name`) — its store file, the older download of the library file that fills it, or the older download lying at
-  its own place — which alone gates the row's Delete. **Both buttons reach one removal**
+  `deletable_count` on the `get_platform_firmware_status` payload counts every file of this platform's store that Tender
+  has a record of and that is on disk — a copy only another emulator uses and a second copy of the same bytes included —
+  and the older downloads still on disk, one a Delete could not reach included (#2191 D29); each row carries the name
+  its Delete is addressed by (`delete_name`) — its store file, the older download of the library file that fills it, or
+  the older download lying at its own place — which alone gates the row's Delete. **Both buttons reach one removal**
   (`PlatformBiosDeleter._delete_io` over `FirmwareStore.do_remove`, under a name selection per button): a second copy of
   that loop is the shape this rule is about, because the copies would drift silently. **Nothing mechanical stands behind
   any of this.** A delete path looping a status list on `downloaded` alone would go green — which is exactly the shape

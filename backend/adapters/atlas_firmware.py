@@ -93,7 +93,8 @@ from _vendor.atlas import (
 )
 
 # None of these names is in emu-atlas's ``__all__``, and emu-atlas has not said
-# whether they are kept: a rename there fails this import at start-up.
+# whether they are kept: a rename there, once vendored, fails this import at
+# start-up.
 from _vendor.atlas.firmware import core_short_name, declared_directory_of, load_hashes
 
 from adapters.atlas_identity import emulator_identity
