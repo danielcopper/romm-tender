@@ -70,7 +70,7 @@ from _vendor.atlas.firmware import (
 )
 from _vendor.atlas.firmware import DECLARED_DIRECTORY as ATLAS_DECLARED_DIRECTORY
 from _vendor.atlas.firmware import DECLARED_FILE as ATLAS_DECLARED_FILE
-from _vendor.atlas.installations import InstallationRoot, RootProvenance, RootsAnswer
+from _vendor.atlas.installations import InstallationRoot, InstallationRootName, RootProvenance, RootsAnswer
 from _vendor.atlas.machine import KIND_DIRECTORY, KIND_FILE, KIND_INACCESSIBLE, KIND_MISSING, PathKind
 from _vendor.atlas.placement import Caveat
 
@@ -2295,7 +2295,7 @@ class TestEachPlacementIsOneEmulatorsRequirement:
         assert adapter().groups[0].satisfied is None
 
 
-def _roots_answer(*roots: tuple[str, str, RootProvenance]) -> RootsAnswer:
+def _roots_answer(*roots: tuple[InstallationRootName, str, RootProvenance]) -> RootsAnswer:
     return RootsAnswer(tuple(InstallationRoot(name, path, provenance, None) for name, path, provenance in roots))
 
 
@@ -2404,7 +2404,11 @@ class TestWhatAFolderDeclarationHolds:
         placement = self._placement(platform_adapter, monkeypatch)
 
         table = load_hashes()
-        filed = {table.get(name).md5.lower() for name in table.names() if name.startswith("pcsx2/bios/")}
+        filed = {
+            entry.md5.lower()
+            for name in table.names()
+            if name.startswith("pcsx2/bios/") and (entry := table.get(name)) is not None
+        }
         assert filed
         assert placement.folder_md5s == frozenset(filed)
 

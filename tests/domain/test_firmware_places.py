@@ -65,13 +65,17 @@ def _record(place: str, target: str, platform: str = "gbc") -> FirmwareLink:
 
 class TestWhichRootAPlaceLiesUnder:
     def test_the_deepest_root_answers(self):
-        assert root_over(f"{_BIOS}/gb_bios.bin", _roots()).name == "bios"
+        root = root_over(f"{_BIOS}/gb_bios.bin", _roots())
+        assert root is not None
+        assert root.name == "bios"
 
     def test_a_place_outside_every_root_lies_under_none(self):
         assert root_over("/home/deck/.var/app/net.retrodeck.retrodeck/data/Cemu/keys.txt", _roots()) is None
 
     def test_a_folder_that_only_shares_a_prefix_is_no_root_of_it(self):
-        assert root_over("/home/deck/retrodeck/bios-old/x.bin", _roots()).name == "installation"
+        root = root_over("/home/deck/retrodeck/bios-old/x.bin", _roots())
+        assert root is not None
+        assert root.name == "installation"
 
 
 class TestWhetherAPlaceMayBeUsed:
@@ -120,7 +124,7 @@ class TestWhoseLinkItIs:
 
 
 class TestWhatARowSaysLiesThere:
-    def _state(self, look, target=_GBC_COPY, present=frozenset({_GB_COPY, _GBC_COPY}), records=None):
+    def _state(self, look, target: str | None = _GBC_COPY, present=frozenset({_GB_COPY, _GBC_COPY}), records=None):
         return link_state(
             _want(f"{_BIOS}/gb_bios.bin", target),
             look,
