@@ -7,7 +7,7 @@ detection to RomM's ``negotiate`` operation list while ``get_save_status`` used
 the matrix — so the two could disagree.
 
 This is the regression guard for the divergence the phase closes. It seeds the
-branch-6d adopt case (``domain/sync_action._decide_when_no_entry``): a server save
+branch-6d adopt case (the compiled core's ``gavel_decide_when_no_entry``): a server save
 whose ``content_hash`` is byte-identical to the local file, with NO
 ``device_syncs`` entry for this device. The matrix verdict is
 ``Skip(adopt_baseline=True)`` — nothing to transfer, no conflict, adopt the local
