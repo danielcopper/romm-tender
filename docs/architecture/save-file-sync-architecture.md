@@ -652,9 +652,9 @@ detected without ever duplicating. The check is pure — no download, no re-hash
 every save. **Known fallback gap:** older / migrated server saves may lack `content_hash`; when it is absent neither
 identity route can match. A local with no baseline then conflicts (row 6a) and a diverged one conflicts (row 6c), so
 only a local unchanged since its baseline — or one whose hash is unknown — can still reach row 6e's POST of what may be
-a byte-identical duplicate. On a real server that POST meets the [409-gate](#the-add_save-post-409-gate), since this
-device holds no sync row on the head, and for an unchanged local the backstop downloads the head instead. No slow-path
-content fetch is attempted (#1013).
+a byte-identical duplicate. RomM's [409-gate](#the-add_save-post-409-gate) refuses that POST, since this device holds no
+sync row on the head, and for an unchanged local the backstop downloads the head instead. No slow-path content fetch is
+attempted (#1013).
 
 ### Why row 6a conflicts instead of going by age
 
