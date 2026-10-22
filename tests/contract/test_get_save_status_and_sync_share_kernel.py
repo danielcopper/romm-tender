@@ -7,12 +7,13 @@ detection to RomM's ``negotiate`` operation list while ``get_save_status`` used
 the matrix — so the two could disagree.
 
 This is the regression guard for the divergence the phase closes. It seeds row 8
-of the decision table: a server save whose ``content_hash`` is byte-identical to
-the local file, a current ``device_syncs`` entry for this device on it, and no
-baseline. The matrix verdict is ``Skip(adopt_baseline=True)`` — nothing to
-transfer, no conflict, adopt the local hash as the baseline. Under the old fork the ``FakeRommApi.negotiate`` empty plan
-would have dispatched nothing (no baseline adopted), diverging from the status
-view. Now both derive from the one kernel, so they agree: status reports
+of the decision table: a server save with a current ``device_syncs`` entry for
+this device on it, and no baseline. The save's ``content_hash`` equals the local
+file's, which plays no part in row 8. The matrix verdict is
+``Skip(adopt_baseline=True)`` — nothing to transfer, no conflict, adopt the local
+hash as the baseline. Under the old fork the ``FakeRommApi.negotiate`` empty
+plan would have dispatched nothing (no baseline adopted), diverging from the
+status view. Now both derive from the one kernel, so they agree: status reports
 ``synced`` / no conflict, sync transfers nothing / raises no conflict, and BOTH
 adopt the baseline.
 """

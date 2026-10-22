@@ -8,10 +8,9 @@ matrix backstops by re-fetching the slot and re-deciding purely from hashes
 head, anything else surfaces a conflict. ``keep_local`` conflict resolution
 instead POSTs with ``overwrite=true`` (the user's content wins outright).
 
-These tests stay on the legacy ``compute_sync_action`` matrix path
-(``active_slot`` set but ``slot_confirmed=False``) so the POST→409 backstop is
-actually exercised — the negotiate transport returns an empty plan under the
-``FakeRommApi`` and the engine fork is not collapsed until a later phase.
+Every ROM decides through the same ``compute_sync_action`` matrix, so the
+unconfirmed slot these tests seed (``active_slot`` set, ``slot_confirmed=False``)
+is decided as a confirmed one would be.
 """
 
 from __future__ import annotations
@@ -142,8 +141,9 @@ async def test_saves_upload_409_stale_with_local_edit_surfaces_conflict(harness)
     local_path = _write_local_save(harness, system="gba", content=b"local diverged edit", filename="game.srm")
     seed_save_state(harness, 42, _tracked_slot_state(baseline=hashlib.md5(b"old baseline").hexdigest()))
 
-    # The snapshot flags us current (explicit device_syncs) but no DeviceSaveSync
-    # ledger row backs it, so the server rejects the overwrite=false POST with 409.
+    # The listing shows us current on the head (seeded device_syncs), as one
+    # taken before another device moved the head would; no ledger row backs it,
+    # so the server rejects the overwrite=false POST with 409.
     harness.romm.saves[200] = {
         "id": 200,
         "rom_id": 42,

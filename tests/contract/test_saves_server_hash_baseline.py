@@ -1,11 +1,12 @@
 """Contract tests for the server-hash baseline identity check (#1468), at the wire.
 
 Drives the real ``Endpoints`` over the real ``bootstrap`` with a registered
-device, which is how every sync reaches RomM. Both identity routes sit in the
-decision's never-touched branch, and RomM never sends that branch a registered
-device: for a save the device has no sync row on, ``GET /api/saves`` answers a
-placeholder entry that is not current. So the two cases below land on the
-not-current rows instead:
+device, as the sync entry points reach RomM. The provenance route is consulted
+only in the decision's never-touched branch and in the 409 backstop, and RomM
+never sends a registered device into that branch: for a save the device has no
+sync row on, ``GET /api/saves`` answers a placeholder entry that is not
+current. The parity route also decides rows 11a and 12a. So the two cases below
+land on the not-current rows:
 
 - **Provenance**: a file with sync history whose stored server hash
   (``last_sync_server_hash``) matches the head's ``content_hash`` while the
@@ -46,7 +47,7 @@ def _backed_up_contents(local_path: str) -> list[bytes]:
     return contents
 
 
-async def test_provenance_syncs_cleanly_under_scheme_drift(harness):
+async def test_a_stored_server_hash_under_scheme_drift_downloads_the_head(harness):
     """A synced file whose local parity hash mismatches the head's ``content_hash``
     downloads the head, with no conflict, keeping the local copy in ``.romm-backup``.
 
