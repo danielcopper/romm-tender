@@ -8,7 +8,7 @@
  * so it lives here rather than on any one component to keep their import graph
  * acyclic. The shortcut artwork job's
  * writes (`utils/shortcutArtwork.ts`) ask it whether an apply is under way, and
- * set the job's wide grids and logos through it.
+ * set the job's wide grids, covers and logos through it.
  */
 
 import {
@@ -248,14 +248,11 @@ function leaseOf(answer: SgdbSlotArtwork): string | undefined {
   return answer.status === "image" || answer.status === "ready" ? answer.prune_lease_token : undefined;
 }
 
-/** The slots whose outcome the game page reports. */
+/** The slots whose outcome the game page reports, the cover among them where its image came from SteamGridDB. */
 type RecordedSlot = SgdbArtworkSlot;
 
-/** The slots whose outcome the ARTWORK tab reports: the four above, and a cover chosen from SteamGridDB. */
-type ReportedSlot = RecordedSlot | "cover";
-
 /** The slots the shortcut artwork job hands the frontend to set; it sets the icons it wrote itself. */
-type JobSlot = "grid" | "logo";
+type JobSlot = "grid" | "logo" | "cover";
 
 /** What the backend answered with an image, passed back when what Steam made of it is reported. */
 type SlotRecord = { sgdb_id?: number | null; image_id?: number | null; sha256?: string | null };
@@ -266,7 +263,7 @@ type SlotRecord = { sgdb_id?: number | null; image_id?: number | null; sha256?: 
  */
 async function setReplacedSlot(
   romId: number,
-  slot: ReportedSlot,
+  slot: RecordedSlot,
   answer: SlotRecord,
   write: () => unknown,
 ): Promise<void> {
@@ -282,7 +279,7 @@ async function setReplacedSlot(
 /** Report what Steam made of an image the replacing apply set, as the fill path reports it. */
 async function reportReplacedSlot(
   romId: number,
-  slot: ReportedSlot,
+  slot: RecordedSlot,
   outcome: "set" | "refused",
   answer: SlotRecord,
 ): Promise<void> {
@@ -300,15 +297,19 @@ async function reportReplacedSlot(
   }
 }
 
-/** The slots the game page fills only while empty through `SetCustomArtworkForApp`, each with Steam's asset type for it. */
+/**
+ * The slots the game page fills only while empty through `SetCustomArtworkForApp`, each with Steam's asset type for
+ * it; the cover is empty only where RomM has no cover for the game (#2381 D27).
+ */
 const FILLED_SLOTS: ReadonlyArray<[slot: Exclude<SgdbArtworkSlot, "icon">, assetType: number]> = [
   ["hero", 1],
   ["logo", 2],
   ["grid", 3],
+  ["cover", 0],
 ];
 
 /** Steam's asset type for each slot the shortcut artwork job hands the frontend to set. */
-const JOB_SLOT_ASSET_TYPES: Readonly<Record<JobSlot, number>> = { logo: 2, grid: 3 };
+const JOB_SLOT_ASSET_TYPES: Readonly<Record<JobSlot, number>> = { logo: 2, grid: 3, cover: 0 };
 
 type SlotImage = Extract<SgdbSlotArtwork, { status: "image" }>;
 
@@ -445,7 +446,7 @@ export async function reportSlotOutcome(
 }
 
 /**
- * Set a wide grid or logo the shortcut artwork job has put into the artwork cache,
+ * Set a wide grid, cover or logo the shortcut artwork job has put into the artwork cache,
  * and report what Steam made of it. The image is fetched through the same
  * per-slot endpoint a first visit uses, so a slot that has filled since the job
  * looked is skipped. Nothing is written once a game page's apply for the
@@ -660,6 +661,21 @@ async function setKeptCurrentSlot(write: KeptCurrentWrite): Promise<boolean> {
     detach(debugLog(`Keeping artwork current: the ${slot} for appId ${appId} was not set: ${e}`));
     return false;
   });
+}
+
+/**
+ * After a change of SteamGridDB game, hand Steam the cover Tender picked under the new game where the cover shows
+ * Tender's SteamGridDB pick on automatic (#2381 D12, D27); answers whether Steam took it.
+ */
+export async function applySteamGridDbCover(romId: number, appId: number): Promise<boolean> {
+  const read = await getArtworkSlots(romId, appId).catch((e: unknown) => {
+    detach(debugLog(`applySteamGridDbCover: the slots of appId ${appId} could not be read: ${e}`));
+    return null;
+  });
+  if (!read || isEndpointFailure(read)) return false;
+  const cover = read.slots.find((row) => row.slot === "cover");
+  if (cover?.state !== "automatic" || cover.source !== "tender") return false;
+  return (await applyKeptCurrentArtwork(romId, appId, ["cover"])).length > 0;
 }
 
 export async function cancelArtworkApply(appId: number): Promise<void> {

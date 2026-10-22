@@ -634,7 +634,7 @@ describe("RomMPlaySection", () => {
       );
     });
 
-    it("fills the empty artwork slots (4 slot fetches, the icon last) on first visit when not already applied", async () => {
+    it("fills the empty artwork slots (5 slot fetches, the icon last) on first visit when not already applied", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 50,
@@ -646,6 +646,7 @@ describe("RomMPlaySection", () => {
         [50, testAppId, "hero"],
         [50, testAppId, "logo"],
         [50, testAppId, "grid"],
+        [50, testAppId, "cover"],
         [50, testAppId, "icon"],
       ]);
       expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
@@ -665,7 +666,7 @@ describe("RomMPlaySection", () => {
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       await flushAsync();
-      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(4);
+      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(5);
       expect(setArtwork).not.toHaveBeenCalled();
       // The icon follows the same rules: a skipped icon is neither written nor set.
       expect(backend.saveShortcutIcon).not.toHaveBeenCalled();

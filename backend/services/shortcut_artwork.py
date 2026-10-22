@@ -1,18 +1,20 @@
-"""The shortcut artwork job: every bound shortcut gets its SteamGridDB icon, wide grid and logo, in the background.
+"""The shortcut artwork job: every bound shortcut gets its SteamGridDB icon, wide grid, logo and cover, unattended.
 
 Contract: docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork". The
 job derives its worklist each time it runs and stores none of it, so a run that
 is stopped leaves exactly the rest for the next one: the icons from
 ``shortcuts.vdf`` and their recorded outcomes
-(:func:`domain.artwork_slot_outcome.icon_waits`), the wide grids and logos from
-Steam's grid directory and theirs (:func:`domain.artwork_slot_outcome.slot_waits`).
-It works in two passes, the icon and the wide grid shortcut by shortcut first,
-then the logos. It fetches four shortcuts at a time, puts each image into the
-artwork cache, writes each icon into Steam's grid directory, and hands the
-finished ones to the frontend in batches as the ``shortcut_artwork`` event,
-which names each icon's file with what its record is to carry, and each wide
-grid or logo for the frontend to fetch and set; it hands the next batch over
-only once the frontend has finished the last. Before each batch it reads
+(:func:`domain.artwork_slot_outcome.icon_waits`), the wide grids, covers and
+logos from Steam's grid directory and theirs
+(:func:`domain.artwork_slot_outcome.slot_waits`); a cover slot is empty only
+where RomM has no cover for the game (#2381 D27). It works in two passes, the
+icon, the wide grid and the cover shortcut by shortcut first, then the logos.
+It fetches four shortcuts at a time, puts each image into the artwork cache,
+writes each icon into Steam's grid directory, and hands the finished ones to
+the frontend in batches as the ``shortcut_artwork`` event, which names each
+icon's file with what its record is to carry, and each wide grid, cover or logo
+for the frontend to fetch and set; it hands the next batch over only once the
+frontend has finished the last. Before each batch it reads
 Steam's renderer memory, and at or above the session budget's ceiling the run
 ends.
 
@@ -173,7 +175,7 @@ class _Finished:
 
 @dataclass(frozen=True)
 class _SlotReady:
-    """A wide grid or logo the artwork cache holds for *rom_id*, for the frontend to set on *app_id*."""
+    """A wide grid, cover or logo the artwork cache holds for *rom_id*, for the frontend to set on *app_id*."""
 
     app_id: int
     rom_id: int
@@ -351,6 +353,7 @@ class ShortcutArtworkService:
             (sum(1 for item in work if ArtworkSlot.ICON in item.slots), "an icon"),
             (sum(1 for item in work if item.logo_icon), "the logo icon"),
             (sum(1 for item in work if ArtworkSlot.WIDE_GRID in item.slots), "a wide grid"),
+            (sum(1 for item in work if ArtworkSlot.COVER in item.slots), "a cover"),
             (sum(1 for item in work if ArtworkSlot.LOGO in item.slots), "a logo"),
         )
         waiting = ", ".join(f"{count} for {what}" for count, what in counts if count)
@@ -407,7 +410,7 @@ class ShortcutArtworkService:
             outcomes = {
                 (rom.rom_id, slot): uow.artwork_slot_outcomes.get(rom.rom_id, slot)
                 for rom in roms.values()
-                for slot in (ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO)
+                for slot in (ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID, ArtworkSlot.COVER, ArtworkSlot.LOGO)
             }
         return _Bound(placeholder, logo_path, roms, outcomes)
 
@@ -437,7 +440,7 @@ class ShortcutArtworkService:
         outcomes: dict[tuple[int, ArtworkSlot], ArtworkSlotOutcome | None],
         generations: dict[int, int],
     ) -> tuple[list[_Item], list[_Item]]:
-        """The icon and wide grid pass, then the logo pass, over *roms* keyed by app id, in ROM order."""
+        """The icon, wide grid and cover pass, then the logo pass, over *roms* keyed by app id, in ROM order."""
         missing = sum(1 for app_id in roms if app_id not in icons)
         if missing:
             self._logger.info(f"Shortcut artwork: shortcuts.vdf does not hold {missing} bound shortcut(s) yet")
@@ -462,7 +465,8 @@ class ShortcutArtworkService:
         first: list[_Item] = []
         second: list[_Item] = []
         for app_id, rom in sorted(roms.items(), key=lambda pair: pair[1].rom_id):
-            slots = tuple(slot for slot in (ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID) if waits(app_id, rom, slot))
+            first_pass = (ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID, ArtworkSlot.COVER)
+            slots = tuple(slot for slot in first_pass if waits(app_id, rom, slot))
             logo_icon = app_id in icons and logo_icon_waits(
                 icons[app_id],
                 outcomes[(rom.rom_id, ArtworkSlot.ICON)],

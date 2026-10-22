@@ -70,21 +70,22 @@ def describe_slot(
     """The tab's view of *slot*.
 
     A slot set in Steam is shown so whatever was chosen for it, then a chosen
-    slot, then an automatic one: the cover's automatic image is RomM's, unless
-    a *filled* cover carries a ``set`` record — Tender's pick from SteamGridDB
-    for a game RomM has no cover for, the only cover image recorded without a
-    choice; a SteamGridDB slot without a game needs one; a *filled* slot shows
-    Tender's image, the one its ``set`` record names, else *cached_image_id*;
-    an empty one whose record is ``none`` has nothing on SteamGridDB, and any
-    other is not filled yet.
+    slot, then an automatic one: a *filled* cover's automatic image is RomM's,
+    unless it carries a ``set`` record — Tender's pick from SteamGridDB for a
+    game RomM has no cover for, the only cover image recorded without a
+    choice; an empty cover is SteamGridDB's to fill (#2381 D27) and reads like
+    an empty SteamGridDB slot below; a SteamGridDB slot without a game needs
+    one; a *filled* slot shows Tender's image, the one its ``set`` record
+    names, else *cached_image_id*; an empty one whose record is ``none`` has
+    nothing on SteamGridDB, and any other is not filled yet.
     """
     if set_in_steam:
         return SlotView(slot, SlotState.SET_IN_STEAM, SlotSource.STEAM, None)
     if choice is not None:
         return SlotView(slot, SlotState.CHOSEN, SlotSource.CHOSEN, choice.image_id)
     recorded_id = recorded.image_id if recorded is not None and recorded.outcome is SlotOutcome.SET else None
-    if slot is ArtworkSlot.COVER:
-        if filled and recorded_id is not None:
+    if slot is ArtworkSlot.COVER and filled:
+        if recorded_id is not None:
             return SlotView(slot, SlotState.AUTOMATIC, SlotSource.TENDER, recorded_id)
         return SlotView(slot, SlotState.AUTOMATIC, SlotSource.ROMM, None)
     if not has_game:

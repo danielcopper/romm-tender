@@ -564,8 +564,11 @@ export const getSgdbArtworkBase64 = endpoint<
   | EndpointFailure
 >("get_sgdb_artwork_base64");
 
-/** An artwork slot the game page fills only while it is empty: the wide grid, the logo, the hero or the icon. */
-export type SgdbArtworkSlot = "grid" | "logo" | "hero" | "icon";
+/**
+ * An artwork slot the game page fills only while it is empty: the wide grid, the logo, the hero, the icon, or the
+ * cover, which is empty only where RomM has no cover for the game (#2381 D27).
+ */
+export type SgdbArtworkSlot = "grid" | "logo" | "hero" | "icon" | "cover";
 
 /** What the backend answers for one empty slot: the image to set, or why there is none to set. */
 export type SgdbSlotArtwork =
@@ -585,11 +588,10 @@ export type SgdbSlotArtwork =
 /**
  * Serve SteamGridDB's image for one slot of a shortcut, only while the slot is not filled — Steam's grid directory has
  * no file for it, or, for the icon, `shortcuts.vdf` points at none but Tender's stand-ins — and its record does not rule
- * it out. With `replace` neither is checked: the slot is served whatever it holds and whatever its record says, and
- * the cover may be asked for, an automatic cover Tender picks from SteamGridDB.
+ * it out. With `replace` neither is checked: the slot is served whatever it holds and whatever its record says.
  */
 export const getSgdbSlotArtwork = endpoint<
-  [number, number, SgdbArtworkSlot | "cover", boolean?],
+  [number, number, SgdbArtworkSlot, boolean?],
   SgdbSlotArtwork | EndpointFailure
 >("get_sgdb_slot_artwork");
 
@@ -598,7 +600,7 @@ export const getSgdbSlotArtwork = endpoint<
  * backend wrote (`SetShortcutIcon`), or of a cover chosen from SteamGridDB, passing what the backend answered back.
  */
 export const reportSgdbSlotArtwork = endpoint<
-  [number, SgdbArtworkSlot | "cover", "set" | "refused", number | null, number | null, string | null],
+  [number, SgdbArtworkSlot, "set" | "refused", number | null, number | null, string | null],
   { success: boolean }
 >("report_sgdb_slot_artwork");
 

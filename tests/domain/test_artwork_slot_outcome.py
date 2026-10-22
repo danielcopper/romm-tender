@@ -58,9 +58,11 @@ class TestTheConstructors:
 
         assert (record.slot, record.outcome) == (ArtworkSlot.HERO, SlotOutcome.SET)
 
-    def test_the_cover_has_no_outcome(self):
-        with pytest.raises(ValueError, match="cover"):
-            ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.COVER, sgdb_id=7, recorded_at=NOW)
+    def test_a_cover_steamgriddb_has_none_for_records_that(self):
+        record = ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.COVER, sgdb_id=7, recorded_at=NOW)
+
+        assert (record.slot, record.outcome) == (ArtworkSlot.COVER, SlotOutcome.NONE)
+        assert record.rules_out(sgdb_id=7, now=NOW + 1)
 
     def test_a_cover_steam_refused_has_no_outcome(self):
         with pytest.raises(ValueError, match="cover"):

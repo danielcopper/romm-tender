@@ -33,15 +33,20 @@ class ArtworkSlot(StrEnum):
 
 
 # The slots whose every outcome is recorded: the four Tender fills from
-# SteamGridDB. The cover is recorded only as ``set`` (SET_RECORDED_SLOTS).
+# SteamGridDB. The cover is recorded only as ``set`` or ``none``
+# (SET_RECORDED_SLOTS, NONE_RECORDED_SLOTS).
 RECORDED_SLOTS: frozenset[ArtworkSlot] = frozenset(
     {ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO, ArtworkSlot.HERO, ArtworkSlot.ICON}
 )
 
 # The slots an image Tender set can be recorded for, with its hash: the four
-# above, and the cover where its image came from SteamGridDB. A cover is never
-# recorded as having no image or a refused one.
+# above, and the cover where its image came from SteamGridDB.
 SET_RECORDED_SLOTS: frozenset[ArtworkSlot] = RECORDED_SLOTS | {ArtworkSlot.COVER}
+
+# The slots SteamGridDB having no image can be recorded for: the four above, and
+# the cover, asked of SteamGridDB while its slot is empty (#2381 D27). A cover
+# Steam refused is never recorded.
+NONE_RECORDED_SLOTS: frozenset[ArtworkSlot] = RECORDED_SLOTS | {ArtworkSlot.COVER}
 
 # The extension Steam keeps the logo's position under, beside the logo itself.
 _NOT_AN_IMAGE_EXTENSION = "json"

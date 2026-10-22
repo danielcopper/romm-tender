@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_slot_filled
+from domain.artwork_slot import NONE_RECORDED_SLOTS, ArtworkSlot, is_slot_filled
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome, icon_waits
 from domain.sgdb_artwork import (
     asset_type_name,
@@ -66,22 +66,22 @@ if TYPE_CHECKING:
     )
 
 
-def _artwork_slot(slot: object, *, replace: bool = False) -> ArtworkSlot:
-    """The slot *slot* names among the four Tender fills from SteamGridDB, or with *replace* the cover; refuses others.
+def _artwork_slot(slot: object) -> ArtworkSlot:
+    """The slot *slot* names among the four Tender fills from SteamGridDB and the cover; refuses any other.
 
-    The cover is served only as a replacement, of the automatic cover Tender
-    picked from SteamGridDB for a game RomM has no cover for.
+    The cover is filled from SteamGridDB only while its slot is empty, which is
+    where RomM has no cover for the game (#2381 D27).
     """
     try:
         artwork_slot = ArtworkSlot(slot)
     except ValueError as e:
         raise Refused("invalid_payload", f"Unknown artwork slot: {slot}") from e
-    if artwork_slot not in RECORDED_SLOTS and not (replace and artwork_slot is ArtworkSlot.COVER):
+    if artwork_slot not in NONE_RECORDED_SLOTS:
         raise Refused("invalid_payload", f"The {slot} slot is not filled from SteamGridDB")
     return artwork_slot
 
 
-_ASSET_TYPES = ("hero", "logo", "grid", "icon")
+_ASSET_TYPES = ("hero", "logo", "grid", "icon", "cover")
 
 # Steam numbers the cover 0 among its artwork asset types; SteamGridDB names it.
 _COVER_ASSET_TYPE = ArtworkSlot.COVER.value
@@ -316,7 +316,7 @@ class SteamGridService:
     def _forget_slot_outcomes(self, rom_id: int) -> None:
         """Drop *rom_id*'s ``none`` and ``refused`` records; a ``set`` record keeps the hash "Set in Steam" reads."""
         with self._uow_factory() as uow:
-            for slot in RECORDED_SLOTS:
+            for slot in NONE_RECORDED_SLOTS:
                 recorded = uow.artwork_slot_outcomes.get(rom_id, slot)
                 if recorded is not None and recorded.outcome is not SlotOutcome.SET:
                     uow.artwork_slot_outcomes.delete_slot(rom_id, slot)
@@ -598,9 +598,10 @@ class SteamGridService:
     async def get_sgdb_slot_artwork(self, rom_id, app_id, slot, replace=False):
         """Serve SteamGridDB's image for one of *app_id*'s artwork slots, only while the slot is empty.
 
-        *slot* is ``"grid"`` (the wide grid), ``"logo"``, ``"hero"`` or
-        ``"icon"``, and with *replace* also ``"cover"``, for the automatic cover
-        Tender picks from SteamGridDB. With *replace* none of the checks that leave a slot alone
+        *slot* is ``"grid"`` (the wide grid), ``"logo"``, ``"hero"``, ``"icon"``
+        or ``"cover"`` (Tender's pick among SteamGridDB's covers, which fills the
+        cover slot only while it is empty: where RomM has no cover, #2381 D27).
+        With *replace* none of the checks that leave a slot alone
         is made: the slot is served whatever it holds, whatever its record
         says, and whether ``shortcuts.vdf`` can be read. Without a SteamGridDB
         game — RomM's or one the user chose — what the artwork cache holds for
@@ -641,7 +642,7 @@ class SteamGridService:
     async def _get_sgdb_slot_artwork(self, rom_id, app_id, slot, replace: bool):
         rom_id = int(rom_id)
         app_id = int(app_id)
-        artwork_slot = _artwork_slot(slot, replace=replace)
+        artwork_slot = _artwork_slot(slot)
         if not self._settings.get("steamgriddb_api_key"):
             return {"status": "no_api_key"}
         refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])

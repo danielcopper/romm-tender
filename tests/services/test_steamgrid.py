@@ -1921,7 +1921,7 @@ class TestAnEmptySlotIsServed:
     @pytest.mark.asyncio
     async def test_an_unknown_slot_is_refused(self, steamgrid, slot_ready):
         with pytest.raises(Refused) as refused:
-            await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+            await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "banner")
 
         assert refused.value.reason == "invalid_payload"
         assert steamgrid.prune_conflicts.conflicting_operations == 0
@@ -3218,7 +3218,7 @@ class TestTheArtworkTabReadsEachSlot:
     ):
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
         _seed_rom(uow, 42, app_id=_APP_ID)
-        _grid_dir(home)
+        (_grid_dir(home) / f"{_APP_ID}p.png").write_bytes(b"romm's cover")
 
         answer = await steamgrid.service.get_artwork_slots(42, _APP_ID)
 
@@ -3413,6 +3413,7 @@ class TestThePickersCandidates:
 
     @pytest.mark.asyncio
     async def test_the_cover_lists_portrait_grids_and_names_no_pick(self, steamgrid, slot_ready, fake_steamgrid_db_api):
+        (slot_ready / f"{_APP_ID}p.png").write_bytes(b"romm's cover")
         _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
 
         answer = await steamgrid.service.get_artwork_slot_candidates(42, "cover", 0)
@@ -3422,6 +3423,28 @@ class TestThePickersCandidates:
         assert fake_steamgrid_db_api.requested_paths == [
             "/grids/game/9999?dimensions=600x900,660x930,342x482&types=static&page=0"
         ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shown", ["empty", "tenders"])
+    async def test_a_cover_steamgriddb_fills_names_tenders_pick(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, shown
+    ):
+        if shown == "tenders":
+            _show_tenders(slot_ready, uow, ArtworkSlot.COVER, 9)
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (5, 600, 900))
+
+        answer = await steamgrid.service.get_artwork_slot_candidates(42, "cover", 0)
+
+        assert answer["tenders_pick"] == 5
+
+    @pytest.mark.asyncio
+    async def test_a_chosen_cover_names_no_pick(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _choose(uow, ArtworkSlot.COVER, 8)
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (5, 600, 900))
+
+        answer = await steamgrid.service.get_artwork_slot_candidates(42, "cover", 0)
+
+        assert answer["tenders_pick"] is None
 
     @pytest.mark.asyncio
     async def test_a_later_page_names_no_pick(self, steamgrid, slot_ready, fake_steamgrid_db_api):
@@ -4779,3 +4802,86 @@ class TestKeepingArtworkCurrent:
         steamgrid.service._keeping_current._withdraw_io(42, _Started(at=400.0, previous=None))
 
         assert _checked_at(uow) == 500.0
+
+
+class TestTheCoverWhereRommHasNone:
+    """D23, D27: an empty cover slot is filled with Tender's pick among SteamGridDB's covers, as the other slots are."""
+
+    @pytest.mark.asyncio
+    async def test_an_empty_cover_is_served_tenders_pick(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (7, 660, 930), (5, 600, 900))
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+
+        assert (answer["status"], answer["image_id"], base64.b64decode(answer["base64"])) == ("image", 5, b"image 5")
+        assert _handover(uow, ArtworkSlot.COVER).image_id == 5
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("name", [f"{_APP_ID}p.png", f"{_APP_ID}p.jpg"])
+    async def test_a_cover_in_the_grid_folder_is_left_alone(self, steamgrid, slot_ready, fake_steamgrid_db_api, name):
+        (slot_ready / name).write_bytes(b"a cover")
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+
+        assert answer == {"status": "skip"}
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    @pytest.mark.asyncio
+    async def test_no_cover_on_steamgriddb_is_recorded_and_rules_it_out_for_a_week(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _seed_cover_candidates(fake_steamgrid_db_api)
+
+        first = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+        again = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+
+        assert (first, again) == ({"status": "none"}, {"status": "skip"})
+        assert _outcome(uow, ArtworkSlot.COVER).outcome is SlotOutcome.NONE
+        assert len(fake_steamgrid_db_api.requested_paths) == 1
+
+    @pytest.mark.asyncio
+    async def test_refresh_artwork_forgets_that_steamgriddb_had_none(self, steamgrid, uow, slot_ready):
+        with uow:
+            uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_none(rom_id=42, slot=ArtworkSlot.COVER, sgdb_id=9999, recorded_at=1.0)
+            )
+
+        await steamgrid.service.get_sgdb_resolution(42)
+
+        assert _outcome(uow, ArtworkSlot.COVER) is None
+
+    @pytest.mark.asyncio
+    async def test_steam_refusing_the_cover_records_nothing(self, steamgrid, uow, slot_ready):
+        await steamgrid.service.report_sgdb_slot_artwork(42, "cover", "refused", 9999, 5, None)
+
+        assert _outcome(uow, ArtworkSlot.COVER) is None
+
+    def test_the_job_gets_the_cover_into_the_cache(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.COVER) is SlotAnswer.READY
+
+    @pytest.mark.asyncio
+    async def test_a_change_of_game_picks_a_steamgriddb_cover_anew_under_it(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.COVER, 5)
+        fake_steamgrid_db_api.seed_raw_response(
+            "/grids/game/7777?dimensions=600x900",
+            {"success": True, "data": [{"id": 6, "url": "https://cdn.example/6.png", "width": 600, "height": 900}]},
+        )
+        fake_steamgrid_db_api.seed_image_bytes("https://cdn.example/6.png", b"image 6")
+
+        await steamgrid.service.apply_sgdb_game_id(42, 7777)
+
+        assert sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "cover", 6)] == b"image 6"
+
+    @pytest.mark.asyncio
+    async def test_a_change_of_game_leaves_romms_cover_alone(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        (slot_ready / f"{_APP_ID}p.png").write_bytes(b"romm's cover")
+
+        await steamgrid.service.apply_sgdb_game_id(42, 7777)
+
+        covers_asked = [path for path in fake_steamgrid_db_api.requested_paths if "dimensions=600x900" in path]
+        assert covers_asked == []

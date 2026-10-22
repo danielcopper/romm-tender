@@ -555,7 +555,7 @@ export interface SyncApplyUnitData {
  */
 export interface ShortcutArtworkData {
   icons: { app_id: number; icon_path: string; record?: ShortcutIconRecord }[];
-  artwork: { app_id: number; rom_id: number; slot: "grid" | "logo" }[];
+  artwork: { app_id: number; rom_id: number; slot: "grid" | "logo" | "cover" }[];
   prune_lease_token: string;
 }
 

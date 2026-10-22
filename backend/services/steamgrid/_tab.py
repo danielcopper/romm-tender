@@ -216,7 +216,7 @@ class ArtworkTabUseCases:
         except Refused as no_cover:
             if no_cover.reason != "no_cover":
                 raise
-            api_key = self._settings.get("steamgriddb_api_key")
+            api_key = self._settings.get("steamgriddb_api_key", "")
             sgdb_id = await self._loop.run_in_executor(None, self._effective_sgdb_id, rom_id) if api_key else None
             if not sgdb_id:
                 raise

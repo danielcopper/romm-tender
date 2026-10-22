@@ -10,6 +10,7 @@ import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
 // reaching into SteamClient / getSgdbArtworkBase64 plumbing.
 vi.mock("../utils/artwork", () => ({
   applyAutomaticArtwork: vi.fn(),
+  applySteamGridDbCover: vi.fn(),
 }));
 
 // Find a <button> whose text content contains `text`.
@@ -30,6 +31,7 @@ describe("SgdbGamePickerModal", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(artwork.applyAutomaticArtwork).mockResolvedValue(4);
+    vi.mocked(artwork.applySteamGridDbCover).mockResolvedValue(false);
     vi.mocked(backend.applySgdbGameId).mockResolvedValue({ success: true });
     vi.mocked(backend.searchSgdbGames).mockResolvedValue({ success: true, games: [] });
     vi.mocked(backend.debugLog).mockResolvedValue(undefined);
@@ -61,6 +63,27 @@ describe("SgdbGamePickerModal", () => {
       expect(vi.mocked(artwork.applyAutomaticArtwork)).toHaveBeenCalledWith(88, 6000);
       expect(onApplied).toHaveBeenCalledWith(4);
       expect(closeModal).toHaveBeenCalledTimes(1);
+    });
+
+    it("hands Steam the SteamGridDB cover Tender picked under the new game (#2381 D12, D27)", async () => {
+      const { container } = render(
+        createElement(SgdbGamePickerModalContent, {
+          romId: 88,
+          appId: 6000,
+          romName: "Mario",
+          candidates: [{ id: 1, name: "Super Mario", release_year: 1985, thumb_url: "https://x/m.png" }],
+          onApplied: vi.fn(),
+          closeModal: vi.fn(),
+        }),
+      );
+      await act(async () => {
+        fireEvent.click(buttonContaining(container, "Super Mario"));
+      });
+      await flushAsync();
+      expect(vi.mocked(artwork.applySteamGridDbCover)).toHaveBeenCalledWith(88, 6000);
+      const [slots] = vi.mocked(artwork.applyAutomaticArtwork).mock.invocationCallOrder;
+      const [cover] = vi.mocked(artwork.applySteamGridDbCover).mock.invocationCallOrder;
+      expect(slots).toBeLessThan(cover ?? 0);
     });
 
     it("says before a change that the images the user chose go back to automatic", () => {

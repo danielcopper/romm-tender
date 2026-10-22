@@ -1,4 +1,4 @@
-"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo, hero or icon, or set as its cover.
+"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo, hero, icon or cover.
 
 ``set`` (an image was set, with SteamGridDB's image id and a hash of the bytes),
 ``none`` (SteamGridDB has no candidate) or ``refused`` (Steam's
@@ -17,7 +17,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from domain._aggregate import cosmic_aggregate
-from domain.artwork_slot import RECORDED_SLOTS, SET_RECORDED_SLOTS, ArtworkSlot, is_slot_filled
+from domain.artwork_slot import NONE_RECORDED_SLOTS, RECORDED_SLOTS, SET_RECORDED_SLOTS, ArtworkSlot, is_slot_filled
 from domain.shortcut_icon import is_icon_filled, shows_no_icon
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class SlotOutcome(StrEnum):
 
 @cosmic_aggregate
 class ArtworkSlotOutcome:
-    """What was last found for one ROM's wide grid, logo, hero or shortcut icon."""
+    """What was last found for one ROM's wide grid, logo, hero, shortcut icon or cover."""
 
     rom_id: int
     slot: ArtworkSlot
@@ -83,9 +83,9 @@ class ArtworkSlotOutcome:
     ) -> ArtworkSlotOutcome:
         """Record that SteamGridDB has no candidate — or the ROM no SteamGridDB id, when *sgdb_id* is ``None``.
 
-        Raises ``ValueError`` for a slot that is not recorded.
+        Raises ``ValueError`` for a slot no ``none`` is recorded for.
         """
-        _require_recorded(slot)
+        _require_recorded(slot, NONE_RECORDED_SLOTS)
         return cls(rom_id=rom_id, slot=slot, outcome=SlotOutcome.NONE, sgdb_id=sgdb_id, recorded_at=recorded_at)
 
     @classmethod

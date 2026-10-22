@@ -18,7 +18,7 @@ from domain.artwork_slot import SET_RECORDED_SLOTS, ArtworkSlot, is_set_in_steam
 from domain.artwork_slot_choice import ArtworkSlotChoice
 from domain.artwork_slot_handover import HANDED_SLOTS
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
-from domain.artwork_slot_view import SlotState, SlotView, describe_slot
+from domain.artwork_slot_view import SlotSource, SlotState, SlotView, describe_slot
 from domain.sgdb_artwork import (
     choose_candidate,
     parse_candidate_page,
@@ -145,11 +145,15 @@ class ArtworkSlots:
         ]
 
     def slots_not_set_in_steam_io(self, rom_id: int) -> list[ArtworkSlot]:
-        """The SteamGridDB slots of *rom_id* not set in Steam, chosen or not, read as the method above reads them."""
+        """The SteamGridDB slots of *rom_id* not set in Steam, chosen or not, read as the method above reads them.
+
+        The cover counts only where it shows Tender's SteamGridDB pick on automatic.
+        """
         return [
             view.slot
             for view in self._views_of_rom_io(rom_id)
-            if view.slot is not ArtworkSlot.COVER and view.state is not SlotState.SET_IN_STEAM
+            if view.state is not SlotState.SET_IN_STEAM
+            and (view.slot is not ArtworkSlot.COVER or view.source is SlotSource.TENDER)
         ]
 
     def kept_current_views_io(self, rom_id: int) -> list[SlotView]:
@@ -294,8 +298,9 @@ class ArtworkSlots:
 
         Each candidate carries its image id, its thumbnail and its stated size.
         On page 0, ``tenders_pick`` names the candidate Tender's own rule takes
-        from that page; it is ``None`` for the cover, whose automatic image is
-        RomM's, and on every later page. A game SteamGridDB does not know lists
+        from that page; for the cover only where its automatic image is
+        SteamGridDB's — it shows Tender's pick, or its slot is empty (#2381
+        D27) — and on no later page. A game SteamGridDB does not know lists
         nothing. Refuses as :func:`refusal_for` answers SteamGridDB's errors, and
         an unsuccessful answer as ``server_unreachable``.
         """
@@ -307,7 +312,7 @@ class ArtworkSlots:
         held = self._listed.get((rom_id, slot), {}) if page else {}
         self._listed[(rom_id, slot)] = {**held, **{candidate.image_id: candidate for candidate in candidates}}
         pick = None
-        if page == 0 and slot is not ArtworkSlot.COVER and payload is not None:
+        if page == 0 and payload is not None and self._picks_from_steamgriddb_io(rom_id, slot):
             chosen = choose_candidate(slot.value, payload.get("data"))
             pick = chosen.image_id if chosen is not None else None
         return {
@@ -317,6 +322,17 @@ class ArtworkSlots:
             "has_more": listed.has_more if listed is not None else False,
             "tenders_pick": pick,
         }
+
+    def _picks_from_steamgriddb_io(self, rom_id: int, slot: ArtworkSlot) -> bool:
+        """Whether Tender's rule picks *rom_id*'s *slot* from SteamGridDB, read as :meth:`slots_left_to_tender_io`.
+
+        Every slot but the cover, and an automatic cover that shows Tender's
+        pick or is empty; RomM's cover and a chosen one are not.
+        """
+        if slot is not ArtworkSlot.COVER:
+            return True
+        cover = next(view for view in self._views_of_rom_io(rom_id) if view.slot is ArtworkSlot.COVER)
+        return cover.state is SlotState.AUTOMATIC and cover.source is not SlotSource.ROMM
 
     def _request_page_io(self, slot: ArtworkSlot, page: int, sgdb_id: int) -> dict[str, Any] | None:
         """SteamGridDB's answer for one page; ``None`` for a game it does not know (a 404)."""
