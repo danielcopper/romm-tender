@@ -585,10 +585,11 @@ export type SgdbSlotArtwork =
 /**
  * Serve SteamGridDB's image for one slot of a shortcut, only while the slot is not filled — Steam's grid directory has
  * no file for it, or, for the icon, `shortcuts.vdf` points at none but Tender's stand-ins — and its record does not rule
- * it out. With `replace` neither is checked: the slot is served whatever it holds and whatever its record says.
+ * it out. With `replace` neither is checked: the slot is served whatever it holds and whatever its record says, and
+ * the cover may be asked for, an automatic cover Tender picks from SteamGridDB.
  */
 export const getSgdbSlotArtwork = endpoint<
-  [number, number, SgdbArtworkSlot, boolean?],
+  [number, number, SgdbArtworkSlot | "cover", boolean?],
   SgdbSlotArtwork | EndpointFailure
 >("get_sgdb_slot_artwork");
 
@@ -725,6 +726,18 @@ export const chooseArtworkSlotImage = endpoint<[number, ArtworkTabSlot, number],
 export const setArtworkSlotAutomatic = endpoint<[number, ArtworkTabSlot], ArtworkSlotImage | EndpointFailure>(
   "set_artwork_slot_automatic",
 );
+
+/**
+ * What a page visit's check of the automatic artwork found (#2381 D5): `replaced` names the slots whose image Tender's
+ * rule now picks instead of the one shown, each in the artwork cache for `getSgdbSlotArtwork` to serve with `replace`.
+ * `unanswered` is a check SteamGridDB left a slot unanswered in, which the next visit makes again.
+ */
+export interface ArtworkKeptCurrent {
+  status: "checked" | "unanswered" | "not_due" | "no_api_key" | "no_sgdb_game" | "not_synced";
+  replaced: ArtworkTabSlot[];
+}
+
+export const keepArtworkCurrent = endpoint<[number], ArtworkKeptCurrent | EndpointFailure>("keep_artwork_current");
 export const reportUnitResults = endpoint<
   [Record<string, number>, string, number | string, number],
   { success: boolean; count: number; ignored?: boolean }

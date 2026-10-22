@@ -13,6 +13,7 @@ import hashlib
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from domain.artwork_keep_current import slots_kept_current
 from domain.artwork_slot import SET_RECORDED_SLOTS, ArtworkSlot, is_set_in_steam, is_slot_filled, slot_files, slot_stem
 from domain.artwork_slot_choice import ArtworkSlotChoice
 from domain.artwork_slot_handover import HANDED_SLOTS
@@ -150,6 +151,10 @@ class ArtworkSlots:
             for view in self._views_of_rom_io(rom_id)
             if view.slot is not ArtworkSlot.COVER and view.state is not SlotState.SET_IN_STEAM
         ]
+
+    def kept_current_views_io(self, rom_id: int) -> list[SlotView]:
+        """The views of *rom_id*'s slots keeping current asks about (``domain.artwork_keep_current``), read as above."""
+        return slots_kept_current(self._views_of_rom_io(rom_id))
 
     def is_set_in_steam_io(self, rom_id: int, slot: ArtworkSlot) -> bool:
         """Whether *rom_id*'s *slot* is set in Steam, read as :meth:`slots_left_to_tender_io`."""

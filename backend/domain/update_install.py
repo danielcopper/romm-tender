@@ -174,8 +174,9 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
 # short, so they make no press wait. This comment is the one list of the writes
 # they may make. Each write is one transaction of a kind
 # whose loss costs nothing done: a cache it can build again; an artwork slot's
-# `none` record and Refresh Artwork's deletion of the records, whose loss only
-# changes when SteamGridDB is asked again; and the record of an artwork image
+# `none` record, Refresh Artwork's deletion of the records and the time of a
+# game's keep-current check, whose loss only changes when SteamGridDB is asked
+# again; and the record of an artwork image
 # handed to Steam, with the `set` record kept for a cache copy a download
 # replaces (#2381 D15), written before the image goes out, so a restart in
 # between leaves no image in Steam the records do not know. A lease one of them
@@ -192,6 +193,7 @@ READ_ONLY_CLAIMS: frozenset[str] = frozenset(
         "get_sgdb_artwork_base64",
         "get_sgdb_resolution",
         "get_sgdb_slot_artwork",
+        "keep_artwork_current",
         "refresh_save_status",
         "refresh_sgdb_artwork",
         "test_connection",

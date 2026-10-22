@@ -34,6 +34,7 @@ from lib.errors import (
     SteamGridDirMissingError,
 )
 from models.shortcut_artwork import SlotAnswer, WrittenIcon
+from services.steamgrid._current import KeepingCurrent, KeepingCurrentConfig
 from services.steamgrid._files import CachedArtwork, NoArtwork, SgdbArtworkFiles, SgdbArtworkFilesConfig
 from services.steamgrid._handover import HandedOverImages, HandedOverImagesConfig, PreviousChoice
 from services.steamgrid._refusals import (
@@ -65,13 +66,17 @@ if TYPE_CHECKING:
     )
 
 
-def _artwork_slot(slot: object) -> ArtworkSlot:
-    """The slot *slot* names among the four Tender fills from SteamGridDB; refuses any other."""
+def _artwork_slot(slot: object, *, replace: bool = False) -> ArtworkSlot:
+    """The slot *slot* names among the four Tender fills from SteamGridDB, or with *replace* the cover; refuses others.
+
+    The cover is served only as a replacement, of the automatic cover Tender
+    picked from SteamGridDB for a game RomM has no cover for.
+    """
     try:
         artwork_slot = ArtworkSlot(slot)
     except ValueError as e:
         raise Refused("invalid_payload", f"Unknown artwork slot: {slot}") from e
-    if artwork_slot not in RECORDED_SLOTS:
+    if artwork_slot not in RECORDED_SLOTS and not (replace and artwork_slot is ArtworkSlot.COVER):
         raise Refused("invalid_payload", f"The {slot} slot is not filled from SteamGridDB")
     return artwork_slot
 
@@ -180,6 +185,20 @@ class SteamGridService:
                 sgdb_ids=self._sgdb_ids_state_only,
                 effective_sgdb_id=self._resolve_sgdb_id_state_only,
                 image_answer=self._image_answer_io,
+            )
+        )
+        self._keeping_current = KeepingCurrent(
+            config=KeepingCurrentConfig(
+                slots=self._slots,
+                files=self._files,
+                sgdb_api=config.sgdb_api,
+                uow_factory=config.uow_factory,
+                rules=config.conflict_rules,
+                settings=config.settings,
+                loop=config.loop,
+                clock=config.clock,
+                effective_sgdb_id=self._resolve_sgdb_id_state_only,
+                logger=config.logger,
             )
         )
         # Per app id: the count ``icon_generation`` answers, and the lock a page
@@ -580,7 +599,8 @@ class SteamGridService:
         """Serve SteamGridDB's image for one of *app_id*'s artwork slots, only while the slot is empty.
 
         *slot* is ``"grid"`` (the wide grid), ``"logo"``, ``"hero"`` or
-        ``"icon"``. With *replace* none of the checks that leave a slot alone
+        ``"icon"``, and with *replace* also ``"cover"``, for the automatic cover
+        Tender picks from SteamGridDB. With *replace* none of the checks that leave a slot alone
         is made: the slot is served whatever it holds, whatever its record
         says, and whether ``shortcuts.vdf`` can be read. Without a SteamGridDB
         game — RomM's or one the user chose — what the artwork cache holds for
@@ -621,7 +641,7 @@ class SteamGridService:
     async def _get_sgdb_slot_artwork(self, rom_id, app_id, slot, replace: bool):
         rom_id = int(rom_id)
         app_id = int(app_id)
-        artwork_slot = _artwork_slot(slot)
+        artwork_slot = _artwork_slot(slot, replace=replace)
         if not self._settings.get("steamgriddb_api_key"):
             return {"status": "no_api_key"}
         refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
@@ -826,6 +846,12 @@ class SteamGridService:
     async def set_artwork_slot_automatic(self, rom_id, slot):
         """``_tab.ArtworkTabUseCases.set_artwork_slot_automatic``."""
         return await self._tab.set_artwork_slot_automatic(rom_id, slot)
+
+    # -- keeping automatic artwork current (use case, in ``_current``) -------
+
+    async def keep_artwork_current(self, rom_id):
+        """``_current.KeepingCurrent.keep_artwork_current``."""
+        return await self._keeping_current.keep_artwork_current(rom_id)
 
     # -- API key management ------------------------------------------------
 

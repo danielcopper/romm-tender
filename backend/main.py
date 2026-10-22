@@ -841,6 +841,10 @@ class Endpoints:
     async def set_artwork_slot_automatic(self, rom_id, slot):
         return await self._services.sgdb_service.set_artwork_slot_automatic(rom_id, slot)
 
+    @route
+    async def keep_artwork_current(self, rom_id):
+        return await self._services.sgdb_service.keep_artwork_current(rom_id)
+
     # ── Metadata delegation to MetadataService ────────────────
 
     @route
