@@ -508,8 +508,9 @@ class TestDeviceSyncDisabled:
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
+        device_id = LiveDeviceId("test-device")
         with pytest.raises(RommSyncDisabledError):
-            await svc._sync_engine._open_negotiate_session(42, LiveDeviceId("test-device"))
+            await svc._sync_engine._open_negotiate_session(42, device_id)
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_refuses_with_the_policy_stop(self, tmp_path):

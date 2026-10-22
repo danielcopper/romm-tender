@@ -138,12 +138,12 @@ export function computeSyncSummary(
   if (!isActive || !saveStatus) return { syncSummaryText: null, syncSummaryColor: MUTED_COLOR };
 
   if (saveStatus.server_query_failed) {
-    const text =
-      saveStatus.server_query_reason === "server_unreachable"
-        ? "Server unreachable"
-        : saveStatus.server_query_reason === "device_not_registered"
-          ? "Device not registered with RomM"
-          : "Save status unavailable";
+    let text = "Save status unavailable";
+    if (saveStatus.server_query_reason === "server_unreachable") {
+      text = "Server unreachable";
+    } else if (saveStatus.server_query_reason === "device_not_registered") {
+      text = "Device not registered with RomM";
+    }
     return { syncSummaryText: text, syncSummaryColor: MUTED_COLOR };
   }
 

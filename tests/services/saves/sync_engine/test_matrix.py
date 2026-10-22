@@ -774,13 +774,14 @@ class TestDedupToNonHeadUploadGuard:
         fake.arm_add_save_dedup(100)  # the POST dedups to the OLDER save
 
         state = RomSaveSyncState(active_slot="default")
+        file_path, device_id = str(save_path), LiveDeviceId("device-1")
         with pytest.raises(RommConflictError):
             svc._sync_engine._matrix.do_upload_save(
                 42,
-                str(save_path),
+                file_path,
                 "pokemon.srm",
                 state,
-                LiveDeviceId("device-1"),
+                device_id,
                 "gba",
                 None,
                 planned_group=[older, head],
@@ -2471,11 +2472,11 @@ class TestADownloadThatFailsLeavesNoTmp:
         fake.saves[100] = _server_save(save_id=100)
         fake.break_download_on(100, failure)
         state = RomSaveSyncState()
+        download = svc._sync_engine._matrix.do_download_save
+        server_save, saves_dir_path, device_id = fake.saves[100], str(save_path.parent), LiveDeviceId("device-1")
 
         with pytest.raises(type(failure)) as caught:
-            svc._sync_engine._matrix.do_download_save(
-                fake.saves[100], str(save_path.parent), "pokemon.srm", state, LiveDeviceId("device-1"), "gba"
-            )
+            download(server_save, saves_dir_path, "pokemon.srm", state, device_id, "gba")
 
         assert caught.value is failure
         assert not (save_path.parent / "pokemon.srm.tmp").exists()
@@ -2496,8 +2497,9 @@ class TestADownloadThatFailsLeavesNoTmp:
 
         download = svc._sync_engine._matrix.do_download_save
         server_save, saves_dir_path, state = fake.saves[100], str(saves_dir), RomSaveSyncState()
+        device_id = LiveDeviceId("device-1")
         with pytest.raises(PermissionError, match="read-only"):
-            download(server_save, saves_dir_path, "pokemon.srm", state, LiveDeviceId("device-1"), "gba")
+            download(server_save, saves_dir_path, "pokemon.srm", state, device_id, "gba")
 
         assert not (saves_dir / "pokemon.srm.tmp").exists()
 
@@ -2519,8 +2521,9 @@ class TestADownloadThatFailsLeavesNoTmp:
 
         download = svc._sync_engine._matrix.do_download_save
         server_save, saves_dir_path, state = fake.saves[100], str(saves_dir), RomSaveSyncState()
+        device_id = LiveDeviceId("device-1")
         with pytest.raises(RommTimeoutError) as caught:
-            download(server_save, saves_dir_path, "pokemon.srm", state, LiveDeviceId("device-1"), "gba")
+            download(server_save, saves_dir_path, "pokemon.srm", state, device_id, "gba")
 
         assert caught.value is failure
         assert removals == [str(saves_dir / "pokemon.srm.tmp")]
