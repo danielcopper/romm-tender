@@ -54,7 +54,10 @@ export async function publishCommittedVersionSwitch(
   try {
     // A cover the user chose for this version is its cover; RomM's only where there is none (#2381 D16).
     const chosen = await setChosenCover(romId, appId, (base64) => onCover?.(romId, base64));
-    const cover = chosen ? null : await fetchCoverBase64(romId);
+    if (chosen === "unavailable") {
+      logWarn(`Version switch: the cover chosen for rom ${romId} cannot be had now; the cover Steam shows stays`);
+    }
+    const cover = chosen === "none" ? await fetchCoverBase64(romId) : null;
     if (signal?.aborted) return;
     if (cover?.base64) {
       onCover?.(romId, cover.base64);

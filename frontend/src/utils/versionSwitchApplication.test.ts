@@ -29,10 +29,19 @@ describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
   });
 
   it("writes RomM's cover where none was chosen", async () => {
-    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
 
     await publishCommittedVersionSwitch(5000, 42);
 
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mock.calls).toEqual([[5000, "ROMM=", "png", 0]]);
+  });
+
+  it("writes no cover over a chosen one that cannot be had now", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: true, chosen: true });
+
+    await publishCommittedVersionSwitch(5000, 42);
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.fetchCoverBase64)).not.toHaveBeenCalled();
   });
 });

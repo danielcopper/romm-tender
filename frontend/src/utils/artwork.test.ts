@@ -1045,7 +1045,7 @@ describe("the ARTWORK tab's writes", () => {
     });
     const onCover = vi.fn();
 
-    await expect(setChosenCover(42, 5000, onCover)).resolves.toBe(true);
+    await expect(setChosenCover(42, 5000, onCover)).resolves.toBe("set");
 
     expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 0);
     expect(onCover).toHaveBeenCalledWith("CHOSEN=");
@@ -1054,9 +1054,17 @@ describe("the ARTWORK tab's writes", () => {
   });
 
   it("leaves the cover to RomM's where none was chosen for the version", async () => {
-    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
 
-    await expect(setChosenCover(42, 5000)).resolves.toBe(false);
+    await expect(setChosenCover(42, 5000)).resolves.toBe("none");
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("answers unavailable for a chosen cover that cannot be had now, and writes nothing", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: true, chosen: true });
+
+    await expect(setChosenCover(42, 5000)).resolves.toBe("unavailable");
 
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
   });

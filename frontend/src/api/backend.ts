@@ -554,6 +554,8 @@ export const getSgdbArtworkBase64 = endpoint<
       image_id?: number;
       sha256?: string;
       sgdb_id?: number | null;
+      /** Asset type 0 only: whether the user chose a cover — `true` without an image is one that cannot be served now. */
+      chosen?: boolean;
     }
   | EndpointFailure
 >("get_sgdb_artwork_base64");

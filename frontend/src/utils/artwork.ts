@@ -477,18 +477,22 @@ export const STEAM_ASSET_TYPES: Readonly<Record<Exclude<ArtworkTabSlot, "icon">,
   grid: 3,
 };
 
+/** What setting a version's chosen cover came to: set, none chosen, or chosen but not to be had now. */
+export type ChosenCover = "set" | "none" | "unavailable";
+
 /**
  * Set the cover the user chose from SteamGridDB for *romId*, as a version switch does (#2381 D16), and report what Steam
- * made of it; *onCover* hears the image first. Answers whether there was a chosen cover to set: `false` leaves the
- * caller to set RomM's.
+ * made of it; *onCover* hears the image first. `none` leaves the caller to set RomM's; `unavailable` — a chosen cover
+ * that cannot be served now — means no cover is to be written over it.
  */
 export async function setChosenCover(
   romId: number,
   appId: number,
   onCover?: (base64: string) => void,
-): Promise<boolean> {
+): Promise<ChosenCover> {
   const answer = await getSgdbArtworkBase64(romId, STEAM_ASSET_TYPES.cover).catch(() => NO_IMAGE);
-  if (isEndpointFailure(answer) || !answer.base64) return false;
+  if (isEndpointFailure(answer)) return "none";
+  if (!answer.base64) return answer.chosen === true ? "unavailable" : "none";
   const base64 = answer.base64;
   onCover?.(base64);
   await withPruneLeases([answer.prune_lease_token], "Version switch", async (signal) => {
@@ -498,7 +502,7 @@ export async function setChosenCover(
       detach(debugLog(`Version switch: Steam refused the chosen cover for appId ${appId}: ${e}`));
     });
   });
-  return true;
+  return "set";
 }
 
 /**
