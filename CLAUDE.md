@@ -947,16 +947,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   platform BIOS site resolves through `domain/emulator_commands.py::resolve_firmware_option` (the platform's core read
   names the bake pick alone, `resolve_platform_label`), `.label` and `.emulator` come off one call, the key is the
   emulator identity and never `.core_so`, and both game-page services ask `ActiveCoreReader.active_emulator_for_rom`,
-  never `active_core_for_rom` — and so does the game page's "Download BIOS" (`download_all_firmware` with a `rom_id`,
-  `TestEachEmulatorsOwnPlace::test_a_game_page_download_places_for_the_games_own_pick`); the one-of groups an answer
-  judges are that same pick's (`groups_for(identity)`), and so are the rows and where a download lands
-  (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other emulator's answer is an entry of its own
-  (`emulator_tabs`) the BIOS tables' emulator selector shows, which never changes the level, the header's counts or the
-  badge — on the platform page `Download required` and a row's own download place for the emulator shown (`emulator`,
-  `None` for the pick; an identity the answer holds no verdict for is refused `emulator_unknown`,
+  never `active_core_for_rom`; the one-of groups an answer judges are that same pick's (`groups_for(identity)`), and so
+  are the rows (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other emulator's answer is an entry of
+  its own (`emulator_tabs`) the BIOS tables' emulator selector shows, which never changes the level, the header's counts
+  or the badge — on the platform page `Download required` fetches what the emulator shown requires (`emulator`, `None`
+  for the pick; an identity the answer holds no verdict for is refused `emulator_unknown`,
   `TestEachEmulatorsOwnPlace::test_download_required_fetches_for_the_shown_emulator`,
-  `::test_the_per_row_download_fetches_for_the_shown_emulator`,
-  `::test_an_emulator_the_answer_does_not_hold_is_refused`), while `Download all` places for the pick. Tests on the bare
+  `::test_an_emulator_the_answer_does_not_hold_is_refused`); where a download is linked follows no pick: every download
+  lands in the platform's store folder and is linked wherever an emulator of the platform opens the file (#2191 D3,
+  `::test_a_game_page_download_links_the_file_for_every_emulator_of_the_platform`). Tests on the bare
   `FakeCoreInfoProvider` exercise a weaker default than the live adapter
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —

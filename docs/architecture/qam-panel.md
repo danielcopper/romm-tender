@@ -1581,8 +1581,8 @@ it, for the focused platform:
   page the list is one focus stop, so focus on it stays there unless the new emulator lists no file, and then goes to
   the carousel's shown entry. Below the table one button, `Download required for
   <emulator> (N)`, over the shown
-  emulator's rows, sending its identity the same way. _N_ counts those rows that are fetchable and that the backend
-  marks `fetch_for_required` — the rule the download applies too, which takes the options of a one-of group's uncovered
+  emulator's rows, sending that emulator's identity. _N_ counts those rows that are fetchable and that the backend marks
+  `fetch_for_required` — the rule the download applies too, which takes the options of a one-of group's uncovered
   regions as well as the files the emulator requires. Under a sub-heading of their own, `For all of <platform>` —
   `SubHeading` in `layout/pane.tsx`, smaller and quieter than a section title, so it reads as part of the BIOS section
   (#2190 D30) — the platform-wide pair, which no emulator choice touches: `Download all`, every file the library holds

@@ -1430,30 +1430,28 @@ Format: **invariant** — tier — enforced by.
   send the BIOS rows back to the platform's own, which is the platform-scoped defect above, per ROM. The one-of groups
   an answer judges are that same pick's too (`FirmwareCatalogue.groups_for(identity)`), and both classes hold the group
   verdicts in their agreement (`_emulator_dependent`), so a second resolution feeding the groups would show as a
-  disagreement there rather than as a group judged for another emulator. So are the rows and where a download lands
+  disagreement there rather than as a group judged for another emulator. So are the rows
   ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D2, D9):
   `FirmwareCatalogue.placements_for(identity)` answers each file name with the launching emulator's own requirement —
   its place, its presence, its verdict — wherever it declares that name, so with YabaSanshiro picked for Saturn the row
-  and the download are `saturn_bios.bin` directly under the BIOS root whatever lies under Kronos's `kronos/`
-  (`tests/services/test_firmware.py::TestEachEmulatorsOwnPlace`). A game page's "Download BIOS" places for that game's
-  own pick (`download_all_firmware` with a `rom_id` asks `active_emulator_for_rom`), so a game set to Kronos on a
-  YabaSanshiro platform gets `kronos/saturn_bios.bin` (`::test_a_game_page_download_places_for_the_games_own_pick`).
-  Every OTHER emulator the resolver answered for is an entry of its own (`emulator_tabs`, `::TestOneEntryPerEmulator`),
-  its rows that emulator's own requirements, which the BIOS tables' emulator selector shows; choosing one never changes
-  the level, the header's counts or the badge. What it does change on the platform page is where a download lands:
-  `Download required` and a row's own download carry the shown emulator's identity (`emulator`, `None` for the pick) and
-  place for THAT emulator — with Kronos shown, `saturn_bios.bin` goes to `kronos/` on a YabaSanshiro platform
-  (`::test_download_required_fetches_for_the_shown_emulator`,
-  `::test_the_per_row_download_fetches_for_the_shown_emulator`) — and an identity the answer holds no verdict for is
-  refused with `emulator_unknown`, because `placements_for` would answer it with the first declarer's place
-  (`::test_an_emulator_the_answer_does_not_hold_is_refused`). `Download all` places for the platform's pick. A reader
-  keying a launch's rows on `by_file_name()` instead would read the first declarer's place and verdict wherever two
-  emulators declare one name at different places — Saturn green under YabaSanshiro over a file only under `kronos/`.
-  **What the ROM sibling cannot pin is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds
-  its invocation from the `active_core` tuple, which carries no identity, so a test on the bare fake resolves an
-  unpinned ROM to a `None` where the live adapter resolves it to an emulator — `_DeclaredDefaultCoreInfo` in that file
-  renders the declared default the way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still
-  exercises the weaker resolution
+  is `saturn_bios.bin` directly under the BIOS root whatever lies under Kronos's `kronos/`
+  (`tests/services/test_firmware.py::TestEachEmulatorsOwnPlace`). Every OTHER emulator the resolver answered for is an
+  entry of its own (`emulator_tabs`, `::TestOneEntryPerEmulator`), its rows that emulator's own requirements, which the
+  BIOS tables' emulator selector shows; choosing one never changes the level, the header's counts or the badge. What it
+  does change on the platform page is what `Download required` fetches: it carries the shown emulator's identity
+  (`emulator`, `None` for the pick) and fetches what THAT emulator requires
+  (`::test_download_required_fetches_for_the_shown_emulator`), and an identity the answer holds no verdict for is
+  refused with `emulator_unknown`, because `placements_for` would answer it with the first declarer's requirement
+  (`::test_an_emulator_the_answer_does_not_hold_is_refused`). Where a download is linked follows no pick: every
+  download, a game page's "Download BIOS" and a row's own included, lands in the platform's store folder and is linked
+  wherever an emulator of the platform opens the file ([#2191](https://github.com/danielcopper/romm-tender/issues/2191)
+  D3, `::test_a_game_page_download_links_the_file_for_every_emulator_of_the_platform`). A reader keying a launch's rows
+  on `by_file_name()` instead would read the first declarer's place and verdict wherever two emulators declare one name
+  at different places — Saturn green under YabaSanshiro over a file only under `kronos/`. **What the ROM sibling cannot
+  pin is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds its invocation from the
+  `active_core` tuple, which carries no identity, so a test on the bare fake resolves an unpinned ROM to a `None` where
+  the live adapter resolves it to an emulator — `_DeclaredDefaultCoreInfo` in that file renders the declared default the
+  way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still exercises the weaker resolution
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins the five parts that can be seen from a test: the two
