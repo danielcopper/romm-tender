@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_set_in_steam, is_slot_filled, slot_stem
 from domain.artwork_slot_choice import ArtworkSlotChoice
+from domain.artwork_slot_handover import HANDED_SLOTS
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
 from domain.artwork_slot_view import SlotState, SlotView, describe_slot
 from domain.sgdb_artwork import (
@@ -33,6 +34,8 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Collection, Mapping
 
+    from domain.artwork_slot_handover import ArtworkSlotHandover
+    from domain.rom import Rom
     from domain.sgdb_artwork import SgdbCandidate
     from services.protocols import (
         Clock,
@@ -184,8 +187,11 @@ class ArtworkSlots:
         with self._uow_factory() as uow:
             choices = {choice.slot: choice for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
             recorded = {slot: uow.artwork_slot_outcomes.get(rom_id, slot) for slot in RECORDED_SLOTS}
+            handed = {slot: uow.artwork_slot_handovers.get(rom_id, slot) for slot in HANDED_SLOTS}
         return [
-            self._view_io(rom_id, app_id, slot, grid, choices.get(slot), recorded.get(slot), has_game=has_game)
+            self._view_io(
+                rom_id, app_id, slot, grid, choices.get(slot), recorded.get(slot), handed.get(slot), has_game=has_game
+            )
             for slot in TAB_SLOTS
         ]
 
@@ -197,13 +203,14 @@ class ArtworkSlots:
         grid: _GridState,
         choice: ArtworkSlotChoice | None,
         recorded: ArtworkSlotOutcome | None,
+        handed: ArtworkSlotHandover | None,
         *,
         has_game: bool,
     ) -> SlotView:
         cached = self._files.cached(rom_id, slot.value) if slot is not ArtworkSlot.COVER else None
         return describe_slot(
             slot,
-            set_in_steam=self._is_set_in_steam_io(rom_id, app_id, slot, grid, recorded, cached),
+            set_in_steam=self._is_set_in_steam_io(rom_id, app_id, slot, grid, recorded, handed, cached),
             choice=choice,
             recorded=recorded,
             has_game=has_game,
@@ -225,6 +232,7 @@ class ArtworkSlots:
         slot: ArtworkSlot,
         grid: _GridState,
         recorded: ArtworkSlotOutcome | None,
+        handed: ArtworkSlotHandover | None,
         cached: CachedArtwork | None,
     ) -> bool:
         if grid.grid_dir is None:
@@ -235,14 +243,22 @@ class ArtworkSlots:
             return self._cover.is_cover_set_in_steam(rom_id, app_id)
         png = f"{slot_stem(app_id, slot)}.png"
         png_sha256 = tenders_sha256 = None
+        handed_sha256 = handed.image_sha256 if handed is not None else None
         if png in grid.file_names:
             if recorded is not None and recorded.outcome is SlotOutcome.SET:
                 tenders_sha256 = recorded.image_sha256
             elif cached is not None:
                 tenders_sha256 = self._sha256_io(self._cache.read_bytes, cached.path)
-            if tenders_sha256 is not None:
+            if tenders_sha256 is not None or handed_sha256 is not None:
                 png_sha256 = self._sha256_io(self._steam_config.read_grid_file, png)
-        return is_set_in_steam(grid.file_names, app_id, slot, png_sha256=png_sha256, tenders_sha256=tenders_sha256)
+        return is_set_in_steam(
+            grid.file_names,
+            app_id,
+            slot,
+            png_sha256=png_sha256,
+            tenders_sha256=tenders_sha256,
+            handed_sha256=handed_sha256,
+        )
 
     def _sha256_io(self, read: Callable[[str], bytes], path: str) -> str | None:
         """The SHA-256 of the bytes *read* answers for *path*; ``None`` where they cannot be read, which is logged."""
@@ -315,41 +331,12 @@ class ArtworkSlots:
             raise Refused("rate_limited", RATE_LIMITED) from e
         if not isinstance(found, CachedArtwork):
             raise Refused("download_failed", "The image could not be downloaded from SteamGridDB")
-        now = self._clock.time()
-        choice = ArtworkSlotChoice(rom_id=rom_id, slot=slot, image_id=image_id, chosen_at=now)
-        reference = self._chosen_reference_io(rom_id, slot, found, sgdb_id, now)
+        choice = ArtworkSlotChoice(rom_id=rom_id, slot=slot, image_id=image_id, chosen_at=self._clock.time())
         with self._uow_factory() as uow:
             if uow.roms.get(rom_id) is None:
                 raise Refused("not_synced", "ROM is not synced to Steam")
             uow.artwork_slot_choices.save(choice)
-            if reference is not None:
-                uow.artwork_slot_outcomes.save(reference)
         return found
-
-    def _chosen_reference_io(
-        self, rom_id: int, slot: ArtworkSlot, found: CachedArtwork, sgdb_id: int, now: float
-    ) -> ArtworkSlotOutcome | None:
-        """The ``set`` record of the chosen image, so it reads as Tender's however its report ends (#2381 D15).
-
-        The hash is of the bytes the frontend is handed. ``None`` for the icon,
-        which is judged by its path and whose written bytes are downscaled.
-        Refuses with ``download_failed`` when the downloaded image cannot be read.
-        """
-        if slot is ArtworkSlot.ICON:
-            return None
-        try:
-            data = self._cache.read_bytes(found.path)
-        except OSError as e:
-            self._logger.warning(f"Could not read the chosen {slot.value} {found.path}: {e}")
-            raise Refused("download_failed", "The downloaded image could not be read") from e
-        return ArtworkSlotOutcome.record_set(
-            rom_id=rom_id,
-            slot=slot,
-            sgdb_id=sgdb_id,
-            image_id=found.image_id,
-            image_sha256=hashlib.sha256(data).hexdigest(),
-            recorded_at=now,
-        )
 
     def _find_candidate_io(self, rom_id: int, slot: ArtworkSlot, image_id: int, sgdb_id: int) -> SgdbCandidate | None:
         candidate = self._listed.get((rom_id, slot), {}).get(image_id)
@@ -425,7 +412,7 @@ class ArtworkSlots:
             uow.artwork_slot_outcomes.delete_slot(rom_id, ArtworkSlot.COVER)
 
     def forget_choices_io(self, rom_id: int) -> set[ArtworkSlot]:
-        """Drop the choices a change of *rom_id*'s SteamGridDB game discards (#2381 D12, D17); answers the slots chosen.
+        """Drop the choices a change of *rom_id*'s SteamGridDB game discards (#2381 D12); answers the slots chosen.
 
         A chosen cover that is not set in Steam keeps its choice: it goes back to
         RomM's through ``set_artwork_slot_automatic``, which reloads RomM's cover
@@ -435,10 +422,7 @@ class ArtworkSlots:
         with self._uow_factory() as uow:
             chosen = {choice.slot for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
             rom = uow.roms.get(rom_id)
-        app_id = rom.shortcut_app_id if rom is not None else None
-        keep_cover = (
-            ArtworkSlot.COVER in chosen and app_id is not None and not self._cover.is_cover_set_in_steam(rom_id, app_id)
-        )
+        keep_cover = self._keeps_cover_choice_io(rom, chosen)
         with self._uow_factory() as uow:
             for slot in chosen:
                 if not (slot is ArtworkSlot.COVER and keep_cover):
@@ -450,21 +434,42 @@ class ArtworkSlots:
     ) -> set[ArtworkSlot]:
         """Where RomM's SteamGridDB id has replaced the game the user chose, discard that game's choices (#2381 D17).
 
-        As a change of game does (:meth:`forget_choices_io`), and the chosen game
-        goes with them, so this happens once. Nothing changes while RomM gives no
-        id, gives the chosen one, or no slot was chosen; answers the slots that
-        had a choice.
+        As a change of game does (:meth:`forget_choices_io`), in one Unit of Work
+        with the chosen game, so this happens once; the discarded SteamGridDB
+        slots' cached images go too, so Tender's pick under RomM's game is
+        downloaded in their place rather than the old game's chosen image
+        served. Nothing changes while RomM gives no id, gives the chosen one, or
+        no slot was chosen. Answers the slots to set back to automatic: the
+        SteamGridDB slots that had a choice, and the cover only where its choice
+        was kept — a cover set in Steam is named nowhere.
         """
         if not romm_id or not chosen_id or romm_id == chosen_id:
             return set()
         with self._uow_factory() as uow:
-            if not uow.artwork_slot_choices.get_all_for_rom(rom_id):
-                return set()
-        chosen = self.forget_choices_io(rom_id)
+            chosen = {choice.slot for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
+            rom = uow.roms.get(rom_id)
+        if not chosen:
+            return set()
+        keep_cover = self._keeps_cover_choice_io(rom, chosen)
         with self._uow_factory() as uow:
+            held = uow.roms.get(rom_id)
+            if held is None or held.chosen_sgdb_id != chosen_id:
+                return set()
+            for slot in chosen:
+                if not (slot is ArtworkSlot.COVER and keep_cover):
+                    uow.artwork_slot_choices.delete_slot(rom_id, slot)
             uow.roms.set_chosen_sgdb_id(rom_id, None)
+        discarded = chosen - {ArtworkSlot.COVER}
+        for slot in discarded:
+            self._files.drop(rom_id, slot.value)
         self._logger.info(f"RomM's SteamGridDB game replaced the one chosen for rom_id={rom_id}; its choices went")
-        return chosen
+        return discarded | ({ArtworkSlot.COVER} if keep_cover else set())
+
+    def _keeps_cover_choice_io(self, rom: Rom | None, chosen: Collection[ArtworkSlot]) -> bool:
+        """Whether a change of game keeps *rom*'s cover choice: it has one, and its cover is not set in Steam."""
+        if ArtworkSlot.COVER not in chosen or rom is None or rom.shortcut_app_id is None:
+            return False
+        return not self._cover.is_cover_set_in_steam(rom.rom_id, rom.shortcut_app_id)
 
 
 def views_payload(views: Collection[SlotView], chosen: Collection[ArtworkSlot]) -> list[Mapping[str, Any]]:

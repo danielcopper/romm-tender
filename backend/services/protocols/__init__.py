@@ -141,6 +141,7 @@ from services.protocols.persistence import SettingsPersister
 from services.protocols.repositories import (
     AnsweredSaveDirectoryRepository,
     ArtworkSlotChoiceRepository,
+    ArtworkSlotHandoverRepository,
     ArtworkSlotOutcomeRepository,
     BiosFileRepository,
     CollectionSyncStateRepository,
@@ -186,6 +187,7 @@ __all__ = [
     "ArtworkManager",
     "ArtworkRemover",
     "ArtworkSlotChoiceRepository",
+    "ArtworkSlotHandoverRepository",
     "ArtworkSlotOutcomeRepository",
     "BiosChecker",
     "BiosFileRepository",

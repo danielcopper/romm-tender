@@ -17,6 +17,7 @@ from fakes.running_loop import running_loop
 from domain.artwork_paths import cover_meta_filename
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_choice import ArtworkSlotChoice
+from domain.artwork_slot_handover import ArtworkSlotHandover
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
 from domain.cover_refresh import scan_cover_refresh_candidates
 from domain.rom import Rom
@@ -2657,6 +2658,43 @@ class TestTheCoverSlotReader:
         steam_config.grid_file_names.return_value = frozenset(files)
         file_store.files[_cache(cover_cache_dir, 42)] = b"tenders"
         _seed_rom(uow, 42, app_id=99999)
+
+        assert artwork_service.is_cover_set_in_steam(42, 99999) is set_in_steam
+
+    @pytest.mark.parametrize(
+        ("png", "set_in_steam"),
+        [(b"handed cover", False), (b"confirmed cover", False), (b"a cover the user set", True)],
+        ids=["the-handed-over-cover", "the-confirmed-cover", "neither"],
+    )
+    def test_a_cover_handed_to_steam_is_tenders_until_steam_answers(
+        self, artwork_service, uow, steam_config, file_store, cover_cache_dir, tmp_path, png, set_in_steam
+    ):
+        grid = str(tmp_path / "grid")
+        steam_config.grid_dir.return_value = grid
+        file_store.files[os.path.join(grid, "99999p.png")] = png
+        steam_config.grid_file_names.return_value = frozenset({"99999p.png"})
+        file_store.files[_cache(cover_cache_dir, 42)] = b"romm's cover"
+        _seed_rom(uow, 42, app_id=99999)
+        with uow:
+            uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_set(
+                    rom_id=42,
+                    slot=ArtworkSlot.COVER,
+                    sgdb_id=7,
+                    image_id=12,
+                    image_sha256=hashlib.sha256(b"confirmed cover").hexdigest(),
+                    recorded_at=1.0,
+                )
+            )
+            uow.artwork_slot_handovers.save(
+                ArtworkSlotHandover.hand_over(
+                    rom_id=42,
+                    slot=ArtworkSlot.COVER,
+                    image_id=13,
+                    image_sha256=hashlib.sha256(b"handed cover").hexdigest(),
+                    handed_at=2.0,
+                )
+            )
 
         assert artwork_service.is_cover_set_in_steam(42, 99999) is set_in_steam
 

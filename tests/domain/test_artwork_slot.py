@@ -117,3 +117,39 @@ class TestASlotThatIsTenders:
     def test_the_icon_is_judged_by_its_path(self):
         with pytest.raises(ValueError, match="path"):
             is_set_in_steam([], APP_ID, ArtworkSlot.ICON, png_sha256=None, tenders_sha256=None)
+
+
+class TestTheImageHandedToSteam:
+    """D15: the image Tender handed over and the one Steam confirmed are both Tender's."""
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_a_png_with_the_handed_over_hash_is_tenders(self, slot):
+        names = [f"{_stem(slot)}.png"]
+
+        assert not is_set_in_steam(
+            names, APP_ID, slot, png_sha256="handed", tenders_sha256="set", handed_sha256="handed"
+        )
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_a_png_with_the_confirmed_hash_stays_tenders_beside_a_hand_over(self, slot):
+        names = [f"{_stem(slot)}.png"]
+
+        assert not is_set_in_steam(names, APP_ID, slot, png_sha256="set", tenders_sha256="set", handed_sha256="handed")
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_a_png_that_is_neither_is_set_in_steam(self, slot):
+        names = [f"{_stem(slot)}.png"]
+
+        assert is_set_in_steam(names, APP_ID, slot, png_sha256="theirs", tenders_sha256="set", handed_sha256="handed")
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_a_hand_over_alone_is_compared(self, slot):
+        names = [f"{_stem(slot)}.png"]
+
+        assert is_set_in_steam(names, APP_ID, slot, png_sha256="theirs", tenders_sha256=None, handed_sha256="handed")
+
+    @pytest.mark.parametrize("slot", _GRID_FOLDER_SLOTS)
+    def test_another_extension_is_set_in_steam_whatever_was_handed(self, slot):
+        names = [f"{_stem(slot)}.png", f"{_stem(slot)}.jpg"]
+
+        assert is_set_in_steam(names, APP_ID, slot, png_sha256="handed", tenders_sha256=None, handed_sha256="handed")

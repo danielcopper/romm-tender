@@ -2,8 +2,9 @@
 
 The rule is :func:`domain.artwork_slot.is_set_in_steam`; this module reads what
 it compares — the grid directory's listing, the hash of ``{app_id}p.png``, and
-Tender's reference: its recorded hash for the cover where a ``set`` outcome is
-recorded, else its cover cache copy.
+Tender's references: its recorded hash for the cover where a ``set`` outcome is
+recorded, else its cover cache copy, and the hash of the SteamGridDB cover last
+handed to Steam whose answer is outstanding (#2381 D15).
 """
 
 from __future__ import annotations
@@ -14,12 +15,14 @@ from typing import TYPE_CHECKING
 
 from domain.artwork_paths import cache_filename, final_filename
 from domain.artwork_slot import ArtworkSlot, is_set_in_steam
-from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome
+from domain.artwork_slot_outcome import SlotOutcome
 
 if TYPE_CHECKING:
     import logging
     from collections.abc import Collection
 
+    from domain.artwork_slot_handover import ArtworkSlotHandover
+    from domain.artwork_slot_outcome import ArtworkSlotOutcome
     from services.protocols import CoverArtFileStore, SteamConfigStore, UnitOfWorkFactory
 
 
@@ -50,6 +53,7 @@ def covers_set_in_steam(
         return set()
     with uow_factory() as uow:
         recorded = {rom_id: uow.artwork_slot_outcomes.get(rom_id, ArtworkSlot.COVER) for rom_id, _ in covers}
+        handed = {rom_id: uow.artwork_slot_handovers.get(rom_id, ArtworkSlot.COVER) for rom_id, _ in covers}
     return {
         rom_id
         for rom_id, app_id in covers
@@ -57,6 +61,7 @@ def covers_set_in_steam(
             rom_id,
             app_id,
             recorded[rom_id],
+            handed[rom_id],
             grid=grid,
             file_names=file_names,
             file_store=file_store,
@@ -70,6 +75,7 @@ def _is_cover_set_in_steam(
     rom_id: int,
     app_id: int,
     outcome: ArtworkSlotOutcome | None,
+    handover: ArtworkSlotHandover | None,
     *,
     grid: str,
     file_names: frozenset[str],
@@ -79,12 +85,26 @@ def _is_cover_set_in_steam(
 ) -> bool:
     """Whether *app_id*'s cover in *grid*, whose listing is *file_names*, is not Tender's cover for *rom_id*.
 
-    *outcome* is the cover outcome recorded for *rom_id*, ``None`` where none is.
+    *outcome* is the cover outcome recorded for *rom_id*, and *handover* the
+    cover last handed to Steam, ``None`` where none is. A ``.png`` holding the
+    handed-over cover is Tender's before any other comparison.
     """
     png = final_filename(app_id)
     png_sha256 = tenders_sha256 = None
+    handed_sha256 = handover.image_sha256 if handover is not None else None
     if png in file_names:
         png_path = os.path.join(grid, png)
+        if handed_sha256 is not None:
+            png_sha256 = _sha256_of(file_store, png_path, logger)
+            if png_sha256 == handed_sha256:
+                return is_set_in_steam(
+                    file_names,
+                    app_id,
+                    ArtworkSlot.COVER,
+                    png_sha256=png_sha256,
+                    tenders_sha256=None,
+                    handed_sha256=handed_sha256,
+                )
         if outcome is not None and outcome.outcome is SlotOutcome.SET:
             png_sha256, tenders_sha256 = _sha256_of(file_store, png_path, logger), outcome.image_sha256
         else:

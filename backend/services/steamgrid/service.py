@@ -35,6 +35,7 @@ from lib.errors import (
 )
 from models.shortcut_artwork import SlotAnswer, WrittenIcon
 from services.steamgrid._files import CachedArtwork, NoArtwork, SgdbArtworkFiles, SgdbArtworkFilesConfig
+from services.steamgrid._handover import HandedOverImages, HandedOverImagesConfig
 from services.steamgrid._refusals import (
     INVALID_KEY,
     KEY_REFUSED,
@@ -76,6 +77,9 @@ def _artwork_slot(slot: object) -> ArtworkSlot:
 
 
 _ASSET_TYPES = ("hero", "logo", "grid", "icon")
+
+# Steam numbers the cover 0 among its artwork asset types; SteamGridDB names it.
+_COVER_ASSET_TYPE = ArtworkSlot.COVER.value
 
 
 @dataclass(frozen=True)
@@ -136,9 +140,21 @@ class SteamGridService:
         self._rules = config.conflict_rules
         self._downscale_icon = config.downscale_icon
         self._clock = config.clock
+        self._handovers = HandedOverImages(
+            config=HandedOverImagesConfig(
+                uow_factory=config.uow_factory,
+                cache=config.sgdb_artwork_cache,
+                steam_config=config.steam_config,
+                clock=config.clock,
+                logger=config.logger,
+            )
+        )
         self._files = SgdbArtworkFiles(
             config=SgdbArtworkFilesConfig(
-                sgdb_api=config.sgdb_api, cache=config.sgdb_artwork_cache, logger=config.logger
+                sgdb_api=config.sgdb_api,
+                cache=config.sgdb_artwork_cache,
+                logger=config.logger,
+                stored=self._handovers.stored_io,
             )
         )
         self._cover = config.cover
@@ -456,10 +472,13 @@ class SteamGridService:
     async def get_sgdb_artwork_base64(self, rom_id, asset_type_num):
         """Serve one SteamGridDB hero, logo or wide grid for *rom_id* as base64, from the cache first.
 
-        An answer that carries an image also carries an ``sgdb_artwork`` lease
-        in ``prune_lease_token`` for the frontend's Steam write. Refuses the
-        icon (asset type 4) with ``invalid_payload``: it is served by
-        :meth:`get_sgdb_slot_artwork` and written by :meth:`save_shortcut_icon`.
+        Asset type 0, Steam's own for the cover, serves only a cover the user
+        chose, so a version switch writes it rather than RomM's (#2381 D16);
+        without a choice it answers no image. An answer that carries an image
+        also carries an ``sgdb_artwork`` lease in ``prune_lease_token`` for the
+        frontend's Steam write. Refuses the icon (asset type 4) with
+        ``invalid_payload``: it is served by :meth:`get_sgdb_slot_artwork` and
+        written by :meth:`save_shortcut_icon`.
         """
         async with self._rules.hold("get_sgdb_artwork_base64", prune=True):
             result = await self._get_sgdb_artwork_base64(rom_id, asset_type_num)
@@ -470,8 +489,12 @@ class SteamGridService:
     async def _get_sgdb_artwork_base64(self, rom_id, asset_type_num):
         rom_id = int(rom_id)
         asset_type_num = int(asset_type_num)
-        asset_type = asset_type_name(asset_type_num)
+        asset_type = _COVER_ASSET_TYPE if asset_type_num == 0 else asset_type_name(asset_type_num)
         self._log_debug(f"SGDB artwork request: rom_id={rom_id}, asset_type={asset_type_num}")
+        if asset_type == _COVER_ASSET_TYPE:
+            has_choice = await self._loop.run_in_executor(None, self._slots.has_choice_io, rom_id, ArtworkSlot.COVER)
+            if not has_choice:
+                return {"base64": None, "no_api_key": False}
         if not asset_type:
             return {"base64": None, "no_api_key": False}
         if asset_type == ArtworkSlot.ICON.value:
@@ -483,7 +506,7 @@ class SteamGridService:
         )
         if cached is not None:
             self._log_debug(f"SGDB artwork cache hit: {cached.path}")
-            answer = await self._artwork_answer(rom_id, cached)
+            answer = await self._artwork_answer(rom_id, ArtworkSlot(asset_type), cached)
             if answer is not None:
                 return answer
 
@@ -500,7 +523,7 @@ class SteamGridService:
         found = await self._loop.run_in_executor(None, self._download_as_chosen_io, int(sgdb_id), rom_id, asset_type)
         if found is not None and self._sgdb_artwork_cache.exists(found.path):
             self._log_debug(f"SGDB artwork download success: rom_id={rom_id}, asset_type={asset_type}")
-            answer = await self._artwork_answer(rom_id, found)
+            answer = await self._artwork_answer(rom_id, ArtworkSlot(asset_type), found)
             if answer is not None:
                 return answer
         else:
@@ -508,22 +531,25 @@ class SteamGridService:
 
         return {"base64": None, "no_api_key": False}
 
-    async def _artwork_answer(self, rom_id: int, cached: CachedArtwork) -> dict[str, Any] | None:
-        """The answer serving *cached*, or ``None`` when it cannot be read.
+    async def _artwork_answer(self, rom_id: int, slot: ArtworkSlot, cached: CachedArtwork) -> dict[str, Any] | None:
+        """The answer serving *cached* as *rom_id*'s *slot*, or ``None`` when it cannot be read.
 
         It also carries its SteamGridDB image id, the SHA-256 of its bytes and
         the ROM's SteamGridDB id, which the frontend passes to
-        ``report_sgdb_slot_artwork`` once Steam has taken it or refused it.
+        ``report_sgdb_slot_artwork`` once Steam has taken it or refused it; the
+        image is the slot's hand-over until then.
         """
         b64 = await self._read_file_as_base64(cached.path)
         if not b64:
             return None
+        data = base64.b64decode(b64)
+        await self._loop.run_in_executor(None, self._handovers.served_io, rom_id, slot, cached.image_id, data)
         sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
         return {
             "base64": b64,
             "no_api_key": False,
             "image_id": cached.image_id,
-            "sha256": hashlib.sha256(base64.b64decode(b64)).hexdigest(),
+            "sha256": hashlib.sha256(data).hexdigest(),
             "sgdb_id": int(sgdb_id) if sgdb_id else None,
         }
 
@@ -603,15 +629,21 @@ class SteamGridService:
             return {"status": found.value}
         if slot is ArtworkSlot.ICON:
             return {"status": "ready"}
-        return self._image_answer_io(found, sgdb_id) or {"status": "failed"}
+        return self._image_answer_io(rom_id, slot, found, sgdb_id) or {"status": "failed"}
 
-    def _image_answer_io(self, found: CachedArtwork, sgdb_id: int | None) -> dict[str, Any] | None:
-        """The ``image`` answer serving *found*, read from the cache; ``None`` where it cannot be read (logged)."""
+    def _image_answer_io(
+        self, rom_id: int, slot: ArtworkSlot, found: CachedArtwork, sgdb_id: int | None
+    ) -> dict[str, Any] | None:
+        """The ``image`` answer serving *found* as *rom_id*'s *slot*, and its hand-over.
+
+        ``None`` where it cannot be read, which is logged.
+        """
         try:
             data = self._sgdb_artwork_cache.read_bytes(found.path)
         except OSError as e:
             self._logger.warning(f"Failed to read cached artwork {found.path}: {e}")
             return None
+        self._handovers.served_io(rom_id, slot, found.image_id, data)
         return {
             "status": "image",
             "base64": base64.b64encode(data).decode("ascii"),
@@ -699,29 +731,22 @@ class SteamGridService:
         ``get_sgdb_slot_artwork`` or ``get_sgdb_artwork_base64`` answered for a
         wide grid, logo or hero, or, for an icon, what :meth:`save_shortcut_icon`
         answered or the shortcut artwork job's batch named, passed back.
-        The cover is reported too once the ARTWORK tab set a SteamGridDB image
-        on it: a ``set`` is recorded, so that image is read as Tender's, and a
-        ``refused`` records nothing, since no cover is recorded as refused. A
-        ``refused`` never replaces a slot's ``set`` record, whose hash is what
-        tells Tender's image in the grid directory from one set in Steam.
+        The cover is reported too once the ARTWORK tab or a version switch set
+        a SteamGridDB image on it: a ``set`` is recorded, so that image is read
+        as Tender's, and a ``refused`` records nothing, since no cover is
+        recorded as refused. Steam's answer settles the slot's hand-over, keeps
+        a ``set`` record over a ``refused``, and discards a choice whose image
+        Steam refused (``_handover.HandedOverImages.settle_io``, #2381 D15).
         Refuses with ``invalid_payload`` for a slot that is not recorded, an
         unknown outcome, or a ``set`` without its image id and hash.
         """
         async with self._rules.hold("report_sgdb_slot_artwork", prune=True):
-            record = self._reported_outcome(int(rom_id), slot, outcome, sgdb_id, image_id, sha256)
-            if record is not None:
-                await self._loop.run_in_executor(None, self._record_reported_outcome, record)
+            rom_id = int(rom_id)
+            record = self._reported_outcome(rom_id, slot, outcome, sgdb_id, image_id, sha256)
+            artwork_slot = record.slot if record is not None else ArtworkSlot.COVER
+            reported_id = int(image_id) if image_id is not None else None
+            await self._loop.run_in_executor(None, self._handovers.settle_io, rom_id, artwork_slot, record, reported_id)
             return {"success": True}
-
-    def _record_reported_outcome(self, record: ArtworkSlotOutcome) -> None:
-        """Save a reported *record*, except a ``refused`` over a ``set``: that image is still Tender's (#2381 D15)."""
-        if record.outcome is SlotOutcome.REFUSED:
-            with self._uow_factory() as uow:
-                held = uow.artwork_slot_outcomes.get(record.rom_id, record.slot)
-            if held is not None and held.outcome is SlotOutcome.SET:
-                self._log_debug(f"Steam refused rom_id={record.rom_id}'s {record.slot.value}; its set record stays")
-                return
-        self._record_slot_outcome(record)
 
     def _reported_outcome(self, rom_id, slot, outcome, sgdb_id, image_id, sha256) -> ArtworkSlotOutcome | None:
         artwork_slot = ArtworkSlot.COVER if slot == ArtworkSlot.COVER else _artwork_slot(slot)

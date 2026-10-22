@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from services.protocols.repositories import (
         AnsweredSaveDirectoryRepository,
         ArtworkSlotChoiceRepository,
+        ArtworkSlotHandoverRepository,
         ArtworkSlotOutcomeRepository,
         BiosFileRepository,
         CollectionSyncStateRepository,
@@ -69,6 +70,8 @@ class UnitOfWork(Protocol):
     def artwork_slot_outcomes(self) -> ArtworkSlotOutcomeRepository: ...
     @property
     def artwork_slot_choices(self) -> ArtworkSlotChoiceRepository: ...
+    @property
+    def artwork_slot_handovers(self) -> ArtworkSlotHandoverRepository: ...
     @property
     def bios_files(self) -> BiosFileRepository: ...
     @property

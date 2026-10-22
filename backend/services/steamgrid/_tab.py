@@ -50,7 +50,7 @@ class ArtworkTabUseCasesConfig:
     loop: asyncio.AbstractEventLoop
     sgdb_ids: Callable[[int], tuple[int | None, int | None]]
     effective_sgdb_id: Callable[[int], int | None]
-    image_answer: Callable[[CachedArtwork, int | None], dict[str, Any] | None]
+    image_answer: Callable[[int, ArtworkSlot, CachedArtwork, int | None], dict[str, Any] | None]
 
 
 class ArtworkTabUseCases:
@@ -78,14 +78,15 @@ class ArtworkTabUseCases:
         can carry.
         """
         async with self._rules.hold("get_artwork_game", prune=True):
-            answer = await self._game_answer(int(rom_id))
+            answer = await self._game_answer(int(rom_id), discard=True)
             return {"success": True, **answer}
 
     async def get_artwork_slots(self, rom_id, app_id):
         """The game page's ARTWORK tab for *rom_id*'s shortcut *app_id*: its SteamGridDB game and its five slots.
 
-        :meth:`get_artwork_game`'s answer, the ``game`` with its ``name`` on
-        SteamGridDB (``None`` where that cannot be asked), and ``slots``: the
+        :meth:`get_artwork_game`'s answer but ``superseded``, which only the
+        visit's read settles, the ``game`` with its ``name`` on SteamGridDB
+        (``None`` where that cannot be asked), and ``slots``: the
         cover, wide grid, hero, logo and icon, each with its ``state``
         (``automatic`` / ``chosen`` / ``set_in_steam``), its ``source``, the
         SteamGridDB ``image_id`` it shows where Tender knows it
@@ -95,7 +96,8 @@ class ArtworkTabUseCases:
         """
         async with self._rules.hold("get_artwork_slots", prune=True):
             rom_id, app_id = int(rom_id), int(app_id)
-            answer = await self._game_answer(rom_id)
+            answer = await self._game_answer(rom_id, discard=False)
+            del answer["superseded"]
             sgdb_id = answer["game"]["sgdb_id"]
             views = await self._loop.run_in_executor(None, self._slots.read_io, rom_id, app_id, sgdb_id)
             chosen = await self._loop.run_in_executor(None, self._slots.chosen_slots_io, rom_id)
@@ -103,14 +105,21 @@ class ArtworkTabUseCases:
                 answer["game"]["name"] = await self._loop.run_in_executor(None, self._slots.game_name_io, sgdb_id)
             return {"success": True, **answer, "slots": views_payload(views, chosen)}
 
-    async def _game_answer(self, rom_id: int) -> dict[str, Any]:
-        """The answer :meth:`get_artwork_game` gives, once choices a RomM id superseded are discarded."""
+    async def _game_answer(self, rom_id: int, *, discard: bool) -> dict[str, Any]:
+        """The answer :meth:`get_artwork_game` gives; with *discard*, once choices a RomM id superseded are discarded.
+
+        Only the visit's read discards, so :meth:`get_artwork_slots` stays a read.
+        """
         api_key = self._settings.get("steamgriddb_api_key", "")
         if api_key:
             refuse_a_key_that_cannot_be_sent(api_key)
         romm_id, chosen_id = await self._loop.run_in_executor(None, self._sgdb_ids, rom_id)
-        discarded = await self._loop.run_in_executor(
-            None, self._slots.discard_superseded_choices_io, rom_id, romm_id, chosen_id
+        discarded = (
+            await self._loop.run_in_executor(
+                None, self._slots.discard_superseded_choices_io, rom_id, romm_id, chosen_id
+            )
+            if discard
+            else set()
         )
         if discarded:
             chosen_id = None
@@ -161,7 +170,7 @@ class ArtworkTabUseCases:
             found = await self._loop.run_in_executor(
                 None, self._slots.choose_io, rom_id, artwork_slot, int(image_id), sgdb_id
             )
-            return await self._served_with_a_lease(artwork_slot, found, sgdb_id)
+            return await self._served_with_a_lease(rom_id, artwork_slot, found, sgdb_id)
 
     async def set_artwork_slot_automatic(self, rom_id, slot):
         """Set *rom_id*'s *slot* back to automatic, and serve what automatic is now.
@@ -193,7 +202,7 @@ class ArtworkTabUseCases:
                 raise Refused("rate_limited", RATE_LIMITED)
             if not isinstance(found, CachedArtwork):
                 raise Refused("download_failed", "Tender's image could not be downloaded from SteamGridDB")
-            return await self._served_with_a_lease(artwork_slot, found, sgdb_id)
+            return await self._served_with_a_lease(rom_id, artwork_slot, found, sgdb_id)
 
     async def _tab_game_or_refuse(self, rom_id: int) -> int:
         """*rom_id*'s effective SteamGridDB game; refuses ``no_api_key``, an unsendable key, and ``no_sgdb_game``."""
@@ -206,11 +215,13 @@ class ArtworkTabUseCases:
             raise Refused("no_sgdb_game", "Choose a SteamGridDB game for this ROM first")
         return int(sgdb_id)
 
-    async def _served_with_a_lease(self, slot: ArtworkSlot, found: CachedArtwork, sgdb_id: int) -> dict[str, Any]:
+    async def _served_with_a_lease(
+        self, rom_id: int, slot: ArtworkSlot, found: CachedArtwork, sgdb_id: int
+    ) -> dict[str, Any]:
         if slot is ArtworkSlot.ICON:
             answer: dict[str, Any] | None = {"status": "ready", "image_id": found.image_id, "sgdb_id": sgdb_id}
         else:
-            answer = await self._loop.run_in_executor(None, self._image_answer, found, sgdb_id)
+            answer = await self._loop.run_in_executor(None, self._image_answer, rom_id, slot, found, sgdb_id)
         if answer is None:
             raise Refused("download_failed", "The downloaded image could not be read")
         answer["prune_lease_token"] = await self._rules.acquire_lease("sgdb_artwork")

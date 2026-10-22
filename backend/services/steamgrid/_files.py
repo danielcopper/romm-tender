@@ -24,6 +24,7 @@ from models.shortcut_artwork import SlotAnswer
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Callable
 
     from domain.sgdb_artwork import SgdbCandidate
     from services.protocols import SgdbArtworkCache, SteamGridDbApi
@@ -46,11 +47,16 @@ class NoArtwork(Enum):
 
 @dataclass(frozen=True)
 class SgdbArtworkFilesConfig:
-    """Wiring for :class:`SgdbArtworkFiles`: the SteamGridDB transport, the cache's file seams and the logger."""
+    """Wiring for :class:`SgdbArtworkFiles`: the SteamGridDB transport, the cache's file seams and the logger.
+
+    ``stored`` is told of every download that replaced a slot's cache file,
+    with the file it replaced, while that file is still there.
+    """
 
     sgdb_api: SteamGridDbApi
     cache: SgdbArtworkCache
     logger: logging.Logger
+    stored: Callable[[int, str, CachedArtwork | None, CachedArtwork], None] | None = None
 
 
 class SgdbArtworkFiles:
@@ -60,6 +66,7 @@ class SgdbArtworkFiles:
         self._sgdb_api = config.sgdb_api
         self._cache = config.cache
         self._logger = config.logger
+        self._stored = config.stored
         # Per ROM and asset type, the names in the artwork cache: listed once,
         # then kept by this object's own downloads and removals, so a lookup
         # does not list the whole cache. Lookups run on executor threads and
@@ -103,14 +110,19 @@ class SgdbArtworkFiles:
     def store(self, rom_id, asset_type, candidate: SgdbCandidate) -> CachedArtwork | NoArtwork:
         """Download *candidate* as *rom_id*'s *asset_type*; ``FAILED`` when the download did not succeed.
 
-        Once it has, the slot's other cache files go. Lets a 429 through.
+        Once it has, ``stored`` is told and the slot's other cache files go.
+        Lets a 429 through.
         """
         target = os.path.join(self._cache.cache_dir(), cached_artwork_name(rom_id, asset_type, candidate.image_id))
+        previous = self.cached(rom_id, asset_type)
         if not self._sgdb_api.download_image(candidate.url, target):
             return NoArtwork.FAILED
+        stored = CachedArtwork(path=target, image_id=candidate.image_id)
         self._note_cache_name(rom_id, asset_type, os.path.basename(target), held=True)
+        if self._stored is not None:
+            self._stored(int(rom_id), asset_type, previous, stored)
         self.drop(rom_id, asset_type, keep=os.path.basename(target))
-        return CachedArtwork(path=target, image_id=candidate.image_id)
+        return stored
 
     def fetch_or_answer(
         self, rom_id: int, asset_type: str, sgdb_id: int, anew: bool = False

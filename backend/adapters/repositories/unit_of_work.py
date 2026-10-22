@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 
 from adapters.repositories.answered_save_directory import SqliteAnsweredSaveDirectoryRepository
 from adapters.repositories.artwork_slot_choice import SqliteArtworkSlotChoiceRepository
+from adapters.repositories.artwork_slot_handover import SqliteArtworkSlotHandoverRepository
 from adapters.repositories.artwork_slot_outcome import SqliteArtworkSlotOutcomeRepository
 from adapters.repositories.bios_file import SqliteBiosFileRepository
 from adapters.repositories.collection_sync_state import SqliteCollectionSyncStateRepository
@@ -67,6 +68,7 @@ class SqliteUnitOfWork:
     answered_save_directories: SqliteAnsweredSaveDirectoryRepository
     artwork_slot_outcomes: SqliteArtworkSlotOutcomeRepository
     artwork_slot_choices: SqliteArtworkSlotChoiceRepository
+    artwork_slot_handovers: SqliteArtworkSlotHandoverRepository
     bios_files: SqliteBiosFileRepository
     firmware_cache: SqliteFirmwareCacheRepository
     sync_runs: SqliteSyncRunRepository
@@ -105,6 +107,7 @@ class SqliteUnitOfWork:
         self.answered_save_directories = SqliteAnsweredSaveDirectoryRepository(conn)
         self.artwork_slot_outcomes = SqliteArtworkSlotOutcomeRepository(conn)
         self.artwork_slot_choices = SqliteArtworkSlotChoiceRepository(conn)
+        self.artwork_slot_handovers = SqliteArtworkSlotHandoverRepository(conn)
         self.bios_files = SqliteBiosFileRepository(conn)
         self.firmware_cache = SqliteFirmwareCacheRepository(conn)
         self.sync_runs = SqliteSyncRunRepository(conn)
