@@ -2,6 +2,11 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
 import { publishCommittedVersionSwitch } from "./versionSwitchApplication";
 
+vi.mock("../api/backend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/backend")>()),
+  logWarn: vi.fn(),
+}));
+
 describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -43,5 +48,32 @@ describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
 
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.fetchCoverBase64)).not.toHaveBeenCalled();
+  });
+
+  it("logs that a chosen cover cannot be served now, and why the cover Steam shows stays", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: true, chosen: true });
+
+    await publishCommittedVersionSwitch(5000, 42);
+
+    expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
+      "Version switch: the cover chosen for rom 42 cannot be served now; the cover Steam shows stays",
+    );
+  });
+
+  it("writes no cover where the read was refused, and logs the refusal without claiming a chosen cover", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
+      success: false,
+      reason: "prune_active",
+      message: "A cleanup is running",
+    });
+
+    await publishCommittedVersionSwitch(5000, 42);
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.fetchCoverBase64)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
+      "Version switch: whether a cover was chosen for rom 42 could not be read (A cleanup is running); " +
+        "the cover Steam shows stays",
+    );
   });
 });

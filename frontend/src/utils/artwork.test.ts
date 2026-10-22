@@ -1045,7 +1045,7 @@ describe("the ARTWORK tab's writes", () => {
     });
     const onCover = vi.fn();
 
-    await expect(setChosenCover(42, 5000, onCover)).resolves.toBe("set");
+    await expect(setChosenCover(42, 5000, onCover)).resolves.toEqual({ kind: "set" });
 
     expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 0);
     expect(onCover).toHaveBeenCalledWith("CHOSEN=");
@@ -1056,7 +1056,7 @@ describe("the ARTWORK tab's writes", () => {
   it("leaves the cover to RomM's where none was chosen for the version", async () => {
     vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
 
-    await expect(setChosenCover(42, 5000)).resolves.toBe("none");
+    await expect(setChosenCover(42, 5000)).resolves.toEqual({ kind: "none" });
 
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
   });
@@ -1064,20 +1064,20 @@ describe("the ARTWORK tab's writes", () => {
   it("answers unavailable for a chosen cover that cannot be had now, and writes nothing", async () => {
     vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: true, chosen: true });
 
-    await expect(setChosenCover(42, 5000)).resolves.toBe("unavailable");
+    await expect(setChosenCover(42, 5000)).resolves.toEqual({ kind: "unavailable" });
 
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
   });
 
-  it("answers unavailable where the chosen-cover read is refused or fails, and writes nothing", async () => {
+  it("answers unread with the reason where the chosen-cover read is refused or fails, and writes nothing", async () => {
     vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValueOnce({
       success: false,
       reason: "auth_failed",
       message: "refused",
     });
-    await expect(setChosenCover(42, 5000)).resolves.toBe("unavailable");
+    await expect(setChosenCover(42, 5000)).resolves.toEqual({ kind: "unread", reason: "refused" });
     vi.mocked(backend.getSgdbArtworkBase64).mockRejectedValueOnce(new Error("connection lost"));
-    await expect(setChosenCover(42, 5000)).resolves.toBe("unavailable");
+    await expect(setChosenCover(42, 5000)).resolves.toEqual({ kind: "unread", reason: "Error: connection lost" });
 
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
   });

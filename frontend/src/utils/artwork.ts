@@ -477,26 +477,31 @@ export const STEAM_ASSET_TYPES: Readonly<Record<Exclude<ArtworkTabSlot, "icon">,
   grid: 3,
 };
 
-/** What setting a version's chosen cover came to: set, none chosen, or chosen but not to be had now. */
-export type ChosenCover = "set" | "none" | "unavailable";
+/**
+ * What setting a version's chosen cover came to: `set`; `none`, no cover was chosen; `unavailable`, one was chosen and
+ * cannot be served now; `unread`, the read failed or was refused, so whether one was chosen is not known — *reason*
+ * says why.
+ */
+export type ChosenCover =
+  { kind: "set" } | { kind: "none" } | { kind: "unavailable" } | { kind: "unread"; reason: string };
 
 /**
  * Set the cover the user chose from SteamGridDB for *romId*, as a version switch does (#2381 D16), and report what Steam
- * made of it; *onCover* hears the image first. `none` leaves the caller to set RomM's; `unavailable` — a chosen cover
- * that cannot be served now, or a read that failed or was refused, which cannot rule a choice out — means no cover is
- * to be written.
+ * made of it; *onCover* hears the image first. Only `none` leaves the caller to set RomM's: `unavailable` and `unread`
+ * cannot rule a chosen cover out, so no cover is to be written.
  */
 export async function setChosenCover(
   romId: number,
   appId: number,
   onCover?: (base64: string) => void,
 ): Promise<ChosenCover> {
-  const answer = await getSgdbArtworkBase64(romId, STEAM_ASSET_TYPES.cover).catch((e: unknown): EndpointFailure => {
-    detach(debugLog(`Version switch: the chosen cover of rom ${romId} could not be read: ${e}`));
-    return { success: false, reason: "server_unreachable", message: "The chosen cover could not be read" };
-  });
-  if (isEndpointFailure(answer)) return "unavailable";
-  if (!answer.base64) return answer.chosen === true ? "unavailable" : "none";
+  const answer = await getSgdbArtworkBase64(romId, STEAM_ASSET_TYPES.cover).catch((e: unknown): EndpointFailure => ({
+    success: false,
+    reason: "server_unreachable",
+    message: String(e),
+  }));
+  if (isEndpointFailure(answer)) return { kind: "unread", reason: answer.message };
+  if (!answer.base64) return { kind: answer.chosen === true ? "unavailable" : "none" };
   const base64 = answer.base64;
   onCover?.(base64);
   await withPruneLeases([answer.prune_lease_token], "Version switch", async (signal) => {
@@ -506,7 +511,7 @@ export async function setChosenCover(
       detach(debugLog(`Version switch: Steam refused the chosen cover for appId ${appId}: ${e}`));
     });
   });
-  return "set";
+  return { kind: "set" };
 }
 
 /**
