@@ -123,7 +123,7 @@ async def test_a_cover_romm_has_none_for_answers_the_failure_shape_and_keeps_the
 
     answer = await harness.endpoints.set_artwork_slot_automatic(_ROM_ID, "cover")
 
-    assert answer == {"success": False, "reason": "no_cover", "message": "ROM has no cover artwork"}
+    assert answer == {"success": False, "reason": "no_cover", "message": "RomM has no cover artwork"}
     assert _choice(harness, ArtworkSlot.COVER).image_id == 5
 
 

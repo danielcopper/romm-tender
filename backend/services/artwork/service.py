@@ -940,7 +940,7 @@ class ArtworkService:
 
         cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
         if not cover_url:
-            raise Refused("no_cover", "ROM has no cover artwork")
+            raise Refused("no_cover", "RomM has no cover artwork")
 
         cache_path = self._cache_path(rom_id)
         self._cover_art_file_store.make_dirs(self._cover_cache_dir)

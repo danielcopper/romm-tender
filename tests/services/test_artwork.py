@@ -1776,7 +1776,7 @@ class TestRefreshCover:
         with pytest.raises(Refused) as refused:
             await refreshing
 
-        assert (refused.value.reason, refused.value.message) == ("no_cover", "ROM has no cover artwork")
+        assert (refused.value.reason, refused.value.message) == ("no_cover", "RomM has no cover artwork")
         romm_api.download_cover.assert_not_called()
 
     @pytest.mark.asyncio
