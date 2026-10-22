@@ -1220,35 +1220,41 @@ SteamGridDB (`domain/artwork_slot.py`, `ArtworkSlot`; the cover has rules of its
 grid directory holds an image file for it, whoever put it there — the icon's when the shortcut's icon path is neither
 empty, the **placeholder icon** nor the **logo icon**, and, in the grid directory, its file is there — and a filled
 hero, logo, wide grid or icon is left alone except by the ARTWORK tab, **Refresh Artwork** (for a slot on automatic) and
-a version switch. The cover is not judged by being filled: the sync replaces it whenever RomM's changes, unless it is
-chosen or set in Steam. A **slot outcome** is what was last found for a ROM's hero, wide grid, logo or icon — `set`,
-`none` or `refused` — and, for a cover whose image came from SteamGridDB, `set` alone (`ArtworkSlotOutcome`). A **slot
-choice** is the SteamGridDB image a user chose for one of a ROM's slots in the game page's ARTWORK tab
-(`ArtworkSlotChoice`); it stays until the user chooses another or sets the slot back to automatic, or the ROM's
-SteamGridDB game changes — the user choosing another game, or RomM's id replacing the one the user chose. A slot with
-neither a choice nor an image set in Steam is **automatic**: Tender picks its image — RomM's cover for the cover,
-falling back to Tender's pick from SteamGridDB where RomM has none, and Tender's pick (`choose_candidate`) for the other
-four — and Refresh Artwork may replace it. A slot is **set in Steam** when its file in the grid directory is not
-Tender's — another extension, or a `.png` whose hash is neither the one Steam last confirmed Tender set nor that of the
-image Tender last handed to Steam whose answer is outstanding (the slot's **hand-over**, `ArtworkSlotHandover`) — or,
-for the icon, when the shortcut's icon path is not Tender's file; neither the shortcut artwork job, the sync's cover
-refresh and cover write nor Refresh Artwork replaces such a slot. A version switch and a sync rebind do, and so does a
-choice in the ARTWORK tab, after asking — except for the icon, which it repoints without asking. Detail:
+a version switch. A filled cover is RomM's to replace: the sync replaces it whenever RomM's changes, unless it is chosen
+or set in Steam; an empty cover is a game RomM has no cover for, which Tender fills from SteamGridDB like the other
+slots (#2381 D27). A **slot outcome** is what was last found for a ROM's hero, wide grid, logo or icon — `set`, `none`
+or `refused` — and, for the cover, `set` for an image from SteamGridDB and `none` where SteamGridDB has no cover
+(`ArtworkSlotOutcome`). A **slot choice** is the SteamGridDB image a user chose for one of a ROM's slots in the game
+page's ARTWORK tab (`ArtworkSlotChoice`); it stays until the user chooses another or sets the slot back to automatic, or
+the ROM's SteamGridDB game changes — the user choosing another game, or RomM's id replacing the one the user chose. A
+slot with neither a choice nor an image set in Steam is **automatic**: Tender picks its image — RomM's cover for the
+cover, falling back to Tender's pick from SteamGridDB where RomM has none, and Tender's pick (`choose_candidate`) for
+the other four — and Refresh Artwork may replace it. Tender **keeps it current**: a visit to the game page checks the
+automatic slots showing Tender's SteamGridDB image at most once in seven days, and replaces one whose pick is now
+another image (`keep_artwork_current`; the time is `roms.artwork_checked_at`); RomM's cover is kept current by the sync
+instead, which also puts RomM's cover in place of Tender's SteamGridDB pick once RomM has one. A slot is **set in
+Steam** when its file in the grid directory is not Tender's — another extension, or a `.png` whose hash is neither the
+one Steam last confirmed Tender set nor that of the image Tender last handed to Steam whose answer is outstanding (the
+slot's **hand-over**, `ArtworkSlotHandover`) — or, for the icon, when the shortcut's icon path is not Tender's file;
+neither the shortcut artwork job, the sync's cover refresh and cover write nor Refresh Artwork replaces such a slot. A
+version switch and a sync rebind do, and so does a choice in the ARTWORK tab, after asking — except for the icon, which
+it repoints without asking. Detail:
 [Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork). _Avoid_: plain "slot", which
 means a **Save-sync slot** or a **Conditional slot**; "picked" for what the user chose, which is Tender's word for its
 own pick.
 
 ### Shortcut artwork job / placeholder icon / logo icon
 
-The **shortcut artwork job** is the background run that gives every bound shortcut its SteamGridDB icon, wide grid and
-logo where the slot is not **filled** and its **slot outcome** does not rule it out (`services/shortcut_artwork.py`); it
-is never a step of a sync, and the hero is left to the game page. The **placeholder icon** is the transparent 1×1 PNG a
-sync gives each shortcut it mints (an adopted shortcut keeps the icon it has), so the icon the job sets later replaces
-one. The **logo icon** is Tender's logo, given where SteamGridDB has no icon for the game, does not know its id, or the
-ROM has no SteamGridDB id stored; it means "no SteamGridDB icon to give", never "not loaded yet", and is not the
-**logo** slot. Both are stand-ins that leave the icon slot unfilled, so whether the job asks again is the slot outcome's
-to say; an icon set by hand fills the slot and is left alone. _Avoid_: "shortcut icon job": it gives more than the icon.
-Detail: [Shortcut artwork](docs/architecture/steam-non-steam-shortcuts.md#shortcut-artwork).
+The **shortcut artwork job** is the background run that gives every bound shortcut its SteamGridDB icon, wide grid, logo
+and — for a game RomM has no cover for — cover where the slot is not **filled** and its **slot outcome** does not rule
+it out (`services/shortcut_artwork.py`); it is never a step of a sync, and the hero is left to the game page. The
+**placeholder icon** is the transparent 1×1 PNG a sync gives each shortcut it mints (an adopted shortcut keeps the icon
+it has), so the icon the job sets later replaces one. The **logo icon** is Tender's logo, given where SteamGridDB has no
+icon for the game, does not know its id, or the ROM has no SteamGridDB id stored; it means "no SteamGridDB icon to
+give", never "not loaded yet", and is not the **logo** slot. Both are stand-ins that leave the icon slot unfilled, so
+whether the job asks again is the slot outcome's to say; an icon set by hand fills the slot and is left alone. _Avoid_:
+"shortcut icon job": it gives more than the icon. Detail:
+[Shortcut artwork](docs/architecture/steam-non-steam-shortcuts.md#shortcut-artwork).
 
 ### Surface (bigpicture / desktop)
 

@@ -752,18 +752,26 @@ date) again as Tender stored it at the last sync. It asks your RomM server nothi
 changed on the server arrives with the next sync.
 
 Opening a game's page sets its hero banner, logo, wide grid and icon only where the game has none yet — an icon counts
-as none while it is the empty spot a newly added game shows, or Tender's logo — so an image you set yourself stays.
-Switching the game to another version sets all four to that version's, over an image you set yourself too (whether Steam
-then shows Tender's image over one you set from a JPEG is not yet known); it uses the images Tender already downloaded
-for that version and downloads only the ones it has not. An image whose new download fails keeps the one Tender had.
+as none while it is the empty spot a newly added game shows, or Tender's logo — so an image you set yourself stays. A
+game with no cover gets Tender's pick from SteamGridDB's covers the same way: a game without a cover is one RomM has no
+cover for, and once RomM has one, the next sync puts RomM's cover in its place.
+
+Once a week at most, opening a game's page also checks the images Tender picked from SteamGridDB: where SteamGridDB now
+ranks another image first, Tender replaces it and says so once, for example "Updated the logo and the hero from
+SteamGridDB" — Steam redraws the page when an image changes. An image you chose and one set in Steam are never replaced.
+When SteamGridDB cannot be reached, the next visit checks again. Switching the game to another version sets all four to
+that version's, over an image you set yourself too (whether Steam then shows Tender's image over one you set from a JPEG
+is not yet known); it uses the images Tender already downloaded for that version and downloads only the ones it has not.
+An image whose new download fails keeps the one Tender had.
 
 ### The ARTWORK tab
 
 The **ARTWORK** tab on a game's page lists the game's five images — cover, wide grid, hero banner, logo and icon — each
 with the image Steam shows for it, where it comes from and its state:
 
-- **Automatic** — Tender picks the image: the cover is RomM's cover, kept current when RomM changes it; the other four
-  are Tender's pick from SteamGridDB.
+- **Automatic** — Tender picks the image: the cover is RomM's cover, kept current when RomM changes it, and Tender's
+  pick from SteamGridDB's covers while RomM has none ("SteamGridDB — Tender's pick, while RomM has no cover"); the other
+  four are Tender's pick from SteamGridDB, kept current when SteamGridDB ranks another image first.
 - **Chosen by you** — an image you chose in the tab. It stays across syncs, later visits to the page and **Refresh
   Artwork**, and comes back when you switch back to that version of the game, until you choose another, set the slot
   back to automatic or change the game's SteamGridDB game.
@@ -780,12 +788,13 @@ on automatic, the chosen image while you chose one — and the one Tender's own 
 The grid shows 14 images after **Automatic**; its last tile, **Load more**, adds 16 more and moves you to the first new
 one. Select a tile and press **Use this image**, which stays below the grid. An image SteamGridDB gives no size for
 shows none. The previews load straight from SteamGridDB; only the image you choose is downloaded in full. The cover can
-be chosen from SteamGridDB's portrait covers; setting it back to **Automatic** reloads RomM's cover at once. Choosing
-images needs a [SteamGridDB API key](configuration.md#steamgriddb-api-key); without one the tab says so. The cover's
-slot opens either way: without a key or a SteamGridDB game its picker offers **Automatic — RomM cover** alone and says
-why no SteamGridDB covers are offered, so RomM's cover is always one press away. If Steam does not take an image you
-chose, the tab says "Steam did not take the image" and the slot stays as it was before: the image you had chosen there
-earlier, if any, is chosen again.
+be chosen from SteamGridDB's portrait covers, and is marked **Tender's pick today** only where Automatic takes
+SteamGridDB's cover; setting it back to **Automatic** reloads RomM's cover at once, or, where RomM has none, sets
+Tender's pick from SteamGridDB. Choosing images needs a [SteamGridDB API key](configuration.md#steamgriddb-api-key);
+without one the tab says so. The cover's slot opens either way: without a key or a SteamGridDB game its picker offers
+**Automatic — RomM cover** alone and says why no SteamGridDB covers are offered, so RomM's cover is always one press
+away. If Steam does not take an image you chose, the tab says "Steam did not take the image" and the slot stays as it
+was before: the image you had chosen there earlier, if any, is chosen again.
 
 Over an image set in Steam the picker asks once more: "This image was set through Steam. Replacing it removes it; Tender
 keeps no copy." **Replace** has Steam remove its image and sets yours — whether Steam's call removes its file in every
@@ -807,9 +816,11 @@ one say so.
 
 **Refresh Artwork** asks your RomM server which SteamGridDB game the ROM maps to, so an id RomM gained since the last
 sync is used, then reloads RomM's cover and downloads Tender's pick anew for every slot on automatic, so the image
-SteamGridDB ranks first today reaches the game. An image you chose and one set in Steam stay, the cover included. While
-the game has no SteamGridDB game it is greyed out with "Choose a SteamGridDB game in the ARTWORK tab first."; it opens
-no game picker, and the next sync brings RomM's cover and id once RomM has them.
+SteamGridDB ranks first today reaches the game, and a damaged or deleted image is repaired. Where RomM has no cover, it
+sets Tender's pick from SteamGridDB's covers instead; where SteamGridDB has none either, it says "RomM has no cover
+artwork". An image you chose and one set in Steam stay, the cover included. While the game has no SteamGridDB game it is
+greyed out with "Choose a SteamGridDB game in the ARTWORK tab first."; it opens no game picker, and the next sync brings
+RomM's cover and id once RomM has them.
 
 One exception after you update Tender: for a game Tender knows on SteamGridDB, an icon, wide grid, logo or hero banner
 Tender downloaded before the update is downloaded once more the first time the game is switched to another version, or
