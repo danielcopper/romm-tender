@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import re
@@ -210,22 +211,69 @@ class TestLinks:
         assert (tmp_path / "old.lnk").is_symlink()
         assert (tmp_path / "place.bin").read_bytes() == b"someone else's"
 
-    def test_moving_aside_keeps_the_mode_and_leaves_nothing_where_the_copy_failed(
-        self, fw_files, tmp_path, monkeypatch
-    ):
+    def test_moving_aside_moves_a_file_by_a_hardlink_where_the_filesystem_makes_one(self, fw_files, tmp_path):
+        (tmp_path / "old.bin").write_bytes(b"old")
+        inode = (tmp_path / "old.bin").stat().st_ino
+
+        fw_files.move_aside(str(tmp_path / "old.bin"), str(tmp_path / "moved" / "old.bin"))
+
+        assert (tmp_path / "moved" / "old.bin").stat().st_ino == inode
+        assert not (tmp_path / "old.bin").exists()
+
+    def test_moving_aside_copies_and_flushes_where_no_hardlink_can_be_made(self, fw_files, tmp_path, monkeypatch):
         (tmp_path / "old.bin").write_bytes(b"old")
         (tmp_path / "old.bin").chmod(0o640)
+        inode = (tmp_path / "old.bin").stat().st_ino
+        flushed: list[int] = []
+        fsync = os.fsync
 
+        def other_filesystem(_src, _dst):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+        def recording(fd):
+            flushed.append(fd)
+            fsync(fd)
+
+        monkeypatch.setattr(os, "link", other_filesystem)
+        monkeypatch.setattr(os, "fsync", recording)
         fw_files.move_aside(str(tmp_path / "old.bin"), str(tmp_path / "moved.bin"))
+
+        assert (tmp_path / "moved.bin").read_bytes() == b"old"
+        assert (tmp_path / "moved.bin").stat().st_ino != inode
         assert stat.S_IMODE((tmp_path / "moved.bin").stat().st_mode) == 0o640
+        assert not (tmp_path / "old.bin").exists()
+        # The file and its folder.
+        assert len(flushed) == 2
+
+    def test_moving_aside_by_a_copy_never_moves_over_anything(self, fw_files, tmp_path, monkeypatch):
+        (tmp_path / "old.bin").write_bytes(b"old")
+        (tmp_path / "place.bin").write_bytes(b"someone else's")
+
+        def other_filesystem(_src, _dst):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+        monkeypatch.setattr(os, "link", other_filesystem)
+        with pytest.raises(FileExistsError):
+            fw_files.move_aside(str(tmp_path / "old.bin"), str(tmp_path / "place.bin"))
+
+        assert (tmp_path / "old.bin").read_bytes() == b"old"
+        assert (tmp_path / "place.bin").read_bytes() == b"someone else's"
+
+    def test_moving_aside_leaves_nothing_where_the_copy_failed(self, fw_files, tmp_path, monkeypatch):
+        (tmp_path / "old.bin").write_bytes(b"old")
+
+        def other_filesystem(_src, _dst):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
 
         def full(_source, _out):
-            raise OSError(28, "No space left on device")
+            raise OSError(errno.ENOSPC, "No space left on device")
 
+        monkeypatch.setattr(os, "link", other_filesystem)
         monkeypatch.setattr(shutil, "copyfileobj", full)
         with pytest.raises(OSError):
-            fw_files.move_aside(str(tmp_path / "moved.bin"), str(tmp_path / "again.bin"))
-        assert (tmp_path / "moved.bin").read_bytes() == b"old"
+            fw_files.move_aside(str(tmp_path / "old.bin"), str(tmp_path / "again.bin"))
+
+        assert (tmp_path / "old.bin").read_bytes() == b"old"
         assert not (tmp_path / "again.bin").exists()
 
     def test_moving_aside_creates_the_folders_and_moves_a_link_as_itself(self, fw_files, tmp_path):

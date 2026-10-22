@@ -9,6 +9,7 @@ exposes only the I/O seams declared by ``services.protocols.FirmwareFileStore``.
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import os
 import pathlib
@@ -18,6 +19,10 @@ import stat
 from domain.firmware_places import PlaceLook
 
 _MD5_CHUNK_SIZE = 8192
+
+# A hardlink these refuse is one the filesystem cannot make here — another
+# filesystem, or one without hardlinks — and the move copies instead.
+_LINK_UNSUPPORTED = frozenset({errno.EXDEV, errno.EPERM, errno.EOPNOTSUPP, errno.EMLINK})
 
 
 class FirmwareFileAdapter:
@@ -87,23 +92,44 @@ class FirmwareFileAdapter:
     def move_aside(self, src: str, dst: str) -> None:
         """Move the file or link at *src* to *dst*, creating *dst*'s folders; a link moves as itself.
 
-        Never over anything: *dst* is claimed by creating it, which raises
-        ``FileExistsError`` where something lies there by then, and a rename
-        would replace it. The content is copied into the claimed name, so the
-        move works across filesystems too; where the copy fails, the claimed
-        name is removed again and *src* stays.
+        Never over anything: *dst* is claimed by creating it — a hardlink, a
+        symlink, or a file opened exclusively — which raises
+        ``FileExistsError`` where something lies there by then, where a rename
+        would replace it. Where the filesystem makes no hardlink to *dst*, the
+        content is copied into the claimed name and flushed to disk with its
+        folder before *src* goes, so a crash leaves the file whole at one name
+        at least; where the copy fails, the claimed name is removed again and
+        *src* stays. Where removing *src* fails after that, the error is raised
+        with the file standing at both names.
         """
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         if os.path.islink(src):
             os.symlink(os.readlink(src), dst)
         else:
-            fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
-                with os.fdopen(fd, "wb") as out, open(src, "rb") as source:
-                    shutil.copyfileobj(source, out)
-                shutil.copystat(src, dst)
-            except OSError:
-                with contextlib.suppress(OSError):
-                    os.unlink(dst)
-                raise
+                os.link(src, dst)
+            except OSError as exc:
+                if exc.errno not in _LINK_UNSUPPORTED:
+                    raise
+                _copy_into_claimed(src, dst)
         os.unlink(src)
+
+
+def _copy_into_claimed(src: str, dst: str) -> None:
+    """Copy *src* into *dst*, claimed exclusively, and flush both to disk; remove the claim where it fails."""
+    fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as out, open(src, "rb") as source:
+            shutil.copyfileobj(source, out)
+            out.flush()
+            os.fsync(out.fileno())
+        shutil.copystat(src, dst)
+        folder = os.open(os.path.dirname(dst), os.O_RDONLY)
+        try:
+            os.fsync(folder)
+        finally:
+            os.close(folder)
+    except OSError:
+        with contextlib.suppress(OSError):
+            os.unlink(dst)
+        raise

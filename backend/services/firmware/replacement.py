@@ -76,6 +76,8 @@ class FirmwareReplacer:
         placed once the old file is in the backup folder, the old file goes
         back to its place where that is still free, and stays in the backup
         folder otherwise; either way the press refuses :data:`REPLACE_FAILED`.
+        A move back that reached the place but could not remove the backup
+        answers as one that did not, naming the backup, where a copy stays.
         """
         system = (await self._loop.run_in_executor(None, self._platform_systems.platform_system, platform_slug)).taken
         firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)

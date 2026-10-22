@@ -492,7 +492,8 @@ class FirmwareFileStore(Protocol):
         """Move the file or link at *src* to *dst*, creating *dst*'s folders; a link moves as itself.
 
         Never over anything: raises ``FileExistsError`` where something lies at
-        *dst*, and leaves *src* where it is whenever it raises.
+        *dst*. Whenever it raises, *src* is where it was — and where removing
+        *src* is what failed, the file stands at *dst* too.
         """
         ...
 
