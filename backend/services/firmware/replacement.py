@@ -99,6 +99,8 @@ class FirmwareReplacer:
         if found is None:
             raise _not_replaceable(place)
         placement, satisfied = found
+        if placement.emulator in catalogue.not_installed:
+            raise _not_replaceable(place)
         look = self._files.look(place)
         owned = self._store.do_owned(self._store.do_read_records())
         refusal = place_refusal(place, look, catalogue.roots, unreadable=placement.place_unreadable)

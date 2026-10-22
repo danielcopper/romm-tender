@@ -221,6 +221,7 @@ def plan_link_update(
     present: frozenset[str],
     records: Mapping[str, FirmwareLink],
     blocked: frozenset[str],
+    judged: frozenset[str] = frozenset(),
 ) -> LinkUpdatePlan:
     """Bring *platform_slug*'s links up to date over every place an emulator wants a store file at.
 
@@ -228,6 +229,9 @@ def plan_link_update(
     of the platform; *blocked* are the recorded places that may not be touched
     now, under a root the resolver only assumed or one that could not be judged.
     A place two emulators want is one place, and its first want decides.
+    *judged* are the sources whose wants were read whole: a link of Tender's
+    in one of them that no installed emulator there wants any more goes; a
+    link in any other source stays.
     """
     plan = _Plan()
     seen: set[str] = set()
@@ -240,7 +244,7 @@ def plan_link_update(
     for place, record in records.items():
         if place in seen or record.platform_slug != platform_slug or place in blocked:
             continue
-        _plan_recorded(plan, record, looks[place], present)
+        _plan_recorded(plan, record, looks[place], present, unwanted=record.source in judged)
     return plan.frozen()
 
 
@@ -274,11 +278,13 @@ def _plan_wanted(
             plan.drop.append(want.place)
 
 
-def _plan_recorded(plan: _Plan, record: FirmwareLink, look: PlaceLook, present: frozenset[str]) -> None:
+def _plan_recorded(
+    plan: _Plan, record: FirmwareLink, look: PlaceLook, present: frozenset[str], *, unwanted: bool
+) -> None:
     if look.link_target != record.target:
         plan.drop.append(record.place)
         return
-    if record.target not in present:
+    if unwanted or record.target not in present:
         plan.remove.append(record.place)
         plan.drop.append(record.place)
 

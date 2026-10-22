@@ -595,6 +595,12 @@ class FirmwareCatalogue:
     ``roots`` that source's root folders with where the resolver took each from
     (:mod:`domain.source_roots`), which decide whether a place below one may be
     used. Both ``None`` for a reading that did not happen.
+
+    ``not_installed`` are the emulators the source's own launch reading states
+    are not installed (the resolver's ``not-installed``). A link goes only to
+    the place of an emulator outside it (:meth:`linkable`): a packaged card
+    states what an emulator wants whether or not it is installed, and an
+    emulator that could not be established is not ruled out.
     """
 
     placements: tuple[FirmwarePlacement, ...]
@@ -605,6 +611,11 @@ class FirmwareCatalogue:
     groups: tuple[FirmwareGroup, ...] = ()
     source: str | None = None
     roots: SourceRoots | None = None
+    not_installed: frozenset[str] = frozenset()
+
+    def linkable(self) -> tuple[FirmwarePlacement, ...]:
+        """The placements a link may go to: every one but those of an emulator stated not installed."""
+        return tuple(placement for placement in self.placements if placement.emulator not in self.not_installed)
 
     def verdict_for(self, emulator: str | None) -> CoreFirmwareVerdict | None:
         """What was recorded about *emulator*, or ``None`` where nothing was.

@@ -308,7 +308,7 @@ class FirmwareStore:
         wanted: list[WantedLink] = []
         looks: dict[str, PlaceLook] = {}
         for catalogue in catalogues:
-            for want, placement in wanted_links(catalogue.placements, platform_slug, catalogue.source or "", copies):
+            for want, placement in wanted_links(catalogue.linkable(), platform_slug, catalogue.source or "", copies):
                 look = looks.setdefault(want.place, self._files.look(want.place))
                 refusal = place_refusal(want.place, look, catalogue.roots, unreadable=placement.place_unreadable)
                 wanted.append(replace(want, refusal=refusal))
@@ -328,6 +328,7 @@ class FirmwareStore:
             present=owned.present,
             records=records.links,
             blocked=frozenset(blocked),
+            judged=frozenset(catalogue.source for catalogue in catalogues if catalogue.source is not None),
         )
         return self._carry_out(plan)
 

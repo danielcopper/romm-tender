@@ -146,6 +146,7 @@ def _file_row(inputs: RowInputs, placement: FirmwarePlacement, emulator: str | N
         source=catalogue.source or "",
         owned=inputs.owned,
         satisfied=placement.satisfied,
+        linkable=placement.emulator not in catalogue.not_installed,
     )
     return entry.with_changes(**facts)
 
@@ -212,6 +213,7 @@ def _recognised_folder_rows(
             source=catalogue.source or "",
             owned=inputs.owned,
             satisfied=satisfied,
+            linkable=placement.emulator not in catalogue.not_installed,
         )
         rows.append(entry.with_changes(**facts))
     return rows

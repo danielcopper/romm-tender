@@ -13,7 +13,7 @@ import hashlib
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -84,13 +84,22 @@ class _Romm:
         Path(dest).write_bytes(self.served.get(firmware_id, self.files[firmware_id][2]))
 
 
+class _LaunchReadingResolver(FakeFirmwareResolver):
+    """The fake, with the source's launch reading: the emulators it states are not installed."""
+
+    not_installed: frozenset[str] = frozenset()
+
+    def __call__(self, system: str | None = None):
+        return replace(super().__call__(system), not_installed=self.not_installed)
+
+
 @dataclass
 class _Machine:
     """One home under ``tmp_path`` and the service over it."""
 
     service: FirmwareService
     store: FirmwareStore
-    resolver: FakeFirmwareResolver
+    resolver: _LaunchReadingResolver
     romm: _Romm
     uow: FakeUnitOfWork
     core_info: FakeCoreInfoProvider
@@ -120,7 +129,7 @@ def machine(tmp_path) -> _Machine:
     tender.mkdir()
     data = tmp_path / "data"
     files = FirmwareFileAdapter()
-    resolver = FakeFirmwareResolver(bios_root=str(bios), present_probe=files.exists, roots=_roots(bios))
+    resolver = _LaunchReadingResolver(bios_root=str(bios), present_probe=files.exists, roots=_roots(bios))
     romm = _Romm()
     uow = FakeUnitOfWork()
     uows = FakeUnitOfWorkFactory(uow)
@@ -660,6 +669,109 @@ class TestBringingLinksUpToDate:
         await machine.service.update_bios_links("saturn")
 
         assert set(machine.links()) == {str(moved / "saturn_bios.bin"), str(moved / "kronos" / "saturn_bios.bin")}
+
+
+class TestOnlyAnInstalledEmulatorIsLinkedFor:
+    async def test_no_link_goes_to_an_emulator_its_source_states_is_not_installed(self, machine):
+        _saturn(machine)
+        machine.resolver.not_installed = frozenset({_KRONOS})
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+
+        await machine.service.download_all_firmware("saturn")
+
+        assert (machine.bios / "saturn_bios.bin").is_symlink()
+        assert not os.path.lexists(machine.bios / "kronos" / "saturn_bios.bin")
+        assert set(machine.links()) == {str(machine.bios / "saturn_bios.bin")}
+
+    async def test_a_link_no_installed_emulator_wants_any_more_is_removed(self, machine):
+        _saturn(machine)
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        await machine.service.download_all_firmware("saturn")
+        machine.resolver.not_installed = frozenset({_KRONOS})
+
+        result = await machine.service.update_bios_links("saturn")
+
+        assert not os.path.lexists(machine.bios / "kronos" / "saturn_bios.bin")
+        assert (machine.bios / "saturn_bios.bin").is_symlink()
+        assert set(machine.links()) == {str(machine.bios / "saturn_bios.bin")}
+        assert machine.store_path("saturn", "sega_101.bin").exists()
+        assert result["removed"] == 1
+
+    async def test_a_file_someone_put_where_that_link_was_is_left_alone(self, machine):
+        _saturn(machine)
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        await machine.service.download_all_firmware("saturn")
+        kronos = machine.bios / "kronos" / "saturn_bios.bin"
+        own = machine.bios / "my_saturn.bin"
+        own.write_bytes(b"the user's own copy")
+        kronos.unlink()
+        kronos.symlink_to(own)
+        machine.resolver.not_installed = frozenset({_KRONOS})
+
+        await machine.service.update_bios_links("saturn")
+
+        assert os.readlink(kronos) == str(own)
+        assert str(kronos) not in machine.links()
+
+    async def test_an_unwanted_link_under_a_root_only_assumed_stays(self, machine):
+        _saturn(machine)
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        await machine.service.download_all_firmware("saturn")
+        machine.resolver.not_installed = frozenset({_KRONOS})
+        machine.resolver.roots = _roots(machine.bios, "assumed")
+
+        await machine.service.update_bios_links("saturn")
+
+        assert (machine.bios / "kronos" / "saturn_bios.bin").is_symlink()
+        assert str(machine.bios / "kronos" / "saturn_bios.bin") in machine.links()
+
+    async def test_a_link_in_a_source_not_read_stays(self, machine, tmp_path):
+        other_bios = tmp_path / "emudeck" / "bios"
+        other_bios.mkdir(parents=True)
+        other = FakeFirmwareResolver(
+            bios_root=str(other_bios), present_probe=os.path.exists, source="emudeck", roots=_roots(other_bios)
+        )
+        other.declare(
+            "saturn_bios.bin",
+            required_by=[_YABA],
+            place=str(other_bios / "saturn_bios.bin"),
+            identity_md5=_md5(_SATURN),
+            identity_kind=IDENTITY_FILE,
+        )
+        machine.resolver.other_sources.append(other)
+        _saturn(machine)
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        await machine.service.download_all_firmware("saturn")
+        # Switched off, or its reading failed: its wants were not read, so nothing there is judged.
+        other.resolved = False
+
+        await machine.service.update_bios_links("saturn")
+
+        assert (other_bios / "saturn_bios.bin").is_symlink()
+        assert str(other_bios / "saturn_bios.bin") in machine.links()
+
+    async def test_no_replace_for_an_emulator_its_source_states_is_not_installed(self, machine):
+        place = machine.bios / "saturn_bios.bin"
+        place.write_bytes(b"a wrong image")
+        machine.resolver.declare(
+            "saturn_bios.bin",
+            required_by=[_YABA],
+            place=str(place),
+            identity_md5=_md5(_SATURN),
+            identity_kind=IDENTITY_FILE,
+            checked="mismatch",
+        )
+        machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
+        machine.resolver.not_installed = frozenset({_YABA})
+
+        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        with pytest.raises(Refused) as refused:
+            await machine.service.replace_bios_file("saturn", str(place))
+
+        (row,) = [f for f in entry["files"] if f["declared_by"] == _YABA]
+        assert row["replace_offered"] is False
+        assert refused.value.reason == "not_replaceable"
+        assert place.read_bytes() == b"a wrong image"
 
 
 class TestAPlaceAnotherPlatformsLinkServes:

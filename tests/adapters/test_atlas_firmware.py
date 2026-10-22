@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pytest
@@ -235,6 +236,24 @@ class _Installation:
         if isinstance(self._answer, Exception):
             raise self._answer
         return self._answer
+
+
+class _Launching(_Installation):
+    """An installation that also answers its launch reading: each emulator's availability, by identity."""
+
+    def __init__(self, answer: FirmwareAnswer, *, availability: dict[str, str] | Exception) -> None:
+        super().__init__(answer)
+        self._availability = availability
+
+    def emulators_for(self, system: str) -> SimpleNamespace:
+        if isinstance(self._availability, Exception):
+            raise self._availability
+        return SimpleNamespace(
+            entries=tuple(
+                SimpleNamespace(emulator=emulator, availability=availability)
+                for emulator, availability in self._availability.items()
+            )
+        )
 
 
 @pytest.fixture
@@ -2518,14 +2537,65 @@ class TestEverySourceItIsPlacedIn:
         assert [catalogue.source for catalogue in catalogues] == ["retrodeck"]
         assert emudeck.asked_for is None
 
-    def test_a_sealed_catalogue_is_left_out(self, traces, monkeypatch):
+    def test_a_sealed_catalogue_is_read_for_the_places_it_states(self, traces, monkeypatch):
         sealed = Caveat(CAVEAT_EMULATOR_CATALOGUE_SEALED, "sealed", {})
         retrodeck = _Installation(_answer(_core(requirements=(_requirement(),))))
         emudeck = _Installation(_answer(_core(requirements=(_requirement(),)), caveats=(sealed,)), kind="emudeck")
         _detect(monkeypatch, _detecting(retrodeck, emudeck))
         adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
-        assert [catalogue.source for catalogue in adapter.every_source("gba")] == ["retrodeck"]
+        catalogues = adapter.every_source("gba")
+
+        assert [catalogue.source for catalogue in catalogues] == ["retrodeck", "emudeck"]
+        assert [placement.file_name for placement in catalogues[1].linkable()] == ["gba_bios.bin"]
+
+    def test_the_rows_of_a_sealed_answering_catalogue_stay_withheld(self, traces, monkeypatch):
+        sealed = Caveat(CAVEAT_EMULATOR_CATALOGUE_SEALED, "sealed", {})
+        _detect(
+            monkeypatch,
+            _detecting(_Installation(_answer(_core(requirements=(_requirement(),)), caveats=(sealed,)))),
+        )
+        adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        catalogue = adapter("gba")
+
+        assert (catalogue.resolved, catalogue.placements) == (False, ())
+
+    def test_an_emulator_its_source_states_is_not_installed_gets_no_link(self, traces, monkeypatch):
+        answer = _answer(
+            _core(core_so="mgba_libretro.so", requirements=(_requirement(core_so="mgba_libretro.so"),)),
+            _core(
+                core_so="gpsp_libretro.so", requirements=(_requirement(core_so="gpsp_libretro.so", file_name="a.bin"),)
+            ),
+            _core(
+                core_so="vbam_libretro.so", requirements=(_requirement(core_so="vbam_libretro.so", file_name="b.bin"),)
+            ),
+        )
+        installation = _Launching(
+            answer,
+            availability={
+                "mgba_libretro.so": "not-installed",
+                "gpsp_libretro.so": "unestablished",
+                "vbam_libretro.so": "startable",
+            },
+        )
+        _detect(monkeypatch, _detecting(installation))
+        adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        (catalogue,) = adapter.every_source("gba")
+
+        assert catalogue.not_installed == frozenset({"mgba_libretro.so"})
+        assert sorted(placement.file_name for placement in catalogue.linkable()) == ["a.bin", "b.bin"]
+
+    def test_a_launch_reading_that_raised_rules_no_emulator_out(self, traces, monkeypatch):
+        installation = _Launching(_answer(_core(requirements=(_requirement(),))), availability=RuntimeError("boom"))
+        _detect(monkeypatch, _detecting(installation))
+        adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        (catalogue,) = adapter.every_source("gba")
+
+        assert catalogue.not_installed == frozenset()
+        assert [placement.file_name for placement in catalogue.linkable()] == ["gba_bios.bin"]
 
     def test_a_source_that_raised_is_left_out(self, traces, monkeypatch):
         retrodeck = _Installation(RuntimeError("boom"))
