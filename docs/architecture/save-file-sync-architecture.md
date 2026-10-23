@@ -513,9 +513,12 @@ covered by cases and vectors.
 ### Inputs
 
 - **`local_file`** — `{filename, path, size, content_size, mtime}` for a file on disk, or `None` if no local file exists
-  for this filename. `content_size` is the file's [content size](#the-content-size). The core also takes `size_fixed`,
-  whether the file's size is fixed (battery-backed SRAM, memory card images): Tender leaves it out, which the core reads
-  as unknown, because nothing Tender reads states it yet.
+  for this filename. `content_size` is the file's [content size](#the-content-size). `size_fixed` is whether the
+  emulator writes the file at a fixed size (battery-backed SRAM, memory card images), taken from the save answer: the
+  resolver states it per group of files, and each synced file carries its group's claim (`SaveComponent.size_fixed`).
+  Where the resolver states none, the file is in no group, or two groups listing the same directory and file name
+  disagree, Tender leaves it out, which the core reads as unknown. The sync and the save status's preview both read the
+  name and the claim off the same synced files, so they decide a file alike.
 - **`server_saves_in_slot`** — RomM save dicts already filtered to the active slot.
 - **`files_state`** — the per-filename baseline from the ROM's save state — the `FileSyncState` value object on the
   `RomSaveSyncState` aggregate (persisted in the `rom_save_files` table), may be empty for a never-synced file. Carries
@@ -802,13 +805,16 @@ recorded `last_sync_local_size` and `last_sync_content_size`): a new size of **0
 content size under **50%** of the recorded one fires as a shrink — the raw sizes stand in where either side states no
 content size. Measuring content lets a save whose emulator writes less trailing fill than the last one upload as the
 edit it is, while a save that lost data still trips it; where both content sizes are stated, a non-empty file of fill
-only trips it whenever the recorded content was larger than 0. The core has a further rule for a file whose size is
-fixed, which conflicts as soon as it is shorter than the recorded content; Tender does not state that fact yet, so the
-rule never fires. The threshold is a hard-coded conservative default — not a setting. When the guard fires, the decision
-is `Conflict(picked)` instead of `Upload`, routing through the existing `SyncConflictModal` so the user decides: **Use
-Server** downloads the good server copy (quarantining the bad local first), **Keep Local** re-uploads the corrupt file
-only after an explicit choice. A plausible-size divergent edit (or a save that grew) is unaffected and still uploads
-(row 9).
+only trips it whenever the recorded content was larger than 0. The core has a further rule for a file the save answer
+states is written at a fixed size (`size_fixed`, see [Inputs](#inputs)), which conflicts as soon as its raw size is
+below the recorded content size, whatever the 50% threshold says. A file shorter only by a trailing run of fill does not
+trip it, because the recorded content size leaves that run out. Where a baseline was recorded before content sizes were
+and the file has been edited since, the recorded raw size stands in, so a fixed-size file shorter than that is a
+conflict once, and the sync that settles it records the content size. The threshold is a hard-coded conservative default
+— not a setting. When the guard fires, the decision is `Conflict(picked)` instead of `Upload`, routing through the
+existing `SyncConflictModal` so the user decides: **Use Server** downloads the good server copy (quarantining the bad
+local first), **Keep Local** re-uploads the corrupt file only after an explicit choice. A plausible-size divergent edit
+(or a save that grew) is unaffected and still uploads (row 9).
 
 ### Why row 11 splits into adopt (11a) vs conflict (11b)
 
@@ -1519,13 +1525,14 @@ neither in place):
    sync would find nothing changed (row 7) and never upload it. `upload_failed` therefore records the target slot's
    newest save for that file — its id, its `content_hash` and its size — as the baseline, and the next sync reads the
    copy as a local change: row 9 uploads it as a new version superseding that save, where this device is current on it.
-   Row 9b still applies — a copy under half that save's size is a conflict, not an upload — and so is a save there this
-   device is not current on: row 12b, whether it never synced that save or another device moved it on since. That
-   baseline is recorded from the save's size alone and carries no [content size](#the-content-size), so row 9b judges
-   the copy by raw size. A new slot has no save to record, and the next sync uploads the copy as its first save (row 2).
-   Where the newest save carries no `content_hash` or no id, there is no baseline to record from it, and the file's
-   tracking is dropped instead: with no baseline beside a head it cannot prove the copy identical to, the next sync
-   answers a conflict — row 8b where this device is current on that save, row 11b where it is not.
+   Row 9b still applies — a copy under half that save's size, or for a file written at a fixed size any copy shorter
+   than it, is a conflict, not an upload — and so is a save there this device is not current on: row 12b, whether it
+   never synced that save or another device moved it on since. That baseline is recorded from the save's size alone and
+   carries no [content size](#the-content-size), so row 9b judges the copy by raw size. A new slot has no save to
+   record, and the next sync uploads the copy as its first save (row 2). Where the newest save carries no `content_hash`
+   or no id, there is no baseline to record from it, and the file's tracking is dropped instead: with no baseline beside
+   a head it cannot prove the copy identical to, the next sync answers a conflict — row 8b where this device is current
+   on that save, row 11b where it is not.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?, message?} |
