@@ -5250,7 +5250,8 @@ describe("RomMGameInfoPanel", () => {
         );
 
         // The detail carries no BIOS answer for the switched-to version, and its
-        // live read is held open: the answer shown is the previous version's.
+        // live read is held open: until it lands, the previous version's answer
+        // must not stand in for it.
         let answer!: (value: BiosAnswer) => void;
         vi.mocked(backend.getBiosStatus).mockReturnValue(
           new Promise<BiosAnswer>((resolve) => {

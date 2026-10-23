@@ -48,8 +48,7 @@ export interface PanelState {
   // path thread `bios_level` straight off their respective payloads, never
   // re-deriving it. Drives the BIOS status-dot color, in `BiosTab`.
   // "unknown" (no installed emulator's answer could be established) renders
-  // neutral grey, and is the one level that stands beside a `biosStatus` holding
-  // no files.
+  // neutral grey.
   // null while no answer is held.
   biosLevel: BiosLevel | null;
   // Whether the latest live BIOS read failed. Beside `biosStatus` it is the
@@ -264,20 +263,15 @@ const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_
 
 /** The panel's two BIOS fields as a BIOS answer carries them — a cached game
  *  detail or the live `get_bios_status` read below, which ship the identical
- *  shape — or `null` when the payload carries no BIOS answer at all: a cached
- *  detail, which never carries one, or a live check that raised. The caller then
- *  leaves the shown status standing instead of replacing an answer with a
- *  non-answer (#1693).
+ *  shape — or `null` when the payload carries no BIOS answer at all. Which
+ *  payloads those are is the wire type's to say (`BiosAnswer` in
+ *  `api/backend.ts`); the "unknown" level is an answer and is shown as one.
  *
- *  `bios_status_unknown` rides two payloads and only one of them is a
- *  non-answer. The level tells them apart: an "unknown" level is a check that
- *  RAN and could not establish the requirement, which is an answer and is shown
- *  as one (#1660). No level is a read that never happened.
- *
- *  Every answer the check established carries `bios_status`, the one that no
- *  BIOS is needed included (`needs_bios: false`). A payload with neither the
- *  status nor the flag was asked about a ROM the backend holds no platform for,
- *  and answers nothing either.
+ *  What a `null` does is each caller's: a live read marks itself failed and
+ *  keeps the shown status ({@link foldBiosRead}), a core change keeps the shown
+ *  status and reads again (`panelEvents.ts`), and a version switch and the
+ *  mount load wait for the live read instead, because what is shown is another
+ *  ROM's or nothing.
  *
  *  `bios_level` is computed by the backend (`compute_bios_level`) and threaded
  *  straight through, never re-derived. */
@@ -295,10 +289,9 @@ export function biosFieldsFromCache(cached: BiosAnswer): Pick<PanelState, "biosS
 
 /** Go back for the BIOS answer the cached detail could not give, and fold it in.
  *
- *  Every fold of {@link biosFieldsFromCache} leaves the shown status standing on
- *  a non-answer (#1693), and nothing else re-reads it — so without this read the
- *  tab would wait on a cached detail's non-answer until an unrelated event moved
- *  it (#1752). The backend marks exactly that payload's `bios` field stale,
+ *  A cached detail carries no BIOS answer, and nothing else re-reads it — so
+ *  without this read the tab would wait on that non-answer until an unrelated
+ *  event moved it. The backend marks exactly that payload's `bios` field stale,
  *  which is what turns "we don't know" into a read; a payload with no stale list
  *  at all is one nobody marked, so it is left alone rather than re-read on every
  *  fold.

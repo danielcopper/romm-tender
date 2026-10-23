@@ -240,7 +240,7 @@ async function handleVersionSwitched(
   //
   // BIOS is the third per-rom tab: the requirement is core-dependent and the
   // core override is keyed on rom_id, so the new version's core may need
-  // different files, or none (#1681).
+  // different files, or none.
   //
   // Two switches in quick succession read the cache twice and can finish in
   // either order, so this read is ordered like the mount load's — see `loadData`.

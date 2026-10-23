@@ -42,8 +42,8 @@
  * Withholding the line costs a reader one fact; re-deriving it risks stating a
  * different amount from the one the other surface was handed. Neither reading is
  * reachable today and both answer the same nothing: of the payloads these two
- * surfaces read, the only ones carrying no counts are the two `needs_bios: False`
- * exits, and those are taken exactly where there is no row to count either.
+ * surfaces read, the only one carrying no counts is the unknown stub, which is
+ * sent exactly where there is no row to count either.
  */
 
 /** The payload fields the ratio is read off. The game page's `BiosStatus` and

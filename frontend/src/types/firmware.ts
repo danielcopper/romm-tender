@@ -692,8 +692,8 @@ export type ContentSearch = "found" | "incomplete" | "unreadable";
 
 export interface BiosStatus extends EmulatorAnswer {
   /** `true` wherever there is a row to show or the verdict is not met; `false`
-   *  on the answer that the launching emulator needs no BIOS, which is a whole
-   *  status like any other, and on the unknown stub below. */
+   *  on the answer that the launching emulator needs no BIOS and on the unknown
+   *  stub below. */
   needs_bios: boolean;
   server_count?: number;
   local_count?: number;
@@ -746,7 +746,7 @@ export interface BiosStatus extends EmulatorAnswer {
   // caught and the file list simply comes back empty, which the machine's own
   // answer can still fill. The `needs_bios: false` it rides on is
   // ignorance, not an answer, so no consumer may clear a shown requirement on it
-  // (#1693) — and the panel renders it as its own state (#1660).
+  // — and the panel renders it as its own state.
   bios_status_unknown?: boolean;
   /** See {@link StoreOnly}. */
   store_only?: StoreOnly | null;

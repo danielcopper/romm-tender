@@ -741,8 +741,8 @@ class TestGetCachedGameDetailCarriesNoBiosAnswer:
     What an emulator wants is read off the machine, and an answer read for a
     previous page open may not stand in for this one — so every open starts
     not-knowing and the live ``get_bios_status`` fills it in a moment later. The
-    frontend clears a shown requirement on an absent ``bios_status``, so the flag
-    is what keeps "not known yet" apart from "this core needs none" (#1693).
+    flag is what marks the payload as no answer, so the frontend keeps what it
+    shows rather than reading the absent ``bios_status`` as an answer.
     """
 
     @pytest.mark.asyncio
@@ -1076,11 +1076,10 @@ class TestGetBiosStatusNotFound:
 
     @pytest.mark.asyncio
     async def test_firmware_error_flags_unknown(self, game_detail):
-        """A raising BIOS check answers ``bios_status_unknown`` — not "no BIOS need" (#1693).
+        """A raising BIOS check answers ``bios_status_unknown`` with no level — no answer.
 
-        The frontend clears a shown requirement on an absent ``bios_status``, so
-        a failed check that shipped the same payload as a real negative took the
-        missing-BIOS warning off the page.
+        The flag with no level is what the frontend reads as a failed read, so it
+        keeps a shown missing-BIOS warning rather than clearing it.
         """
         _seed_rom(game_detail, 42, app_id=50000, name="Game", platform_slug="gba")
         game_detail.service._bios_checker.check_platform_bios = AsyncMock(side_effect=Exception("fail"))

@@ -190,9 +190,9 @@ because the one before was about the other version.
 
 When the BIOS state cannot be read at all, the tab says **"Could not read the BIOS state. Open the game page again to
 retry."** When it was read before and a later read fails — after a BIOS download, say — the tab keeps what it showed
-under **"Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry."**
-The platform page in **Library › Platforms** does the same for a platform, and shows its own spinner beside **Checking
-what this platform needs…** while a platform's answer is on its way.
+under **"Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry."** In
+**Library › Platforms**, a platform whose answer is on its way shows a spinner beside **Checking what this platform
+needs…**.
 
 An unreachable RomM server usually does **not** put Tender in that position. Everything the readiness line needs is
 local: which emulator is active comes from your RetroDECK configuration, what that emulator needs comes from the

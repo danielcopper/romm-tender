@@ -567,9 +567,8 @@ class FirmwareStatusReader:
         its search found nothing in declares no file — and is sent whole.
 
         A verdict of met with no row to show is sent whole too, with
-        ``needs_bios: False``: the game page draws it like any other answer, the
-        sentence read off the verdict and the selector off ``emulator_tabs``. The
-        empty file list says nothing of its own; the verdict is what says met.
+        ``needs_bios: False``. The empty file list says nothing of its own; the
+        verdict is what says met.
         """
         platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, platform_slug, install)
         system = platform.taken

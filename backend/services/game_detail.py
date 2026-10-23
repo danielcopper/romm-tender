@@ -124,8 +124,7 @@ class GameDetailService:
 
         ``unknown`` marks a payload that carries no BIOS answer — the check
         raised, or answered from a source that could not see the requirement.
-        Every answer the check established, "the active core needs no BIOS"
-        included, ships its ``bios_status`` instead.
+        Which payload ships what is :meth:`get_bios_status`'s contract.
 
         Those two reasons for the flag are themselves different answers, and the
         LEVEL is what separates them: a check that ran and could not establish
@@ -418,6 +417,8 @@ class GameDetailService:
         ``"unknown"``, a check that ran without establishing the requirement;
         with no level, a check that raised. A ROM that is gone or has no platform
         ships neither a status nor the flag; nothing has been asked about it.
+        The frontend reads this contract as ``BiosAnswer`` in
+        ``frontend/src/api/backend.ts``.
         """
         rom_id = int(rom_id)
 
@@ -457,14 +458,14 @@ class GameDetailService:
         # well as a flag: the flag alone is also what a failed read ships (the
         # ``except`` above), and the frontend has to tell the two apart — an
         # answer of "unknown" is shown as one, while a read that never happened
-        # leaves whatever is on the page standing (#1693).
+        # leaves whatever is on the page standing.
         if bios.get("bios_status_unknown"):
             return self._bios_answer(bios_level=BIOS_LEVEL_UNKNOWN, bios_label=BIOS_LABEL_UNKNOWN, unknown=True)
-        # Every other answer is the checker's payload, the answer that no BIOS is
-        # needed included, plus the slug it was asked about. Re-wrapping it
-        # through ``format_bios_status`` here would ship that dataclass's
-        # ``reading_complete`` default beside the answer — a field no frontend
-        # models and whose True is a claim this call site cannot make.
+        # Every other answer is the checker's payload plus the slug it was asked
+        # about. Re-wrapping it through ``format_bios_status`` here would ship
+        # that dataclass's ``reading_complete`` default beside the answer — a
+        # field no frontend models and whose True is a claim this call site
+        # cannot make.
         return self._bios_answer(
             {**bios, "platform_slug": platform_slug},
             bios.get("bios_level"),

@@ -152,22 +152,22 @@ export function isRenameCollisions(value: object): value is RenameCollisionsResu
  * same keys, inside a cached game detail — so one projection
  * (`utils/playSection.extractBiosInfo`) reads both.
  *
- * Every answer the check established carries `bios_status`: the requirement, or
- * the answer that the launching emulator needs no BIOS (`needs_bios: false`,
- * level `"ok"`), which clears a shown requirement (#1690) and is drawn on the
- * game page's BIOS tab like any other answer. An absent `bios_status` with no
- * flag was asked about a ROM the backend holds no platform for.
- * `bios_status_unknown` marks the payload that carries no answer at all — a
- * cached game detail, which never carries one whatever the caches hold; a live
- * check that raised; or one that ran and could not ask the platform's emulators
- * — and it ships no `bios_status`, so the flag is the only thing keeping a
- * failed check from taking a missing-BIOS warning off the page (#1693).
+ * Which payloads are answers is stated here and nowhere else in the frontend:
  *
- * The last of those three IS an answer, and `bios_level` is what says so: a
- * check that ran and could not establish the requirement ships `"unknown"`,
- * where one that raised ships none. A consumer that renders the unknown state
- * needs the pair; one that only defends a shown requirement needs the flag
- * alone (#1660).
+ * - Every answer the check established ships `bios_status`, the answer that the
+ *   launching emulator needs no BIOS included (`needs_bios: false`, level
+ *   `"ok"`) — it clears a shown requirement and is drawn on the game page's BIOS
+ *   tab like any other answer.
+ * - `bios_status_unknown` with level `"unknown"` and no status is an answer
+ *   too: a check that ran and could not establish the requirement.
+ * - Every other payload is no answer: `bios_status_unknown` with no level (a
+ *   cached game detail, which never carries one, or a live check that raised),
+ *   and a payload with neither a status nor the flag (a ROM that is gone or has
+ *   no platform). No consumer reads one as an answer, so a failed check never
+ *   takes a missing-BIOS warning off the page.
+ *
+ * The backend's statement of the same contract is `get_bios_status` in
+ * `backend/services/game_detail.py`.
  */
 export interface BiosAnswer {
   bios_status?:
