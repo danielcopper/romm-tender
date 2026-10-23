@@ -1686,38 +1686,34 @@ it, for the focused platform:
   from and it would take the nearest stop instead (`FindFocusableDescendant` in Steam's `sp.js`). Grid flow steps
   sideways only to a column overlapping the stop focus is on and down only to one clear of it, so both columns, and the
   focus group inside each, stretch to the row's height. Every stop in the tab is centred when focus lands on it, as a
-  section is. The tab is drawn afresh each time it is shown again, so Steam's own memory of the stop focus stood on goes
-  with it; `useBiosFocus` notes that stop instead — by the row or bulk button it belongs to and its place there, or by
-  its place in the tab outside them — and moves the first focus that lands in the tab once it is shown again onto it, on
-  the entry-focus delay. A press that went through — a download or Replace… that succeeded, a delete that succeeded or
-  stopped partway (`delete_incomplete`) — holds the tab's buttons until the tab's answer and the play row's are read
-  again, whether or not it changed anything; a refused or failed press reads nothing again. A press on the platform page
-  holds its pane the same way. The tab's answer is read through `rereadBiosAnswer`
-  (`frontend/src/bigpicture/panelEvents.ts`), bound to the game shown and ordered like the event lane's own BIOS reads,
-  the play row's through `refreshBiosStatus`. Where firmware changed, the press then tells every open game page, as the
-  platform page does (`romm_data_changed`, `bios`); its own page skips that event, so a press costs one read of the
-  tab's answer. What a press did stays until the game page is left, across a version switch too: the tab holds it for
-  the platform the versions share. The play row's gear menu has no "Download BIOS" (#2429 D7); the red BIOS badge in the
-  play row leads to this tab. The ratio is a third set again, which is why it rides along on both rather than being
-  folded in. **The ratio names that set in its own words**, because the sentence in front of it counts another one and
-  the numbers cannot say which is which: `The one file … opens by name is in place (1/20 RomM library files)` states
-  three correct numbers over three sets, and the words are the only thing that tells them apart. The pair is the
-  library's inventory for the platform — what it holds, and how many of those Tender found at their destination
-  (GLOSSARY.md → Library inventory) — and the tail names no axis of its own deliberately: the ratio form carries that,
-  and each candidate word for the numerator was worse than none. Two of them are already on the screen under this
-  sentence and stand for something else there — `present` is the row marks and `on disk` the column beside them, both
-  the row's own verdict rather than this pair — and the third, `downloaded`, would read as a claim about who put the
-  file there, which is more than `local_count` counts: `on_server` rows whose file is at its destination, the field
-  itself answering presence and nothing more. Neither surface prints the ratio where the library holds nothing for the
-  platform: `(0/0 RomM library files)` counts a set that does not exist. Nor does it count a row that reads "could not
-  be established", which is no file missing: the ratio is the payload's own pair (`ratio_server_count` /
-  `ratio_local_count`, over the rows whose verdict was established), and where no row was established neither surface
-  prints one. The level, its label and the download buttons read `server_count` / `local_count`, which still count every
-  row the library holds. What stops a surface writing one of these sentences back into itself is
-  `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and fails on any phrase the module
-  builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and `biosGroup.test.ts` over the
-  region names and a file's place in a group. **All three SWEEP the set they search rather than naming it** — every
-  non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
+  section is. A press that went through — a download or Replace… that succeeded, a delete that succeeded or stopped
+  partway (`delete_incomplete`) — holds the tab's buttons until the tab's answer and the play row's are read again,
+  whether or not it changed anything; a refused or failed press reads nothing again. A press on the platform page holds
+  its pane the same way. The tab's answer is read through `rereadBiosAnswer` (`frontend/src/bigpicture/panelEvents.ts`),
+  bound to the game shown and ordered like the event lane's own BIOS reads, the play row's through `refreshBiosStatus`.
+  Where firmware changed, the press then tells every open game page, as the platform page does (`romm_data_changed`,
+  `bios`); its own page skips that event, so a press costs one read of the tab's answer. What a press did stays until
+  the game page is left, across a version switch too: the tab holds it for the platform the versions share. The play
+  row's gear menu has no "Download BIOS" (#2429 D7); the red BIOS badge in the play row leads to this tab. The ratio is
+  a third set again, which is why it rides along on both rather than being folded in. **The ratio names that set in its
+  own words**, because the sentence in front of it counts another one and the numbers cannot say which is which:
+  `The one file … opens by name is in place (1/20 RomM library files)` states three correct numbers over three sets, and
+  the words are the only thing that tells them apart. The pair is the library's inventory for the platform — what it
+  holds, and how many of those Tender found at their destination (GLOSSARY.md → Library inventory) — and the tail names
+  no axis of its own deliberately: the ratio form carries that, and each candidate word for the numerator was worse than
+  none. Two of them are already on the screen under this sentence and stand for something else there — `present` is the
+  row marks and `on disk` the column beside them, both the row's own verdict rather than this pair — and the third,
+  `downloaded`, would read as a claim about who put the file there, which is more than `local_count` counts: `on_server`
+  rows whose file is at its destination, the field itself answering presence and nothing more. Neither surface prints
+  the ratio where the library holds nothing for the platform: `(0/0 RomM library files)` counts a set that does not
+  exist. Nor does it count a row that reads "could not be established", which is no file missing: the ratio is the
+  payload's own pair (`ratio_server_count` / `ratio_local_count`, over the rows whose verdict was established), and
+  where no row was established neither surface prints one. The level, its label and the download buttons read
+  `server_count` / `local_count`, which still count every row the library holds. What stops a surface writing one of
+  these sentences back into itself is `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and
+  fails on any phrase the module builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and
+  `biosGroup.test.ts` over the region names and a file's place in a group. **All three SWEEP the set they search rather
+  than naming it** — every non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
   `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two while three
   surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted. Deriving the
   set from who imports the module would be worse still, since a surface wording a state for itself is precisely one that

@@ -1,7 +1,7 @@
 /**
  * Where focus goes on a BIOS part — a platform's page, a game's BIOS tab — when what it stood on
- * changes under it — a row's or a bulk button's work, a step of the emulator
- * selector, and the game page's tab drawn again after another tab was shown.
+ * changes under it — a row's or a bulk button's work, and a step of
+ * the emulator selector.
  *
  * Wherever focus is lost, Steam puts it back where its own pointer resolves —
  * the top of the page — and scrolls the pane there. So every place that can
@@ -20,8 +20,8 @@
  * button.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FocusEvent } from "react";
-import { ENTRY_FOCUS_DELAY_MS, FOCUS_STOPS, firstBodyStop, placeEntryFocus } from "../../utils/entryFocus";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ENTRY_FOCUS_DELAY_MS, firstBodyStop, placeEntryFocus } from "../../utils/entryFocus";
 import { SHOWN_ENTRY_ATTR } from "../EmulatorSelector";
 
 /**
@@ -29,13 +29,6 @@ import { SHOWN_ENTRY_ATTR } from "../EmulatorSelector";
  * focused element — a value that holds on the device, not a measured duration.
  */
 const AFTER_STEAMS_OWN_SCROLL_MS = 50;
-
-/** The stops inside *scope* that hold no stop of their own, in document order. */
-function leafStops(scope: ParentNode): HTMLElement[] {
-  return [...scope.querySelectorAll<HTMLElement>(FOCUS_STOPS)].filter(
-    (stop) => stop.querySelector(FOCUS_STOPS) === null,
-  );
-}
 
 /** The nearest ancestor of *el* that scrolls. */
 function scrollerOf(el: HTMLElement): HTMLElement | null {
@@ -60,13 +53,6 @@ export interface BiosFocus {
   slot: (key: string) => (el: HTMLDivElement | null) => void;
   /** The ref for the BIOS part as a whole. */
   attachRoot: (el: HTMLDivElement | null) => void;
-  /**
-   * Note where focus landed inside the BIOS part, for a part that unmounts while
-   * its page stays open — a game page's BIOS tab while another tab is shown.
-   * The first focus to land in it once it is drawn again is moved to the stop
-   * noted last, wherever Steam's entry put it.
-   */
-  noteFocus: (event: FocusEvent<HTMLElement>) => void;
   /**
    * Step the selector by *apply*. Where focus was on one of the table's rows
    * (*rowKeys*, in order), it lands afterwards on the same file's row, else on
@@ -191,43 +177,9 @@ export function useBiosFocus(busy: boolean, rowKeys: readonly string[]): BiosFoc
     },
     [],
   );
-  // The stop focus stood on last, by the slot it is in and its place among
-  // that slot's stops, or by its place among the part's own where it is in no
-  // slot — the selector, the header. A place rather than the element, because
-  // a part drawn again is all new elements.
-  const lastStop = useRef<{ key: string | null; index: number } | null>(null);
-  // Set when the part is drawn again with a stop noted: the next focus to land
-  // in it is Steam's entry, which goes where the stop was.
-  const returning = useRef(false);
   const attachRoot = useCallback((el: HTMLDivElement | null) => {
     root.current = el;
-    if (el && lastStop.current !== null) returning.current = true;
   }, []);
-  const stopAt = useCallback((spot: { key: string | null; index: number }): HTMLElement | null => {
-    const scope = spot.key === null ? root.current : (slots.current.get(spot.key) ?? null);
-    return scope === null ? null : (leafStops(scope)[spot.index] ?? null);
-  }, []);
-  const noteFocus = useCallback(
-    (event: FocusEvent<HTMLElement>) => {
-      const target = event.target;
-      if (returning.current) {
-        returning.current = false;
-        const spot = lastStop.current;
-        const stop = spot === null ? null : stopAt(spot);
-        if (stop !== null && stop !== target) {
-          later(() => {
-            if (stop.isConnected) placeEntryFocus(stop, () => stop);
-          }, ENTRY_FOCUS_DELAY_MS);
-          return;
-        }
-      }
-      const key = [...slots.current].find(([, wrapper]) => wrapper.contains(target))?.[0] ?? null;
-      const scope = key === null ? root.current : (slots.current.get(key) ?? null);
-      const index = scope === null ? -1 : leafStops(scope).indexOf(target);
-      if (index >= 0) lastStop.current = { key, index };
-    },
-    [later, stopAt],
-  );
 
   const mark = useCallback(
     (key: string) => {
@@ -238,5 +190,5 @@ export function useBiosFocus(busy: boolean, rowKeys: readonly string[]): BiosFoc
     [hold],
   );
 
-  return { pressed, mark, hold, refocus, slot, attachRoot, step, noteFocus };
+  return { pressed, mark, hold, refocus, slot, attachRoot, step };
 }
