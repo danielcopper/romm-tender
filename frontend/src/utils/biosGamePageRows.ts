@@ -74,10 +74,10 @@ export function fileDotColor(file: BiosFileStatus, missingRegions: ReadonlySet<s
  *   it is required or an option nothing else keeps it — yet Replace is
  *   something the reader can do on this page.
  *
- * What is left over is declared, not required for this launch, not met,
- * fetchable from nowhere and not replaceable — nothing a reader of THIS page
- * could do anything with. A caller counts it on one line instead, which names where the
- * rows are.
+ * What is left over is declared, not required for this launch, not an option,
+ * not met, fetchable from nowhere and not replaceable — nothing a reader of
+ * THIS page could do anything with. A caller counts it on one line instead,
+ * which names where the rows are.
  *
  * A caller asks it of the shown emulator: another emulator's rows carry that
  * emulator's `required_by_active` and `one_of`, so "this launch" there reads as
