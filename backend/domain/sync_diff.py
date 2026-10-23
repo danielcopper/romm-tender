@@ -252,6 +252,7 @@ def collapse_sibling_groups(
     *,
     complete_group_view: bool,
     preferred_region: str = AUTO_REGION,
+    sibling_key_by_rom_id: Mapping[int, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Collapse per-ROM shortcut entries to one Steam shortcut per sibling group.
 
@@ -312,8 +313,11 @@ def collapse_sibling_groups(
 
     Bound rows are grouped by their FETCHED sibling key when the row is in this
     fetch (so a legacy row whose stored key is still NULL is placed in its real
-    group and grandfathered rather than churned), falling back to the stored key
-    for a vanished bound row.
+    group and grandfathered rather than churned). A bound row outside this fetch
+    that a fetched member names among its ``sibling_roms`` joins that member's
+    group (*sibling_key_by_rom_id*, :func:`sibling_group_key_by_rom_id`), so a
+    re-match that left its stored key behind does not mint a second shortcut
+    for the game. Any other bound row falls back to its stored key.
 
     *preferred_region* re-heads the region ranking that both the representative
     and the canonical name fall back to (``"auto"`` = the build-time default
@@ -327,6 +331,7 @@ def collapse_sibling_groups(
         by_group.setdefault(sd.get("sibling_group_key"), []).append(sd)
 
     fetched_key_by_id: dict[Any, str | None] = {sd["rom_id"]: sd.get("sibling_group_key") for sd in shortcuts_data}
+    named_key_by_id = sibling_key_by_rom_id or {}
     bound_by_group: dict[str | None, list[tuple[int, dict[str, Any]]]] = {}
     bound_rom_ids: set[int] = set()
     for rid_str, reg in registry.items():
@@ -334,7 +339,7 @@ def collapse_sibling_groups(
             continue
         rid = int(rid_str)
         bound_rom_ids.add(rid)
-        group_key = fetched_key_by_id.get(rid, reg.get("sibling_group_key"))
+        group_key = fetched_key_by_id.get(rid, named_key_by_id.get(rid, reg.get("sibling_group_key")))
         bound_by_group.setdefault(group_key, []).append((rid, reg))
 
     emitted: list[dict[str, Any]] = []
@@ -503,6 +508,23 @@ class StaleRow(NamedTuple):
 def group_keys_of(rom_ids: Iterable[int], key_by_rom_id: Mapping[int, str]) -> frozenset[str]:
     """The sibling-group keys *key_by_rom_id* holds for *rom_ids*; a ROM it holds none for adds none."""
     return frozenset(key_by_rom_id[rom_id] for rom_id in rom_ids if rom_id in key_by_rom_id)
+
+
+def sibling_group_key_by_rom_id(roms: Iterable[Mapping[str, Any]]) -> dict[int, str]:
+    """Each ``rom_id`` a ROM of *roms* names among its ``sibling_roms``, mapped to that ROM's group key.
+
+    *roms* are fetched payloads whose ``sibling_group_key`` is stamped; a ROM
+    without one names nothing, and of two that name the same id the first wins.
+    """
+    named: dict[int, str] = {}
+    for rom in roms:
+        key = rom.get("sibling_group_key")
+        if not key:
+            continue
+        for sibling in rom.get("sibling_roms") or []:
+            if sibling.get("id"):
+                named.setdefault(int(sibling["id"]), key)
+    return named
 
 
 def sibling_rom_ids_of(roms: Iterable[Mapping[str, Any]]) -> frozenset[int]:

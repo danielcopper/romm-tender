@@ -19,6 +19,7 @@ from domain.sync_diff import (
     select_stale_removals,
     settle_asked_rows,
     should_include_in_platform_collection,
+    sibling_group_key_by_rom_id,
     sibling_rom_ids_of,
     sort_stale_rows,
 )
@@ -1063,6 +1064,44 @@ class TestCollapseSiblingGroupsPartialView:
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=False)
         assert [e["rom_id"] for e in emitted] == [1]
         assert all(BIND_ROM_ID_KEY not in e for e in emitted)
+
+
+class TestABoundRowAFetchedMemberNamesAsItsSibling:
+    """A bound row outside the fetch, named in a fetched member's ``sibling_roms``, is that group's binding.
+
+    A re-match left the bound row's stored key (``romm:22``) behind the group's
+    current one (``g1``); RomM still names it as a sibling of the fetched rom 20.
+    """
+
+    @staticmethod
+    def _collapse(*, complete, named):
+        return collapse_sibling_groups(
+            [_gsd(20, name="Golf (USA)", fs_name="golf_usa.gba", fs_name_no_ext="golf_usa")],
+            {"22": _greg(22, app_id=6020, name="Golf (Europe)", group_key="romm:22", fs_name="golf_eur.gba")},
+            installed_rom_ids=set(),
+            complete_group_view=complete,
+            sibling_key_by_rom_id=named,
+        )
+
+    @pytest.mark.parametrize("complete", [False, True], ids=["partial view", "complete view"])
+    def test_the_group_is_grandfathered_and_mints_no_second_shortcut(self, complete):
+        assert self._collapse(complete=complete, named={22: "g1"}) == []
+
+    @pytest.mark.parametrize("complete", [False, True], ids=["partial view", "complete view"])
+    def test_a_group_whose_members_name_no_bound_row_still_mints(self, complete):
+        assert [e["rom_id"] for e in self._collapse(complete=complete, named={23: "g1"})] == [20]
+
+
+class TestSiblingGroupKeyByRomId:
+    def test_each_named_sibling_takes_the_naming_rom_s_key_and_the_first_naming_wins(self):
+        roms = [
+            {"id": 1, "sibling_group_key": "g1", "sibling_roms": [{"id": 2}, {"id": 3}]},
+            {"id": 4, "sibling_group_key": "g2", "sibling_roms": [{"id": 3}, {"name": "no id"}]},
+            {"id": 5, "sibling_roms": [{"id": 6}]},
+            {"id": 7, "sibling_group_key": "g3"},
+        ]
+
+        assert sibling_group_key_by_rom_id(roms) == {2: "g1", 3: "g1"}
 
 
 class TestPlatformBreakdown:

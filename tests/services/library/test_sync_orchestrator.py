@@ -6766,12 +6766,22 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
         library.sync._chunk_dispatcher._wait_for_unit_complete = bind_new_shortcuts_under_new_app_ids
 
+        run_2_starts_at = len(emit.call_args_list)
+
         assert await self._run_2(library, emit) == ([[]], 6020)
         with library.uow as uow:
             assert uow.roms.get(20).sibling_group_key != uow.roms.get(22).sibling_group_key
+            assert uow.roms.get(20).shortcut_app_id is None, "the game keeps one shortcut, the user's"
+        applied = [
+            sd["rom_id"]
+            for c in emit.call_args_list[run_2_starts_at:]
+            if c.args and c.args[0] == "sync_apply_unit"
+            for sd in c.args[1]["shortcuts"]
+        ]
+        assert applied == []
 
     @pytest.mark.asyncio
-    async def test_the_preview_counts_no_removal_for_a_version_a_fetched_rom_names_as_its_sibling(
+    async def test_the_preview_counts_neither_a_removal_nor_a_new_shortcut_for_a_version_a_fetched_rom_names(
         self, library, fake_romm_api
     ):
         await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="romm:22:2")
@@ -6779,7 +6789,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
         result = await library.sync.sync_preview()
 
-        assert result["summary"]["remove_count"] == 0
+        assert (result["summary"]["remove_count"], result["summary"]["new_count"]) == (0, 0)
 
     @pytest.mark.asyncio
     async def test_a_bound_version_of_another_game_is_still_removed(self, library, fake_romm_api, emit):

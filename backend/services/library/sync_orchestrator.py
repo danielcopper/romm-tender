@@ -56,6 +56,7 @@ from domain.sync_diff import (
     count_disabled_platform_removals,
     group_keys_of,
     platform_breakdown,
+    sibling_group_key_by_rom_id,
     sibling_rom_ids_of,
 )
 from domain.sync_run_kind import SyncRunKind
@@ -372,6 +373,7 @@ class SyncOrchestrator:
                 set(installed_paths),
                 complete_group_view=True,
                 preferred_region=self._settings.get("preferred_region", AUTO_REGION),
+                sibling_key_by_rom_id=sibling_group_key_by_rom_id(all_roms),
             )
             new, changed, unchanged_ids, stale, _disabled_count = classify_roms(
                 emitted,
@@ -1136,6 +1138,7 @@ class SyncOrchestrator:
             set(installed_paths),
             complete_group_view=(unit.type == "platform"),
             preferred_region=self._settings.get("preferred_region", AUTO_REGION),
+            sibling_key_by_rom_id=sibling_group_key_by_rom_id(unit_roms),
         )
 
         # Delta-restricted apply (#1383 / #1382-M3): split the collapsed entries
