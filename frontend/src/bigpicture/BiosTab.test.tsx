@@ -2109,10 +2109,8 @@ describe("BiosTab", () => {
 
     it("moves between the two columns by where they stand, and up and down inside each", () => {
       // Steam's nav is not in happy-dom: what is pinned is the flow each level
-      // declares — grid between the columns, which steps left and right to the
-      // column beside and down to one wrapped below, entering a column sideways
-      // on the stop it last had focus on; and a column flow inside each, so
-      // down at a column's end leaves it only where the other stands below.
+      // declares. How Steam steps by them: docs/architecture/qam-panel.md, "The
+      // game page's BIOS tab stands in two columns".
       const focusable = vi.spyOn(deckyUi, "Focusable");
       const { container, getByTestId } = renderPsx();
       const flows = new Set(
@@ -2135,10 +2133,9 @@ describe("BiosTab", () => {
     });
 
     it("stretches both columns, and their focus groups, to the row's height", () => {
-      // Grid flow steps sideways only to a column overlapping the stop focus is
-      // on, and down only to one clear of it: side by side, the two must
-      // overlap from top to bottom, or a step down at the shorter one's end
-      // would go sideways and a step sideways from below it would go nowhere.
+      // Why grid flow needs the columns to overlap from top to bottom:
+      // docs/architecture/qam-panel.md, "The game page's BIOS tab stands in two
+      // columns".
       const { getByTestId } = renderPsx();
       expect(getByTestId("bios-columns").style.alignItems).toBe("stretch");
       for (const id of ["bios-main-column", "bios-library-column"]) {

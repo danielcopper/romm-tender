@@ -1017,9 +1017,6 @@ The CPU button changes color to indicate the active core status:
 - **Gray** — the default core is active (no overrides)
 - **Yellow** — a non-default core is active (per-game or per-platform override)
 
-On the game detail page, the emulator this game launches with is the one the **BIOS** tab's line speaks for and the one
-its emulator selector opens on, its name in blue — a RetroArch core or a standalone emulator alike.
-
 ---
 
 **Previous:** [Managing Games](managing-games.md) | **Next:** [RetroDECK Path Migration](retrodeck-path-migration.md)

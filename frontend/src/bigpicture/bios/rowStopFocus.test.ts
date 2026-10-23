@@ -1,10 +1,8 @@
-// A BIOS row with no button of its own is a focus stop through a DialogButton
-// on the game page, and how it looks focused is the injected stylesheet's: Steam
-// paints a focused DialogButton's text dark, and the rule keeps the row's own
-// colours and draws a focused table row's fill and marker instead. The sheet
-// lands in Steam's document, which happy-dom has not got, so what is pinned is
-// the rule's text — and that its values are FOCUSED_ROW's, which it copies
-// because `utils/` may not import from a surface.
+// How a focused BIOS row stop looks is the injected stylesheet's, and why is the
+// rule's own comment (`utils/styleInjector.ts`). The sheet lands in Steam's
+// document, which happy-dom has not got, so what is pinned is the rule's text —
+// and that its values are FOCUSED_ROW's, which it copies because `utils/` may
+// not import from a surface.
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { FOCUSED_ROW } from "../layout/pane";

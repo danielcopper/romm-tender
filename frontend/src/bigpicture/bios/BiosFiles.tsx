@@ -371,10 +371,9 @@ export type BiosRowStop = "focusable" | "button";
 
 /**
  * The wrapper a `button` stop draws: no button chrome, the row's own layout,
- * and the row's own text colour, which the row's name takes from it. Focused,
- * Steam would paint the text dark for its light button fill; the injected
- * `.romm-bios-row-stop.gpfocus` rule (`utils/styleInjector.ts`) keeps the
- * colour and draws a focused table row's fill and marker instead.
+ * and the row's own text colour, which the row's name takes from it. How it
+ * looks focused: the `.romm-bios-row-stop.gpfocus` rule in
+ * `utils/styleInjector.ts`.
  */
 const ROW_STOP_BUTTON = {
   background: "transparent",

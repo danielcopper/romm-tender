@@ -76,11 +76,13 @@ export function hideNativePlaySection(playSectionClass: string) {
   outline-offset: 2px;
 }
 /* A BIOS table row with no button of its own is a focus stop through a
-   DialogButton around it (bigpicture/bios/BiosFiles.tsx), and Steam repaints a
-   focused DialogButton's text dark for its light fill — which leaves the row's
-   name dark on the dark pane. Focused, the row keeps its own colours and draws
-   the fill and edge marker a pane's table row draws while its control holds
-   focus: FOCUSED_ROW in bigpicture/layout/pane.tsx, whose values these are. */
+   DialogButton around it (bigpicture/bios/BiosFiles.tsx). Steam paints a
+   focused DialogButton white with dark text (button.DialogButton.gpfocus under
+   a hashed class in steamui/css/sp.css: background #fff, color #23262e), which
+   leaves the row's name dark on the dark pane. Focused, the row keeps its own
+   colours and draws the fill and edge marker a pane's table row draws while its
+   control holds focus: FOCUSED_ROW in bigpicture/layout/pane.tsx, whose values
+   these are. */
 .romm-bios-row-stop.gpfocus {
   color: inherit !important;
   background: #3d4450 !important;

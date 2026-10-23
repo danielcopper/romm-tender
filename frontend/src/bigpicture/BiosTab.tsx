@@ -313,16 +313,9 @@ export const BiosTab: FC<BiosTabProps> = ({
   // buttons inside a button. Everything in the left column stands in the
   // pane's gutter, so the sentence, the selector and the table line up.
   //
-  // Up and down stay inside a column. Between the columns Steam's grid flow
-  // steps by where they stand, so nothing here measures whether they wrapped:
-  // left and right to the column beside, down to the one that has wrapped
-  // below. Left and right enter a column without a position to match, so
-  // Steam enters it on the stop it last had focus on; geometric flow would
-  // hand the column the position focus left from, and it would take the stop
-  // nearest that instead. Grid flow steps left and right only to a column
-  // overlapping the stop focus is on, and down only to one clear of it, which
-  // is why the columns stretch to the row's height: side by side they always
-  // overlap.
+  // The columns stretch to the row's height because Steam's grid flow between
+  // them needs them to overlap: docs/architecture/qam-panel.md, "The game
+  // page's BIOS tab stands in two columns".
   return (
     <Focusable className="romm-bios-columns" flow-children="grid">
       <div
