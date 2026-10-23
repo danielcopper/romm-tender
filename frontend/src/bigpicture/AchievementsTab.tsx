@@ -17,6 +17,7 @@ import { DialogButton } from "@decky/ui";
 import { getAchievements, getAchievementProgress, debugLog } from "../api/backend";
 import type { Achievement, AchievementProgress, EarnedAchievement } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
+import { formatCheevoDate } from "../utils/formatters";
 import {
   beginServerLoad,
   reportServerReachable,
@@ -32,11 +33,6 @@ interface AchievementsTabProps {
   /** The ROM's RetroAchievements game id — without one there is nothing to load. */
   raId: number | null;
   isActive: boolean;
-}
-
-/** "2025-02-14 15:45:38" -> "2025-02-14 15:45" */
-function formatCheevoDate(dateStr: string): string {
-  return dateStr.replace(/:\d{2}$/, "");
 }
 
 /** Deterministic sparkle positions for a hardcore badge, seeded per achievement
