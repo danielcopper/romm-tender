@@ -262,8 +262,12 @@ describe("createSlotFailureMessage", () => {
     expect(createSlotFailureMessage("server_unreachable")).toBe("Can't switch — RomM server is not reachable");
   });
 
+  it("tells the reader to download the game first where it is not installed", () => {
+    expect(createSlotFailureMessage("not_installed")).toBe("Can't create a slot — download the game first");
+  });
+
   it("says the slot could not be created for every other reason, the ones a switch words included", () => {
-    const reasons: WireReason[] = ["not_installed", "savefiles_in_content_dir", "save_shape_unsupported", "not_found"];
+    const reasons: WireReason[] = ["savefiles_in_content_dir", "save_shape_unsupported", "not_found"];
     for (const reason of reasons) {
       expect(createSlotFailureMessage(reason)).toBe("Failed to create slot");
     }

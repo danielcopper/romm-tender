@@ -196,13 +196,18 @@ export function switchSlotFailureMessage(
 }
 
 /**
- * Error message for a failed switch into a new slot: only `pending_uploads`
- * and `server_unreachable` get {@link switchSlotFailureMessage}'s wording.
+ * Error message for a failed switch into a new slot: `pending_uploads` and
+ * `server_unreachable` get {@link switchSlotFailureMessage}'s wording, and
+ * `not_installed` its own.
  */
 export function createSlotFailureMessage(reason: WireReason): string {
-  return reason === "pending_uploads" || reason === "server_unreachable"
-    ? switchSlotFailureMessage(reason)
-    : "Failed to create slot";
+  if (reason === "pending_uploads" || reason === "server_unreachable") {
+    return switchSlotFailureMessage(reason);
+  }
+  if (reason === "not_installed") {
+    return "Can't create a slot — download the game first";
+  }
+  return "Failed to create slot";
 }
 
 export const SWITCH_SLOT_ERROR_MESSAGE = "An error occurred while switching slots";
