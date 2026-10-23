@@ -3,11 +3,12 @@
  * its Steam shortcut. Shared by the game page — `useAutoArtwork`'s fill of the
  * empty slots on a first visit and replacing apply after a version switch,
  * RomMPlaySection's Refresh Artwork and SgdbGamePickerModal's change of game
- * (both on the slots on automatic only), and the ARTWORK tab's one-slot writes —
+ * (both on the slots on automatic only), the ARTWORK tab's one-slot writes and
+ * the writes of keeping the automatic artwork current —
  * so it lives here rather than on any one component to keep their import graph
  * acyclic. The shortcut artwork job's
  * writes (`utils/shortcutArtwork.ts`) ask it whether an apply is under way, and
- * set the job's wide grids and logos through it.
+ * set the job's wide grids, covers and logos through it.
  */
 
 import {
@@ -247,14 +248,11 @@ function leaseOf(answer: SgdbSlotArtwork): string | undefined {
   return answer.status === "image" || answer.status === "ready" ? answer.prune_lease_token : undefined;
 }
 
-/** The slots whose outcome the game page reports. */
+/** The slots whose outcome the game page reports, the cover among them where its image came from SteamGridDB. */
 type RecordedSlot = SgdbArtworkSlot;
 
-/** The slots whose outcome the ARTWORK tab reports: the four above, and a cover chosen from SteamGridDB. */
-type ReportedSlot = RecordedSlot | "cover";
-
 /** The slots the shortcut artwork job hands the frontend to set; it sets the icons it wrote itself. */
-type JobSlot = "grid" | "logo";
+type JobSlot = "grid" | "logo" | "cover";
 
 /** What the backend answered with an image, passed back when what Steam made of it is reported. */
 type SlotRecord = { sgdb_id?: number | null; image_id?: number | null; sha256?: string | null };
@@ -265,7 +263,7 @@ type SlotRecord = { sgdb_id?: number | null; image_id?: number | null; sha256?: 
  */
 async function setReplacedSlot(
   romId: number,
-  slot: ReportedSlot,
+  slot: RecordedSlot,
   answer: SlotRecord,
   write: () => unknown,
 ): Promise<void> {
@@ -281,7 +279,7 @@ async function setReplacedSlot(
 /** Report what Steam made of an image the replacing apply set, as the fill path reports it. */
 async function reportReplacedSlot(
   romId: number,
-  slot: ReportedSlot,
+  slot: RecordedSlot,
   outcome: "set" | "refused",
   answer: SlotRecord,
 ): Promise<void> {
@@ -299,15 +297,19 @@ async function reportReplacedSlot(
   }
 }
 
-/** The slots the game page fills only while empty through `SetCustomArtworkForApp`, each with Steam's asset type for it. */
+/**
+ * The slots the game page fills only while empty through `SetCustomArtworkForApp`, each with Steam's asset type for
+ * it; the cover's rule is "The cover where RomM has none" in docs/architecture/steam-non-steam-shortcuts.md.
+ */
 const FILLED_SLOTS: ReadonlyArray<[slot: Exclude<SgdbArtworkSlot, "icon">, assetType: number]> = [
   ["hero", 1],
   ["logo", 2],
   ["grid", 3],
+  ["cover", 0],
 ];
 
 /** Steam's asset type for each slot the shortcut artwork job hands the frontend to set. */
-const JOB_SLOT_ASSET_TYPES: Readonly<Record<JobSlot, number>> = { logo: 2, grid: 3 };
+const JOB_SLOT_ASSET_TYPES: Readonly<Record<JobSlot, number>> = { logo: 2, grid: 3, cover: 0 };
 
 type SlotImage = Extract<SgdbSlotArtwork, { status: "image" }>;
 
@@ -444,7 +446,7 @@ export async function reportSlotOutcome(
 }
 
 /**
- * Set a wide grid or logo the shortcut artwork job has put into the artwork cache,
+ * Set a wide grid, cover or logo the shortcut artwork job has put into the artwork cache,
  * and report what Steam made of it. The image is fetched through the same
  * per-slot endpoint a first visit uses, so a slot that has filled since the job
  * looked is skipped. Nothing is written once a game page's apply for the
@@ -525,6 +527,29 @@ export async function setChosenCover(
 }
 
 /**
+ * Set Tender's pick among SteamGridDB's covers as *appId*'s cover after a version switch to *romId*, a version with
+ * neither a chosen cover nor one from RomM (#2381 D28), as the first visit's fill sets it, and report what Steam made
+ * of it; *onCover* hears the image first. Answers whether Steam took it.
+ */
+export async function setSteamGridDbSwitchCover(
+  romId: number,
+  appId: number,
+  onCover?: (base64: string) => void,
+): Promise<boolean> {
+  const answer = await getSgdbSlotArtwork(romId, appId, "cover", true).catch((e: unknown): SgdbSlotArtwork => {
+    detach(debugLog(`Version switch: the SteamGridDB cover for rom ${romId} was not served: ${e}`));
+    return { status: "failed" };
+  });
+  if (isEndpointFailure(answer) || answer.status !== "image") return false;
+  onCover?.(answer.base64);
+  const outcome = await withPruneLeases([answer.prune_lease_token], "Version switch", (signal) =>
+    setSlotImage(appId, "cover", answer, STEAM_ASSET_TYPES.cover, signal, () => false),
+  );
+  if (outcome !== null) await reportSlotOutcome(romId, "cover", outcome, answer);
+  return outcome === "set";
+}
+
+/**
  * Remove the image set through Steam for *appId*'s slot *assetType* before Tender sets its own (#2381 D13): Steam
  * shows a `.jpg` before a `.png` (D14), so Tender's image would not show while Steam's stays. What Steam's call
  * removes is not measured yet; if it leaves the hand-set file, this is the one place that changes.
@@ -584,6 +609,96 @@ export async function applyTabSlotImage(
       admission,
     ),
   );
+}
+
+/**
+ * Hand Steam the images keeping current put into the artwork cache for *slots* (#2381 D5): each is fetched through the
+ * per-slot endpoint, set under its lease and reported as a replacing apply sets an image. It yields to any apply for the
+ * shortcut started since it began, and to leaving the game page, by writing nothing more. Answers the slots Steam took.
+ */
+export async function applyKeptCurrentArtwork(
+  romId: number,
+  appId: number,
+  slots: readonly ArtworkTabSlot[],
+): Promise<ArtworkTabSlot[]> {
+  const leaseOwner = `artwork:${appId}`;
+  mountPruneLeaseOwner(leaseOwner);
+  const admission = capturePruneLeaseAdmission(leaseOwner);
+  const overtaken = watchGeneration(appId);
+  return whileInFlight(appId, async () => {
+    const set: ArtworkTabSlot[] = [];
+    // One image at a time, as the fill sets them; S9382 is raised on the await line, so its NOSONAR stays there.
+    for (const slot of slots) {
+      if (overtaken()) break;
+      const write = { romId, appId, slot, overtaken, leaseOwner, admission };
+      if (await setKeptCurrentSlot(write)) set.push(slot); // NOSONAR(typescript:S9382)
+    }
+    return set;
+  });
+}
+
+/** One slot keeping current replaced, with what its write yields to. */
+interface KeptCurrentWrite {
+  romId: number;
+  appId: number;
+  slot: ArtworkTabSlot;
+  overtaken: () => boolean;
+  leaseOwner: string;
+  admission: PruneLeaseAdmission;
+}
+
+/** Fetch and set one slot keeping current replaced; answers whether Steam took it. */
+async function setKeptCurrentSlot(write: KeptCurrentWrite): Promise<boolean> {
+  const { romId, appId, slot, overtaken } = write;
+  const answer = await getSgdbSlotArtwork(romId, appId, slot, true).catch((e): SgdbSlotArtwork => {
+    detach(debugLog(`Keeping artwork current: the ${slot} fetch for appId ${appId} rejected: ${e}`));
+    return { status: "failed" };
+  });
+  if (isEndpointFailure(answer)) {
+    detach(debugLog(`Keeping artwork current: the ${slot} fetch for appId ${appId} refused: ${answer.message}`));
+    return false;
+  }
+  if (answer.status !== "image" && answer.status !== "ready") return false;
+  return withPruneLeases(
+    [answer.prune_lease_token],
+    "Artwork apply",
+    async (signal) => {
+      if (isPruneLeaseCancelled(signal) || overtaken()) return false;
+      try {
+        if (answer.status === "ready" || slot === "icon") return await setReplacedIcon(romId, appId, signal);
+        const assetType = STEAM_ASSET_TYPES[slot];
+        await setReplacedSlot(romId, slot, answer, () =>
+          writeSlotArtwork(appId, slot, () =>
+            SteamClient.Apps.SetCustomArtworkForApp(appId, answer.base64, "png", assetType),
+          ),
+        );
+        return true;
+      } catch (e) {
+        detach(debugLog(`Keeping artwork current: Steam refused the ${slot} for appId ${appId}: ${e}`));
+        return false;
+      }
+    },
+    write.leaseOwner,
+    write.admission,
+  ).catch((e: unknown) => {
+    detach(debugLog(`Keeping artwork current: the ${slot} for appId ${appId} was not set: ${e}`));
+    return false;
+  });
+}
+
+/**
+ * After a change of SteamGridDB game, hand Steam the cover Tender picked under the new game where the cover shows
+ * Tender's SteamGridDB pick on automatic (#2381 D12, D27); answers whether Steam took it.
+ */
+export async function applySteamGridDbCover(romId: number, appId: number): Promise<boolean> {
+  const read = await getArtworkSlots(romId, appId).catch((e: unknown) => {
+    detach(debugLog(`applySteamGridDbCover: the slots of appId ${appId} could not be read: ${e}`));
+    return null;
+  });
+  if (!read || isEndpointFailure(read)) return false;
+  const cover = read.slots.find((row) => row.slot === "cover");
+  if (cover?.state !== "automatic" || cover.source !== "tender") return false;
+  return (await applyKeptCurrentArtwork(romId, appId, ["cover"])).length > 0;
 }
 
 export async function cancelArtworkApply(appId: number): Promise<void> {

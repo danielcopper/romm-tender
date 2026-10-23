@@ -139,6 +139,13 @@ describe("ArtworkTab", () => {
       expect(rowButton(container, "Hero").textContent).toContain("Set in Steam");
     });
 
+    it("says an automatic cover from SteamGridDB stands in while RomM has none (#2381 D1)", async () => {
+      const { container } = await renderTab(answer(FROM_ROMM, { cover: { state: "automatic", source: "tender" } }));
+      expect(rowButton(container, "Cover").textContent).toContain(
+        "SteamGridDB — Tender's pick, until RomM's cover arrives",
+      );
+    });
+
     it("shows Steam's own copy of the image, first URL first", async () => {
       const { container } = await renderTab(answer(FROM_ROMM));
       const cover = rowButton(container, "Cover").querySelector("img");

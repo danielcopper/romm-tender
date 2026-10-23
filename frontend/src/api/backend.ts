@@ -522,9 +522,10 @@ export const getArtworkBase64 = endpoint<[number], { base64: string | null }>("g
 // cover, read error — returns { base64: null } silently; it never re-downloads a
 // cached cover.
 export const fetchCoverBase64 = endpoint<[number], { base64: string | null }>("fetch_cover_base64");
+/** Reload RomM's cover; a success carries the `sgdb_artwork` lease the frontend hands the cover to Steam under. */
 export const refreshCoverArtwork = endpoint<
   [number],
-  { success: boolean; reason?: WireReason; message: string; cover_path?: string }
+  { success: boolean; reason?: WireReason; message: string; cover_path?: string; prune_lease_token?: string }
 >("refresh_cover_artwork");
 // Orphaned grid-image cleanup (Data Management › Grid images). Args: the frontend's full scan of
 // live non-Steam shortcut appIds (the keep-set — RomM-owned AND foreign) and a
@@ -564,8 +565,11 @@ export const getSgdbArtworkBase64 = endpoint<
   | EndpointFailure
 >("get_sgdb_artwork_base64");
 
-/** An artwork slot the game page fills only while it is empty: the wide grid, the logo, the hero or the icon. */
-export type SgdbArtworkSlot = "grid" | "logo" | "hero" | "icon";
+/**
+ * An artwork slot the game page fills only while it is empty: the wide grid, the logo, the hero, the icon, or the
+ * cover (why the cover too: docs/architecture/steam-non-steam-shortcuts.md, "The cover where RomM has none").
+ */
+export type SgdbArtworkSlot = "grid" | "logo" | "hero" | "icon" | "cover";
 
 /** What the backend answers for one empty slot: the image to set, or why there is none to set. */
 export type SgdbSlotArtwork =
@@ -597,7 +601,7 @@ export const getSgdbSlotArtwork = endpoint<
  * backend wrote (`SetShortcutIcon`), or of a cover chosen from SteamGridDB, passing what the backend answered back.
  */
 export const reportSgdbSlotArtwork = endpoint<
-  [number, SgdbArtworkSlot | "cover", "set" | "refused", number | null, number | null, string | null],
+  [number, SgdbArtworkSlot, "set" | "refused", number | null, number | null, string | null],
   { success: boolean }
 >("report_sgdb_slot_artwork");
 
@@ -725,6 +729,18 @@ export const chooseArtworkSlotImage = endpoint<[number, ArtworkTabSlot, number],
 export const setArtworkSlotAutomatic = endpoint<[number, ArtworkTabSlot], ArtworkSlotImage | EndpointFailure>(
   "set_artwork_slot_automatic",
 );
+
+/**
+ * What a page visit's check of the automatic artwork found (#2381 D5): `replaced` names the slots whose image Tender's
+ * rule now picks instead of the one shown, each in the artwork cache for `getSgdbSlotArtwork` to serve with `replace`.
+ * `unanswered` is a check SteamGridDB left a slot unanswered in, which the next visit makes again.
+ */
+export interface ArtworkKeptCurrent {
+  status: "checked" | "unanswered" | "not_due" | "no_api_key" | "no_sgdb_game" | "not_synced";
+  replaced: ArtworkTabSlot[];
+}
+
+export const keepArtworkCurrent = endpoint<[number], ArtworkKeptCurrent | EndpointFailure>("keep_artwork_current");
 export const reportUnitResults = endpoint<
   [Record<string, number>, string, number | string, number],
   { success: boolean; count: number; ignored?: boolean }

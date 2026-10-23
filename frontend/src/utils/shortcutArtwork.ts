@@ -3,7 +3,7 @@
  * (docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork"): points each
  * shortcut in a batch at the icon file the backend wrote, through SteamClient
  * (same page, "shortcuts.vdf is memory-authoritative"), reports what Steam made
- * of each SteamGridDB icon, then sets each wide grid and logo the batch names,
+ * of each SteamGridDB icon, then sets each wide grid, cover and logo the batch names,
  * one image at a time.
  */
 
@@ -14,7 +14,7 @@ import { isArtworkApplyInFlight, reportSlotOutcome, setJobSlotArtwork } from "./
 import { isPruneLeaseCancelled, withPruneLease } from "./pruneLease";
 
 /**
- * Set each icon, wide grid and logo in the batch, under the batch's prune lease,
+ * Set each icon, wide grid, cover and logo in the batch, under the batch's prune lease,
  * and answer how many were set. A shortcut whose artwork the game page is
  * applying right now is left to that apply ({@link isArtworkApplyInFlight} says
  * why).

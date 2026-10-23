@@ -186,28 +186,63 @@ class ArtworkTabUseCases:
         since Steam still shows the chosen image. For the cover, RomM's cover is
         reloaded at once, the choice and the record of the image it set go, and
         ``cover`` answers with a lease, for the frontend to set the cover
-        ``get_artwork_base64`` serves. Refuses with ``invalid_payload`` for an
-        unknown slot; for the cover as its reload refuses; for the others with
-        ``no_api_key``, ``no_sgdb_game`` without a SteamGridDB game, and as
-        SteamGridDB's errors answer. A refusal keeps the choice.
+        ``get_artwork_base64`` serves; where RomM has no cover, Tender's pick
+        among SteamGridDB's covers is served as for a SteamGridDB slot. Refuses
+        with ``invalid_payload`` for an unknown slot; for the cover as its
+        reload refuses, with ``no_cover`` also where SteamGridDB has no cover or
+        cannot be asked for lack of a key or a game, and as SteamGridDB's errors
+        answer; for the others with ``no_api_key``, ``no_sgdb_game`` without a
+        SteamGridDB game, and as SteamGridDB's errors answer. A refusal keeps
+        the choice.
         """
         async with self._rules.hold("set_artwork_slot_automatic", update=True, migration=True, prune=True):
             rom_id, artwork_slot = int(rom_id), _tab_slot(slot)
             if artwork_slot is ArtworkSlot.COVER:
-                await self._cover.refresh_cover_unchecked(rom_id)
-                await self._loop.run_in_executor(None, self._slots.forget_cover_choice_io, rom_id)
-                return {"status": "cover", "prune_lease_token": await self._rules.acquire_lease("sgdb_artwork")}
+                return await self._cover_automatic(rom_id)
             sgdb_id = await self._tab_game_or_refuse(rom_id)
-            found = await self._loop.run_in_executor(None, self._slots.automatic_io, rom_id, artwork_slot, sgdb_id)
-            if found is NoArtwork.NONE:
+            found = await self._automatic_or_refuse(rom_id, artwork_slot, sgdb_id)
+            if found is None:
                 return {"status": "none"}
-            if found is SlotAnswer.KEY_REFUSED:
-                raise AuthFailed(KEY_REFUSED)
-            if found is SlotAnswer.RATE_LIMITED:
-                raise Refused("rate_limited", RATE_LIMITED)
-            if not isinstance(found, CachedArtwork):
-                raise Refused("download_failed", "Tender's image could not be downloaded from SteamGridDB")
             return await self._served_with_a_lease(rom_id, artwork_slot, found, sgdb_id)
+
+    async def _cover_automatic(self, rom_id: int) -> dict[str, Any]:
+        """The cover back to automatic: RomM's cover reloaded, else, where RomM has none, Tender's SteamGridDB pick.
+
+        RomM's ``no_cover`` refusal stands where there is no key or SteamGridDB
+        game to pick from, and where SteamGridDB has no cover either.
+        """
+        try:
+            await self._cover.refresh_cover_unchecked(rom_id)
+        except Refused as no_cover:
+            if no_cover.reason != "no_cover":
+                raise
+            api_key = self._settings.get("steamgriddb_api_key", "")
+            sgdb_id = await self._loop.run_in_executor(None, self._effective_sgdb_id, rom_id) if api_key else None
+            if not sgdb_id:
+                raise
+            refuse_a_key_that_cannot_be_sent(api_key)
+            found = await self._automatic_or_refuse(rom_id, ArtworkSlot.COVER, int(sgdb_id))
+            if found is None:
+                raise
+            return await self._served_with_a_lease(rom_id, ArtworkSlot.COVER, found, int(sgdb_id))
+        await self._loop.run_in_executor(None, self._slots.forget_cover_choice_io, rom_id)
+        return {"status": "cover", "prune_lease_token": await self._rules.acquire_lease("sgdb_artwork")}
+
+    async def _automatic_or_refuse(self, rom_id: int, slot: ArtworkSlot, sgdb_id: int) -> CachedArtwork | None:
+        """Tender's pick for *slot*, downloaded anew and no longer chosen; ``None`` where SteamGridDB has none.
+
+        Refuses a refused key, a 429 and a download that did not succeed.
+        """
+        found = await self._loop.run_in_executor(None, self._slots.automatic_io, rom_id, slot, sgdb_id)
+        if found is NoArtwork.NONE:
+            return None
+        if found is SlotAnswer.KEY_REFUSED:
+            raise AuthFailed(KEY_REFUSED)
+        if found is SlotAnswer.RATE_LIMITED:
+            raise Refused("rate_limited", RATE_LIMITED)
+        if not isinstance(found, CachedArtwork):
+            raise Refused("download_failed", "Tender's image could not be downloaded from SteamGridDB")
+        return found
 
     async def _tab_game_or_refuse(self, rom_id: int) -> int:
         """*rom_id*'s effective SteamGridDB game; refuses ``no_api_key``, an unsendable key, and ``no_sgdb_game``."""

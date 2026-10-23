@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_slot_filled
+from domain.artwork_slot import NONE_RECORDED_SLOTS, ArtworkSlot, is_slot_filled
 from domain.artwork_slot_outcome import ArtworkSlotOutcome, SlotOutcome, icon_waits
 from domain.sgdb_artwork import (
     asset_type_name,
@@ -34,6 +34,7 @@ from lib.errors import (
     SteamGridDirMissingError,
 )
 from models.shortcut_artwork import SlotAnswer, WrittenIcon
+from services.steamgrid._current import KeepingCurrent, KeepingCurrentConfig
 from services.steamgrid._files import CachedArtwork, NoArtwork, SgdbArtworkFiles, SgdbArtworkFilesConfig
 from services.steamgrid._handover import HandedOverImages, HandedOverImagesConfig, PreviousChoice
 from services.steamgrid._refusals import (
@@ -66,17 +67,22 @@ if TYPE_CHECKING:
 
 
 def _artwork_slot(slot: object) -> ArtworkSlot:
-    """The slot *slot* names among the four Tender fills from SteamGridDB; refuses any other."""
+    """The slot *slot* names among the four Tender fills from SteamGridDB and the cover; refuses any other.
+
+    The cover is filled from SteamGridDB only while its slot is empty (why:
+    docs/architecture/steam-non-steam-shortcuts.md, "The cover where RomM has
+    none").
+    """
     try:
         artwork_slot = ArtworkSlot(slot)
     except ValueError as e:
         raise Refused("invalid_payload", f"Unknown artwork slot: {slot}") from e
-    if artwork_slot not in RECORDED_SLOTS:
+    if artwork_slot not in NONE_RECORDED_SLOTS:
         raise Refused("invalid_payload", f"The {slot} slot is not filled from SteamGridDB")
     return artwork_slot
 
 
-_ASSET_TYPES = ("hero", "logo", "grid", "icon")
+_ASSET_TYPES = ("hero", "logo", "grid", "icon", "cover")
 
 # Steam numbers the cover 0 among its artwork asset types; SteamGridDB names it.
 _COVER_ASSET_TYPE = ArtworkSlot.COVER.value
@@ -180,6 +186,20 @@ class SteamGridService:
                 sgdb_ids=self._sgdb_ids_state_only,
                 effective_sgdb_id=self._resolve_sgdb_id_state_only,
                 image_answer=self._image_answer_io,
+            )
+        )
+        self._keeping_current = KeepingCurrent(
+            config=KeepingCurrentConfig(
+                slots=self._slots,
+                files=self._files,
+                sgdb_api=config.sgdb_api,
+                uow_factory=config.uow_factory,
+                rules=config.conflict_rules,
+                settings=config.settings,
+                loop=config.loop,
+                clock=config.clock,
+                effective_sgdb_id=self._resolve_sgdb_id_state_only,
+                logger=config.logger,
             )
         )
         # Per app id: the count ``icon_generation`` answers, and the lock a page
@@ -297,7 +317,7 @@ class SteamGridService:
     def _forget_slot_outcomes(self, rom_id: int) -> None:
         """Drop *rom_id*'s ``none`` and ``refused`` records; a ``set`` record keeps the hash "Set in Steam" reads."""
         with self._uow_factory() as uow:
-            for slot in RECORDED_SLOTS:
+            for slot in NONE_RECORDED_SLOTS:
                 recorded = uow.artwork_slot_outcomes.get(rom_id, slot)
                 if recorded is not None and recorded.outcome is not SlotOutcome.SET:
                     uow.artwork_slot_outcomes.delete_slot(rom_id, slot)
@@ -579,14 +599,17 @@ class SteamGridService:
     async def get_sgdb_slot_artwork(self, rom_id, app_id, slot, replace=False):
         """Serve SteamGridDB's image for one of *app_id*'s artwork slots, only while the slot is empty.
 
-        *slot* is ``"grid"`` (the wide grid), ``"logo"``, ``"hero"`` or
-        ``"icon"``. With *replace* none of the checks that leave a slot alone
+        *slot* is ``"grid"`` (the wide grid), ``"logo"``, ``"hero"``, ``"icon"``
+        or ``"cover"`` (Tender's pick among SteamGridDB's covers, which fills an
+        empty cover slot; "The cover where RomM has none" in
+        docs/architecture/steam-non-steam-shortcuts.md).
+        With *replace* none of the checks that leave a slot alone
         is made: the slot is served whatever it holds, whatever its record
         says, and whether ``shortcuts.vdf`` can be read. Without a SteamGridDB
         game — RomM's or one the user chose — what the artwork cache holds for
         the slot is served. Answers a discriminated ``status``:
 
-        - ``"image"`` — for a wide grid, logo or hero: ``base64``, SteamGridDB's
+        - ``"image"`` — for a wide grid, logo, hero or cover: ``base64``, SteamGridDB's
           ``image_id``, the bytes' ``sha256`` and the
           ``sgdb_id`` it was found under, which the frontend passes back to
           ``report_sgdb_slot_artwork``, and an ``sgdb_artwork`` lease in
@@ -751,18 +774,19 @@ class SteamGridService:
             uow.artwork_slot_outcomes.save(record)
 
     async def report_sgdb_slot_artwork(self, rom_id, slot, outcome, sgdb_id, image_id, sha256):
-        """Record what Steam made of a wide grid, logo, hero or icon Tender served or wrote.
+        """Record what Steam made of a wide grid, logo, hero, icon or cover Tender served or wrote.
 
         *outcome* is ``"set"`` (``SetCustomArtworkForApp``, or
         ``SetShortcutIcon`` for the icon, took it) or ``"refused"`` (it failed
         on the image); *sgdb_id*, *image_id* and *sha256* are what
         ``get_sgdb_slot_artwork`` or ``get_sgdb_artwork_base64`` answered for a
-        wide grid, logo or hero, or, for an icon, what :meth:`save_shortcut_icon`
-        answered or the shortcut artwork job's batch named, passed back.
-        The cover is reported too once the ARTWORK tab or a version switch set
-        a SteamGridDB image on it: a ``set`` is recorded, so that image is read
-        as Tender's, and a ``refused`` records nothing, since no cover is
-        recorded as refused. Steam's answer settles the slot's hand-over, keeps
+        wide grid, logo, hero or cover, or, for an icon, what
+        :meth:`save_shortcut_icon` answered or the shortcut artwork job's batch
+        named, passed back. A cover is reported once a SteamGridDB image was set
+        on it — chosen, or Tender's pick by the fill, the job, keeping current or
+        a version switch: a ``set`` is recorded, so that image is read as
+        Tender's, and a ``refused`` records nothing, since no cover is recorded
+        as refused. Steam's answer settles the slot's hand-over, keeps
         a ``set`` record over a ``refused``, and gives back the choice a refused
         chosen image replaced, removing that one image from the cache
         (``_handover.HandedOverImages.settle_io``, #2381 D15, D20).
@@ -789,7 +813,7 @@ class SteamGridService:
         now = self._clock.time()
         if outcome == SlotOutcome.REFUSED:
             if artwork_slot is ArtworkSlot.COVER:
-                self._log_debug(f"Steam refused the cover chosen for rom_id={rom_id}; nothing is recorded")
+                self._log_debug(f"Steam refused the SteamGridDB cover for rom_id={rom_id}; nothing is recorded")
                 return None
             return ArtworkSlotOutcome.record_refused(rom_id=rom_id, slot=artwork_slot, sgdb_id=sgdb_id, recorded_at=now)
         if outcome != SlotOutcome.SET:
@@ -826,6 +850,12 @@ class SteamGridService:
     async def set_artwork_slot_automatic(self, rom_id, slot):
         """``_tab.ArtworkTabUseCases.set_artwork_slot_automatic``."""
         return await self._tab.set_artwork_slot_automatic(rom_id, slot)
+
+    # -- keeping automatic artwork current (use case, in ``_current``) -------
+
+    async def keep_artwork_current(self, rom_id):
+        """``_current.KeepingCurrent.keep_artwork_current``."""
+        return await self._keeping_current.keep_artwork_current(rom_id)
 
     # -- API key management ------------------------------------------------
 

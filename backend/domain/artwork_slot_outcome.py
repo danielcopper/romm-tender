@@ -1,4 +1,4 @@
-"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo, hero or icon, or set as its cover.
+"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo, hero, icon or cover.
 
 ``set`` (an image was set, with SteamGridDB's image id and a hash of the bytes),
 ``none`` (SteamGridDB has no candidate) or ``refused`` (Steam's
@@ -17,7 +17,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from domain._aggregate import cosmic_aggregate
-from domain.artwork_slot import RECORDED_SLOTS, SET_RECORDED_SLOTS, ArtworkSlot, is_slot_filled
+from domain.artwork_slot import NONE_RECORDED_SLOTS, RECORDED_SLOTS, SET_RECORDED_SLOTS, ArtworkSlot, is_slot_filled
 from domain.shortcut_icon import is_icon_filled, shows_no_icon
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class SlotOutcome(StrEnum):
 
 @cosmic_aggregate
 class ArtworkSlotOutcome:
-    """What was last found for one ROM's wide grid, logo, hero or shortcut icon."""
+    """What was last found for one ROM's wide grid, logo, hero, shortcut icon or cover."""
 
     rom_id: int
     slot: ArtworkSlot
@@ -83,9 +83,9 @@ class ArtworkSlotOutcome:
     ) -> ArtworkSlotOutcome:
         """Record that SteamGridDB has no candidate — or the ROM no SteamGridDB id, when *sgdb_id* is ``None``.
 
-        Raises ``ValueError`` for a slot that is not recorded.
+        Raises ``ValueError`` for a slot no ``none`` is recorded for.
         """
-        _require_recorded(slot)
+        _require_recorded(slot, NONE_RECORDED_SLOTS)
         return cls(rom_id=rom_id, slot=slot, outcome=SlotOutcome.NONE, sgdb_id=sgdb_id, recorded_at=recorded_at)
 
     @classmethod
@@ -121,7 +121,7 @@ def slot_waits(
     sgdb_id: int | None,
     now: float,
 ) -> bool:
-    """Whether the shortcut artwork job asks for *app_id*'s wide grid or logo at *now*.
+    """Whether the shortcut artwork job asks for *app_id*'s wide grid, cover or logo at *now*.
 
     It does while no file in Steam's grid directory fills the slot
     (:func:`domain.artwork_slot.is_slot_filled`) and *recorded*, the ROM's
@@ -174,3 +174,14 @@ def _not_ruled_out(recorded: ArtworkSlotOutcome | None, *, sgdb_id: int | None, 
 def _require_recorded(slot: ArtworkSlot, recorded: frozenset[ArtworkSlot] = RECORDED_SLOTS) -> None:
     if slot not in recorded:
         raise ValueError(f"no outcome is recorded for the {slot.value} slot")
+
+
+def binding_forgets_cover_record(*, previous_app_id: int | None, app_id: int | None, cover_chosen: bool) -> bool:
+    """Whether binding a version to shortcut *app_id*, bound to *previous_app_id* before, forgets its cover record.
+
+    It does where the version becomes the shortcut's bound one — bound anew or
+    moved here — and its cover is not chosen: a SteamGridDB cover recorded for
+    it earlier would otherwise read as set in Steam under whatever cover the
+    shortcut shows now (#2381 D28).
+    """
+    return app_id is not None and app_id != previous_app_id and not cover_chosen

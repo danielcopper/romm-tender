@@ -4,6 +4,8 @@ import { _resetArtworkSlotsForTests, artworkThumbToken } from "./artworkSlotsSto
 import {
   applyArtwork,
   applyAutomaticArtwork,
+  applyKeptCurrentArtwork,
+  applySteamGridDbCover,
   applyTabSlotImage,
   cancelArtworkApply,
   fillEmptyArtwork,
@@ -372,7 +374,7 @@ describe("fillEmptyArtwork", () => {
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
   });
 
-  it("asks for the hero, the logo, the wide grid and the icon of the shortcut", async () => {
+  it("asks for the hero, the logo, the wide grid, the cover and the icon of the shortcut", async () => {
     answerSlots({});
 
     await fillEmptyArtwork(42, 5000);
@@ -381,6 +383,7 @@ describe("fillEmptyArtwork", () => {
       [42, 5000, "hero"],
       [42, 5000, "logo"],
       [42, 5000, "grid"],
+      [42, 5000, "cover"],
       [42, 5000, "icon"],
     ]);
     expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
@@ -395,6 +398,16 @@ describe("fillEmptyArtwork", () => {
       [5000, "LL==", "png", 2],
       [5000, "GG==", "png", 3],
     ]);
+  });
+
+  it("sets an empty cover's SteamGridDB image as Steam's cover and reports it (#2381 D27)", async () => {
+    answerSlots({ cover: image("CO==", 6) });
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(1);
+
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mock.calls).toEqual([[5000, "CO==", "png", 0]]);
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "cover", "set", 9999, 6, "sha-CO==");
   });
 
   it("writes nothing into a slot the backend skips, so an image set by hand stays", async () => {
@@ -445,6 +458,7 @@ describe("fillEmptyArtwork", () => {
       "hero",
       "logo",
       "grid",
+      "cover",
       "icon",
     ]);
   });
@@ -478,6 +492,7 @@ describe("fillEmptyArtwork", () => {
       .mockRejectedValueOnce(new Error("net"))
       .mockResolvedValueOnce(image("LL==", 5))
       .mockResolvedValueOnce({ status: "none" })
+      .mockResolvedValueOnce({ status: "skip" })
       .mockResolvedValueOnce({ status: "skip" });
 
     await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(1);
@@ -608,6 +623,16 @@ describe("setJobSlotArtwork", () => {
     expect(backend.reportSgdbSlotArtwork).toHaveBeenCalledWith(42, "logo", "set", 9999, 12, "sha-LL==");
   });
 
+  it("sets the job's SteamGridDB cover as Steam's cover (#2381 D27)", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue(image("CO=="));
+
+    await expect(setJobSlotArtwork(42, 5000, "cover", notStopped)).resolves.toBe(true);
+
+    expect(backend.getSgdbSlotArtwork).toHaveBeenCalledWith(42, 5000, "cover");
+    expect(SteamClient.Apps.SetCustomArtworkForApp).toHaveBeenCalledWith(5000, "CO==", "png", 0);
+    expect(backend.reportSgdbSlotArtwork).toHaveBeenCalledWith(42, "cover", "set", 9999, 12, "sha-CO==");
+  });
+
   it("writes nothing into a slot that has filled since the job looked", async () => {
     vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
 
@@ -716,6 +741,7 @@ describe("a refused artwork fetch", () => {
       "hero",
       "logo",
       "grid",
+      "cover",
       "icon",
     ]);
     expect(backend.debugLog).toHaveBeenCalledWith(
@@ -1226,5 +1252,153 @@ describe("every write moves its own slot's thumbnail token (#2381)", () => {
     await expect(setJobSlotArtwork(42, 5000, "logo", () => false)).resolves.toBe(false);
 
     expect(moved(before)).toEqual(["logo"]);
+  });
+});
+
+describe("applyKeptCurrentArtwork (#2381 D5)", () => {
+  const image = (base64: string, imageId: number): backend.SgdbSlotArtwork => ({
+    status: "image",
+    base64,
+    image_id: imageId,
+    sha256: `sha-${base64}`,
+    sgdb_id: 9999,
+    prune_lease_token: `lease-${base64}`,
+  });
+
+  const serve = (answers: Partial<Record<backend.ArtworkTabSlot, backend.SgdbSlotArtwork>>) => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(
+      async (_romId, _appId, slot) => answers[slot] ?? { status: "failed" },
+    );
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+      },
+    });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(SAVED_ICON);
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+  });
+
+  it("fetches each replaced slot past the fill's checks, sets it and reports it", async () => {
+    serve({ cover: image("CO", 6), logo: image("LO", 7), icon: { status: "ready", prune_lease_token: "lease-icon" } });
+
+    await expect(applyKeptCurrentArtwork(42, 5000, ["cover", "logo", "icon"])).resolves.toEqual([
+      "cover",
+      "logo",
+      "icon",
+    ]);
+
+    expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledWith(42, 5000, "cover", true);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "CO", "png", 0);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "LO", "png", 2);
+    expect(vi.mocked(SteamClient.Apps.SetShortcutIcon)).toHaveBeenCalledWith(5000, "/grid/5000_icon.png");
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "cover", "set", 9999, 6, "sha-CO");
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "logo", "set", 9999, 7, "sha-LO");
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "icon", "set", 9999, 31, "sha-icon");
+    expect(vi.mocked(backend.releasePruneConflictLease)).toHaveBeenCalledWith("lease-CO");
+  });
+
+  it("leaves out a slot Steam refused, and reports the refusal", async () => {
+    serve({ hero: image("HE", 6), logo: image("LO", 7) });
+    vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockRejectedValueOnce(new Error("refused"));
+
+    await expect(applyKeptCurrentArtwork(42, 5000, ["hero", "logo"])).resolves.toEqual(["logo"]);
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "hero", "refused", 9999, 6, "sha-HE");
+  });
+
+  it("leaves out a slot the fetch did not serve", async () => {
+    serve({ logo: image("LO", 7) });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValueOnce({
+      success: false,
+      reason: "prune_active",
+      message: "A cleanup is running",
+    });
+
+    await expect(applyKeptCurrentArtwork(42, 5000, ["hero", "logo", "grid"])).resolves.toEqual(["logo"]);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes nothing more once an apply for the shortcut has started since", async () => {
+    const fetched = deferred<backend.SgdbSlotArtwork>();
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementationOnce(() => fetched.promise);
+
+    const keeping = applyKeptCurrentArtwork(42, 5000, ["hero", "logo"]);
+    await cancelArtworkApply(5000);
+    fetched.resolve(image("HE", 6));
+
+    await expect(keeping).resolves.toEqual([]);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts as an apply under way, so the shortcut artwork job leaves the shortcut to it", async () => {
+    const fetched = deferred<backend.SgdbSlotArtwork>();
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementationOnce(() => fetched.promise);
+
+    const keeping = applyKeptCurrentArtwork(42, 5000, ["logo"]);
+    const during = isArtworkApplyInFlight(5000);
+    fetched.resolve(image("LO", 7));
+    await keeping;
+
+    expect([during, isArtworkApplyInFlight(5000)]).toEqual([true, false]);
+  });
+});
+
+describe("applySteamGridDbCover (#2381 D12, D27)", () => {
+  const rows = (cover: Pick<backend.ArtworkSlotRow, "state" | "source">): backend.ArtworkSlots => ({
+    success: true,
+    has_api_key: true,
+    game: { sgdb_id: 7777, source: "chosen", name: "Game" },
+    slots: [{ slot: "cover", image_id: 5, has_choice: false, signature: "", ...cover }],
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined) } });
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({
+      status: "image",
+      base64: "CO==",
+      image_id: 6,
+      sha256: "sha-CO",
+      sgdb_id: 7777,
+      prune_lease_token: "lease",
+    });
+  });
+
+  it("sets the cover Tender picked under the new game where it shows Tender's SteamGridDB pick", async () => {
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue(rows({ state: "automatic", source: "tender" }));
+
+    await expect(applySteamGridDbCover(42, 5000)).resolves.toBe(true);
+
+    expect(backend.getSgdbSlotArtwork).toHaveBeenCalledWith(42, 5000, "cover", true);
+    expect(SteamClient.Apps.SetCustomArtworkForApp).toHaveBeenCalledWith(5000, "CO==", "png", 0);
+  });
+
+  it.each([
+    ["RomM's cover", { state: "automatic", source: "romm" }],
+    ["a chosen cover", { state: "chosen", source: "chosen" }],
+    ["a cover set in Steam", { state: "set_in_steam", source: "steam" }],
+  ] as const)("leaves %s alone", async (_what, cover) => {
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue(rows(cover));
+
+    await expect(applySteamGridDbCover(42, 5000)).resolves.toBe(false);
+
+    expect(backend.getSgdbSlotArtwork).not.toHaveBeenCalled();
+  });
+
+  it("sets nothing where the slots cannot be read", async () => {
+    vi.mocked(backend.getArtworkSlots).mockRejectedValue(new Error("connection lost"));
+
+    await expect(applySteamGridDbCover(42, 5000)).resolves.toBe(false);
+
+    expect(backend.debugLog).toHaveBeenCalledWith(expect.stringContaining("connection lost"));
   });
 });

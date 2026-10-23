@@ -647,24 +647,33 @@ game's page is opened or on the next client restart.
 
 The hero, the logo and the wide grid come from SteamGridDB, and Steam has to be handed them in-session through
 `SteamClient.Apps.SetCustomArtworkForApp`: a file written into the grid directory shows only after Steam restarts. The
-icon comes from SteamGridDB too, and is pointed at with `SteamClient.Apps.SetShortcutIcon`. The first visit to a game's
-page in a session sets each of the four **only where the slot is not filled** (`fillEmptyArtwork` in
-`utils/artwork.ts`). **Refresh Artwork** and a change of SteamGridDB game are an explicit request and replace the slots
-on automatic only (`applyAutomaticArtwork`, which reads the ARTWORK tab's slots first and leaves a chosen slot and one
-set in Steam alone, [#2381](https://github.com/danielcopper/romm-tender/issues/2381) D6, D12). A version switch still
-replaces every slot (`applyArtwork`): once artwork was applied for one ROM of an app id, the newly bound ROM's is
-applied in the replacing mode, which sets Tender's image over one set by hand too; whether Steam then shows it over a
-hand-set file kept under another extension is not measured (the order Steam tries a slot's files in is under "The
-ARTWORK tab", below). A version switched back to brings back the images chosen for it: the replacing fetch serves the
-chosen image, downloading exactly that one where the cache lost it, and the switch sets a cover chosen for the version
-rather than RomM's — it asks `get_sgdb_artwork_base64(rom_id, 0)`, Steam's own number for the cover, which serves only a
-chosen cover, reports what Steam made of it, and sets RomM's cover only where that answers no image (D16,
-`setChosenCover` in `utils/artwork.ts`). The replacing mode records the hero, the wide grid, the logo and the icon it
+icon comes from SteamGridDB too, and is pointed at with `SteamClient.Apps.SetShortcutIcon`. The cover is RomM's, and
+Tender's pick among SteamGridDB's covers until RomM's arrives ("The cover where RomM has none", below). The first visit
+to a game's page in a session sets each of the four, and the cover, **only where the slot is not filled**
+(`fillEmptyArtwork` in `utils/artwork.ts`). **Refresh Artwork** and a change of SteamGridDB game are an explicit request
+and replace the slots on automatic only (`applyAutomaticArtwork`, which reads the ARTWORK tab's slots first and leaves a
+chosen slot and one set in Steam alone, [#2381](https://github.com/danielcopper/romm-tender/issues/2381) D6, D12). A
+version switch still replaces every slot (`applyArtwork`): once artwork was applied for one ROM of an app id, the newly
+bound ROM's is applied in the replacing mode, which sets Tender's image over one set by hand too; whether Steam then
+shows it over a hand-set file kept under another extension is not measured (the order Steam tries a slot's files in is
+under "The ARTWORK tab", below). A version switched back to brings back the images chosen for it: the replacing fetch
+serves the chosen image, downloading exactly that one where the cache lost it, and the switch sets a cover chosen for
+the version rather than RomM's — it asks `get_sgdb_artwork_base64(rom_id, 0)`, Steam's own number for the cover, which
+serves only a chosen cover, reports what Steam made of it, and sets RomM's cover only where that answers no image (D16,
+`setChosenCover` in `utils/artwork.ts`). Where `fetch_cover_base64` answers no RomM cover — RomM has none for the
+version, or it cannot be read at that moment — it sets that version's SteamGridDB pick through `get_sgdb_slot_artwork`
+with `replace` and reports it, as the fill does (`setSteamGridDbSwitchCover`); the next sync that reads RomM's cover
+replaces that pick (D24). Whenever a version becomes the one a shortcut is bound to — the switch's bind
+(`VersionSwitchService._rebind_local_io`) and the sync commit's (`SyncReporter._forget_cover_record_on_bind`: a rebind,
+a shortcut created anew after removal, an adopted orphan) — the same write forgets that version's cover record and
+hand-over unless the cover is chosen (`domain/artwork_slot_outcome.py`, `binding_forgets_cover_record`), so the cover
+written next is the one "Set in Steam" judges by, and a SteamGridDB cover Tender set for the version earlier never reads
+as set in Steam under another image (D28). The replacing mode records the hero, the wide grid, the logo and the icon it
 set, or Steam refused, under the ROM now bound, as the fill does below: what the report passes back — the image id, the
 hash of the bytes and the ROM's SteamGridDB id — comes with `get_sgdb_artwork_base64`'s answer for a hero, wide grid or
-logo, and with `save_shortcut_icon`'s for the icon. The shortcut artwork job fills the icon, the wide grid and the logo
-in the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds them filled;
-the hero is the game page's alone. The icon is fetched only as a slot — on the game page through
+logo, and with `save_shortcut_icon`'s for the icon. The shortcut artwork job fills the icon, the wide grid, the cover
+and the logo in the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds
+them filled; the hero is the game page's alone. The icon is fetched only as a slot — on the game page through
 `get_sgdb_slot_artwork`, in the job through `do_fetch_slot_artwork` — and `get_sgdb_artwork_base64` refuses its asset
 type (4) with `invalid_payload`.
 
@@ -675,9 +684,12 @@ reader of the ROM's SteamGridDB id for artwork takes that one rule: the game pag
 (`do_fetch_slot_artwork`) and its worklist, and the id each record is stored under. A game chosen in the tab
 (`apply_sgdb_game_id`) is stored once SteamGridDB has answered without refusing; the change discards every image the
 user chose for the ROM, those slots going back to automatic under the new game, downloads only the slots not set in
-Steam, and reloads RomM's cover where a chosen cover went (D12). Without either id Refresh Artwork is disabled and opens
-no game picker (D3). The sync writes only RomM's id, to `sgdb_id`, and never the choice: once RomM supplies an id it
-wins — the next sync or Refresh Artwork's resolution stores it — while the choice stays beside it, unread.
+Steam — the cover among them where it shows Tender's SteamGridDB pick, which the page then hands to Steam
+(`applySteamGridDbCover`) — and reloads RomM's cover where a chosen cover went (D12); a chosen cover set in Steam loses
+its choice and the record of the image the choice set, which Steam no longer shows. Without either id Refresh Artwork is
+disabled and opens no game picker (D3). The sync writes only RomM's id, to `sgdb_id`, and never the choice: once RomM
+supplies an id it wins — the next sync or Refresh Artwork's resolution stores it — while the choice stays beside it,
+unread.
 
 **Downloading anew.** `applyArtwork` serves each image from the artwork cache first (`get_sgdb_artwork_base64`, and
 `get_sgdb_slot_artwork` with `replace` for the icon), so a version switch downloads only what the new ROM's cache lacks.
@@ -694,16 +706,21 @@ that game. A 401 or 403 from SteamGridDB on either refuses `auth_failed` with `K
 dialog's check (`verify_sgdb_api_key`) answers a 401 or 403 with "Invalid API key", as does every use case for a key no
 header can carry. On Refresh Artwork and after a game change, a refusal of an artwork endpoint is shown as its own
 message rather than read as "no image"; the first visit only logs it, and stops asking once a slot answers
-`key_refused`. Refresh Artwork reloads RomM's cover only while the cover is automatic, and its one toast also names a
-failed RomM cover refresh after the SteamGridDB result, once where both say the same.
+`key_refused`. Refresh Artwork reloads RomM's cover only while the cover is automatic and hands the reloaded cover to
+Steam through `SetCustomArtworkForApp`, as the sync's cover refresh does, since the grid file alone shows only after a
+restart — under the `sgdb_artwork` lease `refresh_cover_artwork` answers with, through `applyTabSlotImage`'s `cover`
+answer as the tab's Automatic sets RomM's cover; where RomM answers it has none, it sets the cover back to automatic,
+which downloads Tender's SteamGridDB pick anew and sets it (D25), and its toast counts that cover among the images it
+applied ("Artwork refreshed (1/5 images applied)"). Its one toast also names a failed RomM cover refresh after the
+SteamGridDB result, once where both say the same: "RomM has no cover artwork" where SteamGridDB has none either.
 
 **When a slot is filled** (`domain/artwork_slot.py`, `is_slot_filled`). A slot already holding an image is left alone by
 the fill, whoever set it — the fill never replaces an image set by hand. It is filled when Steam's grid directory holds
 a regular file, links followed, named exactly the slot's name plus one extension: `<appid>` for the wide grid,
 `<appid>_logo`, `<appid>_hero`. Any extension counts but `.json`, where Steam keeps the logo's position: which image
 formats Steam reads there is not documented beyond PNG and JPEG, and missing an image set by hand would put a second one
-beside it. The cover's file (`<appid>p`) does not fill the wide grid, the logo or the hero; a link that leads nowhere
-fills nothing, and nor does a file named by the 64-bit game id that other tools write.
+beside it. The cover's file (`<appid>p`) fills the cover and not the wide grid, the logo or the hero; a link that leads
+nowhere fills nothing, and nor does a file named by the 64-bit game id that other tools write.
 `SteamConfigAdapter.grid_file_names` lists the regular files; the rule reads the names.
 
 **Set in Steam** (`domain/artwork_slot.py`, `is_set_in_steam`; `domain/shortcut_icon.py`, `is_icon_set_in_steam`). A
@@ -766,8 +783,9 @@ and at every first visit in a session. The row stops counting at once when the R
 **Refresh Artwork** deletes the game's `none` and `refused` rows (in `get_sgdb_resolution`, before it resolves the id);
 a `set` row stays, because its hash is what "Set in Steam" compares the grid file with. A `set` row never rules a slot
 out: a slot whose file is gone is asked again. Rows are keyed by ROM rather than app id, because a re-created shortcut
-gets a new app id. A cover is recorded only as `set`, for a cover from SteamGridDB, so that image reads as Tender's;
-setting the cover back to automatic deletes that row with the choice.
+gets a new app id. A cover is recorded as `set`, for a cover from SteamGridDB, so that image reads as Tender's, and as
+`none` where SteamGridDB has no cover for an empty cover slot (D27); a cover Steam refused is not recorded. Setting the
+cover back to automatic deletes the row with the choice.
 
 **What was handed to Steam** (`services/steamgrid/_handover.py`, D15). Every image Tender gives Steam passes through the
 artwork cache — downloaded into a slot's cache file (`SgdbArtworkFiles.store` tells `HandedOverImages.stored_io`) or
@@ -796,7 +814,7 @@ Steam shows: that the chosen cover cannot be served now, or that whether one was
 read's reason.
 
 **Which image** (`domain/sgdb_artwork.py`, `choose_candidate`), in the one download path the game page, Refresh Artwork,
-a game change, "Automatic" in the ARTWORK tab and the shortcut artwork job's icons, wide grids and logos share
+a game change, "Automatic" in the ARTWORK tab and the shortcut artwork job's icons, wide grids, covers and logos share
 (`SgdbArtworkFiles.fetch`, behind the cache check of `SgdbArtworkFiles.download` for all but those three). A slot the
 user chose is downloaded as chosen instead — by the fill, the job and the replacing fetch alike — never replaced by
 Tender's pick where the cache lost it or holds another image (`ArtworkSlots.download_io`, `cached_as_chosen_io`). The
@@ -811,6 +829,46 @@ Steam draws it. A cover from SteamGridDB is asked among its three portrait sizes
 "Highest Score (Beta)" order and reports a score of 0 for every image, so the first candidate is the best-rated one
 (checked for one game against the website by the maintainer). A slot never stays empty for want of a preferred size.
 
+**The cover where RomM has none** (D1, D23, D24, D27). An empty cover slot — no `<appid>p` file in Steam's grid
+directory — is the sign that RomM has no cover for the game: the sync publishes RomM's cover there wherever it has one.
+So the cover is filled like the other SteamGridDB slots, only while empty, with Tender's pick among SteamGridDB's
+portrait grids ("Which image"): by the shortcut artwork job in its first pass, by the first visit's fill, by the cover's
+"Automatic" in the ARTWORK tab where RomM's reload answers `no_cover`, and by Refresh Artwork. Such a cover is the one
+cover recorded `set` without a choice, which is how every reader tells it from RomM's (`domain/artwork_slot_view.py`:
+the tab names its source `tender`; `services/artwork/_steamgriddb_cover.py`). A cover whose RomM download failed, or
+that was removed through Steam, is empty too and gets the same stand-in. Either way, once the sync's fetch carries a
+RomM cover for a game whose automatic cover is that pick — its fingerprint unknown, unchanged or changed — the cover
+refresh downloads RomM's cover whole, publishes it, drops the pick's record and hand-over so RomM's cover does not read
+as set in Steam, and lists it among the covers the frontend sets in Steam at once; the preview counts it as a changed
+cover, and the apply's cover download leaves it to that refresh, so it is never seeded from the grid file. A cover the
+user chose and one set in Steam stay. Refresh Artwork's reload of RomM's cover drops the pick's record as well. A
+platform the skip leaves unfetched keeps the pick until something on it changes, or until Refresh Artwork or the cover's
+"Automatic" asks RomM.
+
+**Keeping automatic artwork current** (`services/steamgrid/_current.py`, `domain/artwork_keep_current.py`; D5, D21, D22,
+D26, D29). Each visit to a game's page, after `get_artwork_game`, asks `keep_artwork_current(rom_id)`
+(`utils/artworkKeepCurrent.ts`). At most once in seven days per ROM — `roms.artwork_checked_at`, one per version — it
+asks SteamGridDB for the candidates of every slot on automatic that shows Tender's image (not chosen, not set in Steam,
+not empty, not RomM's cover; the SteamGridDB cover above included), applies "Which image", and where the pick's image id
+differs from the one shown — the `set` record's, else the cached file's — downloads it into the artwork cache. The
+answer names those slots; the frontend fetches each through `get_sgdb_slot_artwork` with `replace`, sets it under its
+lease without claiming the newest-apply-wins generation (it stops once any apply for the shortcut starts), reports it,
+reads the tab's slots again, tells GAME INFO of a new cover, and says once which slots it replaced: "Updated the hero
+and the logo from SteamGridDB". Steam redraws the page when an image changes, and the notification says why. The time is
+recorded when the check starts, so the section Steam mounts afresh after Tender's own write does not check again, and
+two visits at once check once; it is taken back where SteamGridDB left a slot unanswered — no connection, a 429, a
+server error, a refused key, an unsuccessful answer, a download that failed — and where the check raised, so the next
+visit checks again, while a slot replaced before that stays replaced. Every visit, inside the seven days too and without
+asking SteamGridDB, also names each of those slots whose cached image is not the one its `set` record names: a
+replacement downloaded and not handed over, because the page was left or Steam rebuilt it partway through, is handed
+over at the next visit, and that visit's notification names it (D29). For a slot told apart by its hash that holds only
+while its hand-over still names the cached image: Steam's refusal settles the hand-over, so a replacement Steam refused
+waits for the next due check rather than being tried at every visit; the icon keeps no hand-over, so a refused icon is
+tried again at the next visit. "No images" and a 404 are answers: the image shown stays. The check holds the cleanup
+rule (`prune`) for its length; a game with no key or no SteamGridDB game is not checked and its time not recorded. Not
+taken: a background pass over every game after a sync, about 3,200 SteamGridDB requests a week for an 800-game library
+(D5).
+
 **The artwork cache** keeps a downloaded image under its SteamGridDB image id, as `{rom_id}_grid_{image_id}.png` /
 `{rom_id}_logo_{image_id}.png` / `{rom_id}_hero_{image_id}.png` / `{rom_id}_icon_{image_id}.png` /
 `{rom_id}_cover_{image_id}.png`: the cache is re-derivable and may vanish at any time, so which image it holds lives and
@@ -822,18 +880,20 @@ without an integer id is therefore no candidate for any slot. One `SgdbArtworkFi
 current.
 
 **The ARTWORK tab** (`bigpicture/ArtworkTab.tsx`, D2, D3). Every visit to a game's page asks `get_artwork_game(rom_id)`:
-the ROM's effective SteamGridDB game — its id and `source` (`romm`, `chosen` or none), no name, so a visit asks
-SteamGridDB nothing — which the play row disables Refresh Artwork by. The same read settles a game RomM's id has
-replaced (D17): where the ROM holds both RomM's id and a different chosen one and the user chose images, those choices
-are discarded as a change of game discards them, in one Unit of Work with the chosen game, so it happens once; the
-discarded SteamGridDB slots' cached images go too, so the automatic apply downloads Tender's pick under RomM's game
-rather than serving the old game's chosen image. The answer's `superseded` names RomM's game, the SteamGridDB slots that
-had a choice and the cover only where its choice was kept — a cover set in Steam is named nowhere and nothing is written
-over it — and the page says "RomM now maps this game to …; your chosen images went back to automatic.", applies the
-slots on automatic and sets a chosen cover back to RomM's through `set_artwork_slot_automatic`
-(`utils/artworkGameChange.ts`). Only that visit's read settles it. The tab itself asks
-`get_artwork_slots(rom_id, app_id)`, a read that discards nothing and answers no `superseded`: the same game, with
-SteamGridDB's name for it (`/games/id/{id}`, asked once per game id), and the five slots, each with its state
+the ROM's effective SteamGridDB game — its id and `source` (`romm`, `chosen` or none), no name, so that read asks
+SteamGridDB nothing; only keeping current does, at most weekly — which the play row disables Refresh Artwork by. The
+same read settles a game RomM's id has replaced (D17): where the ROM holds both RomM's id and a different chosen one and
+the user chose images, those choices are discarded as a change of game discards them, in one Unit of Work with the
+chosen game, so it happens once; the discarded SteamGridDB slots' cached images go too, so the automatic apply downloads
+Tender's pick under RomM's game rather than serving the old game's chosen image, and so does the cached image of a cover
+that shows Tender's SteamGridDB pick, which the page then picks anew under RomM's game (`applySteamGridDbCover`). A
+chosen cover set in Steam loses its choice and the record of the image the choice set, as a change of game drops them.
+The answer's `superseded` names RomM's game, the SteamGridDB slots that had a choice and the cover only where its choice
+was kept — a cover set in Steam is named nowhere and nothing is written over it — and the page says "RomM now maps this
+game to …; your chosen images went back to automatic.", applies the slots on automatic and sets a chosen cover back to
+RomM's through `set_artwork_slot_automatic` (`utils/artworkGameChange.ts`). Only that visit's read settles it. The tab
+itself asks `get_artwork_slots(rom_id, app_id)`, a read that discards nothing and answers no `superseded`: the same
+game, with SteamGridDB's name for it (`/games/id/{id}`, asked once per game id), and the five slots, each with its state
 (`automatic`, `chosen` or `set_in_steam`, set in Steam outranking a choice), its source, the SteamGridDB image id it
 shows where Tender knows it, `has_choice`, which also holds under an image set in Steam, and the `signature` its
 thumbnail carries (`domain/artwork_slot_view.py`, `describe_slot`; read in `services/steamgrid/_slots.py`, the cover's
@@ -859,42 +919,46 @@ extension answered 404; this paragraph is the one home of that measurement and o
 Pressing a row opens the picker (`bigpicture/ArtworkPickerModal.tsx`): `get_artwork_slot_candidates(rom_id, slot, page)`
 answers a page of the slot's candidates in SteamGridDB's order — the same query automatic draws from, the cover's being
 its three portrait sizes, so the picker shows every candidate of the slot's class (D7) — each with its `thumb` URL,
-which the tile loads straight from SteamGridDB, its size, and on page 0 `tenders_pick`, the one Tender's rule takes
-(none for the cover, whose automatic image is RomM's). `choose_artwork_slot_image(rom_id, slot, image_id)` downloads the
-chosen image into the cache, which makes it the slot's hand-over, records it in `artwork_slot_choices`, and serves it
-like the per-slot fetch, or `ready` for the icon; `set_artwork_slot_automatic(rom_id, slot)` serves Tender's pick
-downloaded anew and drops the choice once it is in the cache — where SteamGridDB has none it answers `none` and the
-choice stays, since Steam still shows the chosen image — or, for the cover, reloads RomM's cover at once
-(`refresh_cover_unchecked`, under its own update, migration and cleanup rules, D9) and answers `cover` for the frontend
-to set what `get_artwork_base64` serves. An image or `cover` answer carries an `sgdb_artwork` lease; the frontend sets
-it through `applyTabSlotImage` under the newest-apply-wins guard, then reports it as the replacing mode does. The tab
-reads its slots again as soon as the backend answered — the backend already holds the new state then — and once more
-when the press is done, since Steam's write may re-render the page before it returns. That re-render mounts Tender's
-section afresh, which Tender cannot prevent: Steam rebuilds the game page when its artwork changes. For 15 seconds after
-a press the panel therefore opens on the ARTWORK tab again, with the row pressed as its preferred focus
-(`keptArtworkSlot`, `openingTab` in `bigpicture/panelState.ts`); Steam's own scroll position of the page is not Tender's
-to keep. A change of game (`apply_sgdb_game_id`) reloads no cover itself: it leaves a chosen cover that is not set in
-Steam to the tab's `set_artwork_slot_automatic` call that follows (I3), and discards a chosen cover set in Steam
-outright. On the page the tab is the last in Tender's tab bar, always shown; each of the five rows is a focus stop of
-its own (`DialogButton`), drawn as a card whose focus is a ring in Steam's accent blue rather than Steam's white button
-face, so the row's text and its state pill stay readable. The game line is a stop only where it has a button ("Choose
-game…" / "Change game…"), which carries the same ring; with RomM's game the d-pad goes from the tab bar straight to the
-cover's row. The picker is a modal over the page: its grid is four tiles wide, and its first page — Automatic, 14
-candidates and "Load more" — fills four rows; each "Load more" adds 16 candidates, asking SteamGridDB for the next page
-only once the held one runs out, so "Load more", a full tile, always closes the grid at its bottom right. A SteamGridDB
-page holding fewer than 16 is topped up from the next one, so it stays there; while a page is fetched it stays in place
-with a spinner, and focus then moves to the first new tile, where it stood — or to the last tile, where the load brought
-nothing new. A page that cannot be listed shows nothing more and says why. Cancel and "Use this image" sit below the
-grid, outside its scrolling, so they are reached without walking past every candidate; a size SteamGridDB states as 0 is
-not shown. How the d-pad walks them is checked on the device. A row opens the picker only while the ROM has a
-SteamGridDB game and a key is configured, but for the cover's, which always does: without a game or a key its picker
-offers "Automatic — RomM cover" alone, says why no SteamGridDB cover is offered, and lists nothing (D19).
+which the tile loads straight from SteamGridDB, its size, and on page 0 `tenders_pick`, the one Tender's rule takes —
+for the cover only where its automatic image is SteamGridDB's, an automatic cover showing Tender's pick or empty (D27);
+RomM's cover and a chosen one name none. `choose_artwork_slot_image(rom_id, slot, image_id)` downloads the chosen image
+into the cache, which makes it the slot's hand-over, records it in `artwork_slot_choices`, and serves it like the
+per-slot fetch, or `ready` for the icon; `set_artwork_slot_automatic(rom_id, slot)` serves Tender's pick downloaded anew
+and drops the choice once it is in the cache — where SteamGridDB has none it answers `none` and the choice stays, since
+Steam still shows the chosen image — or, for the cover, reloads RomM's cover at once (`refresh_cover_unchecked`, under
+its own update, migration and cleanup rules, D9) and answers `cover` for the frontend to set what `get_artwork_base64`
+serves; where RomM answers `no_cover`, it serves Tender's SteamGridDB pick downloaded anew as for a SteamGridDB slot,
+and RomM's refusal stands where there is no key or game to pick from or SteamGridDB has no cover either. An image or
+`cover` answer carries an `sgdb_artwork` lease; the frontend sets it through `applyTabSlotImage` under the
+newest-apply-wins guard, then reports it as the replacing mode does. The tab reads its slots again as soon as the
+backend answered — the backend already holds the new state then — and once more when the press is done, since Steam's
+write may re-render the page before it returns. That re-render mounts Tender's section afresh, which Tender cannot
+prevent: Steam rebuilds the game page when its artwork changes. For 15 seconds after a press the panel therefore opens
+on the ARTWORK tab again, with the row pressed as its preferred focus (`keptArtworkSlot`, `openingTab` in
+`bigpicture/panelState.ts`); Steam's own scroll position of the page is not Tender's to keep. A change of game
+(`apply_sgdb_game_id`) reloads no cover itself: it leaves a chosen cover that is not set in Steam to the tab's
+`set_artwork_slot_automatic` call that follows (I3), and discards a chosen cover set in Steam outright. On the page the
+tab is the last in Tender's tab bar, always shown; each of the five rows is a focus stop of its own (`DialogButton`),
+drawn as a card whose focus is a ring in Steam's accent blue rather than Steam's white button face, so the row's text
+and its state pill stay readable. The game line is a stop only where it has a button ("Choose game…" / "Change game…"),
+which carries the same ring; with RomM's game the d-pad goes from the tab bar straight to the cover's row. The picker is
+a modal over the page: its grid is four tiles wide, and its first page — Automatic, 14 candidates and "Load more" —
+fills four rows; each "Load more" adds 16 candidates, asking SteamGridDB for the next page only once the held one runs
+out, so "Load more", a full tile, always closes the grid at its bottom right. A SteamGridDB page holding fewer than 16
+is topped up from the next one, so it stays there; while a page is fetched it stays in place with a spinner, and focus
+then moves to the first new tile, where it stood — or to the last tile, where the load brought nothing new. A page that
+cannot be listed shows nothing more and says why. Cancel and "Use this image" sit below the grid, outside its scrolling,
+so they are reached without walking past every candidate; a size SteamGridDB states as 0 is not shown. How the d-pad
+walks them is checked on the device. A row opens the picker only while the ROM has a SteamGridDB game and a key is
+configured, but for the cover's, which always does: without a game or a key its picker offers "Automatic — RomM cover,
+or Tender's pick until it arrives" alone, says why no SteamGridDB cover is offered, and lists nothing (D19).
 
 ### Shortcut artwork
 
-Every shortcut Tender manages gets its SteamGridDB icon, wide grid and logo in the background, never inside the apply
-loop: there a cold icon fetch cost about a second per minted shortcut, almost all of it SteamGridDB's image CDN missing
-its edge cache (measured by the maintainer on a Steam Deck, Steam client version 1788652215).
+Every shortcut Tender manages gets its SteamGridDB icon, wide grid and logo, and its SteamGridDB cover where RomM has
+none, in the background, never inside the apply loop: there a cold icon fetch cost about a second per minted shortcut,
+almost all of it SteamGridDB's image CDN missing its edge cache (measured by the maintainer on a Steam Deck, Steam
+client version 1788652215).
 
 **What Steam shows**, measured on a Steam Deck LCD in Desktop Mode, in the desktop client, Steam client version
 1788652215 (2026-10-05):
@@ -926,32 +990,34 @@ full-size file stays in the artwork cache. Where the vendored `png` does not loa
 is logged once.
 
 **The job** (`services/shortcut_artwork.py`) gives every bound shortcut its icon by the rules above, and its SteamGridDB
-wide grid and logo where the slot is empty, so a library looks complete without opening each game. The hero stays with
-the game page.
+wide grid, cover and logo where the slot is empty, so a library looks complete without opening each game; why an empty
+cover is filled from SteamGridDB is "The cover where RomM has none", above. The hero stays with the game page.
 
-- **Worklist:** every bound shortcut's icon, wide grid and logo whose slot is not filled and whose recorded outcome does
-  not rule it out (`domain/artwork_slot_outcome.py`, `icon_waits` and `slot_waits`; the record's rules are those of
-  [Game page artwork](#game-page-artwork)). The wide grid and the logo are filled by a file in Steam's grid directory.
-  The icon is filled by the shortcut's `icon` path in `shortcuts.vdf` (`domain/shortcut_icon.py`, `is_icon_filled`): an
-  empty path, the placeholder and the logo icon are stand-ins that fill nothing, by name in any directory, so one under
-  another Steam account's grid directory counts as well; a path in the grid directory the job lists fills it only while
-  its file is there, as a wide grid's or a logo's file does; any other path — an icon somebody set by hand, one in
-  another Steam account's grid directory, one on a drive that is not mounted — fills it whether its file is there or
-  not, so the job never replaces it. Derived at every run and never stored, so a stopped run leaves exactly the rest. A
-  bound shortcut the file does not hold yet is counted in the log and its icon left for the next run; its wide grid and
-  logo do not depend on the file. Where the grid directory cannot be listed, no wide grid or logo is asked for, nor an
-  icon whose path is in that directory; a stand-in still is. A shortcut still showing no icon whose `none` rules the
-  slot out enters too, for the logo icon alone and without a request ("No icon", below).
-- **Two passes:** first each shortcut's icon and wide grid together, shortcut by shortcut, then the logos. A sync may
-  run in the desktop client, where the icon shows in the library list, or in Big Picture, where the wide grid shows in
-  search and among recent games, and neither should wait for the other; a logo shows only on the game page, which fills
-  an empty one itself on opening. The number of requests is the same in any order.
-- **One icon, wide grid or logo:** `SteamGridService.do_fetch_slot_artwork` puts SteamGridDB's image into the artwork
-  cache by the rule the game page uses ("Which image", above) and answers that it is ready; no bytes leave the backend
-  here. A ROM with no SteamGridDB game — neither RomM's id nor one the user chose — gets a `none` record without a
-  request; no name search runs, since picking from one needs a person. A game SteamGridDB has no candidate for, or does
-  not know (a 404), gets a `none` record too. The record keeps the slot off the worklist for a week, or until the ROM's
-  SteamGridDB id changes. A failure records nothing, so the next run asks again.
+- **Worklist:** every bound shortcut's icon, wide grid, cover and logo whose slot is not filled and whose recorded
+  outcome does not rule it out (`domain/artwork_slot_outcome.py`, `icon_waits` and `slot_waits`; the record's rules are
+  those of [Game page artwork](#game-page-artwork)). The wide grid, the cover and the logo are filled by a file in
+  Steam's grid directory. The icon is filled by the shortcut's `icon` path in `shortcuts.vdf`
+  (`domain/shortcut_icon.py`, `is_icon_filled`): an empty path, the placeholder and the logo icon are stand-ins that
+  fill nothing, by name in any directory, so one under another Steam account's grid directory counts as well; a path in
+  the grid directory the job lists fills it only while its file is there, as a wide grid's or a logo's file does; any
+  other path — an icon somebody set by hand, one in another Steam account's grid directory, one on a drive that is not
+  mounted — fills it whether its file is there or not, so the job never replaces it. Derived at every run and never
+  stored, so a stopped run leaves exactly the rest. A bound shortcut the file does not hold yet is counted in the log
+  and its icon left for the next run; its wide grid, cover and logo do not depend on the file. Where the grid directory
+  cannot be listed, no wide grid, cover or logo is asked for, nor an icon whose path is in that directory; a stand-in
+  still is. A shortcut still showing no icon whose `none` rules the slot out enters too, for the logo icon alone and
+  without a request ("No icon", below).
+- **Two passes:** first each shortcut's icon, wide grid and cover together, shortcut by shortcut, then the logos. A sync
+  may run in the desktop client, where the icon shows in the library list, or in Big Picture, where the wide grid shows
+  in search and among recent games; the cover is what the library shows (D23). None of the three should wait for
+  another; a logo shows only on the game page, which fills an empty one itself on opening. The number of requests is the
+  same in any order.
+- **One icon, wide grid, cover or logo:** `SteamGridService.do_fetch_slot_artwork` puts SteamGridDB's image into the
+  artwork cache by the rule the game page uses ("Which image", above) and answers that it is ready; no bytes leave the
+  backend here. A ROM with no SteamGridDB game — neither RomM's id nor one the user chose — gets a `none` record without
+  a request; no name search runs, since picking from one needs a person. A game SteamGridDB has no candidate for, or
+  does not know (a 404), gets a `none` record too. The record keeps the slot off the worklist for a week, or until the
+  ROM's SteamGridDB id changes. A failure records nothing, so the next run asks again.
 - **Writing the icon:** `SteamGridService.write_job_icon` reads the cached icon, downscales it and writes it as
   `{app_id}_icon.png`, answering SteamGridDB's image id and the SHA-256 of the bytes written, the downscaled ones, for
   its `set` record. A file the downscale cannot read — a page in place of an image, a truncated PNG — is not written and
@@ -978,11 +1044,11 @@ the game page.
   with a `record` of the ROM, its SteamGridDB id, the image id and the hash, and `artwork`, `(app_id, rom_id, slot)`
   triples that carry no image. `applyShortcutArtwork` (`utils/shortcutArtwork.ts`) sets each icon and reports what Steam
   made of a SteamGridDB one through `report_sgdb_slot_artwork` — `set`, or `refused` when `SetShortcutIcon` throws —
-  passing its `record` back; the logo icon has nothing to report. Then it sets each wide grid and logo one at a time: it
-  fetches the image's base64 through `get_sgdb_slot_artwork` — which skips a slot that has filled since — sets it with
-  `SetCustomArtworkForApp`, waits, reports the outcome through `report_sgdb_slot_artwork`, and only then fetches the
-  next (`setJobSlotArtwork` in `utils/artwork.ts`). It gives the lease back after the last, and stops once the lease is
-  cancelled. The job hands the next batch over only once that lease has ended — given back, disowned by a panel that
+  passing its `record` back; the logo icon has nothing to report. Then it sets each wide grid, cover and logo one at a
+  time: it fetches the image's base64 through `get_sgdb_slot_artwork` — which skips a slot that has filled since — sets
+  it with `SetCustomArtworkForApp`, waits, reports the outcome through `report_sgdb_slot_artwork`, and only then fetches
+  the next (`setJobSlotArtwork` in `utils/artwork.ts`). It gives the lease back after the last, and stops once the lease
+  is cancelled. The job hands the next batch over only once that lease has ended — given back, disowned by a panel that
   mounts, or expired — so one image at a time is in the renderer across batches too, an image too large fails only its
   own call, and what is set is what the cache holds at that moment. That holds across a stop too: a stop does not wait
   for the frontend, so a run stopped while it waits leaves its batch out, and the next run waits for that batch before

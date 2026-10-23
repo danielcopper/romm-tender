@@ -634,7 +634,7 @@ describe("RomMPlaySection", () => {
       );
     });
 
-    it("fills the empty artwork slots (4 slot fetches, the icon last) on first visit when not already applied", async () => {
+    it("fills the empty artwork slots (5 slot fetches, the icon last) on first visit when not already applied", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 50,
@@ -646,6 +646,7 @@ describe("RomMPlaySection", () => {
         [50, testAppId, "hero"],
         [50, testAppId, "logo"],
         [50, testAppId, "grid"],
+        [50, testAppId, "cover"],
         [50, testAppId, "icon"],
       ]);
       expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
@@ -665,7 +666,7 @@ describe("RomMPlaySection", () => {
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       await flushAsync();
-      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(4);
+      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(5);
       expect(setArtwork).not.toHaveBeenCalled();
       // The icon follows the same rules: a skipped icon is neither written nor set.
       expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
@@ -5744,7 +5745,12 @@ describe("RomMPlaySection", () => {
       vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
         success: false,
         reason: "no_cover",
-        message: "ROM has no cover artwork",
+        message: "RomM has no cover artwork",
+      });
+      vi.mocked(backend.setArtworkSlotAutomatic).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "RomM has no cover artwork",
       });
       vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
       vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
@@ -5759,8 +5765,92 @@ describe("RomMPlaySection", () => {
       });
       await refresh();
       expect(toasts()).toEqual([
-        "Artwork refreshed (4/4 images applied). The RomM cover could not be updated: ROM has no cover artwork",
+        "Artwork refreshed (4/4 images applied). The RomM cover could not be updated: RomM has no cover artwork",
       ]);
+    });
+
+    it("sets Tender's SteamGridDB cover where RomM has none, and names no cover failure", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "RomM has no cover artwork",
+      });
+      vi.mocked(backend.setArtworkSlotAutomatic).mockResolvedValue({
+        status: "image",
+        base64: "CO==",
+        image_id: 6,
+        sha256: "sha-cover",
+        sgdb_id: 42,
+        prune_lease_token: "lease-cover",
+      });
+      vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
+      await refresh();
+      expect(vi.mocked(backend.setArtworkSlotAutomatic)).toHaveBeenCalledWith(77, "cover");
+      expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(testAppId, "CO==", "png", 0);
+      expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(77, "cover", "set", 42, 6, "sha-cover");
+      expect(toasts()).toEqual(["Artwork refreshed (1/5 images applied)"]);
+    });
+
+    it("hands Steam the RomM cover it reloaded under the reload's lease, so it shows without a restart", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: true,
+        message: "Cover refreshed",
+        cover_path: "/covers/77.png",
+        prune_lease_token: "lease-romm",
+      });
+      vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "RC==" });
+      vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "needs_pick", candidates: [] });
+      vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockClear();
+      await refresh();
+      expect(vi.mocked(backend.getArtworkBase64)).toHaveBeenCalledWith(77);
+      expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(testAppId, "RC==", "png", 0);
+      const [written] = vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mock.invocationCallOrder;
+      const released = vi.mocked(backend.releasePruneConflictLease).mock.calls.findIndex(([t]) => t === "lease-romm");
+      expect(released).toBeGreaterThanOrEqual(0);
+      expect(vi.mocked(backend.releasePruneConflictLease).mock.invocationCallOrder[released]).toBeGreaterThan(
+        written ?? Infinity,
+      );
+      expect(toasts()).toEqual(["Choose a SteamGridDB game in the ARTWORK tab first."]);
+    });
+
+    it("says so where Steam did not take Tender's SteamGridDB cover", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "RomM has no cover artwork",
+      });
+      vi.mocked(backend.setArtworkSlotAutomatic).mockResolvedValue({
+        status: "image",
+        base64: "CO==",
+        image_id: 6,
+        sha256: "sha-cover",
+        sgdb_id: 42,
+        prune_lease_token: "lease-cover",
+      });
+      vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockRejectedValue(new Error("refused"));
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "needs_pick", candidates: [] });
+      await refresh();
+      expect(toasts()).toEqual([
+        "Choose a SteamGridDB game in the ARTWORK tab first. The RomM cover could not be updated: Steam did not take the cover from SteamGridDB",
+      ]);
+    });
+
+    it("asks SteamGridDB for no cover where RomM's reload failed for another reason", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "needs_pick", candidates: [] });
+      await refresh();
+      expect(vi.mocked(backend.setArtworkSlotAutomatic)).not.toHaveBeenCalled();
     });
 
     it("names a failed RomM cover refresh beside a refused key too", async () => {
@@ -5797,7 +5887,12 @@ describe("RomMPlaySection", () => {
       vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
         success: false,
         reason: "no_cover",
-        message: "ROM has no cover artwork",
+        message: "RomM has no cover artwork",
+      });
+      vi.mocked(backend.setArtworkSlotAutomatic).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "RomM has no cover artwork",
       });
       vi.mocked(backend.getSgdbResolution).mockResolvedValue({
         success: false,
@@ -5805,7 +5900,7 @@ describe("RomMPlaySection", () => {
         message: PRUNE_ACTIVE,
       });
       await refresh();
-      expect(toasts()).toEqual([`${PRUNE_ACTIVE} The RomM cover could not be updated: ROM has no cover artwork`]);
+      expect(toasts()).toEqual([`${PRUNE_ACTIVE} The RomM cover could not be updated: RomM has no cover artwork`]);
     });
 
     it("says a failed RomM cover refresh beside the ARTWORK tab hint", async () => {
@@ -5813,12 +5908,17 @@ describe("RomMPlaySection", () => {
       vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
         success: false,
         reason: "no_cover",
-        message: "ROM has no cover artwork",
+        message: "RomM has no cover artwork",
+      });
+      vi.mocked(backend.setArtworkSlotAutomatic).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "RomM has no cover artwork",
       });
       vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "needs_pick", candidates: [] });
       await refresh();
       expect(toasts()).toEqual([
-        "Choose a SteamGridDB game in the ARTWORK tab first. The RomM cover could not be updated: ROM has no cover artwork",
+        "Choose a SteamGridDB game in the ARTWORK tab first. The RomM cover could not be updated: RomM has no cover artwork",
       ]);
       expect(vi.mocked(showModal)).not.toHaveBeenCalled();
     });

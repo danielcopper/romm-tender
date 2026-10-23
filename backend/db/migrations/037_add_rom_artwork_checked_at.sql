@@ -1,0 +1,21 @@
+-- =============================================================================
+-- 037_add_rom_artwork_checked_at.sql — when a game's automatic artwork was last checked against SteamGridDB
+-- #2381 (D21: the time of a game's last keep-current check)
+-- =============================================================================
+--
+--   * roms.artwork_checked_at — REAL Unix-epoch seconds at which the game page
+--     last started checking whether Tender's rule now picks another SteamGridDB
+--     image for one of the game's automatic slots. NULL means never checked. One
+--     per ROM, so each version of a game keeps its own, as its images and
+--     choices are kept per version. How the check writes and takes it back is
+--     "Keeping automatic artwork current" in
+--     docs/architecture/steam-non-steam-shortcuts.md. The sync never writes it.
+--
+-- No backfill: a game is checked at the first page open after this migration.
+-- Adding a nullable column changes no existing row, so the runner's
+-- user_version ladder is the only guard this step needs.
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 37.
+-- -----------------------------------------------------------------------------
+ALTER TABLE roms ADD COLUMN artwork_checked_at REAL;

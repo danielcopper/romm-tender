@@ -61,6 +61,11 @@ from domain.cover_refresh import cover_ts_only_change, scan_cover_refresh_candid
 from domain.sync_stage import SyncStage
 from lib.errors import Refused, RommNotFoundError, with_system_text
 from services.artwork._cover_set_in_steam import covers_set_in_steam
+from services.artwork._steamgriddb_cover import (
+    forget_steamgriddb_cover_io,
+    steamgriddb_covers_among_io,
+    steamgriddb_covers_io,
+)
 
 
 @dataclass(frozen=True)
@@ -390,7 +395,10 @@ class ArtworkService:
         A changed cover that is set in Steam, or that the user chose
         (:meth:`_covers_left_alone_io`), is skipped: its cache and its fingerprint stay as they are, so RomM's
         change stays pending (what becomes of it: docs/architecture/backend-architecture.md,
-        "Cover-cache invalidation").
+        "Cover-cache invalidation"). An automatic cover Tender picked from
+        SteamGridDB while RomM had none counts as changed once RomM has one,
+        whatever its fingerprint, is downloaded whole, and loses its record
+        once RomM's cover is in its place.
 
         Returns the refreshed ``[{"rom_id", "app_id"}]`` list — the shortcuts
         whose Steam tile the frontend must re-apply via
@@ -448,7 +456,10 @@ class ArtworkService:
         reads them. It reads the grid directory, the cover cache, the recorded
         outcomes and the choices; it downloads and writes nothing.
         """
-        changed = scan_cover_refresh_candidates(all_roms, registry).changed
+        steamgriddb = await self._loop.run_in_executor(
+            None, steamgriddb_covers_among_io, self._uow_factory, all_roms, registry
+        )
+        changed = scan_cover_refresh_candidates(all_roms, registry, steamgriddb).changed
         return len(await self._without_covers_left_alone(changed))
 
     async def _without_covers_left_alone(self, changed: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
@@ -490,14 +501,18 @@ class ArtworkService:
             return {rom_id for rom_id in rom_ids if uow.artwork_slot_choices.get(rom_id, ArtworkSlot.COVER) is not None}
 
     def _bound_covers_left_alone_io(self, all_roms: list[dict[str, Any]]) -> set[int]:
-        """The ROMs among *all_roms* bound to a shortcut whose cover the sync leaves alone."""
+        """The ROMs among *all_roms* bound to a shortcut whose cover the apply's download leaves alone.
+
+        Besides those the refresh leaves alone, a cover that is Tender's
+        SteamGridDB pick: only the refresh replaces it, never a seed from it.
+        """
         with self._uow_factory() as uow:
             bound = [
                 (rom.rom_id, rom.shortcut_app_id)
                 for raw in all_roms
                 if "id" in raw and (rom := uow.roms.get(int(raw["id"]))) is not None and rom.shortcut_app_id is not None
             ]
-        return self._covers_left_alone_io(bound)
+        return self._covers_left_alone_io(bound) | steamgriddb_covers_io(self._uow_factory, [rom for rom, _ in bound])
 
     def is_cover_set_in_steam(self, rom_id: int, app_id: int) -> bool:
         """Implements ``services.protocols.CoverSlotReader.is_cover_set_in_steam``."""
@@ -513,12 +528,14 @@ class ArtworkService:
         without download); ``changed`` are ``(rom_id, app_id, fresh_source)`` triples
         whose stored fingerprint differs from the fresh one (re-download + republish).
         Only BOUND rows qualify — *registry* projects them, so a ROM with no fresh
-        cover, no registry entry, or an unchanged fingerprint is skipped without any
-        DB access; the compare itself is :func:`domain.cover_refresh.scan_cover_refresh_candidates`
-        (the kernel the preview count shares). Only the cache-existence check on
-        NULL-fingerprint rows touches I/O here.
+        cover, no registry entry, or an unchanged fingerprint is skipped; the
+        compare itself is :func:`domain.cover_refresh.scan_cover_refresh_candidates`
+        (the kernel the preview count shares). I/O here is the cache-existence
+        check on NULL-fingerprint rows and the read of the ROMs whose automatic
+        cover is Tender's SteamGridDB pick.
         """
-        scan = scan_cover_refresh_candidates(all_roms, registry)
+        steamgriddb = steamgriddb_covers_among_io(self._uow_factory, all_roms, registry)
+        scan = scan_cover_refresh_candidates(all_roms, registry, steamgriddb)
         adoptions = [
             (rom_id, fresh)
             for rom_id, fresh in scan.null_fingerprint
@@ -558,9 +575,14 @@ class ArtworkService:
         applied — *url_cover* when the RomM asset 404s and the fallback wins
         (#1450), else *cover_url*. When *stored_source* differs from *cover_url* by
         only its ``?ts=`` and a validator sidecar exists, the fetch revalidates
-        with a conditional request instead of re-downloading.
+        with a conditional request instead of re-downloading. In place of
+        Tender's SteamGridDB pick, RomM's cover is downloaded whole, and the
+        pick's record goes once RomM's cover is published.
         """
         cache_path = self._cache_path(rom_id)
+        steamgriddb_cover = bool(steamgriddb_covers_io(self._uow_factory, [rom_id]))
+        if steamgriddb_cover:
+            stored_source = None
         try:
             result = self._fetch_and_record_cover(rom_id, cover_url, cache_path, url_cover, stored_source)
         except Exception as e:
@@ -576,6 +598,8 @@ class ArtworkService:
         if grid:
             self.finalize_cover_path(grid, cache_path, app_id, str(rom_id))
         self._persist_cover_source(rom_id, result.applied_source)
+        if steamgriddb_cover:
+            forget_steamgriddb_cover_io(self._uow_factory, rom_id)
         return True
 
     def _persist_cover_source(self, rom_id: int, source: str) -> None:
@@ -911,15 +935,17 @@ class ArtworkService:
         fingerprint (#1386). ADR-0006: the read and write each own a short
         UoW with the RomM/file I/O in between, outside any transaction.
 
-        Refuses with ``not_synced``, ``no_grid_dir``, ``not_found`` (RomM
-        answered no ROM) and ``no_cover``, and with ``download_failed`` where
-        this device raises an ``OSError`` around the download — the cover's
-        folder, the file the download writes, the move into place, the
-        validator sidecar; the ROM row is left as it was. A RomM error
-        propagates.
+        The answer carries an ``sgdb_artwork`` lease in ``prune_lease_token``
+        for the frontend to hand the cover to Steam under. Refuses with
+        ``not_synced``, ``no_grid_dir``, ``not_found`` (RomM answered no ROM),
+        ``no_cover``, and ``download_failed`` where this device raises an
+        ``OSError`` around the download — the cover's folder, the file the
+        download writes, the move into place, the validator sidecar; the ROM
+        row is left as it was. A RomM error propagates.
         """
         async with self._rules.hold("refresh_cover_artwork", update=True, migration=True, prune=True):
-            return await self.refresh_cover_unchecked(rom_id)
+            answer = await self.refresh_cover_unchecked(rom_id)
+            return {**answer, "prune_lease_token": await self._rules.acquire_lease("sgdb_artwork")}
 
     async def refresh_cover_unchecked(self, rom_id: int) -> dict[str, Any]:
         """:meth:`refresh_cover` without its conflict rules, for a use case that checked its own.
@@ -940,7 +966,7 @@ class ArtworkService:
 
         cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
         if not cover_url:
-            raise Refused("no_cover", "ROM has no cover artwork")
+            raise Refused("no_cover", "RomM has no cover artwork")
 
         cache_path = self._cache_path(rom_id)
         self._cover_art_file_store.make_dirs(self._cover_cache_dir)
@@ -956,6 +982,7 @@ class ArtworkService:
 
         self.finalize_cover_path(grid, cache_path, app_id, str(rom_id))
         await self._loop.run_in_executor(None, self._persist_cover_path, rom_id, cache_path, result.applied_source)
+        await self._loop.run_in_executor(None, forget_steamgriddb_cover_io, self._uow_factory, rom_id)
 
         return {
             "success": True,

@@ -7,6 +7,8 @@ import { settleArtworkGame, supersededNotice } from "./artworkGameChange";
 
 vi.mock("./artwork", () => ({
   applyAutomaticArtwork: vi.fn(),
+  applyKeptCurrentArtwork: vi.fn(),
+  applySteamGridDbCover: vi.fn(),
   applyTabSlotImage: vi.fn(),
 }));
 
@@ -21,6 +23,7 @@ describe("settleArtworkGame (#2381 D17)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     _resetArtworkSlotsForTests();
+    vi.mocked(backend.keepArtworkCurrent).mockResolvedValue({ status: "not_due", replaced: [] });
   });
 
   it("does nothing more where RomM's game replaced nothing", async () => {
@@ -46,6 +49,17 @@ describe("settleArtworkGame (#2381 D17)", () => {
     expect(vi.mocked(backend.setArtworkSlotAutomatic)).not.toHaveBeenCalled();
   });
 
+  it("picks a SteamGridDB cover anew under RomM's game, after the slots", async () => {
+    vi.mocked(backend.getArtworkGame).mockResolvedValue(answer({ name: "Mario Golf", slots: ["logo"] }));
+
+    await settleArtworkGame(5000, 42);
+
+    expect(vi.mocked(artwork.applySteamGridDbCover)).toHaveBeenCalledWith(42, 5000);
+    const [slots] = vi.mocked(artwork.applyAutomaticArtwork).mock.invocationCallOrder;
+    const [cover] = vi.mocked(artwork.applySteamGridDbCover).mock.invocationCallOrder;
+    expect(slots).toBeLessThan(cover ?? 0);
+  });
+
   it("sets a chosen cover back to RomM's through the endpoint that reloads it", async () => {
     const cover: backend.ArtworkSlotImage = { status: "cover", prune_lease_token: "l" };
     vi.mocked(backend.getArtworkGame).mockResolvedValue(answer({ name: null, slots: ["cover", "logo"] }));
@@ -55,6 +69,24 @@ describe("settleArtworkGame (#2381 D17)", () => {
 
     expect(vi.mocked(backend.setArtworkSlotAutomatic)).toHaveBeenCalledWith(42, "cover");
     expect(vi.mocked(artwork.applyTabSlotImage)).toHaveBeenCalledWith(42, 5000, "cover", cover, false);
+  });
+
+  it("keeps the automatic artwork current once RomM's game has settled (#2381 D5)", async () => {
+    vi.mocked(backend.getArtworkGame).mockResolvedValue(answer({ name: "Mario Golf", slots: ["logo"] }));
+    vi.mocked(backend.keepArtworkCurrent).mockResolvedValue({ status: "checked", replaced: ["hero"] });
+    vi.mocked(artwork.applyKeptCurrentArtwork).mockResolvedValue(["hero"]);
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue({
+      success: false,
+      reason: "no_grid_dir",
+      message: "Steam grid directory not found",
+    });
+
+    await settleArtworkGame(5000, 42);
+
+    expect(vi.mocked(artwork.applyKeptCurrentArtwork)).toHaveBeenCalledWith(42, 5000, ["hero"]);
+    const [automatic] = vi.mocked(artwork.applyAutomaticArtwork).mock.invocationCallOrder;
+    const [check] = vi.mocked(backend.keepArtworkCurrent).mock.invocationCallOrder;
+    expect(automatic).toBeLessThan(check ?? 0);
   });
 
   it("holds whether the ROM has a SteamGridDB game", async () => {

@@ -69,6 +69,26 @@ class TestAutomatic:
 
             assert view == SlotView(ArtworkSlot.COVER, SlotState.AUTOMATIC, SlotSource.ROMM, None)
 
+    @pytest.mark.parametrize("has_game", [True, False])
+    def test_a_cover_tender_set_from_steamgriddb_is_tenders_pick(self, has_game):
+        view = _view(ArtworkSlot.COVER, has_game=has_game, filled=True, recorded=_set(ArtworkSlot.COVER, 12))
+
+        assert view == SlotView(ArtworkSlot.COVER, SlotState.AUTOMATIC, SlotSource.TENDER, 12)
+
+    def test_an_empty_cover_is_not_filled_yet(self):
+        for recorded in (None, _set(ArtworkSlot.COVER, 12)):
+            view = _view(ArtworkSlot.COVER, recorded=recorded)
+
+            assert view == SlotView(ArtworkSlot.COVER, SlotState.AUTOMATIC, SlotSource.EMPTY, None)
+
+    def test_an_empty_cover_steamgriddb_has_none_for(self):
+        none = ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.COVER, sgdb_id=7, recorded_at=1.0)
+
+        assert _view(ArtworkSlot.COVER, recorded=none).source is SlotSource.NONE
+
+    def test_an_empty_cover_without_a_game_needs_one(self):
+        assert _view(ArtworkSlot.COVER, has_game=False).source is SlotSource.NEEDS_GAME
+
     @pytest.mark.parametrize("slot", _SGDB_SLOTS)
     def test_a_steamgriddb_slot_without_a_game_needs_one(self, slot):
         assert _view(slot, has_game=False, filled=True).source is SlotSource.NEEDS_GAME

@@ -6,6 +6,9 @@ import os
 import pytest
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 
+from domain.artwork_slot import ArtworkSlot
+from domain.artwork_slot_choice import ArtworkSlotChoice
+from domain.artwork_slot_outcome import ArtworkSlotOutcome
 from domain.collection_name import fold_collection_name
 from domain.rom import Rom
 from domain.sync_diff import BIND_ROM_ID_KEY
@@ -2749,3 +2752,49 @@ class TestGetSyncRuns:
         assert [run["id"] for run in runs] == [
             f"run-{n:02d}" for n in range(newest, newest - SYNC_RUN_HISTORY_LIMIT, -1)
         ]
+
+
+class TestTheCoverRecordOfAVersionTheCommitBinds:
+    """D28: the commit forgets the SteamGridDB cover record of a version it binds anew, never one it keeps bound."""
+
+    def _seed(self, library, *, app_id, chosen=False):
+        uow = library.uow
+        _seed_rom(uow, 2, app_id=app_id, platform_slug="n64")
+        with uow:
+            uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_set(
+                    rom_id=2, slot=ArtworkSlot.COVER, sgdb_id=7, image_id=5, image_sha256="ab", recorded_at=1.0
+                )
+            )
+            if chosen:
+                uow.artwork_slot_choices.save(
+                    ArtworkSlotChoice(rom_id=2, slot=ArtworkSlot.COVER, image_id=5, chosen_at=1.0)
+                )
+        box = library.sync._box
+        box.pending_sync = {2: {"name": "Game", "cover_path": ""}}
+        box.pending_all_roms = {2: {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""}}
+
+    def _record(self, library):
+        with library.uow as uow:
+            return uow.artwork_slot_outcomes.get(2, ArtworkSlot.COVER)
+
+    def test_a_version_bound_again_forgets_it(self, library):
+        self._seed(library, app_id=None)
+
+        library.sync._reporter._commit_unit_results_io({"2": 5000}, [{"id": 2}])
+
+        assert self._record(library) is None
+
+    def test_a_version_that_stays_bound_keeps_it(self, library):
+        self._seed(library, app_id=5000)
+
+        library.sync._reporter._commit_unit_results_io({"2": 5000}, [{"id": 2}])
+
+        assert self._record(library) is not None
+
+    def test_a_chosen_cover_keeps_it(self, library):
+        self._seed(library, app_id=None, chosen=True)
+
+        library.sync._reporter._commit_unit_results_io({"2": 5000}, [{"id": 2}])
+
+        assert self._record(library) is not None

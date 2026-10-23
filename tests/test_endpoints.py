@@ -331,6 +331,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_artwork_slots",
     "get_artwork_slot_candidates",
     "choose_artwork_slot_image",
+    "keep_artwork_current",
     # Metadata cache reads.
     "get_rom_metadata",
     "get_metadata_cache_page",

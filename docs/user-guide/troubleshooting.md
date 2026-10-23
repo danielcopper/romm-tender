@@ -684,12 +684,13 @@ stores one when it asked SteamGridDB and found the game there. What a game witho
 3. Or set it by hand: edit the game in RomM and enter its **SteamGridDB ID**.
 
 Once RomM has the id, the next sync brings it over, and the background artwork job then gives the game its SteamGridDB
-wide grid and logo where it has none yet, and its SteamGridDB icon in place of Tender's logo; the hero comes when the
-game's page is opened. **Refresh Artwork** stays greyed out until the game has a SteamGridDB game, so for a game without
-one it is that next sync that brings RomM's id over; from then on **Refresh Artwork** asks RomM for the id, downloads
-Tender's pick anew for every image on automatic and applies it, while an image you chose in the ARTWORK tab and one set
-in Steam stay. Opening the game's page for the first time in a session, once a sync has brought the id over from RomM,
-sets the hero banner, logo, wide grid and icon only where the game has none yet (Tender's logo counts as no icon).
+wide grid, logo and — where it has none — cover, and its SteamGridDB icon in place of Tender's logo; the hero comes when
+the game's page is opened. **Refresh Artwork** stays greyed out until the game has a SteamGridDB game, so for a game
+without one it is that next sync that brings RomM's id over; from then on **Refresh Artwork** asks RomM for the id,
+downloads Tender's pick anew for every image on automatic and applies it, while an image you chose in the ARTWORK tab
+and one set in Steam stay. Opening the game's page for the first time in a session, once a sync has brought the id over
+from RomM, sets the hero banner, logo, wide grid, icon and cover only where the game has none yet (Tender's logo counts
+as no icon).
 
 For a game SteamGridDB lists under another name, or not at all, a scan may find nothing. The game's **ARTWORK** tab then
 offers **Choose game…**, where you search SteamGridDB by name and apply a match; Tender remembers it until RomM has an

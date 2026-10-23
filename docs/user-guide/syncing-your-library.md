@@ -459,26 +459,28 @@ Steam collections, holding the games the sync puts in them.
 
 Each synced game gets up to five types of artwork:
 
-| Type                  | Source                                   | Where It Appears                |
-| --------------------- | ---------------------------------------- | ------------------------------- |
-| Portrait Grid (cover) | RomM, or SteamGridDB where you chose one | Library grid tiles, collections |
-| Hero Banner           | SteamGridDB                              | Game detail page background     |
-| Logo                  | SteamGridDB                              | Title overlay on hero banner    |
-| Wide Grid             | SteamGridDB                              | Recent games shelf, list view   |
-| Icon                  | SteamGridDB                              | Taskbar, small UI elements      |
+| Type                  | Source                                                          | Where It Appears                |
+| --------------------- | --------------------------------------------------------------- | ------------------------------- |
+| Portrait Grid (cover) | RomM — SteamGridDB until RomM's arrives, or where you chose one | Library grid tiles, collections |
+| Hero Banner           | SteamGridDB                                                     | Game detail page background     |
+| Logo                  | SteamGridDB                                                     | Title overlay on hero banner    |
+| Wide Grid             | SteamGridDB                                                     | Recent games shelf, list view   |
+| Icon                  | SteamGridDB                                                     | Taskbar, small UI elements      |
 
 Cover art is applied from RomM, unless you chose a cover from SteamGridDB in the game's
-[ARTWORK tab](managing-games.md#the-artwork-tab). The other four types require a
-[SteamGridDB API key](configuration.md#steamgriddb-api-key); games without a SteamGridDB match show Steam's default
-placeholders for hero, logo and wide grid, and Tender's logo as their icon.
+[ARTWORK tab](managing-games.md#the-artwork-tab). A game without a cover — usually one RomM has no cover for — gets
+Tender's pick from SteamGridDB's covers, and once RomM has a cover for it, the next sync sets RomM's cover in its place
+at once and its preview counts it among the cover updates; a cover you chose or set in Steam stays. The SteamGridDB
+images and that cover require a [SteamGridDB API key](configuration.md#steamgriddb-api-key); games without a SteamGridDB
+match show Steam's default placeholders for hero, logo and wide grid, and Tender's logo as their icon.
 
-Icons, wide grids and logos arrive in the background, without opening each game: after every sync and when Tender
-starts, every game Tender manages gets the ones it has none of yet, a few games at a time. The icon and the wide grid
-come first, game by game, so a new game shows in the desktop client's library list and in Big Picture's search with its
-images; the logos follow, since a logo shows only on the game's page. A game the sync has just added shows an empty spot
-in the desktop client's library list until its icon arrives. Without a SteamGridDB API key nothing is fetched, and a
-game the sync adds keeps Steam's default icon instead. When Steam's memory is nearly full the background job stops, and
-goes on after Steam restarts or after the next sync.
+Icons, wide grids, logos and missing covers arrive in the background, without opening each game: after every sync and
+when Tender starts, every game Tender manages gets the ones it has none of yet, a few games at a time. The icon, the
+wide grid and such a cover come first, game by game, so a new game shows in the desktop client's library list, the
+library grid and Big Picture's search with its images; the logos follow, since a logo shows only on the game's page. A
+game the sync has just added shows an empty spot in the desktop client's library list until its icon arrives. Without a
+SteamGridDB API key nothing is fetched, and a game the sync adds keeps Steam's default icon instead. When Steam's memory
+is nearly full the background job stops, and goes on after Steam restarts or after the next sync.
 
 The background job leaves an image you set yourself alone. When SteamGridDB has no icon for a game, the game shows
 Tender's logo as its icon, and the job and opening the game's page ask again after a week, or at once when a sync brings
@@ -488,12 +490,16 @@ Artwork** asks at once. Opening the game's page asks by the same rules as the ba
 you set yourself alone. A game that had no icon at all before shows its first one after Steam restarts, which switching
 between Game Mode and Desktop Mode does.
 
-The hero banner is set the first time a game's page is opened in a session, and so are an icon, a logo and a wide grid
-the background job has not set yet; each only where the game has none (Tender's logo counts as no icon): an image you
-set yourself, in Steam's own artwork options or with another tool, stays, until you switch the game to another version,
-which replaces all four with that version's — an image you chose for that version comes back with it. When SteamGridDB
-has no icon, logo or wide grid for a game, or Steam does not accept the image, neither the background job nor opening
-the page asks again for a week, or until the game's SteamGridDB match changes.
+The hero banner is set the first time a game's page is opened in a session, and so are an icon, a logo, a wide grid and
+a cover the background job has not set yet; each only where the game has none (Tender's logo counts as no icon): an
+image you set yourself, in Steam's own artwork options or with another tool, stays, until you switch the game to another
+version, which replaces the hero banner, icon, logo and wide grid with that version's and sets that version's own cover
+— an image you chose for that version comes back with it. When SteamGridDB has no icon, logo, wide grid or cover for a
+game, or Steam does not accept an icon, logo or wide grid, neither the background job nor opening the page asks again
+for a week, or until the game's SteamGridDB match changes; a cover Steam did not accept is asked for again at once.
+
+Opening a game's page also keeps the images Tender picked from SteamGridDB current, at most once a week per game, and
+says which ones it replaced ([Refreshing Artwork and Metadata](managing-games.md#refreshing-artwork-and-metadata)).
 
 You can refresh artwork for any individual game from its game detail page; that reloads RomM's cover and downloads
 Tender's pick anew for every image on automatic, while an image you chose and one set in Steam stay

@@ -65,12 +65,20 @@ _SYNC_COLUMNS = (
 )
 
 # Read set: the synced columns plus the pin-only emulator_override, selected_disc,
-# applied_launch_options (the recorded applied launch command, #1383) and
-# chosen_sgdb_id (the SteamGridDB game the user chose). Like the two pins, the
-# last two are read here but written only by their own set_*() method, never by
-# save(), so a re-sync never wipes them.
+# applied_launch_options (the recorded applied launch command, #1383),
+# chosen_sgdb_id (the SteamGridDB game the user chose) and artwork_checked_at
+# (when its automatic artwork was last checked against SteamGridDB). Like the
+# two pins, the last three are read here but written only by their own set_*()
+# method, never by save(), so a re-sync never wipes them.
 _SELECT_COLUMNS = ", ".join(
-    (*_SYNC_COLUMNS, "emulator_override", "selected_disc", "applied_launch_options", "chosen_sgdb_id")
+    (
+        *_SYNC_COLUMNS,
+        "emulator_override",
+        "selected_disc",
+        "applied_launch_options",
+        "chosen_sgdb_id",
+        "artwork_checked_at",
+    )
 )
 _INSERT_COLUMNS = ", ".join(_SYNC_COLUMNS)
 _INSERT_PLACEHOLDERS = ", ".join("?" for _ in _SYNC_COLUMNS)
@@ -94,6 +102,7 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
         igdb_id=row["igdb_id"],
         sgdb_id=row["sgdb_id"],
         chosen_sgdb_id=row["chosen_sgdb_id"],
+        artwork_checked_at=row["artwork_checked_at"],
         ra_id=row["ra_id"],
         emulator_override=row["emulator_override"],
         selected_disc=row["selected_disc"],
@@ -246,6 +255,18 @@ class SqliteRomRepository(BaseRepository):
         self._conn.execute(
             "UPDATE roms SET chosen_sgdb_id = ? WHERE rom_id = ?",
             (sgdb_id, rom_id),
+        )
+
+    def set_artwork_checked_at(self, rom_id: int, checked_at: float | None) -> None:
+        """Write (or clear) when ``rom_id``'s automatic artwork was last checked against SteamGridDB.
+
+        ``checked_at`` is Unix-epoch seconds, or ``None`` to store SQL NULL. This
+        is the only write path for the column — the sync UPSERT in :meth:`save`
+        never touches it.
+        """
+        self._conn.execute(
+            "UPDATE roms SET artwork_checked_at = ? WHERE rom_id = ?",
+            (checked_at, rom_id),
         )
 
     def clear_all_applied_launch_options(self) -> None:

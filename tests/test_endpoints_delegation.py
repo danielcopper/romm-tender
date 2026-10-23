@@ -701,6 +701,7 @@ class TestSgdbEndpointDelegation:
             ("get_artwork_slot_candidates", (42, "logo", 1)),
             ("choose_artwork_slot_image", (42, "logo", 12)),
             ("set_artwork_slot_automatic", (42, "cover")),
+            ("keep_artwork_current", (42,)),
         ],
     )
     async def test_the_artwork_tabs_endpoints_delegate(self, endpoints, services, name, args):

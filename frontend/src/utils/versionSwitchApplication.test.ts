@@ -42,6 +42,36 @@ describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mock.calls).toEqual([[5000, "ROMM=", "png", 0]]);
   });
 
+  it("writes Tender's SteamGridDB pick where neither a chosen cover nor RomM's exists, and reports it (#2381 D28)", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({
+      status: "image",
+      base64: "SGDB=",
+      image_id: 6,
+      sha256: "sha6",
+      sgdb_id: 9999,
+      prune_lease_token: "lease",
+    });
+    const onCover = vi.fn();
+
+    await publishCommittedVersionSwitch(5000, 42, onCover);
+
+    expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledWith(42, 5000, "cover", true);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mock.calls).toEqual([[5000, "SGDB=", "png", 0]]);
+    expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(42, "cover", "set", 9999, 6, "sha6");
+    expect(onCover).toHaveBeenCalledWith(42, "SGDB=");
+  });
+
+  it("asks SteamGridDB for no cover where RomM's was written", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+
+    await publishCommittedVersionSwitch(5000, 42);
+
+    expect(vi.mocked(backend.getSgdbSlotArtwork)).not.toHaveBeenCalled();
+  });
+
   it("writes no cover over a chosen one that cannot be had now", async () => {
     vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: true, chosen: true });
 

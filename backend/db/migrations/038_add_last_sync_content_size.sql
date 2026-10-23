@@ -1,5 +1,5 @@
 -- =============================================================================
--- 037_add_last_sync_content_size.sql — the content size on FileSyncState
+-- 038_add_last_sync_content_size.sql — the content size on FileSyncState
 -- #2525 (D2)
 -- =============================================================================
 --
@@ -14,6 +14,6 @@
 -- later for a file still unchanged since its baseline, from the same bytes.
 --
 -- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
--- BEGIN/COMMIT and stamps PRAGMA user_version = 37.
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 38.
 -- -----------------------------------------------------------------------------
 ALTER TABLE rom_save_files ADD COLUMN last_sync_content_size INTEGER;  -- content size at last sync; NULL = none recorded (raw-size rule)

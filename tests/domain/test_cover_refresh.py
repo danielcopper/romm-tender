@@ -119,6 +119,35 @@ class TestScanCoverRefreshCandidates:
         assert scan.changed == [(10, 1010, _NEW)]
 
 
+class TestASteamGridDbCoverRomMNowHasACoverFor:
+    """D24: a cover Tender picked from SteamGridDB is replaced by RomM's once RomM has one, its fingerprint aside."""
+
+    def test_an_unknown_fingerprint_lands_in_changed(self):
+        scan = scan_cover_refresh_candidates([{"id": 10, "path_cover_large": _NEW}], {"10": _bound(1010, None)}, {10})
+
+        assert scan == ([(10, 1010, _NEW)], [])
+
+    def test_an_unchanged_fingerprint_lands_in_changed(self):
+        scan = scan_cover_refresh_candidates([{"id": 10, "path_cover_large": _NEW}], {"10": _bound(1010, _NEW)}, {10})
+
+        assert scan == ([(10, 1010, _NEW)], [])
+
+    def test_a_changed_fingerprint_lands_in_changed_once(self):
+        scan = scan_cover_refresh_candidates([{"id": 10, "path_cover_large": _NEW}], {"10": _bound(1010, _OLD)}, {10})
+
+        assert scan.changed == [(10, 1010, _NEW)]
+
+    def test_while_romm_has_no_cover_it_stays(self):
+        scan = scan_cover_refresh_candidates([{"id": 10}], {"10": _bound(1010, None)}, {10})
+
+        assert scan == ([], [])
+
+    def test_an_unbound_rom_is_skipped(self):
+        scan = scan_cover_refresh_candidates([{"id": 10, "path_cover_large": _NEW}], {}, {10})
+
+        assert scan == ([], [])
+
+
 class TestStripCoverTs:
     """_strip_cover_ts — drop the ?ts= cache-buster, keep everything else (#1454)."""
 

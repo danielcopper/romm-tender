@@ -28,7 +28,7 @@ import {
   type EndpointFailure,
   type SgdbCandidate,
 } from "../api/backend";
-import { applyAutomaticArtwork } from "../utils/artwork";
+import { applyAutomaticArtwork, applySteamGridDbCover } from "../utils/artwork";
 import { GAME_CHANGE_DISCARDS_CHOICES } from "../utils/artworkTabWording";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
 import { scrollToTop, scrollFocusedToCenter } from "../utils/scrollHelpers";
@@ -157,6 +157,9 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
       const applied = await applyAutomaticArtwork(romId, appId).catch((e): number => {
         detach(debugLog(`SgdbGamePickerModal: applyAutomaticArtwork rejected: ${e}`));
         return 0;
+      });
+      await applySteamGridDbCover(romId, appId).catch((e: unknown) => {
+        detach(debugLog(`SgdbGamePickerModal: applySteamGridDbCover rejected: ${e}`));
       });
       showToast(artworkApplyMessage(applied));
       onApplied(applied);

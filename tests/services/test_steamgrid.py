@@ -4,6 +4,7 @@ import hashlib
 import logging
 import os
 import sqlite3
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import patch
@@ -1920,7 +1921,7 @@ class TestAnEmptySlotIsServed:
     @pytest.mark.asyncio
     async def test_an_unknown_slot_is_refused(self, steamgrid, slot_ready):
         with pytest.raises(Refused) as refused:
-            await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+            await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "banner")
 
         assert refused.value.reason == "invalid_payload"
         assert steamgrid.prune_conflicts.conflicting_operations == 0
@@ -3217,7 +3218,7 @@ class TestTheArtworkTabReadsEachSlot:
     ):
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
         _seed_rom(uow, 42, app_id=_APP_ID)
-        _grid_dir(home)
+        (_grid_dir(home) / f"{_APP_ID}p.png").write_bytes(b"romm's cover")
 
         answer = await steamgrid.service.get_artwork_slots(42, _APP_ID)
 
@@ -3412,6 +3413,7 @@ class TestThePickersCandidates:
 
     @pytest.mark.asyncio
     async def test_the_cover_lists_portrait_grids_and_names_no_pick(self, steamgrid, slot_ready, fake_steamgrid_db_api):
+        (slot_ready / f"{_APP_ID}p.png").write_bytes(b"romm's cover")
         _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
 
         answer = await steamgrid.service.get_artwork_slot_candidates(42, "cover", 0)
@@ -3421,6 +3423,28 @@ class TestThePickersCandidates:
         assert fake_steamgrid_db_api.requested_paths == [
             "/grids/game/9999?dimensions=600x900,660x930,342x482&types=static&page=0"
         ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shown", ["empty", "tenders"])
+    async def test_a_cover_steamgriddb_fills_names_tenders_pick(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, shown
+    ):
+        if shown == "tenders":
+            _show_tenders(slot_ready, uow, ArtworkSlot.COVER, 9)
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (5, 600, 900))
+
+        answer = await steamgrid.service.get_artwork_slot_candidates(42, "cover", 0)
+
+        assert answer["tenders_pick"] == 5
+
+    @pytest.mark.asyncio
+    async def test_a_chosen_cover_names_no_pick(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _choose(uow, ArtworkSlot.COVER, 8)
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (5, 600, 900))
+
+        answer = await steamgrid.service.get_artwork_slot_candidates(42, "cover", 0)
+
+        assert answer["tenders_pick"] is None
 
     @pytest.mark.asyncio
     async def test_a_later_page_names_no_pick(self, steamgrid, slot_ready, fake_steamgrid_db_api):
@@ -3606,15 +3630,115 @@ class TestAutomaticAgain:
         await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
 
     @pytest.mark.asyncio
-    async def test_a_cover_reload_romm_refuses_keeps_the_choice(self, steamgrid, uow, slot_ready):
+    async def test_a_cover_reload_romm_refuses_keeps_the_choice(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
         _choose(uow, ArtworkSlot.COVER, 5)
-        steamgrid.cover.refusal = Refused("no_cover", "ROM has no cover artwork")
+        _seed_cover_candidates(fake_steamgrid_db_api)
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
 
         with pytest.raises(Refused) as refused:
             await steamgrid.service.set_artwork_slot_automatic(42, "cover")
 
         assert refused.value.reason == "no_cover"
         assert _choice(uow, ArtworkSlot.COVER).image_id == 5
+
+    @pytest.mark.asyncio
+    async def test_without_a_romm_cover_tenders_steamgriddb_pick_is_served(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _choose(uow, ArtworkSlot.COVER, 5)
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (5, 600, 900), (7, 660, 930), (6, 600, 900))
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        answer = await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert (answer["status"], answer["image_id"], base64.b64decode(answer["base64"])) == ("image", 5, b"image 5")
+        assert _choice(uow, ArtworkSlot.COVER) is None
+        assert _handover(uow, ArtworkSlot.COVER).image_id == 5
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+    @pytest.mark.asyncio
+    async def test_without_a_romm_cover_the_pick_is_downloaded_anew(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "cover", 5)] = b"damaged"
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        answer = await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert base64.b64decode(answer["base64"]) == b"image 5"
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("missing", ["key", "game"])
+    async def test_without_a_romm_cover_or_a_steamgriddb_game_or_key_romms_refusal_stands(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, missing
+    ):
+        _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
+        if missing == "key":
+            steamgrid.settings["steamgriddb_api_key"] = ""
+        else:
+            _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert (refused.value.reason, refused.value.message) == ("no_cover", "RomM has no cover artwork")
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("error", "reason"),
+        [
+            (SgdbRateLimitedError("slow down"), "rate_limited"),
+            (SgdbApiError(401, "Unauthorized"), "auth_failed"),
+        ],
+        ids=["429", "refused-key"],
+    )
+    async def test_without_a_romm_cover_steamgriddbs_refusal_is_answered(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, error, reason
+    ):
+        _choose(uow, ArtworkSlot.COVER, 5)
+        fake_steamgrid_db_api.request_side_effect = error
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert refused.value.reason == reason
+        assert _choice(uow, ArtworkSlot.COVER).image_id == 5
+
+    @pytest.mark.asyncio
+    async def test_without_a_romm_cover_a_failed_download_is_refused(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        fake_steamgrid_db_api.seed_raw_response(
+            "/grids/game/9999?dimensions=600x900",
+            {"success": True, "data": [{"id": 5, "url": "https://cdn.example/5.png", "width": 600, "height": 900}]},
+        )
+        fake_steamgrid_db_api.download_image_return = False
+        steamgrid.cover.refusal = Refused("no_cover", "RomM has no cover artwork")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert refused.value.reason == "download_failed"
+
+    @pytest.mark.asyncio
+    async def test_another_refusal_of_romms_reload_asks_steamgriddb_nothing(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
+        steamgrid.cover.refusal = Refused("not_found", "Could not fetch ROM from server")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.set_artwork_slot_automatic(42, "cover")
+
+        assert refused.value.reason == "not_found"
+        assert fake_steamgrid_db_api.requested_paths == []
 
     @pytest.mark.asyncio
     async def test_an_update_in_progress_refuses_it(self, steamgrid, slot_ready):
@@ -3696,6 +3820,16 @@ class TestChangingTheGameDiscardsTheChoices:
 
         assert steamgrid.cover.reloaded == []
         assert _choice(uow, ArtworkSlot.COVER) is None
+
+    @pytest.mark.asyncio
+    async def test_a_dropped_cover_choice_takes_the_record_of_the_image_it_set(self, steamgrid, uow, slot_ready):
+        _choose(uow, ArtworkSlot.COVER, 5)
+        _record_set(uow, ArtworkSlot.COVER, 5, b"chosen cover")
+        steamgrid.cover.set_in_steam.add(42)
+
+        await steamgrid.service.apply_sgdb_game_id(42, 8888)
+
+        assert _outcome(uow, ArtworkSlot.COVER) is None
 
     @pytest.mark.asyncio
     async def test_a_refused_key_discards_nothing(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
@@ -4276,6 +4410,32 @@ class TestTheChoiceAGameChangeDiscards:
         assert _choice(uow, ArtworkSlot.COVER) is None
         assert steamgrid.cover.reloaded == []
 
+    @pytest.mark.asyncio
+    async def test_a_dropped_cover_choice_takes_the_record_of_the_image_it_set(self, steamgrid, uow, home):
+        self._seed(uow, home, steamgrid)
+        _choose(uow, ArtworkSlot.COVER, 5)
+        _record_set(uow, ArtworkSlot.COVER, 5, b"chosen cover")
+        _choose(uow, ArtworkSlot.LOGO, 77)
+        steamgrid.cover.set_in_steam.add(42)
+
+        await steamgrid.service.get_artwork_game(42)
+
+        assert _outcome(uow, ArtworkSlot.COVER) is None
+
+    @pytest.mark.asyncio
+    async def test_a_steamgriddb_cover_loses_its_cached_image_for_the_re_pick(
+        self, steamgrid, uow, home, sgdb_artwork_cache
+    ):
+        self._seed(uow, home, steamgrid)
+        _show_tenders(_grid_dir(home), uow, ArtworkSlot.COVER, 6)
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "cover", 6)] = b"image 6"
+        _choose(uow, ArtworkSlot.LOGO, 77)
+
+        answer = await steamgrid.service.get_artwork_game(42)
+
+        assert answer["superseded"]["slots"] == ["logo"]
+        assert _cached_path(sgdb_artwork_cache, 42, "cover", 6) not in sgdb_artwork_cache.files
+
     def test_a_game_chosen_since_the_read_is_not_discarded(self, steamgrid, uow, home):
         self._seed(uow, home, steamgrid)
         _choose(uow, ArtworkSlot.LOGO, 77)
@@ -4331,3 +4491,544 @@ class TestAVersionSwitchWritesTheChosenCover:
 
         assert answer == {"base64": None, "no_api_key": False, "chosen": False}
         assert fake_steamgrid_db_api.requested_paths == []
+
+
+# ── keeping automatic artwork current ─────────────────────────────────────
+
+
+def _show_tenders(grid, uow, slot: ArtworkSlot, image_id: int) -> None:
+    """Steam's grid directory shows Tender's SteamGridDB image *image_id* for ROM 42's *slot*, with its record."""
+    data = f"image {image_id}".encode()
+    name = {
+        ArtworkSlot.WIDE_GRID: f"{_APP_ID}.png",
+        ArtworkSlot.LOGO: f"{_APP_ID}_logo.png",
+        ArtworkSlot.HERO: f"{_APP_ID}_hero.png",
+        ArtworkSlot.COVER: f"{_APP_ID}p.png",
+    }[slot]
+    (grid / name).write_bytes(data)
+    _record_set(uow, slot, image_id, data)
+
+
+def _checked_at(uow) -> float | None:
+    with uow:
+        return uow.roms.get(42).artwork_checked_at
+
+
+def _check_was(uow, at: float | None) -> None:
+    with uow:
+        uow.roms.set_artwork_checked_at(42, at)
+
+
+class _ClockThatWaitsForASecondReader(FakeClock):
+    """A clock whose first reading waits, briefly, for a second one, so two readers overlap if nothing serialises them.
+
+    The check reads the clock between reading a ROM's time and recording its
+    own; a second check let in meanwhile reads the time the first has not
+    recorded yet.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._second = threading.Event()
+        self._readings = 0
+
+    def time(self) -> float:
+        self._readings += 1
+        if self._readings == 1:
+            self._second.wait(timeout=0.3)
+        else:
+            self._second.set()
+        return super().time()
+
+
+class TestKeepingArtworkCurrent:
+    """D5, D22: a page visit checks the automatic slots against SteamGridDB, at most once in seven days."""
+
+    @pytest.mark.asyncio
+    async def test_a_new_pick_is_cached_and_named_and_the_time_recorded(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300), (5, 800, 300))
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": ["logo"]}
+        assert sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "logo", 6)] == b"image 6"
+        assert _checked_at(uow) == steamgrid.clock.time()
+
+    @pytest.mark.asyncio
+    async def test_the_same_pick_downloads_nothing(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300), (6, 800, 300))
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": []}
+        assert fake_steamgrid_db_api.downloaded == []
+        assert _checked_at(uow) == steamgrid.clock.time()
+
+    @pytest.mark.asyncio
+    async def test_a_pick_the_cache_already_holds_is_not_downloaded_again(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300))
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "logo", 6)] = b"image 6"
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer["replaced"] == ["logo"]
+        assert fake_steamgrid_db_api.downloaded == []
+
+    @pytest.mark.asyncio
+    async def test_inside_the_seven_days_nothing_is_asked(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300))
+        earlier = steamgrid.clock.time() - (7 * 24 * 60 * 60 - 60)
+        _check_was(uow, earlier)
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "not_due", "replaced": []}
+        assert fake_steamgrid_db_api.requested_paths == []
+        assert _checked_at(uow) == earlier
+
+    @pytest.mark.asyncio
+    async def test_after_seven_days_it_is_asked_again(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300))
+        _check_was(uow, steamgrid.clock.time() - 7 * 24 * 60 * 60)
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": ["logo"]}
+        assert _checked_at(uow) == steamgrid.clock.time()
+
+    @pytest.mark.asyncio
+    async def test_the_visit_after_its_own_write_checks_nothing(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300))
+        await steamgrid.service.keep_artwork_current(42)
+        asked = list(fake_steamgrid_db_api.requested_paths)
+        # The write that makes Steam rebuild the page: the new logo set and reported.
+        (slot_ready / f"{_APP_ID}_logo.png").write_bytes(b"image 6")
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "set", 9999, 6, _sha(b"image 6"))
+        steamgrid.clock.advance(5)
+
+        again = await steamgrid.service.keep_artwork_current(42)
+
+        assert again == {"status": "not_due", "replaced": []}
+        assert fake_steamgrid_db_api.requested_paths == asked
+
+    @pytest.mark.asyncio
+    async def test_two_visits_at_once_check_once(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300))
+        steamgrid.service._keeping_current._clock = _ClockThatWaitsForASecondReader()
+
+        answers = await asyncio.gather(
+            steamgrid.service.keep_artwork_current(42), steamgrid.service.keep_artwork_current(42)
+        )
+
+        assert sorted(answer["status"] for answer in answers) == ["checked", "not_due"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error",
+        [
+            SgdbRateLimitedError("slow down"),
+            SgdbApiError(500, "server error"),
+            SgdbApiError(401, "refused"),
+            SgdbKeyUnsendableError(),
+            OSError("no connection"),
+        ],
+        ids=["429", "5xx", "refused-key", "unsendable-key", "no-connection"],
+    )
+    async def test_a_missing_answer_puts_the_time_back(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, error):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        earlier = steamgrid.clock.time() - 30 * 24 * 60 * 60
+        _check_was(uow, earlier)
+        fake_steamgrid_db_api.request_side_effect = error
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "unanswered", "replaced": []}
+        assert _checked_at(uow) == earlier
+
+    @pytest.mark.asyncio
+    async def test_a_first_check_left_unanswered_leaves_the_game_never_checked(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        fake_steamgrid_db_api.request_side_effect = SgdbRateLimitedError("slow down")
+
+        await steamgrid.service.keep_artwork_current(42)
+
+        assert _checked_at(uow) is None
+
+    @pytest.mark.asyncio
+    async def test_an_unsuccessful_answer_puts_the_time_back(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        fake_steamgrid_db_api.seed_raw_response("/logos/game/9999", {"success": False})
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer["status"] == "unanswered"
+        assert _checked_at(uow) is None
+
+    @pytest.mark.asyncio
+    async def test_a_download_that_failed_puts_the_time_back(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        fake_steamgrid_db_api.seed_raw_response(
+            "/logos/game/9999", {"success": True, "data": [{"id": 6, "url": "https://cdn.example/6.png"}]}
+        )
+        fake_steamgrid_db_api.download_image_return = False
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "unanswered", "replaced": []}
+        assert _checked_at(uow) is None
+
+    @pytest.mark.asyncio
+    async def test_a_slot_replaced_before_one_left_unanswered_stays_replaced(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.WIDE_GRID, 5)
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _seed_candidates(fake_steamgrid_db_api, "grid", (6, 920, 430))
+        fake_steamgrid_db_api.seed_raw_response("/logos/game/9999", {"success": False})
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "unanswered", "replaced": ["grid"]}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "listing",
+        [{"success": True, "data": []}, None],
+        ids=["no-images", "no-listing"],
+    )
+    async def test_no_images_is_an_answer(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, listing):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        if listing is None:
+            fake_steamgrid_db_api.request_side_effect = SgdbApiError(404, "Game not found.")
+        else:
+            fake_steamgrid_db_api.seed_raw_response("/logos/game/9999", listing)
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": []}
+        assert _checked_at(uow) == steamgrid.clock.time()
+
+    @pytest.mark.asyncio
+    async def test_a_chosen_slot_a_slot_set_in_steam_and_an_empty_one_are_not_asked(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        _choose(uow, ArtworkSlot.LOGO, 5)
+        (slot_ready / f"{_APP_ID}_hero.jpg").write_bytes(b"set by hand")
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": []}
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    @pytest.mark.asyncio
+    async def test_romms_cover_is_not_asked(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        (slot_ready / f"{_APP_ID}p.png").write_bytes(b"romm's cover")
+
+        await steamgrid.service.keep_artwork_current(42)
+
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    @pytest.mark.asyncio
+    async def test_a_cover_tender_picked_from_steamgriddb_is_kept_current(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.COVER, 5)
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (6, 600, 900), (5, 660, 930))
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": ["cover"]}
+        assert _cached_path(sgdb_artwork_cache, 42, "cover", 6) in sgdb_artwork_cache.files
+
+    @pytest.mark.asyncio
+    async def test_an_icon_tender_set_is_kept_current(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        icon = slot_ready / f"{_APP_ID}_icon.png"
+        icon.write_bytes(b"icon 5")
+        _write_shortcut_icon_paths(slot_ready, {_APP_ID: str(icon)})
+        _record_set(uow, ArtworkSlot.ICON, 5, b"icon 5")
+        _seed_candidates(fake_steamgrid_db_api, "icon", (6, 256, 256))
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": ["icon"]}
+        assert _cached_path(sgdb_artwork_cache, 42, "icon", 6) in sgdb_artwork_cache.files
+
+    @pytest.mark.asyncio
+    async def test_without_a_key_nothing_is_asked_or_recorded(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        steamgrid.settings["steamgriddb_api_key"] = ""
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "no_api_key", "replaced": []}
+        assert _checked_at(uow) is None
+
+    @pytest.mark.asyncio
+    async def test_without_a_steamgriddb_game_nothing_is_asked_or_recorded(self, steamgrid, uow, home):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "no_sgdb_game", "replaced": []}
+        assert _checked_at(uow) is None
+
+    @pytest.mark.asyncio
+    async def test_an_unsynced_rom_is_not_checked(self, steamgrid, uow):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        steamgrid.library._pending_sync[42] = {"sgdb_id": 9999}
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "not_synced", "replaced": []}
+
+    @pytest.mark.asyncio
+    async def test_a_key_no_header_can_carry_is_refused(self, steamgrid, slot_ready):
+        steamgrid.settings["steamgriddb_api_key"] = "bad\nkey"
+        checking = steamgrid.service.keep_artwork_current(42)
+
+        with pytest.raises(Refused) as refused:
+            await checking
+
+        assert refused.value.reason == "auth_failed"
+
+    @pytest.mark.asyncio
+    async def test_a_running_cleanup_refuses_it(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        steamgrid.prune_conflicts.register_run("held-run")
+
+        with _refused_by_conflict_rule("prune_active"):
+            await steamgrid.service.keep_artwork_current(42)
+
+        assert fake_steamgrid_db_api.requested_paths == []
+        assert _checked_at(uow) is None
+
+    @pytest.mark.asyncio
+    async def test_a_replaced_cover_is_served_as_the_other_slots_are(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.COVER, 5)
+        _seed_cover_candidates(fake_steamgrid_db_api, (6, 600, 900))
+        await steamgrid.service.keep_artwork_current(42)
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover", True)
+
+        assert (answer["status"], answer["image_id"], base64.b64decode(answer["base64"])) == ("image", 6, b"image 6")
+        assert _handover(uow, ArtworkSlot.COVER).image_id == 6
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+    def test_a_withdrawal_leaves_a_later_time_alone(self, steamgrid, uow, slot_ready):
+        from services.steamgrid._current import _Started
+
+        _check_was(uow, 500.0)
+
+        steamgrid.service._keeping_current._withdraw_io(42, _Started(at=400.0, previous=None))
+
+        assert _checked_at(uow) == 500.0
+
+
+class TestTheCoverWhereRommHasNone:
+    """D23, D27: an empty cover slot is filled with Tender's pick among SteamGridDB's covers, as the other slots are."""
+
+    @pytest.mark.asyncio
+    async def test_an_empty_cover_is_served_tenders_pick(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _seed_cover_candidates(fake_steamgrid_db_api, (8, 342, 482), (7, 660, 930), (5, 600, 900))
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+
+        assert (answer["status"], answer["image_id"], base64.b64decode(answer["base64"])) == ("image", 5, b"image 5")
+        assert _handover(uow, ArtworkSlot.COVER).image_id == 5
+        await steamgrid.prune_conflicts.release_lease(answer["prune_lease_token"])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("name", [f"{_APP_ID}p.png", f"{_APP_ID}p.jpg"])
+    async def test_a_cover_in_the_grid_folder_is_left_alone(self, steamgrid, slot_ready, fake_steamgrid_db_api, name):
+        (slot_ready / name).write_bytes(b"a cover")
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+
+        assert answer == {"status": "skip"}
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    @pytest.mark.asyncio
+    async def test_no_cover_on_steamgriddb_is_recorded_and_rules_it_out_for_a_week(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _seed_cover_candidates(fake_steamgrid_db_api)
+
+        first = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+        again = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "cover")
+
+        assert (first, again) == ({"status": "none"}, {"status": "skip"})
+        assert _outcome(uow, ArtworkSlot.COVER).outcome is SlotOutcome.NONE
+        assert len(fake_steamgrid_db_api.requested_paths) == 1
+
+    @pytest.mark.asyncio
+    async def test_refresh_artwork_forgets_that_steamgriddb_had_none(self, steamgrid, uow, slot_ready):
+        with uow:
+            uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_none(rom_id=42, slot=ArtworkSlot.COVER, sgdb_id=9999, recorded_at=1.0)
+            )
+
+        await steamgrid.service.get_sgdb_resolution(42)
+
+        assert _outcome(uow, ArtworkSlot.COVER) is None
+
+    @pytest.mark.asyncio
+    async def test_steam_refusing_the_cover_records_nothing(self, steamgrid, uow, slot_ready):
+        await steamgrid.service.report_sgdb_slot_artwork(42, "cover", "refused", 9999, 5, None)
+
+        assert _outcome(uow, ArtworkSlot.COVER) is None
+
+    def test_the_job_gets_the_cover_into_the_cache(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _seed_cover_candidates(fake_steamgrid_db_api, (5, 600, 900))
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.COVER) is SlotAnswer.READY
+
+    @pytest.mark.asyncio
+    async def test_a_change_of_game_picks_a_steamgriddb_cover_anew_under_it(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.COVER, 5)
+        fake_steamgrid_db_api.seed_raw_response(
+            "/grids/game/7777?dimensions=600x900",
+            {"success": True, "data": [{"id": 6, "url": "https://cdn.example/6.png", "width": 600, "height": 900}]},
+        )
+        fake_steamgrid_db_api.seed_image_bytes("https://cdn.example/6.png", b"image 6")
+
+        await steamgrid.service.apply_sgdb_game_id(42, 7777)
+
+        assert sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "cover", 6)] == b"image 6"
+
+    @pytest.mark.asyncio
+    async def test_a_change_of_game_leaves_romms_cover_alone(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        (slot_ready / f"{_APP_ID}p.png").write_bytes(b"romm's cover")
+
+        await steamgrid.service.apply_sgdb_game_id(42, 7777)
+
+        covers_asked = [path for path in fake_steamgrid_db_api.requested_paths if "dimensions=600x900" in path]
+        assert covers_asked == []
+
+
+class TestWhatAVisitLeftNotHandedOver:
+    """D29: a visit names every automatic slot downloaded anew and not yet set, inside the seven days too."""
+
+    @pytest.mark.asyncio
+    async def test_a_handover_cut_short_finishes_at_the_next_visit(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.WIDE_GRID, 5)
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _seed_candidates(fake_steamgrid_db_api, "grid", (6, 920, 430))
+        _seed_candidates(fake_steamgrid_db_api, "logo", (8, 800, 300))
+        first = await steamgrid.service.keep_artwork_current(42)
+        # Steam took the wide grid; the page was rebuilt before the logo was handed over.
+        (slot_ready / f"{_APP_ID}.png").write_bytes(b"image 6")
+        await steamgrid.service.report_sgdb_slot_artwork(42, "grid", "set", 9999, 6, _sha(b"image 6"))
+        asked = len(fake_steamgrid_db_api.requested_paths)
+
+        second = await steamgrid.service.keep_artwork_current(42)
+
+        assert first == {"status": "checked", "replaced": ["grid", "logo"]}
+        assert second == {"status": "not_due", "replaced": ["logo"]}
+        assert len(fake_steamgrid_db_api.requested_paths) == asked
+
+    @pytest.mark.asyncio
+    async def test_a_visit_with_nothing_left_names_nothing(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (8, 800, 300))
+        await steamgrid.service.keep_artwork_current(42)
+        (slot_ready / f"{_APP_ID}_logo.png").write_bytes(b"image 8")
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "set", 9999, 8, _sha(b"image 8"))
+
+        again = await steamgrid.service.keep_artwork_current(42)
+
+        assert again == {"status": "not_due", "replaced": []}
+
+    @pytest.mark.asyncio
+    async def test_a_due_check_names_what_was_left_beside_what_it_replaced(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.WIDE_GRID, 5)
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "logo", 8)] = b"image 8"
+        _seed_candidates(fake_steamgrid_db_api, "grid", (6, 920, 430))
+        _seed_candidates(fake_steamgrid_db_api, "logo", (8, 800, 300))
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": ["grid", "logo"]}
+
+    @pytest.mark.asyncio
+    async def test_a_replacement_steam_refused_waits_for_the_next_check(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (8, 800, 300))
+        await steamgrid.service.keep_artwork_current(42)
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 8, None)
+
+        again = await steamgrid.service.keep_artwork_current(42)
+        steamgrid.clock.advance(7 * 24 * 60 * 60)
+        week_later = await steamgrid.service.keep_artwork_current(42)
+
+        assert again == {"status": "not_due", "replaced": []}
+        assert week_later == {"status": "checked", "replaced": ["logo"]}
+
+    @pytest.mark.asyncio
+    async def test_a_chosen_slot_is_never_left_over(self, steamgrid, uow, slot_ready, sgdb_artwork_cache):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _choose(uow, ArtworkSlot.LOGO, 7)
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "logo", 8)] = b"image 8"
+        _check_was(uow, steamgrid.clock.time())
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "not_due", "replaced": []}
+
+
+class TestACheckThatRaises:
+    @pytest.mark.asyncio
+    async def test_its_time_is_taken_back(self, steamgrid, uow, slot_ready, monkeypatch):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        earlier = steamgrid.clock.time() - 30 * 24 * 60 * 60
+        _check_was(uow, earlier)
+
+        def boom(_slot, _sgdb_id):
+            raise RuntimeError("unexpected")
+
+        # Reached only inside the check, once its time is recorded.
+        monkeypatch.setattr(steamgrid.service._keeping_current, "_pick_io", boom)
+        checking = steamgrid.service.keep_artwork_current(42)
+
+        with pytest.raises(RuntimeError):
+            await checking
+
+        assert _checked_at(uow) == earlier
+
+    def test_a_withdrawal_for_a_rom_gone_meanwhile_does_nothing(self, steamgrid, uow, slot_ready):
+        from services.steamgrid._current import _Started
+
+        with uow:
+            uow.roms.delete(42)
+
+        steamgrid.service._keeping_current._withdraw_io(42, _Started(at=400.0, previous=None))
+
+        with uow:
+            assert uow.roms.get(42) is None

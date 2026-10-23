@@ -31,7 +31,7 @@ import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
 import { useTriggerHandler } from "./emulatorStepping";
-import { applyAutomaticArtwork, cancelArtworkApply } from "../utils/artwork";
+import { applyAutomaticArtwork, applyTabSlotImage, cancelArtworkApply } from "../utils/artwork";
 import { settleArtworkGame } from "../utils/artworkGameChange";
 import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
 import { CHOOSE_GAME_FIRST } from "../utils/artworkTabWording";
@@ -47,6 +47,7 @@ import {
   getRomMetadata,
   isEndpointFailure,
   refreshCoverArtwork,
+  setArtworkSlotAutomatic,
   refreshSgdbArtwork,
   downloadAllFirmware,
   deleteLocalSaves,
@@ -130,20 +131,43 @@ async function readAndBroadcastSaveStatus(appId: number, isCancelled: () => bool
   }
 }
 
-/** Reload RomM's cover for *romId* and tell the game info panel; answers why it failed, or `null` once reloaded. */
-async function refreshRommCover(romId: number): Promise<string | null> {
+/** What reloading the cover came to: why it failed, `null` once reloaded, and whether it is Tender's SteamGridDB pick. */
+interface CoverReload {
+  failure: string | null;
+  steamGridDb: boolean;
+}
+
+/**
+ * Reload RomM's cover for *romId* and hand it to Steam — where RomM has none, Tender's pick from SteamGridDB's covers,
+ * downloaded anew and set (#2381 D23, D25) — and tell the game info panel.
+ */
+async function refreshRommCover(romId: number, appId: number): Promise<CoverReload> {
   // Re-download the RomM cover, rename to {app_id}p.png, and patch
   // cover_path on the registry row so the game info panel can render the
   // refreshed image.
   const coverResult = await refreshCoverArtwork(romId).catch(
-    (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
+    (
+      e,
+    ): {
+      success: boolean;
+      reason?: WireReason | "exception";
+      message: string;
+      cover_path?: string;
+      prune_lease_token?: string;
+    } => {
       detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
       return { success: false, reason: "exception", message: "the request did not complete" };
     },
   );
-  if (!coverResult.success) {
+  let steamGridDb = false;
+  if (coverResult.success) {
+    await setRommCoverInSteam(romId, appId, coverResult.prune_lease_token);
+  } else {
     detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
-    return coverResult.message;
+    if (coverResult.reason !== "no_cover") return { failure: coverResult.message, steamGridDb };
+    const failure = await setSteamGridDbCover(romId, appId);
+    if (failure !== null) return { failure: failure ?? coverResult.message, steamGridDb };
+    steamGridDb = true;
   }
   // Notify the game info panel so it can re-render the cover image.
   globalThis.dispatchEvent(
@@ -151,7 +175,42 @@ async function refreshRommCover(romId: number): Promise<string | null> {
       detail: { type: "cover_refreshed", rom_id: romId },
     }),
   );
-  return null;
+  return { failure: null, steamGridDb };
+}
+
+/**
+ * Hand Steam the RomM cover the backend just reloaded, under the lease the reload answered with, as the ARTWORK tab's
+ * Automatic sets RomM's cover: the grid file alone shows only after Steam restarts. A write that fails is logged; the
+ * reload stands.
+ */
+async function setRommCoverInSteam(romId: number, appId: number, leaseToken: string | undefined): Promise<void> {
+  if (!leaseToken) return;
+  const outcome = await applyTabSlotImage(
+    romId,
+    appId,
+    "cover",
+    { status: "cover", prune_lease_token: leaseToken },
+    false,
+  ).catch((e: unknown) => {
+    detach(debugLog(`Refresh Artwork: RomM's cover for appId ${appId} was not handed to Steam: ${e}`));
+    return null;
+  });
+  if (outcome === "refused") detach(debugLog(`Refresh Artwork: Steam refused RomM's cover for appId ${appId}`));
+}
+
+/**
+ * Set the cover back to automatic for a game RomM has no cover for, which serves Tender's pick from SteamGridDB, and
+ * hand it to Steam. `null` once Steam took it; why not otherwise, `undefined` where no answer came.
+ */
+async function setSteamGridDbCover(romId: number, appId: number): Promise<string | null | undefined> {
+  const answer = await setArtworkSlotAutomatic(romId, "cover").catch((e: unknown) => {
+    detach(debugLog(`Refresh Artwork: the SteamGridDB cover for rom ${romId} was not served: ${e}`));
+    return null;
+  });
+  if (!answer) return undefined;
+  if (isEndpointFailure(answer)) return answer.message;
+  const outcome = await applyTabSlotImage(romId, appId, "cover", answer, false);
+  return outcome === "set" ? null : "Steam did not take the cover from SteamGridDB";
 }
 
 interface RomMPlaySectionProps {
@@ -430,6 +489,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     setActionPending("artwork");
     const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
     let coverFailure: string | null = null;
+    let coverFromSteamGridDb = false;
     const say = (sgdbResult: string) => {
       if (!coverFailure || coverFailure === sgdbResult) {
         showToast(sgdbResult);
@@ -451,7 +511,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         return;
       }
       if (slots.slots.some((row) => row.slot === "cover" && row.state === "automatic")) {
-        coverFailure = await refreshRommCover(romId);
+        const reload = await refreshRommCover(romId, appId);
+        coverFailure = reload.failure;
+        coverFromSteamGridDb = reload.steamGridDb;
       }
 
       const resolution = await getSgdbResolution(romId).catch((e): null => {
@@ -477,7 +539,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
             say(refreshed.message);
             break;
           }
-          say(artworkApplyMessage(await applyAutomaticArtwork(romId, appId)));
+          say(artworkApplyMessage(await applyAutomaticArtwork(romId, appId), coverFromSteamGridDb));
           break;
         }
         case "needs_pick":
