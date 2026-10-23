@@ -846,9 +846,10 @@ class MatrixExecutor:
         the caller: reading them again here would put a second live reading of
         the machine on every ROM of a whole-library sweep. A ``None`` directory
         is the refusing answer's pairing — nothing local is probed for. A file's
-        name and its size claim — that of the component by that name in
-        *saves_dir*, where every name is probed — are both read off
-        *synced_files*, so every caller decides a file by the same claim.
+        name and its size claim are both read off *synced_files*, so every
+        caller decides a file by the same claim; the claim is the one stated in
+        *saves_dir*, the directory every name is probed in
+        (save-file-sync-architecture.md, "Inputs").
 
         Walks the local saves directory + server-only canonical targets,
         runs ``compute_sync_action`` against the per-filename inputs, and
