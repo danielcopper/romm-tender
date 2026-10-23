@@ -174,3 +174,14 @@ def _not_ruled_out(recorded: ArtworkSlotOutcome | None, *, sgdb_id: int | None, 
 def _require_recorded(slot: ArtworkSlot, recorded: frozenset[ArtworkSlot] = RECORDED_SLOTS) -> None:
     if slot not in recorded:
         raise ValueError(f"no outcome is recorded for the {slot.value} slot")
+
+
+def binding_forgets_cover_record(*, previous_app_id: int | None, app_id: int | None, cover_chosen: bool) -> bool:
+    """Whether binding a version to shortcut *app_id*, bound to *previous_app_id* before, forgets its cover record.
+
+    It does where the version becomes the shortcut's bound one — bound anew or
+    moved here — and its cover is not chosen: a SteamGridDB cover recorded for
+    it earlier would otherwise read as set in Steam under whatever cover the
+    shortcut shows now (#2381 D28).
+    """
+    return app_id is not None and app_id != previous_app_id and not cover_chosen

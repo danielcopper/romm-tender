@@ -23,6 +23,8 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.artwork_slot import ArtworkSlot
+from domain.artwork_slot_outcome import binding_forgets_cover_record
 from domain.collection_label import steam_collection_key
 from domain.collection_name import fold_collection_name
 from domain.fetch_generation import gone_from_romm_ids
@@ -682,8 +684,22 @@ class SyncReporter:
         if rom_id in binding:
             rom.record_applied_launch_options(built.get("launch_options", ""))
             uow.roms.set_applied_launch_options(rom_id, rom.applied_launch_options)
+            self._forget_cover_record_on_bind(uow, rom_id, binding[rom_id], existing)
 
         self._stamp_rom_metadata(uow, rom_id, roms_by_id.get(rom_id))
+
+    @staticmethod
+    def _forget_cover_record_on_bind(uow, rom_id: int, app_id: int, existing: Rom | None) -> None:
+        """Forget the cover record of a version this commit binds anew or moves a shortcut onto (#2381 D28).
+
+        :func:`domain.artwork_slot_outcome.binding_forgets_cover_record` decides;
+        a rebind, a recreated shortcut and an adopted orphan all bind here.
+        """
+        previous_app_id = existing.shortcut_app_id if existing is not None else None
+        cover_chosen = uow.artwork_slot_choices.get(rom_id, ArtworkSlot.COVER) is not None
+        if binding_forgets_cover_record(previous_app_id=previous_app_id, app_id=app_id, cover_chosen=cover_chosen):
+            uow.artwork_slot_outcomes.delete_slot(rom_id, ArtworkSlot.COVER)
+            uow.artwork_slot_handovers.delete_slot(rom_id, ArtworkSlot.COVER)
 
     def _merge_locally_resolved_fields(self, rom: Rom, rom_id: int, built, finalized, existing) -> None:
         """Read-merge the locally resolved fields onto the freshly built Rom.

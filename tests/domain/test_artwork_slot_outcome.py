@@ -9,6 +9,7 @@ from domain.artwork_slot_outcome import (
     RULED_OUT_SECONDS,
     ArtworkSlotOutcome,
     SlotOutcome,
+    binding_forgets_cover_record,
     icon_waits,
     logo_icon_waits,
     slot_waits,
@@ -181,3 +182,20 @@ class TestWhetherTheJobGivesTheLogoIconWithoutAsking:
         refused = ArtworkSlotOutcome.record_refused(rom_id=1, slot=ArtworkSlot.ICON, sgdb_id=7, recorded_at=NOW)
 
         assert not logo_icon_waits("", refused, sgdb_id=7, now=NOW + 1)
+
+
+class TestABindingForgetsTheCoverRecord:
+    """D28: a version that becomes a shortcut's bound one forgets its SteamGridDB cover record unless it is chosen."""
+
+    @pytest.mark.parametrize(("previous", "app_id"), [(None, 5000), (4000, 5000)], ids=["bound-anew", "moved-here"])
+    def test_a_version_that_becomes_bound_forgets_it(self, previous, app_id):
+        assert binding_forgets_cover_record(previous_app_id=previous, app_id=app_id, cover_chosen=False) is True
+
+    def test_a_version_that_stays_bound_keeps_it(self):
+        assert binding_forgets_cover_record(previous_app_id=5000, app_id=5000, cover_chosen=False) is False
+
+    def test_a_chosen_cover_keeps_it(self):
+        assert binding_forgets_cover_record(previous_app_id=None, app_id=5000, cover_chosen=True) is False
+
+    def test_no_binding_forgets_nothing(self):
+        assert binding_forgets_cover_record(previous_app_id=5000, app_id=None, cover_chosen=False) is False
