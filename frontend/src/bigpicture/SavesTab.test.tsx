@@ -745,7 +745,7 @@ describe("SavesTab", () => {
       }
     });
 
-    it("surfaces 'Failed to create slot' for other switch-slot failure reasons (e.g. not_installed)", async () => {
+    it("tells the reader to download the game first where it is not installed", async () => {
       vi.useFakeTimers();
       try {
         vi.mocked(backend.switchSlot).mockResolvedValue({
@@ -759,8 +759,8 @@ describe("SavesTab", () => {
           await newSlotModalSubmit()?.("named");
           await vi.advanceTimersByTimeAsync(0);
         });
-        expect(container.textContent).toContain("Failed to create slot");
-        expect(container.textContent).not.toContain("download the game first");
+        expect(container.textContent).toContain("Can't create a slot — download the game first");
+        expect(container.textContent).not.toContain("Failed to create slot");
       } finally {
         vi.useRealTimers();
       }
