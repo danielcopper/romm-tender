@@ -493,9 +493,10 @@ between Game Mode and Desktop Mode does.
 The hero banner is set the first time a game's page is opened in a session, and so are an icon, a logo, a wide grid and
 a cover the background job has not set yet; each only where the game has none (Tender's logo counts as no icon): an
 image you set yourself, in Steam's own artwork options or with another tool, stays, until you switch the game to another
-version, which replaces all four with that version's — an image you chose for that version comes back with it. When
-SteamGridDB has no icon, logo, wide grid or cover for a game, or Steam does not accept the image, neither the background
-job nor opening the page asks again for a week, or until the game's SteamGridDB match changes.
+version, which replaces the hero banner, icon, logo and wide grid with that version's and sets that version's own cover
+— an image you chose for that version comes back with it. When SteamGridDB has no icon, logo, wide grid or cover for a
+game, or Steam does not accept an icon, logo or wide grid, neither the background job nor opening the page asks again
+for a week, or until the game's SteamGridDB match changes; a cover Steam did not accept is asked for again at once.
 
 Opening a game's page also keeps the images Tender picked from SteamGridDB current, at most once a week per game, and
 says which ones it replaced ([Refreshing Artwork and Metadata](managing-games.md#refreshing-artwork-and-metadata)).

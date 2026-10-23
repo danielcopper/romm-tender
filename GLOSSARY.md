@@ -1229,8 +1229,8 @@ cover, `set` for an image from SteamGridDB and `none` where SteamGridDB has no c
 choice** is the SteamGridDB image a user chose for one of a ROM's slots in the game page's ARTWORK tab
 (`ArtworkSlotChoice`); it stays until the user chooses another or sets the slot back to automatic, or the ROM's
 SteamGridDB game changes — the user choosing another game, or RomM's id replacing the one the user chose. A slot with
-neither a choice nor an image set in Steam is **automatic**: Tender picks its image — RomM's cover for the cover,
-falling back to Tender's pick from SteamGridDB where RomM has none, and Tender's pick (`choose_candidate`) for the other
+neither a choice nor an image set in Steam is **automatic**: Tender picks its image — RomM's cover for the cover, with
+Tender's pick from SteamGridDB standing in until RomM's arrives, and Tender's pick (`choose_candidate`) for the other
 four — and Refresh Artwork may replace it. Tender **keeps it current**: a visit to the game page checks the automatic
 slots showing Tender's SteamGridDB image at most once in seven days, and replaces one whose pick is now another image
 (`keep_artwork_current`; the time is `roms.artwork_checked_at`); RomM's cover is kept current by the sync instead, which

@@ -757,9 +757,9 @@ game with no cover gets Tender's pick from SteamGridDB's covers the same way —
 also one whose RomM cover could not be downloaded or was removed through Steam — and the first sync that brings RomM's
 cover for it puts RomM's cover in its place. Switching the game to another version sets the hero banner, logo, wide grid
 and icon to that version's, over an image you set yourself too (whether Steam then shows Tender's image over one you set
-from a JPEG is not yet known), and the cover to the one you chose for that version, else RomM's, else Tender's pick from
-SteamGridDB; it uses the images Tender already downloaded for that version and downloads only the ones it has not. An
-image whose new download fails keeps the one Tender had.
+from a JPEG is not yet known), and the cover to the one you chose for that version, else RomM's, else — RomM has none,
+or it cannot be reached — Tender's pick from SteamGridDB; it uses the images Tender already downloaded for that version
+and downloads only the ones it has not. An image whose new download fails keeps the one Tender had.
 
 Once a week at most, opening a game's page also checks the images Tender picked from SteamGridDB: where SteamGridDB now
 ranks another image first, Tender replaces it and says so once, for example "Updated the hero and the logo from
