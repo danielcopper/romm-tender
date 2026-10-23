@@ -190,8 +190,8 @@ class SaveGroup:
 
     ``files`` is ``None`` when the resolver states that save data lives in
     ``directory`` and refuses to name it — never "the directory is empty".
-    ``size_fixed`` is the resolver's claim that the emulator writes each of
-    ``files`` at a fixed size, ``None`` where it established none.
+    ``size_fixed`` is the resolver's claim whether the emulator writes each of
+    ``files`` at a fixed size — ``None`` where it established none.
     """
 
     directory: str
@@ -209,7 +209,8 @@ class SaveComponent:
     ``memory-card``, ``settings``, …), its own ``unknown`` for a file on the
     machine that no declaration describes, or ``None`` where no group claimed it
     at all. ``size_fixed`` is whether the emulator writes the file at a fixed
-    size, as :func:`agreed_size_fixed` reads it off the groups that list it;
+    size, as :func:`agreed_size_fixed` reads it off the groups that list its
+    directory and name;
     ``None`` is unknown, never "its size varies".
     """
 
@@ -628,8 +629,9 @@ def agreed_size_fixed(claims: Iterable[bool | None]) -> bool | None:
 
     The resolver states ``size_fixed`` per group and none per file, so a file
     two groups list carries two claims. Where they all agree, that is the
-    file's claim — the resolver's own reading of such a file — and where they
-    do not, nothing is established about its size.
+    file's claim, and where they do not, nothing is established about its
+    size — the rule the resolver applies itself where several files share one
+    group's claim (``installations._one_claim``).
     """
     distinct = set(claims)
     return distinct.pop() if len(distinct) == 1 else None
@@ -643,12 +645,14 @@ def _components(
     """The concrete files the answer names, each with what it is and where it sits.
 
     Built from the groups where there are any: they carry the role, their own
-    directory and the size claim, and in every reading taken so far they cover
-    the placement's own file list and then some. A placement the resolver
-    answered without groups still names files, and those take the placement's
-    directory, no role and no size claim. A file's size claim is looked up by
-    its directory and name across every group, so a file two groups list
-    carries the claim they agree on (:func:`agreed_size_fixed`).
+    directory and the size claim. The resolver holds the names of the groups in
+    the first group's directory, repeats included, to the placement's own list
+    (``FileSet._check_group_agreement``), and leaves groups in other directories
+    unchecked, so those may add files. A placement the resolver answered
+    without groups still names files, and those take the placement's directory,
+    no role and no size claim. A file's size claim is looked up by its
+    directory and name across every group, so a file two groups list carries
+    the claim they agree on (:func:`agreed_size_fixed`).
     """
     if not groups:
         return tuple(SaveComponent(name=name, directory=directory, role=None, granularity=None) for name in files)

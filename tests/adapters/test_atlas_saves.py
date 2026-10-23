@@ -1302,12 +1302,12 @@ class TestTheSizeClaim:
         assert [component.size_fixed for component in answer.synced_files] == [None]
 
 
-class TestRetroArchsStandardRuleNowCarriesGroups:
-    """emu-atlas 0.26.0 answers RetroArch's standard rule with one group per file it writes, where 0.25.0 had none.
+class TestTheStandardRulesGroupsChangeNoSyncedFile:
+    """RetroArch's standard rule answers one battery group per file it writes.
 
-    The shapes are the ones a Game Boy game under Gambatte answers at each
-    release; the groups add a role and a size claim, and change nothing about
-    which files a sync carries or where (#2538 D5).
+    Against the same files answered without groups, the groups add a role and a
+    size claim and change nothing about which files a sync carries or where
+    (#2538 D5).
     """
 
     _FILES = ("Game Title.srm", "Game Title.rtc")

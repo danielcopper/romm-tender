@@ -215,8 +215,8 @@ class GavelNativeAdapter:
         ``local_file`` may state ``content_size`` and ``size_fixed`` beside
         ``size`` and ``mtime``, and ``files_state`` ``last_sync_content_size``
         beside ``last_sync_local_size``; each absent key is unknown.
-        ``size_fixed`` is ``True``, ``False`` or absent, and anything else
-        raises.
+        ``size_fixed`` is ``True``, ``False``, or absent or ``None`` (both
+        unknown), and anything else raises.
         """
         # Every buffer the C structs point at has to outlive the call. CPython's
         # ctypes does track this itself — a value assigned to a pointer field is
