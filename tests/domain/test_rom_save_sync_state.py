@@ -496,7 +496,7 @@ class TestRecordTransfer:
 
 
 class TestAdoptHead:
-    def test_the_baseline_is_the_one_a_download_of_the_same_bytes_would_leave(self):
+    def test_the_baseline_is_composed_from_the_head_and_the_local_measure(self):
         state = RomSaveSyncState()
 
         state.adopt_head("game.srm", _HEAD, _MEASURE, 1700000000.5, synced_at="2026-03-01T00:00:00Z")

@@ -764,8 +764,9 @@ class SaveFileStore(Protocol):
         sync run's repeated reads of the same file (negotiate inventory, the
         newest-wins matrix, the post-op baseline write) read it once. The memo
         is discarded on scope exit — never a process-lifetime cache — and a file
-        overwritten mid-run is read again on its new stat. Reentrant: nested scopes share one memo. The
-        engine opens exactly one outermost scope per device-gated save-sync run.
+        overwritten mid-run is read again on its new stat. Reentrant: nested
+        scopes share one memo. The engine opens exactly one outermost scope per
+        device-gated save-sync run.
         """
         ...
 

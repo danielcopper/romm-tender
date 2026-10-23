@@ -171,8 +171,8 @@ class RomSaveSyncState:
         ``content_hash`` is stored verbatim as ``last_sync_server_hash``, and
         its ``updated_at`` falls back to *synced_at*. *local* is the local
         file's measure, ``None`` when it is gone. A save without an id, or a
-        local file with no hash, has no baseline to record: nothing changes
-        and ``False`` is returned.
+        local file that is gone or has no hash, has no baseline to record:
+        nothing changes and ``False`` is returned.
         """
         server_save_id = server_save.get("id")
         if server_save_id is None or local is None or not local.content_hash:
@@ -203,10 +203,11 @@ class RomSaveSyncState:
     ) -> None:
         """Record the local file, identical to *head*, as *filename*'s baseline for that head.
 
-        The adopt a ``Skip(adopt_baseline=True)`` asks for: no transfer, and the
-        baseline a download of the same bytes would leave — the head's id, its
-        ``content_hash`` verbatim, its size and ``updated_at``, and *local*'s
-        hash, size and content size. Raises ``ValueError`` where
+        The adopt a ``Skip(adopt_baseline=True)`` asks for: no transfer, and a
+        baseline composed like a download's — the head's id, its
+        ``content_hash`` verbatim, its size and ``updated_at`` (empty where the
+        head states none, where a download records the sync time), and
+        *local*'s hash, size and content size. Raises ``ValueError`` where
         :meth:`adopt_baseline` does.
         """
         head_id = int(head["id"])

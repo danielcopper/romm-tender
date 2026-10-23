@@ -223,12 +223,12 @@ class MatrixExecutor:
         """Update per-file sync tracking on *save_state* after a successful sync op.
 
         Mutates the passed aggregate in memory via its verb methods; the
-        operation entry owns the surrounding write Unit of Work. Measures the
+        operation entry owns the surrounding write Unit of Work. Seeds the ROM's
+        state through :meth:`RomSaveSyncState.reach_sync_boundary`, measures the
         local file — its hash, size and content size from one open, and its
         mtime — and hands the measure to
-        :meth:`RomSaveSyncState.reach_sync_boundary` and
-        :meth:`RomSaveSyncState.record_transfer`, which hold what the boundary
-        records; a response or file with nothing to record is logged.
+        :meth:`RomSaveSyncState.record_transfer`, which composes the baseline; a
+        response or file with nothing to record is logged.
         """
         save_state.reach_sync_boundary(system, default_slot, emulator_tag=emulator_tag, core=core_so)
         local_exists = self._save_file_store.is_file(local_path)
@@ -247,7 +247,7 @@ class MatrixExecutor:
                 "update_file_sync_state: skipping untrackable baseline for %s (id=%r, has_hash=%s)",
                 filename,
                 server_response.get("id"),
-                measure is not None,
+                bool(measure and measure.content_hash),
             )
 
     def adopt_head_as_baseline(
@@ -265,8 +265,10 @@ class MatrixExecutor:
 
         The adopt a ``Skip(adopt_baseline=True)`` asks for, with no transfer:
         the baseline is :meth:`RomSaveSyncState.adopt_head`'s, and as the adopt
-        stands in for a download of the same bytes, *save_state* is seeded as
-        :meth:`update_file_sync_state` seeds it. *local_hash* is the hash
+        stands in for a download of the same bytes, *save_state* is seeded
+        through :meth:`RomSaveSyncState.reach_sync_boundary` as a download seeds
+        it, except that no core is recorded and the emulator tag stays the one
+        already recorded. *local_hash* is the hash
         the decision was made on; when the file no longer hashes to it, nothing
         is recorded and ``False`` is returned, so a file written since the
         decision is never recorded as the head's bytes. Mutates *save_state* in
@@ -298,7 +300,10 @@ class MatrixExecutor:
         system: str,
         default_slot: str | None,
     ) -> None:
-        """Seed *save_state* as a download does and record *head* as *filename*'s baseline from *measured*."""
+        """Seed *save_state* at the boundary (no core; the recorded emulator tag) and record *head*.
+
+        *head* becomes *filename*'s baseline, composed from *measured*.
+        """
         save_state.reach_sync_boundary(system, default_slot)
         save_state.adopt_head(filename, head, *measured, synced_at=self._clock.now().isoformat())
 

@@ -226,12 +226,12 @@ class SaveFileAdapter:
         save's measure keyed by ``(path, mtime_ns, size)`` so the several passes
         of one run that hash the same file read it once. The memo is discarded
         when the outermost scope exits, so it is never a process-lifetime cache;
-        a file overwritten mid-run gets a new stat key and is read again. Reentrant — nested scopes
-        share one memo and only the outermost clears it — so the engine can open
-        it at both the sweep and per-ROM levels. The engine opens exactly one
-        (outermost) scope per device-gated save-sync run, so within-scope hashing
-        is single-threaded; callers outside a scope hash directly and never touch
-        the memo.
+        a file overwritten mid-run gets a new stat key and is read again.
+        Reentrant — nested scopes share one memo and only the outermost clears
+        it — so the engine can open it at both the sweep and per-ROM levels. The
+        engine opens exactly one (outermost) scope per device-gated save-sync
+        run, so within-scope hashing is single-threaded; callers outside a scope
+        hash directly and never touch the memo.
         """
         self._hash_memo_depth += 1
         if self._hash_memo is None:
