@@ -58,6 +58,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     coverBase64: null,
     biosStatus: null,
     biosLevel: null,
+    biosReadFailed: false,
     coreInfo: null,
     saveSyncEnabled: false,
     saveStatus: null,
@@ -186,7 +187,6 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
         activeTab={state.activeTab}
         hasAchievements={!!state.raId}
         hasSaves={state.saveSyncEnabled}
-        hasBios={!!state.biosStatus}
         onSelect={(tabId) => setState((prev) => ({ ...prev, activeTab: tabId }))}
       />
       <Focusable
@@ -211,6 +211,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
         <BiosTab
           biosStatus={state.biosStatus}
           biosLevel={state.biosLevel}
+          readFailed={state.biosReadFailed}
           coreInfo={state.coreInfo}
           isActive={state.activeTab === "bios"}
           platformName={state.platformName}

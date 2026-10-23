@@ -127,8 +127,9 @@ describe("refreshBiosInBackground", () => {
   });
 
   it("clears the shown requirement when the read reports none", async () => {
-    // A read that ANSWERS "no BIOS need" is the only thing that may take a shown
-    // requirement back — the core it was read for may genuinely need none. This
+    // Only a read that ANSWERS may take a shown requirement back — that no BIOS
+    // is needed, as here, or the "unknown" level; the core it was read for may
+    // genuinely need none. This
     // case asserted the opposite until #1690, and that expectation was the
     // defect: the fields could only ever move one way, so a version switch to a
     // core needing no BIOS left the previous level standing (both writers on the
@@ -137,9 +138,9 @@ describe("refreshBiosInBackground", () => {
     // that FAILED still writes nothing, because that one is "we don't know",
     // not an answer.
     vi.mocked(backend.getBiosStatus).mockResolvedValueOnce({
-      bios_status: null,
-      bios_level: null,
-      bios_label: null,
+      bios_status: { platform_slug: "snes", needs_bios: false, server_count: 0, local_count: 0, all_downloaded: true },
+      bios_level: "ok",
+      bios_label: "OK",
     } as unknown as Awaited<ReturnType<typeof backend.getBiosStatus>>);
 
     const setter = vi.fn<(updater: (prev: BiosState) => BiosState) => void>();
@@ -162,9 +163,9 @@ describe("refreshBiosInBackground", () => {
   });
 
   it("writes nothing when the read carries no BIOS answer (#1693)", async () => {
-    // The backend flags a check it could not answer — a cold firmware cache, a
-    // platform check that failed — and it ships the same absent `bios_status` as
-    // a real negative. Folding it would clear the shown requirement.
+    // The backend flags a check it could not answer — a platform check that
+    // failed — with no status and no level. Folding it would clear the shown
+    // requirement.
     vi.mocked(backend.getBiosStatus).mockResolvedValueOnce({
       bios_status: null,
       bios_level: null,

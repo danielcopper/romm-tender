@@ -357,12 +357,10 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
       refreshAchievementsInBackground(romId, cancelled, writeForRom);
     }
 
-    // Folded whether or not the detail reports a requirement: an absent
-    // `bios_status` is the backend answering "this version's core needs none",
-    // and only an unconditional fold can take a shown requirement back (#1690).
-    // A detail derived while the firmware cache was cold carries no answer at
-    // all and is refused here instead (#1693) — the `bios` stale field below
-    // then brings the live one.
+    // A cached detail carries no BIOS answer (`BiosAnswer` in
+    // `api/backend.ts`), so `extractBiosInfo` refuses it here and the `bios`
+    // stale field below brings the live one. Every answer it does project is
+    // folded, the one that clears a shown requirement included.
     const cachedBios = extractBiosInfo(cached);
     if (cachedBios) write((prev) => ({ ...prev, ...cachedBios }));
 

@@ -72,6 +72,7 @@ import {
   releasePruneLeasesByOwner,
   withPruneLease,
 } from "../../utils/pruneLease";
+import { biosAnswerStale, biosReadState, type BiosReadState } from "../../utils/biosReadState";
 import { removeShortcutsPaced } from "../../utils/shortcutRemoval";
 import { withTimeout } from "../../utils/withTimeout";
 import { useLatestWrites, useLineWrites } from "./latestWrites";
@@ -101,27 +102,9 @@ export interface DetailStatus {
   text: string;
 }
 
-/**
- * Where one platform's BIOS answer stands.
- *
- * `pending` is the state this page exists to keep separate: the answer has been
- * asked for and has not arrived, which is NOT "nothing could be established".
- * Rendering the two alike is how a reader takes an answer where none has come
- * yet — and every row starts out that way, because the answers arrive one
- * platform at a time.
- *
- * - `pending` — asked for (or queued), not back yet.
- * - `answered` — {@link PlatformRow.firmware} holds it. Every finished read
- *   answers with an entry, a reading that did not happen included: its
- *   verdict is the one that says nothing could be established.
- * - `failed` — the read did not come back and there is nothing behind it.
- *
- * An answer already held outranks a failure, so a failed RE-read leaves the
- * state where it was and raises {@link PlatformRow.firmwareStale} instead:
- * taking an answer back because a later read failed is how a pane loses an
- * answer it has.
- */
-export type FirmwareState = "pending" | "answered" | "failed";
+/** Where one platform's BIOS answer stands — see {@link BiosReadState}. Every row
+ *  starts out `pending`, because the answers arrive one platform at a time. */
+export type FirmwareState = BiosReadState;
 
 /** One platform as the list and the detail read it — the three reads joined. */
 export interface PlatformRow {
@@ -589,17 +572,6 @@ export function usePlatformsPage(): PlatformsPageState {
     };
   }, [loadCore, loadSaveCount, readOverview, refreshShortcutCounts, syncWrites]);
 
-  /** Where a platform's BIOS answer stands — see {@link FirmwareState}.
-   *
-   *  Order matters. An answer already held is read first, so a failed re-read
-   *  cannot take one back — it is reported beside the answer instead. Then a
-   *  failure with nothing behind it. Everything left is still coming. */
-  const firmwareStateFor = (slug: string): FirmwareState => {
-    if (slug in firmware) return "answered";
-    if (readFailed[slug]) return "failed";
-    return "pending";
-  };
-
   const rows = new Map<string, PlatformRow>(
     platforms.map((p) => [
       p.slug,
@@ -610,8 +582,8 @@ export function usePlatformsPage(): PlatformsPageState {
         romCount: p.rom_count,
         syncEnabled: p.sync_enabled,
         firmware: firmware[p.slug] ?? null,
-        firmwareState: firmwareStateFor(p.slug),
-        firmwareStale: readFailed[p.slug] === true && p.slug in firmware,
+        firmwareState: biosReadState(p.slug in firmware, readFailed[p.slug] === true),
+        firmwareStale: biosAnswerStale(p.slug in firmware, readFailed[p.slug] === true),
         shortcutCount: shortcutCountsFailed ? null : (shortcutCounts[p.slug]?.bound ?? 0),
         reachableCount: shortcutCountsFailed ? null : (shortcutCounts[p.slug]?.reachable ?? 0),
       },

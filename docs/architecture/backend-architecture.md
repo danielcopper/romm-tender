@@ -838,11 +838,12 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   collapse identically — the preview counts can never diverge from what those units create (the #1292 counts-vs-reality
   bug class). A **collection** apply unit spans platforms and may fetch only one unbound sibling of a group whose bound
   member it never fetched, so it is a **partial** view (`complete_group_view=False`): a group that already holds a
-  binding anywhere is grandfathered untouched — never rebound onto the partial member, never given a second shortcut —
-  because the group's real representative rides its own platform unit in the same run. (Inferring "bound sibling absent
-  ⇒ vanished" from a partial view would rebind a live installed game onto an uninstalled sibling — #1296.)
-  `classify_roms` runs over the collapsed set, so its new / changed / unchanged / stale buckets count **games, not
-  dumps**, and an unbound sibling stops reading as a perpetual "new".
+  binding anywhere is grandfathered untouched — never rebound onto the partial member, never given a second shortcut.
+  Where the group's platform is synced, its bound member rides that platform unit in the same run; where only
+  collections reach the group, the stale removal keeps the binding (below). (Inferring "bound sibling absent ⇒ vanished"
+  from a partial view would rebind a live installed game onto an uninstalled sibling — #1296.) `classify_roms` runs over
+  the collapsed set, so its new / changed / unchanged / stale buckets count **games, not dumps**, and an unbound sibling
+  stops reading as a perpetual "new".
 - **Resolution chain** (`domain/sibling_resolution.py::resolve_group_representative`, total + shuffle-stable): an
   installed sibling wins; else an existing binding; else RomM's per-user default (`is_main_sibling`); else the **1G1R
   ranking** — prerelease demotion > **region priority** > revision (newest) > alphabetical `fs_name_no_ext` > `rom_id`.
@@ -893,7 +894,14 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   never emitted for removal).
 - **The stale removal keeps a game gone from RomM.** A bound row no unit of the run returned is sorted by
   `domain/sync_diff.py::sort_stale_rows`: on a platform the run read whole it is gone from RomM and stays bound — and
-  stays in its platform's Steam collection; on a platform the run did not read, it was reached either through a
+  stays in its platform's Steam collection. On a platform the run did not read, **a row whose game the run synced stays
+  bound**: when another member of its sibling group is among the ROMs a unit returned, a skipped unit's stamp members
+  included (#2533 D1), the row is never removed. A row's group is read off its stored key: a bound version whose stored
+  key no longer matches its game's, after RomM matched the game anew, is judged by that stored key, as before this rule
+  (#2533 D10). It is still asked about wherever any other row would be, below, and RomM's answer sets or clears its mark
+  as for any asked row (D6). A version switch binds the shortcut to a member no unit delivers while a collection still
+  delivers the game through another version, and collecting any version puts the game's one shortcut in the collection
+  (the group fallback below). A row without a group key is judged alone. Any other row was reached either through a
   collection or through its platform. The row itself says which: `roms.delivered_through` records the kind of unit whose
   commit last upserted it (`Rom.record_delivery`, written by `SyncReporter.commit_unit_results` for the unit the chunk
   dispatcher names; a commit that names none, such as a unit acknowledged after its run ended, keeps the row's value). A
@@ -919,8 +927,11 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   (`do_read_kept_platform_names`, through `services/library/_stale_rows.py::with_kept_platform_names`) and counts the
   collection as kept. Force Full Sync leaves the routes in place. The preview asks the same question for the same rows,
   through the same `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the
-  apply makes. **Only the apply records what it established** (`StaleSort.gone_from_romm_marks`, written in the
-  finalize's write UoW by `SyncReporter.finalize_per_unit_run`): an asked row RomM answered with a proven 404 is marked
+  apply makes. Both judge a row's game by the group keys of the ROMs the run counts as synced
+  (`domain/sync_diff.py::group_keys_of`): the apply reads them off the rows its commits upserted
+  (`do_read_resident_group_keys`), and the preview, which writes nothing, lays the keys its fetch stamped over the same
+  read. **Only the apply records what it established** (`StaleSort.gone_from_romm_marks`, written in the finalize's
+  write UoW by `SyncReporter.finalize_per_unit_run`): an asked row RomM answered with a proven 404 is marked
   `roms.gone_from_romm = 'not_found'`, one RomM returned has its mark cleared, and an answer that establishes nothing
   writes nothing; a row kept on a platform RomM no longer lists is marked `delisted`. A row kept on a platform the run
   read whole is not marked, since that platform's stamp already names it. Any commit of a row clears its mark, because

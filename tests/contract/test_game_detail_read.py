@@ -118,9 +118,10 @@ async def test_cached_game_detail_unknown_app_id_is_not_found(harness):
 
 
 # ── The BIOS answer both reads ship (#1693) ──────────────────────────────────
-# An absent ``bios_status`` means "the active core needs no BIOS" and clears a
-# shown requirement (#1690); ``bios_status_unknown`` marks the payload that has
-# no answer at all, which must not. Both endpoints are pinned in both directions.
+# Every answer the check established ships ``bios_status``, the one that no BIOS
+# is needed included; ``bios_status_unknown`` with no level marks the payload
+# that has no answer at all, which must not clear a shown requirement. The
+# contract's home is ``get_bios_status``'s docstring.
 # The harness has no emulator installation, so every answer here is the one a
 # machine that cannot state its own scope gives.
 

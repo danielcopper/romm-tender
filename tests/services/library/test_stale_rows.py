@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from domain.sync_diff import StaleRow
-from services.library._stale_rows import settle_stale_rows, with_kept_platform_names
+from services.library._stale_rows import settle_stale_rows, stale_rows_of, with_kept_platform_names
 
 _LOGGER = logging.getLogger("test_stale_rows")
 
@@ -26,6 +26,7 @@ class TestSettleStaleRows:
             read_platform_slugs=set(),
             listed_platform_slugs={"gba"},
             collection_listed_rom_ids=set(),
+            synced_group_keys=frozenset(),
         )
 
         assert [row.rom_id for row in remove] == [1]
@@ -46,10 +47,46 @@ class TestSettleStaleRows:
             read_platform_slugs={"n64"},
             listed_platform_slugs={"n64"},
             collection_listed_rom_ids=set(),
+            synced_group_keys=frozenset(),
         )
 
         assert (remove, [row.rom_id for row in kept]) == ([], [1])
         ask.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_row_whose_game_the_run_synced_is_asked_where_another_would_be_and_never_removed(self):
+        ask = AsyncMock(return_value={1: "present", 3: "gone"})
+        rows = [
+            StaleRow(1, 1001, "gba", "collection", "igdb:1:1"),
+            StaleRow(2, 1002, "gba", None, "igdb:1:1"),
+            StaleRow(3, 1003, "gba", "collection", "igdb:1:1"),
+        ]
+
+        remove, kept, marks = await settle_stale_rows(
+            rows,
+            ask_romm=ask,
+            logger=_LOGGER,
+            read_platform_slugs=set(),
+            listed_platform_slugs={"gba"},
+            collection_listed_rom_ids=set(),
+            synced_group_keys=frozenset({"igdb:1:1"}),
+        )
+
+        assert (remove, kept, marks) == ([], [], {1: None, 3: "not_found"})
+        ask.assert_awaited_once_with([1, 3])
+
+
+class TestStaleRowsOf:
+    def test_each_row_carries_what_the_registry_holds_for_it(self):
+        registry = {
+            "1": {"app_id": 1001, "platform_slug": "gba", "delivered_through": "collection", "sibling_group_key": "g1"},
+            "2": {"app_id": 1002, "platform_slug": "n64", "delivered_through": None, "sibling_group_key": None},
+        }
+
+        assert stale_rows_of([2, 1], registry) == [
+            StaleRow(2, 1002, "n64", None, None),
+            StaleRow(1, 1001, "gba", "collection", "g1"),
+        ]
 
 
 class TestWithKeptPlatformNames:

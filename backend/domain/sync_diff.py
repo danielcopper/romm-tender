@@ -303,10 +303,12 @@ def collapse_sibling_groups(
     * **Grandfathered untouched** (partial view only) — the group holds a binding
       that is not in THIS fetch: emit nothing. Absence from a partial view is not
       absence from the server, so the binding is left alone (no rebind, no second
-      shortcut). The group's real representative rides its own platform unit in
-      the same run; the unbound fetched members still persist via
-      ``pending_all_roms`` and the reporter's collection group-fallback places the
-      group's shortcut in the Steam collection.
+      shortcut). Where the group's platform is synced, the bound member rides
+      that platform unit in the same run; where only collections reach the
+      group, the stale removal keeps the binding, since the run delivered a
+      member of its group (:func:`sort_stale_rows`). The unbound fetched members
+      still persist via ``pending_all_roms`` and the reporter's collection
+      group-fallback places the group's shortcut in the Steam collection.
 
     Bound rows are grouped by their FETCHED sibling key when the row is in this
     fetch (so a legacy row whose stored key is still NULL is placed in its real
@@ -489,12 +491,18 @@ def select_stale_removals(
 
 
 class StaleRow(NamedTuple):
-    """A bound row no unit of the run returned: its id, its shortcut's appId, its platform, and how it last arrived."""
+    """A bound row no unit of the run returned: its id, its appId, its platform, how it last arrived, and its group."""
 
     rom_id: int
     app_id: int
     platform_slug: str
     delivered_through: DeliveryRoute | None = None
+    sibling_group_key: str | None = None
+
+
+def group_keys_of(rom_ids: Iterable[int], key_by_rom_id: Mapping[int, str]) -> frozenset[str]:
+    """The sibling-group keys *key_by_rom_id* holds for *rom_ids*; a ROM it holds none for adds none."""
+    return frozenset(key_by_rom_id[rom_id] for rom_id in rom_ids if rom_id in key_by_rom_id)
 
 
 # What one exact-id question to RomM established about a ROM: a proven 404
@@ -503,18 +511,23 @@ RomAnswer = Literal["gone", "present", "unknown"]
 
 
 class StaleSort(NamedTuple):
-    """The stale rows split by what the run knows about each."""
+    """The stale rows split by what the run knows about each.
+
+    :attr:`ask_only` holds the rows RomM is asked about for their mark alone:
+    their game was synced, so they stay bound whatever RomM answers.
+    """
 
     remove: list[StaleRow]
     keep: list[StaleRow]
     ask: list[StaleRow]
+    ask_only: tuple[StaleRow, ...] = ()
 
     def gone_from_romm_marks(
         self, answers: Mapping[int, RomAnswer], read_platform_slugs: Collection[str]
     ) -> dict[int, GoneEvidence | None]:
         """What an apply records on each stale row about RomM still serving it: a mark, ``None`` to clear one.
 
-        *answers* are RomM's to the exact ids of :attr:`ask`, and
+        *answers* are RomM's to the exact ids of :attr:`ask` and :attr:`ask_only`, and
         *read_platform_slugs* the platforms :func:`sort_stale_rows` was given as
         read whole. A kept row whose platform the run did not read is on a
         platform RomM no longer lists, and is marked ``delisted``. An asked row
@@ -527,7 +540,7 @@ class StaleSort(NamedTuple):
         marks: dict[int, GoneEvidence | None] = {
             row.rom_id: "delisted" for row in self.keep if row.platform_slug not in read_platform_slugs
         }
-        for row in self.ask:
+        for row in (*self.ask, *self.ask_only):
             answer = answers.get(row.rom_id)
             if answer == "gone":
                 marks[row.rom_id] = "not_found"
@@ -542,6 +555,7 @@ def sort_stale_rows(
     read_platform_slugs: Collection[str],
     listed_platform_slugs: Collection[str] | None,
     collection_listed_rom_ids: Collection[int],
+    synced_group_keys: Collection[str] = frozenset(),
 ) -> StaleSort:
     """Split the stale rows into the ones to remove, to keep, and to ask RomM about.
 
@@ -550,7 +564,9 @@ def sort_stale_rows(
     run, on in Tender or not (``None`` where that is not known, which reads as
     every platform listed); *collection_listed_rom_ids* the members every
     collection held at its last completed apply, read before the run rewrote
-    any of them.
+    any of them; *synced_group_keys* the games the run synced — the group keys
+    (:func:`group_keys_of`) of every ROM a unit returned, a skipped unit's stamp
+    members included.
 
     * **keep** — the row's platform was read whole and did not return it, so it
       is gone from RomM. A skipped platform rebuilds every bound row, so only a
@@ -563,24 +579,39 @@ def sort_stale_rows(
       delivered through a collection, or, with no route recorded, a
       collection's last completed apply listed it. Only RomM's answer to its
       exact id tells "gone" from "left the collection".
+    * **ask_only** — a row the rule above asks about whose game the run
+      synced: RomM's answer still sets or clears its mark, and it stays bound
+      whatever the answer is.
+    * **none of these** — any other row whose game the run synced, on a
+      platform the run did not read: the row holds the game's one shortcut. A
+      version switch binds a member no unit delivers. A row with no group key
+      is judged alone.
     * **remove** — the rest: the row's platform is listed and turned off in
-      Tender, and no collection reached it.
+      Tender, no collection reached it, and no unit delivered its game.
     """
     listed = None if listed_platform_slugs is None else set(listed_platform_slugs)
     sort = StaleSort(remove=[], keep=[], ask=[])
+    ask_only: list[StaleRow] = []
     for row in rows:
-        unlisted = listed is not None and row.platform_slug not in listed
+        game_synced = row.sibling_group_key in synced_group_keys
         if row.platform_slug in read_platform_slugs:
             sort.keep.append(row)
-        elif row.delivered_through == "collection" or (
-            row.delivered_through is None and row.rom_id in collection_listed_rom_ids
-        ):
-            sort.ask.append(row)
-        elif unlisted:
+        elif _reached_through_a_collection(row, collection_listed_rom_ids):
+            (ask_only if game_synced else sort.ask).append(row)
+        elif game_synced:
+            continue
+        elif listed is not None and row.platform_slug not in listed:
             sort.keep.append(row)
         else:
             sort.remove.append(row)
-    return sort
+    return sort._replace(ask_only=tuple(ask_only))
+
+
+def _reached_through_a_collection(row: StaleRow, collection_listed_rom_ids: Collection[int]) -> bool:
+    """Whether a collection last delivered *row*, or, with no route recorded, a collection record lists it."""
+    return row.delivered_through == "collection" or (
+        row.delivered_through is None and row.rom_id in collection_listed_rom_ids
+    )
 
 
 def settle_asked_rows(

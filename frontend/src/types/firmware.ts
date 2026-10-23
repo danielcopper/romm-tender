@@ -691,6 +691,9 @@ export interface EmulatorTab {
 export type ContentSearch = "found" | "incomplete" | "unreadable";
 
 export interface BiosStatus extends EmulatorAnswer {
+  /** `true` wherever there is a row to show or the verdict is not met; `false`
+   *  on the answer that the launching emulator needs no BIOS and on the unknown
+   *  stub below. */
   needs_bios: boolean;
   server_count?: number;
   local_count?: number;
@@ -728,23 +731,22 @@ export interface BiosStatus extends EmulatorAnswer {
   files?: BiosFileStatus[];
   // unknown/ok/partial/missing state computed by the backend (compute_bios_level)
   // so the frontend reads the decision off the payload instead of re-deriving the
-  // threshold logic. Present only when needs_bios is true.
+  // threshold logic. Absent on the unknown stub alone.
   bios_level?: BiosLevel | null;
   // The play row's compact token (compute_bios_label): "Missing", "Unknown",
   // "OK", or the plain required files' "X/Y required", never counting a one-of
   // group. It is not a restatement of the level — a partial group beside plain
-  // files all in place reads "OK" — so read the level for the verdict. Present
-  // only when needs_bios is true.
+  // files all in place reads "OK" — so read the level for the verdict. Absent on
+  // the unknown stub alone.
   bios_label?: string;
   // Set when the check could not determine the requirement — it found no file
   // to speak for AND its reading of the platform's emulators was not complete,
   // which one unread core is already enough for, so it cannot say that nothing
   // is wanted. A failed firmware fetch alone does not raise it: the listing is
   // caught and the file list simply comes back empty, which the machine's own
-  // answer can still fill. The `needs_bios: false` it rides on is
-  // ignorance, not an answer, so no consumer may clear a shown requirement on it
-  // (#1693) — and the panel renders it as its own state rather than hiding the
-  // BIOS tab, which would say the same thing (#1660).
+  // answer can still fill. The `needs_bios: false` it rides on never means
+  // that nothing is needed. Whether a payload carrying the flag is an answer is
+  // decided by its level, as `BiosAnswer` in `api/backend.ts` states.
   bios_status_unknown?: boolean;
   /** See {@link StoreOnly}. */
   store_only?: StoreOnly | null;

@@ -31,6 +31,7 @@ import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { EmulatorSelector } from "../EmulatorSelector";
+import { WaitingLine } from "../WaitingLine";
 import { entryForLabel } from "../../utils/emulatorEntries";
 import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
@@ -1276,7 +1277,11 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
               silence for "nothing needed" on a platform whose turn simply has
               not come. A read that did not come back is a question that could
               not be asked. */}
-          {row.firmwareState === "pending" && <Muted fontSize={NOTE_FONT}>Checking what this platform needs…</Muted>}
+          {row.firmwareState === "pending" && (
+            <Muted fontSize={NOTE_FONT}>
+              <WaitingLine>Checking what this platform needs…</WaitingLine>
+            </Muted>
+          )}
           {row.firmwareState === "failed" && (
             <Muted fontSize={NOTE_FONT}>Could not read the BIOS state. Pick the platform again to retry.</Muted>
           )}

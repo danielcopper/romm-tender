@@ -17,7 +17,7 @@ import { showModal } from "@decky/ui";
 import { RomMGameInfoPanel } from "./RomMGameInfoPanel";
 import { EmulatorStepScope, useStepOnTriggers } from "./emulatorStepping";
 import * as backend from "../api/backend";
-import type { CachedGameDetail } from "../api/backend";
+import type { BiosAnswer, CachedGameDetail } from "../api/backend";
 import { HostTransportError } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as cachedStore from "../utils/cachedGameDetailStore";
@@ -219,6 +219,47 @@ function biosNeedingDetail(overrides: Partial<CachedGameDetail> = {}): CachedGam
     bios_level: "partial",
     ...overrides,
   };
+}
+
+/** The answer that the game's launching emulator needs no BIOS, as `get_bios_status`
+ *  ships it: a whole status, with an entry for each of the platform's two emulators
+ *  and no row for the launching one. */
+function noBiosNeededAnswer(): BiosAnswer {
+  return {
+    bios_status: {
+      needs_bios: false,
+      platform_slug: "snes",
+      server_count: 0,
+      local_count: 0,
+      ratio_server_count: 0,
+      ratio_local_count: 0,
+      all_downloaded: true,
+      required_count: 0,
+      required_downloaded: 0,
+      required_withheld: 0,
+      emulator_read: true,
+      active_core_label: "Snes9x",
+      files: [],
+      emulator_tabs: [
+        { emulator: "snes9x_libretro.so", label: "Snes9x", launching: true, requirements_met: true, rows: [] },
+        { emulator: "bsnes_libretro.so", label: "bsnes", launching: false, requirements_met: true, rows: [] },
+      ],
+    },
+    bios_level: "ok",
+    bios_label: "OK",
+    bios_status_unknown: false,
+  };
+}
+
+/** The sentence the BIOS tab heads {@link noBiosNeededAnswer} with. */
+const NO_BIOS_NEEDED_SENTENCE = "Snes9x marks none of its BIOS files as required";
+
+/** Bring the BIOS tab to the front, as its button or the play row's badge does. */
+async function showBiosTab(): Promise<void> {
+  await act(async () => {
+    globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+  });
+  await flushAsync();
 }
 
 describe("RomMGameInfoPanel", () => {
@@ -1553,7 +1594,7 @@ describe("RomMGameInfoPanel", () => {
       expect(vi.mocked(backend.debugLog)).not.toHaveBeenCalledWith(expect.stringContaining("onDataChanged error"));
     });
 
-    it("bios: matching platform_slug → re-reads this rom's BIOS answer; the BIOS tab appears when it needs firmware", async () => {
+    it("bios: matching platform_slug → re-reads this rom's BIOS answer, which lands on the BIOS tab", async () => {
       // Panel's own platform is snes; a matching-platform bios event must be
       // applied (the positive case for the #1082 guard).
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
@@ -1577,6 +1618,8 @@ describe("RomMGameInfoPanel", () => {
       });
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
+      await showBiosTab();
+      expect(container.textContent).toContain("Checking…");
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
@@ -1587,8 +1630,8 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(60);
-      // BIOS tab now visible (biosStatus non-null).
-      expect(container.textContent).toContain("BIOS");
+      expect(container.textContent).toContain("marks none of its BIOS files as required (2/2 RomM library files)");
+      expect(container.textContent).not.toContain("Checking…");
     });
 
     it("bios: answers for the game's own core, not the platform default (#1718)", async () => {
@@ -1808,15 +1851,15 @@ describe("RomMGameInfoPanel", () => {
       expect(vi.mocked(backend.getBiosStatus)).not.toHaveBeenCalled();
     });
 
-    it("bios: a rejected re-read → the shown requirement stands (#1693, non-vacuous .catch)", async () => {
-      // Trigger: "Download BIOS" from the gear menu where the follow-up check
-      // fails. Rewriting the rejection into "needs none" dropped the whole BIOS
-      // tab while the play row above correctly kept its level, so the panel
-      // mounts WITH a requirement and it has to survive.
+    it("bios: a rejected re-read → the shown requirement stands, said to be out of date", async () => {
+      // A `bios` event whose re-read fails. The panel mounts WITH a requirement,
+      // and it has to survive under the notice that it may be out of date.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).toContain("BIOS");
+      await showBiosTab();
+      expect(container.textContent).toContain("1/2");
+      expect(container.textContent).not.toContain("Could not re-read the BIOS state");
       vi.mocked(backend.getBiosStatus).mockRejectedValue(new Error("net"));
       await act(async () => {
         globalThis.dispatchEvent(
@@ -1828,9 +1871,12 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
       // The outer try/catch did not fire — the inline .catch swallowed the
-      // rejection and wrote nothing, so the BIOS tab is still there.
+      // rejection, so the requirement is still shown, under the notice.
       expect(vi.mocked(backend.debugLog)).not.toHaveBeenCalledWith(expect.stringContaining("onDataChanged error"));
-      expect(container.textContent).toContain("BIOS");
+      expect(container.textContent).toContain("1/2");
+      expect(container.textContent).toContain(
+        "Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.",
+      );
     });
 
     it("bios: a re-read carrying no BIOS answer leaves the shown requirement standing (#1693)", async () => {
@@ -1863,7 +1909,6 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).toContain("BIOS");
       vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status_unknown: true, bios_level: "unknown" });
       await act(async () => {
         globalThis.dispatchEvent(
@@ -1880,15 +1925,16 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
     });
 
-    it("bios: a real 'needs none' answer still clears the tab", async () => {
-      // The other direction — an ANSWER carrying no requirement takes the tab
-      // away, which is what makes the flag above load-bearing rather than a
-      // blanket "never clear".
+    it("bios: an answer that no BIOS is needed replaces the requirement, and the tab stays", async () => {
+      // The other direction — an ANSWER carrying no requirement takes the shown
+      // one off, which is what makes the flag above load-bearing rather than a
+      // blanket "never clear". The tab draws it like any other answer.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
-      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      const { container, getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).toContain("BIOS");
-      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null });
+      await showBiosTab();
+      expect(container.textContent).toContain("1/2");
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(noBiosNeededAnswer());
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
@@ -1898,14 +1944,18 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(container.textContent).not.toContain("BIOS");
+      expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
+      expect(container.textContent).toContain(NO_BIOS_NEEDED_SENTENCE);
+      expect(container.textContent).not.toContain("1/2");
+      // The selector over the platform's two emulators.
+      expect(container.textContent).toContain("1 / 2");
     });
 
     it("bios: cross-platform event (#1082) → ignored; no fetch, foreign BIOS list never bleeds in", async () => {
       // Regression for #1082: bios events fan out to every mounted panel.
       // A gba panel must ignore a psx bios event (e.g. a psx BIOS bulk
       // download) instead of repainting itself with the psx BIOS list.
-      // Mount a gba panel WITHOUT bios_status, so the BIOS tab starts hidden.
+      // Mount a gba panel WITHOUT bios_status, so the BIOS tab starts waiting.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 70,
@@ -1916,11 +1966,12 @@ describe("RomMGameInfoPanel", () => {
       });
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).not.toContain("BIOS");
+      await showBiosTab();
+      expect(container.textContent).toContain("Checking…");
 
       // The psx event would, if applied, repaint this panel with a needs-BIOS
-      // status (surfacing the BIOS tab + a psx-specific marker). Make the
-      // assertion non-vacuous: a distinct payload that must NOT appear.
+      // status (a psx-specific marker on the BIOS tab). Make the assertion
+      // non-vacuous: a distinct payload that must NOT appear.
       vi.mocked(backend.getBiosStatus).mockClear();
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
         bios_status: {
@@ -1954,8 +2005,8 @@ describe("RomMGameInfoPanel", () => {
 
       // Guard returns BEFORE the fetch — no re-read runs.
       expect(vi.mocked(backend.getBiosStatus)).not.toHaveBeenCalled();
-      // BIOS tab stayed hidden; the psx marker never bled into this gba panel.
-      expect(container.textContent).not.toContain("BIOS");
+      // The BIOS tab still waits; the psx marker never bled into this gba panel.
+      expect(container.textContent).toContain("Checking…");
       expect(container.innerHTML).not.toContain("PSX_BLEED_MARKER.bin");
     });
 
@@ -1972,7 +2023,8 @@ describe("RomMGameInfoPanel", () => {
       });
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).not.toContain("BIOS");
+      await showBiosTab();
+      expect(container.textContent).toContain("Checking…");
 
       vi.mocked(backend.getBiosStatus).mockClear();
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
@@ -1996,9 +2048,9 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      // Own-platform event flows through: fetch fired and BIOS tab surfaced.
+      // Own-platform event flows through: fetch fired and its answer is on the tab.
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(70);
-      expect(container.textContent).toContain("BIOS");
+      expect(container.textContent).toContain("marks none of its BIOS files as required (1/1 RomM library files)");
     });
 
     it("emulator_sources: re-reads the emulators, the BIOS state and the save status", async () => {
@@ -2106,10 +2158,10 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("core_changed: invalidates cache + re-fetches getCachedGameDetail and updates biosStatus state", async () => {
-      // Mount without bios_status so the initial state.biosStatus is null
-      // and the BIOS tab is NOT visible. Then dispatch core_changed with a
-      // cache response that DOES carry bios_status — the handler's setState
-      // call is the only path that surfaces the BIOS tab.
+      // Mount without bios_status so the initial state.biosStatus is null and
+      // the BIOS tab waits. Then dispatch core_changed with a cache response
+      // that DOES carry bios_status — the handler's setState call is the only
+      // path that puts an answer on the tab.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 60,
@@ -2120,7 +2172,8 @@ describe("RomMGameInfoPanel", () => {
       });
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).not.toContain("BIOS");
+      await showBiosTab();
+      expect(container.textContent).toContain("Checking…");
       vi.mocked(cachedStore.invalidateCachedGameDetail).mockClear();
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
@@ -2176,27 +2229,23 @@ describe("RomMGameInfoPanel", () => {
       expect(vi.mocked(cachedStore.getCachedGameDetail)).toHaveBeenCalled();
       // Keyed on rom_id (#945) — the active core reflects the per-game DB override.
       expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(60);
-      // biosStatus now non-null → BIOS tab visible. Removing the
+      // biosStatus now non-null → its answer is on the tab. Removing the
       // handler's `setState((prev) => ({ ..., biosStatus }))` line
       // makes this assertion fail.
-      expect(container.textContent).toContain("BIOS");
-      // Switch to the BIOS tab and assert the new active core label (from the
-      // dedicated core-info path) reached the rendered Emulator column.
-      await act(async () => {
-        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
-        await Promise.resolve();
-      });
+      expect(container.textContent).toContain("marks none of its BIOS files as required (1/1 RomM library files)");
+      // The new active core label (from the dedicated core-info path) reached
+      // the rendered Emulator column.
       expect(container.textContent).toContain("FROM_CORE_CHANGED");
     });
 
     it("core_changed: a cached detail with no BIOS answer keeps the tab (#1693)", async () => {
-      // The firmware cache is invalidated by every BIOS download and delete, and
-      // a detail derived while it is cold carries no BIOS answer. Reading that
-      // as "needs none" hid the tab until something else refreshed it.
+      // A cached detail carries no BIOS answer, the one a core change re-derives
+      // included, so the tab keeps the requirement it shows.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).toContain("BIOS");
+      await showBiosTab();
+      expect(container.textContent).toContain("1/2");
 
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
         biosNeedingDetail({ bios_status: null, bios_level: null, bios_status_unknown: true }),
@@ -2211,19 +2260,19 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      expect(container.textContent).toContain("BIOS");
+      expect(container.textContent).toContain("1/2");
+      expect(container.textContent).not.toContain("Checking…");
     });
 
-    it("core_changed: an answered detail without a requirement clears the tab", async () => {
-      // The counterpart: the new core genuinely needs no BIOS, so the tab goes.
+    it("core_changed: an answered detail that no BIOS is needed replaces the requirement on the tab", async () => {
+      // The counterpart: the new core genuinely needs no BIOS, and the tab says so.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).toContain("BIOS");
+      await showBiosTab();
+      expect(container.textContent).toContain("1/2");
 
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
-        biosNeedingDetail({ bios_status: null, bios_level: null }),
-      );
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail(noBiosNeededAnswer()));
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
@@ -2234,7 +2283,8 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      expect(container.textContent).not.toContain("BIOS");
+      expect(container.textContent).toContain(NO_BIOS_NEEDED_SENTENCE);
+      expect(container.textContent).not.toContain("1/2");
     });
 
     it("core_changed: cache returns found=false → no state mutation", async () => {
@@ -2283,7 +2333,6 @@ describe("RomMGameInfoPanel", () => {
       });
       const view = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(view.container.textContent).toContain("BIOS");
       // Second resolve: found=false. The handler's early-return means
       // biosStatus is NOT touched.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValueOnce({
@@ -2300,14 +2349,10 @@ describe("RomMGameInfoPanel", () => {
       });
       // Outer catch did NOT fire …
       expect(vi.mocked(backend.debugLog)).not.toHaveBeenCalledWith(expect.stringContaining("onDataChanged error"));
-      // … and biosStatus is unchanged from the initial value (BIOS tab
-      // still visible and the INITIAL_CORE label still reaches the BIOS
-      // section after a tab switch).
-      expect(view.container.textContent).toContain("BIOS");
-      await act(async () => {
-        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
-        await Promise.resolve();
-      });
+      // … and biosStatus is unchanged from the initial value (its answer and
+      // the INITIAL_CORE label still reach the BIOS section after a tab switch).
+      await showBiosTab();
+      expect(view.container.textContent).toContain("marks none of its BIOS files as required (1/1 RomM library files)");
       expect(view.container.textContent).toContain("INITIAL_CORE");
     });
 
@@ -2488,26 +2533,19 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toContain("ACHIEVEMENTS");
     });
 
-    it("BIOS tab is visible only when biosStatus is non-null", async () => {
+    it("BIOS tab is in the tab bar the moment the page opens, before any BIOS answer", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1,
-        bios_status: {
-          needs_bios: true,
-          platform_slug: "snes",
-          server_count: 1,
-          local_count: 0,
-          ratio_server_count: 1,
-          ratio_local_count: 0,
-          all_downloaded: false,
-        } as never,
+        platform_slug: "snes",
         metadata: makeMetadata(),
-        stale_fields: [],
+        stale_fields: ["bios"],
       });
-      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      // The live answer never arrives.
+      vi.mocked(backend.getBiosStatus).mockReturnValue(new Promise(() => {}));
+      const { getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      // Tab bar label (uppercase).
-      expect(container.innerHTML).toContain("BIOS");
+      expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
     });
 
     it("SAVES tab visible only when save_sync_enabled=true", async () => {
@@ -3934,7 +3972,7 @@ describe("RomMGameInfoPanel", () => {
   });
 
   describe("biosStatusFromCache + saveStatusFromCache (cache-first rendering)", () => {
-    it("biosStatusFromCache(null) yields no biosStatus → no BIOS tab", async () => {
+    it("biosStatusFromCache(null) yields no biosStatus → the BIOS tab shows Steam's spinner and Checking…", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1,
@@ -3942,9 +3980,13 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      const { container, getByText, getByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).not.toContain("BIOS");
+      expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
+      await showBiosTab();
+      expect(getByTestId("waiting-line").textContent).toBe("Checking…");
+      expect(getByTestId("spinner")).not.toBeNull();
+      expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("BIOS");
     });
 
     it("biosStatusFromCache drives BIOS tab; active core comes from the dedicated path (#923)", async () => {
@@ -4002,6 +4044,87 @@ describe("RomMGameInfoPanel", () => {
   // (#1693), and nothing used to go back for the real one: the panel waited for
   // a `bios` event, a core change, a version switch or a remount. The backend
   // marks exactly that payload's `bios` field stale.
+  // The tab tells apart an answer still out, a read that failed with nothing
+  // shown, and a re-read that failed over an answer it keeps — as the platform
+  // page does.
+  describe("where the BIOS answer stands", () => {
+    /** A cached detail carrying no BIOS answer, which the page then reads live. */
+    const unansweredDetail = (): CachedGameDetail => ({
+      found: true,
+      rom_id: 60,
+      platform_slug: "snes",
+      metadata: makeMetadata(),
+      stale_fields: ["bios"],
+      bios_status_unknown: true,
+    });
+    const READ_FAILED = "Could not read the BIOS state. Open the game page again to retry.";
+    const RE_READ_FAILED =
+      "Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.";
+
+    it("keeps the tab when the first answer is that no BIOS is needed", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(unansweredDetail());
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(noBiosNeededAnswer());
+      const { container, getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await showBiosTab();
+
+      expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
+      expect(container.textContent).toContain(NO_BIOS_NEEDED_SENTENCE);
+      expect(container.textContent).not.toContain("Checking…");
+    });
+
+    it("says the read failed when it fails with nothing shown", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(unansweredDetail());
+      vi.mocked(backend.getBiosStatus).mockRejectedValue(new Error("offline"));
+      const { container, queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await showBiosTab();
+
+      expect(container.textContent).toContain(READ_FAILED);
+      expect(queryByTestId("waiting-line")).toBeNull();
+      expect(container.textContent).not.toContain("Nothing could be established");
+    });
+
+    it("says the read failed when it comes back carrying no answer", async () => {
+      // The shape a check that raised ships: the flag and no level.
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(unansweredDetail());
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status_unknown: true });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await showBiosTab();
+
+      expect(container.textContent).toContain(READ_FAILED);
+    });
+
+    it("keeps a shown answer under the notice when a re-read fails, and drops the notice once one answers", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
+      const { container, getByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await showBiosTab();
+      const bios = (platform_slug: string) =>
+        act(async () => {
+          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug } }));
+        });
+
+      vi.mocked(backend.getBiosStatus).mockRejectedValue(new Error("offline"));
+      await bios("snes");
+      await flushAsync();
+
+      // The notice stands above the answer it warns about.
+      const notice = getByTestId("bios-stale");
+      expect(notice.textContent).toBe(RE_READ_FAILED);
+      const text = container.textContent;
+      expect(text.indexOf(RE_READ_FAILED)).toBeLessThan(text.indexOf("1/2"));
+
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(noBiosNeededAnswer());
+      await bios("snes");
+      await flushAsync();
+
+      expect(container.textContent).not.toContain(RE_READ_FAILED);
+      expect(container.textContent).toContain(NO_BIOS_NEEDED_SENTENCE);
+    });
+  });
+
   describe("BIOS re-read when the detail marks its answer stale (#1752)", () => {
     /** A BIOS answer — cached or live, one shape — with `localCount` of 3 files
      *  present. */
@@ -4035,7 +4158,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
     };
 
-    it("re-reads on mount when the cached detail carries no answer, and the live one brings the tab back", async () => {
+    it("re-reads on mount when the cached detail carries no answer, and the live one lands on the tab", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(staleDetail({ bios_status_unknown: true }));
       vi.mocked(backend.getBiosStatus).mockResolvedValue(biosAnswer(1));
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
@@ -4044,7 +4167,6 @@ describe("RomMGameInfoPanel", () => {
       // Keyed on rom_id — `get_bios_status` resolves the per-game active core
       // (#945), which is what the requirement is computed against.
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(60);
-      expect(container.textContent).toContain("BIOS");
       await openBiosTab();
       expect(container.textContent).toContain(
         "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
@@ -4151,15 +4273,17 @@ describe("RomMGameInfoPanel", () => {
       expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("BIOS status refresh error"));
     });
 
-    it("clears the requirement when the live answer reports none", async () => {
+    it("replaces the requirement when the live answer is that no BIOS is needed", async () => {
       // The other direction has to keep working: a re-read IS an answer, so one
-      // reporting no requirement takes the tab away (#1690).
+      // reporting no requirement takes the shown one off.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(staleDetail(biosAnswer(1)));
-      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null });
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(noBiosNeededAnswer());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
+      await openBiosTab();
 
-      expect(container.textContent).not.toContain("BIOS");
+      expect(container.textContent).toContain(NO_BIOS_NEEDED_SENTENCE);
+      expect(container.textContent).not.toContain("(1/3 RomM library files)");
     });
 
     it("re-reads after a core change whose detail could not answer", async () => {
@@ -5002,11 +5126,11 @@ describe("RomMGameInfoPanel", () => {
         expect(container.textContent).toContain("Game (Japan)");
       });
 
-      it("lands on the info tab when the switch clears the BIOS answer as well", async () => {
-        // Both gated tabs lose their button at once. The user is on SAVES, so
-        // that is the dead end that has to be caught — a fallback that answers
-        // for BIOS first would leave them there.
-        const { container, queryByTestId } = await mountOnSavesTab({
+      it("lands on the info tab when the switch takes SAVES away, with BIOS still in the bar", async () => {
+        // SAVES loses its button while BIOS keeps its own, which no switch takes
+        // away. The user is on SAVES, so that is the dead end that has to be
+        // caught.
+        const { container, getByText, queryByTestId } = await mountOnSavesTab({
           bios_status: {
             platform_slug: "snes",
             server_count: 2,
@@ -5017,11 +5141,10 @@ describe("RomMGameInfoPanel", () => {
           },
           bios_level: "partial",
         });
-        expect(container.textContent).toContain("BIOS");
 
         await switchToRom2();
 
-        expect(container.textContent).not.toContain("BIOS");
+        expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
         expect(queryByTestId("saves-tab")).toBeNull();
         expect(container.textContent).toContain("Game (Japan)");
       });
@@ -5093,27 +5216,30 @@ describe("RomMGameInfoPanel", () => {
         await flushAsync();
       };
 
-      it("clears the requirement when the switched-to version's core needs none", async () => {
+      it("replaces the requirement when the switched-to version's core needs none", async () => {
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailNeedingBios(1, 1));
         const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
-        expect(container.textContent).toContain("BIOS");
+        await openBiosTab();
+        expect(container.textContent).toContain("(1/3 RomM library files)");
 
-        // The new active version's core needs no BIOS — the cached detail
-        // carries no bios_status at all.
+        // The new active version's core needs no BIOS, which its live read says.
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
           found: true,
           rom_id: 2,
           platform_slug: "snes",
           metadata: makeMetadata(),
-          stale_fields: [],
+          stale_fields: ["bios"],
+          bios_status_unknown: true,
         });
+        vi.mocked(backend.getBiosStatus).mockResolvedValue(noBiosNeededAnswer());
         await switchVersion();
 
-        expect(container.textContent).not.toContain("BIOS");
+        expect(container.textContent).toContain(NO_BIOS_NEEDED_SENTENCE);
+        expect(container.textContent).not.toContain("(1/3 RomM library files)");
       });
 
-      it("leaves the shown level standing when the switched-to detail carries no BIOS answer (#1693)", async () => {
+      it("shows Checking… after a switch until the switched-to version's answer arrives", async () => {
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailNeedingBios(1, 1));
         const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
@@ -5122,9 +5248,15 @@ describe("RomMGameInfoPanel", () => {
           "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
         );
 
-        // The switch lands inside the window a BIOS download or delete opens:
-        // the firmware cache is cold, so the detail carries no BIOS answer — the
-        // same absent `bios_status` as the clear above.
+        // The detail carries no BIOS answer for the switched-to version, and its
+        // live read is held open: until it lands, the previous version's answer
+        // must not stand in for it.
+        let answer!: (value: BiosAnswer) => void;
+        vi.mocked(backend.getBiosStatus).mockReturnValue(
+          new Promise<BiosAnswer>((resolve) => {
+            answer = resolve;
+          }),
+        );
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
           found: true,
           rom_id: 2,
@@ -5135,15 +5267,24 @@ describe("RomMGameInfoPanel", () => {
         });
         await switchVersion();
 
+        expect(container.textContent).toContain("Checking…");
+        expect(container.textContent).not.toContain("(1/3 RomM library files)");
+
+        await act(async () => {
+          answer(detailNeedingBios(2, 3));
+        });
+        await flushAsync();
+
+        expect(container.textContent).not.toContain("Checking…");
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
+          "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
         );
       });
 
-      it("leaves the BIOS tab for the info tab when the requirement is cleared under it", async () => {
+      it("stays on the BIOS tab across a switch", async () => {
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailNeedingBios(1, 1));
         vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFor("Snes9x", "snes9x_libretro.so"));
-        const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+        const { container, getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
         await openBiosTab();
         expect(container.textContent).toContain("Snes9x");
@@ -5157,13 +5298,11 @@ describe("RomMGameInfoPanel", () => {
         });
         await switchVersion();
 
-        // The tab the user was standing on is gated on the requirement, so
-        // clearing it removes the button. Without the fallback `activeTab` stays
-        // "bios", the body resolves to null, and the panel is a lone GAME INFO
-        // button over an empty pane — which is why the assertion is on the info
-        // tab's BODY and not on its button.
-        expect(container.textContent).not.toContain("Snes9x");
-        expect(container.textContent).toContain("No metadata available");
+        // Asserted on the BIOS tab's BODY as well as its button: the body is
+        // what a fallback to GAME INFO would replace.
+        expect(getByText("BIOS", { selector: ".romm-tab" }).className).toContain("romm-tab-active");
+        expect(container.textContent).toContain("Checking…");
+        expect(container.textContent).not.toContain("No metadata available");
       });
 
       it("re-keys the level and the active core to the new active version", async () => {

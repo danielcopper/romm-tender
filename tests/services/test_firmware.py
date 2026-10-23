@@ -5315,8 +5315,8 @@ class TestCheckPlatformBiosNoCoreFields:
     exception to that rule but the answer's own: it is the NAME of the pick THIS
     payload's counts were filtered by, so the sentence over them can say which
     emulator they are about without a second resolution of the question. It is
-    stamped only where there is an answer to name — the two ``needs_bios: False``
-    branches below carry nothing at all.
+    stamped wherever there is an answer to name, the answer that no BIOS is
+    needed included.
     """
 
     @pytest.mark.asyncio
@@ -5340,9 +5340,10 @@ class TestCheckPlatformBiosNoCoreFields:
 
         result = await fw.check_platform_bios("sms")
 
-        assert result == {"needs_bios": False}
+        assert result["needs_bios"] is False
+        assert result["bios_level"] == "ok"
+        assert result["files"] == []
         assert "active_core" not in result
-        assert "active_core_label" not in result
         assert "available_cores" not in result
 
     @pytest.mark.asyncio
@@ -5366,7 +5367,8 @@ class TestCheckPlatformBiosNoCoreFields:
         # No emulator wants anything and the whole scope was read, so "needs
         # none" is a real answer even with the listing unavailable — and it
         # still carries no core fields.
-        assert result == {"needs_bios": False}
+        assert result["needs_bios"] is False
+        assert result["bios_level"] == "ok"
         assert "active_core" not in result
         assert "available_cores" not in result
 
@@ -5773,7 +5775,9 @@ class TestCheckPlatformBiosOffline:
         ):
             result = await fw.check_platform_bios("n64")
 
-        assert result == {"needs_bios": False}
+        assert result["needs_bios"] is False
+        assert result["bios_level"] == "ok"
+        assert "bios_status_unknown" not in result
 
     @pytest.mark.asyncio
     async def test_offline_with_an_incomplete_reading_says_it_does_not_know(self, firmware, tmp_path):
@@ -5834,6 +5838,44 @@ class TestCheckPlatformBiosOffline:
 
         assert result["needs_bios"] is False
         assert "bios_status_unknown" not in result
+
+
+class TestAGameThatNeedsNoBios:
+    """A met verdict with no row to show is answered whole, so the game page draws it like any other answer."""
+
+    @staticmethod
+    def _service():
+        core_info = FakeCoreInfoProvider(
+            options=[
+                libretro_option("genesisplusgx_libretro", "Genesis Plus GX"),
+                libretro_option("picodrive_libretro", "PicoDrive"),
+            ],
+            active_core=("genesisplusgx_libretro", "Genesis Plus GX"),
+        )
+        fw = _make_firmware_service(core_info=core_info)
+        _resolver(fw).describe_emulator(_id("genesisplusgx_libretro"))
+        _resolver(fw).describe_emulator(_id("picodrive_libretro"))
+        _stub_listing(fw, [])
+        _inline_executor(fw)
+        return fw
+
+    @pytest.mark.asyncio
+    async def test_it_carries_the_verdict_the_sentence_is_read_off(self):
+        result = await self._service().check_platform_bios("sms")
+
+        assert result["needs_bios"] is False
+        assert result["emulator_read"] is True
+        assert result["bios_level"] == "ok"
+        assert result["required_count"] == 0
+        assert result["files"] == []
+        assert "bios_status_unknown" not in result
+
+    @pytest.mark.asyncio
+    async def test_it_carries_an_entry_for_every_emulator_the_selector_offers(self):
+        result = await self._service().check_platform_bios("sms")
+
+        entries = [(entry["emulator"], entry["launching"]) for entry in result["emulator_tabs"]]
+        assert entries == [(_id("genesisplusgx_libretro"), True), (_id("picodrive_libretro"), False)]
 
 
 class TestPerCoreFiltering:
