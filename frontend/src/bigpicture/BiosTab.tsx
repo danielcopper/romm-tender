@@ -96,7 +96,11 @@ export interface BiosTabState {
 
 const NO_REREAD = async (): Promise<void> => {};
 
-/** The BIOS tab's own state: which emulator the table shows, a press under way and the line it left. */
+/**
+ * The BIOS tab's own state: which emulator the table shows, a press under way
+ * and the line it left. A version switch keeps it, since all of it is about the
+ * game's platform, which the switch keeps.
+ */
 export function useBiosTab({
   biosStatus,
   platformName,

@@ -28,7 +28,11 @@ const AFTER_STEAMS_OWN_SCROLL_MS = 50;
 interface GamePageTabsProps {
   /** The tabs shown, in order; a tab not shown is not in the list. */
   tabs: Tab[];
-  /** One of `tabs`' ids. */
+  /**
+   * Where it names none of `tabs` — SAVES once save sync is off — Steam's tabbed
+   * page shows the first tab (`steamui/sp.js`), and the play row's L1 and R1
+   * step from there.
+   */
   activeTab: string;
   onShowTab: (tabId: string) => void;
 }

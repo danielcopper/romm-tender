@@ -204,15 +204,11 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     return null;
   }
 
-  const tabs = buildPanelTabs({ appId, binding: bindRomInState(state.romId, setState), state, achievements, bios });
-  // The stored tab may be one not shown — SAVES once save sync is off — and the first stands in for it.
-  const activeTab = (tabs.find((tab) => tab.id === state.activeTab) ?? tabs[0])?.id ?? "info";
-
   return (
     <div data-romm="true">
       <GamePageTabs
-        tabs={tabs}
-        activeTab={activeTab}
+        tabs={buildPanelTabs({ appId, binding: bindRomInState(state.romId, setState), state, achievements, bios })}
+        activeTab={state.activeTab}
         onShowTab={(tabId) => setState((prev) => ({ ...prev, activeTab: tabId }))}
       />
     </div>
