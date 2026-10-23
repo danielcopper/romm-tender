@@ -1102,11 +1102,12 @@ class TestCompositeServerQueryFailedDomain:
 def _seed_baseline_adopt_scenario(svc, fake, tmp_path) -> str:
     """Seed the state that drives ``get_save_status`` to adopt + persist a baseline.
 
-    A local file is present and the server save reports our device as
-    ``is_current=True``, but no baseline is adopted yet (the file is absent
-    from ``state.files``) — so the matrix returns ``Skip(adopt_baseline=True)``
-    and the status RMW records the local hash as the new baseline (an
-    observable ``rom_save_sync_states.save``). Returns the local file's md5.
+    A local file is present, identical to the server save, which reports our
+    device as ``is_current=True``, but no baseline is adopted yet (the file is
+    absent from ``state.files``) — so the matrix returns
+    ``Skip(adopt_baseline=True)`` with no acknowledgement and the status RMW
+    records the head as the new baseline (an observable
+    ``rom_save_sync_states.save``). Returns the local file's md5.
     """
     _enable_sync_with_device(svc)
     _install_rom(svc, tmp_path)
@@ -1114,13 +1115,15 @@ def _seed_baseline_adopt_scenario(svc, fake, tmp_path) -> str:
     local_hash = _file_md5(str(save_path))
 
     ss = _server_save_with_syncs(device_syncs=[{"device_id": "device-1", "is_current": True}])
+    ss["content_hash"] = local_hash
     fake.saves[100] = ss
     # "No baseline adopted yet" is modelled by the file being absent from
     # state.files: the matrix falls back to its in-memory FileSyncState()
     # default (last_sync_hash=None), not a persisted hashless row —
     # rom_save_files.last_sync_hash is NOT NULL (db/migrations/001_initial.sql).
-    # The is_current server save above is what drives Skip(adopt_baseline=True);
-    # the local file matches it by filename, so no tracked_save_id is needed.
+    # The is_current server save above, holding the local file's bytes, is what
+    # drives Skip(adopt_baseline=True); the local file matches it by filename, so
+    # no tracked_save_id is needed.
     _seed_save_state_dict(svc, 42, {"files": {}})
     return local_hash
 
@@ -1583,3 +1586,49 @@ class TestCheckLocalDriftWithSaveSyncOff:
         result = await svc.check_local_drift(42)
 
         assert result == {"drifted": False, "only_here": False, "stranding": "none", "rom_id": 42}
+
+
+class TestTheStatusReadAndAnAdopt:
+    """The status read records an adopt only where RomM needs no acknowledgement (#2525 D1)."""
+
+    _BYTES = b"identical" + b"\x00" * 23  # 32 bytes, content size 9
+
+    def _setup(self, tmp_path, *, current: bool):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=self._BYTES)
+        head = _server_save(save_id=100, file_size_bytes=len(self._BYTES))
+        head["content_hash"] = _file_md5(str(save_path))
+        fake.saves[100] = head
+        if current:
+            fake.stage_device_sync(100, "device-1", head["updated_at"])
+        _seed_save_state(svc, 42, RomSaveSyncState())
+        return svc, fake, save_path
+
+    @pytest.mark.asyncio
+    async def test_an_adopt_that_must_be_acknowledged_is_left_to_the_next_sync(self, tmp_path):
+        svc, fake, _path = self._setup(tmp_path, current=False)
+
+        result = await svc.get_save_status(42)
+
+        assert result["files"][0]["status"] == "synced"
+        assert not any(c[0] == "confirm_download" for c in fake.call_log)
+        state = _get_save_state(svc, 42)
+        assert state is not None
+        assert state.files == {}
+
+    @pytest.mark.asyncio
+    async def test_an_adopt_that_needs_no_acknowledgement_is_recorded_as_a_full_baseline(self, tmp_path):
+        svc, fake, save_path = self._setup(tmp_path, current=True)
+
+        result = await svc.get_save_status(42)
+
+        assert result["files"][0]["status"] == "synced"
+        assert not any(c[0] == "confirm_download" for c in fake.call_log)
+        state = _get_save_state(svc, 42)
+        assert state is not None
+        fs = state.files["pokemon.srm"]
+        assert fs.tracked_save_id == 100
+        assert fs.last_sync_hash == fs.last_sync_server_hash == _file_md5(str(save_path))
+        assert (fs.last_sync_local_size, fs.last_sync_content_size) == (32, 9)

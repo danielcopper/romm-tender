@@ -88,8 +88,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 031_add_platform_skip_fetch_start_and_checksum
 # + 032_add_collection_skip_fetch_start_and_checksum
 # + 033_add_artwork_slot_choices + 034_clear_firmware_cache_filed_by_folder
-# + 035_add_artwork_slot_handovers + 036_add_firmware_store).
-_SHIPPED_VERSION = 36
+# + 035_add_artwork_slot_handovers + 036_add_firmware_store
+# + 037_add_last_sync_content_size).
+_SHIPPED_VERSION = 37
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -2495,7 +2496,7 @@ class Test036AddFirmwareStore:
         finally:
             conn.close()
 
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 36)))
 
         conn = sqlite3.connect(db_path)
         try:
@@ -2505,3 +2506,42 @@ class Test036AddFirmwareStore:
         assert _user_version(db_path) == 36
         assert {"firmware_store", "firmware_links"} <= _tables(db_path)
         assert handovers == 1
+
+
+class Test037AddLastSyncContentSize:
+    """037 — adds the nullable last_sync_content_size column to rom_save_files only (#2525 D2)."""
+
+    def test_the_column_does_not_exist_before_it(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 36)))
+
+        assert _user_version(db_path) == 36
+        assert "last_sync_content_size" not in _columns(db_path, "rom_save_files")
+
+    def test_a_baseline_from_before_it_reads_no_content_size_and_keeps_the_rest(self, tmp_path: Path):
+        """The device's path: its database is at 036 when this rung arrives."""
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 36)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            conn.execute("INSERT INTO rom_save_sync_states (rom_id) VALUES (1)")
+            conn.execute(
+                "INSERT INTO rom_save_files (rom_id, filename, tracked_save_id, last_sync_hash, last_sync_local_size) "
+                "VALUES (1, 'game.srm', 7, 'deadbeef', 131072)"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == 37
+
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT tracked_save_id, last_sync_hash, last_sync_local_size, last_sync_content_size "
+                "FROM rom_save_files WHERE rom_id = 1 AND filename = 'game.srm'"
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row == (7, "deadbeef", 131072, None)
+        assert "last_sync_content_size" not in _columns(db_path, "rom_save_sync_states")

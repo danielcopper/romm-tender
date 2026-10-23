@@ -118,8 +118,8 @@ class RollbackOrchestrator:
         the caller's entry gate took, used here instead of a second one.
 
         Raises its refusals, ``SyncEngine.live_device_id``'s among them, taken
-        before the server's saves are listed; a RomM error from listing them or
-        from the transfer propagates, and an ``OSError`` from the local side
+        before the server's saves are listed; a RomM error from listing them,
+        from the transfer or from acknowledging an adopt propagates, and an ``OSError`` from the local side
         refuses with ``resolve_failed``.
         """
         rom_id = int(rom_id)
@@ -281,6 +281,11 @@ class RollbackOrchestrator:
         locally but the server save has ``file_extension=srm``),
         :class:`FileNotFoundError` is raised — we never silently rename across
         extensions. Mutates *save_state* in memory; ``resolve`` owns the write UoW.
+
+        The adopt without an upload first confirms *server* to RomM as synced by
+        this device, through the retry strategy, and records the baseline only
+        once that succeeded: after the user resolved the conflict this device
+        must be current on the head. A failure propagates with nothing recorded.
         """
         target = local_save_target(server, rom_name, known_names=save_names)
         local_path = os.path.join(saves_dir, target)
@@ -289,7 +294,8 @@ class RollbackOrchestrator:
         # Zip-aware RomM-parity hash on both sides — get_server_save_hash hashes
         # the downloaded server copy the same way — so a zip save's adopt-without-
         # upload check can actually match instead of always re-POSTing (#1457).
-        local_hash = self._save_file_store.content_hash(local_path)
+        measure = self._save_file_store.measure(local_path)
+        local_hash = measure.content_hash
         try:
             server_hash = self._retry.with_retry(lambda: self._matrix.get_server_save_hash(server))
         except Exception:
@@ -307,6 +313,7 @@ class RollbackOrchestrator:
             self._log_debug(
                 f"keep_local: hash matches server, adopting without upload (rom={rom_id} filename={target})"
             )
+            self._retry.with_retry(lambda: self._romm_api.confirm_download(int(server_id), device_id))
             save_state.adopt_baseline(
                 target,
                 tracked_save_id=int(server_id),
@@ -317,7 +324,8 @@ class RollbackOrchestrator:
                 last_sync_server_save_id=server_id,
                 last_sync_server_size=server.get("file_size_bytes"),
                 last_sync_local_mtime=self._save_file_store.get_mtime(local_path),
-                last_sync_local_size=self._save_file_store.get_size(local_path),
+                last_sync_local_size=measure.size,
+                last_sync_content_size=measure.content_size,
             )
             return
 

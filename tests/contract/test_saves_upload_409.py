@@ -99,7 +99,7 @@ async def test_saves_upload_409_stale_downgrades_to_download(harness, monkeypatc
 
 async def test_saves_newer_foreign_head_with_unchanged_local_downloads_without_a_post(harness):
     """A newer foreign save + local unchanged since baseline: RomM answers this device
-    a not-current placeholder on the head, so row 10 downloads it directly — no POST."""
+    a not-current placeholder on the head, so row 10b downloads it directly — no POST."""
     enable_save_sync(harness)
     seed_install(harness, 42, system="gba", file_name="game.gba")
     _write_local_save(harness, system="gba", content=b"in-sync local", filename="game.srm")

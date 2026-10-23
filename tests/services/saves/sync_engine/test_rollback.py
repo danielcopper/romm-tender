@@ -924,3 +924,51 @@ class TestResolveSyncConflictSeedsConfiguredDefaultSlot:
         # The tracked slot wins — the configured default is irrelevant here.
         assert upload_calls[0][2]["slot"] == "desktop"
         assert _require_save_state(svc, 42).active_slot == "desktop"
+
+
+class TestKeepLocalAdoptAcknowledges:
+    """Keep Local's adopt without an upload confirms the head to RomM first (#2525 D7)."""
+
+    _BYTES = b"identical" + b"\xff" * 23  # 32 bytes, content size 9
+
+    def _setup(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=self._BYTES)
+        ss = _server_save_with_syncs(device_syncs=[{"device_id": "device-1", "is_current": False}])
+        ss["content_hash"] = _file_md5(str(save_path))
+        fake.saves[100] = ss
+        fake.uploaded_files[100] = str(save_path)
+        return svc, fake, save_path
+
+    @pytest.mark.asyncio
+    async def test_the_head_is_acknowledged_and_then_recorded_with_its_content_size(self, tmp_path):
+        svc, fake, _path = self._setup(tmp_path)
+
+        result = await svc.resolve_sync_conflict(
+            rom_id=42, filename="pokemon.srm", server_save_id=100, action="keep_local"
+        )
+
+        assert result == {"success": True, "action": "keep_local"}
+        assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(100, "device-1")]
+        assert not any(c[0] == "upload_save" for c in fake.call_log)
+        fs = _require_save_state(svc, 42).files["pokemon.srm"]
+        assert (fs.tracked_save_id, fs.last_sync_local_size, fs.last_sync_content_size) == (100, 32, 9)
+
+    @pytest.mark.asyncio
+    async def test_a_failed_acknowledgement_records_nothing(self, tmp_path, monkeypatch):
+        svc, fake, _path = self._setup(tmp_path)
+        earlier = FileSyncState(tracked_save_id=90, last_sync_hash="an-earlier-baseline")
+        _seed_save_state(svc, 42, RomSaveSyncState(files={"pokemon.srm": earlier}))
+
+        def confirm_download(save_id, device_id):
+            raise RommServerError("upstream 502")
+
+        monkeypatch.setattr(fake, "confirm_download", confirm_download)
+
+        with pytest.raises(RommServerError):
+            await svc.resolve_sync_conflict(rom_id=42, filename="pokemon.srm", server_save_id=100, action="keep_local")
+
+        assert _require_save_state(svc, 42).files["pokemon.srm"] == earlier
+        assert not any(c[0] == "upload_save" for c in fake.call_log)

@@ -162,8 +162,8 @@ class TestFilesReplacedOnReSave:
         assert loaded.files == {}
 
     def test_hash_only_baseline_null_tracked_save_id_round_trips(self, uow: SqliteUnitOfWork):
-        # The skip-adopt path (update_baseline_hash) persists a hash with no server
-        # save id; tracked_save_id is nullable so this no longer crashes the whole save.
+        # A baseline an earlier version stored without a server save id; tracked_save_id
+        # is nullable so loading and re-saving it does not crash the whole save.
         _seed_rom(uow, 5)
         state = RomSaveSyncState(files={"save.srm": FileSyncState(last_sync_hash="hashOnly")})
         uow.rom_save_sync_states.save(5, state)
@@ -194,3 +194,34 @@ class TestIteration:
         assert set(by_id) == {1, 2}
         assert by_id[1].active_slot == "a"
         assert set(by_id[2].files) == {"x.srm"}
+
+
+class TestTheContentSize:
+    def test_a_recorded_content_size_round_trips_and_an_absent_one_stays_null(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        state = RomSaveSyncState(
+            files={
+                "save.srm": FileSyncState(
+                    tracked_save_id=100, last_sync_hash="h", last_sync_local_size=131072, last_sync_content_size=32768
+                ),
+                "save.rtc": FileSyncState(tracked_save_id=101, last_sync_hash="g", last_sync_local_size=16),
+            }
+        )
+        uow.rom_save_sync_states.save(5, state)
+
+        loaded = uow.rom_save_sync_states.get(5)
+        assert loaded is not None
+        assert loaded.files["save.srm"].last_sync_content_size == 32768
+        assert loaded.files["save.rtc"].last_sync_content_size is None
+        assert loaded == state
+
+    def test_a_content_size_of_zero_is_a_value_not_an_absent_one(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        state = RomSaveSyncState(
+            files={"save.srm": FileSyncState(tracked_save_id=100, last_sync_hash="h", last_sync_content_size=0)}
+        )
+        uow.rom_save_sync_states.save(5, state)
+
+        loaded = uow.rom_save_sync_states.get(5)
+        assert loaded is not None
+        assert loaded.files["save.srm"].last_sync_content_size == 0

@@ -7,6 +7,7 @@ conflict rollback in tests/services/saves/sync_engine/test_rollback.py.
 """
 
 import asyncio
+import hashlib
 import io
 import threading
 import time
@@ -1269,16 +1270,23 @@ class TestSyncEngineDelegates:
     """Cover the thin delegate methods on SyncEngine that forward to MatrixExecutor
     or DeviceRegistry."""
 
-    def test_adopt_baseline_hash_delegates_to_matrix(self, tmp_path):
-        """SyncEngine.adopt_baseline_hash records the hash on the passed aggregate."""
-        from domain.rom_save_sync_state import RomSaveSyncState
-
+    def test_adopt_head_as_baseline_delegates_to_matrix(self, tmp_path):
+        """SyncEngine.adopt_head_as_baseline records the head as the baseline on the passed aggregate."""
         svc, _ = make_service(tmp_path)
+        save_path = _create_save(tmp_path, content=b"identical")
+        local_hash = hashlib.md5(b"identical").hexdigest()
+        head = {**_server_save(save_id=77, filename="pokemon.srm"), "content_hash": local_hash}
 
         state = RomSaveSyncState()
-        svc._sync_engine.adopt_baseline_hash(state, "pokemon.srm", "deadbeef" * 4)
+        recorded = svc._sync_engine.adopt_head_as_baseline(
+            state, "pokemon.srm", head, str(save_path), local_hash, system="gba"
+        )
 
-        assert state.files["pokemon.srm"].last_sync_hash == "deadbeef" * 4
+        assert recorded is True
+        assert (state.files["pokemon.srm"].tracked_save_id, state.files["pokemon.srm"].last_sync_hash) == (
+            77,
+            local_hash,
+        )
 
     def test_build_sync_conflict_entry_delegates_to_matrix(self, tmp_path):
         """SyncEngine.build_sync_conflict_entry builds the same dict shape as the matrix."""

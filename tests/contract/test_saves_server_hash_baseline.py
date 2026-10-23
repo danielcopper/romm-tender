@@ -11,11 +11,12 @@ rows 11a and 12a. So the two cases below land on the not-current rows:
 
 - **Provenance**: a file with sync history whose stored server hash
   (``last_sync_server_hash``) matches the head's ``content_hash`` while the
-  local parity hash does not — the head is downloaded (row 10).
+  local parity hash does not — the head is adopted (row 10a).
 - **Parity**: a fresh-install / copied-SD-card file with NO sync history whose
-  bytes are byte-identical to the head — the head is downloaded too (row 11a).
+  bytes are byte-identical to the head — the head is adopted too (row 11a).
 
-Either download first moves the local file into ``.romm-backup``.
+Either adopt moves no bytes: the head is acknowledged to RomM and recorded as
+the file's baseline, and the local file stays where it is.
 """
 
 from __future__ import annotations
@@ -37,27 +38,28 @@ def _write_local_save(harness, *, system: str, content: bytes, filename: str) ->
     return path
 
 
-def _backed_up_contents(local_path: str) -> list[bytes]:
-    backup_dir = os.path.join(os.path.dirname(local_path), ".romm-backup")
-    stem = os.path.splitext(os.path.basename(local_path))[0]
-    contents = []
-    for name in sorted(os.listdir(backup_dir)):
-        if name.startswith(stem):
-            with open(os.path.join(backup_dir, name), "rb") as fh:
-                contents.append(fh.read())
-    return contents
+def _baseline(harness) -> FileSyncState:
+    with harness.uow_factory() as uow:
+        state = uow.rom_save_sync_states.get(42)
+    assert state is not None
+    return state.files["game.srm"]
 
 
-async def test_a_stored_server_hash_under_scheme_drift_downloads_the_head(harness):
+def _nothing_moved_aside(local_path: str) -> bool:
+    return not os.path.exists(os.path.join(os.path.dirname(local_path), ".romm-backup"))
+
+
+async def test_a_stored_server_hash_under_scheme_drift_adopts_the_head(harness):
     """A synced file whose local parity hash mismatches the head's ``content_hash``
-    downloads the head, with no conflict, keeping the local copy in ``.romm-backup``.
+    adopts the head, with no conflict and no transfer.
 
     The server head carries a ``content_hash`` (``drifted-server-hash``) that
     does NOT equal the local file's real content hash — the exact situation a
     change in RomM's hashing would produce — and we stored that server hash at
     the last sync, with the local file unchanged since. This device has no sync
-    row on the head, so RomM's placeholder reads it as not current: row 10
-    downloads the head, and the provenance route is not consulted.
+    row on the head, so RomM's placeholder reads it as not current: the
+    provenance route proves the bytes identical, and row 10a adopts the head and
+    acknowledges it.
     """
     enable_save_sync(harness)
     seed_install(harness, 42, system="gba", file_name="game.gba")
@@ -92,28 +94,30 @@ async def test_a_stored_server_hash_under_scheme_drift_downloads_the_head(harnes
 
     status = await harness.endpoints.get_save_status(42)
     files = {f["filename"]: f for f in status["files"]}
-    assert files["game.srm"]["status"] == "download"
+    assert files["game.srm"]["status"] == "synced"
     assert status["conflicts"] == []
 
     result = await harness.endpoints.sync_rom_saves(42)
     assert result["success"] is True
-    assert result["synced"] == 1
+    assert result["synced"] == 0
     assert result["conflicts"] == []
     assert result["errors"] == []
 
-    assert not any(c[0] == "upload_save" for c in harness.romm.call_log)
-    downloads = [c for c in harness.romm.call_log if c[0] == "download_save_content"]
-    assert [c[1][0] for c in downloads] == [100]
-    assert _backed_up_contents(local_path) == [content]
+    assert not any(c[0] in ("upload_save", "download_save_content") for c in harness.romm.call_log)
+    assert [c[1][0] for c in harness.romm.call_log if c[0] == "confirm_download"] == [100]
+    assert _nothing_moved_aside(local_path)
+    baseline = _baseline(harness)
+    assert (baseline.tracked_save_id, baseline.last_sync_server_hash) == (100, drifted_server_hash)
 
 
-async def test_parity_match_on_a_fresh_install_downloads_the_head(harness):
-    """A fresh-install byte-identical file with NO sync history downloads the head once.
+async def test_parity_match_on_a_fresh_install_adopts_the_head(harness):
+    """A fresh-install byte-identical file with NO sync history adopts the head.
 
     No baseline, so no stored server hash, and no sync row for this device on
     the head, which RomM's placeholder reads as not current. Row 11a matches the
-    parity ``local_hash == server.content_hash`` and downloads the head: never a
-    duplicate POST, and the local copy goes to ``.romm-backup`` first.
+    parity ``local_hash == server.content_hash`` and adopts the head with no
+    transfer: never a duplicate POST, never the same bytes downloaded again, and
+    the head acknowledged to RomM.
     """
     enable_save_sync(harness)
     seed_install(harness, 42, system="gba", file_name="game.gba")
@@ -130,10 +134,11 @@ async def test_parity_match_on_a_fresh_install_downloads_the_head(harness):
 
     result = await harness.endpoints.sync_rom_saves(42)
     assert result["success"] is True
-    assert result["synced"] == 1
+    assert result["synced"] == 0
     assert result["conflicts"] == []
     assert result["errors"] == []
-    assert not any(c[0] == "upload_save" for c in harness.romm.call_log)
-    downloads = [c for c in harness.romm.call_log if c[0] == "download_save_content"]
-    assert [c[1][0] for c in downloads] == [100]
-    assert _backed_up_contents(local_path) == [content]
+    assert not any(c[0] in ("upload_save", "download_save_content") for c in harness.romm.call_log)
+    assert [c[1][0] for c in harness.romm.call_log if c[0] == "confirm_download"] == [100]
+    assert _nothing_moved_aside(local_path)
+    baseline = _baseline(harness)
+    assert (baseline.tracked_save_id, baseline.last_sync_hash) == (100, local_hash)

@@ -291,7 +291,7 @@ class TestAnUploadThatFailsAfterTheDownload:
 
     @pytest.mark.parametrize("missing", ["content_hash", "id"])
     @pytest.mark.asyncio
-    async def test_without_a_content_hash_or_id_a_head_this_device_is_current_on_is_adopted_by_the_next_sync(
+    async def test_without_a_content_hash_or_id_a_head_this_device_is_current_on_makes_the_next_sync_a_conflict(
         self, tmp_path, monkeypatch, missing
     ):
         head = self._a_head_without_a_content_hash() if missing == "content_hash" else self._target_head()
@@ -313,10 +313,11 @@ class TestAnUploadThatFailsAfterTheDownload:
         assert "pokemon.srm" not in _require_save_state(svc, 42).files
         _uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
 
-        assert (errors, conflicts) == ([], [])
+        assert errors == []
+        assert [c["server_save_id"] for c in conflicts] == [200]
         assert [i for i, s in fake.saves.items() if s.get("slot") == TARGET] == [200]
         assert (tmp_path / "saves" / "gba" / "pokemon.srm").read_bytes() == self.COPIED
-        assert _require_save_state(svc, 42).files["pokemon.srm"].last_sync_hash == hashlib.md5(self.COPIED).hexdigest()
+        assert "pokemon.srm" not in _require_save_state(svc, 42).files
 
     @pytest.mark.parametrize("last_synced_at", [None, "2026-02-20T10:00:00Z"], ids=["never-synced", "moved-on"])
     @pytest.mark.asyncio

@@ -9,14 +9,15 @@ device registration in test_devices.py; conflict rollback in test_rollback.py.
 import hashlib
 import os
 import zipfile
+from dataclasses import replace
 from typing import Any
 
 import pytest
 
 from domain.live_device_id import LiveDeviceId
-from domain.rom_save_sync_state import RomSaveSyncState
+from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.sync_action import Conflict, Skip
-from lib.errors import DeviceWriteError, RommApiError, RommConflictError, RommTimeoutError
+from lib.errors import DeviceWriteError, RommApiError, RommConflictError, RommTimeoutError, classify_error
 from services.saves.sync_engine.matrix import (
     DispatchSink,
     RomDispatchContext,
@@ -1838,13 +1839,13 @@ class TestSyncRomSavesDispatch:
         assert c["local_size"] == os.path.getsize(str(save_path))
         assert "created_at" in c
 
-    def test_sync_rom_saves_download_when_both_moved_to_identical_content(self, tmp_path):
+    def test_sync_rom_saves_adopts_and_acknowledges_when_both_moved_to_identical_content(self, tmp_path):
         """Row 12a (#1480) — is_current=false + local diverged from baseline, but
         byte-identical to the moved-past head (``server.content_hash ==
-        local_hash``) → Download, not Conflict. Both sides independently landed on
-        the same bytes, so there is nothing to reconcile: the served decision
-        downloads (adopting the head re-establishes baseline + is_current), and no
-        conflict is surfaced.
+        local_hash``) → adopt, not Conflict. Both sides independently landed on
+        the same bytes, so there is nothing to reconcile: the head is adopted with
+        no transfer and acknowledged (re-establishing baseline + is_current), and
+        no conflict is surfaced.
         """
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
@@ -1876,12 +1877,13 @@ class TestSyncRomSavesDispatch:
         uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
 
         assert uploaded == 0
-        assert downloaded == 1
+        assert downloaded == 0
         assert errors == []
         assert conflicts == []
-        download_calls = [c for c in fake.call_log if c[0] == "download_save_content"]
-        assert len(download_calls) == 1
-        assert download_calls[0][1][0] == 100
+        assert not any(c[0] == "download_save_content" for c in fake.call_log)
+        assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(100, "device-1")]
+        file_state = _require_save_state(svc, 42).files["pokemon.srm"]
+        assert (file_state.tracked_save_id, file_state.last_sync_hash) == (100, local_hash)
 
         file_state = _require_save_state(svc, 42).files["pokemon.srm"]
         assert file_state.tracked_save_id == 100
@@ -2042,8 +2044,9 @@ class TestSyncRomSavesDispatch:
         assert save_path.exists()
 
     def test_sync_rom_saves_skip_with_adopt_baseline_writes_hash(self, tmp_path):
-        """is_current=true + local present + no baseline → Skip + adopt_baseline:
-        no I/O but state.last_sync_hash gets recorded as local_hash."""
+        """Row 8a — is_current=true + local present + no baseline, local identical to
+        the head → Skip + adopt_baseline: no transfer and no acknowledgement, and the
+        head is recorded as the file's full baseline."""
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
@@ -2053,6 +2056,7 @@ class TestSyncRomSavesDispatch:
         ss = _server_save_with_syncs(
             device_syncs=[{"device_id": "device-1", "is_current": True}],
         )
+        ss["content_hash"] = local_hash
         fake.saves[100] = ss
 
         # No file_state at all — no baseline yet.
@@ -2066,9 +2070,13 @@ class TestSyncRomSavesDispatch:
         assert conflicts == []
         # No I/O initiated.
         assert not any(c[0] in ("upload_save", "download_save_content", "download_save") for c in fake.call_log)
-        # Baseline now persisted.
+        assert not any(c[0] == "confirm_download" for c in fake.call_log)
+        # Baseline now persisted, anchored on the adopted head.
         file_state = _require_save_state(svc, 42).files["pokemon.srm"]
         assert file_state.last_sync_hash == local_hash
+        assert file_state.tracked_save_id == 100
+        assert file_state.last_sync_server_hash == local_hash
+        assert file_state.last_sync_local_size == len(b"first sync")
 
     def test_sync_rom_saves_recovery_download_when_no_local(self, tmp_path):
         """is_current=true on the picked save but local file is gone → Download
@@ -2164,7 +2172,7 @@ class TestSyncRomSavesDispatch:
 
     def test_sync_rom_saves_newer_foreign_head_with_unchanged_local_downloads_without_a_post(self, tmp_path):
         """A newer foreign head + local unchanged since baseline: RomM answers this
-        device a not-current placeholder on it, so row 10 downloads the head
+        device a not-current placeholder on it, so row 10b downloads the head
         directly — no POST, no conflict."""
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
@@ -2884,3 +2892,247 @@ class TestQuarantineBackupRetention:
 
         assert save.read_bytes() == b"keep"
         assert list(outside.iterdir()) == []
+
+
+_PROGRESS = b"progress" + b"\xff" * 24  # 32 bytes, content size 8
+
+
+class _TriesThrice:
+    """A retry strategy that calls the wrapped function up to three times."""
+
+    def is_retryable(self, exc: Exception) -> bool:
+        del exc
+        return True
+
+    def with_retry(self, fn, *args, max_attempts: int = 3, base_delay: int = 1, **kwargs):
+        del base_delay
+        for attempt in range(max_attempts):
+            try:
+                return fn(*args, **kwargs)
+            except Exception:
+                if attempt == max_attempts - 1:
+                    raise
+        raise AssertionError("unreachable")
+
+
+def _head(content: bytes, *, content_hash: str | None = None) -> dict[str, Any]:
+    head = _server_save(save_id=100, file_size_bytes=len(content), updated_at="2026-02-17T06:00:00Z")
+    head["content_hash"] = content_hash if content_hash is not None else hashlib.md5(content).hexdigest()
+    return head
+
+
+def _confirm_calls(fake) -> list[tuple[int, str]]:
+    return [c[1] for c in fake.call_log if c[0] == "confirm_download"]
+
+
+def _transfers(fake) -> list[str]:
+    return [c[0] for c in fake.call_log if c[0] in ("upload_save", "download_save_content", "download_save")]
+
+
+class TestAnAdoptOfTheHead:
+    """romm-gavel 2.0.0: a local file identical to the head is adopted, never transferred (#2525)."""
+
+    def _setup(self, tmp_path, *, content: bytes = _PROGRESS, current: bool, head_hash: str | None = None, retry=None):
+        overrides = {"retry": retry} if retry is not None else {}
+        svc, fake = make_service(tmp_path, **overrides)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=content)
+        fake.saves[100] = _head(content, content_hash=head_hash)
+        if current:
+            fake.stage_device_sync(100, "device-1", "2026-02-17T06:00:00Z")
+        _seed_save_state(svc, 42, RomSaveSyncState(active_slot=None))
+        return svc, fake, save_path
+
+    def test_a_current_device_without_a_baseline_and_a_differing_local_file_gets_a_conflict(self, tmp_path):
+        svc, fake, _path = self._setup(tmp_path, current=True, head_hash="someone-elses-bytes")
+
+        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert (uploaded, downloaded, errors) == (0, 0, [])
+        assert [c["server_save_id"] for c in conflicts] == [100]
+        assert _transfers(fake) == []
+        assert "pokemon.srm" not in _require_save_state(svc, 42).files
+
+    def test_an_identical_file_beside_a_head_this_device_is_not_current_on_is_adopted_and_acknowledged(self, tmp_path):
+        svc, fake, save_path = self._setup(tmp_path, current=False)
+
+        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert (uploaded, downloaded, errors, conflicts) == (0, 0, [], [])
+        assert _transfers(fake) == []
+        assert _confirm_calls(fake) == [(100, "device-1")]
+        assert not (save_path.parent / ".romm-backup").exists()
+        assert save_path.read_bytes() == _PROGRESS
+        fs = _require_save_state(svc, 42).files["pokemon.srm"]
+        assert fs.tracked_save_id == fs.last_sync_server_save_id == 100
+        assert fs.last_sync_hash == fs.last_sync_server_hash == hashlib.md5(_PROGRESS).hexdigest()
+        assert fs.last_sync_server_updated_at == "2026-02-17T06:00:00Z"
+        assert (fs.last_sync_server_size, fs.last_sync_local_size, fs.last_sync_content_size) == (32, 32, 8)
+        assert fs.last_sync_local_mtime == os.path.getmtime(save_path)
+
+    def test_an_adopt_of_a_head_this_device_is_current_on_sends_no_acknowledgement(self, tmp_path):
+        svc, fake, _path = self._setup(tmp_path, current=True)
+
+        assert _do_sync(svc, 42) == (0, 0, [], [])
+
+        assert _confirm_calls(fake) == []
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
+
+    def test_a_failed_acknowledgement_records_nothing_and_is_reported_and_the_next_sync_decides_again(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake, _path = self._setup(tmp_path, current=False)
+        earlier = FileSyncState(tracked_save_id=90, last_sync_hash="an-earlier-baseline", last_sync_local_size=32)
+        _seed_save_state(svc, 42, RomSaveSyncState(files={"pokemon.srm": earlier}))
+        failure = RommApiError("upstream 502")
+        monkeypatch.setattr(fake, "confirm_download", _raising(fake, failure))
+
+        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert (uploaded, downloaded, conflicts) == (0, 0, [])
+        assert errors == [f"pokemon.srm: {classify_error(failure)[1]}"]
+        assert _require_save_state(svc, 42).files["pokemon.srm"] == earlier
+        assert _transfers(fake) == []
+
+        monkeypatch.undo()
+        assert _do_sync(svc, 42) == (0, 0, [], [])
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
+
+    def test_the_acknowledgement_goes_through_the_retry_strategy(self, tmp_path, monkeypatch):
+        svc, fake, _path = self._setup(tmp_path, current=False, retry=_TriesThrice())
+        attempts = []
+        confirm = fake.confirm_download
+
+        def fails_twice(save_id, device_id):
+            attempts.append(save_id)
+            if len(attempts) < 3:
+                raise RommApiError("upstream 502")
+            return confirm(save_id, device_id)
+
+        monkeypatch.setattr(fake, "confirm_download", fails_twice)
+
+        assert _do_sync(svc, 42) == (0, 0, [], [])
+
+        assert attempts == [100, 100, 100]
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
+
+    def test_a_file_changed_since_the_decision_is_not_recorded_as_the_head(self, tmp_path):
+        svc, fake, save_path = self._setup(tmp_path, current=True)
+        state = RomSaveSyncState()
+
+        recorded = svc._sync_engine._matrix.adopt_head_as_baseline(
+            state, "pokemon.srm", fake.saves[100], str(save_path), "the-hash-the-decision-saw", system="gba"
+        )
+
+        assert recorded is False
+        assert state.files == {}
+
+    def test_a_fresh_install_s_adopt_leaves_the_rom_state_a_download_would_have(self, tmp_path):
+        def after_first_sync(root, *, local: bool) -> tuple[Any, ...]:
+            svc, fake = make_service(root)
+            _enable_sync_with_device(svc)
+            _install_rom(svc, root)
+            if local:
+                _create_save(root, content=_PROGRESS)
+            fake.saves[100] = _head(_PROGRESS)
+            fake.set_server_save_content(100, _PROGRESS)
+
+            uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
+
+            assert (uploaded, errors, conflicts) == (0, [], [])
+            assert downloaded == (0 if local else 1)
+            state = _require_save_state(svc, 42)
+            assert state.files["pokemon.srm"].tracked_save_id == 100
+            return state.active_slot, state.slots, state.system, state.emulator, state.last_synced_core
+
+        adopted = after_first_sync(tmp_path / "adopt", local=True)
+        downloaded = after_first_sync(tmp_path / "download", local=False)
+
+        assert adopted == downloaded
+        assert adopted[0] == "autosave"
+        assert adopted[2] == "gba"
+
+
+def _raising(fake, exc: Exception):
+    def confirm_download(save_id, device_id):
+        fake.call_log.append(("confirm_download", (save_id, device_id), {}))
+        raise exc
+
+    return confirm_download
+
+
+class TestTheContentSizeAtTheBoundaries:
+    """The content size is supplied to the core and recorded at every sync boundary (#2525)."""
+
+    def _setup(self, tmp_path, *, content: bytes, current: bool, files: dict[str, FileSyncState]):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=content)
+        fake.saves[100] = _head(b"the head's bytes")
+        if current:
+            fake.stage_device_sync(100, "device-1", "2026-02-17T06:00:00Z")
+        _seed_save_state(svc, 42, RomSaveSyncState(files=files))
+        return svc, fake, save_path
+
+    def test_an_edit_that_only_dropped_trailing_fill_uploads_once_a_content_size_is_recorded(self, tmp_path):
+        edited = b"edited!!" + b"\xff" * 56  # 64 bytes, content size 8
+        recorded = FileSyncState(
+            tracked_save_id=100, last_sync_hash="the-baseline", last_sync_local_size=256, last_sync_content_size=8
+        )
+        svc, _fake, _path = self._setup(tmp_path, content=edited, current=True, files={"pokemon.srm": recorded})
+
+        uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert (uploaded, errors, conflicts) == (1, [], [])
+        assert _require_save_state(svc, 42).files["pokemon.srm"].last_sync_content_size == 8
+
+    def test_without_a_recorded_content_size_the_same_edit_is_judged_by_its_raw_size(self, tmp_path):
+        edited = b"edited!!" + b"\xff" * 56
+        recorded = FileSyncState(tracked_save_id=100, last_sync_hash="the-baseline", last_sync_local_size=256)
+        svc, _fake, _path = self._setup(tmp_path, content=edited, current=True, files={"pokemon.srm": recorded})
+
+        uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert (uploaded, errors) == (0, [])
+        assert [c["server_save_id"] for c in conflicts] == [100]
+
+    def test_a_download_records_the_content_size_of_the_bytes_it_wrote(self, tmp_path):
+        svc, fake, save_path = self._setup(tmp_path, content=b"", current=False, files={})
+        save_path.unlink()
+        fake.set_server_save_content(100, b"head" + b"\x00" * 28)
+
+        _uploaded, downloaded, errors, _conflicts = _do_sync(svc, 42)
+
+        assert (downloaded, errors) == (1, [])
+        fs = _require_save_state(svc, 42).files["pokemon.srm"]
+        assert (fs.last_sync_local_size, fs.last_sync_content_size) == (32, 4)
+
+    def test_a_file_unchanged_since_its_baseline_gets_its_content_size_recorded(self, tmp_path):
+        unchanged = b"progress" + b"\x00" * 120
+        recorded = FileSyncState(
+            tracked_save_id=100,
+            last_sync_hash=hashlib.md5(unchanged).hexdigest(),
+            last_sync_server_hash=hashlib.md5(b"the head's bytes").hexdigest(),
+            last_sync_local_size=128,
+        )
+        svc, _fake, _path = self._setup(tmp_path, content=unchanged, current=True, files={"pokemon.srm": recorded})
+
+        assert _do_sync(svc, 42) == (0, 0, [], [])
+
+        fs = _require_save_state(svc, 42).files["pokemon.srm"]
+        assert fs.last_sync_content_size == 8
+        assert fs == replace(recorded, last_sync_content_size=8)
+
+    def test_a_file_edited_since_its_baseline_gets_no_content_size_from_a_sync_that_records_nothing(self, tmp_path):
+        recorded = FileSyncState(tracked_save_id=90, last_sync_hash="the-baseline", last_sync_local_size=128)
+        svc, _fake, _path = self._setup(
+            tmp_path, content=b"edited" + b"\x00" * 122, current=False, files={"pokemon.srm": recorded}
+        )
+
+        _uploaded, _downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert errors == []
+        assert [c["server_save_id"] for c in conflicts] == [100]
+        assert _require_save_state(svc, 42).files["pokemon.srm"].last_sync_content_size is None

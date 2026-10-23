@@ -524,3 +524,78 @@ class TestMakeTempPath:
             assert os.path.isfile(path)
         finally:
             os.remove(path)
+
+
+class TestMeasure:
+    """``measure`` answers the content hash, size and content size of one read of the file."""
+
+    def test_a_plain_file_s_hash_is_its_content_hash_and_its_fill_is_not_content(self, save_files, tmp_path):
+        f = tmp_path / "game.srm"
+        data = b"progress" + b"\xff" * 24
+        f.write_bytes(data)
+
+        measured = save_files.measure(str(f))
+
+        assert measured.content_hash == hashlib.md5(data).hexdigest() == save_files.content_hash(str(f))
+        assert measured.size == 32
+        assert measured.content_size == 8
+
+    def test_an_empty_file_has_content_size_zero(self, save_files, tmp_path):
+        f = tmp_path / "game.srm"
+        f.write_bytes(b"")
+
+        measured = save_files.measure(str(f))
+
+        assert (measured.size, measured.content_size) == (0, 0)
+
+    def test_a_zip_is_hashed_over_its_entries_and_sized_over_its_raw_bytes(self, save_files, tmp_path):
+        z = tmp_path / "multi.zip"
+        with zipfile.ZipFile(z, "w", zipfile.ZIP_STORED) as zf:
+            zf.writestr("a.srm", b"alpha")
+            zf.writestr("b.srm", b"beta")
+            zf.comment = b"end!"
+        archive = z.read_bytes()
+        z.write_bytes(archive + b"\xff" * 16)
+
+        measured = save_files.measure(str(z))
+
+        assert measured.content_hash == _GOLDEN_TWO_ENTRY_ZIP_HASH
+        assert measured.size == len(archive) + 16
+        assert measured.content_size == len(archive)
+
+    def test_a_zip_it_cannot_read_falls_back_to_the_md5_of_its_bytes_and_still_has_a_content_size(
+        self, save_files, tmp_path
+    ):
+        z = tmp_path / "broken.zip"
+        _write_corrupt_central_dir_zip(z)
+        data = z.read_bytes()
+
+        measured = save_files.measure(str(z))
+
+        assert measured.content_hash == hashlib.md5(data).hexdigest()
+        assert measured.size == len(data)
+
+    def test_a_zip_is_read_through_one_open(self, save_files, tmp_path, monkeypatch):
+        z = tmp_path / "multi.zip"
+        _write_zip(z, [("a.srm", b"alpha"), ("b.srm", b"beta")])
+        opened: list[str] = []
+        real_open = open
+
+        def counting_open(file, *args, **kwargs):
+            opened.append(str(file))
+            return real_open(file, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.open", counting_open)
+        monkeypatch.setattr("io.open", counting_open)
+        save_files.measure(str(z))
+
+        assert opened == [str(z)]
+
+    def test_inside_a_scope_the_measure_is_memoized(self, save_files, tmp_path):
+        f = tmp_path / "game.srm"
+        f.write_bytes(b"A" * 16)
+        with save_files.hash_memo_scope():
+            first = save_files.measure(str(f))
+            TestHashMemoScope._rewrite_same_stat(f, b"B" * 8 + b"\x00" * 8)
+            assert save_files.measure(str(f)) == first
+        assert save_files.measure(str(f)).content_size == 8

@@ -423,9 +423,21 @@ class SyncEngine:
             saves_dir=saves_dir,
         )
 
-    def adopt_baseline_hash(self, save_state: RomSaveSyncState, filename: str, local_hash: str) -> None:
-        """Record ``local_hash`` as the file's ``last_sync_hash`` baseline."""
-        self._matrix.adopt_baseline_hash(save_state, filename, local_hash)
+    def adopt_head_as_baseline(
+        self,
+        save_state: RomSaveSyncState,
+        filename: str,
+        head: dict[str, Any],
+        local_path: str,
+        local_hash: str,
+        *,
+        system: str,
+        default_slot: str | None = None,
+    ) -> bool:
+        """Record the local file as *filename*'s baseline for the identical *head* (delegate)."""
+        return self._matrix.adopt_head_as_baseline(
+            save_state, filename, head, local_path, local_hash, system=system, default_slot=default_slot
+        )
 
     def build_sync_conflict_entry(
         self,

@@ -31,7 +31,7 @@ _STATE_COLUMNS = (
 _FILE_COLUMNS = (
     "rom_id, filename, tracked_save_id, last_sync_hash, last_sync_server_hash, last_sync_at, "
     "last_sync_server_updated_at, last_sync_server_save_id, last_sync_server_size, "
-    "last_sync_local_mtime, last_sync_local_size"
+    "last_sync_local_mtime, last_sync_local_size, last_sync_content_size"
 )
 
 
@@ -46,6 +46,7 @@ def _row_to_file(row: sqlite3.Row) -> FileSyncState:
         last_sync_server_size=row["last_sync_server_size"],
         last_sync_local_mtime=row["last_sync_local_mtime"],
         last_sync_local_size=row["last_sync_local_size"],
+        last_sync_content_size=row["last_sync_content_size"],
     )
 
 
@@ -98,7 +99,7 @@ class SqliteRomSaveSyncStateRepository(BaseRepository):
         )
         self._conn.execute("DELETE FROM rom_save_files WHERE rom_id = ?", (rom_id,))
         self._conn.executemany(
-            f"INSERT INTO rom_save_files ({_FILE_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            f"INSERT INTO rom_save_files ({_FILE_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     rom_id,
@@ -112,6 +113,7 @@ class SqliteRomSaveSyncStateRepository(BaseRepository):
                     file.last_sync_server_size,
                     file.last_sync_local_mtime,
                     file.last_sync_local_size,
+                    file.last_sync_content_size,
                 )
                 for filename, file in state.files.items()
             ],

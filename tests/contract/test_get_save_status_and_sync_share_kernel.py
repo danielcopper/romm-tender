@@ -6,10 +6,10 @@ Before the collapse, a confirmed non-legacy ROM's ``sync_rom_saves`` handed
 detection to RomM's ``negotiate`` operation list while ``get_save_status`` used
 the matrix — so the two could disagree.
 
-This is the regression guard for the divergence the phase closes. It seeds row 8
+This is the regression guard for the divergence the phase closes. It seeds row 8a
 of the decision table: a server save with a current ``device_syncs`` entry for
 this device on it, and no baseline. The save's ``content_hash`` equals the local
-file's, which plays no part in row 8. The matrix verdict is
+file's, which is what makes row 8a adopt rather than conflict. The matrix verdict is
 ``Skip(adopt_baseline=True)`` — nothing to transfer, no conflict, adopt the local
 hash as the baseline. Under the old fork the ``FakeRommApi.negotiate`` empty
 plan would have dispatched nothing (no baseline adopted), diverging from the
@@ -56,7 +56,7 @@ async def test_get_save_status_and_sync_share_kernel(harness):
     seed_save_state(harness, 42, RomSaveSyncState(active_slot="default", slot_confirmed=True, system="gba"))
 
     # A server save in the slot with content_hash == local_hash that RomM records
-    # this device as current on → row 8, adopt.
+    # this device as current on → row 8a, adopt.
     entry = seed_server_save(harness, save_id=100, rom_id=42, slot="default", file_name="game.srm")
     entry["content_hash"] = local_hash
     harness.romm.stage_device_sync(100, "device-1", entry["updated_at"])

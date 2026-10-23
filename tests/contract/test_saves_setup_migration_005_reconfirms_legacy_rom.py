@@ -84,6 +84,8 @@ def _rewind_to_v4(db_path: str) -> None:
         # Reverse 033 so its CREATE TABLE and ADD COLUMN re-apply instead of duplicating.
         conn.execute("DROP TABLE artwork_slot_choices")
         conn.execute("ALTER TABLE roms DROP COLUMN chosen_sgdb_id")
+        # Reverse 037 so its ADD COLUMN re-applies instead of duplicating.
+        conn.execute("ALTER TABLE rom_save_files DROP COLUMN last_sync_content_size")
         # Reverse 036 so its CREATE TABLEs and ADD COLUMN re-apply instead of duplicating.
         conn.execute("DROP TABLE firmware_store")
         conn.execute("DROP TABLE firmware_links")

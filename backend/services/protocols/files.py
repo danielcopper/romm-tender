@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from domain.firmware_places import PlaceLook
     from domain.prune import BundleReadmeContext
+    from domain.save_measure import SaveFileMeasure
     from domain.tender_folder import Drive, TenderPlace
     from domain.update_install import UpdateAttemptRecord
     from domain.update_outcome import UpdateFailure
@@ -739,22 +740,31 @@ class SaveFileStore(Protocol):
         archive container's framing. A file that sniffs as a zip but cannot be
         read as one falls back to the plain MD5 rather than raising, so one
         unreadable save never aborts a sync sweep. Non-security use, like
-        ``checksum_md5``.
+        ``checksum_md5``. It is :meth:`measure`'s hash.
 
         Inside a :meth:`hash_memo_scope` the result is memoized per file; see
         that method.
         """
         ...
 
-    def hash_memo_scope(self) -> AbstractContextManager[None]:
-        """Bound a per-run :meth:`content_hash` memo to a single sync run.
+    def measure(self, path: str) -> SaveFileMeasure:
+        """Return *path*'s :meth:`content_hash`, size and content size, read in one open.
 
-        Within the returned scope, ``content_hash`` caches each save's digest
-        keyed by ``(path, mtime_ns, size)`` so one sync run's repeated hashings
-        of the same file (negotiate inventory, the newest-wins matrix, the
-        post-op baseline write) read it once. The memo is discarded on scope exit
-        — never a process-lifetime cache — and a file overwritten mid-run
-        re-hashes on its new stat. Reentrant: nested scopes share one memo. The
+        The size and the content size are taken over the file's raw bytes, a
+        zip's included (:mod:`domain.save_measure`). Inside a
+        :meth:`hash_memo_scope` the result is memoized per file; see that method.
+        """
+        ...
+
+    def hash_memo_scope(self) -> AbstractContextManager[None]:
+        """Bound a per-run :meth:`measure` memo to a single sync run.
+
+        Within the returned scope, :meth:`measure` (and so ``content_hash``)
+        caches each save's measure keyed by ``(path, mtime_ns, size)`` so one
+        sync run's repeated reads of the same file (negotiate inventory, the
+        newest-wins matrix, the post-op baseline write) read it once. The memo
+        is discarded on scope exit — never a process-lifetime cache — and a file
+        overwritten mid-run is read again on its new stat. Reentrant: nested scopes share one memo. The
         engine opens exactly one outermost scope per device-gated save-sync run.
         """
         ...

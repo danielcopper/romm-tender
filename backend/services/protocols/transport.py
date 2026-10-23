@@ -368,8 +368,13 @@ class RommSaveApi(Protocol):
         """Stream save content; ``optimistic=False`` with ``device_id`` defers the sync ack to ``confirm_download``."""
         ...
 
-    def confirm_download(self, save_id: int, device_id: str) -> dict[str, Any]:
-        """Acknowledge a deferred-sync save download (paired with ``optimistic=False``)."""
+    def confirm_download(self, save_id: int, device_id: LiveDeviceId) -> dict[str, Any]:
+        """Record this device as synced on ``save_id`` without a transfer (``POST /api/saves/{id}/downloaded``).
+
+        Acknowledges a deferred-sync download (paired with ``optimistic=False``)
+        and an adopted head alike. Takes only the id ``SyncEngine.live_device_id``
+        answers.
+        """
         ...
 
     def get_save_summary(self, rom_id: int) -> dict[str, Any]:

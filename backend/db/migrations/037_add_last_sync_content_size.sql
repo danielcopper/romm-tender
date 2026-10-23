@@ -1,0 +1,19 @@
+-- =============================================================================
+-- 037_add_last_sync_content_size.sql — the content size on FileSyncState
+-- #2525 (D2)
+-- =============================================================================
+--
+-- Adds a nullable column recording the local file's content size at the last
+-- sync, beside last_sync_local_size: its size less the trailing run of the
+-- byte it ends with, when that byte is 0xFF or 0x00 (romm-gavel 2.0.0, SPEC.md
+-- "Inputs"). The corrupt-local guard compares it with the local file's content
+-- size where both are stated, and the raw sizes where either is not.
+--
+-- NULL = no content size recorded. Every row from before this migration reads
+-- NULL: the bytes it was recorded from are not at hand here. A sync records it
+-- later for a file still unchanged since its baseline, from the same bytes.
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 37.
+-- -----------------------------------------------------------------------------
+ALTER TABLE rom_save_files ADD COLUMN last_sync_content_size INTEGER;  -- content size at last sync; NULL = none recorded (raw-size rule)

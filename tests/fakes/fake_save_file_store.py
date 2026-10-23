@@ -9,6 +9,7 @@ import zipfile
 from typing import TYPE_CHECKING
 
 from domain.save_hash import combine_zip_entry_hashes
+from domain.save_measure import SaveFileMeasure, TrailingRun, content_size
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -51,7 +52,7 @@ class FakeSaveFileStore:
         self._next_mtime: float = 1_000_000.0
         # Per-run content_hash memo, live only inside ``hash_memo_scope`` —
         # mirrors ``SaveFileAdapter`` so fakes and the real adapter behave alike.
-        self._hash_memo: dict[tuple[str, float, int], str] | None = None
+        self._hash_memo: dict[tuple[str, float, int], SaveFileMeasure] | None = None
         self._hash_memo_depth = 0
 
     def _ensure_mtime(self, path: str) -> None:
@@ -169,19 +170,28 @@ class FakeSaveFileStore:
         return hashlib.md5(self.files[path]).hexdigest()
 
     def content_hash(self, path: str) -> str:
+        return self.measure(path).content_hash
+
+    def measure(self, path: str) -> SaveFileMeasure:
         if path not in self.files:
             raise FileNotFoundError(path)
         memo = self._hash_memo
         if memo is None:
-            return self._compute_content_hash(path)
+            return self._measure(path)
         self._ensure_mtime(path)
         key = (path, self.mtimes[path], len(self.files[path]))
         cached = memo.get(key)
         if cached is not None:
             return cached
-        digest = self._compute_content_hash(path)
-        memo[key] = digest
-        return digest
+        measured = self._measure(path)
+        memo[key] = measured
+        return measured
+
+    def _measure(self, path: str) -> SaveFileMeasure:
+        data = self.files[path]
+        return SaveFileMeasure(
+            self._compute_content_hash(path), len(data), content_size(len(data), TrailingRun().after(data))
+        )
 
     def _compute_content_hash(self, path: str) -> str:
         data = self.files[path]

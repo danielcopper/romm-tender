@@ -117,88 +117,6 @@ class TestAdoptBaseline:
         assert state.files == {}
 
 
-class TestUpdateBaselineHash:
-    def test_creates_minimal_entry_when_untracked(self):
-        state = RomSaveSyncState()
-        state.update_baseline_hash("game.srm", "abc123")
-        fs = state.files["game.srm"]
-        assert fs.last_sync_hash == "abc123"
-        # No server anchor — the relaxed entry point leaves the rest at defaults.
-        assert fs.tracked_save_id is None
-        assert fs.last_sync_server_save_id is None
-        assert fs.last_sync_at == ""
-
-    def test_updates_hash_in_place_preserving_other_anchors(self):
-        state = RomSaveSyncState()
-        state.adopt_baseline(
-            "game.srm",
-            tracked_save_id=11,
-            last_sync_hash="old",
-            last_sync_at="2026-05-28T10:00:00",
-            last_sync_server_save_id=99,
-            last_sync_server_size=2048,
-        )
-        state.update_baseline_hash("game.srm", "new")
-        fs = state.files["game.srm"]
-        assert fs.last_sync_hash == "new"
-        # Every other anchor survives the relaxed update.
-        assert fs.tracked_save_id == 11
-        assert fs.last_sync_at == "2026-05-28T10:00:00"
-        assert fs.last_sync_server_save_id == 99
-        assert fs.last_sync_server_size == 2048
-
-    def test_clears_stale_server_hash_when_hash_changes(self):
-        # A changed local hash has no server hash for the new content; a kept
-        # stale one would pair a fresh last_sync_hash with an unrelated server
-        # hash, which the provenance identity check would misread (#1468).
-        state = RomSaveSyncState()
-        state.adopt_baseline(
-            "game.srm",
-            tracked_save_id=11,
-            last_sync_hash="old",
-            last_sync_server_hash="srv-old",
-        )
-        state.update_baseline_hash("game.srm", "new")
-        fs = state.files["game.srm"]
-        assert fs.last_sync_hash == "new"
-        assert fs.last_sync_server_hash is None
-
-    def test_keeps_server_hash_when_hash_unchanged(self):
-        # A re-adopt of the SAME content (e.g. a status read or repeat sync of an
-        # unchanged file) keeps the stored server hash — it still pairs with the
-        # unchanged last_sync_hash, so provenance survives repeated evaluation
-        # (#1468).
-        state = RomSaveSyncState()
-        state.adopt_baseline(
-            "game.srm",
-            tracked_save_id=11,
-            last_sync_hash="same",
-            last_sync_server_hash="srv-same",
-        )
-        state.update_baseline_hash("game.srm", "same")
-        fs = state.files["game.srm"]
-        assert fs.last_sync_hash == "same"
-        assert fs.last_sync_server_hash == "srv-same"
-
-    def test_minimal_entry_has_no_server_hash(self):
-        state = RomSaveSyncState()
-        state.update_baseline_hash("game.srm", "abc123")
-        assert state.files["game.srm"].last_sync_server_hash is None
-
-    def test_does_not_add_a_second_entry_on_update(self):
-        state = RomSaveSyncState()
-        state.update_baseline_hash("game.srm", "a")
-        state.update_baseline_hash("game.srm", "b")
-        assert list(state.files) == ["game.srm"]
-        assert state.files["game.srm"].last_sync_hash == "b"
-
-    def test_empty_hash_raises(self):
-        state = RomSaveSyncState()
-        with pytest.raises(ValueError, match="last_sync_hash is required"):
-            state.update_baseline_hash("game.srm", "")
-        assert state.files == {}
-
-
 class TestTrackOwnUpload:
     def test_starts_list_when_unknown(self):
         state = RomSaveSyncState()
@@ -425,3 +343,56 @@ class TestClearBaselines:
         assert state.files
         state.clear_baselines()
         assert state.files == {}
+
+
+class TestTheContentSize:
+    """The content size a baseline records, and the one it gains from a file still holding it."""
+
+    def test_adopt_baseline_records_the_content_size_beside_the_raw_size(self):
+        state = RomSaveSyncState()
+        state.adopt_baseline(
+            "game.srm",
+            tracked_save_id=11,
+            last_sync_hash="h",
+            last_sync_local_size=131072,
+            last_sync_content_size=32768,
+        )
+        fs = state.files["game.srm"]
+        assert (fs.last_sync_local_size, fs.last_sync_content_size) == (131072, 32768)
+
+    def test_a_file_unchanged_since_its_baseline_backfills_its_content_size(self):
+        state = RomSaveSyncState()
+        state.adopt_baseline("game.srm", tracked_save_id=11, last_sync_hash="h", last_sync_local_size=131072)
+
+        state.backfill_content_size("game.srm", local_hash="h", content_size=32768)
+
+        fs = state.files["game.srm"]
+        assert fs.last_sync_content_size == 32768
+        assert (fs.tracked_save_id, fs.last_sync_hash, fs.last_sync_local_size) == (11, "h", 131072)
+
+    def test_a_file_changed_since_its_baseline_backfills_nothing(self):
+        state = RomSaveSyncState()
+        state.adopt_baseline("game.srm", tracked_save_id=11, last_sync_hash="h")
+
+        state.backfill_content_size("game.srm", local_hash="edited", content_size=32768)
+
+        assert state.files["game.srm"].last_sync_content_size is None
+
+    def test_a_recorded_content_size_is_never_replaced(self):
+        state = RomSaveSyncState()
+        state.adopt_baseline("game.srm", tracked_save_id=11, last_sync_hash="h", last_sync_content_size=100)
+
+        state.backfill_content_size("game.srm", local_hash="h", content_size=32768)
+
+        assert state.files["game.srm"].last_sync_content_size == 100
+
+    @pytest.mark.parametrize("local_hash", ["", "h"])
+    def test_an_untracked_file_or_an_empty_hash_backfills_nothing(self, local_hash):
+        state = RomSaveSyncState()
+        state.backfill_content_size("game.srm", local_hash=local_hash, content_size=1)
+        assert state.files == {}
+
+    def test_an_empty_hash_never_matches_an_empty_baseline(self):
+        state = RomSaveSyncState(files={"game.srm": FileSyncState(last_sync_hash="")})
+        state.backfill_content_size("game.srm", local_hash="", content_size=1)
+        assert state.files["game.srm"].last_sync_content_size is None

@@ -20,7 +20,7 @@ from domain.sync_action import Conflict, Skip
 from lib.errors import Refused, classify_error
 from services.saves._local_changes import changed_since_last_sync
 from services.saves._save_state import read_save_state
-from services.saves._settings import save_sync_enabled
+from services.saves._settings import resolve_default_slot, save_sync_enabled
 
 if TYPE_CHECKING:
     import asyncio
@@ -137,9 +137,12 @@ class StatusService:
     ) -> tuple[list[MatrixOutcome], list[MatrixOutcome], bool, list[str]]:
         """Iterate matrix outcomes for the active slot, splitting them into local/server-only buckets.
 
-        Side effect: when an outcome is ``Skip(adopt_baseline=True)`` with
-        a local hash, records that hash as the new sync baseline on
-        *save_state* (in memory) and flags that a write is needed.
+        Side effect: when an outcome is ``Skip(adopt_baseline=True)`` that needs
+        no acknowledgement, records the local file as its baseline for the head
+        on *save_state* (in memory) and flags that a write is needed. An adopt
+        that must be acknowledged is left to the next sync: showing a page never
+        writes to RomM, and a baseline recorded before the acknowledgement would
+        claim a sync RomM does not know of.
 
         Returns ``(local_outcomes, server_only_outcomes, baseline_adopted,
         all_filenames)``. The local bucket is every outcome with a local file
@@ -163,8 +166,24 @@ class StatusService:
             saves_dir=info["saves_dir"],
         ):
             all_filenames.append(outcome.filename)
-            if isinstance(outcome.action, Skip) and outcome.action.adopt_baseline and outcome.local_hash:
-                self._sync_engine.adopt_baseline_hash(save_state, outcome.filename, outcome.local_hash)
+            action = outcome.action
+            if (
+                isinstance(action, Skip)
+                and action.adopt_baseline
+                and not action.acknowledge
+                and action.server_save is not None
+                and outcome.local_path is not None
+                and outcome.local_hash
+                and self._sync_engine.adopt_head_as_baseline(
+                    save_state,
+                    outcome.filename,
+                    action.server_save,
+                    outcome.local_path,
+                    outcome.local_hash,
+                    system=info["system"],
+                    default_slot=resolve_default_slot(self._settings),
+                )
+            ):
                 baseline_adopted = True
             if outcome.local_path is None:
                 server_only_outcomes.append(outcome)
@@ -205,9 +224,10 @@ class StatusService:
         Older versions of the same slot are reachable via the lazy-fetched
         ``Previous Versions`` dropdown (``list_file_versions``).
 
-        The one allowed mutation is recording an adopted baseline hash when
-        the action requests it (``Skip(adopt_baseline=True)``) — pure state
-        hygiene, persisted via a short write UoW only when it actually fires.
+        The one allowed mutation is recording an adopted baseline when the
+        action requests it (``Skip(adopt_baseline=True)``) and needs no
+        acknowledgement — pure state hygiene, persisted via a short write UoW
+        only when it actually fires.
 
         *device_id* is the one ``SyncEngine.live_device_id`` answered the
         caller, ``None`` where it refused. When *server_query_failed* is True
