@@ -905,7 +905,7 @@ class TestALinkAnotherPlatformMayStillWant:
         await machine.service.download_all_firmware("gb")
         assert place.is_symlink()
         machine.resolver.not_installed_in = {"gb": frozenset({_YABA})}
-        machine.platform_systems.library = frozenset({"gb", "gbc"})
+        machine.platform_systems.listed = frozenset({"gb", "gbc"})
         return place
 
     def _gbc_wants_nothing(self, machine: _Machine) -> None:
@@ -952,10 +952,10 @@ class TestALinkAnotherPlatformMayStillWant:
 
         self._stays(machine, place)
 
-    async def test_without_a_kept_listing_of_the_librarys_platforms_it_stays(self, machine):
+    async def test_without_a_kept_listing_of_romms_platforms_it_stays(self, machine):
         place = await self._unwanted_on_gb(machine)
         self._gbc_wants_nothing(machine)
-        machine.platform_systems.library = None
+        machine.platform_systems.listed = None
 
         await machine.service.update_bios_links("gb")
 
@@ -988,7 +988,7 @@ class TestALinkAnotherPlatformMayStillWant:
     async def test_each_system_is_read_once_however_many_platforms_share_it(self, machine):
         await self._unwanted_on_gb(machine)
         self._gbc_wants_nothing(machine)
-        machine.platform_systems.library = frozenset({"gb", "gbc", "gbc-hacks"})
+        machine.platform_systems.listed = frozenset({"gb", "gbc", "gbc-hacks"})
         machine.platform_systems.mapping = {"gbc-hacks": "gbc"}
         machine.resolver.calls.clear()
 
@@ -998,7 +998,7 @@ class TestALinkAnotherPlatformMayStillWant:
 
     async def test_the_asking_stops_once_every_link_is_known_to_be_wanted(self, machine):
         place = await self._unwanted_on_gb(machine)
-        machine.platform_systems.library = frozenset({"gb", "gbc", "sgb"})
+        machine.platform_systems.listed = frozenset({"gb", "gbc", "sgb"})
         machine.resolver.calls.clear()
 
         await machine.service.update_bios_links("gb")
@@ -1024,7 +1024,7 @@ class TestALinkAnotherPlatformMayStillWant:
             machine.romm.add(firmware_id, "ps2", name, data)
         await machine.service.download_all_firmware("ps2")
         machine.resolver.not_installed_in = {"ps2": frozenset({"pcsx2_libretro.so"})}
-        machine.platform_systems.library = frozenset({"ps2", "ps2-homebrew"})
+        machine.platform_systems.listed = frozenset({"ps2", "ps2-homebrew"})
         # The folder another platform's emulator reads recognises the USA image only.
         machine.resolver.placements = [
             replace(placement, folder_md5s=frozenset({_md5(b"usa")})) for placement in machine.resolver.placements

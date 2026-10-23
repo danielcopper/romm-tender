@@ -1302,11 +1302,10 @@ Format: **invariant** — tier — enforced by.
   row builder deciding presence by `look(place).lexists` would go green and read a link to a missing store file as
   present; one reading `downloaded` as the verdict would read a wrong image as met. A withheld verdict is not an absence
   — its cause is read off the row's caveat codes and, for a declared FILE, off its `checked` (GLOSSARY.md → Byte
-  reading), never off the verdict itself. Three of that vocabulary's eight values sit behind one withheld verdict and
-  are three different statements: a file the emulator READ and does not recognise was checked, so wording it "could not
-  be checked" is untrue; `refused` is not withheld at all, arriving with the verdict already `false`. Nothing checks
-  that a consumer keeps them apart — `checked` is a plain string on the row beside a `satisfied` that reads like its
-  summary
+  reading), never off the verdict itself. Three of that vocabulary's nine values sit behind one withheld verdict and are
+  three different statements: a file the emulator READ and does not recognise was checked, so wording it "could not be
+  checked" is untrue; `refused` is not withheld at all, arriving with the verdict already `false`. Nothing checks that a
+  consumer keeps them apart — `checked` is a plain string on the row beside a `satisfied` that reads like its summary
 - **A firmware row's verdict is `BiosFileEntry.satisfied` — the resolver's per-file verdict at the place the launching
   emulator opens it, never presence — and a folder declaration is one row per file of it the resolver makes a statement
   about or recognises in the library (#2191 D26), each with the verdict over that file, the folder's own verdict
@@ -1606,9 +1605,11 @@ Format: **invariant** — tier — enforced by.
   every entry it lists it under (`FirmwareCatalogue.linkable`), in every enabled source, a sealed catalogue's places
   included while its rows stay withheld; the link update removes a link of Tender's that still points at its store file
   only in a source whose list it read whole — never a sealed one — and whose roots it may touch, at a place no emulator
-  that source does not state not installed wants any more, for this platform or for any other platform RomM listed at
-  the last sync or Tender holds store files for, and keeps it wherever such a platform or its source could not be read;
-  a link whose store file is gone goes wherever its place may be touched** — test + prompt-only —
+  that source does not state not installed wants any more, for this platform or for any other whose ids are kept — each
+  one RomM listed at the last sync, and any kept since — or that Tender holds store files for; it keeps the link where
+  no ids were ever kept or such a platform or its source could not be read, and the next update asks again; an installed
+  emulator whose wants the resolver could not read wants no place, since the resolver states none; a link whose store
+  file is gone goes wherever its place may be touched** — test + prompt-only —
   `tests/services/test_firmware_store.py::TestOnlyAnInstalledEmulatorIsLinkedFor` (no link for an emulator stated not
   installed; a link nobody wants removed; a link the user put there, one under a root only assumed, one in a source not
   read and one a sealed list leaves out left alone; its row refusing "Replace…" with the refusal `not_installed`),
@@ -1629,11 +1630,13 @@ Format: **invariant** — tier — enforced by.
   list leaves out is a link not placed, while reading it as complete — for rows and verdicts, or for deciding that a
   link is unwanted — would misstate what is needed. One place can serve two platforms (D19), and a platform need hold no
   file of Tender's to want a place, so a link one platform no longer wants stays while another platform's emulator in
-  the same source wants its place, and an answer that could not be had is never read as wanting nothing
-  ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42). Prompt-only: a new placing path
-  reads `linkable()`, never `placements`; `not_installed` comes only from the source's own launch reading; a link of
-  Tender's that still points at its store file, in a source switched off or not read, stays whatever that source's list
-  would say; a link whose store file is gone goes in any source, not only the one the test places it in
+  the same source wants its place, and a platform or a source that could not be read is never read as wanting nothing.
+  An installed emulator whose wants the resolver could not read (`unread_emulators`) is the one exception: it wants no
+  place only because the resolver states none for it, and any emulator the resolver states a place for counts as wanting
+  it ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42, D43). Prompt-only: a new
+  placing path reads `linkable()`, never `placements`; `not_installed` comes only from the source's own launch reading;
+  a link of Tender's that still points at its store file, in a source switched off or not read, stays whatever that
+  source's list would say; a link whose store file is gone goes in any source, not only the one the test places it in
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

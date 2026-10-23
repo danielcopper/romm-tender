@@ -85,8 +85,12 @@ class PlatformSystems(Protocol):
         """The system a game is asked about: its install record's where it is installed, else the platform's."""
         ...
 
-    def library_platforms(self) -> frozenset[str] | None:
-        """Every platform RomM listed at the last sync, by slug; ``None`` where no listing was ever kept."""
+    def listed_platforms(self) -> frozenset[str] | None:
+        """Every platform whose ids are kept, by slug; ``None`` where none are. Reads nothing from RomM.
+
+        Each platform RomM listed at the last sync, and every one kept since —
+        a listing read for a platform with no ids keeps the whole listing.
+        """
         ...
 
 

@@ -1645,16 +1645,19 @@ delete and "Forget what is recorded there" remove the links of the files they ta
 `forget_records_under`); nothing else places or removes a link. Every download ends with it; so does a replacement; and
 the panel asks for it (`update_bios_links`) when a platform page or a game's page opens and after an emulator switch.
 
-**Before such a link goes, every other platform is asked whether it still wants the place** (D42): every platform RomM
-listed at the last sync — the ids `PlatformSystems.library_platforms` keeps — and every one Tender holds store files
-for, whether or not it holds one itself. Each platform's system is asked first and each system read once in every
-enabled source; an emulator its source states is not installed wants nothing, a sealed list's places count as wanted,
-and a folder declaration wants a place in its folder only for a copy it recognises
+**Before such a link goes, every other platform is asked whether it still wants the place** (D42): every platform whose
+ids are kept — each one RomM listed at the last sync, and any a listing read since named, which
+`PlatformSystems.listed_platforms` answers without reading RomM — and every platform Tender holds store files for. A
+listed platform is asked whether or not Tender holds a file for it. Each platform's system is asked first and each
+system read once in every enabled source; an emulator its source states is not installed wants nothing, and so does an
+installed one whose wants the resolver could not read (`unread_emulators`), only because the resolver states no place
+for it (D43) — any emulator the resolver states a place for counts as wanting it. A sealed list's places count as
+wanted, and a folder declaration wants a place in its folder only for a copy it recognises
 (`domain/firmware_rows.py::wants_place`). The asking stops once every link is known to be wanted. A link stays wherever
-the answer could not be had: no listing was ever kept, a platform's system could not be asked, or a source could not be
-read for its system (`SourceCatalogues.unread`) — what could not be read is never counted as wanting nothing, and the
-next update asks again. A platform with no system in the answering source wants nothing; one whose system is switched
-off is asked by that system all the same.
+the answer could not be had: no ids were ever kept, a platform's system could not be asked, or a source could not be
+read for its system (`SourceCatalogues.unread`) — a platform or source that could not be read is never counted as
+wanting nothing, and the next update asks again. A platform with no system in the answering source wants nothing; one
+whose system is switched off is asked by that system all the same.
 
 **A file the resolver reads as wrong is replaced only on the user's confirmation**, and only where the library copy is
 proven right by its checksum (D5): the copy is fetched and checked first, the file in the way goes to

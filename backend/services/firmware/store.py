@@ -66,8 +66,8 @@ class FirmwareStoreConfig:
 
     Holds the RomM API the bytes come from, the file store every look and
     write goes through, the resolver seam that answers each enabled source's
-    demand and roots, the seam that answers which platforms the library holds
-    and the system each is, Tender's folder made ready for a write, the
+    demand and roots, the seam that answers which platforms RomM listed and
+    the system each is, Tender's folder made ready for a write, the
     Unit-of-Work factory the records are kept through, the clock a record and
     a backup are stamped by, Tender's data folder the backups go under, and the
     logger.
@@ -363,16 +363,19 @@ class FirmwareStore:
     ) -> frozenset[tuple[str, str]]:
         """Which *unwanted* links, by source and place, another platform still wants — or might.
 
-        Every platform RomM listed at the last sync is asked, and every one
-        Tender holds store files for, each system read once. An emulator its
-        source states is not installed wants nothing; a sealed list's places
-        are wanted. Where something could not be read — the listing was never
-        kept, a platform's system could not be asked, a source could not be
-        read — what it might want is kept, never counted as nothing.
+        Every platform whose ids are kept is asked — each one RomM listed at
+        the last sync, and any kept since — and every one Tender holds store
+        files for, each system read once. An emulator its source states is not
+        installed wants nothing, and so does one whose wants the resolver could
+        not read, since it states no place for it; a sealed list's places are
+        wanted. Where a platform or a source could not be read — no ids were
+        ever kept, a platform's system could not be asked, a source could not
+        be read for a system — what it might want is kept, never counted as
+        nothing, and the next update asks again.
         """
         if not unwanted:
             return frozenset()
-        listed = self._platform_systems.library_platforms()
+        listed = self._platform_systems.listed_platforms()
         if listed is None:
             return frozenset(unwanted)
         others = sorted((listed | {stored.platform_slug for stored in records.stored}) - {platform_slug})

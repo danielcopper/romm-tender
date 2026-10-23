@@ -25,7 +25,7 @@ class FakePlatformSystems:
     The tests' platforms are mostly spelled like the systems they stand for,
     which is why a slug nothing names answers itself. ``calls`` records each
     ``(platform_slug, source)`` asked, through either method; an installed game
-    is answered from its record. ``library`` is what the last sync listed —
+    is answered from its record. ``listed`` is the platforms whose ids are kept —
     nothing by default, and ``None`` where no listing was ever kept.
     """
 
@@ -34,7 +34,7 @@ class FakePlatformSystems:
     ) -> None:
         self.mapping: dict[str, str] = mapping if mapping is not None else {}
         self.answers: dict[str, PlatformSystem] = answers if answers is not None else {}
-        self.library: frozenset[str] | None = frozenset()
+        self.listed: frozenset[str] | None = frozenset()
         self.calls: list[tuple[str, str | None]] = []
 
     def platform_system(
@@ -59,5 +59,5 @@ class FakePlatformSystems:
         self.calls.append((platform_slug, None))
         return PlatformSystem(FOUND, platform_slug, platform_slug, system=install.system)
 
-    def library_platforms(self) -> frozenset[str] | None:
-        return self.library
+    def listed_platforms(self) -> frozenset[str] | None:
+        return self.listed

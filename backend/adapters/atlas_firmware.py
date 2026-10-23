@@ -276,9 +276,9 @@ class AtlasPlatformFirmwareAdapter:
 
         Empty where that reading could not be asked: an emulator nothing ruled
         out is linked for, as one the reading could not establish is. Read over
-        the identity rather than over the row, as :func:`_unread_emulators` is:
+        the identity rather than over the entry, as :func:`_unread_emulators` is:
         an emulator the catalogue lists twice (EmuDeck's Cemu, native and
-        through Proton) is not installed only where EVERY one of its rows says so.
+        through Proton) is not installed only where EVERY one of its entries says so.
         """
         try:
             entries = installation.emulators_for(system).entries

@@ -1012,16 +1012,18 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   every entry it lists it under (`FirmwareCatalogue.linkable`), in every enabled source, a sealed catalogue's places
   included while its rows stay withheld; the link update removes a link of Tender's that still points at its store file
   only in a source whose list it read whole — never a sealed one — and whose roots it may touch, at a place no emulator
-  that source does not state not installed wants any more, for this platform or for any other platform RomM listed at
-  the last sync or Tender holds store files for, and keeps it wherever such a platform or its source could not be read;
-  a link whose store file is gone goes wherever its place may be touched** — test + prompt-only —
+  that source does not state not installed wants any more, for this platform or for any other whose ids are kept — each
+  one RomM listed at the last sync, and any kept since — or that Tender holds store files for; it keeps the link where
+  no ids were ever kept or such a platform or its source could not be read, and the next update asks again; an installed
+  emulator whose wants the resolver could not read wants no place, since the resolver states none; a link whose store
+  file is gone goes wherever its place may be touched** — test + prompt-only —
   `tests/services/test_firmware_store.py::TestOnlyAnInstalledEmulatorIsLinkedFor`,
   `::TestALinkAnotherPlatformMayStillWant`,
   `::TestBringingLinksUpToDate::test_a_link_of_tenders_with_no_store_copy_left_is_removed` and
   `tests/adapters/test_atlas_firmware.py::TestEverySourceItIsPlacedIn`; prompt-only: a new placing path reads
   `linkable()`, never `placements`; `not_installed` comes only from the source's own launch reading; a link whose store
   file is gone goes in any source, not only the one the test places it in
-  ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42)
+  ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42, D43)
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

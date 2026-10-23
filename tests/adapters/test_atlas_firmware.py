@@ -2603,7 +2603,7 @@ class TestEverySourceItIsPlacedIn:
         ],
         ids=["one-row-starts", "one-row-unestablished", "every-row-not-installed"],
     )
-    def test_an_emulator_listed_twice_is_ruled_out_only_where_every_row_says_not_installed(
+    def test_an_emulator_listed_twice_is_ruled_out_only_where_every_entry_says_not_installed(
         self, traces, monkeypatch, rows, ruled_out
     ):
         answer = _answer(_core(core_so="cemu", requirements=(_requirement(core_so="cemu", file_name="keys.txt"),)))
