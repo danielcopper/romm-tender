@@ -200,7 +200,7 @@
       },
       "directory": {
         "name": "duckstation",
-        "citation": "[V-source] the DataRoot is the duckstation directory below whichever base the launch picks (qthost.cpp:562-582 at stenzek/duckstation@64655818e); components/duckstation/component_functions.sh:3 and component_functions.sh:5-12 pin the config-home spelling (the line between names the component's own rd_config, not a DuckStation tree)",
+        "citation": "[V-source] the DataRoot is the duckstation directory below whichever base the launch picks (qthost.cpp:562-582 at RetroDECK/Duckstation@1f6de046b); components/duckstation/component_functions.sh:3 and component_functions.sh:5-12 pin the config-home spelling (the line between names the component's own rd_config, not a DuckStation tree)",
         "anchors": {
           "binary": "duckstation/bin/duckstation-qt",
           "names": {
@@ -217,7 +217,7 @@
             "data"
           ],
           "path": "settings.ini",
-          "citation": "[V-source] the DataRoot is $XDG_CONFIG_HOME/duckstation where that variable is set and absolute, else ~/.local/share/duckstation (qthost.cpp:562-582 at stenzek/duckstation@64655818e), and settings.ini lives inside it; no file records which branch a launch took, so both are candidates in that order"
+          "citation": "[V-source] the DataRoot is $XDG_CONFIG_HOME/duckstation where that variable is set and absolute, else ~/.local/share/duckstation (qthost.cpp:562-582 at RetroDECK/Duckstation@1f6de046b), and settings.ini lives inside it; no file records which branch a launch took, so both are candidates in that order"
         }
       }
     },

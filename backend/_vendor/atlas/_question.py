@@ -24,21 +24,17 @@ from __future__ import annotations
 
 import functools
 from contextvars import ContextVar
-from typing import Callable, Hashable, ParamSpec, TypeVar, cast
-
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
-_T = TypeVar("_T")
+from typing import Callable, Hashable, cast
 
 # The open question's memo, or ``None`` outside every question.
 _MEMO: ContextVar[dict[Hashable, object] | None] = ContextVar("atlas_question_memo", default=None)
 
 
-def one_question(method: Callable[_P, _R]) -> Callable[_P, _R]:
+def one_question[**P, R](method: Callable[P, R]) -> Callable[P, R]:
     """Run *method* as one question: what it computes through :func:`once`, it computes once."""
 
     @functools.wraps(method)
-    def asked(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+    def asked(*args: P.args, **kwargs: P.kwargs) -> R:
         if _MEMO.get() is not None:
             return method(*args, **kwargs)
         token = _MEMO.set({})
@@ -50,7 +46,7 @@ def one_question(method: Callable[_P, _R]) -> Callable[_P, _R]:
     return asked
 
 
-def once(key: Hashable, compute: Callable[[], _T]) -> _T:
+def once[T](key: Hashable, compute: Callable[[], T]) -> T:
     """*compute*'s result for *key*, computed once within the open question.
 
     Outside a question every call computes. The result is shared by every
@@ -62,4 +58,4 @@ def once(key: Hashable, compute: Callable[[], _T]) -> _T:
         return compute()
     if key not in memo:
         memo[key] = compute()
-    return cast(_T, memo[key])
+    return cast(T, memo[key])

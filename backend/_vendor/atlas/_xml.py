@@ -5,9 +5,10 @@ its gamelists, Cemu's ``settings.xml``, Vita3K's ``user.xml``. That takes a
 parser which is present wherever a consumer runs a vendored copy, and
 ``xml.etree`` is not reliably that parser. It is a Python-source package over
 the extension that does the work, and a frozen runtime ships only the modules
-its build analysis reached: on Decky Loader's PyInstaller bundle ``import
-xml.etree.ElementTree`` raises ``ModuleNotFoundError: No module named
-'xml.etree'`` while the expat extension itself sits in the bundle's
+its build analysis reached. The case this module was built for is Decky
+Loader's PyInstaller bundle, where the first consumer's backend ran: there
+``import xml.etree.ElementTree`` raised ``ModuleNotFoundError: No module named
+'xml.etree'`` while the expat extension itself sat in the bundle's
 ``lib-dynload`` (issue #339). Vendoring atlas is a directory copy (DESIGN.md,
 consumption) whose release manifest checksums every packaged file
 (``docs/how-to-use.md``), so a consumer cannot patch that away — the assumption

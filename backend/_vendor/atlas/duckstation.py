@@ -183,11 +183,11 @@ def dataroot_caveat(token: str, below: str) -> Caveat:
 def load_path(
     values: Mapping[tuple[str, str], str], root: str, section: str, name: str, default: str
 ) -> str:
-    """``EmuFolders::LoadPathFromSettings`` (settings.cpp:1952-1962) as a read.
+    """``EmuFolders::LoadPathFromSettings`` (settings.cpp:1955-1965) as a read.
 
     An unset *or empty* value is the default, and anything relative — the
     default included — hangs off the DataRoot through ``Path::Combine``
-    (:1958-1959), which is :func:`atlas.qt_ini.path_combine` and not
+    (:1961-1962), which is :func:`atlas.qt_ini.path_combine` and not
     ``os.path.join``: the combine collapses separator runs and strips a
     trailing separator, so a degenerate spelling like ``memcards//sub/``
     composes to the directory the emulator opens rather than to the same
@@ -197,8 +197,8 @@ def load_path(
     so a ``[folders]`` spelling governs here exactly as it does in the
     running emulator.
 
-    Upstream then hands the composed path to ``Path::RealPath`` (:1960;
-    file_system.cpp:301-476 at 64655818e), and what an answer mirrors of it
+    Upstream then hands the composed path to ``Path::RealPath`` (:1963;
+    file_system.cpp:301-476 at 1f6de046b), and what an answer mirrors of it
     is split, deliberately. RealPath walks the path a component at a time,
     replacing each symlink with its target (``lstat``/``readlink``,
     :397-464, a relative target resolved against the link's own directory)
@@ -236,7 +236,7 @@ def load_path(
 
 # The per-game settings layer. Its directory is the usual LoadPathFromSettings
 # shape, ``[Folders] GameSettings`` defaulting to ``gamesettings`` below the
-# DataRoot (settings.cpp:1972, the compiled default the same join at :1941).
+# DataRoot (settings.cpp:1975, the compiled default the same join at :1944).
 GAME_SETTINGS_SECTION = "Folders"
 GAME_SETTINGS_KEY = "GameSettings"
 GAME_SETTINGS_DEFAULT = "gamesettings"
@@ -253,7 +253,7 @@ _ANY_INI_GLOB = "*.ini"
 # drift into four tellings of one fact — the reason :func:`dataroot_caveat`
 # lives here too.
 _LAYER = (
-    "UpdateGameSettingsLayer, system.cpp:1407-1441 at stenzek/duckstation@64655818e — "
+    "UpdateGameSettingsLayer, system.cpp:1407-1441 at RetroDECK/Duckstation@1f6de046b — "
     "the file is <serial>.ini, folded onto a disc set's first serial "
     "(GetGameSettingsPath, :1145-1152)"
 )

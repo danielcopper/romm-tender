@@ -128,6 +128,7 @@ def _placement_core(placement: SavefilePlacement | SavestatePlacement) -> dict[s
                     "files": None if group.files is None else list(group.files),
                     "granularity": group.granularity,
                     "role": group.role,
+                    "size_fixed": group.size_fixed,
                 }
                 for group in placement.file_set.groups
             ],
@@ -453,9 +454,15 @@ def _requirement_entry_contract(
     A plain requirement stays exactly the fields it always was — ``regions``
     appears nowhere on it, because an unconditional entry has no scope to
     state.
+
+    A group answering a question that named the game's content carries two
+    more keys beside ``alternatives``: ``region``, the console region the
+    emulator decides for that content, and ``region_source``, where it came
+    from — both ``null`` where nothing was decided. A question that named no
+    content serializes the group exactly as before, without either key.
     """
     if isinstance(entry, FirmwareAlternatives):
-        return {
+        group: dict[str, Any] = {
             "alternatives": [
                 {
                     **_requirement_contract(option),
@@ -464,6 +471,10 @@ def _requirement_entry_contract(
                 for option in entry.options
             ]
         }
+        if entry.for_content:
+            group["region"] = entry.region
+            group["region_source"] = entry.region_source
+        return group
     return _requirement_contract(entry)
 
 
@@ -484,9 +495,10 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
 
     **Two of the fields on a core answer to different owners.**
     ``requirements`` is what the *emulator itself declared*, reproduced down to
-    each entry's ``need``: nothing read off the machine is ever overwritten, so
-    a core that marks a file it cannot start without ``optional`` still
-    serializes ``optional``. ``requirements_met`` is *atlas's own verdict*
+    each entry's ``need``, so a core that marks a file it cannot start without
+    ``optional`` still serializes ``optional``; a ``need`` moves only to
+    ``optional``, and only where something beside the row already states what
+    the launch needs (:attr:`atlas.firmware.FirmwareRequirement.need`). ``requirements_met`` is *atlas's own verdict*
     about that declaration, and it draws on **world knowledge** as well as on
     what was read from the machine — a packaged, source-cited table
     (``atlas/data/system_firmware.json``) recording which systems do not start

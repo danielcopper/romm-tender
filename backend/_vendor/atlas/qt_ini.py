@@ -61,7 +61,7 @@ def _path_append(dst: list[str], src: str) -> None:
     """``PathAppendString``, the POSIX half — one function in two emulators.
 
     (common/FileSystem.cpp:98-139 at PCSX2 v2.6.3; file_system.cpp:100-140 at
-    stenzek/duckstation@64655818e.) Copies *src* onto *dst* collapsing every
+    RetroDECK/Duckstation@1f6de046b.) Copies *src* onto *dst* collapsing every
     run of separators to one. The state that decides it is ``last_separator``,
     seeded from what *dst* already ends with (:104 / :105) — which is the
     whole mechanism behind :func:`path_combine` swallowing an absolute value's
@@ -86,7 +86,7 @@ def path_combine(base: str, name: str) -> str:
     """``Path::Combine``, ported faithfully — the same function in two emulators.
 
     (common/FileSystem.cpp:847-862 at PCSX2 v2.6.3; file_system.cpp:859-874 at
-    stenzek/duckstation@64655818e — token-identical outside the unported
+    RetroDECK/Duckstation@1f6de046b — token-identical outside the unported
     ``_WIN32`` arm, see :func:`_path_append`, so one port serves both.) A
     resident here for the reason :func:`from_chars_bool` is: every configured
     *file name* either emulator composes goes through this combine — PCSX2's
@@ -115,8 +115,8 @@ def path_combine(base: str, name: str) -> str:
     one PCSX2 configuration file an absolute value is a path when it names a
     directory and is not one when it names a file. DuckStation keeps the same
     asymmetry: its folder reader tests it (``LoadPathFromSettings``,
-    settings.cpp:1955-1962) and its shared-card getter tests it
-    (settings.cpp:1785-1797), while the BIOS-image combine tests nothing.
+    settings.cpp:1958-1965) and its shared-card getter tests it
+    (settings.cpp:1788-1800), while the BIOS-image combine tests nothing.
 
     Nothing here normalises, because upstream resolves no ``.`` or ``..``
     component either. A name of ``"../x"`` composes literally to
@@ -144,7 +144,7 @@ def from_chars_bool(value: str | None) -> bool | None:
     keeping the caller's default where that returns nothing
     (INISettingsInterface.cpp:198-210 and StringUtil.h:178-197 at PCSX2 v2.6.3;
     ini_settings_interface.cpp:155-167 and string_util.h:180-197 at
-    stenzek/duckstation@64655818e). ``None`` here is that nothing: the key
+    RetroDECK/Duckstation@1f6de046b). ``None`` here is that nothing: the key
     said something the emulator could not read as a boolean, so its compiled
     default governs — which is not the same fact as an absent key, and the
     caller keeps them apart.
@@ -193,7 +193,7 @@ def simpleini_value(
     ``CSimpleIniA``, whose comparator is ASCII case-insensitive on Linux
     (PCSX2 v2.6.3: INISettingsInterface.h:66, SimpleIni.h:2882-2887 define
     SI_NO_CONVERSION, :3629-3634 pick SI_GenericNoCase, :3642-3643 the
-    typedef; the same chain at stenzek/duckstation@64655818e,
+    typedef; the same chain at RetroDECK/Duckstation@1f6de046b,
     ini_settings_interface.h:65 and its vendored SimpleIni.h:3593-3607). A
     file carrying two case-spellings of one key collapses them into one entry
     with the last occurrence winning (AddEntry assigns into the found key,

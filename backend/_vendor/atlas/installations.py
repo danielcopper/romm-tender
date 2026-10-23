@@ -282,7 +282,9 @@ from .placement import (
     CAVEAT_SAVE_INSIDE_CONTENT,
     CAVEAT_SAVE_INSIDE_IMAGE,
     CAVEAT_SAVE_ROOT_REVOKED,
+    CAVEAT_SAVE_FILES_COMPRESSED,
     CAVEAT_SAVE_WRITES_DISCARDED,
+    CAVEAT_SIZE_FIXED_EXCEPT_TRAILING_FILL,
     CAVEAT_SAVESTATE_INSIDE_IMAGE,
     CAVEAT_SAVESTATE_SUPPORT_MACHINE_DEPENDENT,
     CAVEAT_SORTED_DIR_MISSING,
@@ -363,6 +365,7 @@ from .placement import (
     DataValue,
     FileGroup,
     FileSet,
+    SizeFact,
     GRANULARITY_PER_GAME_DIRECTORY,
     GRANULARITY_PER_GAME_FILE,
     GRANULARITY_PER_GAME_FILES,
@@ -388,6 +391,7 @@ from .placement import (
     build_savestate_placement,
     build_soft_patch_candidates,
     checked_appendconfig,
+    checked_content_path,
     checked_cwd,
     cwd_templated,
     file_set_holes,
@@ -4471,7 +4475,13 @@ def _cross_root_parts(
         filled = _card_files(group.files or (), content.rom_stem)
         names = filled if filled is not None else group.files or ()
         groups_out.append(
-            FileGroup(dir=directory, files=names, granularity=group.granularity, role=group.role)
+            FileGroup(
+                dir=directory,
+                files=names,
+                granularity=group.granularity,
+                role=group.role,
+                size_fixed=_card_group_size(group.granularity),
+            )
         )
         holes.extend(base.needs)
         caveats.append(
@@ -4906,9 +4916,22 @@ def _declared_groups(
                 files=names,
                 granularity=group.granularity,
                 role=group.role,
+                size_fixed=_card_group_size(group.granularity),
             )
         )
     return tuple(groups)
+
+
+def _card_group_size(granularity: str) -> bool | None:
+    """What a card group says about its files' size before anything else is known.
+
+    A directory per game is a folder save: the game writes the files below it
+    at whatever length it likes, so no file there keeps a size — ``False``.
+    Every other card group is ``None`` here: a file RetroArch writes gets its
+    claim from :func:`_frontend_sizes`, and a file the core writes itself has
+    not been read for one yet.
+    """
+    return False if granularity == GRANULARITY_PER_GAME_DIRECTORY else None
 
 
 def _observation_names(group: SaveGroup, rom_stem: str | None) -> frozenset[str]:
@@ -5015,7 +5038,13 @@ def _observed_groups(
             continue
         unclaimed = [name for name in unclaimed if name not in names]
         groups.append(
-            FileGroup(dir=directory, files=mine, granularity=group.granularity, role=group.role)
+            FileGroup(
+                dir=directory,
+                files=mine,
+                granularity=group.granularity,
+                role=group.role,
+                size_fixed=_card_group_size(group.granularity),
+            )
         )
     catchall = _unnamed_here(mode) if unclaimed else None
     if catchall is not None:
@@ -5025,6 +5054,7 @@ def _observed_groups(
                 files=tuple(unclaimed),
                 granularity=catchall.granularity,
                 role=catchall.role,
+                size_fixed=_card_group_size(catchall.granularity),
             )
         )
         unclaimed = []
@@ -5167,6 +5197,141 @@ class _Declaration:
     file_set: FileSet | None = None
     granularity: Granularity | None = None
     caveats: tuple[Caveat, ...] = ()
+    # Each file the set names, with whether its size is fixed — in the set's
+    # order, ``None`` where the record states no claim that holds here.
+    frontend: tuple[tuple[str, SizeFact | None], ...] = ()
+
+
+# The key RetroArch's own compression of the files it writes is read from
+# (settings_def_saving.h:98-99 at RetroArch a79435a); its compiled default is
+# off (config.def.h:1516).
+_SAVE_FILE_COMPRESSION = "save_file_compression"
+
+
+def _standard_groups(
+    file_set: FileSet, frontend: tuple[tuple[str, SizeFact | None], ...], *, directory: str
+) -> FileSet:
+    """The standard rule's set decomposed: one group per file RetroArch writes.
+
+    Built here rather than with the declaration because a group carries its
+    directory, and the directory is only final once the filesystem has had its
+    say. Each file is this game's battery-backed data — the ``.rtc`` too, a
+    cartridge clock keeps its time on the same battery — and each is a group
+    of its own, because the size claim is per file and a group carries one.
+    """
+    if not frontend or file_set.groups:
+        return file_set
+    groups = tuple(
+        FileGroup(dir=directory, files=(name,), granularity=GRANULARITY_PER_GAME_FILE, role=ROLE_BATTERY)
+        for name, _ in frontend
+    )
+    return cast(FileSet, _dc_replace(file_set, groups=groups))
+
+
+def _sized_file_set(
+    file_set: FileSet,
+    declaration: _Declaration,
+    *,
+    mode: SaveMode | None,
+    rom_stem: str | None,
+    directory: str,
+    layers: Sequence[_CfgLayer],
+) -> tuple[FileSet, tuple[Caveat, ...]]:
+    """The answer's set with the standard rule's groups and every frontend-written file's size.
+
+    Where the standard rule declared the set it is the answer's set — a
+    declaration short-circuits the look at the directory — so its groups are
+    added here, in the directory that stands; a card's own groups are already
+    there. Either way the files RetroArch writes then get their size claim.
+    """
+    if declaration.file_set is not None:
+        file_set = _standard_groups(file_set, declaration.frontend, directory=directory)
+    return _frontend_sizes(file_set, declaration.frontend or _card_frontend(mode, rom_stem), layers)
+
+
+def _card_frontend(
+    mode: SaveMode | None, rom_stem: str | None
+) -> tuple[tuple[str, SizeFact | None], ...]:
+    """The files a rule card says RetroArch writes itself, with their size claims, resolved."""
+    if mode is None or mode.stated is not None:
+        return ()
+    found: list[tuple[str, SizeFact | None]] = []
+    for group in mode.groups:
+        if group.frontend is None or group.root is not None:
+            continue
+        names = _card_files(group.files or (), rom_stem) or ()
+        found.extend((name, group.frontend.size) for name in names)
+    return tuple(found)
+
+
+def _frontend_sizes(
+    file_set: FileSet, frontend: tuple[tuple[str, SizeFact | None], ...], layers: Sequence[_CfgLayer]
+) -> tuple[FileSet, tuple[Caveat, ...]]:
+    """Whether each file RetroArch writes keeps its size, with what that rests on.
+
+    Applied to every group whose files are all ones the frontend writes,
+    declared or observed alike, so the same file answers the same way whether
+    or not it has been written yet. ``save_file_compression`` is read live,
+    through the same chain as the save directory: where it is on, the file is an
+    RZIP stream whose length follows its content, so the core's report no
+    longer decides and every such group is false. Otherwise the claim is the
+    record's, and a fixed file that may move by trailing fill says so.
+    """
+    sizes = dict(frontend)
+    touched = [
+        index
+        for index, group in enumerate(file_set.groups)
+        if group.files and all(name in sizes for name in group.files)
+    ]
+    if not touched:
+        return file_set, ()
+    compressed, source, ignored = chain_bool_read(layers, _SAVE_FILE_COMPRESSION, default=False)
+    caveats = list(_ignored_caveats(ignored))
+    groups = list(file_set.groups)
+    for index in touched:
+        names = groups[index].files or ()
+        facts = [sizes[name] for name in names]
+        groups[index] = cast(
+            FileGroup,
+            _dc_replace(groups[index], size_fixed=False if compressed else _one_claim(facts)),
+        )
+        if not compressed:
+            caveats.extend(
+                _trailing_fill_caveat(name, fact)
+                for name, fact in zip(names, facts)
+                if fact is not None and fact.fill is not None
+            )
+    if compressed and source is not None:
+        caveats.insert(0, _compressed_caveat(source))
+    return cast(FileSet, _dc_replace(file_set, groups=tuple(groups))), tuple(caveats)
+
+
+def _one_claim(facts: Sequence[SizeFact | None]) -> bool | None:
+    """The size claim several files share, or ``None`` where any is unstated or they differ."""
+    claims = {fact.fixed if fact is not None else None for fact in facts}
+    return claims.pop() if len(claims) == 1 else None
+
+
+def _compressed_caveat(source: CfgSource) -> Caveat:
+    """``save-files-compressed`` — the key, and the layer whose read stands."""
+    return Caveat(
+        CAVEAT_SAVE_FILES_COMPRESSED,
+        f"{_SAVE_FILE_COMPRESSION} is on in {source.label}, so RetroArch writes its save files as "
+        "RZIP streams whose length follows their content (save.c:645-656) — none of them keeps a "
+        "fixed size, whatever the core reports",
+        {"key": _SAVE_FILE_COMPRESSION, "layer": source.kind, "file": source.file},
+    )
+
+
+def _trailing_fill_caveat(name: str, fact: SizeFact) -> Caveat:
+    """``size-fixed-except-trailing-fill`` for one file, with the claim's citation."""
+    return Caveat(
+        CAVEAT_SIZE_FIXED_EXCEPT_TRAILING_FILL,
+        f"{name} keeps its size except for a trailing run of {fact.fill}: the emulator may write it "
+        "longer or shorter by that fill, so compare its length without the trailing run — shorter "
+        "than that is content lost",
+        {"file": name, "fill": fact.fill or "", "citation": fact.citation},
+    )
 
 
 def _drift_caveat(
@@ -5365,6 +5530,10 @@ def _standard_declaration(
     files = _card_files(entry.file_templates, content.rom_stem)
     if files is None:
         return _Declaration()
+    frontend = tuple(
+        (name, record.size(query.system, memory_type))
+        for name, memory_type in zip(files, entry.memory_types)
+    )
     if entry.frontend_writes_nothing:
         return _no_frontend_files(
             record, entry, system=scope, core_version=core_version, extra=across
@@ -5394,6 +5563,7 @@ def _standard_declaration(
         ),
         caveats=across
         + _as_tuple(_drift_caveat(record, entry, system=scope, core_version=core_version)),
+        frontend=frontend,
     )
 
 
@@ -5640,6 +5810,15 @@ def _standard_placement(
         )
     all_caveats.extend(cross_parts.caveats)
     file_set = _with_cross_parts(file_set, cross_parts)
+    file_set, size_caveats = _sized_file_set(
+        file_set,
+        declaration,
+        mode=mode,
+        rom_stem=content.rom_stem,
+        directory=final_dir,
+        layers=chain.layers,
+    )
+    all_caveats.extend(size_caveats)
 
     return SavefilePlacement(
         dir=final_dir,
@@ -7545,6 +7724,7 @@ _DOLPHIN_CITATION_SLOTS = frozenset(
         "agp_paths",  # the AgpCartA/BPath keys a GBA cartridge adapter reads
         "agp_save",  # how the adapter loads, sizes and writes back its .sav
         "split_path",  # how the cartridge path's extension is cut for that .sav
+        "card_size",  # how a raw card is read and written back at the size it was created at
     }
 )
 
@@ -8032,6 +8212,7 @@ def _dolphin_raw_slot(
                 files=(name,),
                 granularity=GRANULARITY_SHARED_FILE,
                 role=ROLE_MEMORY_CARD,
+                size_fixed=True,
             )
             for name in names
         ),
@@ -8090,6 +8271,7 @@ def _dolphin_folder_slot(
                 files=None,
                 granularity=GRANULARITY_PER_GAME_FILES,
                 role=ROLE_MEMORY_CARD,
+                size_fixed=False,
             )
             for d in dirs
         ),
@@ -8601,7 +8783,7 @@ def _dolphin_gc_answer(
             complete=False,
             groups=groups,
         ),
-        sources=(f"standalone save card '{card.token}': {card.provenance}",),
+        sources=_card_sources(card, groups, f"{cite('card_size')} at {cite('build')}"),
         caveats=tuple(caveats),
         physical_dir=physical,
         granularity=Granularity(
@@ -8723,6 +8905,7 @@ def _unnamed_tree_placement(
                     files=None,
                     granularity=GRANULARITY_PER_GAME_FILES,
                     role=ROLE_BATTERY,
+                    size_fixed=False,
                 ),
             ),
         ),
@@ -8773,6 +8956,7 @@ def _per_title_placement(
                     files=None,
                     granularity=GRANULARITY_PER_GAME_DIRECTORY,
                     role=ROLE_BATTERY,
+                    size_fixed=False,
                 ),
                 *extra_groups,
             ),
@@ -9796,16 +9980,18 @@ def _azahar_savefile_placement(
                 files=None,
                 granularity=GRANULARITY_PER_GAME_FILES,
                 role=ROLE_BATTERY,
+                size_fixed=False,
             ),
         ),
     )
 
 
 # DuckStation's slot vocabulary, in the emulator's own declaration order
-# (settings.cpp:1743-1745 at stenzek/duckstation@64655818e — the last commit
-# before RetroDECK's 2024-09-19 "Legacy" freeze). Matching is case-insensitive
-# the way ParseMemoryCardTypeName matches, and an unparseable value falls back
-# to the compiled default the way ``.value_or`` does (settings.cpp:391-398).
+# (settings.cpp:1746-1748 at RetroDECK/Duckstation@1f6de046b — the commit
+# RetroDECK's 2024-09-19 "Legacy" release was built from). Matching is
+# case-insensitive the way ParseMemoryCardTypeName matches, and an unparseable
+# value falls back to the compiled default the way ``.value_or`` does
+# (settings.cpp:392-399).
 _DUCKSTATION_TYPE_NAMES = (
     "None",
     "Shared",
@@ -9814,14 +10000,14 @@ _DUCKSTATION_TYPE_NAMES = (
     "PerGameFileTitle",
     "NonPersistent",
 )
-_DUCKSTATION_TYPE_DEFAULTS = ("PerGameTitle", "None")  # settings.h:510-511
+_DUCKSTATION_TYPE_DEFAULTS = ("PerGameTitle", "None")  # settings.h:511-512
 
 
 def _duckstation_sanitized(name: str) -> str:
     """``Path::SanitizeFileName``'s Linux branch: ``/`` and ``*`` become ``_``.
 
     ``FileSystemCharacterIsSane`` splits on the platform
-    (file_system.cpp:69-97 at 64655818e). The ``#else`` arm the shipped Linux
+    (file_system.cpp:69-97 at 1f6de046b). The ``#else`` arm the shipped Linux
     build compiles rejects exactly two characters: ``/`` when slashes are
     being stripped (:82-83, and ``SanitizeFileName`` defaults ``strip_slashes``
     to true) and ``*`` (:86-87, "drop asterisks too, they make globbing
@@ -9914,9 +10100,9 @@ def _duckstation_shared_slot(
 ) -> _DuckSlot:
     """The shared card: ``CardXPath`` — absolute or Directory-relative — else the default name.
 
-    The three arms are ``GetSharedMemoryCardPath``'s own (settings.cpp:1785-1797
-    at 64655818e): an empty value combines the default name below the
-    memory-card directory (:1790), a relative one combines there too (:1792),
+    The three arms are ``GetSharedMemoryCardPath``'s own (settings.cpp:1788-1800
+    at 1f6de046b): an empty value combines the default name below the
+    memory-card directory (:1793), a relative one combines there too (:1795),
     and only a value upstream's ``Path::IsAbsolute`` accepts stands alone — no
     ``RealPath`` follows any of them, unlike the folder reader. Both combines
     are :func:`atlas.qt_ini.path_combine`, not ``os.path.join``, because the
@@ -9941,7 +10127,7 @@ def _duckstation_shared_slot(
             f'settings.ini: [MemoryCards] {path_spelled} = "{raw_path}"'
             if raw_path
             else f"Card{n}Path is unset — the default shared_card_{n}.mcd below the memory-card "
-            "directory governs (settings.cpp:1785-1797)"
+            "directory governs (settings.cpp:1788-1800)"
         ),
         None,
     )
@@ -9974,6 +10160,7 @@ def _duckstation_shared_slot(
             files=(os.path.basename(resolved),),
             granularity=GRANULARITY_SHARED_CARD,
             role=ROLE_MEMORY_CARD,
+            size_fixed=True,
         ),
         readings=(type_reading, path_reading),
     )
@@ -10003,11 +10190,11 @@ def _duckstation_per_game_slot(
             "the content file's own name without its extension, sanitized the way "
             "Path::SanitizeFileName sanitizes on Linux ('/' and '*' become '_')"
         )
-        citation = "system.cpp:3744-3762 and file_system.cpp:142-163 at 64655818e"
+        citation = "system.cpp:3744-3762 and file_system.cpp:142-163 at 1f6de046b"
     elif mode == "PerGame":
         name = f"{TEMPLATE_SAVE_ID}_{n}.mcd"
         fill = "the disc's serial, as DuckStation reads it off the running game"
-        citation = "system.cpp:3663-3685 and settings.cpp:1799-1802 at 64655818e"
+        citation = "system.cpp:3663-3685 and settings.cpp:1802-1805 at 1f6de046b"
     else:
         name = f"{TEMPLATE_SAVE_ID}_{n}.mcd"
         raw_playlist, playlist_spelled = _simpleini_value(values, "MemoryCards", "UsePlaylistTitle")
@@ -10019,7 +10206,7 @@ def _duckstation_per_game_slot(
                     f'settings.ini: [MemoryCards] {playlist_spelled} = "{raw_playlist}"'
                     if raw_playlist is not None
                     else "UsePlaylistTitle is unset — the default true governs "
-                    "(settings.cpp:401)"
+                    "(settings.cpp:402)"
                 ),
                 None,
             )
@@ -10029,7 +10216,7 @@ def _duckstation_per_game_slot(
             "disc-set game may use the set's name instead, and an existing disc-title card "
             "outranks it"
         )
-        citation = "system.cpp:3688-3742 and settings.cpp:1799-1802 at 64655818e"
+        citation = "system.cpp:3688-3742 and settings.cpp:1802-1805 at 1f6de046b"
     message = (
         f"slot {n} names its card by {fill}; a running game without that fact falls back to "
         f"the shared card ({shared_fallback})"
@@ -10071,6 +10258,7 @@ def _duckstation_per_game_slot(
             files=(name,),
             granularity=GRANULARITY_PER_GAME_FILE,
             role=ROLE_MEMORY_CARD,
+            size_fixed=True,
         ),
         readings=tuple(readings),
         caveats=(caveat,),
@@ -10103,11 +10291,11 @@ def _duckstation_slot(
         provenance = (
             f'settings.ini sets {type_spelled} to "{raw}", a value ParseMemoryCardTypeName '
             f"does not know — the compiled default {mode} governs (.value_or, "
-            "settings.cpp:391-398)"
+            "settings.cpp:392-399)"
         )
     else:
         provenance = (
-            f"Card{n}Type is unset — the compiled default {mode} governs (settings.h:510-511)"
+            f"Card{n}Type is unset — the compiled default {mode} governs (settings.h:511-512)"
         )
     type_reading = OptionReading(f"Card{n}Type", raw, provenance, None)
     if mode == "None":
@@ -10178,7 +10366,7 @@ def _duckstation_needs(groups: tuple[FileGroup, ...]) -> tuple[str, ...]:
 # The section-qualified keys DuckStation's save answer depends on, and what a
 # per-game value does to them. All five, unconditionally: a game ini can change
 # the slot MODES themselves, so even a machine whose slots are both ``None``
-# today can be answered differently for one game (settings.cpp:391-401).
+# today can be answered differently for one game (settings.cpp:392-402).
 _DUCKSTATION_SAVE_LAYER_KEYS = (
     "[MemoryCards] Card1Type",
     "[MemoryCards] Card2Type",
@@ -10191,15 +10379,15 @@ _DUCKSTATION_SAVE_LAYER_KEYS = (
 _DUCKSTATION_SAVE_LAYER_GOVERNS = (
     "A per-game value there decides which card each slot holds and which file it reads, and an "
     "absolute CardNPath is used verbatim rather than joined below the memory-card directory "
-    "(GetSharedMemoryCardPath, settings.cpp:1785-1797), so a card named there need not sit in "
+    "(GetSharedMemoryCardPath, settings.cpp:1788-1800), so a card named there need not sit in "
     "the directory this answer states. The directory itself is fixed: [MemoryCards] Directory "
-    "is read from the base settings alone (EmuFolders::LoadConfig, settings.cpp:1964-1981), "
+    "is read from the base settings alone (EmuFolders::LoadConfig, settings.cpp:1967-1984), "
     "and no per-game file moves it."
 )
 # The door those five come through: Settings::Load is handed the LAYERED
 # interface, because Host::GetSettingsInterface returns the layered object
 # itself rather than its base layer.
-_DUCKSTATION_SAVE_LAYER_READ = "Settings::Load, settings.cpp:391-401, on host.cpp:42-45"
+_DUCKSTATION_SAVE_LAYER_READ = "Settings::Load, settings.cpp:392-402, on host.cpp:42-45"
 
 
 def _duckstation_game_settings_caveats(
@@ -10312,12 +10500,12 @@ def _duckstation_savefile_placement(
             f'settings.ini: [MemoryCards] {dir_spelled} = "{raw_dir}"'
             if raw_dir
             else "Directory is unset — the default memcards below the DataRoot governs "
-            "(settings.cpp:1943, :1974)"
+            "(settings.cpp:1946, :1977)"
         ),
         None,
     )
     # The directory is a LoadPathFromSettings read (EmuFolders::LoadConfig,
-    # settings.cpp:1974 with :1952-1962 at 64655818e): unset and empty alike
+    # settings.cpp:1977 with :1955-1965 at 1f6de046b): unset and empty alike
     # fall to the compiled default, and a relative value combines below the
     # DataRoot — through the emulator's own combine, whose degenerate-spelling
     # behaviour and RealPath tail :func:`atlas.duckstation.load_path` states.
@@ -10389,7 +10577,7 @@ def _duckstation_savefile_placement(
             complete=False,
             groups=groups,
         ),
-        sources=(f"standalone save card '{card.token}': {card.provenance}",),
+        sources=_card_sources(card, groups, _DUCKSTATION_CARD_SIZE),
         caveats=tuple(caveats),
         physical_dir=physical,
         granularity=Granularity(
@@ -10399,7 +10587,7 @@ def _duckstation_savefile_placement(
             alternatives=(),
             provenance=(
                 f"standalone save card '{card.token}': the slot pair from settings.ini "
-                "(settings.cpp:391-401 at 64655818e)"
+                "(settings.cpp:392-402 at 1f6de046b)"
             ),
         ),
     )
@@ -10638,7 +10826,11 @@ def _pcsx2_slot_group(
             },
         )
         group = FileGroup(
-            dir=full, files=None, granularity=GRANULARITY_PER_GAME_FILES, role=ROLE_MEMORY_CARD
+            dir=full,
+            files=None,
+            granularity=GRANULARITY_PER_GAME_FILES,
+            role=ROLE_MEMORY_CARD,
+            size_fixed=False,
         )
         return "folder", group, tuple(readings), (caveat,)
     group = FileGroup(
@@ -10646,6 +10838,7 @@ def _pcsx2_slot_group(
         files=(os.path.basename(full),),
         granularity=GRANULARITY_SHARED_CARD,
         role=ROLE_MEMORY_CARD,
+        size_fixed=True,
     )
     return "file", group, tuple(readings), ()
 
@@ -10868,7 +11061,7 @@ def _pcsx2_savefile_placement(
             complete=False,
             groups=groups,
         ),
-        sources=(f"standalone save card '{card.token}': {card.provenance}",),
+        sources=_card_sources(card, groups, _PCSX2_CARD_SIZE),
         caveats=tuple(caveats),
         physical_dir=physical,
         granularity=Granularity(
@@ -11578,6 +11771,7 @@ def _per_user_savedata_placement(
             files=None,
             granularity=GRANULARITY_PER_GAME_DIRECTORY,
             role=ROLE_BATTERY,
+            size_fixed=False,
         )
         # Where nothing was found the compiled default stands in — as the tree
         # the emulator starts with, never as a user seen on this machine, which
@@ -13454,8 +13648,9 @@ def _vita3k_key_provenance(
 # writes that release's tag beside the binary (vita3k/component_recipe.json:57
 # at main-20261003-0649, :27 at main-20260529-1747; $SOURCE_VERSION is the
 # release downloaded, automation-tools/alchemist/alchemist.sh:56,67). The tag is
-# the build's commit count, the number its stamp carries before the revision,
-# which tests/test_standalone_build_tripwire.py holds against the binary. An
+# the build's commit count, the number its stamp carries before the revision;
+# tests/test_standalone_build_tripwire.py holds it against the release of the
+# build whose stamp the binary carries. An
 # arrangement with no deploy tree — EmuDeck runs the AppImage it downloaded
 # without opening it — states no build here at all.
 _VITA3K_COMPONENT_VERSION = "/app/retrodeck/components/vita3k/component_version"
@@ -14223,6 +14418,37 @@ STANDALONE_SAVE_CITATION_SLOTS = {
     "PRIMEHACK": _DOLPHIN_CITATION_SLOTS,
 }
 
+# Why a card image keeps its size, in the build each resolver below reads. In
+# code beside those resolvers' other citations rather than on their cards: the
+# card citation slots are the Dolphin family's, whose one reading serves two
+# source trees, and neither of these emulators shares its reading.
+_DUCKSTATION_CARD_SIZE = (
+    "src/core/memory_card_image.h:17, src/core/memory_card_image.cpp:99-111 and :124-136 at "
+    "RetroDECK/Duckstation 1f6de046b: a card is DATA_SIZE, 128 KiB; a file of any other size is "
+    "refused when loaded, and a save writes the whole card"
+)
+_PCSX2_CARD_SIZE = (
+    "pcsx2/SIO/Memcard/MemoryCardFile.cpp:289, :308-326 and :484-524 at PCSX2 v2.6.3: a file card "
+    "is created at its size, opened r+b and written in place at the addressed offset, so its length "
+    "never changes"
+)
+
+
+def _card_sources(
+    card: StandaloneSaveCard, groups: Sequence[FileGroup], citation: str
+) -> tuple[str, ...]:
+    """A card answer's sources: the card's provenance, and the evidence behind a fixed size.
+
+    A card image is written whole or in place at the size it was created at,
+    never cut short, so its group says ``size_fixed`` true; the line ranges
+    that say so ride the answer's sources, once, beside the card's provenance —
+    and only where a group states one.
+    """
+    sources = [f"standalone save card '{card.token}': {card.provenance}"]
+    if any(group.size_fixed for group in groups):
+        sources.append(f"a memory-card image keeps the size it was created at — {citation}")
+    return tuple(sources)
+
 
 def _standalone_savefile_placement(
     machine: Machine,
@@ -14497,8 +14723,8 @@ def _duckstation_savestate_placement(
 
     The same two-base DataRoot probe the save answer performs, then the one
     key: default ``savestates`` below the DataRoot, an empty value falling to
-    the default and a relative one joining the root (settings.cpp:1944,
-    :1955-1962, :1975 at 64655818e — upstream then resolves the path with
+    the default and a relative one joining the root (settings.cpp:1947,
+    :1958-1965, :1978 at 1f6de046b — upstream then resolves the path with
     ``Path::RealPath``, which is what makes RetroDECK's symlink at the
     default location work; this answer states the link as ``physical_dir``
     instead of silently resolving it). The ini goes through the same
@@ -14520,8 +14746,8 @@ def _duckstation_savestate_placement(
     if not raw:
         # Unset and empty answer alike HERE and only here: DuckStation's own
         # LoadPathFromSettings folds an empty value back to the compiled
-        # default (`if (value.empty()) value = def;`, settings.cpp:1955-1957
-        # at 64655818e). PCSX2's does not — its empty value survives and
+        # default (`if (value.empty()) value = def;`, settings.cpp:1958-1960
+        # at 1f6de046b). PCSX2's does not — its empty value survives and
         # Path::Combine lands the directory on the DataRoot itself
         # (:func:`_pcsx2_folder_below_dataroot`) — so this branch must not be
         # "fixed" to match the sibling resolver.
@@ -14531,14 +14757,14 @@ def _duckstation_savestate_placement(
             f"DataRoot governs ({setting.citation})"
         )
     elif not os.path.isabs(raw):
-        # The emulator's own combine (settings.cpp:1958-1959), not
+        # The emulator's own combine (settings.cpp:1961-1962), not
         # os.path.join: what that changes for a degenerate spelling, and what
         # of the RealPath tail an answer mirrors, is stated once at
         # :func:`atlas.duckstation.load_path`.
         directory = qt_ini.path_combine(data_root, raw)
         reading = (
             f'settings.ini: [{setting.section}] {spelled} = "{raw}" — a relative value '
-            "joins the DataRoot (LoadPathFromSettings, settings.cpp:1955-1962)"
+            "joins the DataRoot (LoadPathFromSettings, settings.cpp:1958-1965)"
         )
     else:
         host = sandbox.host(setting.key, raw)
@@ -17062,7 +17288,10 @@ def _firmware_core_options(
     themselves: the game and folder ``.opt`` layers are keyed by content, so
     what governs here is the per-core ``.opt`` (unless ``global_core_options``
     switched it off) and then the global options file, which is exactly the
-    tail of RetroArch's own priority order.
+    tail of RetroArch's own priority order. A firmware question that names the
+    game's content (#661) reads those two layers too, and whether RetroArch
+    reads them at all is the global cfg's ``game_specific_options``, carried
+    here; the override ``.cfg`` layers stay unread either way.
     """
     layers: list[_CfgLayer] = (
         [(CfgSource(CFG_LAYER_GLOBAL, cfg_label), global_text)] if global_text is not None else []
@@ -17080,6 +17309,7 @@ def _firmware_core_options(
         per_core_options=gates.per_core_options,
         core_dir=core_dir,
         caveats=(*override_caveats, *gates.caveats),
+        game_specific_options=gates.game_specific_options,
     )
 
 
@@ -17201,7 +17431,12 @@ class _FirmwareQueries:
 
     @one_question
     def firmware_for_core(
-        self, core_so: str, *, verify: bool = False, cwd: str | None = None
+        self,
+        core_so: str,
+        *,
+        verify: bool = False,
+        cwd: str | None = None,
+        content_path: str | None = None,
     ) -> FirmwareAnswer:
         """Does *core_so* need firmware, where does each file go, and is it there?
 
@@ -17209,26 +17444,49 @@ class _FirmwareQueries:
         path; a value that is not absolute raises ``ValueError``. No core's
         firmware depends on it, so it changes nothing here — it is taken so a
         launcher can pass it on every firmware question.
+
+        ``content_path`` names the game the launch is for — the path the launch
+        is handed, an ``.m3u`` or a single image. Where the core's firmware is
+        a group whose option the console region selects, the group then states
+        the region the core decides for that game and where it came from
+        (:attr:`atlas.firmware.FirmwareAlternatives.region`); every other
+        answer is the same with or without it.
         """
         checked_cwd(cwd)
+        checked_content_path(content_path)
         return _resolve_for_core(
-            self._machine, self._firmware_context(cwd=cwd), core_so=core_so, verify=verify
+            self._machine,
+            self._firmware_context(cwd=cwd),
+            core_so=core_so,
+            verify=verify,
+            content_path=content_path,
         )
 
     @one_question
     def firmware_for_system(
-        self, system: str, *, verify: bool = False, cwd: str | None = None
+        self,
+        system: str,
+        *,
+        verify: bool = False,
+        cwd: str | None = None,
+        content_path: str | None = None,
     ) -> FirmwareAnswer:
         """Which emulators can run *system*, and what does each of them want?
 
         ``cwd`` is the working folder the launch will use, an absolute host
         path: it completes a standalone emulator's relative configured path
         (xemu's), is ignored where no answer depends on it, and a value that
-        is not absolute raises ``ValueError``.
+        is not absolute raises ``ValueError``. ``content_path`` names the game
+        the launch is for, as :meth:`firmware_for_core` takes it.
         """
         checked_cwd(cwd)
+        checked_content_path(content_path)
         return _resolve_for_system(
-            self._machine, self._firmware_context(cwd=cwd), system=system, verify=verify
+            self._machine,
+            self._firmware_context(cwd=cwd),
+            system=system,
+            verify=verify,
+            content_path=content_path,
         )
 
     @one_question
@@ -20726,6 +20984,7 @@ class _CatalogueQueries:
     def _catalogue_answer(
         self, system: str, *, content_path: str | None = None
     ) -> tuple[CatalogueAnswer, str | None]:
+        del system, content_path  # with no catalogue, every system and file is refused alike
         return CatalogueAnswer(caveats=(*self.health().issues, self._catalogue_absence())), None
 
     def _launchable_answer(
@@ -22343,7 +22602,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
 
     @one_question
     def firmware_for_system(
-        self, system: str, *, verify: bool = False, cwd: str | None = None
+        self,
+        system: str,
+        *,
+        verify: bool = False,
+        cwd: str | None = None,
+        content_path: str | None = None,
     ) -> FirmwareAnswer:
         """Which emulators RetroDECK offers for *system*, and what each of them wants.
 
@@ -22357,14 +22621,17 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
 
         The catalogue is the one :meth:`emulators_for` answers from, assembled
         from this query's own snapshot: marker and both catalogue layers are
-        read once here and handed on, never re-read. ``cwd`` is taken as the
-        shared firmware questions take it.
+        read once here and handed on, never re-read. ``cwd`` and
+        ``content_path`` are taken as the shared firmware questions take them.
         """
         checked_cwd(cwd)
+        checked_content_path(content_path)
         config, marker_issues = self._read_marker()
         if _not_set_up(marker_issues) is not None:
             context = self._stated(self._firmware_context_from(config, marker_issues), cwd=cwd)
-            return _resolve_for_system(self._machine, context, system=system, verify=verify)
+            return _resolve_for_system(
+                self._machine, context, system=system, verify=verify, content_path=content_path
+            )
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
         catalogue = Catalogue(
@@ -22378,7 +22645,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         # The override files follow the same rule: read once, by the context.
         context = self._stated(self._firmware_context_from(config, marker_issues), cwd=cwd)
         answer = _resolve_for_system(
-            self._machine, context, system=system, catalogue=catalogue, verify=verify
+            self._machine,
+            context,
+            system=system,
+            catalogue=catalogue,
+            verify=verify,
+            content_path=content_path,
         )
         # The catalogue-status statements ride only answers the catalogue
         # informed: an own spelling is answered from the cores, so the
@@ -25070,7 +25342,12 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
 
     @one_question
     def firmware_for_system(
-        self, system: str, *, verify: bool = False, cwd: str | None = None
+        self,
+        system: str,
+        *,
+        verify: bool = False,
+        cwd: str | None = None,
+        content_path: str | None = None,
     ) -> FirmwareAnswer:
         """Which emulators this EmuDeck's ES-DE offers for *system*, and what each wants.
 
@@ -25090,10 +25367,11 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         unreadable bundled layer is. And on every catalogue-informed answer
         the marker cross-check rides adjacent to the catalogue-status
         statement, in the same order every catalogue answer pins (sealed,
-        then mismatch). ``cwd`` is taken as the shared firmware questions take
-        it.
+        then mismatch). ``cwd`` and ``content_path`` are taken as the shared
+        firmware questions take them.
         """
         checked_cwd(cwd)
+        checked_content_path(content_path)
         settings, marker_issues = self._read_marker()
         cfg = self._machine.read_text(self._companion_cfg_path())
         context = self._stated(self._firmware_context_from(settings, marker_issues, cfg), cwd=cwd)
@@ -25104,7 +25382,9 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             # catalogue could inform the answer — the resolver returns the
             # same empty answer either way, so the ES-DE sources are not read
             # for an answer that would discard them.
-            return _resolve_for_system(self._machine, context, system=system, verify=verify)
+            return _resolve_for_system(
+                self._machine, context, system=system, verify=verify, content_path=content_path
+            )
         mismatch = self._frontend_marker_mismatch(settings, present)
         by_system, complete, shadow_broken, exclusive, catalogue_invalid = (
             self._read_esde_catalogue()
@@ -25122,7 +25402,12 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 hole=None if complete else self._catalogue_sealed_caveat(system),
             )
         answer = _resolve_for_system(
-            self._machine, context, system=system, catalogue=catalogue, verify=verify
+            self._machine,
+            context,
+            system=system,
+            catalogue=catalogue,
+            verify=verify,
+            content_path=content_path,
         )
         # The catalogue-status statements and the cross-check ride only answers
         # the catalogue informed: an own spelling is answered from the cores
@@ -25837,11 +26122,21 @@ class Installation(Protocol):
     def rom_locations(self) -> RomLocationsAnswer: ...
 
     def firmware_for_core(
-        self, core_so: str, *, verify: bool = False, cwd: str | None = None
+        self,
+        core_so: str,
+        *,
+        verify: bool = False,
+        cwd: str | None = None,
+        content_path: str | None = None,
     ) -> FirmwareAnswer: ...
 
     def firmware_for_system(
-        self, system: str, *, verify: bool = False, cwd: str | None = None
+        self,
+        system: str,
+        *,
+        verify: bool = False,
+        cwd: str | None = None,
+        content_path: str | None = None,
     ) -> FirmwareAnswer: ...
 
     def firmware_inventory(self, *, verify: bool = False, cwd: str | None = None) -> FirmwareAnswer: ...

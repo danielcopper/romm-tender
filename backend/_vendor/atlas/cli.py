@@ -129,12 +129,14 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
         launch_command_contract,
     ),
     "firmware-for-core": (
-        lambda target, args: target.firmware_for_core(args.core, verify=args.verify, cwd=args.cwd),
+        lambda target, args: target.firmware_for_core(
+            args.core, verify=args.verify, cwd=args.cwd, content_path=args.content
+        ),
         firmware_contract,
     ),
     "firmware-for-system": (
         lambda target, args: target.firmware_for_system(
-            args.system, verify=args.verify, cwd=args.cwd
+            args.system, verify=args.verify, cwd=args.cwd, content_path=args.content
         ),
         firmware_contract,
     ),
@@ -157,6 +159,10 @@ _ROOTS_KINDS = (RetroDeck.kind, EmuDeck.kind)
 # Help texts shared by every subcommand that takes the same input.
 _SYSTEM_ID_HELP = "system id, e.g. gba"
 _VERIFY_HELP = "hash present files against known dumps"
+_FIRMWARE_CONTENT_HELP = (
+    "absolute path of the game the launch is for (an .m3u or a disc image): a group the console region selects "
+    "states the region the emulator decides for it"
+)
 
 
 def _cwd_argument(value: str) -> str:
@@ -357,6 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for_core.add_argument("--core", required=True, help="libretro core .so name")
     for_core.add_argument("--verify", action="store_true", help=_VERIFY_HELP)
+    for_core.add_argument("--content", type=_absolute_argument, help=_FIRMWARE_CONTENT_HELP)
     _add_cwd(for_core)
 
     for_system = commands.add_parser(
@@ -366,6 +373,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for_system.add_argument("--system", required=True, help=_SYSTEM_ID_HELP)
     for_system.add_argument("--verify", action="store_true", help=_VERIFY_HELP)
+    for_system.add_argument("--content", type=_absolute_argument, help=_FIRMWARE_CONTENT_HELP)
     _add_cwd(for_system)
 
     inventory = commands.add_parser(

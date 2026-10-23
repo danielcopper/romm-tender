@@ -39,7 +39,7 @@ firmware, it does, or nobody has established which.
 
 **Open is a value, not an absence.** A system whose cores disagree is a system
 someone should look at, and recording it as ``open`` is what makes it visible
-without anyone pretending to know. Six of the seven shipped entries are exactly
+without anyone pretending to know. Six of the eight shipped entries are exactly
 that, and the tripwire beside this loader
 (``tests/test_system_firmware_tripwire.py``) is what puts them there: it
 recomputes the disagreements from the deployed catalogue and fails when it
@@ -55,9 +55,17 @@ without an image, and which the entry does not excuse, stops reporting
 in place — each needing system asks that of its own images, so a core two
 entries speak about needs one image apiece and not one between them — and
 :data:`CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE` rides beside every **stated**
-verdict so the second source is marked rather than implied. What does **not**
-move is the declaration: every ``need`` on a requirement stays the value the
-core's own ``.info`` carries.
+verdict so the second source is marked rather than implied. The declaration
+moves in two places, both to ``optional``, and this table drives one of them:
+on a question naming a system an exemption scoped to systems
+(:attr:`CoreAlternative.systems`) covers, the excused core's rows filed under
+the system the excusing entry reaches — for PUAE, ``amiga``, under which every
+image it declares is filed — read ``optional``, because the core starts the
+named system on a substitute of its own, PUAE's AROS kickstart on the Amiga
+computers. That is the one answer this table turns green rather than
+narrowing. The other place is a route's alternatives group
+(:attr:`atlas.firmware.FirmwareRequirement.need`); everywhere else every
+``need`` stays the value the core's own ``.info`` carries.
 """
 
 from __future__ import annotations
@@ -148,21 +156,37 @@ STATED_EVIDENCE_WORDS = (EVIDENCE_WORD_VERIFIED, EVIDENCE_WORD_DERIVED)
 # repository's first rule applied to the one field that started crossing it.
 CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE = "system-firmware-world-knowledge"
 
+# A core this table excuses on named systems starts them on a substitute of its
+# own where the image it would use is missing — PUAE boots its built-in AROS in
+# place of a missing kickstart. The substitute is of limited compatibility: a
+# title it cannot run fails at run time, which no file read predicts, so a real
+# image is preferred even where the verdict is green. The data names the core
+# as this table spells it, the substitute, and the systems the excuse covers.
+# It rides every answer about such a core, on a system the excuse covers and
+# on one it does not, and on a question that names no system — wherever the
+# entry carrying the excuse reaches the core — because what it says is true of
+# the core on every one of them: there it is why the verdict is green, and
+# elsewhere it is where the core does start without an image. Beside this
+# table for the reason the code above is.
+CAVEAT_FIRMWARE_CORE_SUBSTITUTE = "firmware-core-substitute"
+
 
 @dataclass(frozen=True, slots=True)
 class CoreAlternative:
-    """One core whose all-optional declaration is right, and why.
+    """One core that runs a system needing firmware without a file, and why.
 
     A system that needs firmware can still have a core that runs without a
-    file, because the core supplies its own substitute. That core's catalogue
-    entry declares everything optional and is *correct* to, so it has to be
-    nameable.
+    file, because the core supplies its own substitute. Where that core's
+    catalogue entry declares everything optional it is *correct* to (PCSX
+    ReARMed); where it marks images required that the substitute stands in
+    for, the exemption is scoped to the systems it holds on and reads those
+    images optional there (PUAE). Either way the core has to be nameable.
 
     **What it is for, precisely.** It is what keeps a system's requirement off
     a core that carries its own substitute: the answer reads it, and a core
     named here answers
-    :data:`~atlas.firmware.SYSTEM_FIRMWARE_CORE_ALTERNATIVE` where its
-    unexcused siblings answer
+    :data:`~atlas.firmware.SYSTEM_FIRMWARE_CORE_ALTERNATIVE`, on every
+    question the exemption covers, where its unexcused siblings answer
     :data:`~atlas.firmware.SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT`. It is *not*
     what makes the tripwire's derivation pass: that derivation compares whole
     systems and never consults this field, so removing it changes no verdict
@@ -175,10 +199,28 @@ class CoreAlternative:
 
     ``reason`` carries the evidence rather than a bare exemption: what the core
     offers, and what was seen.
+
+    ``systems`` scopes the excuse to the systems an answer is asked about, as
+    atlas system ids. Empty, the excuse holds on every answer the entry
+    reaches, which is the shape the PlayStation's exemption has. Named, it
+    holds only on a question about one of those systems, because the
+    substitute boots some of the machines one ``systemname`` covers and not
+    the others: PUAE's AROS stands in for the Amiga computers' kickstart and
+    does not boot a CD32 disc, and all five of those systems are one
+    ``systemname``. A question that names none of them, or names no system at
+    all, finds the core unexcused.
+
+    ``substitute`` names what the core starts those systems on, and is stated
+    exactly where ``systems`` is: it is what
+    :data:`CAVEAT_FIRMWARE_CORE_SUBSTITUTE` names on every answer about the
+    core, excused or not, so a reader learns where the core starts without an
+    image and on what.
     """
 
     core: str
     reason: str
+    systems: tuple[str, ...] = ()
+    substitute: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +251,44 @@ def _expect_str(value: Any, where: str) -> str:
     return value
 
 
+def _excused_systems(value: Any, where: str) -> tuple[str, ...]:
+    """The systems a scoped excuse holds on: named, each once."""
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{where}: systems must be a non-empty list of system ids, got {value!r}")
+    systems = tuple(_expect_str(system, f"{where}: system") for system in value)
+    if len(set(systems)) != len(systems):
+        raise ValueError(f"{where}: systems names a system twice, got {value!r}")
+    return systems
+
+
+def _alternative(core: Any, value: Any, where: str) -> CoreAlternative:
+    """One exempted core: its reason alone, or its reason and the systems it is scoped to."""
+    name = _expect_str(core, f"{where}: core key")
+    if not isinstance(value, dict):
+        return CoreAlternative(core=name, reason=_expect_str(value, f"{where}: {name!r} reason"))
+    surplus = set(value) - {"reason", "systems", "substitute"}
+    if surplus or "reason" not in value:
+        raise ValueError(
+            f"{where}: {name!r} states a reason and may state systems with their substitute, "
+            f"got {sorted(value)}"
+        )
+    # The two come together: the systems say where the core starts on its
+    # substitute, and the substitute is what the answer names there — one
+    # without the other is half a claim.
+    if ("systems" in value) != ("substitute" in value):
+        raise ValueError(
+            f"{where}: {name!r} states systems and substitute together or neither, got {sorted(value)}"
+        )
+    if "systems" not in value:
+        return CoreAlternative(core=name, reason=_expect_str(value["reason"], f"{where}: {name!r} reason"))
+    return CoreAlternative(
+        core=name,
+        reason=_expect_str(value["reason"], f"{where}: {name!r} reason"),
+        systems=_excused_systems(value["systems"], f"{where}: {name!r}"),
+        substitute=_expect_str(value["substitute"], f"{where}: {name!r} substitute"),
+    )
+
+
 def _alternatives(entry: Any, where: str) -> tuple[CoreAlternative, ...]:
     """The exempted cores of one entry, each with the reason it is exempt."""
     if not isinstance(entry, dict) or not entry:
@@ -216,13 +296,7 @@ def _alternatives(entry: Any, where: str) -> tuple[CoreAlternative, ...]:
             f"{where}: cores_supplying_an_alternative must be a non-empty object mapping a core "
             f"key to its reason, got {entry!r}"
         )
-    return tuple(
-        CoreAlternative(
-            core=_expect_str(core, f"{where}: core key"),
-            reason=_expect_str(reason, f"{where}: {core!r} reason"),
-        )
-        for core, reason in entry.items()
-    )
+    return tuple(_alternative(core, value, where) for core, value in entry.items())
 
 
 def _system(name: str, entry: Any) -> SystemFirmware:

@@ -78,7 +78,7 @@ import tomllib
 import re
 from dataclasses import dataclass, field, replace
 from glob import escape as _glob_escape
-from typing import Any, Iterable, Literal, Mapping, Protocol, Sequence, TypeAlias, TypeVar, cast
+from typing import Any, Iterable, Literal, Mapping, Protocol, Sequence, TypeVar, cast
 
 from ._data import packaged_text
 from .bios_table import BiosCandidate, BiosImage, BiosPick, BiosTable, packaged_bios_table
@@ -152,8 +152,16 @@ from .placement import (
     READING_IDENTIFIED,
     READING_UNREADABLE,
     READING_UNRECOGNISED,
+    CAVEAT_REGION_PROPERTY_UNCONFIRMED,
+    DISC_REGIONS,
+    ConsoleRegion,
+    REASON_CONTENT_UNOPENABLE,
+    REASON_DISC_FORMAT_UNREAD,
+    REASON_DISC_UNREAD,
     REASON_REGION_DECIDED_BY_DISC,
+    REASON_REGION_PROPERTY_UNREAD,
     SearchReading,
+    checked_content_path,
     HOLE_CWD,
     ROOT_SYSTEM_DIRECTORY,
     TEMPLATE_CWD,
@@ -164,13 +172,18 @@ from .placement import (
     Caveat,
     DataValue,
 )
+from . import psx_region
+from .content_path import split_content_path
+from .psx_region import REGION_SOURCES, DiscRegionReading, RegionSource
 from .retroarch_cfg import cfg_uint
 from .system_firmware import (
+    CAVEAT_FIRMWARE_CORE_SUBSTITUTE,
     CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
     EVIDENCE_WORDS,
     VERDICT_CANNOT_RUN_WITHOUT,
     VERDICT_OPEN,
     VERDICT_RUNS_WITHOUT,
+    CoreAlternative,
     SystemFirmware,
     load_system_firmware,
 )
@@ -2031,7 +2044,7 @@ class FirmwareRequirement:
     enforces it). DuckStation is what the field exists for: exactly one of its
     per-region BIOS keys is read per launch, selected by the console region
     the running disc sets (``GetBIOSImage``, bios.cpp:321-338 and
-    system.cpp:1613-1648, :2510 at 64655818e), so two named images were never
+    system.cpp:1613-1648, :2510 at 1f6de046b), so two named images were never
     two files one launch needs.
     """
 
@@ -2053,15 +2066,20 @@ class FirmwareRequirement:
     """What the core asks for — ``required``, or ``optional`` where its declaration marks
     the slot so.
 
-    One rule moves it away from the declaration, and only for a row the entry
-    beside it already speaks for: where the core's own route tries several
+    Two rules move it away from the declaration, and only for a row something
+    beside it already speaks for. Where the core's own route tries several
     spellings of one image, the declared row naming one of those spellings is
     ``optional``, because the group states what a launch needs and the row is
     the file it is one spelling of (:func:`_spoken_for_by_the_route`). Left
     ``required`` it would be read as a conjunction — three region images for a
     launch that opens one — and a machine holding the right image for the disc
-    in it would answer ``False``. Every other row keeps what its declaration
-    says.
+    in it would answer ``False``. And on a question about a system the packaged
+    table records the core as starting on a substitute of its own, under an
+    exemption scoped to that system, every row filed under the system the
+    excusing entry reaches is ``optional`` — for PUAE, ``amiga``, under which
+    all its kickstarts are filed, whichever computer the question names: the
+    launch needs none of them in particular (:func:`_asked_for_nothing`).
+    Every other row keeps what its declaration says.
     """
     file_name: str
     """The declaration's own file name: the basename the core opens, and the key the
@@ -2272,7 +2290,7 @@ class FirmwareAlternatives:
     A conjunction is what a requirement list means, and DuckStation's
     per-region BIOS keys are not one: ``GetBIOSImage`` reads exactly one of
     them per launch, switched on the console region (bios.cpp:321-338 at
-    64655818e), which under the shipped Auto setting is the running disc's own
+    1f6de046b), which under the shipped Auto setting is the running disc's own
     region (system.cpp:1613-1648, :2510) — a run-time fact no configuration
     records. So the alternatives are stated as one entry: each option carries
     the :attr:`~FirmwareRequirement.regions` whose launch it serves, the
@@ -2285,16 +2303,54 @@ class FirmwareAlternatives:
     image beside a search that found nothing is still only what a US console
     boots, and flattening it into an unconditional requirement would claim a
     PAL launch needs it.
+
+    A question that names the game's content (#661) asks the emulator's own
+    region rule for that disc, and a group answering it states the region the
+    rule decided and where it came from; the options stay as they are, and the
+    verdict becomes the one option whose regions hold that region. Where the
+    disc decided nothing the group stays stated per region, and the caveat
+    beside it says why.
     """
 
     options: tuple[FirmwareRequirement, ...]
     """The requirements one launch needs exactly one of, each carrying the regions whose
     launch it serves.
     """
+    region: ConsoleRegion | None = None
+    """The console region the emulator decides for the content the question named, and
+    ``null`` where it decided none — the disc could not be read, or the emulator cannot
+    open the content, and the caveat beside the group says which. Present only on an
+    answer to a question that named content.
+    """
+    region_source: RegionSource | None = None
+    """Where :attr:`region` came from: the emulator's region ``setting``, DuckStation's
+    per-path ``custom-property``, the disc's ``license`` string, its ``serial``, or the
+    ``emulator-default`` a disc that names no region boots. ``null`` exactly where
+    ``region`` is.
+    """
+    for_content: bool = False
+    """Did the question name the content whose region this group was asked to decide?
+
+    It decides whether :attr:`region` and :attr:`region_source` are part of the
+    group's serialized form at all: an answer to a question that named no
+    content carries neither, exactly as before #661, so no existing answer
+    changes shape. Out of the contract itself, because it is a fact about the
+    question rather than about the machine.
+    """
 
     def __post_init__(self) -> None:
         if not self.options:
             raise ValueError("FirmwareAlternatives: an empty group states nothing — options must be non-empty")
+        if (self.region is None) != (self.region_source is None):
+            raise ValueError("FirmwareAlternatives: a region and its source are stated together or not at all")
+        if self.region is not None and not self.for_content:
+            raise ValueError("FirmwareAlternatives: only a question that named content decides a region")
+        if self.region is not None and self.region not in DISC_REGIONS:
+            raise ValueError(f"FirmwareAlternatives: region must be one of {DISC_REGIONS}, got {self.region!r}")
+        if self.region_source is not None and self.region_source not in REGION_SOURCES:
+            raise ValueError(
+                f"FirmwareAlternatives: region_source must be one of {REGION_SOURCES}, got {self.region_source!r}"
+            )
         claimed: set[str] = set()
         for option in self.options:
             if option.regions is None:
@@ -2315,6 +2371,19 @@ class FirmwareAlternatives:
             claimed.update(option.regions)
 
     @property
+    def weighed_options(self) -> tuple[FirmwareRequirement, ...]:
+        """The options a launch's verdict rests on: every one, or only the decided region's.
+
+        Where :attr:`region` is decided the launch opens exactly the option
+        whose regions hold it, so that one alone — or none, where no option
+        holds the region — is what the group's verdict and the core's lists of
+        unusable and unjudged files weigh. Undecided, every option is.
+        """
+        if self.region is None:
+            return self.options
+        return tuple(o for o in self.options if self.region in (o.regions or ()))
+
+    @property
     def satisfied(self) -> bool | None:
         """The three-valued lift over the selector atlas cannot read.
 
@@ -2325,7 +2394,14 @@ class FirmwareAlternatives:
         verdict and the entry's caveats speak for them — a group of one
         satisfied NTSC-U image says nothing about the two regions with no
         image stated.
+
+        Where :attr:`region` is decided the run-time fact is known, and the
+        verdict is the one option's whose regions hold it; a decided region no
+        option lists has nothing stated for it, so its verdict is ``None``.
         """
+        if self.region is not None:
+            chosen = self.weighed_options
+            return chosen[0].satisfied if chosen else None
         verdicts = {option.satisfied for option in self.options}
         if verdicts == {True}:
             return True
@@ -2438,13 +2514,18 @@ image apiece. It is one question per system, and this value says one system is i
 without saying how many are.
 """
 # The system does not start without an image, and this core carries its own
-# substitute, so its all-optional declaration is correct. PCSX ReARMed's HLE
-# BIOS is the recorded case; the table names such cores per system, each with
-# the evidence for it.
+# substitute. PCSX ReARMed's HLE BIOS is one recorded case, an all-optional
+# declaration that is right as it stands; PUAE's AROS kickstart is the other,
+# excused on the Amiga computers alone, where the kickstarts its declaration
+# marks required read optional. The table names such cores per system, each
+# with the evidence for it.
 SYSTEM_FIRMWARE_CORE_ALTERNATIVE: CoreSystemFirmware = "core-supplies-an-alternative"
-"""The system needs an image and this core carries its own substitute, so its all-optional
-declaration is right. It is a statement about this core and not about the system: another core
-on the same system may still need an image.
+"""The system needs an image and this core carries its own substitute. It is a statement about
+this core and not about the system: another core on the same system may still need an image.
+Where the table scopes the substitute to some of the systems a core runs, it is stated on a
+question naming one of them alone, and there every image the core declares under the system the
+excusing entry reaches (for PUAE, ``amiga``) reads ``optional``; elsewhere the same core answers
+``cannot-run-without-firmware``. ``firmware-core-substitute`` names the substitute on every question.
 """
 # Somebody established that the system starts with no image present. Recorded
 # knowledge like the other two, and the reason it is a value of its own: it is
@@ -2514,7 +2595,9 @@ class CoreFirmware:
     **Two of these fields answer to different owners, and the difference is
     the point.** ``requirements`` is the *emulator's* statement, reproduced:
     every entry and every ``need`` on it is what this core's own declaration
-    said, read off this machine and never overwritten. ``requirements_met`` is
+    said, read off this machine, but for the rows the two rules
+    :attr:`FirmwareRequirement.need` names cover — rows something beside them
+    already speaks for. ``requirements_met`` is
     *atlas's* verdict about that declaration, and since it began reading
     ``system_firmware`` it rests on world knowledge as well — a packaged,
     source-cited table about the system, not a reading of the machine. The
@@ -2538,10 +2621,12 @@ class CoreFirmware:
     """What this emulator itself declared, reproduced: a conjunction, every entry needed,
     and where one is an alternatives group what is needed is exactly one of its options.
 
-    Nothing here is atlas's own judgement. Every ``need`` is the value the
-    core's declaration carries, so a core that marks a file it cannot start
-    without ``optional`` still reads ``optional`` — what the machine says is
-    never overwritten. The verdict about it is
+    Nothing here is atlas's own judgement of what a file is worth. Every
+    ``need`` is the value the core's declaration carries, so a core that marks
+    a file it cannot start without ``optional`` still reads ``optional`` — a
+    ``need`` moves only to ``optional``, and only where an entry beside the row
+    already states what the launch needs (:attr:`FirmwareRequirement.need`).
+    The verdict about it is
     :attr:`requirements_met`, which is a different field with a different
     owner.
     """
@@ -2735,7 +2820,7 @@ class CoreFirmware:
     and kept nothing of a size the emulator accepts — an empty directory,
     nothing at its path, a file in its place — the search returns nothing and
     the boot stops (bios.cpp:403-417, system.cpp:2510-2512 and :1755-1761 at
-    stenzek/duckstation@64655818e), and there is no file to state as a
+    RetroDECK/Duckstation@1f6de046b), and there is no file to state as a
     requirement, because a directory is not a file's destination. That holds
     only where the DataRoot is established: where the launch decides it
     (``core-mode-unestablished``), the searched directory is one of two
@@ -2818,13 +2903,15 @@ class CoreFirmware:
         An alternatives group contributes its options only when the whole
         group fails: one region's image being absent while another region's is
         served is not "the launch lacks this file", it is a fact the region
-        decides, and that is :attr:`undetermined`'s side of the line.
+        decides, and that is :attr:`undetermined`'s side of the line. A group
+        whose region is decided contributes the decided region's option alone
+        (:attr:`FirmwareAlternatives.weighed_options`).
         """
         out: list[FirmwareRequirement] = []
         for entry in self.requirements:
             if isinstance(entry, FirmwareAlternatives):
                 if entry.satisfied is False:
-                    out.extend(o for o in entry.options if o.need == NEED_REQUIRED)
+                    out.extend(o for o in entry.weighed_options if o.need == NEED_REQUIRED)
             elif entry.need == NEED_REQUIRED and entry.satisfied is False:
                 out.append(entry)
         return tuple(out)
@@ -2836,14 +2923,15 @@ class CoreFirmware:
         From an alternatives group that has no single verdict, the options not
         established usable: which of them the launch needs is the run-time
         fact the group exists to state, so none of the not-satisfied ones may
-        be presented as settled.
+        be presented as settled. Where the region is decided, only that
+        region's option is weighed.
         """
         out: list[FirmwareRequirement] = []
         for entry in self.requirements:
             if isinstance(entry, FirmwareAlternatives):
                 if entry.satisfied is None:
                     out.extend(
-                        o for o in entry.options if o.need == NEED_REQUIRED and o.satisfied is not True
+                        o for o in entry.weighed_options if o.need == NEED_REQUIRED and o.satisfied is not True
                     )
             elif entry.need == NEED_REQUIRED and entry.satisfied is None:
                 out.append(entry)
@@ -3042,9 +3130,13 @@ class CoreFirmware:
         could not be judged — including one that was simply never verified — or
         when a required declaration was refused.
         ``True`` is never reached with a required file whose bytes are known to
-        be wrong. The system-level reading only ever narrows this: it can turn a
-        ``True`` into ``False`` or ``None``, and it makes nothing true that was
-        not true before.
+        be wrong. The system-level reading narrows this everywhere but one
+        place: it can turn a ``True`` into ``False`` or ``None``, and the one
+        answer it turns green is a question about a system an exemption scoped
+        to systems covers, where the excused core's rows filed under the
+        system the excusing entry reaches read ``optional`` — PUAE on the
+        Amiga computers, whose kickstarts are all filed under ``amiga`` and
+        which it starts on its built-in AROS kickstart (#657).
 
         An alternatives group folds in through its own three-valued
         :attr:`FirmwareAlternatives.satisfied`: ``False`` blocks (no region
@@ -3052,10 +3144,12 @@ class CoreFirmware:
         is the run-time fact atlas cannot read), and only an all-satisfied
         group lets ``True`` through.
 
-        What a group does to the rows BESIDE it is the one place a declared
-        ``need`` is not the declaration's own: a row whose name the route's
+        A declared ``need`` is not the declaration's own in two places
+        (:attr:`FirmwareRequirement.need`). One is a system an exemption
+        scoped to systems excuses the core for, described above. The other is
+        what a group does to the rows BESIDE it: a row whose name the route's
         lists try is ``optional``, because the group is already the statement
-        of what the launch needs (:attr:`FirmwareRequirement.need`). Without
+        of what the launch needs. Without
         that rule the two statements would be read as one conjunction and
         Beetle PSX's three required region images would veto every machine
         that holds one of them — which is the answer its declaration gave
@@ -5330,7 +5424,7 @@ def _requirements_of(cores: tuple[CoreFirmware, ...]) -> tuple[FirmwareRequireme
 # hashable as it stands, so each is spelled out — the mapping as its sorted
 # sequence as its own tuple, because its ORDER is part of the contract and two
 # caveats naming the same files in different orders are not the same statement.
-_FlatValue: TypeAlias = "str | tuple[str, ...] | tuple[tuple[str, str], ...]"
+type _FlatValue = str | tuple[str, ...] | tuple[tuple[str, str], ...]
 _CaveatKey = tuple[str, tuple[tuple[str, _FlatValue], ...]]
 
 
@@ -5640,6 +5734,7 @@ def _read_core(
     verify: bool,
     folders: _FolderReads,
     for_a_launch: bool = True,
+    content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """One core whose ``.info`` was read: the answer for it, and what it observed.
 
@@ -5666,7 +5761,7 @@ def _read_core(
     # shape, the names that entry already answers for, which is the one thing
     # that reaches back into the rows above: their ``need`` alone, every other
     # field still the declaration's.
-    located = _located_firmware(machine, context, core, verify=verify)
+    located = _located_firmware(machine, context, core, verify=verify, content=content)
     requirements = _spoken_for_by_the_route(requirements, located.spoken_for)
     refused = _spoken_for_by_the_route(refused, located.spoken_for)
     return (
@@ -5698,6 +5793,7 @@ def _resolve_cores(
     verify: bool,
     labels: Mapping[str, str] | None = None,
     for_a_launch: bool = True,
+    content: "_GameContent | None" = None,
 ) -> tuple[tuple[CoreFirmware, ...], list[Caveat]]:
     resolved: list[CoreFirmware] = []
     answer_caveats: list[Caveat] = []
@@ -5708,7 +5804,14 @@ def _resolve_cores(
             resolved.append(_undeclarable_core(core, label))
             continue
         answer, observed = _read_core(
-            machine, context, core, label, verify=verify, folders=folders, for_a_launch=for_a_launch
+            machine,
+            context,
+            core,
+            label,
+            verify=verify,
+            folders=folders,
+            for_a_launch=for_a_launch,
+            content=content,
         )
         answer_caveats.extend(observed)
         resolved.append(answer)
@@ -5812,15 +5915,68 @@ def _core_alternative_key(core_so: str | None) -> str | None:
     return core_so[: -len(SO_SUFFIX)]
 
 
+def _excuses(candidate: CoreAlternative, alternative: str | None, asked: str | None) -> bool:
+    """Does this exemption excuse the core *alternative* on a question about *asked*?
+
+    An exemption with no systems holds on every question; one scoped to
+    systems holds only on a question naming one of them, so a question about
+    another system, or about none, finds the core unexcused
+    (:attr:`~atlas.system_firmware.CoreAlternative.systems`).
+    """
+    if candidate.core != alternative:
+        return False
+    return not candidate.systems or asked in candidate.systems
+
+
+def _substitute_caveats(
+    needs: list[tuple[str, SystemFirmware]], alternative: str | None
+) -> tuple[Caveat, ...]:
+    """The substitute a scoped exemption names for this core, on every question.
+
+    Read off the exemptions whatever system the question names, because what
+    it states holds of the core on all of them
+    (:data:`CAVEAT_FIRMWARE_CORE_SUBSTITUTE`). One per distinct statement: two
+    table keys landing on one id would otherwise say it twice.
+    """
+    if alternative is None:
+        return ()
+    stated = tuple(
+        dict.fromkeys(
+            (candidate.substitute, candidate.systems)
+            for _, entry in needs
+            for candidate in entry.alternatives
+            if candidate.core == alternative and candidate.substitute is not None
+        )
+    )
+    return tuple(
+        Caveat(
+            CAVEAT_FIRMWARE_CORE_SUBSTITUTE,
+            f"{alternative} starts {', '.join(systems)} on its built-in {substitute} where the "
+            "image it would use is missing — a substitute of limited compatibility: a title it "
+            "cannot run fails at run time, which no file read predicts, so a real image is "
+            "preferred",
+            {"core": alternative, "substitute": substitute, "systems": systems},
+        )
+        for substitute, systems in stated
+    )
+
+
 def _system_firmware_state(
-    core: CoreFirmware, recorded: Mapping[str, tuple[SystemFirmware, ...]]
-) -> tuple[CoreSystemFirmware | None, tuple[str, ...], tuple[Caveat, ...]]:
+    core: CoreFirmware,
+    recorded: Mapping[str, tuple[SystemFirmware, ...]],
+    asked: str | None = None,
+) -> tuple[CoreSystemFirmware | None, tuple[str, ...], tuple[str, ...], tuple[Caveat, ...]]:
     """What the table says about the systems *core* declares firmware for.
 
-    Three things, because the state alone does not say *which* system it is
+    Four things, because the state alone does not say *which* system it is
     about: the state, the systems whose unexcused need it rests on (empty
     under every other state, and what :attr:`CoreFirmware.system_firmware_needs`
-    carries so the need is asked over that system's images), and the marks.
+    carries so the need is asked over that system's images), the systems an
+    exemption scoped to systems excuses the core for on this question (whose
+    rows :func:`_stating_system_firmware` reads as ``optional``), and the
+    marks. *asked* is the system the question names, and ``None`` on a
+    question that names none: an exemption scoped to systems is read against
+    it (:func:`_excuses`).
 
     The systems come off the requirements already on the answer
     (:attr:`FirmwareRequirement.system`, alternatives flattened) rather than
@@ -5857,7 +6013,7 @@ def _system_firmware_state(
     )
     hits = [(system, entry) for system in systems for entry in recorded.get(system, ())]
     if not hits:
-        return None, (), ()
+        return None, (), (), ()
     # One mark per stated (system, evidence) pair rather than per entry: two
     # table keys can land on one system id, and where they also rest on the
     # same level the second mark would repeat the first word for word. The
@@ -5882,6 +6038,7 @@ def _system_firmware_state(
     )
     alternative = _core_alternative_key(core.core_so)
     needs = [(system, entry) for system, entry in hits if entry.verdict == VERDICT_CANNOT_RUN_WITHOUT]
+    caveats = (*caveats, *_substitute_caveats(needs, alternative))
     # The systems, not the entries: which machine each need is about is what
     # the image the need asks for is filed under, and two table keys landing
     # on one id are one machine asking once.
@@ -5889,17 +6046,34 @@ def _system_firmware_state(
         dict.fromkeys(
             system
             for system, entry in needs
-            if not any(candidate.core == alternative for candidate in entry.alternatives)
+            if not any(_excuses(candidate, alternative, asked) for candidate in entry.alternatives)
+        )
+    )
+    # The systems a SCOPED exemption excuses on this question, whose rows are
+    # read ``optional`` (:func:`_asked_for_nothing`). An exemption naming no
+    # systems excuses a declaration that is right as it stands, so it moves no
+    # row. They travel even where another system leaves the core unexcused:
+    # rows filed under a system the core starts on its own substitute are
+    # asked for nothing there, whatever another system needs.
+    excused = tuple(
+        dict.fromkeys(
+            system
+            for system, entry in needs
+            if system not in unexcused
+            and any(
+                candidate.systems and _excuses(candidate, alternative, asked)
+                for candidate in entry.alternatives
+            )
         )
     )
     if unexcused:
-        return SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, unexcused, caveats
+        return SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, unexcused, excused, caveats
     if needs:
-        return SYSTEM_FIRMWARE_CORE_ALTERNATIVE, (), caveats
+        return SYSTEM_FIRMWARE_CORE_ALTERNATIVE, (), excused, caveats
     if any(entry.verdict == VERDICT_OPEN for _, entry in hits):
-        return SYSTEM_FIRMWARE_OPEN, (), caveats
+        return SYSTEM_FIRMWARE_OPEN, (), (), caveats
     if any(entry.verdict == VERDICT_RUNS_WITHOUT for _, entry in hits):
-        return SYSTEM_FIRMWARE_RUNS_WITHOUT, (), caveats
+        return SYSTEM_FIRMWARE_RUNS_WITHOUT, (), (), caveats
     # Unreachable while this vocabulary is total over the table's verdicts,
     # and it refuses rather than answering ``None`` precisely because the day
     # it stops being total is the day a recorded verdict would silently become
@@ -5913,8 +6087,53 @@ def _system_firmware_state(
     )
 
 
+def _excused_row(row: FirmwareRequirement, excused: tuple[str, ...]) -> FirmwareRequirement:
+    """A row filed under a system its core supplies its own substitute for asks for nothing."""
+    if row.system in excused and row.need == NEED_REQUIRED:
+        return cast(FirmwareRequirement, replace(row, need=NEED_OPTIONAL))
+    return row
+
+
+def _asked_for_nothing(
+    requirements: tuple[FirmwareRequirement | FirmwareAlternatives, ...], excused: tuple[str, ...]
+) -> tuple[FirmwareRequirement | FirmwareAlternatives, ...]:
+    """The requirements with every row filed under an *excused* system read ``optional``.
+
+    The second rule that moves a ``need`` away from the declaration, beside
+    :func:`_spoken_for_by_the_route`, and for the same kind of reason: an entry
+    beside the row already says what the launch needs. There it is the
+    route's group; here it is an exemption scoped to systems in the packaged
+    table, which records that this core starts the system the question names
+    on a substitute of its own, so the launch needs none of the images it
+    declares under the system the excusing entry reaches in particular. That
+    is the id *excused* holds, not the id asked about: every PUAE row is
+    filed under ``amiga``, whichever computer the question names. An
+    exemption naming no systems moves no row: it excuses a declaration that
+    is right as it stands. PUAE's ``.info`` marks four kickstarts required
+    and the core boots its built-in AROS when the one it would use is missing
+    (#657); left ``required`` they would turn the verdict red over a machine
+    the core starts. Rows filed under any other system keep their ``need``,
+    and so does every row on a question the exemption does not cover — there
+    nothing is excused.
+
+    Refused declarations are left as declared: they carry no system, so which
+    system's image one would have been is not read, and the verdict keeps
+    withholding over a refused row that says ``required``.
+    """
+    if not excused:
+        return requirements
+    return tuple(
+        replace(entry, options=tuple(_excused_row(option, excused) for option in entry.options))
+        if isinstance(entry, FirmwareAlternatives)
+        else _excused_row(entry, excused)
+        for entry in requirements
+    )
+
+
 def _stating_system_firmware(
-    cores: tuple[CoreFirmware, ...], recorded: "Mapping[str, SystemFirmware]"
+    cores: tuple[CoreFirmware, ...],
+    recorded: "Mapping[str, SystemFirmware]",
+    asked: str | None = None,
 ) -> tuple[CoreFirmware, ...]:
     """Every core with what the packaged tables add to it, and the mark that they did.
 
@@ -5937,7 +6156,11 @@ def _stating_system_firmware(
     every carded answer leaves through.
 
     *recorded* is the context's snapshot of the packaged system table, so one
-    answer can never mix two revisions of it.
+    answer can never mix two revisions of it. *asked* is the system the
+    question names — :func:`firmware_for_system` passes it, the questions that
+    name no system do not — and it is what an exemption scoped to systems is
+    read against, so one core's block can answer differently for two systems
+    it runs (:func:`_excuses`).
     """
     table = _recorded_by_system(recorded)
     stated: list[CoreFirmware] = []
@@ -5947,12 +6170,13 @@ def _stating_system_firmware(
             if core.core_so is None
             else replace(core, locating=locating_of_core(core.core_so))
         )
-        state, needs, caveats = _system_firmware_state(located, table)
+        state, needs, excused, caveats = _system_firmware_state(located, table, asked)
         stated.append(
             located
             if state is None
             else replace(
                 located,
+                requirements=_asked_for_nothing(located.requirements, excused),
                 system_firmware=state,
                 system_firmware_needs=needs,
                 caveats=(*located.caveats, *caveats),
@@ -5962,7 +6186,12 @@ def _stating_system_firmware(
 
 
 def firmware_for_core(
-    machine: Machine, context: FirmwareContext, *, core_so: str, verify: bool = False
+    machine: Machine,
+    context: FirmwareContext,
+    *,
+    core_so: str,
+    verify: bool = False,
+    content_path: str | None = None,
 ) -> FirmwareAnswer:
     """Does *core_so* need firmware, and where does each file go?
 
@@ -6017,7 +6246,9 @@ def firmware_for_core(
             sources=context.sources,
             caveats=stated_once((*context.caveats, reason)),
         )
-    cores, caveats = _resolve_cores(machine, context, (match,), verify=verify)
+    cores, caveats = _resolve_cores(
+        machine, context, (match,), verify=verify, content=_game_content(content_path)
+    )
     return FirmwareAnswer(
         root=context.root,
         cores=_stating_system_firmware(cores, context.system_firmware),
@@ -6087,7 +6318,12 @@ def derived_enumeration_lead(system: str) -> Caveat:
 
 
 def _derived_enumeration(
-    machine: Machine, context: FirmwareContext, system: str, *, verify: bool
+    machine: Machine,
+    context: FirmwareContext,
+    system: str,
+    *,
+    verify: bool,
+    content: "_GameContent | None" = None,
 ) -> tuple[list[CoreFirmware], list[Caveat]]:
     """The emulators filed under *system* by the installed cores' own declarations.
 
@@ -6099,7 +6335,7 @@ def _derived_enumeration(
     states its own reason.
     """
     selected, hidden = derived_core_selection(context.cores, system)
-    cores, observation_caveats = _resolve_cores(machine, context, selected, verify=verify)
+    cores, observation_caveats = _resolve_cores(machine, context, selected, verify=verify, content=content)
     caveats = list(observation_caveats)
     if hidden is not None:
         caveats.append(hidden)
@@ -6107,7 +6343,12 @@ def _derived_enumeration(
 
 
 def _cores_by_systemname(
-    machine: Machine, context: FirmwareContext, system: str, *, verify: bool
+    machine: Machine,
+    context: FirmwareContext,
+    system: str,
+    *,
+    verify: bool,
+    content: "_GameContent | None" = None,
 ) -> tuple[list[CoreFirmware], list[Caveat]]:
     """The emulators for *system* where no frontend catalogue exists.
 
@@ -6118,7 +6359,7 @@ def _cores_by_systemname(
     the caveat states that: an enumeration a catalogue would disagree with is
     a real possibility, an identifier mismatch is not.
     """
-    cores, caveats = _derived_enumeration(machine, context, system, verify=verify)
+    cores, caveats = _derived_enumeration(machine, context, system, verify=verify, content=content)
     return cores, [derived_enumeration_lead(system), *caveats]
 
 
@@ -6381,6 +6622,7 @@ def _melonds_standalone_core(
     xdg_pinned: bool,
     verify: bool,
     cwd: str | None = None,
+    content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """melonDS's expectations: ``verifySetup`` performed as reads.
 
@@ -6488,6 +6730,7 @@ def _pcsx2_standalone_core(
     xdg_pinned: bool,
     verify: bool,
     cwd: str | None = None,
+    content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """PCSX2's expectation: the image named inside the directory named.
 
@@ -6801,6 +7044,7 @@ def _xemu_standalone_core(
     xdg_pinned: bool,
     verify: bool,
     cwd: str | None = None,
+    content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """xemu's expectations: the three files in ``[sys.files]`` its documentation asks for.
 
@@ -6945,7 +7189,7 @@ def _duckstation_named_image(
     of its own (``Path::Combine(EmuFolders::Bios, bios_name)``, bios.cpp:350),
     which is why a name is what belongs in the setting. DuckStation's combine
     is PCSX2's to the token outside an unported ``_WIN32`` arm
-    (file_system.cpp:859-874 at stenzek/duckstation@64655818e), so the compose
+    (file_system.cpp:859-874 at RetroDECK/Duckstation@1f6de046b), so the compose
     goes through the one ported :func:`atlas.qt_ini.path_combine` — an
     absolute value joins *below* the directory, where ``os.path.join`` would
     let it replace the directory and name a file this emulator never opens
@@ -7073,7 +7317,7 @@ def _duckstation_named_content(
     Two readings in upstream's order, and only the second costs a content
     check. ``LoadImageFromFile`` refuses a file whose size is none of the three
     it accepts before reading a byte of it (bios.cpp:183-190 at
-    stenzek/duckstation@64655818e) — the same gate the search applies to a
+    RetroDECK/Duckstation@1f6de046b) — the same gate the search applies to a
     listing (:378) — so a named file of another size is one this launch boots
     nothing from, and that is answered whether or not ``verify`` was passed.
 
@@ -7198,7 +7442,7 @@ def _table_identity(
     Every route to a table comes through here, and each fork says why in its
     own way. In DuckStation a region key hands its composed path to the very
     ``LoadImageFromFile`` the search calls per candidate (bios.cpp:350 and
-    :385 at stenzek/duckstation@64655818e), and the hash and the lookup are
+    :385 at RetroDECK/Duckstation@1f6de046b), and the hash and the lookup are
     inside that one function (:198, :203) — so both of its routes really do
     consult the table. In SwanStation they are not: its ``LoadImageFromFile``
     (bios.cpp:81-105 at libretro/swanstation@4d309c05f) reads and nothing
@@ -7451,7 +7695,7 @@ _DUCKSTATION_BIOS_LAYER_GOVERNS = (
     "its console region: the name is combined with that directory and loaded outright, where "
     "an empty value leaves the region to the content search (bios.cpp:321-351). The search "
     "directory itself is fixed: [BIOS] SearchDirectory is read from the base settings alone "
-    "(EmuFolders::LoadConfig, settings.cpp:1964-1981), and no per-game file moves it."
+    "(EmuFolders::LoadConfig, settings.cpp:1967-1984), and no per-game file moves it."
 )
 # The door those three come through, and it is not the memory-card keys' door:
 # Host::GetStringSettingValue reads the layered interface, unlike the
@@ -7549,6 +7793,7 @@ def _duckstation_standalone_core(
     xdg_pinned: bool,
     verify: bool,
     cwd: str | None = None,
+    content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """DuckStation's expectation: a directory, and whatever in it is a BIOS.
 
@@ -7654,7 +7899,13 @@ def _duckstation_standalone_core(
     requirements: tuple[FirmwareRequirement | FirmwareAlternatives, ...]
     if named:
         options = tuple(sorted((*named, *found), key=_by_destination))
-        requirements = (FirmwareAlternatives(options=options),)
+        group = FirmwareAlternatives(options=options)
+        if content is not None:
+            group, region_caveats = _duckstation_group_for_content(
+                machine, entry, card, group, read=read, bios_dir=bios_dir, content=content
+            )
+            caveats.extend(region_caveats)
+        requirements = (group,)
     else:
         requirements = tuple(sorted(found, key=_by_destination))
     return (
@@ -7674,6 +7925,92 @@ def _duckstation_standalone_core(
         ),
         answer_caveats,
     )
+
+
+# DuckStation's per-path properties file, beside its settings under the
+# DataRoot (game_list.cpp:1505-1508 at 1f6de046b).
+_DUCKSTATION_CUSTOM_PROPERTIES = "custom_properties.ini"
+_DUCKSTATION_REGION_PROPERTY = "Region"
+
+
+def _duckstation_region_reading(
+    machine: Machine,
+    card: StandaloneFirmwareCard,
+    *,
+    read: duckstation.SettingsRead,
+    content: _GameContent,
+) -> tuple[DiscRegionReading, list[Caveat]]:
+    """The region a DuckStation launch of *content* boots into, in the order the boot consults its sources.
+
+    ``[Console] Region`` first: a value other than ``Auto`` is the region,
+    whatever the disc says (system.cpp:1591, :1636). Under ``Auto`` a per-path
+    ``Region`` property is taken over the disc's own region (:1635) — stated
+    with :data:`CAVEAT_REGION_PROPERTY_UNCONFIRMED`, because it applies only
+    where the game list holds the path, which a binary cache atlas does not read
+    decides. Otherwise the disc decides (:mod:`atlas.psx_region`). Where the
+    properties file is there and could not be read, whether it names a region
+    for this path is exactly what was not established, so no region is stated
+    and the reading is ``region-property-unread`` (D14 of #661).
+    """
+    configured = qt_ini.simpleini_value(read.values, "Console", "Region")[0]
+    setting = psx_region.duckstation_console_region(configured)
+    if setting is not None:
+        return psx_region.decided(setting, psx_region.REGION_SOURCE_SETTING), []
+    path = os.path.join(read.root, _DUCKSTATION_CUSTOM_PROPERTIES)
+    properties = machine.read_text(path)
+    if properties.status == READ_OK and properties.text is not None:
+        value = psx_region.custom_property(properties.text, content.path, _DUCKSTATION_REGION_PROPERTY)
+        region = psx_region.duckstation_custom_region(value)
+        if region is not None:
+            return psx_region.decided(region, psx_region.REGION_SOURCE_CUSTOM_PROPERTY), [
+                Caveat(
+                    CAVEAT_REGION_PROPERTY_UNCONFIRMED,
+                    f"{path} names {region} for this content, and DuckStation takes that over the disc's own "
+                    "region only where its game list holds the path — a binary cache atlas does not read, so "
+                    "whether the launch boots this region or the disc's is not confirmed here",
+                    {"token": card.token, "content_path": content.path, "region": region},
+                )
+            ]
+    elif properties.status != READ_MISSING:
+        return DiscRegionReading(reason=REASON_REGION_PROPERTY_UNREAD, path=path), []
+    return psx_region.read_disc_region(machine, psx_region.EMULATOR_DUCKSTATION, content.path), []
+
+
+def _duckstation_group_for_content(
+    machine: Machine,
+    entry: CatalogueEntry,
+    card: StandaloneFirmwareCard,
+    group: FirmwareAlternatives,
+    *,
+    read: duckstation.SettingsRead,
+    bios_dir: str,
+    content: _GameContent,
+) -> tuple[FirmwareAlternatives, list[Caveat]]:
+    """The named-key group of a question that named the game's content, and what stands beside it.
+
+    A decided region goes onto the group; an undecided one leaves the group per
+    region with the reason beside it, in the keys the libretro cores' groups
+    state it in, the card's ``token`` naming the subject.
+    """
+    search = card.search
+    assert search is not None  # the caller resolved the search before building a group
+    reading, caveats = _duckstation_region_reading(machine, card, read=read, content=content)
+    decided = _decided_group(group, reading)
+    if reading.region is not None:
+        return decided, caveats
+    every = tuple(region for region, _ in search.region_keys)
+    return decided, [
+        *caveats,
+        _undecided_disc_caveat(
+            entry.label or card.token,
+            group,
+            every,
+            directory=bios_dir,
+            content=content,
+            reading=reading,
+            token=card.token,
+        ),
+    ]
 
 
 def _duckstation_search(
@@ -8026,7 +8363,12 @@ def _content_table(card: CoreFirmwareCard) -> BiosTable:
 
 
 def _locating_library_name(
-    machine: Machine, context: FirmwareContext, core: CoreDeclarations, *, falls_back_to: str
+    machine: Machine,
+    context: FirmwareContext,
+    core: CoreDeclarations,
+    *,
+    falls_back_to: str,
+    content: "_GameContent | None" = None,
 ) -> tuple[str | None, list[Caveat]]:
     """The core's own ``library_name``, where a per-core options file could govern.
 
@@ -8042,9 +8384,14 @@ def _locating_library_name(
     falls back on the global file and those defaults, while a folder
     declaration's option has no recorded default — the core fills that one
     from its own listing at run time — so nothing but the global file is left.
+
+    A question that names the game's *content* needs the name for one more
+    reason: the game and folder ``.opt`` files sit in that same directory, and
+    RetroArch reads them wherever ``game_specific_options`` is on, whatever
+    ``global_core_options`` says.
     """
     chain = context.core_options
-    if chain is None or not chain.per_core_options or chain.core_dir is None:
+    if chain is None or chain.core_dir is None or not _reads_core_files(chain, content):
         return None, []
     if machine.path_kind(chain.override_config_dir) == KIND_MISSING:
         # Every per-core file is one directory down from here
@@ -8066,6 +8413,11 @@ def _locating_library_name(
     ]
 
 
+def _reads_core_files(chain: CoreOptionsChain, content: "_GameContent | None") -> bool:
+    """Would RetroArch read any options file keyed by the core's ``library_name`` for this question?"""
+    return chain.per_core_options or (content is not None and chain.game_specific_options)
+
+
 def _locating_option(
     machine: Machine,
     context: FirmwareContext,
@@ -8073,17 +8425,21 @@ def _locating_option(
     key: str,
     default: str,
     library_name: str | None,
+    content: "_GameContent | None" = None,
 ) -> str:
     """One core option, read over the files RetroArch would read for this launch.
 
-    No content is known here — nothing has been launched — so the game and
-    folder ``.opt`` layers, which are keyed by a content path, do not exist to
-    read: what governs is the per-core ``.opt`` where ``global_core_options``
-    is off, and otherwise the global options file, which is the tail of
-    RetroArch's own priority order. A key no file states falls back to the
-    default the knowledge entry records, which is the core's own declared
-    default and what RetroArch answers with in that case — so the read always
-    ends in a value.
+    Where the question names no content nothing has been launched, so the game
+    and folder ``.opt`` layers, which are keyed by a content path, do not exist
+    to read: what governs is the per-core ``.opt`` where
+    ``global_core_options`` is off, and otherwise the global options file,
+    which is the tail of RetroArch's own priority order. Where it names the
+    game's content those two layers come first, named the way RetroArch names
+    them — after the content RetroArch was handed, so after the playlist where
+    the launch is one — wherever ``game_specific_options`` is on. A key no file
+    states falls back to the default the knowledge entry records, which is the
+    core's own declared default and what RetroArch answers with in that case —
+    so the read always ends in a value.
     """
     chain = context.core_options or _NO_OPTIONS_FILE
     value, _, _, _ = core_options_value(
@@ -8091,11 +8447,11 @@ def _locating_option(
         override_config_dir=chain.override_config_dir,
         global_file=chain.global_file,
         library_name=library_name,
-        content_dir_name=None,
-        rom_stem=None,
+        content_dir_name=None if content is None else content.dir_name,
+        rom_stem=None if content is None else content.rom_stem,
         option_key=key,
         option_default=default,
-        game_specific_options=False,
+        game_specific_options=content is not None and chain.game_specific_options,
         per_core_options=chain.per_core_options,
     )
     assert value is not None  # the knowledge entry states a default for every key
@@ -8311,7 +8667,7 @@ def _named_content(
 # (``None`` where atlas would not follow the path at all), which of the three
 # outcomes above opening it came to, what that says about this core's
 # configuration, and what the look at the machine saw.
-_NamedRead: TypeAlias = "tuple[FirmwareRequirement | None, str, tuple[Caveat, ...], tuple[Caveat, ...]]"
+type _NamedRead = tuple[FirmwareRequirement | None, str, tuple[Caveat, ...], tuple[Caveat, ...]]
 
 
 def _named_image(
@@ -8651,6 +9007,23 @@ def _region_statements(
     return caveats
 
 
+def _carried_split(
+    group: "FirmwareAlternatives", every: tuple[str, ...]
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The route's regions the group carries an option for, and those it does not, each in the route's order."""
+    carried = {region for option in group.options for region in option.regions or ()}
+    return (
+        tuple(region for region in every if region in carried),
+        tuple(region for region in every if region not in carried),
+    )
+
+
+def _unstated_clause(unstated: tuple[str, ...]) -> str:
+    if not unstated:
+        return ""
+    return f"; nothing is stated for a {', '.join(unstated)} console, and the caveats beside this say why"
+
+
 def _undecided_region_caveat(
     core: CoreDeclarations,
     group: "FirmwareAlternatives",
@@ -8698,15 +9071,8 @@ def _undecided_region_caveat(
     those it does not is one rule, and a second copy of it is a second answer
     waiting to disagree.
     """
-    carried = {region for option in group.options for region in option.regions or ()}
-    stated = tuple(region for region in every if region in carried)
-    unstated = tuple(region for region in every if region not in carried)
-    left = (
-        ""
-        if not unstated
-        else f"; nothing is stated for a {', '.join(unstated)} console, and the caveats beside "
-        "this say why"
-    )
+    stated, unstated = _carried_split(group, every)
+    left = _unstated_clause(unstated)
     return Caveat(
         CAVEAT_CORE_MODE_UNESTABLISHED,
         f"{core.core_so} takes the console region from the disc that is being booted, a fact no "
@@ -8720,6 +9086,144 @@ def _undecided_region_caveat(
             "unstated": list(unstated),
         },
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _GameContent:
+    """The game a firmware question named (#661), in the coordinates its answer reads.
+
+    ``path`` is the content path exactly as the question spelled it — the path
+    the launch is handed, an ``.m3u`` or a single image (D1). ``dir_name`` and
+    ``rom_stem`` are the two names RetroArch keys a folder and a game ``.opt``
+    by (:func:`atlas.content_path.split_content_path`), ``None`` where its path
+    math derives none.
+    """
+
+    path: str
+    dir_name: str | None
+    rom_stem: str | None
+
+
+def _game_content(content_path: str | None) -> _GameContent | None:
+    """The content a question named, or ``None`` where it named none; a relative path raises ``ValueError``."""
+    if content_path is None:
+        return None
+    checked_content_path(content_path)
+    _, dir_name, rom_stem = split_content_path(content_path)
+    return _GameContent(path=content_path, dir_name=dir_name or None, rom_stem=rom_stem or None)
+
+
+def _decided_group(group: "FirmwareAlternatives", reading: DiscRegionReading) -> "FirmwareAlternatives":
+    """The group as a question naming content answers it: the region and its source, where one was decided."""
+    return cast(
+        FirmwareAlternatives,
+        replace(group, region=reading.region, region_source=reading.source, for_content=True),
+    )
+
+
+def _disc_why(reading: DiscRegionReading) -> str:
+    """Why a disc a question named decided no region, as the clause a statement's sentence carries."""
+    if reading.reason == REASON_DISC_FORMAT_UNREAD:
+        return f"{reading.disc} is an image of a format atlas does not read ({reading.extension or 'no suffix'})"
+    if reading.reason == REASON_CONTENT_UNOPENABLE:
+        return f"the emulator does not open {reading.disc} as content ({reading.extension or 'no suffix'})"
+    if reading.reason == REASON_REGION_PROPERTY_UNREAD:
+        return (
+            f"{reading.path} could not be read, and a Region it names for this path is taken over the disc's own"
+        )
+    return f"{reading.disc} did not yield a region ({reading.status})"
+
+
+def _undecided_disc_caveat(
+    subject: str,
+    group: "FirmwareAlternatives",
+    every: tuple[str, ...],
+    *,
+    directory: str,
+    content: _GameContent,
+    reading: DiscRegionReading,
+    core_so: str | None = None,
+    token: str | None = None,
+) -> Caveat:
+    """Why a question that named the game's content still has its group stated per region.
+
+    It takes the place of the ``region-decided-by-disc`` statement on the same
+    group and keeps that statement's keys — the subject, ``dir``, ``regions``
+    and ``unstated`` — adding ``content_path`` and what the reason carries:
+    ``disc`` and ``status`` under :data:`REASON_DISC_UNREAD`, ``disc`` and
+    ``extension`` under :data:`REASON_DISC_FORMAT_UNREAD`, ``extension`` under
+    :data:`REASON_CONTENT_UNOPENABLE`, and ``path`` under
+    :data:`REASON_REGION_PROPERTY_UNREAD` (D13 and D14 of #661). The subject is
+    a libretro core's ``core_so`` or a carded emulator's ``token``, whichever
+    the caller names.
+    """
+    assert reading.reason is not None  # an undecided reading carries its reason
+    stated, unstated = _carried_split(group, every)
+    data: dict[str, DataValue] = {
+        "reason": reading.reason,
+        "dir": directory,
+        "regions": list(stated),
+        "unstated": list(unstated),
+        "content_path": content.path,
+    }
+    if token is not None:
+        data["token"] = token
+    if core_so is not None:
+        data["core_so"] = core_so
+    if reading.reason in (REASON_DISC_UNREAD, REASON_DISC_FORMAT_UNREAD):
+        data["disc"] = reading.disc or ""
+    if reading.reason == REASON_DISC_UNREAD:
+        data["status"] = reading.status or ""
+    elif reading.reason == REASON_REGION_PROPERTY_UNREAD:
+        data["path"] = reading.path or ""
+    else:
+        data["extension"] = reading.extension or ""
+    return Caveat(
+        CAVEAT_CORE_MODE_UNESTABLISHED,
+        f"{subject} takes the console region from the disc that is being booted, and for the content named "
+        f"({content.path}) {_disc_why(reading)} — so no region is decided for it and the options below are "
+        f"stated per region ({', '.join(stated)}){_unstated_clause(unstated)}",
+        data,
+    )
+
+
+def _region_group_for_content(
+    machine: Machine,
+    core: CoreDeclarations,
+    group: "FirmwareAlternatives",
+    every: tuple[str, ...],
+    *,
+    directory: str,
+    content: _GameContent | None,
+) -> tuple["FirmwareAlternatives", list[Caveat]]:
+    """A libretro core's group, and the statement beside it, for the question asked.
+
+    Without content the group is what it always was, explained by
+    ``region-decided-by-disc``. With content the core's own region rule is
+    asked about that disc (:func:`atlas.psx_region.read_disc_region`): a
+    decided region goes onto the group and needs no explaining, and an
+    undecided one leaves the group per region with the reason beside it.
+    """
+    if content is None:
+        return group, [_undecided_region_caveat(core, group, every, directory)]
+    emulator = psx_region.CORE_EMULATORS.get(core.core_so.removesuffix(SO_SUFFIX))
+    if emulator is None:
+        return group, [_undecided_region_caveat(core, group, every, directory)]
+    reading = psx_region.read_disc_region(machine, emulator, content.path)
+    decided = _decided_group(group, reading)
+    if reading.region is not None:
+        return decided, []
+    return decided, [
+        _undecided_disc_caveat(
+            core.core_so,
+            group,
+            every,
+            directory=directory,
+            content=content,
+            reading=reading,
+            core_so=core.core_so,
+        )
+    ]
 
 
 # ── The core that carries its own spellings ───────────────────────────────
@@ -9091,6 +9595,7 @@ def _spelled_firmware(
     *,
     root: str,
     verify: bool,
+    content: _GameContent | None = None,
 ) -> _LocatedFirmware:
     """What a core that carries its own spellings adds to its declaration.
 
@@ -9108,9 +9613,10 @@ def _spelled_firmware(
         context,
         core,
         falls_back_to="the value below comes from the global options file and this core's own default",
+        content=content,
     )
     value = _locating_option(
-        machine, context, key=option.key, default=option.default, library_name=library_name
+        machine, context, key=option.key, default=option.default, library_name=library_name, content=content
     )
     selected, unknown = _override_selection(core, option, value)
     caveats.extend(unknown)
@@ -9130,11 +9636,15 @@ def _spelled_firmware(
         pinned=False,
     )
     if isinstance(entry, FirmwareAlternatives):
-        caveats.append(
-            _undecided_region_caveat(
-                core, entry, tuple(row.region for row in route.regions), directory
-            )
+        entry, region_caveats = _region_group_for_content(
+            machine,
+            core,
+            entry,
+            tuple(row.region for row in route.regions),
+            directory=directory,
+            content=content,
         )
+        caveats.extend(region_caveats)
     return _LocatedFirmware(
         entry=entry,
         core_caveats=tuple(caveats),
@@ -9183,7 +9693,12 @@ def _spoken_for(route: CoreFirmwareSpellingRoute) -> tuple[str, ...]:
 
 
 def _located_firmware(
-    machine: Machine, context: FirmwareContext, core: CoreDeclarations, *, verify: bool
+    machine: Machine,
+    context: FirmwareContext,
+    core: CoreDeclarations,
+    *,
+    verify: bool,
+    content: "_GameContent | None" = None,
 ) -> _LocatedFirmware:
     """What this core's own locating route adds to its declaration, or nothing.
 
@@ -9209,9 +9724,11 @@ def _located_firmware(
     root = context.root
     assert root is not None  # callers resolve the empty-root answer before getting here
     if isinstance(card.name_route, CoreFirmwareSpellingRoute):
-        return _spelled_firmware(machine, context, core, card.name_route, root=root, verify=verify)
+        return _spelled_firmware(
+            machine, context, core, card.name_route, root=root, verify=verify, content=content
+        )
     return _two_door_firmware(
-        machine, context, core, card, card.name_route, root=root, verify=verify
+        machine, context, core, card, card.name_route, root=root, verify=verify, content=content
     )
 
 
@@ -9224,6 +9741,7 @@ def _two_door_firmware(
     *,
     root: str,
     verify: bool,
+    content: _GameContent | None = None,
 ) -> _LocatedFirmware:
     """What a core that opens a configured name and searches behind it adds to its declaration.
 
@@ -9240,6 +9758,7 @@ def _two_door_firmware(
         context,
         core,
         falls_back_to="the values below come from the global options file and this core's own defaults",
+        content=content,
     )
     region_value = _locating_option(
         machine,
@@ -9247,6 +9766,7 @@ def _two_door_firmware(
         key=route.region_option.key,
         default=route.region_option.default,
         library_name=library_name,
+        content=content,
     )
     regions, pinned, stated = _regions_answered(core, route, region_value)
     caveats.extend(stated)
@@ -9258,7 +9778,7 @@ def _two_door_firmware(
             key,
             root=root,
             name=_locating_option(
-                machine, context, key=key.key, default=key.default, library_name=library_name
+                machine, context, key=key.key, default=key.default, library_name=library_name, content=content
             ),
             verify=verify,
         )
@@ -9291,7 +9811,10 @@ def _two_door_firmware(
     )
     entry = _locating_entry(_region_options(answers), pinned=pinned)
     if isinstance(entry, FirmwareAlternatives):
-        caveats.append(_undecided_region_caveat(core, entry, regions, directory))
+        entry, region_caveats = _region_group_for_content(
+            machine, core, entry, regions, directory=directory, content=content
+        )
+        caveats.extend(region_caveats)
     return _LocatedFirmware(
         entry=entry,
         core_caveats=tuple(caveats),
@@ -9400,6 +9923,7 @@ def _carded_standalone_core(
     xdg_pinned: bool,
     verify: bool,
     cwd: str | None = None,
+    content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """A carded standalone entry, routed by the shape its card states.
 
@@ -9452,6 +9976,7 @@ def _carded_standalone_core(
             xdg_pinned=xdg_pinned,
             verify=verify,
             cwd=cwd,
+            content=content,
         )
     located = cast(CoreFirmware, replace(core, locating=locating_of_card(card)))
     return _claiming_what_it_read(machine, located), observed
@@ -9464,6 +9989,7 @@ def _standalone_entry_core(
     system: str,
     *,
     verify: bool,
+    content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """A standalone entry: its card's answer, or the honest refusal.
 
@@ -9512,6 +10038,7 @@ def _standalone_entry_core(
             xdg_pinned=xdg_pinned,
             verify=verify,
             cwd=context.cwd,
+            content=content,
         )
     return (
         CoreFirmware(
@@ -9580,6 +10107,7 @@ def _catalogue_entry_core(
     *,
     verify: bool,
     folders: _FolderReads,
+    content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """One catalogue entry resolved, plus the observations it produced.
 
@@ -9601,7 +10129,7 @@ def _catalogue_entry_core(
     if core_file is not None:
         return _foreign_core_entry(entry, core_file, system), []
     if entry.kind != KIND_LIBRETRO or entry.core_so is None:
-        return _standalone_entry_core(machine, context, entry, system, verify=verify)
+        return _standalone_entry_core(machine, context, entry, system, verify=verify, content=content)
     core = by_stem.get(entry.core_so[: -len(".so")] if entry.core_so.endswith(".so") else entry.core_so)
     if core is None:
         # Same guard as the per-core route: absence is a claim, and it
@@ -9641,6 +10169,7 @@ def _catalogue_entry_core(
         declared_index=entry.declared_index,
         verify=verify,
         folders=folders,
+        content=content,
     )
 
 
@@ -9699,6 +10228,7 @@ def firmware_for_system(
     system: str,
     catalogue: Catalogue | None = None,
     verify: bool = False,
+    content_path: str | None = None,
 ) -> FirmwareAnswer:
     """Which emulators can run *system*, and what each of them wants.
 
@@ -9738,11 +10268,17 @@ def firmware_for_system(
     carrying its own ``system``: a multi-system core (mGBA declares Game Boy
     boot ROMs) wants what it wants regardless of which of its systems was
     asked about, and silently dropping entries would turn "needs firmware" into
-    a wrong answer.
+    a wrong answer. The *verdict* can follow *system*, though, and does in one
+    case: where the packaged table excuses a core on some of the systems it
+    runs, a question naming one of them answers that core excused and its
+    rows filed under the system the excusing entry reaches ``optional`` (for
+    PUAE, ``amiga``), and a question naming another
+    answers it as declared (:func:`_stating_system_firmware`).
     """
     if context.root is None:
         return _empty_answer(context)
 
+    content = _game_content(content_path)
     resolved: list[CoreFirmware] = []
     caveats: list[Caveat] = []
     # Whether the enumeration happened at all decides whether this answer may
@@ -9765,10 +10301,10 @@ def firmware_for_system(
         # enumeration here even when a catalogue exists, so whether *they*
         # were read is what an empty answer hangs on.
         enumerated = context.cores_read
-        resolved, caveats = _derived_enumeration(machine, context, system, verify=verify)
+        resolved, caveats = _derived_enumeration(machine, context, system, verify=verify, content=content)
         caveats.insert(0, _uncatalogued_word_caveat(system))
     elif catalogue is None:
-        resolved, caveats = _cores_by_systemname(machine, context, system, verify=verify)
+        resolved, caveats = _cores_by_systemname(machine, context, system, verify=verify, content=content)
     elif not catalogue.read:
         caveats.append(
             Caveat(
@@ -9791,7 +10327,14 @@ def firmware_for_system(
         folders: _FolderReads = {}
         for entry in catalogue.entries:
             core, observed = _catalogue_entry_core(
-                machine, context, entry, by_stem, system, verify=verify, folders=folders
+                machine,
+                context,
+                entry,
+                by_stem,
+                system,
+                verify=verify,
+                folders=folders,
+                content=content,
             )
             resolved.append(core)
             caveats.extend(observed)
@@ -9801,7 +10344,7 @@ def firmware_for_system(
 
     return FirmwareAnswer(
         root=context.root,
-        cores=_stating_system_firmware(tuple(resolved), context.system_firmware),
+        cores=_stating_system_firmware(tuple(resolved), context.system_firmware, system),
         unclaimed=(),
         hash_checked=verify,
         sources=context.sources,

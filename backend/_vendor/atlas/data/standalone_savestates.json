@@ -247,11 +247,11 @@
           "section": "Folders",
           "key": "SaveStates",
           "default": "savestates",
-          "citation": "settings.cpp:1944, :1975 at stenzek/duckstation@64655818e"
+          "citation": "settings.cpp:1947, :1978 at RetroDECK/Duckstation@1f6de046b"
         },
         "names": {
           "pattern": "<serial>_<slot>.sav",
-          "citation": "system.cpp:5288-5302 at stenzek/duckstation@64655818e"
+          "citation": "system.cpp:5291-5305 at RetroDECK/Duckstation@1f6de046b"
         }
       },
       "anchors": {
@@ -272,7 +272,7 @@
         }
       },
       "provenance": {
-        "source": "The DuckStation build RetroDECK ships as 'DuckStation (Legacy)' — the save card's pin, stenzek/duckstation@64655818e. The states directory is [Folders] SaveStates, default 'savestates' below the DataRoot (settings.cpp:1944, :1975; an empty value falls to the default, a relative one joins the DataRoot, then Path::RealPath resolves it, :1955-1962). RetroDECK's script calls the location hard-coded (components/duckstation/component_prepare.sh:20) — the key disproves that comment, but the script only links the default location (dir_prep \"$states_path/psx/duckstation\" \"$XDG_CONFIG_HOME/duckstation/savestates\", component_prepare.sh:20, component_prepare.sh:38), a symlink the answer walks, while EmuDeck writes the key itself (SaveStates = …, emuDeckDuckStation.sh:67-75). A per-game state is <serial>_<slot>.sav with <serial>_resume.sav beside it, and the global slots are savestate_<slot>.sav and resume.sav in the same directory (System::GetGameSaveStateFileName / GetGlobalSaveStateFileName, system.cpp:5288-5302), slots 1-10 each (system.h:83-84); the serial is the disc's own, not derivable from the content path. settings.ini lives in the DataRoot the launch environment picks — the same two-base probe the save card states (qthost.cpp:562-582)."
+        "source": "The DuckStation build RetroDECK ships as 'DuckStation (Legacy)' — the save card's pin, RetroDECK/Duckstation@1f6de046b. The states directory is [Folders] SaveStates, default 'savestates' below the DataRoot (settings.cpp:1947, :1978; an empty value falls to the default, a relative one joins the DataRoot, then Path::RealPath resolves it, :1958-1965). RetroDECK's script calls the location hard-coded (components/duckstation/component_prepare.sh:20) — the key disproves that comment, but the script only links the default location (dir_prep \"$states_path/psx/duckstation\" \"$XDG_CONFIG_HOME/duckstation/savestates\", component_prepare.sh:20, component_prepare.sh:38), a symlink the answer walks, while EmuDeck writes the key itself (SaveStates = …, emuDeckDuckStation.sh:67-75). A per-game state is <serial>_<slot>.sav with <serial>_resume.sav beside it, and the global slots are savestate_<slot>.sav and resume.sav in the same directory (System::GetGameSaveStateFileName / GetGlobalSaveStateFileName, system.cpp:5291-5305), slots 1-10 each (system.h:83-84); the serial is the disc's own, not derivable from the content path. settings.ini lives in the DataRoot the launch environment picks — the same two-base probe the save card states (qthost.cpp:562-582)."
       }
     },
     "CEMU": {

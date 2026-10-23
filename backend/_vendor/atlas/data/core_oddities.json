@@ -3416,7 +3416,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] src/libretro/libretro_host_interface.cpp:771-789 at libretro/swanstation 4d309c0 — SAVE_RAM answers the constant 128 * 1024, one memory card, whenever slot 1's type is Libretro."
+                  }
+                }
               }
             ]
           },
@@ -3428,7 +3435,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] src/libretro/libretro_host_interface.cpp:771-789 at libretro/swanstation 4d309c0 — SAVE_RAM answers the constant 128 * 1024, one memory card, whenever slot 1's type is Libretro."
+                  }
+                }
               },
               {
                 "files": [
@@ -3447,7 +3461,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] src/libretro/libretro_host_interface.cpp:771-789 at libretro/swanstation 4d309c0 — SAVE_RAM answers the constant 128 * 1024, one memory card, whenever slot 1's type is Libretro."
+                  }
+                }
               },
               {
                 "files": [
@@ -3473,7 +3494,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] src/libretro/libretro_host_interface.cpp:771-789 at libretro/swanstation 4d309c0 — SAVE_RAM answers the constant 128 * 1024, one memory card, whenever slot 1's type is Libretro."
+                  }
+                }
               },
               {
                 "files": [
@@ -3862,7 +3890,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] libretro.cpp:5147-5162 at beetle-psx-libretro d6383bf — SAVE_RAM answers the constant 1 << 17, one 128 KiB memory card, whenever the libretro memcard-0 method is in force."
+                  }
+                }
               },
               {
                 "files": [
@@ -3881,7 +3916,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] libretro.cpp:5147-5162 at beetle-psx-libretro d6383bf — SAVE_RAM answers the constant 1 << 17, one 128 KiB memory card, whenever the libretro memcard-0 method is in force."
+                  }
+                }
               },
               {
                 "files": [
@@ -3900,7 +3942,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] libretro.cpp:5147-5162 at beetle-psx-libretro d6383bf — SAVE_RAM answers the constant 1 << 17, one 128 KiB memory card, whenever the libretro memcard-0 method is in force."
+                  }
+                }
               }
             ]
           },
@@ -4026,7 +4075,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] libretro.cpp:5147-5162 at beetle-psx-libretro d6383bf — SAVE_RAM answers the constant 1 << 17, one 128 KiB memory card, whenever the libretro memcard-0 method is in force."
+                  }
+                }
               },
               {
                 "files": [
@@ -4045,7 +4101,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] libretro.cpp:5147-5162 at beetle-psx-libretro d6383bf — SAVE_RAM answers the constant 1 << 17, one 128 KiB memory card, whenever the libretro memcard-0 method is in force."
+                  }
+                }
               },
               {
                 "files": [
@@ -4064,7 +4127,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] libretro.cpp:5147-5162 at beetle-psx-libretro d6383bf — SAVE_RAM answers the constant 1 << 17, one 128 KiB memory card, whenever the libretro memcard-0 method is in force."
+                  }
+                }
               }
             ]
           },
@@ -4188,7 +4258,15 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "battery"
+                "role": "battery",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "fill": "0xff",
+                    "citation": "[V] libretro/libretro.c:3759-3784 at ekeeke/Genesis-Plus-GX 46a5521 — SAVE_RAM answers 0x10000 before emulation runs and, while it runs, the length up to the last byte that is not 0xff, so the file is the cartridge's 64 KiB SRAM less a trailing run of 0xff that moves with what the game has written."
+                  }
+                }
               }
             ]
           },
@@ -4203,7 +4281,15 @@
                 "files_established_note": "The class here is a raw .bin loaded as the cartridge dump it is in every ordinary library — one that carries the Sega CD disc header boots as a disc instead and takes the CD modes, a class the extension alone cannot settle.",
                 "files_citation": "core/loadrom.c load-time system detection at 46a5521",
                 "granularity": "per-game-file",
-                "role": "battery"
+                "role": "battery",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "fill": "0xff",
+                    "citation": "[V] libretro/libretro.c:3759-3784 at ekeeke/Genesis-Plus-GX 46a5521 — SAVE_RAM answers 0x10000 before emulation runs and, while it runs, the length up to the last byte that is not 0xff, so the file is the cartridge's 64 KiB SRAM less a trailing run of 0xff that moves with what the game has written."
+                  }
+                }
               }
             ]
           },
@@ -4836,7 +4922,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] frontend/libretro.c:2060-2068 and libpcsxcore/sio.h:34 at libretro/pcsx_rearmed 228c14e — SAVE_RAM answers MCD_SIZE, the constant 128 KiB of one PlayStation memory card."
+                  }
+                }
               }
             ]
           },
@@ -4848,7 +4941,14 @@
                   "<rom_stem>.srm"
                 ],
                 "granularity": "per-game-file",
-                "role": "memory-card"
+                "role": "memory-card",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] frontend/libretro.c:2060-2068 and libpcsxcore/sio.h:34 at libretro/pcsx_rearmed 228c14e — SAVE_RAM answers MCD_SIZE, the constant 128 KiB of one PlayStation memory card."
+                  }
+                }
               },
               {
                 "files": [

@@ -62,6 +62,13 @@ class CoreOptionsChain:
     limited to, so the probe asks the build the answer is about.
     """
     caveats: tuple[Caveat, ...] = ()
+    game_specific_options: bool = False
+    """Does RetroArch read the game and folder ``.opt`` layers on this installation?
+
+    ``game_specific_options`` as the configuration states it. It governs only
+    a question that names content, because those two layers are keyed by the
+    content's name and its folder; a question naming none reads neither.
+    """
 
 
 def _option_file_candidates(

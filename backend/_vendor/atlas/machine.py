@@ -92,9 +92,9 @@ import sys
 import zipfile
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Callable, Iterable, Literal, Mapping, NamedTuple, Protocol, TypeAlias, runtime_checkable
+from typing import Callable, Iterable, Literal, Mapping, NamedTuple, Protocol, runtime_checkable
 
-from . import lha, ps2_bios, squashfs, whdload
+from . import lha, ps2_bios, psx_disc, squashfs, whdload
 
 _CORE_PROBE_TIMEOUT_SECONDS = 15
 SYMLINK_HOPS = 40
@@ -164,7 +164,7 @@ _APPIMAGE_ENTRY_FAILURE_OF: Mapping[str, AppImageEntryFailure] = {word: word for
 # bytes hold nothing the pattern matches ("no-stamp"), or more than one place
 # does ("ambiguous") — a stamp the read would have to pick between is one it
 # refuses rather than guesses.
-AppImageStampStatus: TypeAlias = Literal["ok", "no-stamp", "ambiguous"] | AppImageEntryFailure
+type AppImageStampStatus = Literal["ok", "no-stamp", "ambiguous"] | AppImageEntryFailure
 APPIMAGE_STAMP_OK: AppImageStampStatus = "ok"
 APPIMAGE_NO_STAMP: AppImageStampStatus = "no-stamp"
 APPIMAGE_AMBIGUOUS: AppImageStampStatus = "ambiguous"
@@ -180,6 +180,22 @@ PS2_BIOS_OK: Ps2BiosHeaderStatus = "ok"
 PS2_BIOS_MISSING: Ps2BiosHeaderStatus = "missing"
 PS2_BIOS_UNREADABLE: Ps2BiosHeaderStatus = "unreadable"
 PS2_BIOS_NOT_A_BIOS: Ps2BiosHeaderStatus = "not-a-bios"
+
+# Reading a PlayStation disc's identity has two ways to fail beyond a plain
+# file read, and both are findings rather than read failures. "format-not-read"
+# is a disc atlas does not read: a suffix no reader here opens, or a layout the
+# three emulators that decide a region from it would read apart
+# (atlas.psx_disc). "not-a-disc" is content that opens as no disc at all: a cue
+# sheet the parser refuses, or one whose first track is audio. "missing" and
+# "unreadable" keep the plain read's meaning, and they speak for every file the
+# read needs — a cue sheet's data file that is not there is a disc that is
+# missing, whatever the sheet itself is.
+DiscIdentityStatus = Literal["ok", "missing", "unreadable", "format-not-read", "not-a-disc"]
+DISC_OK: DiscIdentityStatus = "ok"
+DISC_MISSING: DiscIdentityStatus = "missing"
+DISC_UNREADABLE: DiscIdentityStatus = "unreadable"
+DISC_FORMAT_NOT_READ: DiscIdentityStatus = "format-not-read"
+DISC_NOT_A_DISC: DiscIdentityStatus = "not-a-disc"
 
 # Listing an archive has one way to fail beyond a plain file read:
 # "not-archive" is a file that was opened and is not an archive of a kind
@@ -228,7 +244,7 @@ CoreUnansweredStatus = Literal[
     "timed-out",
     "unusable",
 ]
-CoreReadStatus: TypeAlias = Literal["answered"] | CoreUnansweredStatus
+CoreReadStatus = Literal["answered"] | CoreUnansweredStatus
 # The one status that is not a failure, and the only one carrying a CoreInfo:
 # a line naming a ``library_name`` came back. Spelled as a bare constant rather
 # than with a sentence under it because it belongs to no published vocabulary —
@@ -359,6 +375,25 @@ class Ps2BiosHeaderResult:
         if (self.header is None) == (self.status == PS2_BIOS_OK):
             raise ValueError(
                 f"Ps2BiosHeaderResult: header must be set exactly when status is 'ok' (got {self.status!r})"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class DiscIdentityResult:
+    """One disc identity read's explicit outcome — ``identity`` is set exactly when ``status`` is ok.
+
+    The statuses are documented on :data:`DiscIdentityStatus`; the identity is
+    :class:`atlas.psx_disc.DiscIdentity`, the bytes the emulators decide a
+    region from.
+    """
+
+    status: DiscIdentityStatus
+    identity: psx_disc.DiscIdentity | None = None
+
+    def __post_init__(self) -> None:
+        if (self.identity is None) == (self.status == DISC_OK):
+            raise ValueError(
+                f"DiscIdentityResult: identity must be set exactly when status is 'ok' (got {self.status!r})"
             )
 
 
@@ -996,6 +1031,8 @@ class Machine(Protocol):
 
     def read_ps2_bios_header(self, path: str) -> Ps2BiosHeaderResult: ...
 
+    def read_disc_identity(self, path: str) -> DiscIdentityResult: ...
+
     def list_archive(self, path: str) -> ArchiveListResult: ...
 
     def read_whdload_slave(self, path: str) -> WhdloadSlaveResult: ...
@@ -1190,6 +1227,37 @@ class RealMachine:
         except OSError:
             return Ps2BiosHeaderResult(PS2_BIOS_UNREADABLE)
         return Ps2BiosHeaderResult(PS2_BIOS_OK, header)
+
+    def read_disc_identity(self, path: str) -> DiscIdentityResult:
+        """The bytes a PlayStation disc's emulators decide its region from — a status, and the identity where read.
+
+        *path* is the image itself — a ``.cue`` or a bare image, never a
+        playlist, which each emulator resolves by its own rules above this seam.
+        It must be a regular file, checked before anything is opened; every
+        file the read then opens — a cue sheet's data files — keeps the plain
+        read's two words, so a sheet whose data file is gone answers
+        ``missing``. The reader is :mod:`atlas.psx_disc`, and its two refusals
+        map to ``format-not-read`` and ``not-a-disc``.
+        """
+        try:
+            st = os.stat(path)
+        except (FileNotFoundError, NotADirectoryError):
+            return DiscIdentityResult(DISC_MISSING)
+        except OSError:
+            return DiscIdentityResult(DISC_UNREADABLE)
+        if not _stat.S_ISREG(st.st_mode):
+            return DiscIdentityResult(DISC_UNREADABLE)
+        try:
+            identity = psx_disc.read_identity(path, lambda name: open(name, "rb"))
+        except (FileNotFoundError, NotADirectoryError):
+            return DiscIdentityResult(DISC_MISSING)
+        except psx_disc.FormatNotRead:
+            return DiscIdentityResult(DISC_FORMAT_NOT_READ)
+        except psx_disc.NotADisc:
+            return DiscIdentityResult(DISC_NOT_A_DISC)
+        except OSError:
+            return DiscIdentityResult(DISC_UNREADABLE)
+        return DiscIdentityResult(DISC_OK, identity)
 
     def list_archive(self, path: str) -> ArchiveListResult:
         """What one container holds — the read PUAE's own walk over a mounted volume makes.
@@ -2114,6 +2182,90 @@ def _fixture_ps2_bios_header(path: str, spec: Mapping[str, object]) -> ps2_bios.
     return ps2_bios.Ps2BiosHeader.from_strings(strings["romver"], strings["serial"])
 
 
+# The states a fixture disc identity may declare short of the identity: what
+# RealMachine can report about an image it opened. "missing" is among them
+# because the read opens more than the declared file — a cue sheet's data file
+# that is not there answers it. "format-not-read" is not: whether a reader
+# opens a suffix is decided by the suffix, which the fixture answers from the
+# path itself, as the real reader does.
+_FIXTURE_DISC_STATES = ("missing", "unreadable", "not-a-disc")
+_FIXTURE_DISC_FIELDS = ("license", "system_cnf", "boot_found", "edc_valid")
+_FIXTURE_DISC_SUFFIXES = (psx_disc.CUE_SUFFIX, *psx_disc.BARE_IMAGE_SUFFIXES)
+
+
+def disc_suffix_read(path: str) -> bool:
+    """Does :mod:`atlas.psx_disc` open an image by this path's suffix — the rule both machines and the validator share."""
+    return os.path.splitext(path)[1].lower() in _FIXTURE_DISC_SUFFIXES
+
+
+def _validate_fixture_disc_identities(
+    identities: Mapping[str, Mapping[str, object] | str],
+    files: Mapping[str, tuple[ReadStatus, str | None]],
+) -> dict[str, psx_disc.DiscIdentity | str]:
+    """The declared disc identities, built once into the reader's own type.
+
+    An identity describes an image's bytes, so its path must be a declared
+    file whose bytes can be read, and one whose suffix the reader opens — a
+    declaration beside a suffix the reader refuses would assert a read the
+    machine it models never makes.
+    """
+    validated: dict[str, psx_disc.DiscIdentity | str] = {}
+    for path, spec in identities.items():
+        if path not in files:
+            raise ValueError(f"disc identity {path!r}: an identity describes a file's bytes, and no file is declared there")
+        if files[path][0] == READ_UNREADABLE:
+            raise ValueError(
+                f"disc identity {path!r}: an unreadable file states no identity — its bytes are what cannot be "
+                "read, so a real one answers 'unreadable' first"
+            )
+        if not disc_suffix_read(path):
+            raise ValueError(
+                f"disc identity {path!r}: no reader opens this suffix, so the path answers 'format-not-read' "
+                "whatever is declared"
+            )
+        if isinstance(spec, str):
+            if spec not in _FIXTURE_DISC_STATES:
+                raise ValueError(f"disc identity {path!r}: a state must be one of {_FIXTURE_DISC_STATES}, got {spec!r}")
+            validated[path] = spec
+            continue
+        validated[path] = _fixture_disc_identity(path, spec)
+    return validated
+
+
+def _fixture_disc_identity(path: str, spec: Mapping[str, object]) -> psx_disc.DiscIdentity:
+    """The four declared facts, as the reader would hold them.
+
+    ``license`` is at most :data:`atlas.psx_disc.LICENSE_LENGTH` characters,
+    one byte each, padded with NUL to that length — a byte no rule reads as
+    part of a string. ``system_cnf`` is the file's text or ``null``, and the
+    sector Beetle reads is that text cut or NUL-padded to one sector: the
+    padding a mastered disc carries after a file's last byte.
+    """
+    if set(spec) != set(_FIXTURE_DISC_FIELDS):
+        raise ValueError(f"disc identity {path!r}: expected a state or an object with exactly {_FIXTURE_DISC_FIELDS}, got {spec!r}")
+    license_text, system_cnf = spec["license"], spec["system_cnf"]
+    if not isinstance(license_text, str) or (system_cnf is not None and not isinstance(system_cnf, str)):
+        raise ValueError(f"disc identity {path!r}: license is a string and system_cnf a string or null")
+    for key in ("boot_found", "edc_valid"):
+        if not isinstance(spec[key], bool):
+            raise ValueError(f"disc identity {path!r}: {key} must be a boolean, got {spec[key]!r}")
+    try:
+        license_bytes = license_text.encode("latin-1")
+        cnf_bytes = None if system_cnf is None else system_cnf.encode("latin-1")
+    except UnicodeEncodeError as error:
+        raise ValueError(f"disc identity {path!r}: text must be one byte per character (latin-1)") from error
+    if len(license_bytes) > psx_disc.LICENSE_LENGTH:
+        raise ValueError(f"disc identity {path!r}: license is at most the {psx_disc.LICENSE_LENGTH} bytes read")
+    sector = None if cnf_bytes is None else cnf_bytes[: psx_disc.USER_DATA_SIZE].ljust(psx_disc.USER_DATA_SIZE, b"\x00")
+    return psx_disc.DiscIdentity(
+        license=license_bytes.ljust(psx_disc.LICENSE_LENGTH, b"\x00"),
+        system_cnf=cnf_bytes,
+        system_cnf_sector=sector,
+        boot_found=bool(spec["boot_found"]),
+        edc_valid=bool(spec["edc_valid"]),
+    )
+
+
 # The states a fixture archive may declare short of a member list: what
 # RealMachine can report about a file it opened. "missing" is not among them —
 # an absent archive is modeled by not declaring the file.
@@ -2294,10 +2446,11 @@ class FixtureMachine:
     would fail where nothing is there, so it reads as a binary nothing could
     be loaded from, and everywhere else the loader refuses it, because a
     fixture's files are text and blobs and never a library a loader opens.
-    ``appimages``, ``appimage_stamps``, ``ps2_bios_headers``, ``archives``
-    and ``whdload_slaves`` model five content reads at the seam rather than as
-    bytes — see :meth:`read_appimage_text`, :meth:`read_appimage_stamp`,
-    :meth:`read_ps2_bios_header`, :meth:`list_archive` and
+    ``appimages``, ``appimage_stamps``, ``ps2_bios_headers``,
+    ``disc_identities``, ``archives`` and ``whdload_slaves`` model six content
+    reads at the seam rather than as bytes — see :meth:`read_appimage_text`,
+    :meth:`read_appimage_stamp`, :meth:`read_ps2_bios_header`,
+    :meth:`read_disc_identity`, :meth:`list_archive` and
     :meth:`read_whdload_slave`. The last two are a
     pair: ``archives`` maps an archive's path to its member list (or to
     ``"unreadable"`` / ``"not-archive"``), and ``whdload_slaves`` maps the
@@ -2353,6 +2506,7 @@ class FixtureMachine:
         appimages: Mapping[str, Mapping[str, object] | str] | None = None,
         appimage_stamps: Mapping[str, object] | None = None,
         ps2_bios_headers: Mapping[str, Mapping[str, object] | str] | None = None,
+        disc_identities: Mapping[str, Mapping[str, object] | str] | None = None,
         archives: Mapping[str, object] | None = None,
         whdload_slaves: Mapping[str, object] | None = None,
     ) -> None:
@@ -2362,6 +2516,7 @@ class FixtureMachine:
         self._appimages = _validate_fixture_appimages(appimages or {})
         self._appimage_stamps = _validate_fixture_appimage_stamps(appimage_stamps or {}, self._appimages)
         self._ps2_bios_headers = _validate_fixture_ps2_bios_headers(ps2_bios_headers or {}, self._files)
+        self._disc_identities = _validate_fixture_disc_identities(disc_identities or {}, self._files)
         self._inaccessible = set(inaccessible or ())
         self._unlistable = set(unlistable or ())
         _refuse_both_unreadable_lists(self._inaccessible, self._unlistable)
@@ -2538,6 +2693,37 @@ class FixtureMachine:
         if resolved in self._dirs or self._files.get(resolved, (READ_MISSING, None))[0] == READ_UNREADABLE:
             return Ps2BiosHeaderResult(PS2_BIOS_UNREADABLE)
         return Ps2BiosHeaderResult(PS2_BIOS_MISSING)
+
+    def read_disc_identity(self, path: str) -> DiscIdentityResult:
+        """The modeled disc identity read — the four facts in, the same outcomes RealMachine reports.
+
+        Modeled beside ``files`` for the reason ``ps2_bios_headers`` is: what
+        the real read needs is a disc image, which a fixture must not carry. The
+        path is judged in RealMachine's order: one that cannot be looked at
+        answers ``unreadable``, one that is not there ``missing``, a directory
+        or an unreadable file ``unreadable``, and then the suffix decides
+        whether any reader opens it (``format-not-read`` where none does). A
+        path declared in ``disc_identities`` answers its identity or its state;
+        a declared file with no entry answers ``missing`` — answering
+        ``not-a-disc`` instead would let a vector that forgot the key prove a
+        region nobody modeled.
+        """
+        if self._is_inaccessible(path):
+            return DiscIdentityResult(DISC_UNREADABLE)
+        resolved = self._resolve(path).path
+        if resolved is None:
+            return DiscIdentityResult(DISC_MISSING)
+        if resolved in self._dirs or self._files.get(resolved, (READ_MISSING, None))[0] == READ_UNREADABLE:
+            return DiscIdentityResult(DISC_UNREADABLE)
+        if not disc_suffix_read(resolved):
+            return DiscIdentityResult(DISC_FORMAT_NOT_READ)
+        spec = self._disc_identities.get(resolved)
+        if isinstance(spec, str):
+            status: DiscIdentityStatus = spec  # type: ignore[assignment]  # validated at construction
+            return DiscIdentityResult(status)
+        if spec is not None:
+            return DiscIdentityResult(DISC_OK, spec)
+        return DiscIdentityResult(DISC_MISSING)
 
     def list_archive(self, path: str) -> ArchiveListResult:
         """The modeled container listing — the same one rule, over data instead of bytes.

@@ -44,7 +44,9 @@ from .placement import (
     SUBDIR_TEMPLATE_HOLES,
     TEMPLATE_ROM_STEM,
     TEMPLATE_SAVE_ID,
+    SizeFact,
 )
+from .save_memory import MEMORY_TYPE_EXTENSIONS
 
 # Packaged-data schema versions. The loaders are strict: unknown schema or
 # malformed entries raise instead of coercing — a broken build must fail
@@ -270,6 +272,26 @@ class SaveGroup:
     unnamed: str | None = None
     root: str | None = None
     save_id: SaveIdFill | None = None
+    frontend: FrontendFile | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FrontendFile:
+    """A card group's file that RetroArch writes itself, through one of the core's memory ids.
+
+    A deviating core can still hand its save to the frontend: PCSX-ReARMed's
+    first card and Genesis Plus GX's cartridge SRAM reach RetroArch through
+    ``RETRO_MEMORY_SAVE_RAM`` and are written as the standard ``.srm``. The
+    card says so here, with the ``memory`` id and the ``size`` the core reports
+    for it, because both are facts about the frontend's write: the file is
+    exactly as long as that report (``save.c:645-656`` at RetroArch a79435a),
+    and RetroArch's own ``save_file_compression`` applies to it. The loader
+    holds the group to the one name the frontend gives that id, so the field
+    cannot be attached to a file the core writes itself.
+    """
+
+    memory: str
+    size: SizeFact
 
 
 @dataclass(frozen=True, slots=True)
@@ -829,6 +851,43 @@ def _file_list_scope(mode: Any, files: Any, where: str) -> _FileListScope:
     return _FileListScope(established_for, note, citation)
 
 
+def _frontend_file(value: object, names: tuple[str, ...] | None, where: str) -> FrontendFile | None:
+    """A group's ``written_by_frontend`` block, held to the one name RetroArch gives its id."""
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != {"memory", "size"}:
+        raise ValueError(f"{where}: written_by_frontend expects {{'memory': …, 'size': …}}, got {value!r}")
+    memory = _expect_str(value["memory"], f"{where}: written_by_frontend.memory")
+    extension = MEMORY_TYPE_EXTENSIONS.get(memory)
+    if extension is None:
+        raise ValueError(
+            f"{where}: written_by_frontend.memory must be one of {sorted(MEMORY_TYPE_EXTENSIONS)}, "
+            f"got {memory!r}"
+        )
+    if names != (f"{TEMPLATE_ROM_STEM}{extension}",):
+        # RetroArch names the file after the content and the id, and nothing
+        # else; a group naming anything more is a file the core writes itself.
+        raise ValueError(
+            f"{where}: a group RetroArch writes through {memory} holds exactly "
+            f"{TEMPLATE_ROM_STEM}{extension}, got {names!r}"
+        )
+    size = value["size"]
+    if not isinstance(size, dict) or not {"fixed", "citation"} <= set(size) <= {"fixed", "citation", "fill"}:
+        raise ValueError(
+            f"{where}: written_by_frontend.size expects {{'fixed': …, 'citation': …}} with an "
+            f"optional 'fill', got {size!r}"
+        )
+    try:
+        fact = SizeFact(
+            fixed=size["fixed"],
+            citation=_expect_str(size["citation"], f"{where}: written_by_frontend.size.citation"),
+            fill=size.get("fill"),
+        )
+    except ValueError as error:
+        raise ValueError(f"{where}: written_by_frontend.size: {error}") from None
+    return FrontendFile(memory=memory, size=fact)
+
+
 def _save_group(mode: Any, where: str) -> SaveGroup:
     """One group of a mode — its directory, its files, and what they are."""
     if not isinstance(mode, dict):
@@ -883,6 +942,7 @@ def _save_group(mode: Any, where: str) -> SaveGroup:
         files_citation=scope.citation,
         unnamed=unnamed,
         save_id=_save_id_fill(mode.get("save_id"), names, where),
+        frontend=_frontend_file(mode.get("written_by_frontend"), names, where),
     )
 
 

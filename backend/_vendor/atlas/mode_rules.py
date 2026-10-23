@@ -24,7 +24,7 @@ live value, and where to change it.
 from __future__ import annotations
 
 import posixpath
-from dataclasses import dataclass, field, replace as _dc_replace
+from dataclasses import dataclass, replace as _dc_replace
 from types import MappingProxyType
 from typing import Callable, Mapping, cast
 
@@ -161,9 +161,7 @@ class RuleReading:
 
 
 # What a rule fills no template with — the state of every mode whose names
-# follow from the card alone. It reaches ModeChoice through a factory rather
-# than as a bare default: a dataclass rejects a default whose class is not
-# hashable, and mappingproxy became hashable only in 3.12.
+# follow from the card alone.
 _NO_FILLS: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
 
@@ -193,7 +191,7 @@ class ModeChoice:
     alternatives: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = ()
     caveats: tuple[Caveat, ...] = ()
     readings: tuple[OptionReading, ...] = ()
-    fills: Mapping[str, tuple[str, ...]] = field(default_factory=lambda: _NO_FILLS)
+    fills: Mapping[str, tuple[str, ...]] = _NO_FILLS
 
 
 def _value_unestablished(core: str, option_key: str) -> Caveat:

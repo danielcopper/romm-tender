@@ -60,7 +60,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Iterable, Literal, Mapping, Sequence, TypeAlias, TypeVar
+from typing import Iterable, Literal, Mapping, Sequence, TypeVar
 
 from .find_rules import (
     CAVEAT_FIND_RULES_UNREADABLE,
@@ -369,10 +369,10 @@ def _freeze(mapping: Mapping[str, _FrozenValue]) -> Mapping[str, _FrozenValue]:
 # contractual, because it is the emitter's stated order. The mapping is what a
 # list cannot be read out of step with: where two facts are said about each of
 # several files, each is keyed by the file rather than indexed beside it.
-DataValue: TypeAlias = "str | Sequence[str] | Mapping[str, str]"
+DataValue = str | Sequence[str] | Mapping[str, str]
 # The same values once a frozen dataclass holds them: sequences are tuples and
 # mappings are read-only.
-FrozenDataValue: TypeAlias = "str | tuple[str, ...] | Mapping[str, str]"
+type FrozenDataValue = str | tuple[str, ...] | Mapping[str, str]
 
 
 def _frozen_value(value: "str | Sequence[str] | Mapping[str, str]") -> "FrozenDataValue":
@@ -697,6 +697,27 @@ CAVEAT_SAVESTATE_INSIDE_IMAGE = "savestate-inside-image"
 # still travels, with value "none": the option readings and alternatives in
 # it are how a caller sees which switch to flip to make saves exist again.
 CAVEAT_SAVE_WRITES_DISCARDED = "save-writes-discarded"
+# RetroArch compresses the save files it writes itself: ``save_file_compression``
+# is on, so the ``.srm``/``.rtc`` it writes through a core's memory ids goes out
+# as an RZIP stream (``save.c:645-656`` at RetroArch a79435a; the key is
+# ``settings_def_saving.h:98-99``, default false at ``config.def.h:1516``). A
+# compressed stream's length follows its content, so every group this answer
+# states for such a file carries ``size_fixed`` false whatever the core
+# reports. One per answer that holds such a group; ``data`` names the ``key``,
+# the cfg ``layer`` whose read stands and its ``file`` — the triple
+# ``appended-config-overridden`` carries, because the remedy is the same edit.
+CAVEAT_SAVE_FILES_COMPRESSED = "save-files-compressed"
+# A file whose ``size_fixed`` is true may still be written longer or shorter by
+# a trailing run of one fill byte, so its length is compared without that run.
+# Genesis Plus GX reports its SRAM only up to the last byte that is not
+# ``0xff``; mGBA reports a Game Boy Advance cartridge's save as 128 KiB of
+# ``0xff`` until the game first touches it, and then the size of the save type
+# it detected. A file shorter than its content once the fill is stripped has
+# still lost content — for mGBA, a session that detects a smaller save type
+# than the file holds writes it so, and that is the write a fixed size lets a
+# guard catch. One per affected file; ``data`` carries the ``file`` as the answer
+# spells it, the ``fill`` byte (:data:`SIZE_FILLS`) and the ``citation``.
+CAVEAT_SIZE_FIXED_EXCEPT_TRAILING_FILL = "size-fixed-except-trailing-fill"
 # A rule card fits this core, but which of its recorded modes is in force
 # could not be established — the selection rule needed something this
 # question did not carry (hatari's write-protect story splits on whether the
@@ -762,6 +783,23 @@ REASON_EMULATOR_BUILD_UNESTABLISHED = "emulator-build-unestablished"
 # regions that group carries no option for.
 REASON_REGION_DECIDED_BY_DISC = "region-decided-by-disc"
 REASON_DATA_ROOT_DECIDED_BY_LAUNCH = "data-root-decided-by-launch"
+# A question named the game's content and its disc still decided no region,
+# so the group stays stated per region. They take the place of
+# ``region-decided-by-disc`` on that group and keep its ``regions``,
+# ``unstated``, ``dir`` and ``core_so`` / ``token``, adding ``content_path``,
+# the path the question named. ``disc-format-unread`` is an image of a format
+# atlas does not read (``disc`` names the image — the path itself, or the first
+# entry of its playlist — and ``extension`` its suffix); ``disc-unread`` is an
+# image atlas reads that did not yield a region (``disc``, and ``status`` from
+# :data:`atlas.psx_region.DISC_UNREAD_STATUSES`); ``content-unopenable`` is
+# content the emulator itself does not open (``extension``), a fact about the
+# emulator rather than about atlas's read; ``region-property-unread`` is
+# DuckStation's ``custom_properties.ini`` there and not read, which may name a
+# region the launch takes over the disc's (``path`` names the file).
+REASON_DISC_FORMAT_UNREAD = "disc-format-unread"
+REASON_DISC_UNREAD = "disc-unread"
+REASON_CONTENT_UNOPENABLE = "content-unopenable"
+REASON_REGION_PROPERTY_UNREAD = "region-property-unread"
 # What sits in an emulated slot (Dolphin's EXI devices): ``slot`` names the
 # slot letter, and ``value`` the raw configured device the card cannot read.
 # ``slot-holds-agp-device`` is the GBA cartridge adapter whose cartridge save
@@ -878,6 +916,10 @@ CORE_MODE_UNESTABLISHED_REASONS = (
     REASON_EMULATOR_BUILD_UNESTABLISHED,
     REASON_REGION_DECIDED_BY_DISC,
     REASON_DATA_ROOT_DECIDED_BY_LAUNCH,
+    REASON_DISC_FORMAT_UNREAD,
+    REASON_DISC_UNREAD,
+    REASON_CONTENT_UNOPENABLE,
+    REASON_REGION_PROPERTY_UNREAD,
     REASON_SLOT_HOLDS_AGP_DEVICE,
     REASON_SLOT_DEVICE_UNINTERPRETED,
     REASON_SESSION_OVERRIDE_SET,
@@ -1168,6 +1210,18 @@ def checked_cwd(cwd: str | None) -> str | None:
     return cwd
 
 
+def checked_content_path(content_path: str | None) -> str | None:
+    """*content_path* as a firmware question takes it: an absolute host path, or ``None`` for not given.
+
+    It names the game a launch is handed, and a relative one names nothing
+    without a working folder of its own — the caller's mistake, refused at the
+    call the way ``launch_command`` refuses it.
+    """
+    if content_path is not None and not os.path.isabs(content_path):
+        raise ValueError(f"content_path must be an absolute path, got {content_path!r}")
+    return content_path
+
+
 def cwd_templated(directory: str) -> bool:
     """Is this directory the launch's own — the ``<cwd>`` template or below it?"""
     return directory == TEMPLATE_CWD or directory.startswith(TEMPLATE_CWD + "/")
@@ -1289,6 +1343,50 @@ def _data_words(value: "DataValue") -> tuple[str, ...]:
     return tuple(value)
 
 
+# The byte a save may be padded with at its end, under
+# ``size-fixed-except-trailing-fill``'s ``data["fill"]``, spelled the way a
+# comparison strips it. Closed, because a client strips exactly the byte it is
+# told and nothing else.
+SizeFill = Literal["0xff", "0x00"]
+SIZE_FILL_FF: SizeFill = "0xff"
+"""Erased flash and unwritten SRAM: the fill a cartridge save is padded with."""
+SIZE_FILL_00: SizeFill = "0x00"
+"""Zeroed memory: the fill of a save whose emulator clears it rather than erasing it."""
+SIZE_FILLS = (SIZE_FILL_FF, SIZE_FILL_00)
+
+
+@dataclass(frozen=True, slots=True)
+class SizeFact:
+    """Whether one save file keeps its size, as world knowledge read at a pinned revision.
+
+    The packaged half of :attr:`FileGroup.size_fixed`: a save-memory record
+    states one per memory type and a rule card one per group RetroArch writes,
+    each with the citation the claim rests on. ``fill`` is the trailing byte a
+    fixed file may be written longer or shorter by (:data:`SIZE_FILLS`), and it
+    is only ever stated beside ``fixed`` true — a file whose size is not fixed
+    has no exception to state.
+    """
+
+    fixed: bool | None
+    citation: str
+    fill: str | None = None
+
+    def __post_init__(self) -> None:
+        # Typed, and still checked: the loaders hand over JSON, where a string
+        # "false" would otherwise pass for a claim and read as true.
+        if self.fixed is not None and type(self.fixed) is not bool:
+            raise ValueError(f"SizeFact: fixed must be true, false or null, got {self.fixed!r}")
+        if not self.citation:
+            raise ValueError("SizeFact: a size claim carries the citation it rests on")
+        if self.fill is not None and self.fill not in SIZE_FILLS:
+            raise ValueError(f"SizeFact: fill must be one of {SIZE_FILLS}, got {self.fill!r}")
+        if self.fill is not None and self.fixed is not True:
+            raise ValueError(
+                "SizeFact: a trailing fill is an exception to a fixed size, so it rides only on "
+                "fixed true"
+            )
+
+
 @dataclass(frozen=True, slots=True)
 class FileGroup:
     """One directory's worth of a save, with what it is and whom it belongs to.
@@ -1347,8 +1445,25 @@ class FileGroup:
     client decides by, and :data:`ROLE_UNKNOWN` where nothing atlas read says what the
     file is.
     """
+    size_fixed: bool | None = None
+    """Whether each file of this group keeps its size from one session to the next.
+
+    ``true`` where the save hardware or the format fixes it, so the file never
+    legitimately loses content — a file that may still grow or shrink by a
+    trailing run of fill carries ``size-fixed-except-trailing-fill`` beside it.
+    ``false`` where the size follows the content: a folder save, whose files the
+    game writes at whatever length it likes, and every file RetroArch writes
+    while ``save-files-compressed`` says it compresses them. ``null`` where it
+    was not established — never a claim that the size varies.
+    """
 
     def __post_init__(self) -> None:
+        # Typed, and still checked: a truthy string or a 1 would otherwise be
+        # serialized as a claim nobody made.
+        if self.size_fixed is not None and type(self.size_fixed) is not bool:
+            raise ValueError(
+                f"FileGroup: size_fixed must be true, false or None, got {self.size_fixed!r}"
+            )
         if self.granularity not in GRANULARITIES:
             raise ValueError(
                 f"FileGroup: granularity must be one of {GRANULARITIES}, got {self.granularity!r}"
@@ -1896,6 +2011,28 @@ SETTINGS_FILE_NOT_READ_CODES = (
     UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
 )
 
+# The console regions a PlayStation emulator decides a launch into — the words
+# the region-scoped requirements carry, and the value of a group's ``region``
+# where a question named the game's content (atlas.psx_region decides it).
+ConsoleRegion = Literal["ntsc-u", "ntsc-j", "pal"]
+REGION_NTSC_U: ConsoleRegion = "ntsc-u"
+"""The North American console — the region all three emulators boot where the disc places none."""
+REGION_NTSC_J: ConsoleRegion = "ntsc-j"
+"""The Japanese console."""
+REGION_PAL: ConsoleRegion = "pal"
+"""The European console."""
+DISC_REGIONS = (REGION_NTSC_U, REGION_NTSC_J, REGION_PAL)
+
+# DuckStation takes a game's console region from a per-path ``Region`` entry
+# of its ``custom_properties.ini`` before it reads the disc — but only where
+# its game list holds that path (game_list.cpp:1602-1608 at
+# RetroDECK/Duckstation@1f6de046b), and the game list is a binary cache atlas
+# does not read. So a region taken from that file is stated with this beside
+# it, carrying ``token``, ``content_path`` and the ``region`` the entry names.
+# A file that is there and could not be read is not this: no region is taken
+# from it, and ``region-property-unread`` says so.
+CAVEAT_REGION_PROPERTY_UNCONFIRMED = "region-property-unconfirmed"
+
 # Every file a BIOS search kept and hashed, keyed by path, beside what the
 # emulator's own table made of each one's bytes. Built by
 # :func:`atlas.firmware._duckstation_candidate_listing`, one module over with
@@ -1946,12 +2083,15 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         # keyed by its path, so the vocabulary closes the mapped words rather
         # than the mapping as a whole.
         (CAVEAT_FIRMWARE_SEARCH_CANDIDATES, "readings"): FIRMWARE_SEARCH_READINGS,
+        (CAVEAT_REGION_PROPERTY_UNCONFIRMED, "region"): DISC_REGIONS,
         # Which find-rules layer the frontend could not have read: the one the
         # verdict hangs on, or the custom one ES-DE skips beside it.
         (CAVEAT_FIND_RULES_UNREADABLE, "layer"): FIND_RULES_LAYERS,
         (CAVEAT_INVALID_SAVE_DIRECTORY, "layer"): CFG_LAYER_KINDS,
         # Only an override can win a key an appended file sets.
         (CAVEAT_APPENDED_CONFIG_OVERRIDDEN, "layer"): CFG_LAYER_OVERRIDE_KINDS,
+        (CAVEAT_SAVE_FILES_COMPRESSED, "layer"): CFG_LAYER_KINDS,
+        (CAVEAT_SIZE_FIXED_EXCEPT_TRAILING_FILL, "fill"): SIZE_FILLS,
         # Which reading of a launch command made it more than plain words.
         (CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX, "construct"): SHELL_CONSTRUCTS,
         # Which bound atlas puts on taking one command apart was reached.

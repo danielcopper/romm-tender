@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "generated_from": "stenzek/duckstation src/core/bios.cpp and src/core/bios.h",
-    "revision": "64655818e",
-    "generated_at": "2026-08-22",
+    "generated_from": "RetroDECK/Duckstation src/core/bios.cpp and src/core/bios.h",
+    "revision": "1f6de046b",
+    "generated_at": "2026-10-22",
     "images": 104
   },
   "sizes": {

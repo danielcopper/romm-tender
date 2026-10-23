@@ -231,7 +231,7 @@ class BiosTable:
         """Which candidate a console of *region* would boot, and what ties with it.
 
         Three tests in upstream's order (bios.cpp:387-395 at
-        stenzek/duckstation@64655818e): a known image is never displaced by an
+        RetroDECK/Duckstation@1f6de046b): a known image is never displaced by an
         unknown one, a region match is never displaced by a mismatch, and
         between two known images the lower ``priority`` number holds. A table
         that pins no priority leaves every row at 0, so for it the third test
@@ -271,7 +271,7 @@ class BiosTable:
     def matches_region(image: BiosImage, region: str) -> bool:
         """``any`` on either side matches — the same test in both forks.
 
-        ``IsValidBIOSForRegion`` at bios.cpp:228-231 (stenzek/duckstation@64655818e)
+        ``IsValidBIOSForRegion`` at bios.cpp:228-231 (RetroDECK/Duckstation@1f6de046b)
         and ``IsValidHashForRegion`` at bios.cpp:118-125 (libretro/swanstation@4d309c05f),
         which reads it off the row the hash found rather than off a row handed in.
         """

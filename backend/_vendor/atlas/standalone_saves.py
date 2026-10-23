@@ -36,17 +36,20 @@ class StandaloneBuild:
     ``release`` is the name the deploy writes for the build it ships — the
     release tag RetroDECK's component recipe writes as ``component_version`` —
     which is what a resolver whose rule turns on the build reads to pick this
-    one. ``revision`` is the short commit hash the deployed binary spells in the
-    version string its ``--version`` prints, so a deployed build can be held
-    against the revision the card was written from
-    (``tests/test_standalone_build_tripwire.py``). Where that string is a
-    constant of the build, as Vita3K's is, it names the commit that build was
-    configured at and the check needs nothing run. A build that moved past
-    every pin fails it rather than letting the card describe source the
-    machine no longer runs. ``citation`` is how the release was tied to the
-    commit, and ``provenance`` the sentence an answer read under this build
-    carries in its ``sources`` — the card-level one being what an answer
-    carries where no pinned build applied.
+    one. ``revision`` is the short commit hash the card's citations were read
+    at. ``stamp`` is the identity the build itself carries: the whole string
+    constant the deployed binary holds, NUL-delimited, which
+    ``tests/test_standalone_build_tripwire.py`` searches the binary for so a
+    deployed build is held against the revision the card was written from
+    with nothing run. What that constant says is the emulator's own choice —
+    Vita3K's names the commit in its version string, DuckStation's legacy build
+    carries no commit hash at all and states the commit's date instead — so
+    the stamp is stated beside the revision rather than derived from it. A
+    build that moved past every pin fails the search rather than letting the
+    card describe source the machine no longer runs. ``citation`` is how the
+    release and the stamp were tied to the commit, and ``provenance`` the
+    sentence an answer read under this build carries in its ``sources`` — the
+    card-level one being what an answer carries where no pinned build applied.
 
     A sibling of :class:`atlas.core_firmware.CoreFirmwareBuild` rather than that
     class: the two pin the same kind of fact and read it through different
@@ -56,6 +59,7 @@ class StandaloneBuild:
 
     release: str
     revision: str
+    stamp: str
     citation: str
     provenance: str
 
@@ -154,9 +158,10 @@ def _stated_pin(value: Any, where: str) -> str:
     """A string the pin can be held against — the blank one refused too.
 
     Stricter than the ``_expect_str`` the rest of this file shares, and only
-    here: a revision of spaces is a substring of every version string there
-    is, so a card pinning one would pass the tripwire against any build at
-    all — a pin that reads as checked and checks nothing, which is worse than
+    here: a stamp of spaces is a run any binary may hold between two NULs, so
+    a card pinning one could pass the tripwire against a build it never
+    described, and a revision of spaces is a substring of every citation there
+    is — a pin that reads as checked and checks nothing, which is worse than
     the absent pin it was meant to replace. A citation of spaces is one nobody
     can follow, the same reason the core-firmware table refuses it.
     """
@@ -166,11 +171,11 @@ def _stated_pin(value: Any, where: str) -> str:
     return stated
 
 
-_BUILD_KEYS = frozenset({"release", "revision", "citation", "provenance"})
+_BUILD_KEYS = frozenset({"release", "revision", "stamp", "citation", "provenance"})
 
 
 def _build(where: str, entry: Any) -> StandaloneBuild:
-    """One pinned build — exactly release, revision, citation and provenance.
+    """One pinned build — exactly release, revision, stamp, citation and provenance.
 
     A block of some other shape is refused by name rather than read for what
     can be found in it: a misspelled key would otherwise read as a build with
@@ -179,12 +184,13 @@ def _build(where: str, entry: Any) -> StandaloneBuild:
     """
     if not isinstance(entry, dict) or frozenset(entry) != _BUILD_KEYS:
         raise ValueError(
-            f"{where}: a build must state exactly release/revision/citation/provenance, "
+            f"{where}: a build must state exactly release/revision/stamp/citation/provenance, "
             f"got {entry!r}"
         )
     return StandaloneBuild(
         release=_stated_pin(entry["release"], f"{where}: build.release"),
         revision=_stated_pin(entry["revision"], f"{where}: build.revision"),
+        stamp=_stated_pin(entry["stamp"], f"{where}: build.stamp"),
         citation=_stated_pin(entry["citation"], f"{where}: build.citation"),
         provenance=_stated_pin(entry["provenance"], f"{where}: build.provenance"),
     )
@@ -197,14 +203,15 @@ def _builds(where: str, entry: Any) -> tuple[StandaloneBuild, ...]:
     set is what keeps deliberate. An empty list is refused rather than read as
     that absence, because it states a pin and pins nothing. Two builds under
     one release would leave the resolver two rules for one deploy, and two
-    under one revision would be one build stated twice, so both are refused.
+    under one revision or one stamp would be one build stated twice — and two
+    builds the search cannot tell apart — so all three are refused.
     """
     if entry is None:
         return ()
     if not isinstance(entry, list) or not entry:
         raise ValueError(f"{where}: builds must be a non-empty list, got {entry!r}")
     builds = tuple(_build(where, build) for build in entry)
-    for field_name in ("release", "revision"):
+    for field_name in ("release", "revision", "stamp"):
         stated = [getattr(build, field_name) for build in builds]
         if len(set(stated)) != len(stated):
             raise ValueError(f"{where}: builds state one {field_name} twice: {stated!r}")

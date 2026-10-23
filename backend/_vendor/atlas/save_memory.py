@@ -39,6 +39,15 @@ hold it. What a record states is which files can occur at all: the candidate
 set a caller has to look for, which is exactly the question a save-syncing
 client asks and exactly what ``file_set`` was shaped to carry.
 
+**Each file a record names carries whether its size is fixed**, per memory
+type and with its own citation (:class:`~atlas.placement.SizeFact`). RetroArch
+writes exactly as many bytes as the core reports for the id (``save.c:645-656``
+at RetroArch a79435a), so the claim is about that report: a constant, a
+property of the cartridge read once at load, or a length that moves with what
+the game has written. It is read at the same revision as ``memory_types`` and
+pinned by the same ``verified_core``, so the drift tripwire that guards one
+guards the other.
+
 Facts in data, interpretation in code: this module only loads and indexes; the
 resolver in :mod:`atlas.installations` decides when a record applies.
 """
@@ -51,13 +60,13 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from ._data import packaged_text
-from .placement import TEMPLATE_ROM_STEM
+from .placement import SIZE_FILLS, TEMPLATE_ROM_STEM, SizeFact
 from .systems import known_systems
 
 # Packaged-data schema version. The loader is strict for the same reason every
 # other packaged-data loader here is: a malformed build fails loudly instead of
 # resolving with knowledge nobody can place.
-SAVE_MEMORY_SCHEMA = 1
+SAVE_MEMORY_SCHEMA = 2
 
 # How a record's ``.so`` is spelled — the record key plus this suffix, exactly
 # as :data:`atlas.oddities.SO_SUFFIX` and :data:`atlas.textures.SO_SUFFIX` spell
@@ -148,6 +157,17 @@ class SystemMemory:
     memory_types: tuple[str, ...]
     verified_core: str
     citation: str
+    sizes: Mapping[str, SizeFact] = MappingProxyType({})
+    """Whether each file this entry names keeps its size, keyed by memory type — every
+    type in ``memory_types`` or none of them, and none is a size nobody read."""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "sizes", MappingProxyType(dict(self.sizes)))
+        if self.sizes and set(self.sizes) != set(self.memory_types):
+            raise ValueError(
+                f"SystemMemory: sizes must state exactly the memory types filled "
+                f"{list(self.memory_types)}, got {sorted(self.sizes)}"
+            )
 
     @property
     def file_templates(self) -> tuple[str, ...]:
@@ -229,16 +249,74 @@ class SaveMemoryRecord:
             return None
         return next(iter(self.systems.values()), None)
 
+    def size(self, system: str | None, memory_type: str) -> SizeFact | None:
+        """Whether the file of *memory_type* keeps its size on *system*, or ``None`` unstated.
+
+        For an unnamed system the systems the record covers have to agree on
+        the claim — ``fixed`` and its ``fill`` — the way :meth:`unanimous`
+        asks them to agree on the files, and the first one's citation speaks
+        for them. Where they disagree the answer is not established rather
+        than a pick: PicoDrive's cartridge saves are fixed and its Mega CD
+        backup RAM follows a core option, so a save asked about without
+        naming which of the two it is has no size atlas can state.
+        """
+        if system is not None:
+            entry = self.systems.get(system)
+            return entry.sizes.get(memory_type) if entry is not None else None
+        facts = [entry.sizes.get(memory_type) for entry in self.systems.values()]
+        if any(fact is None for fact in facts):
+            return None
+        claims = {(fact.fixed, fact.fill) for fact in facts if fact is not None}
+        return facts[0] if len(claims) == 1 else None
+
+
+def _size_fact(value: object, where: str) -> SizeFact:
+    """One file's size claim — ``fixed`` as a JSON boolean or null, never coerced."""
+    if not isinstance(value, dict) or not {"fixed", "citation"} <= set(value) <= {
+        "fixed",
+        "citation",
+        "fill",
+    }:
+        raise ValueError(
+            f"{where}: expected {{'fixed': …, 'citation': …}} with an optional 'fill', got {value!r}"
+        )
+    fixed = value["fixed"]
+    if fixed is not None and not isinstance(fixed, bool):
+        # bool("false") is True in Python — never coerce this claim.
+        raise ValueError(f"{where}.fixed: expected true, false or null, got {fixed!r}")
+    fill = value.get("fill")
+    if fill is not None and fill not in SIZE_FILLS:
+        raise ValueError(f"{where}.fill: expected one of {list(SIZE_FILLS)}, got {fill!r}")
+    if fill is not None and fixed is not True:
+        raise ValueError(f"{where}.fill: a trailing fill is an exception to a fixed size")
+    return SizeFact(
+        fixed=fixed, citation=_expect_str(value.get("citation"), f"{where}.citation"), fill=fill
+    )
+
 
 def _system_memory(value: object, where: str) -> SystemMemory:
-    if not isinstance(value, dict) or set(value) != {"memory_types", "verified_core", "citation"}:
+    keys = {"memory_types", "verified_core", "citation"}
+    if not isinstance(value, dict) or not keys <= set(value) <= keys | {"size"}:
         raise ValueError(
-            f"{where}: expected {{'memory_types': …, 'verified_core': …, 'citation': …}}, got {value!r}"
+            f"{where}: expected {{'memory_types': …, 'verified_core': …, 'citation': …, 'size': …}}, "
+            f"got {value!r}"
+        )
+    memory_types = _memory_types(value.get("memory_types"), f"{where}.memory_types")
+    # Absent is "nobody read the size yet", which answers null; present, it
+    # covers every file the entry names — half a block would leave one file
+    # null for a reason nobody wrote down — and none it does not, which would
+    # be evidence for a file never written.
+    sizes = value.get("size", {})
+    if not isinstance(sizes, dict) or (sizes and set(sizes) != set(memory_types)):
+        raise ValueError(
+            f"{where}.size: expected one claim per memory type filled {list(memory_types)}, "
+            f"got {sizes!r}"
         )
     return SystemMemory(
-        memory_types=_memory_types(value.get("memory_types"), f"{where}.memory_types"),
+        memory_types=memory_types,
         verified_core=_expect_str(value.get("verified_core"), f"{where}.verified_core"),
         citation=_expect_str(value.get("citation"), f"{where}.citation"),
+        sizes={name: _size_fact(fact, f"{where}.size[{name!r}]") for name, fact in sizes.items()},
     )
 
 
