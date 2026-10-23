@@ -2202,10 +2202,10 @@ describe("BiosTab", () => {
 
     it("moves between the two columns by where they stand, and up and down inside each", () => {
       // Steam's nav is not in happy-dom: what is pinned is the flow each level
-      // declares — geometric between the columns, so a step goes to the column
-      // that stands in its direction (beside on a desktop, below on the Deck),
-      // and a column flow inside each, so down at a column's end leaves it only
-      // where the other column stands below.
+      // declares — grid between the columns, which steps left and right to the
+      // column beside and down to one wrapped below, entering a column sideways
+      // on the stop it last had focus on; and a column flow inside each, so
+      // down at a column's end leaves it only where the other stands below.
       const focusable = vi.spyOn(deckyUi, "Focusable");
       const { container, getByTestId } = renderPsx();
       const flows = new Set(
@@ -2215,7 +2215,7 @@ describe("BiosTab", () => {
           .map((props) => `${props.className}:${props["flow-children"]}`),
       );
       focusable.mockRestore();
-      expect([...flows]).toEqual(["romm-bios-columns:geometric", "romm-bios-column:column"]);
+      expect([...flows]).toEqual(["romm-bios-columns:grid", "romm-bios-column:column"]);
       expect(container.querySelectorAll(".romm-bios-column")).toHaveLength(2);
       const columns = container.querySelector<HTMLElement>(".romm-bios-columns");
       expect(columns?.contains(getByTestId("bios-columns"))).toBe(true);
@@ -2225,6 +2225,21 @@ describe("BiosTab", () => {
       expect(main?.textContent).toBe(getByTestId("bios-main-column").textContent);
       expect(library?.textContent).toBe(getByTestId("bios-library-column").textContent);
       expect(library?.textContent).not.toBe("");
+    });
+
+    it("stretches both columns, and their focus groups, to the row's height", () => {
+      // Grid flow steps sideways only to a column overlapping the stop focus is
+      // on, and down only to one clear of it: side by side, the two must
+      // overlap from top to bottom, or a step down at the shorter one's end
+      // would go sideways and a step sideways from below it would go nowhere.
+      const { getByTestId } = renderPsx();
+      expect(getByTestId("bios-columns").style.alignItems).toBe("stretch");
+      for (const id of ["bios-main-column", "bios-library-column"]) {
+        const column = getByTestId(id);
+        expect(column.style.display).toBe("flex");
+        expect(column.style.flexDirection).toBe("column");
+        expect(column.querySelector<HTMLElement>(".romm-bios-column")?.style.flexGrow).toBe("1");
+      }
     });
 
     it("draws a row stop in the row's own text colour, which its focus rule keeps", () => {

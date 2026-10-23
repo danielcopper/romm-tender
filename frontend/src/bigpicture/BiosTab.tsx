@@ -243,6 +243,9 @@ function buildGroupBlock(bios: BiosStatus): ReactElement | null {
  */
 const MAIN_COLUMN = "760px";
 const SIDE_COLUMN = "400px";
+/** A column, and the focus group inside it filling the column's whole height. */
+const COLUMN_BOX = { display: "flex", flexDirection: "column", minWidth: 0 } as const;
+const COLUMN_FILL = { flexGrow: 1 } as const;
 
 /**
  * Steam's own scroll to a focused element does not centre it reliably on the
@@ -310,17 +313,22 @@ export const BiosTab: FC<BiosTabProps> = ({
   // buttons inside a button. Everything in the left column stands in the
   // pane's gutter, so the sentence, the selector and the table line up.
   //
-  // Up and down stay inside a column, and the step between the two columns is
-  // taken by where they stand rather than by their order: beside each other it
-  // is left and right, and where the right column has wrapped below the left
-  // it is down — Steam's geometric flow decides from the laid-out boxes, so
-  // nothing here measures whether they wrapped.
+  // Up and down stay inside a column. Between the columns Steam's grid flow
+  // steps by where they stand, so nothing here measures whether they wrapped:
+  // left and right to the column beside, down to the one that has wrapped
+  // below. Left and right enter a column without a position to match, so
+  // Steam enters it on the stop it last had focus on; geometric flow would
+  // hand the column the position focus left from, and it would take the stop
+  // nearest that instead. Grid flow steps left and right only to a column
+  // overlapping the stop focus is on, and down only to one clear of it, which
+  // is why the columns stretch to the row's height: side by side they always
+  // overlap.
   return (
-    <Focusable className="romm-bios-columns" flow-children="geometric">
+    <Focusable className="romm-bios-columns" flow-children="grid">
       <div
         ref={attachRoot}
         data-testid="bios-columns"
-        style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "24px 40px" }}
+        style={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", gap: "24px 40px" }}
         // The tab is drawn afresh each time it is shown again, which Steam's
         // own memory of where focus stood does not survive.
         onFocus={(e) => {
@@ -328,8 +336,8 @@ export const BiosTab: FC<BiosTabProps> = ({
           centreFocused(e);
         }}
       >
-        <div data-testid="bios-main-column" style={{ flex: `0 0 ${MAIN_COLUMN}`, maxWidth: "100%", minWidth: 0 }}>
-          <Focusable className="romm-bios-column" flow-children="column">
+        <div data-testid="bios-main-column" style={{ ...COLUMN_BOX, flex: `0 0 ${MAIN_COLUMN}`, maxWidth: "100%" }}>
+          <Focusable className="romm-bios-column" flow-children="column" style={COLUMN_FILL}>
             {section(
               "bios-core",
               null,
@@ -342,8 +350,8 @@ export const BiosTab: FC<BiosTabProps> = ({
             <BiosButtons part={part} status={status && { key: status.slug, scope: status.scope, text: status.text }} />
           </Focusable>
         </div>
-        <div data-testid="bios-library-column" style={{ flex: `1 1 ${SIDE_COLUMN}`, minWidth: 0 }}>
-          <Focusable className="romm-bios-column" flow-children="column">
+        <div data-testid="bios-library-column" style={{ ...COLUMN_BOX, flex: `1 1 ${SIDE_COLUMN}` }}>
+          <Focusable className="romm-bios-column" flow-children="column" style={COLUMN_FILL}>
             <BiosLibraryTable part={part} />
             <BiosPartLegend part={part} />
           </Focusable>
