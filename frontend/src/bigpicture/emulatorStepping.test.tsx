@@ -14,7 +14,7 @@ const Selector: FC<{ step: ((by: number) => void) | null }> = ({ step }) => {
   return null;
 };
 
-/** A node further in the scope, as the play row and the tab bar are. */
+/** A node further in the scope, as the play row and the tab row are. */
 const Inner: FC = () => (
   <Focusable data-testid="inner" onButtonDown={useTriggerHandler()}>
     <button type="button">inner</button>

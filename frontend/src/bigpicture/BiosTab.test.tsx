@@ -1637,7 +1637,7 @@ describe("BiosTab", () => {
     const tabButton = (container: HTMLElement, label: string) =>
       [...container.querySelectorAll("button")].find((b) => b.textContent === label) as HTMLElement;
 
-    it("steps with L2 and R2 from the tab bar while the BIOS tab is open", () => {
+    it("steps with L2 and R2 from the tab row while the BIOS tab is open", () => {
       const { container } = gamePage(true);
       pull(tabButton(container, "GAME INFO"), R2);
       expect(shown(container)).toBe("Kronos 2 / 2");

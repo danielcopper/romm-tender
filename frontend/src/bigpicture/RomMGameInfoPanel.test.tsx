@@ -1302,7 +1302,7 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
       expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
-      // SAVES tab now hidden in the rendered tab bar.
+      // SAVES tab now hidden in the rendered tab row.
       expect(container.textContent).not.toContain("SAVES");
     });
 
@@ -2731,7 +2731,7 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toContain("ACHIEVEMENTS");
     });
 
-    it("BIOS tab is in the tab bar the moment the page opens, before any BIOS answer", async () => {
+    it("BIOS tab is in the tab row the moment the page opens, before any BIOS answer", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1,
@@ -5836,7 +5836,7 @@ describe("RomMGameInfoPanel", () => {
         });
         await flushAsync();
 
-        // The switched-to version has save sync off, so its tab bar carries no
+        // The switched-to version has save sync off, so its tab row carries no
         // SAVES tab — the refused write is what keeps it that way.
         expect(container.textContent).not.toContain("SAVES");
       });

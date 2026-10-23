@@ -383,7 +383,7 @@ describe("ArtworkTab", () => {
   });
 
   describe("the game line as a focus stop (#2381 device test)", () => {
-    it("is no stop with RomM's game, so the first stop below the tab bar is the cover's row", async () => {
+    it("is no stop with RomM's game, so the first stop below the tab row is the cover's row", async () => {
       const { container } = await renderTab(answer(FROM_ROMM));
       expect(container.querySelector("button")).toBe(rowButton(container, "Cover"));
     });
