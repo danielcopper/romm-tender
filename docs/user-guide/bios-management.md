@@ -203,10 +203,11 @@ exist only in your RomM library are not listed.
 For each emulator the list shows that emulator's own files — nothing borrowed from another emulator, whose files are
 shown when you choose it — and not every one of them, but the ones this game gives you something to do or to know: files
 the emulator requires, the images it would start the console from (one of them per region), files you already have,
-files you can still download, and files Tender could not judge. What is left over — the emulator names it, does not
-require it, it is not met, and no page offers a download for it — is counted on one line instead, naming the emulator:
-_6 more files Flycast lists — not required for this launch, nothing to download. All files are on the platform page._
-With another emulator chosen the line names that emulator's own need instead: _not required by Kronos_.
+files you can still download, files Tender could not judge, and files you can **Replace…**. What is left over — the
+emulator names it, does not require it, it is not one of the images it could start the console from, it is not met, no
+page offers a download for it and it offers no Replace… — is counted on one line instead, naming the emulator: _6 more
+files Flycast lists — not required for this launch, nothing to download. All files are on the platform page._ With
+another emulator chosen the line names that emulator's own need instead: _not required by Kronos_.
 
 A Dreamcast is the everyday case. Flycast also emulates Naomi and AtomisWave, so it declares six arcade BIOS files
 beside the two the Dreamcast itself needs, and none of the six is anything a Dreamcast game's page could act on. The

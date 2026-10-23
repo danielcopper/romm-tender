@@ -99,6 +99,10 @@ describe("rowBelongsOnThisPage", () => {
     expect(rowBelongsOnThisPage(row({ on_server: true, library: LIBRARY_FILE }))).toBe(true);
   });
 
+  it("keeps a file that offers Replace…, though it is not required, not an option, not met and not fetchable", () => {
+    expect(rowBelongsOnThisPage(row({ replace_offered: true }))).toBe(true);
+  });
+
   it("leaves out an unmet file that is not required, not an option and not fetchable", () => {
     expect(rowBelongsOnThisPage(row())).toBe(false);
   });

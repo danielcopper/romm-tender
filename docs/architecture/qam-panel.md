@@ -1716,17 +1716,17 @@ it, for the focused platform:
   `fetched_as_required` leaves it out of `Download required`, and the store's link plan refuses it as `unreadable`) —
   and neither `bios_level` nor `required_withheld` is read anywhere among them. The predicate lives outside this file
   because the game page's BIOS tab asks it too — there it is one of the answers that earn a row a line at all, since a
-  file no page can fetch, that the launch does not require and whose verdict is not met, is nothing that page can act
-  on. What each surface DOES with the answer stays its own: the game page's rule for keeping a row is four further
-  answers wide and belongs to that page, and this one has no such rule. Two further inputs sit beside that filter and
-  are of the same two kinds rather than readiness gates: `Download required` counts the shown emulator's rows the
-  backend marks `fetch_for_required`, that emulator's own demand, and `Download all` stops at the library's own finished
-  ratio. Readiness is not an input to any of them, in any of its shapes: what the resolver could establish is the
-  EMULATOR's demand and what is fetchable is what the RomM library holds, and neither answers the other. Gating on the
-  verdict is what took the buttons off PS2, GameCube and PSP when a BIOS answer was first scoped to the emulator that
-  launches — those three launch standalone emulators the resolver holds no card for, so the verdict declines over a
-  library that still holds their files, and the pane then offered nothing to press on exactly the platforms that need
-  one.
+  file no page can fetch, that the launch does not require, that is no option of its one-of group, whose verdict is not
+  met and that offers no Replace…, is nothing that page can act on. What each surface DOES with the answer stays its
+  own: the game page's rule for keeping a row is five further answers wide and belongs to that page, and this one has no
+  such rule. Two further inputs sit beside that filter and are of the same two kinds rather than readiness gates:
+  `Download required` counts the shown emulator's rows the backend marks `fetch_for_required`, that emulator's own
+  demand, and `Download all` stops at the library's own finished ratio. Readiness is not an input to any of them, in any
+  of its shapes: what the resolver could establish is the EMULATOR's demand and what is fetchable is what the RomM
+  library holds, and neither answers the other. Gating on the verdict is what took the buttons off PS2, GameCube and PSP
+  when a BIOS answer was first scoped to the emulator that launches — those three launch standalone emulators the
+  resolver holds no card for, so the verdict declines over a library that still holds their files, and the pane then
+  offered nothing to press on exactly the platforms that need one.
 
   **A running download is said by the button that started it.** The pressed button — bulk or per-row — becomes a
   spinner, every other download button on the pane disables, and when it finishes the rows re-read. There is no

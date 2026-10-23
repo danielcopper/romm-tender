@@ -672,13 +672,14 @@ Format: **invariant** — tier — enforced by.
   On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
   out of all three folds below. **A sixth reader is the game page's BIOS tab** (`frontend/src/bigpicture/BiosTab.tsx`,
   through `frontend/src/utils/biosGamePageRows.ts`'s `rowBelongsOnThisPage`), and it is display alone in the same sense:
-  it decides whether a row gets a LINE — a file no page can fetch, that the shown emulator does not require and whose
-  verdict is not met, is nothing that page can act on — and gates no count and offers no action, so it belongs to none
-  of the three folds below either. It is asked about whichever emulator the page shows. What holds the two surfaces
-  together is that they call one predicate, `isFetchable`, rather than spelling its clauses twice: a second copy would
-  let the game page point at a download button the platform page does not offer, or leave off a row it does. What must
-  NOT be shared is the game page's rule around it — required for this launch, an option of the emulator's one-of group,
-  present, fetchable, or unjudged — which is that page's alone; the platform detail has no such rule, and a shared
+  it decides whether a row gets a LINE — a file no page can fetch, that the shown emulator does not require, that is no
+  option of its one-of group, whose verdict is not met and that offers no Replace…, is nothing that page can act on —
+  and gates no count and offers no action, so it belongs to none of the three folds below either. It is asked about
+  whichever emulator the page shows. What holds the two surfaces together is that they call one predicate,
+  `isFetchable`, rather than spelling its clauses twice: a second copy would let the game page point at a download
+  button the platform page does not offer, or leave off a row it does. What must NOT be shared is the game page's rule
+  around it — required for this launch, an option of the emulator's one-of group, present, fetchable, unjudged, or
+  offering Replace… (`replace_offered`) — which is that page's alone; the platform detail has no such rule, and a shared
   "visibility" module would invent a notion only one surface has. Each fold has its own quiet failure: drop the row from
   the required counts and a sentence reads "all in place" under a red verdict; add it to the ratio and a SNES page
   reports `0 / 26 files, 26 missing` for twenty-six optional files no core wants; add it to the buttons and the page
