@@ -1682,8 +1682,11 @@ it, for the focused platform:
   column is a `Focusable` with `flow-children="column"`, so up and down stay inside it, and the two stand in one with
   `flow-children="geometric"`: Steam steps to the column that stands in the direction pressed, which is left and right
   where they stand side by side and down where the right column has wrapped below the left, and nothing of ours measures
-  which. Every stop in the tab is centred when focus lands on it, as a section is. A press that went through — a
-  download or Replace… that succeeded, a delete that succeeded or stopped partway (`delete_incomplete`) — holds the
+  which. Every stop in the tab is centred when focus lands on it, as a section is. The tab is drawn afresh each time it
+  is shown again, so Steam's own memory of the stop focus stood on goes with it; `useBiosFocus` notes that stop instead
+  — by the row or bulk button it belongs to and its place there, or by its place in the tab outside them — and moves the
+  first focus that lands in the tab once it is shown again onto it, on the entry-focus delay. A press that went through
+  — a download or Replace… that succeeded, a delete that succeeded or stopped partway (`delete_incomplete`) — holds the
   tab's buttons until the tab's answer and the play row's are read again, whether or not it changed anything; a refused
   or failed press reads nothing again. A press on the platform page holds its pane the same way. The tab's answer is
   read through `rereadBiosAnswer` (`frontend/src/bigpicture/panelEvents.ts`), bound to the game shown and ordered like

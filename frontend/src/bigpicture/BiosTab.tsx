@@ -284,7 +284,7 @@ export const BiosTab: FC<BiosTabProps> = ({
     launching: "shown",
     stop: "button",
   });
-  const { attachRoot } = part.focus;
+  const { attachRoot, noteFocus } = part.focus;
   if (!isActive) return null;
   const held = biosStatus !== null;
   if (!held) return unansweredTab(biosReadState(held, readFailed) === "failed");
@@ -321,7 +321,12 @@ export const BiosTab: FC<BiosTabProps> = ({
         ref={attachRoot}
         data-testid="bios-columns"
         style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "24px 40px" }}
-        onFocus={centreFocused}
+        // The tab is drawn afresh each time it is shown again, which Steam's
+        // own memory of where focus stood does not survive.
+        onFocus={(e) => {
+          noteFocus(e);
+          centreFocused(e);
+        }}
       >
         <div data-testid="bios-main-column" style={{ flex: `0 0 ${MAIN_COLUMN}`, maxWidth: "100%", minWidth: 0 }}>
           <Focusable className="romm-bios-column" flow-children="column">
