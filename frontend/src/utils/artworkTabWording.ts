@@ -26,8 +26,8 @@ export const SOURCE_LINES: Readonly<Record<ArtworkSlotSource, string>> = {
 /** An icon set in Steam: a path the shortcut's properties name, not Steam's grid folder. */
 export const ICON_SET_IN_STEAM = "Set in the shortcut's properties";
 
-/** An automatic cover from SteamGridDB: Tender's pick stands in for RomM's cover (#2381 D1). */
-export const COVER_FROM_STEAMGRIDDB = "SteamGridDB — Tender's pick, while RomM has no cover";
+/** An automatic cover from SteamGridDB: Tender's pick stands in for RomM's cover until it arrives (#2381 D1, D27). */
+export const COVER_FROM_STEAMGRIDDB = "SteamGridDB — Tender's pick, until RomM's cover arrives";
 
 /** The source line of *slot*, whose source is *source*. */
 export function sourceLine(slot: ArtworkTabSlot, source: ArtworkSlotSource): string {
@@ -48,7 +48,7 @@ export const STATE_CHIPS: Readonly<Record<ArtworkSlotState, string>> = {
 /** The picker's first tile, which sets the slot back to automatic. */
 export function automaticTileLabel(slot: ArtworkTabSlot): string {
   return slot === "cover"
-    ? "Automatic — RomM cover, follows RomM when it changes"
+    ? "Automatic — RomM cover, or Tender's pick until it arrives"
     : "Automatic — Tender picks by its own rule";
 }
 

@@ -142,7 +142,7 @@ describe("ArtworkTab", () => {
     it("says an automatic cover from SteamGridDB stands in while RomM has none (#2381 D1)", async () => {
       const { container } = await renderTab(answer(FROM_ROMM, { cover: { state: "automatic", source: "tender" } }));
       expect(rowButton(container, "Cover").textContent).toContain(
-        "SteamGridDB — Tender's pick, while RomM has no cover",
+        "SteamGridDB — Tender's pick, until RomM's cover arrives",
       );
     });
 

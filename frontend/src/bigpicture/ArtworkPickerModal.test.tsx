@@ -74,7 +74,7 @@ describe("ArtworkPickerModal", () => {
   it("calls the cover's Automatic RomM's cover", async () => {
     const { container } = await open(row({ slot: "cover", source: "romm", image_id: null }));
     expect(button(container, "Automatic").textContent).toContain(
-      "Automatic — RomM cover, follows RomM when it changes",
+      "Automatic — RomM cover, or Tender's pick until it arrives",
     );
   });
 
