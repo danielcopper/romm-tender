@@ -855,42 +855,15 @@ class MatrixExecutor:
         handled_filenames: set[str] = set()
         for lf in local_files:
             filename = lf["filename"]
-            local_path = lf["path"]
             handled_filenames.add(filename)
-            local_exists = self._save_file_store.is_file(local_path)
-            # RomM-parity content hash (zip-aware) — the kernel compares this to
-            # server.content_hash for its byte-identity checks, so a zip save
-            # must be hashed per-entry, not as the whole archive (#1457).
-            measure = self._save_file_store.measure(local_path) if local_exists else None
-            local_hash = measure.content_hash if measure is not None else None
-            file_state = files_state.get(filename, FileSyncState())
-            local_mtime = self._save_file_store.get_mtime(local_path) if local_exists else None
-            local_mtime_iso = (
-                datetime.fromtimestamp(local_mtime, tz=UTC).isoformat() if local_mtime is not None else None
-            )
             # Group server saves to this file's own canonical target — symmetric
             # with the server-only loop below — so a multi-file save set never
             # cross-contaminates extensions (#1006). Without this, a sibling
             # extension's newer server record would win max(updated_at) and the
             # file would be evaluated/dispatched against the wrong save.
             group = [ss for ss in server_in_slot if local_save_target(ss, rom_name, known_names=save_names) == filename]
-            action = self._compute_sync_action(
-                local_file=self._build_local_input(local_path, filename, measure, local_mtime),
-                server_saves_in_slot=group,
-                files_state=_file_state_to_dict(file_state),
-                device_id=device_id_str,
-                local_hash=local_hash,
-            )
-            yield MatrixOutcome(
-                filename=filename,
-                action=action,
-                local_path=local_path,
-                local_hash=local_hash,
-                local_mtime_iso=local_mtime_iso,
-                local_size=measure.size if measure is not None else None,
-                local_content_size=measure.content_size if measure is not None else None,
-                file_state=file_state,
-                server_candidates=group,
+            yield self._local_outcome(
+                filename, lf["path"], group, files_state.get(filename, FileSyncState()), device_id_str
             )
 
         # Group server saves by canonical local target filename. Server-only
@@ -940,6 +913,43 @@ class MatrixExecutor:
                 file_state=file_state,
                 server_candidates=group,
             )
+
+    def _local_outcome(
+        self,
+        filename: str,
+        local_path: str,
+        group: list[dict[str, Any]],
+        file_state: FileSyncState,
+        device_id: str,
+    ) -> MatrixOutcome:
+        """Measure the local file at *local_path* and decide it against its server *group*."""
+        local_exists = self._save_file_store.is_file(local_path)
+        # RomM-parity content hash (zip-aware) — the kernel compares this to
+        # server.content_hash for its byte-identity checks, so a zip save
+        # must be hashed per-entry, not as the whole archive (#1457).
+        measure = self._save_file_store.measure(local_path) if local_exists else None
+        local_hash = measure.content_hash if measure is not None else None
+        local_mtime = self._save_file_store.get_mtime(local_path) if local_exists else None
+        action = self._compute_sync_action(
+            local_file=self._build_local_input(local_path, filename, measure, local_mtime),
+            server_saves_in_slot=group,
+            files_state=_file_state_to_dict(file_state),
+            device_id=device_id,
+            local_hash=local_hash,
+        )
+        return MatrixOutcome(
+            filename=filename,
+            action=action,
+            local_path=local_path,
+            local_hash=local_hash,
+            local_mtime_iso=datetime.fromtimestamp(local_mtime, tz=UTC).isoformat()
+            if local_mtime is not None
+            else None,
+            local_size=measure.size if measure is not None else None,
+            local_content_size=measure.content_size if measure is not None else None,
+            file_state=file_state,
+            server_candidates=group,
+        )
 
     def sync_rom_saves(
         self,
