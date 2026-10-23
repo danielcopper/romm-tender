@@ -635,6 +635,21 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("Checking what this platform needs…");
     });
 
+    it("puts Steam's spinner beside the line that says the answer is still out", async () => {
+      mockFirmware([firmwarePlatform()]);
+      const pending = deferredPlatformReads();
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const waiting = () => container.querySelector<HTMLElement>('[data-testid="waiting-line"]');
+      expect(waiting()?.textContent).toBe("Checking what this platform needs…");
+      expect(waiting()?.querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+      await resolveRead(pending, "gba", unreadPlatform("gba"));
+
+      expect(waiting()).toBeNull();
+    });
+
     it("asks the platform the reader is on before the ones above it", async () => {
       // The answers arrive one at a time, so the order is the only thing that
       // decides how long the open pane waits. The reader is looking at this one.
