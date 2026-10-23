@@ -2,27 +2,41 @@
 
 Shared by :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s
 preview and its apply's finalize, so the removals a preview promises are the
-ones its apply makes. The preview also reads here the name of a kept row's
-platform (:func:`with_kept_platform_names`).
+ones its apply makes. The preview also builds its stale rows here
+(:func:`registry_stale_rows`) and reads the name of a kept row's platform
+(:func:`with_kept_platform_names`).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from domain.sync_diff import settle_asked_rows, sort_stale_rows
+from domain.sync_diff import StaleRow, settle_asked_rows, sort_stale_rows
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Awaitable, Callable, Collection, Iterable
+    from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
 
     from domain.rom import GoneEvidence
-    from domain.sync_diff import RomAnswer, StaleRow
+    from domain.sync_diff import RomAnswer
 
     # ``LibraryFetcher.ask_romm_for_roms``: one exact-id question per ROM.
     AskRommFn = Callable[[Collection[int]], Awaitable[dict[int, RomAnswer]]]
     # ``LocalLibraryReader.do_read_kept_platform_names``, offloaded by the caller.
     ReadKeptNamesFn = Callable[[Collection[str]], Awaitable[dict[str, str]]]
+
+
+def registry_stale_rows(stale_rom_ids: Iterable[int], registry: Mapping[str, Mapping[str, Any]]) -> list[StaleRow]:
+    """A :class:`StaleRow` per *stale_rom_ids* entry, off the preview's registry (``do_read_preview_baseline``)."""
+    rows: list[StaleRow] = []
+    for rom_id in stale_rom_ids:
+        reg = registry[str(rom_id)]
+        rows.append(
+            StaleRow(
+                rom_id, reg["app_id"], reg["platform_slug"], reg.get("delivered_through"), reg.get("sibling_group_key")
+            )
+        )
+    return rows
 
 
 async def settle_stale_rows(

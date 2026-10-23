@@ -64,7 +64,7 @@ from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
-from services.library._stale_rows import settle_stale_rows, with_kept_platform_names
+from services.library._stale_rows import registry_stale_rows, settle_stale_rows, with_kept_platform_names
 from services.library._state import CollectionMembership
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
@@ -390,16 +390,7 @@ class SyncOrchestrator:
             # The marks are discarded: docs/architecture/backend-architecture.md,
             # "The stale removal keeps a game gone from RomM".
             removals, kept, _marks = await settle_stale_rows(
-                (
-                    StaleRow(
-                        rid,
-                        registry[str(rid)]["app_id"],
-                        registry[str(rid)]["platform_slug"],
-                        registry[str(rid)].get("delivered_through"),
-                        registry[str(rid)].get("sibling_group_key"),
-                    )
-                    for rid in stale
-                ),
+                registry_stale_rows(stale, registry),
                 ask_romm=self._fetcher.ask_romm_for_roms,
                 logger=self._logger,
                 read_platform_slugs=set(slug_to_name),
