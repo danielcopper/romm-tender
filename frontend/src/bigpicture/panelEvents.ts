@@ -25,6 +25,7 @@ import {
 import type { CoreInfo, RomMetadata, SaveStatus, SyncConflict, DownloadCompleteEvent } from "../types";
 import type { RommDataChangedDetail } from "../types/events";
 import { detach } from "../utils/detach";
+import { announceBiosChange } from "./bios/useBiosActions";
 import {
   bindRom,
   biosFieldsFromCache,
@@ -59,6 +60,9 @@ export interface PanelEventContext {
    *  race these handlers for the same fields. */
   readonly readSeqs: MutableRefObject<PanelReadSeqs>;
   readonly setState: Dispatch<SetStateAction<PanelState>>;
+  /** Set for exactly the dispatch of a `bios` event this panel's own BIOS tab
+   *  sends — see {@link announceOwnBiosChange}. */
+  readonly announcingOwnBiosChange: MutableRefObject<boolean>;
 }
 
 /** Bind a read this panel is issuing now for the ROM it currently shows — see
@@ -155,6 +159,27 @@ async function handleBiosChange(
   // and to skip the wasted re-read (#1082). Read via ref to avoid a stale
   // closure.
   if (!detail.platform_slug || detail.platform_slug !== ctx.platformSlugRef.current) return;
+  if (ctx.announcingOwnBiosChange.current) return;
+  await rereadBiosAnswer(ctx);
+}
+
+/** Tell the other pages that *slug*'s firmware changed, after a press on this
+ *  panel's own BIOS tab. The press has already read this panel's answer
+ *  ({@link rereadBiosAnswer}), so the event costs no second read here; it is
+ *  dispatched synchronously, which is what lets the flag cover exactly it. */
+export function announceOwnBiosChange(ctx: PanelEventContext, slug: string): void {
+  ctx.announcingOwnBiosChange.current = true;
+  try {
+    announceBiosChange(slug);
+  } finally {
+    ctx.announcingOwnBiosChange.current = false;
+  }
+}
+
+/** Read the panel's BIOS answer again and fold it in — after a `bios` event, and
+ *  after a press on the panel's own BIOS tab, which awaits it before the press
+ *  ends. */
+export async function rereadBiosAnswer(ctx: PanelEventContext): Promise<void> {
   const romId = ctx.romIdRef.current;
   if (!romId) return;
   // Keyed on the rom rather than the platform: the requirement depends on the

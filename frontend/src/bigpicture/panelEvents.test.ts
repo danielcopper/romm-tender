@@ -87,6 +87,7 @@ function panelFor(romId: number, coreInfo: CoreInfo | null) {
     setState: (update: SetStateAction<PanelState>) => {
       state = typeof update === "function" ? update(state) : update;
     },
+    announcingOwnBiosChange: { current: false },
   };
   const unwire = wirePanelEvents(ctx);
   return {

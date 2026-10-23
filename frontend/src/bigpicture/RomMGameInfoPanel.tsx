@@ -24,7 +24,7 @@ import { BiosTab } from "./BiosTab";
 import { useTriggerHandler } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
 import { bindRomInState, loadData, openingTab, type PanelReadSeqs, type PanelState } from "./panelState";
-import { wirePanelEvents } from "./panelEvents";
+import { announceOwnBiosChange, rereadBiosAnswer, wirePanelEvents, type PanelEventContext } from "./panelEvents";
 import { useSaveSlotsLoad } from "./panelSlotsLoad";
 import { buildTabContent } from "./panelTabContent";
 import { setMigrationStatus, useMigrationStatus } from "../utils/migrationStore";
@@ -37,6 +37,7 @@ import { StrandedPanelCard } from "./StrandedPanelCard";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
 import { refreshBiosStatus } from "../utils/gameDetailStore";
+import { announceBiosChange } from "./bios/useBiosActions";
 
 interface RomMGameInfoPanelProps {
   appId: number;
@@ -89,9 +90,20 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   // enforce is stated at `takeReadTicket`. They live here because the loads, the
   // event lane and the lazy slots lane take tickets from the same counters.
   const readSeqs = useRef<PanelReadSeqs>({ detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, bios: 0 });
-  // After a press on the BIOS tab, the play row's answer; the tab's own is read
-  // again by the `bios` event the press sends where firmware changed.
-  const rereadBios = useCallback(() => refreshBiosStatus(appId), [appId]);
+  // The event lane's context for the appId shown, which a press on the BIOS tab
+  // reads the tab's answer through — bound and ordered like the lane's own reads.
+  const eventContext = useRef<PanelEventContext | null>(null);
+  const announcingOwnBiosChange = useRef(false);
+  // After a press on the BIOS tab: the tab's answer and the play row's.
+  const rereadBios = useCallback(async () => {
+    const ctx = eventContext.current;
+    await Promise.all([ctx === null ? undefined : rereadBiosAnswer(ctx), refreshBiosStatus(appId)]);
+  }, [appId]);
+  const announceBios = useCallback((slug: string) => {
+    const ctx = eventContext.current;
+    if (ctx === null) announceBiosChange(slug);
+    else announceOwnBiosChange(ctx, slug);
+  }, []);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
   const stranded = useStrandedAnswer() !== null;
@@ -109,7 +121,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
 
     detach(loadData(appId, () => cancelled, romIdRef, platformSlugRef, readSeqs, setState, setPlatformSlug));
 
-    const unwire = wirePanelEvents({
+    const ctx: PanelEventContext = {
       appId,
       cancelled: () => cancelled,
       romIdRef,
@@ -117,10 +129,14 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
       slotsLoadedRef,
       readSeqs,
       setState,
-    });
+      announcingOwnBiosChange,
+    };
+    eventContext.current = ctx;
+    const unwire = wirePanelEvents(ctx);
 
     return () => {
       cancelled = true;
+      if (eventContext.current === ctx) eventContext.current = null;
       unwire();
     };
   }, [appId]);
@@ -222,6 +238,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
           platformSlug={platformSlug}
           romId={romId}
           onReread={rereadBios}
+          onAnnounce={announceBios}
         />
       </Focusable>
     </div>

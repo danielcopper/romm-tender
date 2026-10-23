@@ -1858,9 +1858,135 @@ describe("RomMGameInfoPanel", () => {
       });
       await flushAsync();
 
-      // The press's `bios` event asks for it; nothing else does. (No play row is
-      // mounted here, so the play row's own re-read reads nothing.)
+      // The press reads it; the `bios` event the press sends reads nothing more
+      // here. (No play row is mounted here, so the play row's own re-read reads
+      // nothing.)
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledTimes(1);
+    });
+
+    it("bios: a press holds the tab until its answer is read again, also where nothing changed", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail({ platform_slug: "psx" }));
+      const answer: BiosAnswer = {
+        bios_status: {
+          platform_slug: "psx",
+          needs_bios: true,
+          server_count: 1,
+          local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
+          all_downloaded: false,
+          required_count: 1,
+          required_downloaded: 0,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: false,
+              local_path: "/bios/scph5501.bin",
+              description: "",
+              wanted: "needed",
+              required_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+            },
+          ],
+        },
+        bios_level: "missing",
+      };
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(answer);
+      // A run that moved nothing: no `bios` event follows it.
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({ success: true, message: "", downloaded: 0 });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      await flushAsync();
+      let release!: (value: BiosAnswer) => void;
+      vi.mocked(backend.getBiosStatus).mockClear();
+      vi.mocked(backend.getBiosStatus).mockReturnValue(
+        new Promise<BiosAnswer>((resolve) => {
+          release = resolve;
+        }),
+      );
+      const labelled = (label: string) =>
+        [...container.querySelectorAll<HTMLElement>("button")].find((el) => el.textContent === label);
+
+      fireEvent.click(labelled("Download all") as HTMLElement);
+      await flushAsync();
+
+      // Read once although nothing changed, and while it is out the press's
+      // spinner stands in for its label and the row's Download is held.
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledTimes(1);
+      expect(labelled("Download all")).toBeUndefined();
+      expect(labelled("Download")?.hasAttribute("disabled")).toBe(true);
+      await act(async () => {
+        release(answer);
+      });
+      await flushAsync();
+      expect(labelled("Download all")?.hasAttribute("disabled")).toBe(false);
+      expect(labelled("Download")?.hasAttribute("disabled")).toBe(false);
+    });
+
+    it("bios: a press that changed firmware has every other panel of the platform read again", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail({ platform_slug: "psx" }));
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({
+        bios_status: {
+          platform_slug: "psx",
+          needs_bios: true,
+          server_count: 1,
+          local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
+          all_downloaded: false,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: false,
+              local_path: "/bios/scph5501.bin",
+              description: "",
+              wanted: "needed",
+              required_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+            },
+          ],
+        },
+        bios_level: "missing",
+      });
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({ success: true, message: "", downloaded: 1 });
+      const pressing = render(<RomMGameInfoPanel appId={testAppId} />);
+      render(<RomMGameInfoPanel appId={testAppId + 1} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      await flushAsync();
+      vi.mocked(backend.getBiosStatus).mockClear();
+
+      const downloadAll = [...pressing.container.querySelectorAll<HTMLElement>("button")].find(
+        (el) => el.textContent === "Download all",
+      );
+      expect(downloadAll?.hasAttribute("disabled")).toBe(false);
+      fireEvent.click(downloadAll as HTMLElement);
+      await flushAsync();
+      await flushAsync();
+
+      // One read for the pressing panel's press, one for the other panel's event.
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledTimes(2);
     });
 
     it("bios: threads bios_level from the endpoint result into the rendered status-dot color (#461)", async () => {

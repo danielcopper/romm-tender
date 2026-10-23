@@ -1912,13 +1912,14 @@ Format: **invariant** — tier — enforced by.
   writes install what a binding would compare against, so ordering is all they can have, and the panel's lazy SAVES-tab
   slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`) writes through the raw setter, ordered by its own `slots`
   ticket. The fourth has neither — the store's `cached.bios_status` fold runs in the same synchronous run as its guard.
-  The event lane's `handleBiosChange` is bound and ordered: it re-reads `get_bios_status` for the rom it shows, whose
-  emulator is resolved per ROM — a per-game pin over the platform's pick — and takes the `bios` ticket the panel's other
-  BIOS re-reads take (#1718). The play button is NOT covered (#1714)** — test + prompt-only — the panel's fourteen bound
-  sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and
-  every new write site on either are prompt-only, because a checker scoped to the store's own function bodies would be
-  green on the case this rule was written for. The reasons behind the two writer mechanisms live at `writerForRom` and
-  `RomBinding` — do not restate them here
+  The event lane's `rereadBiosAnswer`, which `handleBiosChange` and a press on the panel's own BIOS tab both read
+  through, is bound and ordered: it re-reads `get_bios_status` for the rom it shows, whose emulator is resolved per ROM
+  — a per-game pin over the platform's pick — and takes the `bios` ticket the panel's other BIOS re-reads take (#1718).
+  The play button is NOT covered (#1714)** — test + prompt-only — the panel's fourteen bound sites each carry a
+  version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site on
+  either are prompt-only, because a checker scoped to the store's own function bodies would be green on the case this
+  rule was written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not
+  restate them here
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own, so the reader can walk the
   table; text between two stops of the same card is reached through them and is no stop of its own (an emulator source

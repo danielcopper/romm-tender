@@ -49,6 +49,9 @@ export interface BiosActionsConfig {
   setStatus: (line: BiosStatusLine | null) => void;
   /** Read *slug*'s BIOS answer again; the press's spinner ends once it has. */
   reread: (slug: string) => Promise<void>;
+  /** Tell the other pages that *slug*'s firmware changed, once the press's own
+   *  read is in. Defaults to {@link announceBiosChange}. */
+  announce?: (slug: string) => void;
   /** The game every press is for — the system its install record holds is the
    *  one its rows were read for and its links placed for — or `null` for the
    *  platform's own system. */
@@ -112,7 +115,13 @@ export function announceBiosChange(platformSlug: string): void {
   );
 }
 
-export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosActionsConfig): BiosActions {
+export function useBiosActions({
+  setBusy,
+  setStatus,
+  reread,
+  announce = announceBiosChange,
+  romId,
+}: BiosActionsConfig): BiosActions {
   const [downloadPending, setDownloadPending] = useState<string | null>(null);
   const [downloadFailed, setDownloadFailed] = useState<string | null>(null);
   // What the latest attempt did to a row, by `slug|place:…` and `slug|file:…`.
@@ -182,7 +191,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
             if (result.success) {
               noteLinkFailures(slug, result.link_failures);
               await reread(slug);
-              if (result.downloaded > 0 || (result.placed ?? 0) > 0) announceBiosChange(slug);
+              if (result.downloaded > 0 || (result.placed ?? 0) > 0) announce(slug);
               const failed = result.failed ?? [];
               const lines = [
                 failed.length > 0 ? result.message : null,
@@ -213,7 +222,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
         })(),
       );
     },
-    [noteLinkFailures, reread, reportFailure, setBusy, setStatus],
+    [announce, noteLinkFailures, reread, reportFailure, setBusy, setStatus],
   );
 
   const downloadRequired = useCallback(
@@ -259,7 +268,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
             const placed = placedSentence(result);
             if (placed !== null) setStatus({ slug, scope: "bios", text: placed });
             await reread(slug);
-            announceBiosChange(slug);
+            announce(slug);
           } catch (e) {
             setStatus({ slug, scope: "bios", text: `Failed to replace the file: ${e}` });
           } finally {
@@ -268,7 +277,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
         })(),
       );
     },
-    [noteLinkFailures, reread, romId, setBusy, setStatus],
+    [announce, noteLinkFailures, reread, romId, setBusy, setStatus],
   );
 
   const attemptFor = useCallback(
@@ -293,7 +302,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
             // success.
             if (result.success || result.reason === "delete_incomplete") {
               await reread(slug);
-              if ((result.deleted_count ?? 0) > 0) announceBiosChange(slug);
+              if ((result.deleted_count ?? 0) > 0) announce(slug);
             }
           } catch (e) {
             setStatus({ slug, scope: "bios", text: `Failed to delete BIOS files: ${e}` });
@@ -303,7 +312,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
         })(),
       );
     },
-    [reread, setBusy, setStatus],
+    [announce, reread, setBusy, setStatus],
   );
 
   /** One row's Delete. A success is said by the rows coming back re-read; only
@@ -322,7 +331,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
             else if (kept.length > 0) setStatus({ slug, scope: "bios", text: kept.join("\n") });
             if (result.success || result.reason === "delete_incomplete") {
               await reread(slug);
-              if ((result.deleted_count ?? 0) > 0) announceBiosChange(slug);
+              if ((result.deleted_count ?? 0) > 0) announce(slug);
             }
           } catch (e) {
             setStatus({ slug, scope: "bios", text: `Failed to delete ${what}: ${e}` });
@@ -332,7 +341,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
         })(),
       );
     },
-    [reread, setBusy, setStatus],
+    [announce, reread, setBusy, setStatus],
   );
 
   const deleteBiosFile = useCallback(

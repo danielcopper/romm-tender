@@ -40,7 +40,7 @@ import {
   BiosShownTable,
   useBiosFiles,
 } from "./bios/BiosFiles";
-import { useBiosActions, type BiosStatusLine } from "./bios/useBiosActions";
+import { announceBiosChange, useBiosActions, type BiosStatusLine } from "./bios/useBiosActions";
 import { PANE_GUTTER } from "./layout/pane";
 import { section } from "./panelSection";
 import { WaitingLine } from "./WaitingLine";
@@ -67,11 +67,13 @@ interface BiosTabProps {
   platformName?: string;
   /** The game's platform, which every press acts on. */
   platformSlug?: string;
-  /** The game, whose links "Download all" follows. */
+  /** The game every press is for. */
   romId?: number | null;
-  /** What a press brings up to date before its spinner ends — the play row's BIOS answer. The tab's own is read
-   *  again by the `bios` event the press sends where firmware changed. */
+  /** Read the BIOS answers a press changes — the tab's own and the play row's;
+   *  the press's spinner ends once they are in. */
   onReread?: () => Promise<void>;
+  /** Tell the other pages the platform's firmware changed, once `onReread` is in. */
+  onAnnounce?: (slug: string) => void;
 }
 
 const NO_REREAD = async (): Promise<void> => {};
@@ -260,10 +262,17 @@ export const BiosTab: FC<BiosTabProps> = ({
   platformSlug = "",
   romId = null,
   onReread = NO_REREAD,
+  onAnnounce = announceBiosChange,
 }) => {
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [status, setStatus] = useState<BiosStatusLine | null>(null);
-  const actions = useBiosActions({ setBusy: setBusySlug, setStatus, reread: onReread, romId });
+  const actions = useBiosActions({
+    setBusy: setBusySlug,
+    setStatus,
+    reread: onReread,
+    announce: onAnnounce,
+    romId,
+  });
   const part = useBiosFiles({
     slug: platformSlug,
     platformName: platformName || platformSlug,
