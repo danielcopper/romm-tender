@@ -236,6 +236,11 @@ export function hideNativePlaySection(playSectionClass: string) {
   border-bottom: none;
   padding-bottom: 0;
 }
+/* section() and ConnectingIndicator set their padding inline. */
+.romm-game-page-pane .romm-panel-section:first-child,
+.romm-game-page-pane .romm-connecting:first-child {
+  padding-top: 0 !important;
+}
 .romm-panel-section-title {
   font-size: 10px;
   font-weight: 600;

@@ -678,7 +678,7 @@ left — is `useBiosTab`'s, and the achievements' load, made once until the ROM 
 calls both. SAVES reads the panel's state already, and ARTWORK's slots are held in `utils/artworkSlotsStore.ts` and read
 again on every opening. Where focus stood is Steam's to put back: its tabbed page saves the pane's navigation state per
 tab id and restores it a moment after the switch, which finds a row only if the pane draws it at once — a pane that came
-back on a spinner would put focus nowhere. Whether that restore lands where it should is a device check; so is the look.
+back on a spinner would put focus nowhere.
 
 ### Scrolling a region without moving focus
 

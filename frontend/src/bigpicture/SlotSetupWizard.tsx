@@ -617,7 +617,7 @@ export const SlotSetupWizard: FC<SlotSetupWizardProps> = ({ romId, onComplete })
   // bare italic text, so a load paying the backend retry ladder reads as busy.
   if (loading || (confirming && !error)) {
     return (
-      <div style={{ padding: "12px 0" }}>
+      <div style={{ padding: "0 0 12px" }}>
         <div className="romm-panel-section-title">Save Slot Setup</div>
         <ConnectingIndicator label={confirming ? "Setting up" : "Connecting to RomM"} />
       </div>
@@ -627,7 +627,7 @@ export const SlotSetupWizard: FC<SlotSetupWizardProps> = ({ romId, onComplete })
   // Error without data — show retry
   if (error && !info) {
     return (
-      <div style={{ padding: "12px 0" }}>
+      <div style={{ padding: "0 0 12px" }}>
         <div className="romm-panel-section-title">Save Slot Setup</div>
         <div style={{ color: "#d4513f", fontSize: "12px", marginBottom: "8px" }}>{error}</div>
         <DialogButton className="romm-wizard-btn" style={btnStyle} onClick={retry}>
@@ -645,7 +645,7 @@ export const SlotSetupWizard: FC<SlotSetupWizardProps> = ({ romId, onComplete })
   const rightChildren = buildServerSlotsColumn(info, defaultSlot, handleConfirm);
 
   return (
-    <div style={{ padding: "12px 0" }}>
+    <div style={{ padding: "0 0 12px" }}>
       <div className="romm-panel-section-title" style={{ marginBottom: "4px" }}>
         Save Slot Setup
       </div>

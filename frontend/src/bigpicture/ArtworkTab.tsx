@@ -174,7 +174,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
 
   if (!slots) {
     return (
-      <div className="romm-panel-loading" style={{ padding: "12px 0" }}>
+      <div className="romm-panel-loading" style={{ padding: "0 0 12px" }}>
         {held?.failure ?? "Loading artwork…"}
       </div>
     );

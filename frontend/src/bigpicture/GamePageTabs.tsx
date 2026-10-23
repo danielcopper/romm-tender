@@ -34,10 +34,11 @@ export const STEAM_HEADER_PADDING_PX = 40;
 const NO_TRANSFORM = 1;
 
 /**
- * How far below the tab row a pane starts: Steam's own game page starts a
- * pane's first block 8 px below its tab row (measured in Big Picture).
+ * How far below the tab row a pane's content starts. A section or a connecting
+ * line that opens a pane gives up its own top padding (`.romm-game-page-pane`
+ * in `utils/styleInjector.ts`), and the panes' other opening blocks carry none.
  */
-const PANE_TOP_GAP = "8px";
+const PANE_TOP_GAP = "20px";
 
 /** The delay `utils/scrollHelpers.ts` takes to land after Steam's own scroll to a focused element. */
 const AFTER_STEAMS_OWN_SCROLL_MS = 50;
@@ -84,7 +85,14 @@ export const GamePageTabs: FC<GamePageTabsProps> = ({ tabs, activeTab: asked, on
     if (next !== undefined) show(next);
   }, []);
   useStepTabsOnBumpers(step);
-  const panes = tabs.map((tab) => ({ ...tab, content: <div style={{ paddingTop: PANE_TOP_GAP }}>{tab.content}</div> }));
+  const panes = tabs.map((tab) => ({
+    ...tab,
+    content: (
+      <div className="romm-game-page-pane" style={{ paddingTop: PANE_TOP_GAP }}>
+        {tab.content}
+      </div>
+    ),
+  }));
 
   return (
     <Focusable

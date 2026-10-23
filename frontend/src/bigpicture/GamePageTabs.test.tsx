@@ -97,13 +97,15 @@ describe("GamePageTabs", () => {
     });
   });
 
-  it("starts every pane 8 px below the tab row", () => {
+  it("starts every pane 20 px below the tab row", () => {
     const { getByTestId, rerender } = render(<GamePageTabs tabs={tabs} activeTab="info" onShowTab={vi.fn()} />);
-    const gap = () => (getByTestId("steam-tab-content").firstElementChild as HTMLElement).style.paddingTop;
-    expect(gap()).toBe("8px");
+    const pane = () => getByTestId("steam-tab-content").firstElementChild as HTMLElement;
+    expect(pane().style.paddingTop).toBe("20px");
+    expect(pane().className).toBe("romm-game-page-pane");
     rerender(<GamePageTabs tabs={tabs} activeTab="bios" onShowTab={vi.fn()} />);
     expect(getByTestId("steam-tab-content").textContent).toBe("bios pane");
-    expect(gap()).toBe("8px");
+    expect(pane().style.paddingTop).toBe("20px");
+    expect(pane().className).toBe("romm-game-page-pane");
   });
 
   it("declares Steam's transform-free scroll for what is inside it", () => {
