@@ -45,6 +45,7 @@ if TYPE_CHECKING:
         SgdbArtworkCache,
         SteamConfigStore,
         SteamGridDbApi,
+        UnitOfWork,
         UnitOfWorkFactory,
     )
     from services.steamgrid._files import SgdbArtworkFiles
@@ -459,16 +460,16 @@ class ArtworkSlots:
         A chosen cover that is not set in Steam keeps its choice: it goes back to
         RomM's through ``set_artwork_slot_automatic``, which reloads RomM's cover
         under its own conflict rules, so the cover never reads automatic while
-        Steam still shows the chosen image.
+        Steam still shows the chosen image. A chosen cover set in Steam loses its
+        choice and the record of the image the choice set, which Steam no longer
+        shows.
         """
         with self._uow_factory() as uow:
             chosen = {choice.slot for choice in uow.artwork_slot_choices.get_all_for_rom(rom_id)}
             rom = uow.roms.get(rom_id)
         keep_cover = self._keeps_cover_choice_io(rom, chosen)
         with self._uow_factory() as uow:
-            for slot in chosen:
-                if not (slot is ArtworkSlot.COVER and keep_cover):
-                    uow.artwork_slot_choices.delete_slot(rom_id, slot)
+            _forget_discarded_choices(uow, rom_id, chosen, keep_cover=keep_cover)
         return chosen
 
     def discard_superseded_choices_io(
@@ -480,10 +481,14 @@ class ArtworkSlots:
         with the chosen game, so this happens once; the discarded SteamGridDB
         slots' cached images go too, so Tender's pick under RomM's game is
         downloaded in their place rather than the old game's chosen image
-        served. Nothing changes while RomM gives no id, gives the chosen one, or
-        no slot was chosen. Answers the slots to set back to automatic: the
-        SteamGridDB slots that had a choice, and the cover only where its choice
-        was kept — a cover set in Steam is named nowhere.
+        served. A cover that shows Tender's SteamGridDB pick loses its cached
+        image as well, so the page's re-pick downloads it under RomM's game. A
+        chosen cover set in Steam loses its choice and the record of the image the
+        choice set, as :meth:`forget_choices_io` drops them. Nothing changes while
+        RomM gives no id, gives the chosen one, or no slot was chosen. Answers the
+        slots to set back to automatic: the SteamGridDB slots that had a choice,
+        and the cover only where its choice was kept — a cover set in Steam is
+        named nowhere.
         """
         if not romm_id or not chosen_id or romm_id == chosen_id:
             return set()
@@ -493,25 +498,41 @@ class ArtworkSlots:
         if not chosen:
             return set()
         keep_cover = self._keeps_cover_choice_io(rom, chosen)
+        steamgriddb_cover = ArtworkSlot.COVER not in chosen and self._shows_tenders_cover_io(rom_id)
         with self._uow_factory() as uow:
             held = uow.roms.get(rom_id)
             if held is None or held.chosen_sgdb_id != chosen_id:
                 return set()
-            for slot in chosen:
-                if not (slot is ArtworkSlot.COVER and keep_cover):
-                    uow.artwork_slot_choices.delete_slot(rom_id, slot)
+            _forget_discarded_choices(uow, rom_id, chosen, keep_cover=keep_cover)
             uow.roms.set_chosen_sgdb_id(rom_id, None)
         discarded = chosen - {ArtworkSlot.COVER}
-        for slot in discarded:
+        for slot in discarded | ({ArtworkSlot.COVER} if steamgriddb_cover else set()):
             self._files.drop(rom_id, slot.value)
         self._logger.info(f"RomM's SteamGridDB game replaced the one chosen for rom_id={rom_id}; its choices went")
         return discarded | ({ArtworkSlot.COVER} if keep_cover else set())
+
+    def _shows_tenders_cover_io(self, rom_id: int) -> bool:
+        """Whether *rom_id*'s cover shows Tender's SteamGridDB pick on automatic."""
+        cover = next(view for view in self._views_of_rom_io(rom_id) if view.slot is ArtworkSlot.COVER)
+        return cover.state is SlotState.AUTOMATIC and cover.source is SlotSource.TENDER
 
     def _keeps_cover_choice_io(self, rom: Rom | None, chosen: Collection[ArtworkSlot]) -> bool:
         """Whether a change of game keeps *rom*'s cover choice: it has one, and its cover is not set in Steam."""
         if ArtworkSlot.COVER not in chosen or rom is None or rom.shortcut_app_id is None:
             return False
         return not self._cover.is_cover_set_in_steam(rom.rom_id, rom.shortcut_app_id)
+
+
+def _forget_discarded_choices(
+    uow: UnitOfWork, rom_id: int, chosen: Collection[ArtworkSlot], *, keep_cover: bool
+) -> None:
+    """Delete *rom_id*'s choices among *chosen* a change of game discards; a dropped cover choice takes its record."""
+    for slot in chosen:
+        if slot is ArtworkSlot.COVER and keep_cover:
+            continue
+        uow.artwork_slot_choices.delete_slot(rom_id, slot)
+        if slot is ArtworkSlot.COVER:
+            uow.artwork_slot_outcomes.delete_slot(rom_id, slot)
 
 
 def _signature(names: Sequence[str], stamps: Mapping[str, str]) -> str:

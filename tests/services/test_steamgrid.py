@@ -3822,6 +3822,16 @@ class TestChangingTheGameDiscardsTheChoices:
         assert _choice(uow, ArtworkSlot.COVER) is None
 
     @pytest.mark.asyncio
+    async def test_a_dropped_cover_choice_takes_the_record_of_the_image_it_set(self, steamgrid, uow, slot_ready):
+        _choose(uow, ArtworkSlot.COVER, 5)
+        _record_set(uow, ArtworkSlot.COVER, 5, b"chosen cover")
+        steamgrid.cover.set_in_steam.add(42)
+
+        await steamgrid.service.apply_sgdb_game_id(42, 8888)
+
+        assert _outcome(uow, ArtworkSlot.COVER) is None
+
+    @pytest.mark.asyncio
     async def test_a_refused_key_discards_nothing(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
         _choose(uow, ArtworkSlot.LOGO, 77)
         fake_steamgrid_db_api.request_side_effect = SgdbApiError(status_code=401, message="no")
@@ -4399,6 +4409,32 @@ class TestTheChoiceAGameChangeDiscards:
         assert answer["superseded"]["slots"] == ["logo"]
         assert _choice(uow, ArtworkSlot.COVER) is None
         assert steamgrid.cover.reloaded == []
+
+    @pytest.mark.asyncio
+    async def test_a_dropped_cover_choice_takes_the_record_of_the_image_it_set(self, steamgrid, uow, home):
+        self._seed(uow, home, steamgrid)
+        _choose(uow, ArtworkSlot.COVER, 5)
+        _record_set(uow, ArtworkSlot.COVER, 5, b"chosen cover")
+        _choose(uow, ArtworkSlot.LOGO, 77)
+        steamgrid.cover.set_in_steam.add(42)
+
+        await steamgrid.service.get_artwork_game(42)
+
+        assert _outcome(uow, ArtworkSlot.COVER) is None
+
+    @pytest.mark.asyncio
+    async def test_a_steamgriddb_cover_loses_its_cached_image_for_the_re_pick(
+        self, steamgrid, uow, home, sgdb_artwork_cache
+    ):
+        self._seed(uow, home, steamgrid)
+        _show_tenders(_grid_dir(home), uow, ArtworkSlot.COVER, 6)
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "cover", 6)] = b"image 6"
+        _choose(uow, ArtworkSlot.LOGO, 77)
+
+        answer = await steamgrid.service.get_artwork_game(42)
+
+        assert answer["superseded"]["slots"] == ["logo"]
+        assert _cached_path(sgdb_artwork_cache, 42, "cover", 6) not in sgdb_artwork_cache.files
 
     def test_a_game_chosen_since_the_read_is_not_discarded(self, steamgrid, uow, home):
         self._seed(uow, home, steamgrid)

@@ -6,7 +6,7 @@
  */
 
 import { isEndpointFailure, setArtworkSlotAutomatic, debugLog, type SupersededGame } from "../api/backend";
-import { applyAutomaticArtwork, applyTabSlotImage } from "./artwork";
+import { applyAutomaticArtwork, applySteamGridDbCover, applyTabSlotImage } from "./artwork";
 import { keepArtworkCurrentOnVisit } from "./artworkKeepCurrent";
 import { loadArtworkGame } from "./artworkSlotsStore";
 import { detach } from "./detach";
@@ -28,11 +28,17 @@ export async function settleArtworkGame(appId: number, romId: number): Promise<v
   await keepArtworkCurrentOnVisit(appId, romId);
 }
 
-/** Say once that RomM's game replaced the chosen one, and set the slots it emptied of a choice to automatic. */
+/**
+ * Say once that RomM's game replaced the chosen one, and set the slots it emptied of a choice to automatic; a cover
+ * showing Tender's SteamGridDB pick is picked anew under RomM's game.
+ */
 export async function applySupersededGame(appId: number, romId: number, superseded: SupersededGame): Promise<void> {
   showToast(supersededNotice(superseded));
   await applyAutomaticArtwork(romId, appId);
-  if (!superseded.slots.includes("cover")) return;
+  if (!superseded.slots.includes("cover")) {
+    await applySteamGridDbCover(romId, appId);
+    return;
+  }
   // The cover goes back to RomM's through the endpoint that reloads it under its own rules.
   const cover = await setArtworkSlotAutomatic(romId, "cover").catch((e: unknown) => {
     detach(debugLog(`The cover of appId ${appId} could not go back to RomM's: ${e}`));

@@ -8,6 +8,7 @@ import { settleArtworkGame, supersededNotice } from "./artworkGameChange";
 vi.mock("./artwork", () => ({
   applyAutomaticArtwork: vi.fn(),
   applyKeptCurrentArtwork: vi.fn(),
+  applySteamGridDbCover: vi.fn(),
   applyTabSlotImage: vi.fn(),
 }));
 
@@ -46,6 +47,17 @@ describe("settleArtworkGame (#2381 D17)", () => {
     );
     expect(vi.mocked(artwork.applyAutomaticArtwork)).toHaveBeenCalledWith(42, 5000);
     expect(vi.mocked(backend.setArtworkSlotAutomatic)).not.toHaveBeenCalled();
+  });
+
+  it("picks a SteamGridDB cover anew under RomM's game, after the slots", async () => {
+    vi.mocked(backend.getArtworkGame).mockResolvedValue(answer({ name: "Mario Golf", slots: ["logo"] }));
+
+    await settleArtworkGame(5000, 42);
+
+    expect(vi.mocked(artwork.applySteamGridDbCover)).toHaveBeenCalledWith(42, 5000);
+    const [slots] = vi.mocked(artwork.applyAutomaticArtwork).mock.invocationCallOrder;
+    const [cover] = vi.mocked(artwork.applySteamGridDbCover).mock.invocationCallOrder;
+    expect(slots).toBeLessThan(cover ?? 0);
   });
 
   it("sets a chosen cover back to RomM's through the endpoint that reloads it", async () => {
