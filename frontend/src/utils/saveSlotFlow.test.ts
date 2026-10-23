@@ -254,13 +254,15 @@ describe("executeSlotSwitch", () => {
           "server_error",
           "auth_failed",
           "switch_incomplete",
+          "sync_disabled",
+          "savefiles_in_content_dir",
         ] as const
       ).map((reason) => ({ purpose, reason })),
     ),
   )("tells the connection store nothing for a $reason failure answer ($purpose)", async ({ purpose, reason }) => {
     vi.mocked(backend.switchSlot).mockResolvedValueOnce({ success: false, reason, message: "Not switched" });
 
-    await executeSlotSwitch(7, "main", purpose);
+    await expect(executeSlotSwitch(7, "main", purpose)).resolves.toMatchObject({ ok: false, reason });
     expect(connectionState.reportServerReachable).not.toHaveBeenCalled();
   });
 

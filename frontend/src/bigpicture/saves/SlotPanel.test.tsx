@@ -888,6 +888,28 @@ describe("SlotPanel", () => {
       expect((getByText("Delete Slot") as HTMLButtonElement).disabled).toBe(false);
     });
 
+    it("ends 'Deleting...' when the info call answers a failure", async () => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+      vi.mocked(backend.getSlotDeleteInfo).mockResolvedValueOnce({
+        success: false,
+        reason: "server_unreachable",
+        message: "RomM server is not reachable",
+      });
+
+      const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
+      fireEvent.click(container.querySelector("button")!);
+      await flushAsync();
+      fireEvent.click(getByText("Delete Slot"));
+      await flushAsync();
+      await flushAsync();
+
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "RomM server is not reachable" }),
+      );
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+      expect((getByText("Delete Slot") as HTMLButtonElement).disabled).toBe(false);
+    });
+
     it("ends 'Deleting...' when opening the confirmation throws", async () => {
       const errorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
       try {
