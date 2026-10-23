@@ -1922,7 +1922,8 @@ Format: **invariant** — tier — enforced by.
   `frontend/src/bigpicture/panelEvents.ts`, `frontend/src/bigpicture/panelTabContent.tsx` — the panel component itself
   holds none of these writes) via `RomBinding`, built by `bindRom` for a read a run of the `[appId]` effect issued and
   by `bindRomInState` for the active tab's panes, whose writer is built during render; the achievements tab
-  (`frontend/src/bigpicture/AchievementsTab.tsx`) by construction, its React key being the rom id, so its state cannot
+  (`frontend/src/bigpicture/AchievementsTab.tsx`, whose load is `useAchievements` in
+  `frontend/src/utils/achievements.ts`) by construction, its React key being the rom id, so the hook's state cannot
   outlive the identity it was read for. A version switch re-keys without closing, so neither the store's generation
   counter nor the panel's `[appId]` effect sees this class. Binding answers the wrong-rom question only; two answers for
   the SAME rom are ordered instead, by a sequence taken when the read is issued — the store's `loadSeq` and

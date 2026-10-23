@@ -1,9 +1,9 @@
 /**
  * AchievementsTab — the RetroAchievements pane of the RomM game detail panel.
  *
- * Owns the whole lane: the lazy list + progress load, its load-once gate, and
- * the rendered badge rows. Nothing about it reaches the panel, which knows only
- * the `ra_id` that decides whether the tab exists at all.
+ * Draws the lane: the list and progress `useAchievements` loads lazily, as badge
+ * rows. Nothing about it reaches the panel, which knows only the `ra_id` that
+ * decides whether the tab exists at all.
  *
  * Stays mounted while another tab is showing (rendering nothing) so a loaded
  * list survives a tab switch instead of re-fetching on every visit.
@@ -12,21 +12,13 @@
  * styleInjector.
  */
 
-import { useState, useEffect, useRef, FC, type ReactElement } from "react";
+import { FC, type ReactElement } from "react";
 import { DialogButton } from "@decky/ui";
-import { getAchievements, getAchievementProgress, debugLog } from "../api/backend";
 import type { Achievement, AchievementProgress, EarnedAchievement } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
+import { earnedByBadgeId, orderEarnedFirst, useAchievements } from "../utils/achievements";
 import { formatCheevoDate } from "../utils/formatters";
-import {
-  beginServerLoad,
-  reportServerReachable,
-  setServerRetryProgress,
-  settleServerLoad,
-  useRommConnectionState,
-} from "../utils/connectionState";
 import { ConnectingIndicator } from "./saves/ConnectingIndicator";
-import { detach } from "../utils/detach";
 
 interface AchievementsTabProps {
   romId: number;
@@ -149,19 +141,8 @@ function renderCheevoList(achievements: Achievement[], progress: AchievementProg
   const earned = progress?.earned ?? 0;
   const total = progress?.total ?? achievements.length;
 
-  // Build map from badge_id -> earned data (id in earned_achievements is badge_id)
-  const earnedMap = new Map<string, EarnedAchievement>();
-  for (const ea of progress?.earned_achievements ?? []) {
-    earnedMap.set(ea.id, ea);
-  }
-
-  // Sort: earned first, then by display_order
-  const sorted = [...achievements].sort((a, b) => {
-    const aEarned = earnedMap.has(a.badge_id) ? 0 : 1;
-    const bEarned = earnedMap.has(b.badge_id) ? 0 : 1;
-    if (aEarned !== bEarned) return aEarned - bEarned;
-    return (a.display_order || 0) - (b.display_order || 0);
-  });
+  const earnedMap = earnedByBadgeId(progress);
+  const sorted = orderEarnedFirst(achievements, earnedMap);
 
   const earnedList = sorted.filter((a) => earnedMap.has(a.badge_id));
   const lockedList = sorted.filter((a) => !earnedMap.has(a.badge_id));
@@ -207,89 +188,7 @@ function renderCheevoList(achievements: Achievement[], progress: AchievementProg
 }
 
 export const AchievementsTab: FC<AchievementsTabProps> = ({ romId, raId, isActive }) => {
-  const isOffline = useRommConnectionState() === "offline";
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [progress, setProgress] = useState<AchievementProgress | null>(null);
-  const [loading, setLoading] = useState(false);
-  const loadedRef = useRef(false);
-
-  // Lazy-load on first activation. Mirrors the panel's saves-slot load's offline
-  // handling (#1345 F1): a known-offline fast path (no ladder hang), a
-  // reachability feed, auto-reload on reconnect, and a mid-flight-teardown guard
-  // so a store flip can't wedge the spinner.
-  useEffect(() => {
-    if (!isActive || !raId) return;
-    if (loadedRef.current) return;
-
-    // Known-offline fast path: the server fetch runs the retry ladder, so on a
-    // known-unreachable server it would hang "Loading achievements…" for tens of
-    // seconds. Skip it — the render shows a short degraded line while any
-    // last-known list stays visible. The ref stays false, so a flip back to
-    // connected re-runs this effect (isOffline dep) and loads.
-    if (isOffline) return;
-    loadedRef.current = true;
-
-    const load = beginServerLoad();
-    let cancelled = false;
-    let settled = false;
-
-    async function loadAchievements() {
-      // Drop stale retry progress from a prior load so the ConnectingIndicator
-      // starts at a plain "Loading achievements…" (#1345).
-      setServerRetryProgress(null);
-      setLoading(true);
-      try {
-        const [listResult, progressResult] = await Promise.all([getAchievements(romId), getAchievementProgress(romId)]);
-        if (cancelled) return;
-        settled = true;
-        // Conservative reachability feed (#1345): report offline only on a
-        // genuine unreachable verdict from either call. Treat a resolved
-        // non-stale success as a connected signal — this can be cache-served
-        // (get_achievements / get_achievement_progress answer from a warm cache
-        // without touching the server), so it is not a hard reachability proof,
-        // but that is acceptable: the 30s heartbeat is the reachability authority
-        // and self-corrects a wrong "connected". A "no_ra_username" config gap and
-        // a stale-cache fallback are neither verdict — leave the store untouched.
-        const unreachable =
-          (!listResult.success && listResult.reason === "server_unreachable") ||
-          (!progressResult.success && progressResult.reason === "server_unreachable");
-        if (unreachable) {
-          reportServerReachable(false);
-          // Mirror the slot lane's failure reset: release the gate so a reconnect
-          // (or a later re-activation) retries instead of caching the failure.
-          loadedRef.current = false;
-        } else if ((listResult.success && !listResult.stale) || (progressResult.success && !progressResult.stale)) {
-          reportServerReachable(true);
-        }
-        // Keep the last-known values on a failed load — never clobber an
-        // already-shown list / progress count to empty on a transient blip.
-        if (listResult.success) setAchievements(listResult.achievements);
-        if (progressResult.success) setProgress(progressResult);
-        setLoading(false);
-      } catch (e) {
-        detach(debugLog(`Failed to load achievements: ${e}`));
-        if (!cancelled) {
-          settled = true;
-          loadedRef.current = false;
-          setLoading(false);
-        }
-      } finally {
-        settleServerLoad(load);
-      }
-    }
-
-    detach(loadAchievements());
-    return () => {
-      cancelled = true;
-      // Torn down mid-flight (e.g. a concurrent call flipped the store offline) —
-      // release the gate and drop the spinner so the re-run / reconnect isn't
-      // wedged behind a stuck loading flag (#1345 F1, mirrors the slots lane).
-      if (!settled) {
-        loadedRef.current = false;
-        setLoading(false);
-      }
-    };
-  }, [isActive, raId, romId, isOffline]);
+  const { achievements, progress, loading, isOffline } = useAchievements(romId, raId, isActive);
 
   if (!isActive) return null;
 
