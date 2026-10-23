@@ -4976,6 +4976,22 @@ class TestWhatAVisitLeftNotHandedOver:
         assert answer == {"status": "checked", "replaced": ["grid", "logo"]}
 
     @pytest.mark.asyncio
+    async def test_a_replacement_steam_refused_waits_for_the_next_check(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (8, 800, 300))
+        await steamgrid.service.keep_artwork_current(42)
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "refused", 9999, 8, None)
+
+        again = await steamgrid.service.keep_artwork_current(42)
+        steamgrid.clock.advance(7 * 24 * 60 * 60)
+        week_later = await steamgrid.service.keep_artwork_current(42)
+
+        assert again == {"status": "not_due", "replaced": []}
+        assert week_later == {"status": "checked", "replaced": ["logo"]}
+
+    @pytest.mark.asyncio
     async def test_a_chosen_slot_is_never_left_over(self, steamgrid, uow, slot_ready, sgdb_artwork_cache):
         _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
         _choose(uow, ArtworkSlot.LOGO, 7)
@@ -4994,10 +5010,11 @@ class TestACheckThatRaises:
         earlier = steamgrid.clock.time() - 30 * 24 * 60 * 60
         _check_was(uow, earlier)
 
-        def boom(_rom_id):
+        def boom(_slot, _sgdb_id):
             raise RuntimeError("unexpected")
 
-        monkeypatch.setattr(steamgrid.service._slots, "kept_current_views_io", boom)
+        # Reached only inside the check, once its time is recorded.
+        monkeypatch.setattr(steamgrid.service._keeping_current, "_pick_io", boom)
         checking = steamgrid.service.keep_artwork_current(42)
 
         with pytest.raises(RuntimeError):

@@ -167,18 +167,26 @@ class ArtworkSlots:
         Each has a ``set`` record naming another image id than the cached
         file's: a replacement downloaded and not yet handed to Steam, as when
         the page was left, or Steam rebuilt it, partway through handing over.
+        A slot told apart by its hash counts only while its hand-over still
+        names the cached image: Steam's refusal settles the hand-over, and a
+        refused replacement waits for the next due check. The icon keeps no
+        hand-over, so a refused icon counts.
         """
         views = self.kept_current_views_io(rom_id)
         with self._uow_factory() as uow:
             recorded = {view.slot: uow.artwork_slot_outcomes.get(rom_id, view.slot) for view in views}
+            handed = {view.slot: uow.artwork_slot_handovers.get(rom_id, view.slot) for view in views}
         pending: list[ArtworkSlot] = []
         for view in views:
-            record = recorded[view.slot]
+            record, handover = recorded[view.slot], handed[view.slot]
             cached = self._files.cached(rom_id, view.slot.value)
             if record is None or record.outcome is not SlotOutcome.SET or cached is None:
                 continue
-            if cached.image_id != record.image_id:
-                pending.append(view.slot)
+            if cached.image_id == record.image_id:
+                continue
+            if view.slot in HANDED_SLOTS and (handover is None or handover.image_id != cached.image_id):
+                continue
+            pending.append(view.slot)
         return pending
 
     def is_set_in_steam_io(self, rom_id: int, slot: ArtworkSlot) -> bool:
