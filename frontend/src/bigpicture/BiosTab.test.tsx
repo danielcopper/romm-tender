@@ -2107,6 +2107,46 @@ describe("BiosTab", () => {
       expect(getByTestId("bios-main-column").nextElementSibling).toBe(getByTestId("bios-library-column"));
     });
 
+    it("moves between the two columns by where they stand, and up and down inside each", () => {
+      // Steam's nav is not in happy-dom: what is pinned is the flow each level
+      // declares — geometric between the columns, so a step goes to the column
+      // that stands in its direction (beside on a desktop, below on the Deck),
+      // and a column flow inside each, so down at a column's end leaves it only
+      // where the other column stands below.
+      const focusable = vi.spyOn(deckyUi, "Focusable");
+      const { container, getByTestId } = renderPsx();
+      const flows = new Set(
+        focusable.mock.calls
+          .map(([props]) => props as { className?: string; "flow-children"?: string })
+          .filter((props) => props.className?.startsWith("romm-bios-column"))
+          .map((props) => `${props.className}:${props["flow-children"]}`),
+      );
+      focusable.mockRestore();
+      expect([...flows]).toEqual(["romm-bios-columns:geometric", "romm-bios-column:column"]);
+      expect(container.querySelectorAll(".romm-bios-column")).toHaveLength(2);
+      const columns = container.querySelector<HTMLElement>(".romm-bios-columns");
+      expect(columns?.contains(getByTestId("bios-columns"))).toBe(true);
+      const main = getByTestId("bios-main-column").querySelector<HTMLElement>(".romm-bios-column");
+      const library = getByTestId("bios-library-column").querySelector<HTMLElement>(".romm-bios-column");
+      expect(main?.contains(button(container, "Download all") as HTMLElement)).toBe(true);
+      expect(main?.textContent).toBe(getByTestId("bios-main-column").textContent);
+      expect(library?.textContent).toBe(getByTestId("bios-library-column").textContent);
+      expect(library?.textContent).not.toBe("");
+    });
+
+    it("draws a row stop in the row's own text colour, which its focus rule keeps", () => {
+      // What Steam paints on focus is device-only; the rule that keeps the
+      // colour then is pinned in `bios/rowStopFocus.test.ts`.
+      const dialogButton = vi.spyOn(deckyUi, "DialogButton");
+      renderPsx();
+      const stops = dialogButton.mock.calls
+        .map(([props]) => props as { className?: string; style?: Record<string, unknown> })
+        .filter((props) => props.className === "romm-bios-row-stop");
+      dialogButton.mockRestore();
+      expect(stops.length).toBeGreaterThan(0);
+      for (const props of stops) expect(props.style).toMatchObject({ color: "inherit", background: "transparent" });
+    });
+
     it("offers the platform's delete and its emulators on an answer nothing could establish", () => {
       const unknown: BiosStatus = { ...psx(), needs_bios: false, bios_status_unknown: true, files: [] };
       const { container } = render(

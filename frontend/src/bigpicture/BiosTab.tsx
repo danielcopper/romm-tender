@@ -23,6 +23,7 @@
  */
 
 import { FC, useState, type FocusEvent, type ReactElement } from "react";
+import { Focusable } from "@decky/ui";
 import type { BiosLevel, BiosStatus, CoreInfo } from "../types";
 import { biosColorForLevel } from "../utils/biosColor";
 import { type GroupLineTone } from "../utils/biosGroup";
@@ -308,29 +309,41 @@ export const BiosTab: FC<BiosTabProps> = ({
   // section is itself a focusable button, and their buttons inside it would be
   // buttons inside a button. Everything in the left column stands in the
   // pane's gutter, so the sentence, the selector and the table line up.
+  //
+  // Up and down stay inside a column, and the step between the two columns is
+  // taken by where they stand rather than by their order: beside each other it
+  // is left and right, and where the right column has wrapped below the left
+  // it is down — Steam's geometric flow decides from the laid-out boxes, so
+  // nothing here measures whether they wrapped.
   return (
-    <div
-      ref={attachRoot}
-      data-testid="bios-columns"
-      style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "24px 40px" }}
-      onFocus={centreFocused}
-    >
-      <div data-testid="bios-main-column" style={{ flex: `0 0 ${MAIN_COLUMN}`, maxWidth: "100%", minWidth: 0 }}>
-        {section(
-          "bios-core",
-          null,
-          <div key="bios-header" style={{ padding: `0 ${PANE_GUTTER}` }}>
-            {header}
-          </div>,
-        )}
-        <BiosEmulatorSelector part={part} padding={`4px ${PANE_GUTTER} 6px`} />
-        <BiosShownTable part={part} />
-        <BiosButtons part={part} status={status && { key: status.slug, scope: status.scope, text: status.text }} />
+    <Focusable className="romm-bios-columns" flow-children="geometric">
+      <div
+        ref={attachRoot}
+        data-testid="bios-columns"
+        style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "24px 40px" }}
+        onFocus={centreFocused}
+      >
+        <div data-testid="bios-main-column" style={{ flex: `0 0 ${MAIN_COLUMN}`, maxWidth: "100%", minWidth: 0 }}>
+          <Focusable className="romm-bios-column" flow-children="column">
+            {section(
+              "bios-core",
+              null,
+              <div key="bios-header" style={{ padding: `0 ${PANE_GUTTER}` }}>
+                {header}
+              </div>,
+            )}
+            <BiosEmulatorSelector part={part} padding={`4px ${PANE_GUTTER} 6px`} />
+            <BiosShownTable part={part} />
+            <BiosButtons part={part} status={status && { key: status.slug, scope: status.scope, text: status.text }} />
+          </Focusable>
+        </div>
+        <div data-testid="bios-library-column" style={{ flex: `1 1 ${SIDE_COLUMN}`, minWidth: 0 }}>
+          <Focusable className="romm-bios-column" flow-children="column">
+            <BiosLibraryTable part={part} />
+            <BiosPartLegend part={part} />
+          </Focusable>
+        </div>
       </div>
-      <div data-testid="bios-library-column" style={{ flex: `1 1 ${SIDE_COLUMN}`, minWidth: 0 }}>
-        <BiosLibraryTable part={part} />
-        <BiosPartLegend part={part} />
-      </div>
-    </div>
+    </Focusable>
   );
 };

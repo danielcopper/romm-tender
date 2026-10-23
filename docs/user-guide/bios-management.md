@@ -138,9 +138,11 @@ and words, a **Download**, **Replace…** or **Delete** button on every row that
 _emulator_**, and under **For all of _platform_** **Download all** and **Delete downloads**, all acting on the game's
 platform, for the system the game was downloaded under. Where nothing could be established about what the emulator
 needs, the tab still offers the deletes and the emulator selector, as the platform's page does. Every row is a stop the
-controller lands on, so you can scroll to each one; a row without a button does nothing when you press it. What a press
-did to a row — a link it could not place, a download that arrived damaged, a file it replaced — is said on that row;
-what else it could not do, or what it moved out of the way, is said in a line under the buttons.
+controller lands on, so you can scroll to each one; a row without a button does nothing when you press it. Up and down
+move within a column, and left and right move between the two; on the Steam Deck, where the right column stands below,
+moving down past the left column's last button reaches it. What a press did to a row — a link it could not place, a
+download that arrived damaged, a file it replaced — is said on that row; what else it could not do, or what it moved out
+of the way, is said in a line under the buttons.
 
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. It follows the red
 verdict and nothing else: the resolver says the emulator you launch with does not have what it needs — a required file

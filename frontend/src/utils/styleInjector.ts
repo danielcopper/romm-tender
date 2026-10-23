@@ -3,8 +3,10 @@
 // and what a rule DOES lands in Steam's SteamRoot document, which happy-dom has
 // not got. styleInjector.test.ts pins the TEXT of one family of those rules —
 // the vanished-version trash, whose colour a component can only reference by
-// class name — and of nothing else the file injects: a drift lock on those
-// rules, not coverage of the stylesheet or of its effect.
+// class name — and bigpicture/bios/rowStopFocus.test.ts the BIOS row stop's
+// focus rule against the values it copies; nothing else the file injects is
+// pinned: a drift lock on those rules, not coverage of the stylesheet or of
+// its effect.
 import { findSP } from "./deckyUiInternals";
 
 const ROMM_PLAY_HIDE_ID = "romm-hide-native-play";
@@ -72,6 +74,17 @@ export function hideNativePlaySection(playSectionClass: string) {
 [data-romm] .gpfocus {
   outline: 2px solid #1a9fff;
   outline-offset: 2px;
+}
+/* A BIOS table row with no button of its own is a focus stop through a
+   DialogButton around it (bigpicture/bios/BiosFiles.tsx), and Steam repaints a
+   focused DialogButton's text dark for its light fill — which leaves the row's
+   name dark on the dark pane. Focused, the row keeps its own colours and draws
+   the fill and edge marker a pane's table row draws while its control holds
+   focus: FOCUSED_ROW in bigpicture/layout/pane.tsx, whose values these are. */
+.romm-bios-row-stop.gpfocus {
+  color: inherit !important;
+  background: #3d4450 !important;
+  box-shadow: inset 3px 0 0 #1a9fff !important;
 }
 .romm-wizard-btn:hover,
 .romm-wizard-btn:focus,

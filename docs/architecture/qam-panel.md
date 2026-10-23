@@ -1675,18 +1675,25 @@ it, for the focused platform:
   row and no count. **Every row is a focus stop** (#2429 D6): a row with a button is reached as that button, and a row
   without one is a `DialogButton` around the row that does nothing when pressed — on the game page a `Focusable` around
   content that is not a control registers no gamepad stop (`utils/scrollHelpers.ts`), which is why that page's rows are
-  not the table's own `Focusable`. Every stop in the tab is centred when focus lands on it, as a section is. A press
-  that went through — a download or Replace… that succeeded, a delete that succeeded or stopped partway
-  (`delete_incomplete`) — holds the tab's buttons until the tab's answer and the play row's are read again, whether or
-  not it changed anything; a refused or failed press reads nothing again. A press on the platform page holds its pane
-  the same way. The tab's answer is read through `rereadBiosAnswer` (`frontend/src/bigpicture/panelEvents.ts`), bound to
-  the game shown and ordered like the event lane's own BIOS reads, the play row's through `refreshBiosStatus`. Where
-  firmware changed, the press then tells every open game page, as the platform page does (`romm_data_changed`, `bios`);
-  its own page skips that event, so a press costs one read of the tab's answer. What a press did stays until the game
-  page is left, across a version switch too: the tab holds it for the platform the versions share. The play row's gear
-  menu has no "Download BIOS" (#2429 D7); the red BIOS badge in the play row leads to this tab. The ratio is a third set
-  again, which is why it rides along on both rather than being folded in. **The ratio names that set in its own words**,
-  because the sentence in front of it counts another one and the numbers cannot say which is which:
+  not the table's own `Focusable`. Such a row keeps its own text colours while it holds focus — Steam darkens a focused
+  `DialogButton`'s text for its light fill, and the row's name takes its colour from the button — and shows focus with
+  the fill and edge marker a pane's table row draws while its control holds focus (`FOCUSED_ROW`, `layout/pane.tsx`),
+  through the `.romm-bios-row-stop.gpfocus` rule of the game page's injected stylesheet (`utils/styleInjector.ts`). Each
+  column is a `Focusable` with `flow-children="column"`, so up and down stay inside it, and the two stand in one with
+  `flow-children="geometric"`: Steam steps to the column that stands in the direction pressed, which is left and right
+  where they stand side by side and down where the right column has wrapped below the left, and nothing of ours measures
+  which. Every stop in the tab is centred when focus lands on it, as a section is. A press that went through — a
+  download or Replace… that succeeded, a delete that succeeded or stopped partway (`delete_incomplete`) — holds the
+  tab's buttons until the tab's answer and the play row's are read again, whether or not it changed anything; a refused
+  or failed press reads nothing again. A press on the platform page holds its pane the same way. The tab's answer is
+  read through `rereadBiosAnswer` (`frontend/src/bigpicture/panelEvents.ts`), bound to the game shown and ordered like
+  the event lane's own BIOS reads, the play row's through `refreshBiosStatus`. Where firmware changed, the press then
+  tells every open game page, as the platform page does (`romm_data_changed`, `bios`); its own page skips that event, so
+  a press costs one read of the tab's answer. What a press did stays until the game page is left, across a version
+  switch too: the tab holds it for the platform the versions share. The play row's gear menu has no "Download BIOS"
+  (#2429 D7); the red BIOS badge in the play row leads to this tab. The ratio is a third set again, which is why it
+  rides along on both rather than being folded in. **The ratio names that set in its own words**, because the sentence
+  in front of it counts another one and the numbers cannot say which is which:
   `The one file … opens by name is in place (1/20 RomM library files)` states three correct numbers over three sets, and
   the words are the only thing that tells them apart. The pair is the library's inventory for the platform — what it
   holds, and how many of those Tender found at their destination (GLOSSARY.md → Library inventory) — and the tail names
