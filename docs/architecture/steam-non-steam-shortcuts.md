@@ -938,20 +938,21 @@ on the ARTWORK tab again, with the row pressed as its preferred focus (`keptArtw
 `bigpicture/panelState.ts`); Steam's own scroll position of the page is not Tender's to keep. A change of game
 (`apply_sgdb_game_id`) reloads no cover itself: it leaves a chosen cover that is not set in Steam to the tab's
 `set_artwork_slot_automatic` call that follows (I3), and discards a chosen cover set in Steam outright. On the page the
-tab is the last in Tender's tab bar, always shown; each of the five rows is a focus stop of its own (`DialogButton`),
-drawn as a card whose focus is a ring in Steam's accent blue rather than Steam's white button face, so the row's text
-and its state pill stay readable. The game line is a stop only where it has a button ("Choose game…" / "Change game…"),
-which carries the same ring; with RomM's game the d-pad goes from the tab bar straight to the cover's row. The picker is
-a modal over the page: its grid is four tiles wide, and its first page — Automatic, 14 candidates and "Load more" —
-fills four rows; each "Load more" adds 16 candidates, asking SteamGridDB for the next page only once the held one runs
-out, so "Load more", a full tile, always closes the grid at its bottom right. A SteamGridDB page holding fewer than 16
-is topped up from the next one, so it stays there; while a page is fetched it stays in place with a spinner, and focus
-then moves to the first new tile, where it stood — or to the last tile, where the load brought nothing new. A page that
-cannot be listed shows nothing more and says why. Cancel and "Use this image" sit below the grid, outside its scrolling,
-so they are reached without walking past every candidate; a size SteamGridDB states as 0 is not shown. How the d-pad
-walks them is checked on the device. A row opens the picker only while the ROM has a SteamGridDB game and a key is
-configured, but for the cover's, which always does: without a game or a key its picker offers "Automatic — RomM cover,
-or Tender's pick until it arrives" alone, says why no SteamGridDB cover is offered, and lists nothing (D19).
+tab is the last of the game page's tabs, always shown; each of the five rows is a focus stop of its own
+(`DialogButton`), drawn as a card whose focus is a ring in Steam's accent blue rather than Steam's white button face, so
+the row's text and its state pill stay readable. The game line is a stop only where it has a button ("Choose game…" /
+"Change game…"), which carries the same ring; with RomM's game the d-pad goes from the tab row straight to the cover's
+row. The picker is a modal over the page: its grid is four tiles wide, and its first page — Automatic, 14 candidates and
+"Load more" — fills four rows; each "Load more" adds 16 candidates, asking SteamGridDB for the next page only once the
+held one runs out, so "Load more", a full tile, always closes the grid at its bottom right. A SteamGridDB page holding
+fewer than 16 is topped up from the next one, so it stays there; while a page is fetched it stays in place with a
+spinner, and focus then moves to the first new tile, where it stood — or to the last tile, where the load brought
+nothing new. A page that cannot be listed shows nothing more and says why. Cancel and "Use this image" sit below the
+grid, outside its scrolling, so they are reached without walking past every candidate; a size SteamGridDB states as 0 is
+not shown. How the d-pad walks them is checked on the device. A row opens the picker only while the ROM has a
+SteamGridDB game and a key is configured, but for the cover's, which always does: without a game or a key its picker
+offers "Automatic — RomM cover, or Tender's pick until it arrives" alone, says why no SteamGridDB cover is offered, and
+lists nothing (D19).
 
 ### Shortcut artwork
 

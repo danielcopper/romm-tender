@@ -22,6 +22,14 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
   installed games); it's also omitted when RomM doesn't report the size.
 - **Action buttons** — Download, Pause/Resume, Uninstall, Cancel, or Refresh Metadata depending on state
 
+Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on
+Steam's own tab row, the one a Steam game's page has. **ACHIEVEMENTS** and **SAVES** are there only when they have
+something to show. **L1** and **R1** step to the previous and the next tab from anywhere in Tender's part of the page,
+the play row included, going round from the last tab to the first and skipping a tab that is not there. Moving focus
+onto a tab shows it, and a tab you come back to puts focus where it stood in it. The tab area is one screen tall and a
+tab's content scrolls inside it: moving down from the play row into the tabs scrolls the page so the tab row stands at
+the top, and moving back up to the play row scrolls it back.
+
 ![Game detail page showing the Tender panel for an installed game](../assets/screenshot-game-detail.jpg)
 
 ## Versions

@@ -1,22 +1,11 @@
 /**
- * The game page's tabs: Steam's own tabbed page, as on Steam's own game page.
+ * The game page's tabs: Steam's own tabbed page, as Steam's own game page has
+ * it, with the scroll that brings the tabs to the top of the game page as focus
+ * enters them, and one handler around it through which L2 and R2 reach the BIOS
+ * tab's emulator selector from the tab row and from every pane.
  *
- * L1 and R1, the wrap-around, the bumper glyphs, a tab switching as soon as
- * focus lands on it, and each tab keeping where focus stood are all Steam's.
- * What this adds is the part of a game page Steam's game page does around its
- * tabbed page, and the two buttons Tender's section takes:
- *
- * - **Scrolling.** The tab area is one screen tall and a tab's pane scrolls
- *   inside it. Focus entering the tabs scrolls the game page so the tab row
- *   stands at the top; the play row scrolls it back (`RomMPlaySection`).
- * - **L2 and R2** step the BIOS tab's emulator selector from the tab row and
- *   from every pane: Steam's tab row and content pass the triggers on, so one
- *   handler around the tabbed page reaches both.
- * - **L1 and R1 from the play row**, which is outside the tabbed page:
- *   `tabStepping.tsx`.
- *
- * Structure and vocabulary: `docs/architecture/qam-panel.md`, "The game page's
- * tabs".
+ * What is Steam's here, what is Tender's, and why: `docs/architecture/qam-panel.md`,
+ * "The game page's tabs".
  */
 
 import { useCallback, useLayoutEffect, useRef, type FC, type FocusEvent } from "react";

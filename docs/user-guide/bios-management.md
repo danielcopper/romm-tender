@@ -115,7 +115,7 @@ that treats a file as optional) clears the warning, while switching to a core th
 Under the line sits the emulator selector, which chooses which emulator's files the list shows. Its top row reads _◀ ●
 YabaSanshiro 1 / 5 ▶_: it opens on the emulator you launch with, whose name is blue, and ◀ and ▶ step to the previous
 and next emulator, going round from the last back to the first. **L2** and **R2**, whose glyphs stand beside the arrows,
-do the same anywhere in Tender's part of the page while the **BIOS** tab is open — the play row and the tab bar
+do the same anywhere in Tender's part of the page while the **BIOS** tab is open — the play row and the tab row
 included. Under it every emulator Tender could ask about stands in a row of small names that turns like a carousel: the
 one shown is always in the middle, outlined, the others on either side in the order the arrows step through them, and
 pressing a name shows that emulator. Each carries a dot for that emulator's own answer (green has everything it needs,
