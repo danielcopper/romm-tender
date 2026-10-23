@@ -7,6 +7,7 @@ import {
   scrollNearestToBottom,
   scrollFocusedToCenter,
 } from "./scrollHelpers";
+import { SCROLL_BOUNDARY_CLASS } from "./scrollBoundary";
 
 /**
  * happy-dom does not compute layout. Set `scrollHeight` / `clientHeight` and
@@ -103,6 +104,30 @@ describe("findScrollParent", () => {
     chain(a, b, leaf);
 
     expect(findScrollParent(leaf)).toBeNull();
+  });
+
+  it("never goes past a scroll boundary, though a scroller beyond it overflows", () => {
+    // The game page's tabs: a pane whose rows all fit, inside the tabs, inside
+    // the game page that scrolls.
+    const page = makeElement({ overflowY: "auto", scrollHeight: 2000, clientHeight: 600 });
+    const boundary = makeElement({});
+    boundary.classList.add(SCROLL_BOUNDARY_CLASS);
+    const pane = makeElement({ overflowY: "auto", scrollHeight: 400, clientHeight: 400 });
+    const leaf = makeElement({});
+    chain(page, boundary, pane, leaf);
+
+    expect(findScrollParent(leaf)).toBeNull();
+  });
+
+  it("finds a scroller inside a scroll boundary", () => {
+    const page = makeElement({ overflowY: "auto", scrollHeight: 2000, clientHeight: 600 });
+    const boundary = makeElement({});
+    boundary.classList.add(SCROLL_BOUNDARY_CLASS);
+    const pane = makeElement({ overflowY: "auto", scrollHeight: 900, clientHeight: 400 });
+    const leaf = makeElement({});
+    chain(page, boundary, pane, leaf);
+
+    expect(findScrollParent(leaf)).toBe(pane);
   });
 });
 

@@ -12,6 +12,7 @@
 import { useCallback, useLayoutEffect, useRef, type FC, type FocusEvent } from "react";
 import { Focusable, type Tab } from "@decky/ui";
 import { Tabs } from "../utils/deckyUiInternals";
+import { SCROLL_BOUNDARY_CLASS } from "../utils/scrollBoundary";
 import { findOutermostScrollParent, offsetWithinScroller } from "../utils/scrollHelpers";
 import { useTriggerHandler } from "./emulatorStepping";
 import { steppedTab, useFocusPlayRow, useStepTabsOnBumpers } from "./tabStepping";
@@ -22,6 +23,15 @@ import { steppedTab, useFocusPlayRow, useStepTabsOnBumpers } from "./tabStepping
  * app details' class module (`steamui/sp.js`).
  */
 export const STEAM_HEADER_PADDING_PX = 40;
+
+/**
+ * Steam's `EScrollIntoViewType.NoTransform` (`steamui/sp.js`; `@decky/ui`
+ * declares the enum without exporting it): on a navigation node, Steam brings a
+ * focused element inside it into view by its laid-out position rather than with
+ * the browser's own `scrollIntoView`. Why the tabs need it:
+ * `docs/architecture/qam-panel.md`, "The game page's tabs".
+ */
+const NO_TRANSFORM = 1;
 
 /** The delay `utils/scrollHelpers.ts` takes to land after Steam's own scroll to a focused element. */
 const AFTER_STEAMS_OWN_SCROLL_MS = 50;
@@ -67,7 +77,12 @@ export const GamePageTabs: FC<GamePageTabsProps> = ({ tabs, activeTab, onShowTab
   useStepTabsOnBumpers(step);
 
   return (
-    <Focusable className="romm-game-page-tabs" onButtonDown={onTrigger} onFocus={standAtTop}>
+    <Focusable
+      className={`romm-game-page-tabs ${SCROLL_BOUNDARY_CLASS}`}
+      onButtonDown={onTrigger}
+      onFocus={standAtTop}
+      {...{ scrollIntoViewType: NO_TRANSFORM }}
+    >
       {Tabs ? (
         // B steps back as on Steam's own game page: the pane hands it to the
         // tab row, and the tab row to the play row.

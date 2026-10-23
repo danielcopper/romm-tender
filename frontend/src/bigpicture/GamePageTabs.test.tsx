@@ -6,6 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render } from "@testing-library/react";
 import type { FC } from "react";
+import type { Tab } from "@decky/ui";
+import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { StubTabs } from "../test-utils/steamTabs";
 import type { WideTabsProps } from "../utils/deckyUiInternals";
 import { GamePageTabs, STEAM_HEADER_PADDING_PX } from "./GamePageTabs";
@@ -95,6 +97,11 @@ describe("GamePageTabs", () => {
     });
   });
 
+  it("declares Steam's transform-free scroll for what is inside it", () => {
+    const { container } = render(<GamePageTabs tabs={tabs} activeTab="info" onShowTab={vi.fn()} />);
+    expect(container.querySelector(".romm-game-page-tabs")?.getAttribute("data-scroll-into-view-type")).toBe("1");
+  });
+
   describe("scrolling the game page", () => {
     beforeEach(() => {
       vi.useFakeTimers();
@@ -104,11 +111,11 @@ describe("GamePageTabs", () => {
     });
 
     /** The game page as Steam scrolls it: a play row's stand-in above the tabs, the tabs 300 px down. */
-    const gamePage = () => {
+    const gamePage = (shown: Tab[] = tabs) => {
       const utils = render(
         <div data-testid="game-page" style={{ overflowY: "auto" }}>
           <button type="button">play</button>
-          <GamePageTabs tabs={tabs} activeTab="info" onShowTab={vi.fn()} />
+          <GamePageTabs tabs={shown} activeTab="info" onShowTab={vi.fn()} />
         </div>,
       );
       const page = utils.getByTestId("game-page");
@@ -129,6 +136,27 @@ describe("GamePageTabs", () => {
         vi.advanceTimersByTime(60);
       });
       expect(scrollTo).toHaveBeenCalledWith({ top: 300 - STEAM_HEADER_PADDING_PX, behavior: "smooth" });
+    });
+
+    it("keeps a pane's own focus scroll from moving the game page around the tabs", () => {
+      const { getByTestId, scrollTo } = gamePage([
+        {
+          id: "info",
+          title: "GAME INFO",
+          content: (
+            <button type="button" onFocus={scrollFocusedToCenter}>
+              a row
+            </button>
+          ),
+        },
+      ]);
+      fireEvent.focusIn(getByTestId("steam-tab-content").querySelector("button") as HTMLElement, {
+        relatedTarget: getByTestId("tab-info"),
+      });
+      act(() => {
+        vi.advanceTimersByTime(60);
+      });
+      expect(scrollTo).not.toHaveBeenCalled();
     });
 
     it("leaves the game page where it is while focus moves inside the tabs", () => {

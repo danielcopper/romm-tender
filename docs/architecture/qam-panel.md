@@ -636,7 +636,25 @@ Tender passes the same, so a tab's pane scrolls inside that box rather than the 
 also scrolls itself so its tabbed page stands at the top as focus enters it, and back to the top as focus returns to its
 play bar; Tender's does the same. Focus coming into the tabs from outside them scrolls the game page so they stand 40 px
 below its top — Steam's `headerPadding`, the value its own page takes off — and focus coming to the play row scrolls it
-back (`scrollToTop` on the row). Moving inside the tabs scrolls nothing.
+back (`scrollToTop` on the row). That scroll is Tender's because Steam's lives in the overview panel Tender's section
+replaces, not in the tabbed page.
+
+**Once the tabs stand at the top, moving focus inside them scrolls only inside them.** Two things would otherwise move
+the game page:
+
+- **A pane's own focus scroll.** Tender's rows centre themselves in the nearest scroller that overflows
+  (`scrollFocusedToCenter`, `utils/scrollHelpers.ts`). A pane whose rows all fit leaves Steam's per-tab scroller with
+  nothing to scroll, so that walk went on to the game page and moved it under the tab row on every focus move — every
+  pane but a long ACHIEVEMENTS list, whose own scroller overflows. The tabs carry `SCROLL_BOUNDARY_CLASS`, past which
+  the walk does not go.
+- **Steam's scroll to a focus put back after a tab switch.** Steam slides the incoming pane in from the side
+  (`translateX(±40%)`, `steamui/css/sp.css`) and puts focus back in it before it has arrived. Its own focus scroll hands
+  that element to the browser's `scrollIntoView` (`steamui/sp.js`), which scrolls every scroller around it sideways to
+  reach it, the game page's included — that one cannot be scrolled sideways by hand, but a background image of Steam's
+  inside it is wider than the page, so a call can scroll it. The tabs declare Steam's `scrollIntoViewType` NoTransform,
+  under which Steam brings a focused element into view by its laid-out position instead, with the slide not counted.
+  Steam's own game page passes its tabbed page none and goes through the same code; whether it shows the same shift was
+  not measured.
 
 **B steps back as on Steam's own game page** (#2421 D5): in a pane it puts focus on the tab row, on the tab row it puts
 focus on the play row, and only on the play row does it leave the page. The first step is Steam's tabbed page's own —

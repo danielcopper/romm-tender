@@ -271,9 +271,10 @@ vi.mock("@decky/ui", () => {
     // an attribute of its own, so a test pins the DECLARATION rather than the
     // tabindex Steam would write for it.
     // preferredFocus and navEntryPreferPosition are Steam's entry preference,
-    // read off the nav node and never written to the DOM, so happy-dom has
-    // nothing to show of them: each gets an attribute of its own, and a test
-    // pins the declaration.
+    // and scrollIntoViewType how it scrolls to a focused element, read off the
+    // nav node and never written to the DOM, so happy-dom has nothing to show
+    // of them: each gets an attribute of its own, and a test pins the
+    // declaration.
     Focusable: ({
       children,
       className,
@@ -287,6 +288,7 @@ vi.mock("@decky/ui", () => {
       focusableIfEmpty,
       preferredFocus,
       navEntryPreferPosition,
+      scrollIntoViewType,
       "aria-label": ariaLabel,
     }: AnyProps & {
       className?: string;
@@ -298,6 +300,7 @@ vi.mock("@decky/ui", () => {
       focusableIfEmpty?: boolean;
       preferredFocus?: boolean;
       navEntryPreferPosition?: number;
+      scrollIntoViewType?: number;
     }) =>
       createElement(
         "div",
@@ -307,6 +310,7 @@ vi.mock("@decky/ui", () => {
           "data-focusable-if-empty": focusableIfEmpty ? "true" : undefined,
           "data-preferred-focus": preferredFocus ? "true" : undefined,
           "data-nav-entry-prefer-position": navEntryPreferPosition,
+          "data-scroll-into-view-type": scrollIntoViewType,
           className,
           style,
           role,

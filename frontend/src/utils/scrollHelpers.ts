@@ -11,6 +11,8 @@
  * Steam's gamepad engine when injected into the game page's own React tree.
  */
 
+import { SCROLL_BOUNDARY_CLASS } from "./scrollBoundary";
+
 /**
  * How far `el` sits below the start of `scroller`'s content, in layout terms.
  *
@@ -34,10 +36,11 @@ export function offsetWithinScroller(el: HTMLElement, scroller: HTMLElement): nu
 }
 
 /** Find the nearest ancestor that is actually scrollable (overflow:scroll|auto
- *  AND scrollHeight > clientHeight). */
+ *  AND scrollHeight > clientHeight), never past a {@link SCROLL_BOUNDARY_CLASS}. */
 export function findScrollParent(el: HTMLElement): HTMLElement | null {
   let parent: HTMLElement | null = el.parentElement;
   while (parent) {
+    if (parent.classList.contains(SCROLL_BOUNDARY_CLASS)) return null;
     const ov = globalThis.getComputedStyle(parent).overflowY;
     if ((ov === "scroll" || ov === "auto") && parent.scrollHeight > parent.clientHeight) return parent;
     parent = parent.parentElement;
