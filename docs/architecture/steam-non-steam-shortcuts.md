@@ -214,14 +214,14 @@ RomM keeps a ROM row whose file has left its disk, and lists a physical game tha
 ([Backend Architecture — group-aware sync](backend-architecture.md#libraryservice-decomposition-serviceslibrary)).
 
 A shortcut bound to such a member that is not installed is moved by the next complete-view sync (a platform unit, or the
-preview) onto a sibling with a file whose `fs_name_no_ext` equals the bound member's, through the same rebind entry the
-re-import case uses: keyed by the bound row, so the appId, artwork, collections and playtime survive, and carrying
-`bind_rom_id` → the sibling. An equal stem means the file was replaced in place — a rescan that turns `Game (USA).zip`
-into a folder `Game (USA)`. A sibling whose name differs in any part (language, region, version, a hack or a patch)
-never takes over: it is another version the user did not choose, and RomM parses some of those dimensions, such as
-`(v1.1)`, without sending them. The target must hold no shortcut of its own (grandfathered duplicates), and two bound
-members never move onto one target; of several candidates the chain's order picks. Otherwise the shortcut stays on the
-member without a file, and its play button says **No file on RomM**.
+preview for a game a platform unit delivers) onto a sibling with a file whose `fs_name_no_ext` equals the bound
+member's, through the same rebind entry the re-import case uses: keyed by the bound row, so the appId, artwork,
+collections and playtime survive, and carrying `bind_rom_id` → the sibling. An equal stem means the file was replaced in
+place — a rescan that turns `Game (USA).zip` into a folder `Game (USA)`. A sibling whose name differs in any part
+(language, region, version, a hack or a patch) never takes over: it is another version the user did not choose, and RomM
+parses some of those dimensions, such as `(v1.1)`, without sending them. The target must hold no shortcut of its own
+(grandfathered duplicates), and two bound members never move onto one target; of several candidates the chain's order
+picks. Otherwise the shortcut stays on the member without a file, and its play button says **No file on RomM**.
 
 `classify_roms` counts an entry carrying `bind_rom_id` as changed — this rebind and the re-import one alike — because
 the apply moves a binding for it even when the shortcut's name and launch command stay the same. Without that, a rebind

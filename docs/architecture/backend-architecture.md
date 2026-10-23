@@ -833,17 +833,20 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   (`domain/sync_diff.py::collapse_sibling_groups`). Preview and apply build the full per-ROM shortcut list, then
   collapse it to one entry per group against the bound-row registry (preview reads
   `LocalLibraryReader.do_read_preview_baseline`, apply reads `LocalLibraryReader.do_read_apply_registry` per unit). The
-  collapse takes an explicit `complete_group_view` flag: a sibling group is per-platform, so the whole-library
-  **preview** union and each **platform** apply unit see a group's whole membership (`complete_group_view=True`) and
-  collapse identically — the preview counts can never diverge from what those units create (the #1292 counts-vs-reality
-  bug class). A **collection** apply unit spans platforms and may fetch only one unbound sibling of a group whose bound
-  member it never fetched, so it is a **partial** view (`complete_group_view=False`): a group that already holds a
-  binding anywhere is grandfathered untouched — never rebound onto the partial member, never given a second shortcut.
-  Where the group's platform is synced, its bound member rides that platform unit in the same run; where only
-  collections reach the group, the stale removal keeps the binding (below). (Inferring "bound sibling absent ⇒ vanished"
-  from a partial view would rebind a live installed game onto an uninstalled sibling — #1296.) `classify_roms` runs over
-  the collapsed set, so its new / changed / unchanged / stale buckets count **games, not dumps**, and an unbound sibling
-  stops reading as a perpetual "new".
+  collapse takes an explicit `complete_group_view`: a sibling group is per-platform, so each **platform** apply unit
+  sees a group's whole membership (`complete_group_view=True`). A **collection** apply unit spans platforms and may
+  fetch only one unbound sibling of a group whose bound member it never fetched, so it is a **partial** view
+  (`complete_group_view=False`): a group that already holds a binding anywhere is grandfathered untouched — never
+  rebound onto the partial member, never given a second shortcut. The whole-library **preview** collapses each group
+  with the view its apply unit will use, by passing the set of group keys it holds whole: every group a platform unit of
+  the run delivered a member of is complete, and a group only collections reach is partial (#2536). So the preview
+  counts can never diverge from what the apply creates or rebinds (the #1292 counts-vs-reality bug class); collapsed
+  whole, a game only collections reach would count a rebind of a bound member gone from RomM, or without a file, that
+  its collection unit never makes. Where the group's platform is synced, its bound member rides that platform unit in
+  the same run; where only collections reach the group, the stale removal keeps the binding (below). (Inferring "bound
+  sibling absent ⇒ vanished" from a partial view would rebind a live installed game onto an uninstalled sibling —
+  #1296.) `classify_roms` runs over the collapsed set, so its new / changed / unchanged / stale buckets count **games,
+  not dumps**, and an unbound sibling stops reading as a perpetual "new".
 - **Resolution chain** (`domain/sibling_resolution.py::resolve_group_representative`, total + shuffle-stable): an
   installed sibling wins; else an existing binding; else RomM's per-user default (`is_main_sibling`); else the **1G1R
   ranking** — prerelease demotion > **region priority** > revision (newest) > alphabetical `fs_name_no_ext` > `rom_id`.
@@ -883,15 +886,15 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   ([ADR-0021](../adr/0021-sibling-group-one-shortcut-binding-active-version.md) §2's amendment). A bound sibling that
   vanished from the server emits nothing and keeps its binding, its shortcut, name and launch command, installed or not;
   the game page says it is gone, and the version picker switches it. The one move left is onto **the same dump under a
-  new id** — in a view that sees the group's whole membership (a platform unit or the preview,
-  `complete_group_view=True`; a partial collection view never moves a binding), onto a fetched sibling with a file on
-  RomM, no shortcut of its own and the `fs_name_no_ext` the vanished row's stored `fs_name` has without its extension.
-  The collapse then emits a **rebind entry** keyed to the vanished sibling's `rom_id` (so the frontend reuses its
-  existing shortcut through the `rom_id → appId` map — no delete + recreate churn), carrying the target's launch bake
-  and a `bind_rom_id` marker. The commit translates the ack through `bind_rom_id`, so the DB binding moves onto the
-  target; the collision-safe `Rom` save then unbinds the vanished row. The shortcut's appId, artwork, collections and
-  playtime all survive. The #1036 committed-appId guard is unchanged (the reused appId is committed this run, so it is
-  never emitted for removal).
+  new id** — in a view that sees the group's whole membership (a platform unit, or the preview for a group a platform
+  unit delivers; a partial collection view never moves a binding), onto a fetched sibling with a file on RomM, no
+  shortcut of its own and the `fs_name_no_ext` the vanished row's stored `fs_name` has without its extension. The
+  collapse then emits a **rebind entry** keyed to the vanished sibling's `rom_id` (so the frontend reuses its existing
+  shortcut through the `rom_id → appId` map — no delete + recreate churn), carrying the target's launch bake and a
+  `bind_rom_id` marker. The commit translates the ack through `bind_rom_id`, so the DB binding moves onto the target;
+  the collision-safe `Rom` save then unbinds the vanished row. The shortcut's appId, artwork, collections and playtime
+  all survive. The #1036 committed-appId guard is unchanged (the reused appId is committed this run, so it is never
+  emitted for removal).
 - **The stale removal keeps a game gone from RomM.** A bound row no unit of the run returned is sorted by
   `domain/sync_diff.py::sort_stale_rows`: on a platform the run read whole it is gone from RomM and stays bound — and
   stays in its platform's Steam collection. On a platform the run did not read, **a row whose game the run synced stays
