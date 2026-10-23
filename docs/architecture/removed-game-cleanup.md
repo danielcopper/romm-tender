@@ -120,11 +120,12 @@ Discovery reads the platform's completion stamp whether or not its skip was revo
 unbinds the rows of a platform whose sync is turned off, all but three kinds: those an enabled collection returned;
 those a collection reached that RomM's exact-id answer does not show present — a row with no recorded route counts as
 reached by a collection when a collection's last completed apply listed it; and those whose game an enabled collection
-delivered through another version, a skipped collection's members included, which stay bound whatever RomM answers while
-that answer still sets or clears their mark (#2533 D6, D7). A platform RomM no longer lists keeps its rows bound, but
-for a collection-reached one RomM still serves. The stale removal revokes the skip of each platform it unbinds a row on,
-and "Remove all shortcuts", a per-platform removal and a shortcut deleted in Steam's own UI, which unbind rows too,
-revoke it for every platform they touch; each keeps the stamp
+delivered through another version, a skipped collection's members included, which stay bound whatever RomM answers;
+where such a row is asked about, as one a collection reached is, the answer still sets or clears its mark (#2533 D6, D7,
+D9). A platform RomM no longer lists keeps its rows bound, but for a collection-reached one RomM still serves whose game
+the run did not deliver. The stale removal revokes the skip of each platform it unbinds a row on, and "Remove all
+shortcuts", a per-platform removal and a shortcut deleted in Steam's own UI, which unbind rows too, revoke it for every
+platform they touch; each keeps the stamp
 ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"). The
 rows keep their fetch generation and the stamp still records the fetch that set it, so Gone from RomM keeps naming the
 rows that fetch did not return — including for as long as the platform's sync stays off, while no new complete fetch
