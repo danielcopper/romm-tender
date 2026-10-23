@@ -569,6 +569,10 @@ class FirmwareStatusReader:
         A verdict of met with no row to show is sent whole too, with
         ``needs_bios: False``. The empty file list says nothing of its own; the
         verdict is what says met.
+
+        A sent answer carries what the game page's BIOS buttons stand on, as the
+        platform entry does: the delete counts (:meth:`_stamp_deletable`) and
+        ``server_offline``, whether the library's listing could be read.
         """
         platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, platform_slug, install)
         system = platform.taken
@@ -576,11 +580,13 @@ class FirmwareStatusReader:
         pick = self._resolve_launching_emulator(platform_slug, options, launching_emulator)
         identity = pick.emulator if pick is not None else None
 
+        server_offline = False
         try:
             firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
         except Exception as e:
             self._logger.warning(f"Answering BIOS status without the server listing: {e}")
             firmware_list = []
+            server_offline = True
 
         catalogue, rows, others = await self._loop.run_in_executor(
             None, self._platform_rows, system, platform_slug, firmware_list, identity
@@ -601,6 +607,12 @@ class FirmwareStatusReader:
         payload["emulator_tabs"] = emulator_tabs(
             catalogue, identity, pick.label if pick is not None else None, options["options"], others
         )
+        payload["server_offline"] = server_offline
+        # After the listing, as for the platform entry: a fresh read moves older
+        # records to their platform, and the count must see them where they now are.
+        payload["store_files"] = await self._loop.run_in_executor(None, self._store_files, platform_slug)
+        records = await self._loop.run_in_executor(None, self._read_bios_records)
+        self._stamp_deletable(payload, platform_slug, records)
         return payload
 
 

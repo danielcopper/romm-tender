@@ -2646,6 +2646,76 @@ class TestGetFirmwareStatusDeletableCount:
         assert plat["deletable_count"] == 0
 
 
+class TestTheGamePageAnswerCarriesWhatItsButtonsStandOn:
+    """``check_platform_bios`` carries the delete counts and the listing's state, as the platform entry does.
+
+    The game page's BIOS tab offers the platform page's buttons, and they stand
+    on the same fields: a row's Delete on ``delete_name``, the platform-wide
+    delete on ``deletable_count``, and every download on ``server_offline``.
+    """
+
+    @staticmethod
+    def _service(firmware, tmp_path, files: dict[str, bytes]) -> tuple[FirmwareService, str]:
+        bios_dir = str(tmp_path / "bios")
+        fw = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            firmware_file_store=FakeFirmwareFileStore({os.path.join(bios_dir, n): b for n, b in files.items()}),
+            retrodeck_folders=FakeRetroDeckFolders(bios=bios_dir),
+            core_info=_test_core_info(),
+        )
+        _inline_executor(fw)
+        return fw, bios_dir
+
+    @pytest.mark.asyncio
+    async def test_it_counts_tenders_downloads_for_the_platform_and_per_row(self, firmware, tmp_path):
+        """``IPL.bin`` was placed by hand and ``ours.bin`` downloaded by Tender: only ours is deletable."""
+        fw, bios_dir = self._service(firmware, tmp_path, {"IPL.bin": b"\x00" * 8, "ours.bin": b"\x00" * 8})
+        _declare(fw, ("IPL.bin", "GameCube IPL", True))
+        firmware.uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_slug="gc",
+                file_name="ours.bin",
+                file_path=os.path.join(bios_dir, "ours.bin"),
+                downloaded_at="2026-01-01T00:00:00+00:00",
+                firmware_id=9,
+            )
+        )
+        _stub_listing(
+            fw,
+            [
+                {"id": 7, "file_name": "IPL.bin", "platform_slug": "gc", "file_size_bytes": 8, "md5_hash": ""},
+                {"id": 9, "file_name": "ours.bin", "platform_slug": "gc", "file_size_bytes": 8, "md5_hash": ""},
+            ],
+        )
+
+        result = await fw.check_platform_bios("gc")
+
+        assert result["deletable_count"] == 1
+        rows = {f["file_name"]: f for f in result["files"]}
+        assert rows["IPL.bin"]["downloaded"] is True
+        assert rows["IPL.bin"]["deletable_count"] == 0
+        assert rows["IPL.bin"]["delete_name"] is None
+        assert rows["ours.bin"]["deletable_count"] == 1
+        assert rows["ours.bin"]["delete_name"] == "ours.bin"
+
+    @pytest.mark.asyncio
+    async def test_it_says_whether_the_librarys_listing_could_be_read(self, firmware, tmp_path):
+        fw, _ = self._service(firmware, tmp_path, {})
+        _declare(fw, ("IPL.bin", "GameCube IPL", True))
+        _stub_listing(fw, [])
+
+        reachable = await fw.check_platform_bios("gc")
+        fw._config.romm_api.list_platforms.side_effect = RuntimeError("offline")
+        fw._listing.invalidate()
+        offline = await fw.check_platform_bios("gc")
+
+        assert reachable["server_offline"] is False
+        # Still an answer: the machine's demand is read locally either way.
+        assert offline["files"][0]["file_name"] == "IPL.bin"
+        assert offline["server_offline"] is True
+
+
 class TestCheckPlatformBiosUnknown:
     """``check_platform_bios`` surfaces the 'unknown' state for unanswerable platforms.
 
