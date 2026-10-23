@@ -2706,7 +2706,9 @@ class TestTheGamePageAnswerCarriesWhatItsButtonsStandOn:
         _stub_listing(fw, [])
 
         reachable = await fw.check_platform_bios("gc")
-        fw._config.romm_api.list_platforms.side_effect = RuntimeError("offline")
+        api = fw._config.romm_api
+        assert isinstance(api, MagicMock)
+        api.list_platforms.side_effect = RuntimeError("offline")
         fw._listing.invalidate()
         offline = await fw.check_platform_bios("gc")
 
