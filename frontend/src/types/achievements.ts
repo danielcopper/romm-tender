@@ -19,6 +19,9 @@ export interface Achievement {
 }
 
 export interface EarnedAchievement {
+  /** The earned achievement's `Achievement.badge_id`: RomM's RetroAchievements
+   *  progression names it so, and `backend/domain/achievements.py` passes the
+   *  entries through as they come. */
   id: string;
   date: string;
   date_hardcore: string | null;

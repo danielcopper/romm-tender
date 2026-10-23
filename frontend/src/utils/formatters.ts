@@ -150,7 +150,7 @@ export function lastPathSegment(path: string): string {
   return path.slice(path.lastIndexOf("/", end - 1) + 1, end);
 }
 
-/** "2025-02-14 15:45:38" -> "2025-02-14 15:45" */
+/** RomM's earned date, `YYYY-MM-DD HH:MM:SS`, without its seconds. */
 export function formatCheevoDate(dateStr: string): string {
   return dateStr.replace(/:\d{2}$/, "");
 }

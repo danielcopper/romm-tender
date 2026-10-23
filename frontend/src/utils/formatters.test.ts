@@ -310,7 +310,7 @@ describe("formatCheevoDate", () => {
     expect(formatCheevoDate("2025-02-14 15:45:38")).toBe("2025-02-14 15:45");
   });
 
-  it("leaves a date without seconds as it is", () => {
+  it("leaves a date with no time part as it is", () => {
     expect(formatCheevoDate("2025-02-14")).toBe("2025-02-14");
   });
 });

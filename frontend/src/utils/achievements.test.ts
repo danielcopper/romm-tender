@@ -89,10 +89,21 @@ describe("useAchievements", () => {
     });
 
     hook.rerender({ isActive: false });
+    expect(hook.result.current).toEqual({
+      achievements: LIST.achievements,
+      progress: PROGRESS,
+      loading: false,
+      isOffline: false,
+    });
     hook.rerender({ isActive: true });
     await settle();
     expect(backend.getAchievements).toHaveBeenCalledTimes(1);
-    expect(hook.result.current.achievements).toEqual(LIST.achievements);
+    expect(hook.result.current).toEqual({
+      achievements: LIST.achievements,
+      progress: PROGRESS,
+      loading: false,
+      isOffline: false,
+    });
   });
 
   it("loads nothing without a RetroAchievements id", async () => {
@@ -189,13 +200,19 @@ describe("useAchievements", () => {
       { ...LIST, stale: true },
       { success: false, reason: "auth_failed", message: "denied" } as const,
     ],
-  ])("%s leave the connection state alone", async (_what, list: ListAnswer, progress: ProgressAnswer) => {
+  ])("%s leave the connection state alone and stand", async (_what, list: ListAnswer, progress: ProgressAnswer) => {
     setRommConnectionState("checking");
     vi.mocked(backend.getAchievements).mockResolvedValue(list);
     vi.mocked(backend.getAchievementProgress).mockResolvedValue(progress);
-    mount();
+    const hook = mount();
     await settle();
     expect(getRommConnectionState()).toBe("checking");
+
+    hook.rerender({ isActive: false });
+    hook.rerender({ isActive: true });
+    await settle();
+    expect(backend.getAchievements).toHaveBeenCalledTimes(1);
+    expect(backend.getAchievementProgress).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the last-known list and progress where a later load fails", async () => {
@@ -264,9 +281,11 @@ describe("useAchievements", () => {
 
     act(() => setRommConnectionState("offline"));
     expect(hook.result.current.loading).toBe(false);
+    act(() => setServerRetryProgress({ attempt: 1, maxAttempts: 3 }));
     list.resolve({ ...LIST, achievements: [cheevo(9, "b9", 9)] });
     await settle();
     expect(hook.result.current.achievements).toEqual([]);
+    expect(getServerRetryProgress()).toBeNull();
 
     await act(async () => {
       reportServerReachable(true);
@@ -279,13 +298,14 @@ describe("useAchievements", () => {
 
   it("a torn-down load that throws late leaves the newer load in flight", async () => {
     let rejectFirst!: (e: Error) => void;
+    const second = deferred<ListAnswer>();
     vi.mocked(backend.getAchievements)
       .mockReturnValueOnce(
         new Promise<ListAnswer>((_resolve, reject) => {
           rejectFirst = reject;
         }),
       )
-      .mockReturnValueOnce(new Promise(() => {}));
+      .mockReturnValueOnce(second.promise);
     const hook = mount();
     await settle();
 
@@ -300,6 +320,13 @@ describe("useAchievements", () => {
     rejectFirst(new Error("late"));
     await settle();
     expect(hook.result.current.loading).toBe(true);
+
+    second.resolve(LIST);
+    await settle();
+    hook.rerender({ isActive: false });
+    hook.rerender({ isActive: true });
+    await settle();
+    expect(backend.getAchievements).toHaveBeenCalledTimes(2);
   });
 });
 

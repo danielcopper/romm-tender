@@ -2,9 +2,9 @@
  * A ROM's RetroAchievements list and progress: the lazy load of both, the map of
  * what is earned, and the earned-first order a list is drawn in.
  *
- * Nothing in the hook binds its state to the ROM it was called with: the key of
- * the component that calls it does (`docs/architecture/invariants.md`, the entry
- * on per-rom detail state).
+ * The hook binds its state to no ROM: a caller must key the component that calls
+ * it by the ROM id (`docs/architecture/invariants.md`, the entry on per-rom detail
+ * state).
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -28,9 +28,9 @@ interface AchievementsLoad {
 
 /** Load `romId`'s achievement list and progress the first time `isActive` is
  *  true with a `raId` while RomM is not known offline, and keep them while
- *  `isActive` goes false again. A load torn down mid-flight, answered
- *  unreachable, or that throws is tried again on the next activation or
- *  reconnect; any other answer stands. */
+ *  `isActive` goes false again. A load torn down mid-flight or one that throws
+ *  is tried again on the next activation or reconnect, and one answered
+ *  unreachable once RomM reconnects; any other answer stands. */
 export function useAchievements(romId: number, raId: number | null, isActive: boolean): AchievementsLoad {
   const isOffline = useRommConnectionState() === "offline";
   const [achievements, setAchievements] = useState<Achievement[]>([]);
@@ -38,10 +38,10 @@ export function useAchievements(romId: number, raId: number | null, isActive: bo
   const [loading, setLoading] = useState(false);
   const loadedRef = useRef(false);
 
-  // Lazy-load on first activation. Mirrors the game page's save-slot load's
-  // offline handling (#1345 F1): a known-offline fast path (no ladder hang), a
-  // reachability feed, auto-reload on reconnect, and a mid-flight-teardown guard
-  // so a store flip can't wedge the spinner.
+  // Mirrors the offline handling of the game page's save-slot load
+  // (`useSaveSlotsLoad` in `frontend/src/bigpicture/panelSlotsLoad.ts`): a
+  // known-offline fast path (no ladder hang), a reachability feed, a reload on
+  // reconnect, and a mid-flight-teardown guard.
   useEffect(() => {
     if (!isActive || !raId) return;
     if (loadedRef.current) return;
@@ -60,15 +60,15 @@ export function useAchievements(romId: number, raId: number | null, isActive: bo
 
     async function loadAchievements() {
       // Drop stale retry progress from a prior load, so a caller's retry-progress
-      // display (`useServerRetryProgress`) starts without an attempt count (#1345).
+      // display (`useServerRetryProgress`) starts without an attempt count.
       setServerRetryProgress(null);
       setLoading(true);
       try {
         const [listResult, progressResult] = await Promise.all([getAchievements(romId), getAchievementProgress(romId)]);
         if (cancelled) return;
         settled = true;
-        // Conservative reachability feed (#1345): report offline only on a
-        // genuine unreachable verdict from either call. Treat a resolved
+        // Conservative reachability feed: report offline only on a genuine
+        // unreachable verdict from either call. Treat a resolved
         // non-stale success as a connected signal — this can be cache-served
         // (get_achievements / get_achievement_progress answer from a warm cache
         // without touching the server), so it is not a hard reachability proof,
@@ -80,14 +80,14 @@ export function useAchievements(romId: number, raId: number | null, isActive: bo
           (!progressResult.success && progressResult.reason === "server_unreachable");
         if (unreachable) {
           reportServerReachable(false);
-          // Mirror the save-slot load's failure reset: release the gate so a reconnect
-          // (or a later re-activation) retries instead of caching the failure.
+          // Release the gate on an unreachable answer only, so the reconnect
+          // loads again; unlike the save-slot load, any other failed answer stands.
           loadedRef.current = false;
         } else if ((listResult.success && !listResult.stale) || (progressResult.success && !progressResult.stale)) {
           reportServerReachable(true);
         }
-        // Keep the last-known values on a failed load — never clobber an
-        // already-shown list / progress count to empty on a transient blip.
+        // A failed answer keeps the last-known list or progress rather than
+        // emptying it on a transient blip.
         if (listResult.success) setAchievements(listResult.achievements);
         if (progressResult.success) setProgress(progressResult);
         setLoading(false);
@@ -106,9 +106,9 @@ export function useAchievements(romId: number, raId: number | null, isActive: bo
     detach(loadAchievements());
     return () => {
       cancelled = true;
-      // Torn down mid-flight (e.g. a concurrent call flipped the store offline) —
-      // release the gate and drop the spinner so the re-run / reconnect isn't
-      // wedged behind a stuck loading flag (#1345 F1, mirrors the save-slot load).
+      // Torn down mid-flight (e.g. a concurrent call flipped the store offline):
+      // release the gate so the re-run or reconnect loads again, and clear
+      // `loading`, which the dropped answer never will.
       if (!settled) {
         loadedRef.current = false;
         setLoading(false);
@@ -119,8 +119,7 @@ export function useAchievements(romId: number, raId: number | null, isActive: bo
   return { achievements, progress, loading, isOffline };
 }
 
-/** Each earned achievement by its badge id — the `id` of an entry in
- *  `earned_achievements` is the achievement's `badge_id`. */
+/** Each earned achievement by its badge id (`EarnedAchievement.id`). */
 export function earnedByBadgeId(progress: AchievementProgress | null): Map<string, EarnedAchievement> {
   const earnedMap = new Map<string, EarnedAchievement>();
   for (const ea of progress?.earned_achievements ?? []) {

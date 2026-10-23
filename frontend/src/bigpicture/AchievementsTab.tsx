@@ -1,9 +1,9 @@
 /**
- * AchievementsTab — the RetroAchievements pane of the RomM game detail panel.
+ * AchievementsTab — the RetroAchievements tab of the game page.
  *
- * Draws the lane: the list and progress `useAchievements` loads lazily, as badge
- * rows. Nothing about it reaches the panel, which knows only the `ra_id` that
- * decides whether the tab exists at all.
+ * Draws what `useAchievements` loads: a summary, a progress bar and a row per
+ * achievement. `RomMGameInfoPanel` knows only the `ra_id` that decides whether
+ * the tab exists at all.
  *
  * Stays mounted while another tab is showing (rendering nothing) so a loaded
  * list survives a tab switch instead of re-fetching on every visit.
@@ -44,7 +44,7 @@ function makeHcSparkles(seed: number) {
 
 /** Render one achievement row — badge, title/description/rarity, earned dates,
  *  points. Earned state (and with it the hardcore treatment) comes from
- *  `earnedMap`, keyed by badge_id. */
+ *  `earnedMap`. */
 function renderCheevoRow(a: Achievement, earnedMap: Map<string, EarnedAchievement>) {
   const earnedData = earnedMap.get(a.badge_id);
   const isEarned = !!earnedData;
@@ -135,8 +135,8 @@ function renderCheevoRow(a: Achievement, earnedMap: Map<string, EarnedAchievemen
   );
 }
 
-/** The list body: summary bar, progress bar, then the earned and locked rows —
- *  earned first, each group in display order. */
+/** The list body: summary bar, progress bar, then the earned rows and the
+ *  locked ones, in `orderEarnedFirst`'s order. */
 function renderCheevoList(achievements: Achievement[], progress: AchievementProgress | null): ReactElement {
   const earned = progress?.earned ?? 0;
   const total = progress?.total ?? achievements.length;
