@@ -566,7 +566,7 @@ export const getSgdbArtworkBase64 = endpoint<
 
 /**
  * An artwork slot the game page fills only while it is empty: the wide grid, the logo, the hero, the icon, or the
- * cover, which is empty only where RomM has no cover for the game (#2381 D27).
+ * cover (why the cover too: docs/architecture/steam-non-steam-shortcuts.md, "The cover where RomM has none").
  */
 export type SgdbArtworkSlot = "grid" | "logo" | "hero" | "icon" | "cover";
 

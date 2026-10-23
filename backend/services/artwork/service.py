@@ -503,8 +503,8 @@ class ArtworkService:
     def _bound_covers_left_alone_io(self, all_roms: list[dict[str, Any]]) -> set[int]:
         """The ROMs among *all_roms* bound to a shortcut whose cover the apply's download leaves alone.
 
-        Beside the ones the refresh leaves alone, a cover Tender picked from
-        SteamGridDB, which only the refresh replaces, never a seed from it.
+        Besides those the refresh leaves alone, a cover that is Tender's
+        SteamGridDB pick: only the refresh replaces it, never a seed from it.
         """
         with self._uow_factory() as uow:
             bound = [

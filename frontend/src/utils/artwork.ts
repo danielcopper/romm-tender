@@ -299,7 +299,7 @@ async function reportReplacedSlot(
 
 /**
  * The slots the game page fills only while empty through `SetCustomArtworkForApp`, each with Steam's asset type for
- * it; the cover is empty only where RomM has no cover for the game (#2381 D27).
+ * it; the cover's rule is "The cover where RomM has none" in docs/architecture/steam-non-steam-shortcuts.md.
  */
 const FILLED_SLOTS: ReadonlyArray<[slot: Exclude<SgdbArtworkSlot, "icon">, assetType: number]> = [
   ["hero", 1],

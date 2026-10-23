@@ -18,7 +18,7 @@ const SLOT_NOUNS: Readonly<Record<ArtworkTabSlot, string>> = {
   icon: "the icon",
 };
 
-/** The notification for the slots keeping current replaced, such as "Updated the logo and the hero from SteamGridDB". */
+/** The notification for the slots keeping current replaced, such as "Updated the hero and the logo from SteamGridDB". */
 export function keptCurrentNotice(slots: readonly ArtworkTabSlot[]): string {
   const nouns = slots.map((slot) => SLOT_NOUNS[slot]);
   const last = nouns.pop();

@@ -6,15 +6,15 @@ is stopped leaves exactly the rest for the next one: the icons from
 ``shortcuts.vdf`` and their recorded outcomes
 (:func:`domain.artwork_slot_outcome.icon_waits`), the wide grids, covers and
 logos from Steam's grid directory and theirs
-(:func:`domain.artwork_slot_outcome.slot_waits`); a cover slot is empty only
-where RomM has no cover for the game (#2381 D27). It works in two passes, the
-icon, the wide grid and the cover shortcut by shortcut first, then the logos.
-It fetches four shortcuts at a time, puts each image into the artwork cache,
-writes each icon into Steam's grid directory, and hands the finished ones to
-the frontend in batches as the ``shortcut_artwork`` event, which names each
-icon's file with what its record is to carry, and each wide grid, cover or logo
-for the frontend to fetch and set; it hands the next batch over only once the
-frontend has finished the last. Before each batch it reads
+(:func:`domain.artwork_slot_outcome.slot_waits`); why an empty cover is filled
+from SteamGridDB is that page's "The cover where RomM has none". It works in
+two passes, the icon, the wide grid and the cover shortcut by shortcut first,
+then the logos. It fetches four shortcuts at a time, puts each image into the
+artwork cache, writes each icon into Steam's grid directory, and hands the
+finished ones to the frontend in batches as the ``shortcut_artwork`` event,
+which names each icon's file with what its record is to carry, and each wide
+grid, cover or logo for the frontend to fetch and set; it hands the next batch
+over only once the frontend has finished the last. Before each batch it reads
 Steam's renderer memory, and at or above the session budget's ceiling the run
 ends.
 

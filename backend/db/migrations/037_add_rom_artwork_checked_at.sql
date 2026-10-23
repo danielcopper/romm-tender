@@ -5,7 +5,7 @@
 --
 --   * roms.artwork_checked_at — REAL Unix-epoch seconds at which the game page
 --     last started checking whether Tender's rule now picks another SteamGridDB
---     image for one of the game's automatic slots. NULL is never checked. One
+--     image for one of the game's automatic slots. NULL means never checked. One
 --     per ROM, so each version of a game keeps its own, as its images and
 --     choices are kept per version. How the check writes and takes it back is
 --     "Keeping automatic artwork current" in

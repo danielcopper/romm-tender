@@ -188,12 +188,12 @@ class ArtworkTabUseCases:
         ``cover`` answers with a lease, for the frontend to set the cover
         ``get_artwork_base64`` serves; where RomM has no cover, Tender's pick
         among SteamGridDB's covers is served as for a SteamGridDB slot. Refuses
-        with ``invalid_payload`` for an unknown slot; for the cover as its reload
-        refuses, ``no_cover`` also where SteamGridDB has no cover or cannot be
-        asked for lack of a key or a game, and as SteamGridDB's errors answer;
-        for the others with
-        ``no_api_key``, ``no_sgdb_game`` without a SteamGridDB game, and as
-        SteamGridDB's errors answer. A refusal keeps the choice.
+        with ``invalid_payload`` for an unknown slot; for the cover as its
+        reload refuses, with ``no_cover`` also where SteamGridDB has no cover or
+        cannot be asked for lack of a key or a game, and as SteamGridDB's errors
+        answer; for the others with ``no_api_key``, ``no_sgdb_game`` without a
+        SteamGridDB game, and as SteamGridDB's errors answer. A refusal keeps
+        the choice.
         """
         async with self._rules.hold("set_artwork_slot_automatic", update=True, migration=True, prune=True):
             rom_id, artwork_slot = int(rom_id), _tab_slot(slot)
