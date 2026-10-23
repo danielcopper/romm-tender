@@ -359,11 +359,13 @@ class SyncOrchestrator:
             # Collapse to one entry per sibling group (ADR-0021) so the preview
             # counts games, not individual dumps: a multi-version game becomes one
             # shortcut and its unbound siblings stop reading as perpetual "new".
-            # Each group is collapsed with the view its apply unit will use, so the
-            # preview counts can't diverge from what the apply produces (the #1292
-            # bug class). A group is per-platform: one a platform unit delivers a
-            # member of arrives whole, and one only collections reach is the
-            # partial view a collection unit has (#2536).
+            # The view is chosen per group as the apply's units have it, so the
+            # rebinds the view decides are counted as the apply makes them (the
+            # #1292 bug class). A group is per-platform: one a platform unit
+            # delivers a member of is complete, the view that unit collapses with
+            # (a unit skipped as unchanged collapses nothing, and its groups stay
+            # complete here), and one only collections reach is the partial view a
+            # collection unit has (#2536).
             whole_groups = {sd.get("sibling_group_key") for sd in shortcuts_data if sd["rom_id"] in platform_rom_ids}
             emitted = collapse_sibling_groups(
                 shortcuts_data,
