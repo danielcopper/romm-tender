@@ -59,7 +59,6 @@ export function useBumperHandler(): (evt: GamepadEvent) => void {
 
 /** The tab *by* steps from *active* among *ids*, going round at either end; *active* outside *ids* counts as the first. */
 export function steppedTab(ids: readonly string[], active: string, by: number): string | undefined {
-  if (ids.length === 0) return undefined;
   const at = Math.max(0, ids.indexOf(active));
   return ids[(at + by + ids.length) % ids.length];
 }

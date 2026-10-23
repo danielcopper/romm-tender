@@ -12,10 +12,11 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
-import { createElement, useSyncExternalStore, type ComponentProps, type ReactElement } from "react";
-import { showModal } from "@decky/ui";
+import { createElement, useSyncExternalStore, type ComponentProps, type FC, type ReactElement } from "react";
+import { Focusable, showModal } from "@decky/ui";
 import { RomMGameInfoPanel } from "./RomMGameInfoPanel";
 import { EmulatorStepScope, useStepOnTriggers } from "./emulatorStepping";
+import { TabStepScope, useBumperHandler } from "./tabStepping";
 import * as backend from "../api/backend";
 import type { BiosAnswer, CachedGameDetail } from "../api/backend";
 import { HostTransportError } from "../api/host";
@@ -6374,6 +6375,195 @@ describe("RomMGameInfoPanel", () => {
 
       expect(queryByTestId("saves-tab")).not.toBeNull();
       expect(queryByTestId("slot-setup-wizard")).toBeNull();
+    });
+  });
+
+  describe("the game page's tabs (#2421)", () => {
+    const L1 = 5;
+    const R1 = 6;
+    const R2 = 8;
+    const pull = (from: Element, button: number) =>
+      fireEvent(from, new CustomEvent("decky-button-down", { detail: { button }, bubbles: true }));
+    const tabIds = (container: HTMLElement) =>
+      [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute("data-testid"));
+    const shownTab = (container: HTMLElement) =>
+      container.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("data-testid");
+    const press = async (container: HTMLElement, testId: string) => {
+      await act(async () => {
+        fireEvent.click(container.querySelector(`[data-testid="${testId}"]`) as HTMLElement);
+      });
+      await flushAsync();
+    };
+
+    /** The play row's stand-in: a node of Tender's section outside the tabs, carrying the play row's bumper handler. */
+    const PlayRow: FC = () => (
+      <Focusable className="play-row-stand-in" onButtonDown={useBumperHandler()}>
+        <button type="button">Play</button>
+      </Focusable>
+    );
+    const section = () =>
+      render(
+        <TabStepScope>
+          <PlayRow />
+          <RomMGameInfoPanel appId={testAppId} />
+        </TabStepScope>,
+      );
+    const playRow = (container: HTMLElement) => container.querySelector(".play-row-stand-in") as HTMLElement;
+    const detail = (overrides: Partial<CachedGameDetail> = {}): CachedGameDetail => ({
+      found: true,
+      rom_id: 31,
+      platform_slug: "snes",
+      metadata: makeMetadata(),
+      stale_fields: [],
+      ...overrides,
+    });
+
+    it("hands Steam's tabbed page every tab in its fixed order, titled as before", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ ra_id: 7, save_sync_enabled: true }));
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(tabIds(container)).toEqual(["tab-info", "tab-achievements", "tab-saves", "tab-bios", "tab-artwork"]);
+      expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+        "GAME INFO",
+        "ACHIEVEMENTS",
+        "SAVES",
+        "BIOS",
+        "ARTWORK",
+      ]);
+      expect(shownTab(container)).toBe("tab-info");
+    });
+
+    it("leaves a tab whose pane has nothing to show out of the tabbed page", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail());
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(tabIds(container)).toEqual(["tab-info", "tab-bios", "tab-artwork"]);
+    });
+
+    it("shows the tab Steam's tabbed page reports shown", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail());
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await press(container, "tab-bios");
+      expect(shownTab(container)).toBe("tab-bios");
+      expect(container.querySelector('[data-testid="steam-tab-content"]')?.textContent).toContain("BIOS");
+    });
+
+    it("steps to the next shown tab with R1 from the play row, skipping a tab not shown", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ save_sync_enabled: true }));
+      const { container } = section();
+      await flushAsync();
+      await act(async () => {
+        pull(playRow(container), R1);
+      });
+      expect(shownTab(container)).toBe("tab-saves");
+      await act(async () => {
+        pull(playRow(container), R1);
+      });
+      expect(shownTab(container)).toBe("tab-bios");
+    });
+
+    it("steps back with L1 from the play row, going round from the first tab to the last and on to the first", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail());
+      const { container } = section();
+      await flushAsync();
+      await act(async () => {
+        pull(playRow(container), L1);
+      });
+      expect(shownTab(container)).toBe("tab-artwork");
+      await act(async () => {
+        pull(playRow(container), R1);
+      });
+      expect(shownTab(container)).toBe("tab-info");
+    });
+
+    it("on the BIOS tab, lets L2 and R2 step the emulators and never the tabs", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail());
+      const step = vi.fn();
+      const Selector = () => {
+        useStepOnTriggers(step);
+        return null;
+      };
+      const { container } = render(
+        <EmulatorStepScope>
+          {() => (
+            <TabStepScope>
+              <Selector />
+              <PlayRow />
+              <RomMGameInfoPanel appId={testAppId} />
+            </TabStepScope>
+          )}
+        </EmulatorStepScope>,
+      );
+      await flushAsync();
+      await press(container, "tab-bios");
+      await act(async () => {
+        pull(container.querySelector('[data-testid="tab-info"]') as HTMLElement, R2);
+        pull(container.querySelector('[data-testid="steam-tab-content"]') as HTMLElement, R2);
+        pull(playRow(container), R2);
+      });
+      expect(step.mock.calls).toEqual([[1], [1]]);
+      expect(shownTab(container)).toBe("tab-bios");
+    });
+
+    describe("what a pane holds across a tab switch", () => {
+      it("shows the BIOS tab on the emulator it was stepped to when it is shown again", async () => {
+        const answer = noBiosNeededAnswer();
+        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
+          detail({ bios_status: answer.bios_status ?? null, bios_level: "ok" }),
+        );
+        const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+        await flushAsync();
+        await press(container, "tab-bios");
+        expect(container.textContent).toContain("1 / 2");
+        fireEvent.click(container.querySelector('button[aria-label="Next emulator"]') as HTMLElement);
+        expect(container.textContent).toContain("2 / 2");
+
+        await press(container, "tab-info");
+        expect(container.textContent).not.toContain("2 / 2");
+        await press(container, "tab-bios");
+        expect(container.textContent).toContain("2 / 2");
+      });
+
+      it("shows ACHIEVEMENTS again without a second load and without a spinner", async () => {
+        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ ra_id: 7 }));
+        vi.mocked(backend.getAchievements).mockResolvedValue({
+          success: true,
+          total: 1,
+          achievements: [
+            {
+              ra_id: 1,
+              badge_id: "b1",
+              title: "First Steps",
+              description: "Did the thing",
+              points: 5,
+              badge_url: "http://example/b1.png",
+              badge_url_lock: "http://example/b1-lock.png",
+              display_order: 1,
+              type: "win",
+              num_awarded: 1,
+              num_awarded_hardcore: 0,
+            },
+          ],
+        });
+        vi.mocked(backend.getAchievementProgress).mockResolvedValue({
+          success: true,
+          earned: 0,
+          earned_hardcore: 0,
+          total: 1,
+          earned_achievements: [],
+        });
+        const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+        await flushAsync();
+        await press(container, "tab-achievements");
+        expect(container.textContent).toContain("First Steps");
+
+        await press(container, "tab-info");
+        fireEvent.click(container.querySelector('[data-testid="tab-achievements"]') as HTMLElement);
+        expect(container.textContent).toContain("First Steps");
+        expect(container.textContent).not.toContain("Loading achievements");
+        expect(backend.getAchievements).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

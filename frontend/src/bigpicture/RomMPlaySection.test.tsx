@@ -20,6 +20,8 @@ import { _resetArtworkSlotsForTests } from "../utils/artworkSlotsStore";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { showContextMenu, showModal } from "@decky/ui";
 import { EmulatorStepScope, useStepOnTriggers } from "./emulatorStepping";
+import { TabStepScope, useStepTabsOnBumpers } from "./tabStepping";
+import { scrollToTop } from "../utils/scrollHelpers";
 import { HostTransportError, toaster } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import {
@@ -213,7 +215,7 @@ vi.mock("@decky/ui", async () => {
         },
         children as never,
       ),
-    GamepadButton: { TRIGGER_LEFT: 7, TRIGGER_RIGHT: 8 },
+    GamepadButton: { BUMPER_LEFT: 5, BUMPER_RIGHT: 6, TRIGGER_LEFT: 7, TRIGGER_RIGHT: 8 },
     // `onButtonDown` is Steam's, not the DOM's: it rides a "decky-button-down"
     // listener, as in the global stub, rather than reaching the div as a prop.
     Focusable: ({ onButtonDown, ...p }: AnyProps & { onButtonDown?: (e: Event) => void }) =>
@@ -520,6 +522,34 @@ describe("RomMPlaySection", () => {
       const row = container.querySelector(".romm-play-section-row") as HTMLElement;
       fireEvent(row, new CustomEvent("decky-button-down", { detail: { button: 7 }, bubbles: true }));
       expect(step).toHaveBeenCalledWith(-1);
+    });
+
+    it("hands L1 and R1 from the play row to the game page's tabs", async () => {
+      const step = vi.fn();
+      const Tabs = () => {
+        useStepTabsOnBumpers(step);
+        return null;
+      };
+      const { container } = render(
+        <TabStepScope>
+          <Tabs />
+          <RomMPlaySection appId={testAppId} />
+        </TabStepScope>,
+      );
+      await flushAsync();
+      const row = container.querySelector(".romm-play-section-row") as HTMLElement;
+      fireEvent(row, new CustomEvent("decky-button-down", { detail: { button: 6 }, bubbles: true }));
+      expect(step).toHaveBeenLastCalledWith(1);
+      fireEvent(row, new CustomEvent("decky-button-down", { detail: { button: 5 }, bubbles: true }));
+      expect(step).toHaveBeenLastCalledWith(-1);
+    });
+
+    it("scrolls the game page back to its top when focus comes to the play row", async () => {
+      vi.mocked(scrollToTop).mockClear();
+      const { queryByTestId } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      fireEvent.focusIn(queryByTestId("play-button") as HTMLElement);
+      expect(scrollToTop).toHaveBeenCalled();
     });
   });
 

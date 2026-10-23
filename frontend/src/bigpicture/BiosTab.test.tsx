@@ -3,12 +3,13 @@
 // tabs' call, pinned beside the panel (RomMGameInfoPanel.test.tsx).
 
 import { describe, it, expect, vi } from "vitest";
-import type { ReactElement } from "react";
+import { useState, type FC, type ReactElement } from "react";
 import { act, fireEvent, render } from "@testing-library/react";
 import * as deckyUi from "@decky/ui";
 import { showModal } from "@decky/ui";
 import * as backend from "../api/backend";
 import { EmulatorStepScope } from "./emulatorStepping";
+import { BiosTab, useBiosTab } from "./BiosTab";
 import { GamePageTabs } from "./GamePageTabs";
 import { BiosTabWithState } from "../test-utils/biosTab";
 import { libretroEmu } from "../test-utils/coreFixtures";
@@ -971,6 +972,78 @@ describe("BiosTab", () => {
       first.unmount();
       const again = render(tab());
       expect(again.container.textContent).not.toContain("Could not place a link");
+    });
+
+    describe("while another tab of the game page is shown", () => {
+      // The panel holds the tab's state and Steam's tabbed page unmounts the pane
+      // whenever another tab is shown, as the stand-in for it does here.
+      const place = "/home/deck/retrodeck/bios/dc_boot.bin";
+      const files = [row("dc_boot.bin", { required_by_active: true, local_path: place, on_server: true })];
+      const GamePage: FC = () => {
+        const [active, setActive] = useState("bios");
+        const status = statusWith(files);
+        const tabState = useBiosTab({ biosStatus: status, platformSlug: "dc" });
+        return (
+          <GamePageTabs
+            tabs={[
+              { id: "info", title: "GAME INFO", content: <div>game info</div> },
+              {
+                id: "bios",
+                title: "BIOS",
+                content: <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} tabState={tabState} />,
+              },
+            ]}
+            activeTab={active}
+            onShowTab={setActive}
+          />
+        );
+      };
+      const show = (container: HTMLElement, tab: "info" | "bios") =>
+        fireEvent.click(container.querySelector(`[data-testid="tab-${tab}"]`) as HTMLElement);
+      const download = (container: HTMLElement) =>
+        [...container.querySelectorAll("button")].find((b) => b.textContent === "Download") as HTMLElement;
+
+      it("keeps a press under way, and shows it running when the tab is shown again", async () => {
+        let finish!: (answer: { success: true; message: string; downloaded: number }) => void;
+        vi.mocked(backend.downloadPlatformFirmwareFile).mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+        );
+        const { container } = render(<GamePage />);
+        await act(async () => {
+          fireEvent.click(download(container));
+        });
+        expect(container.querySelector('[data-testid="bios-file-row"] [data-testid="spinner"]')).not.toBeNull();
+
+        show(container, "info");
+        expect(container.querySelector('[data-testid="bios-file-row"]')).toBeNull();
+        show(container, "bios");
+        expect(container.querySelector('[data-testid="bios-file-row"] [data-testid="spinner"]')).not.toBeNull();
+        await act(async () => {
+          finish({ success: true, message: "", downloaded: 1 });
+        });
+      });
+
+      it("keeps the line a press left, and shows it when the tab is shown again", async () => {
+        const backup = "/d/backups/bios/2026-10-22_10-00-00/t/bios/dc/dc_boot.bin";
+        vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({
+          success: true,
+          message: "Downloaded dc_boot.bin",
+          downloaded: 1,
+          backups: [backup],
+        });
+        const { container, getByTestId } = render(<GamePage />);
+        await act(async () => {
+          fireEvent.click(download(container));
+        });
+        const line = `A different dc_boot.bin was already in Tender's firmware store. It was moved to ${backup}.`;
+        expect(getByTestId("status-bios").textContent).toBe(line);
+
+        show(container, "info");
+        show(container, "bios");
+        expect(getByTestId("status-bios").textContent).toBe(line);
+      });
     });
 
     it("lists server files nothing asks for in the library's own section, in the column beside the emulator's rows", () => {
