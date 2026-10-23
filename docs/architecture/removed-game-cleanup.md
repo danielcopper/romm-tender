@@ -117,11 +117,13 @@ it offers all of them, so the whole game, as the bulk scan would. Either way eac
 gone (`gone_from_romm`): by that evidence, or as the version the trash icon was opened on.
 
 Discovery reads the platform's completion stamp whether or not its skip was revoked. The end-of-run stale removal
-unbinds the rows of a platform whose sync is turned off, all but those an enabled collection returned and those a
-collection reached that RomM's exact-id answer does not show present — a row with no recorded route counts as reached by
-a collection when a collection's last completed apply listed it. A platform RomM no longer lists keeps its rows bound,
-but for a collection-reached one RomM still serves. The stale removal revokes the skip of each platform it unbinds a row
-on, and "Remove all shortcuts", a per-platform removal and a shortcut deleted in Steam's own UI, which unbind rows too,
+unbinds the rows of a platform whose sync is turned off, all but three kinds: those an enabled collection returned;
+those a collection reached that RomM's exact-id answer does not show present — a row with no recorded route counts as
+reached by a collection when a collection's last completed apply listed it; and those whose game an enabled collection
+delivered through another version, a skipped collection's members included, which stay bound whatever RomM answers while
+that answer still sets or clears their mark (#2533 D6, D7). A platform RomM no longer lists keeps its rows bound, but
+for a collection-reached one RomM still serves. The stale removal revokes the skip of each platform it unbinds a row on,
+and "Remove all shortcuts", a per-platform removal and a shortcut deleted in Steam's own UI, which unbind rows too,
 revoke it for every platform they touch; each keeps the stamp
 ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"). The
 rows keep their fetch generation and the stamp still records the fetch that set it, so Gone from RomM keeps naming the
