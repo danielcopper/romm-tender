@@ -288,7 +288,7 @@ export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport((e
  * which is what lets the start-up check ask about it at all.
  */
 export const NotificationStore: SteamNotificationStore | undefined = (
-  window as Window & { NotificationStore?: SteamNotificationStore }
+  window as unknown as { NotificationStore?: SteamNotificationStore }
 ).NotificationStore;
 
 /**
