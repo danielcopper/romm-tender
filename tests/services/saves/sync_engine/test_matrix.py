@@ -3194,12 +3194,21 @@ class TestTheSizeClaimReachesTheDecision:
 
     The sync and the save status's preview walk the same matrix with the same
     synced components, so both hand the decision the same claim. A file two
-    groups list is two components today, and so two decisions; what is pinned
-    here is the claim each of them is handed, not how many there are.
+    groups list is two components, and so two decisions; what is pinned here is
+    the claim each is handed, not how many there are.
     """
 
     @staticmethod
-    def _setup(tmp_path, claims: tuple[bool | None, ...]):
+    def _setup(
+        tmp_path,
+        claims: tuple[bool | None, ...],
+        *,
+        elsewhere: tuple[tuple[str, bool | None], ...] = (),
+    ):
+        """An answer whose groups list ``pokemon.srm`` once per claim in *claims*.
+
+        *elsewhere* adds one group per ``(name, claim)`` in another directory.
+        """
         decided: list[dict[str, Any] | None] = []
 
         def recording(**kwargs: Any):
@@ -3219,6 +3228,15 @@ class TestTheSizeClaimReachesTheDecision:
                 size_fixed=claim,
             )
             for claim in claims
+        ) + tuple(
+            SaveGroup(
+                directory=str(tmp_path / "elsewhere"),
+                files=(name,),
+                role="battery",
+                granularity="per-game-file",
+                size_fixed=claim,
+            )
+            for name, claim in elsewhere
         )
         save_locations = svc._rom_info._save_locations
         assert isinstance(save_locations, FakeSaveLocationReader)
@@ -3266,6 +3284,25 @@ class TestTheSizeClaimReachesTheDecision:
 
         assert decided
         assert {self._stated(local_file) for local_file in decided} == {expected}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", ["sync", "status"])
+    async def test_a_claim_from_another_directory_is_never_lent_to_the_file(self, tmp_path, path: str):
+        # Both files are probed in the answer's own directory. ``pokemon.srm``
+        # there is fixed whatever a group elsewhere says about a file of that
+        # name; ``pokemon.sav`` there is in no group of that directory at all, so
+        # nothing is established about it.
+        svc, _fake, decided = self._setup(tmp_path, (True,), elsewhere=(("pokemon.srm", False), ("pokemon.sav", True)))
+        _create_save(tmp_path, content=_PROGRESS, ext=".srm")
+        _create_save(tmp_path, content=_PROGRESS, ext=".sav")
+
+        if path == "sync":
+            _do_sync(svc, 42)
+        else:
+            await svc.get_save_status(42)
+
+        stated = {(local_file or {})["filename"]: self._stated(local_file) for local_file in decided}
+        assert stated == {"pokemon.srm": True, "pokemon.sav": _ABSENT}
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("claim", "conflicts"), [(True, [100]), (None, [])])

@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Any
 from domain.emulator_tag import build_emulator_tag
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from domain.save_answer import agreed_size_fixed
 from domain.save_backup import BACKUP_DIR_NAME, backup_name, select_backups_to_prune
 from domain.save_slot import filter_saves_to_slot
 from domain.sync_action import Conflict, Download, Skip, SyncAction, Upload
@@ -847,8 +846,9 @@ class MatrixExecutor:
         the caller: reading them again here would put a second live reading of
         the machine on every ROM of a whole-library sweep. A ``None`` directory
         is the refusing answer's pairing — nothing local is probed for. A file's
-        name and its size claim are both read off *synced_files*, so every
-        caller decides a file by the same claim.
+        name and its size claim — that of the component by that name in
+        *saves_dir*, where every name is probed — are both read off
+        *synced_files*, so every caller decides a file by the same claim.
 
         Walks the local saves directory + server-only canonical targets,
         runs ``compute_sync_action`` against the per-filename inputs, and
@@ -861,6 +861,7 @@ class MatrixExecutor:
         files_state: dict[str, FileSyncState] = save_state.files if save_state else {}
         device_id_str = device_id or ""
         save_names = tuple(component.name for component in synced_files)
+        size_claims = {c.name: c.size_fixed for c in synced_files if c.directory == saves_dir}
 
         local_files = self._rom_info.probe_save_files(list(save_names), saves_dir)
 
@@ -880,7 +881,7 @@ class MatrixExecutor:
                 group,
                 files_state.get(filename, FileSyncState()),
                 device_id_str,
-                agreed_size_fixed(component.size_fixed for component in synced_files if component.name == filename),
+                size_claims.get(filename),
             )
 
         # Group server saves by canonical local target filename. Server-only
