@@ -5794,19 +5794,27 @@ describe("RomMPlaySection", () => {
       expect(toasts()).toEqual(["Artwork refreshed (1/5 images applied)"]);
     });
 
-    it("hands Steam the RomM cover it reloaded, so it shows without a restart", async () => {
+    it("hands Steam the RomM cover it reloaded under the reload's lease, so it shows without a restart", async () => {
       const refresh = await openRefresh();
       vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
         success: true,
         message: "Cover refreshed",
         cover_path: "/covers/77.png",
+        prune_lease_token: "lease-romm",
       });
       vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "RC==" });
+      vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
       vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "needs_pick", candidates: [] });
       vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockClear();
       await refresh();
       expect(vi.mocked(backend.getArtworkBase64)).toHaveBeenCalledWith(77);
       expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(testAppId, "RC==", "png", 0);
+      const [written] = vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mock.invocationCallOrder;
+      const released = vi.mocked(backend.releasePruneConflictLease).mock.calls.findIndex(([t]) => t === "lease-romm");
+      expect(released).toBeGreaterThanOrEqual(0);
+      expect(vi.mocked(backend.releasePruneConflictLease).mock.invocationCallOrder[released]).toBeGreaterThan(
+        written ?? Infinity,
+      );
       expect(toasts()).toEqual(["Choose a SteamGridDB game in the ARTWORK tab first."]);
     });
 

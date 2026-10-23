@@ -522,9 +522,10 @@ export const getArtworkBase64 = endpoint<[number], { base64: string | null }>("g
 // cover, read error — returns { base64: null } silently; it never re-downloads a
 // cached cover.
 export const fetchCoverBase64 = endpoint<[number], { base64: string | null }>("fetch_cover_base64");
+/** Reload RomM's cover; a success carries the `sgdb_artwork` lease the frontend hands the cover to Steam under. */
 export const refreshCoverArtwork = endpoint<
   [number],
-  { success: boolean; reason?: WireReason; message: string; cover_path?: string }
+  { success: boolean; reason?: WireReason; message: string; cover_path?: string; prune_lease_token?: string }
 >("refresh_cover_artwork");
 // Orphaned grid-image cleanup (Data Management › Grid images). Args: the frontend's full scan of
 // live non-Steam shortcut appIds (the keep-set — RomM-owned AND foreign) and a

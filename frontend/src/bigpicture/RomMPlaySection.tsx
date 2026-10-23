@@ -33,12 +33,7 @@ import { WarningCard } from "./WarningCard";
 import { useTriggerHandler } from "./emulatorStepping";
 import { applyAutomaticArtwork, applyTabSlotImage, cancelArtworkApply } from "../utils/artwork";
 import { settleArtworkGame } from "../utils/artworkGameChange";
-import {
-  isKnownWithoutSgdbGame,
-  loadArtworkSlots,
-  useArtworkSlotsChanges,
-  writeSlotArtwork,
-} from "../utils/artworkSlotsStore";
+import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
 import { CHOOSE_GAME_FIRST } from "../utils/artworkTabWording";
 import { useAutoArtwork } from "../utils/autoArtwork";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
@@ -49,7 +44,6 @@ import {
   testConnection,
   probeReachability,
   getSgdbResolution,
-  getArtworkBase64,
   getRomMetadata,
   isEndpointFailure,
   refreshCoverArtwork,
@@ -152,14 +146,22 @@ async function refreshRommCover(romId: number, appId: number): Promise<CoverRelo
   // cover_path on the registry row so the game info panel can render the
   // refreshed image.
   const coverResult = await refreshCoverArtwork(romId).catch(
-    (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
+    (
+      e,
+    ): {
+      success: boolean;
+      reason?: WireReason | "exception";
+      message: string;
+      cover_path?: string;
+      prune_lease_token?: string;
+    } => {
       detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
       return { success: false, reason: "exception", message: "the request did not complete" };
     },
   );
   let steamGridDb = false;
   if (coverResult.success) {
-    await setRommCoverInSteam(romId, appId);
+    await setRommCoverInSteam(romId, appId, coverResult.prune_lease_token);
   } else {
     detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
     if (coverResult.reason !== "no_cover") return { failure: coverResult.message, steamGridDb };
@@ -177,17 +179,23 @@ async function refreshRommCover(romId: number, appId: number): Promise<CoverRelo
 }
 
 /**
- * Hand Steam the RomM cover the backend just reloaded: the grid file alone shows only after Steam restarts, as for the
- * sync's covers (`applyCoverArtwork` in `utils/syncManager.ts`). A write that fails is logged; the reload stands.
+ * Hand Steam the RomM cover the backend just reloaded, under the lease the reload answered with, as the ARTWORK tab's
+ * Automatic sets RomM's cover: the grid file alone shows only after Steam restarts. A write that fails is logged; the
+ * reload stands.
  */
-async function setRommCoverInSteam(romId: number, appId: number): Promise<void> {
-  try {
-    const { base64 } = await getArtworkBase64(romId);
-    if (!base64) return;
-    await writeSlotArtwork(appId, "cover", () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", 0));
-  } catch (e) {
+async function setRommCoverInSteam(romId: number, appId: number, leaseToken: string | undefined): Promise<void> {
+  if (!leaseToken) return;
+  const outcome = await applyTabSlotImage(
+    romId,
+    appId,
+    "cover",
+    { status: "cover", prune_lease_token: leaseToken },
+    false,
+  ).catch((e: unknown) => {
     detach(debugLog(`Refresh Artwork: RomM's cover for appId ${appId} was not handed to Steam: ${e}`));
-  }
+    return null;
+  });
+  if (outcome === "refused") detach(debugLog(`Refresh Artwork: Steam refused RomM's cover for appId ${appId}`));
 }
 
 /**

@@ -1637,9 +1637,11 @@ class TestRefreshCover:
         romm_api.download_cover.side_effect = _writing_download(file_store, b"new cover bytes")
 
         result = await artwork_service.refresh_cover(42)
+        lease = result.pop("prune_lease_token")
 
         cache = _cache(cover_cache_dir, 42)
         expected_final = os.path.join(grid, "999p.png")
+        assert lease.startswith("sgdb_artwork")
         # The persisted cover_path is the CACHE path; the grid gets a copy. The
         # repair also stamps the confirmed cover fingerprint (#1386).
         assert result == {"success": True, "message": "Cover refreshed", "cover_path": cache}
@@ -1826,6 +1828,7 @@ class TestRefreshCover:
         romm_api.download_cover_from_url.side_effect = _writing_download(file_store, b"cdn")
 
         result = await artwork_service.refresh_cover(42)
+        result.pop("prune_lease_token")
 
         cache = _cache(cover_cache_dir, 42)
         assert result == {"success": True, "message": "Cover refreshed", "cover_path": cache}

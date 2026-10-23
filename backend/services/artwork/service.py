@@ -935,15 +935,17 @@ class ArtworkService:
         fingerprint (#1386). ADR-0006: the read and write each own a short
         UoW with the RomM/file I/O in between, outside any transaction.
 
-        Refuses with ``not_synced``, ``no_grid_dir``, ``not_found`` (RomM
-        answered no ROM) and ``no_cover``, and with ``download_failed`` where
-        this device raises an ``OSError`` around the download — the cover's
-        folder, the file the download writes, the move into place, the
-        validator sidecar; the ROM row is left as it was. A RomM error
-        propagates.
+        The answer carries an ``sgdb_artwork`` lease in ``prune_lease_token``
+        for the frontend to hand the cover to Steam under. Refuses with
+        ``not_synced``, ``no_grid_dir``, ``not_found`` (RomM answered no ROM),
+        ``no_cover``, and ``download_failed`` where this device raises an
+        ``OSError`` around the download — the cover's folder, the file the
+        download writes, the move into place, the validator sidecar; the ROM
+        row is left as it was. A RomM error propagates.
         """
         async with self._rules.hold("refresh_cover_artwork", update=True, migration=True, prune=True):
-            return await self.refresh_cover_unchecked(rom_id)
+            answer = await self.refresh_cover_unchecked(rom_id)
+            return {**answer, "prune_lease_token": await self._rules.acquire_lease("sgdb_artwork")}
 
     async def refresh_cover_unchecked(self, rom_id: int) -> dict[str, Any]:
         """:meth:`refresh_cover` without its conflict rules, for a use case that checked its own.
