@@ -835,9 +835,9 @@ When SteamGridDB refuses your API key, **Refresh Artwork** says "SteamGridDB ref
 Settings"; when SteamGridDB is rate-limiting requests, it says that instead. Opening a game's page stays quiet about
 both. When the RomM cover could not be updated, the same message says why, after the SteamGridDB result.
 
-The full set of per-game actions — refresh artwork, refresh metadata, sync save files, and uninstall — is available from
-the RomM Actions menu in the game detail panel. BIOS files are downloaded from the game's **BIOS** tab
-([BIOS Status on the Game Detail Page](bios-management.md#bios-status-on-the-game-detail-page)).
+The full set of per-game actions — refresh artwork, refresh metadata, sync save files, delete local saves, and uninstall
+— is available from the RomM Actions menu in the game detail panel. BIOS files are downloaded from the game's **BIOS**
+tab ([BIOS Status on the Game Detail Page](bios-management.md#bios-status-on-the-game-detail-page)).
 
 ![RomM Actions menu with Refresh Artwork, Refresh Metadata, Sync Save Files, Delete Local Saves, and Uninstall entries](../assets/screenshot-actions.jpg)
 
