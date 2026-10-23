@@ -329,9 +329,9 @@ the source that answers, which is RetroDECK while it is switched on. Where _sour
 games."**; where the platform's only systems are switched off in _source_, they say **"System _system_ is switched off
 in _source_."** A platform's BIOS downloads are not refused: they land in Tender's firmware store and are linked once a
 source has a system for the platform ([Where downloads go](bios-management.md#where-downloads-go)). A game you already
-installed keeps the system it was downloaded under, and **Download BIOS** on its page links the files for that system.
-Where several systems fit one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — the main one (`snes`) is
-taken; the platform's page names it.
+installed keeps the system it was downloaded under, and **Download all** on its BIOS tab links the files for that
+system. Where several systems fit one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — the main one (`snes`)
+is taken; the platform's page names it.
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need
@@ -835,8 +835,11 @@ When SteamGridDB refuses your API key, **Refresh Artwork** says "SteamGridDB ref
 Settings"; when SteamGridDB is rate-limiting requests, it says that instead. Opening a game's page stays quiet about
 both. When the RomM cover could not be updated, the same message says why, after the SteamGridDB result.
 
-The full set of per-game actions — refresh artwork, refresh metadata, sync save files, download BIOS, and uninstall — is
-available from the RomM Actions menu in the game detail panel.
+The full set of per-game actions — refresh artwork, refresh metadata, sync save files, and uninstall — is available from
+the RomM Actions menu in the game detail panel. BIOS files are downloaded from the game's **BIOS** tab
+([BIOS Status on the Game Detail Page](bios-management.md#bios-status-on-the-game-detail-page)).
+
+<!-- Screenshot: the RomM Actions menu without Download BIOS — screenshot-actions.jpg still shows that entry -->
 
 ![RomM Actions context menu with Refresh Artwork, Sync Save Files, Download BIOS, and Uninstall entries](../assets/screenshot-actions.jpg)
 

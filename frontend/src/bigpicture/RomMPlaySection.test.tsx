@@ -11,8 +11,7 @@
 // `testAppId` per test (incremented in `beforeEach`) — Option A in the playbook.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, renderHook, act, fireEvent, waitFor } from "@testing-library/react";
-import { forgetBiosPresses, useBiosPresses } from "../utils/biosAttempts";
+import { render, act, fireEvent, waitFor } from "@testing-library/react";
 import { createElement, type ComponentProps, type ReactElement } from "react";
 import { RomMPlaySection } from "./RomMPlaySection";
 import * as backend from "../api/backend";
@@ -3276,11 +3275,11 @@ describe("RomMPlaySection", () => {
   });
 
   // ------------------------------------------------------------------
-  // J. handleDownloadBios
+  // J. BIOS — the BIOS tab's own buttons, not the gear
   // ------------------------------------------------------------------
 
-  describe("handleDownloadBios", () => {
-    async function setupBiosAction() {
+  describe("the gear's BIOS entry", () => {
+    it("offers no Download BIOS", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 42,
@@ -3288,183 +3287,14 @@ describe("RomMPlaySection", () => {
       });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
-      return openRomMMenuAndGetItems(testAppId);
-    }
-
-    it("happy path: downloads BIOS, dispatches bios event, refreshes status", async () => {
-      const items = await setupBiosAction();
-      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
-        success: true,
-        message: "",
-        downloaded: 3,
-        failed: [],
-      } as never);
-      vi.mocked(backend.getBiosStatus).mockResolvedValue({
-        bios_status: {
-          platform_slug: "ps1",
-          server_count: 1,
-          local_count: 1,
-          all_downloaded: true,
-        },
-        bios_level: "ok",
-        bios_label: "OK",
-      });
-      vi.mocked(toaster.toast).mockClear();
-      const listener = vi.fn();
-      globalThis.addEventListener("romm_data_changed", listener);
-      try {
-        await act(async () => {
-          await items[3]!.props.onClick?.();
-        });
-        // The ROM goes along: a downloaded game's files are placed for the
-        // system its install record holds.
-        expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("ps1", 42);
-        expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-          expect.objectContaining({ body: "BIOS downloaded (3 files)" }),
-        );
-        const biosEv = listener.mock.calls.map((c) => c[0] as CustomEvent).find((e) => e.detail.type === "bios");
-        expect(biosEv?.detail).toMatchObject({
-          type: "bios",
-          platform_slug: "ps1",
-        });
-      } finally {
-        globalThis.removeEventListener("romm_data_changed", listener);
-      }
-    });
-
-    it("toasts only what it downloaded, and leaves a link it could not place to the BIOS tab's rows", async () => {
-      const items = await setupBiosAction();
-      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
-        success: true,
-        message: "",
-        downloaded: 1,
-        failed: [],
-        placed: 0,
-        left_in_place: 1,
-        link_failures: [{ place: "/r/bios/scph5501.bin", file_name: "scph5501.bin", reason: "Permission denied" }],
-        backups: ["/d/backups/bios/s/t/bios/ps1/scph5501.bin"],
-      } as never);
-      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null, bios_label: null });
-      vi.mocked(toaster.toast).mockClear();
-
-      await act(async () => {
-        await items[3]!.props.onClick?.();
-      });
-
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ body: "BIOS downloaded (1 files)" }),
-      );
-      const { result } = renderHook(() => useBiosPresses());
-      expect(result.current("/r/bios/scph5501.bin", "scph5501.bin")).toEqual({
-        linkFailure: "Permission denied",
-        movedAside: "/d/backups/bios/s/t/bios/ps1/scph5501.bin",
-      });
-      act(() => forgetBiosPresses());
-    });
-
-    it("nothing downloaded and getBiosStatus rejecting → safe fallback, no setInfo write, no game page told", async () => {
-      const items = await setupBiosAction();
-      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
-        success: true,
-        message: "",
-        downloaded: 0,
-        failed: [],
-      } as never);
-      vi.mocked(backend.getBiosStatus).mockRejectedValue(new Error("net"));
-      vi.mocked(toaster.toast).mockClear();
-      const listener = vi.fn();
-      globalThis.addEventListener("romm_data_changed", listener);
-      try {
-        await act(async () => {
-          await items[3]!.props.onClick?.();
-        });
-        // Toast still fires; fallback has bios_status null → skips setInfo.
-        expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-          expect.objectContaining({ body: "BIOS downloaded (0 files)" }),
-        );
-        // A batch that downloaded nothing changed no firmware, so no page is told.
-        const biosEvents = listener.mock.calls.map((c) => c[0] as CustomEvent).filter((e) => e.detail.type === "bios");
-        expect(biosEvents).toHaveLength(0);
-      } finally {
-        globalThis.removeEventListener("romm_data_changed", listener);
-      }
-    });
-
-    it("a batch with failed files → toasts the backend's sentence naming them", async () => {
-      const items = await setupBiosAction();
-      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
-        success: true,
-        message: "Downloaded 2 firmware files (1 failed: scph5501.bin)",
-        downloaded: 2,
-        failed: ["scph5501.bin"],
-      });
-      vi.mocked(toaster.toast).mockClear();
-      await act(async () => {
-        await items[3]!.props.onClick?.();
-      });
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Downloaded 2 firmware files (1 failed: scph5501.bin)" }),
-      );
-      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(
-        expect.objectContaining({ body: "BIOS downloaded (2 files)" }),
-      );
-    });
-
-    it("failure with message → toasts the message", async () => {
-      const items = await setupBiosAction();
-      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
-        success: false,
-        message: "no internet",
-      } as never);
-      vi.mocked(toaster.toast).mockClear();
-      await act(async () => {
-        await items[3]!.props.onClick?.();
-      });
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "no internet" }));
-    });
-
-    it("failure with empty message → falls back to 'BIOS download failed'", async () => {
-      const items = await setupBiosAction();
-      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
-        success: false,
-        message: "",
-      } as never);
-      vi.mocked(toaster.toast).mockClear();
-      await act(async () => {
-        await items[3]!.props.onClick?.();
-      });
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "BIOS download failed" }));
-    });
-
-    it("throw → toasts 'BIOS download failed'", async () => {
-      const items = await setupBiosAction();
-      vi.mocked(backend.downloadAllFirmware).mockRejectedValue(new Error("io"));
-      vi.mocked(toaster.toast).mockClear();
-      await act(async () => {
-        await items[3]!.props.onClick?.();
-      });
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "BIOS download failed" }));
-    });
-
-    it("no platformSlug → early return, no fetch", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 42,
-        platform_slug: "",
-      });
-      render(<RomMPlaySection appId={testAppId} />);
-      await flushAsync();
       const items = await openRomMMenuAndGetItems(testAppId);
-      vi.mocked(backend.downloadAllFirmware).mockClear();
-      await act(async () => {
-        await items[3]!.props.onClick?.();
-      });
-      expect(vi.mocked(backend.downloadAllFirmware)).not.toHaveBeenCalled();
+      expect(items.map((item) => item.props.children)).not.toContain("Download BIOS");
+      expect(items.length).toBeGreaterThan(0);
     });
   });
 
   // ------------------------------------------------------------------
-  // K. handleUninstall (separator is at index 4, so uninstall is at index 6)
+  // K. handleUninstall (separator is at index 3, so uninstall is at index 5)
   // ------------------------------------------------------------------
 
   describe("handleUninstall", () => {
@@ -4535,7 +4365,7 @@ describe("RomMPlaySection", () => {
   });
 
   describe("context menus", () => {
-    it("showRomMMenu yields 6 MenuItems + 1 separator (Refresh artwork/metadata/saves/bios + delete-saves + uninstall)", async () => {
+    it("showRomMMenu yields 5 MenuItems + 1 separator (Refresh artwork/metadata/saves + delete-saves + uninstall)", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 42,
@@ -4543,7 +4373,7 @@ describe("RomMPlaySection", () => {
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       const items = await openRomMMenuAndGetItems(testAppId);
-      expect(items).toHaveLength(6);
+      expect(items).toHaveLength(5);
       // tone="destructive" on the delete-saves + uninstall ones.
       const destructive = items.filter((i) => i.props.tone === "destructive");
       expect(destructive).toHaveLength(2);
