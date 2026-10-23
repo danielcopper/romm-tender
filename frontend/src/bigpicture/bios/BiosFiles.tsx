@@ -420,8 +420,8 @@ const BiosFileRow: FC<{
         {
           // With the folder in front of it what gets cut is the NAME rather
           // than the description that used to sit here —
-          // `scummvm/extra/hadesch_translations.dat` does not fit 202px in any
-          // arrangement. The title is the mouse's way back to it; a reader on
+          // `scummvm/extra/hadesch_translations.dat` does not fit the platform
+          // pane's ~202px name cell in any arrangement. The title is the mouse's way back to it; a reader on
           // the controller has none, and the only real fix is width the list
           // column currently holds.
           //
@@ -469,7 +469,8 @@ const BiosFileRow: FC<{
       ]}
     >
       {/* The description is a muted line UNDER the row rather than beside the
-          name: this name lives in a ~202px table cell that clips, and it
+          name: this name lives in a table cell that clips (~202px on the
+          platform pane), and it
           already gives up its folder prefix to the same shortage — hanging the
           label off it would take the NAME off the screen, which is the one
           thing a reader placing a file by hand needs. Under the row there is a
@@ -625,8 +626,9 @@ const BULK_REQUIRED = "bulk:required";
 const BULK_ALL = "bulk:all";
 const BULK_DELETE = "bulk:delete";
 
-/** A bulk button: as wide as its label, never stretched across the row it stands in. */
-export const BULK_BUTTON = { ...FLAT_BUTTON, flex: "0 1 auto" } as const;
+/** A bulk button: as wide as its label, never stretched across the row it stands in. Steam's `.DialogButton` sets
+ *  `width: 100%`, which the flex item would otherwise keep. */
+const BULK_BUTTON = { ...FLAT_BUTTON, flex: "0 1 auto", width: "auto" } as const;
 
 /** The fields of a platform's or a game's BIOS answer the part is drawn from. */
 export interface BiosAnswerFields {

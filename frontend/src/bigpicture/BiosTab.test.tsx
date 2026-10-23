@@ -6,10 +6,10 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
 import { act, fireEvent, render } from "@testing-library/react";
+import * as deckyUi from "@decky/ui";
 import { showModal } from "@decky/ui";
 import * as backend from "../api/backend";
 import { BiosTab } from "./BiosTab";
-import { BULK_BUTTON } from "./bios/BiosFiles";
 import { EmulatorStepScope } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
 import { libretroEmu } from "../test-utils/coreFixtures";
@@ -2086,7 +2086,32 @@ describe("BiosTab", () => {
     });
 
     it("draws a bulk button as wide as its label, never stretched across its row", () => {
-      expect(BULK_BUTTON.flex).toBe("0 1 auto");
+      const dialogButton = vi.spyOn(deckyUi, "DialogButton");
+      renderPsx();
+      const bulk = bulkButtonStyles(dialogButton.mock.calls);
+      dialogButton.mockRestore();
+      expect(Object.keys(bulk).sort()).toEqual(["Delete downloads", "Download all", "Download required"]);
+      for (const style of Object.values(bulk)) expect(style).toMatchObject({ width: "auto", flex: "0 1 auto" });
     });
   });
 });
+
+/** The style each bulk button was drawn with, by the start of its label. */
+function bulkButtonStyles(calls: readonly (readonly unknown[])[]): Record<string, unknown> {
+  const textOf = (node: unknown): string => {
+    if (typeof node === "string") return node;
+    if (node && typeof node === "object" && "props" in node) {
+      return textOf((node as { props: { children?: unknown } }).props.children);
+    }
+    return "";
+  };
+  const styles: Record<string, unknown> = {};
+  for (const [props] of calls) {
+    const { children, style } = props as { children?: unknown; style?: unknown };
+    const label = ["Download required", "Download all", "Delete downloads"].find((start) =>
+      textOf(children).startsWith(start),
+    );
+    if (label !== undefined) styles[label] = style;
+  }
+  return styles;
+}
