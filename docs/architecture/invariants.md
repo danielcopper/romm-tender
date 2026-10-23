@@ -670,20 +670,21 @@ Format: **invariant** — tier — enforced by.
   `frontend/src/bigpicture/library/PlatformDetail.tsx` — and since #1815 the per-row Download button reads the same
   filtered set, so a fourth reader of the axis now exists in that one file. A fifth reads it in the same file for the
   On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
-  out of all three folds below. **A sixth reader is the game page's BIOS tab** (`BiosTab.tsx`'s `rowBelongsOnThisPage`),
-  and it is display alone in the same sense: it decides whether a row gets a LINE — a file no page can fetch, that the
-  shown emulator does not require and whose verdict is not met, is nothing that page can act on — and gates no count and
-  offers no action, so it belongs to none of the three folds below either. It is asked about whichever emulator the page
-  shows. What holds the two surfaces together is that they call one predicate rather than spelling its clauses twice: a
-  second copy would let the game page point at a download button the platform page does not offer, or leave off a row it
-  does. What must NOT be shared is the game page's rule around it — required for this launch, an option of the
-  emulator's one-of group, present, fetchable, or unjudged — which is that page's alone; the platform detail has no such
-  rule, and a shared "visibility" module would invent a notion only one surface has. Each fold has its own quiet
-  failure: drop the row from the required counts and a sentence reads "all in place" under a red verdict; add it to the
-  ratio and a SNES page reports `0 / 26 files, 26 missing` for twenty-six optional files no core wants; add it to the
-  buttons and the page offers a download that cannot succeed. The counts and the ratio read `on_server`, the buttons
-  read `library` (`on_server` only on a payload that states no `library`); the row's `id: None` is an honest absence
-  with no consumer at all, so nothing breaks if it is filled in and nothing is guarded by leaving it empty
+  out of all three folds below. **A sixth reader is the game page's BIOS tab** (`frontend/src/bigpicture/BiosTab.tsx`,
+  through `frontend/src/utils/biosGamePageRows.ts`'s `rowBelongsOnThisPage`), and it is display alone in the same sense:
+  it decides whether a row gets a LINE — a file no page can fetch, that the shown emulator does not require and whose
+  verdict is not met, is nothing that page can act on — and gates no count and offers no action, so it belongs to none
+  of the three folds below either. It is asked about whichever emulator the page shows. What holds the two surfaces
+  together is that they call one predicate, `isFetchable`, rather than spelling its clauses twice: a second copy would
+  let the game page point at a download button the platform page does not offer, or leave off a row it does. What must
+  NOT be shared is the game page's rule around it — required for this launch, an option of the emulator's one-of group,
+  present, fetchable, or unjudged — which is that page's alone; the platform detail has no such rule, and a shared
+  "visibility" module would invent a notion only one surface has. Each fold has its own quiet failure: drop the row from
+  the required counts and a sentence reads "all in place" under a red verdict; add it to the ratio and a SNES page
+  reports `0 / 26 files, 26 missing` for twenty-six optional files no core wants; add it to the buttons and the page
+  offers a download that cannot succeed. The counts and the ratio read `on_server`, the buttons read `library`
+  (`on_server` only on a payload that states no `library`); the row's `id: None` is an honest absence with no consumer
+  at all, so nothing breaks if it is filled in and nothing is guarded by leaving it empty
 - **No link is placed at a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
   nobody could see what lies there, so a link could not be judged against it, and a place the resolver cannot read is
   usually one the emulator cannot read either (#2190). The row's verdict is withheld, grey, and its sentence names the
@@ -1380,28 +1381,31 @@ Format: **invariant** — tier — enforced by.
   `::TestThePlayRowTokenCountsPlainFilesOnly` what the token says beside one; `tests/services/test_firmware.py`
   (`TestAOneOfGroupIsOneRequirement`, the group cases of `TestOnePlatformOneEmulator` and `TestOneRomOneEmulator`, and
   `TestDownloadRequiredFirmware`'s group cases) pins it end to end, the ROM's own region, and that the button's count
-  and the download are one set; the frontend halves are `frontend/src/utils/biosSummary.test.ts`, `biosGroup.test.ts`,
-  `BiosTab.test.tsx` and `library/PlatformsTab.test.tsx`. The rule spans the adapter
-  (`adapters/atlas_firmware.py::_wants` and `_groups`), two domain modules (`domain/firmware_groups.py` judges,
-  `domain/bios_status.py` counts), the service (`services/firmware/status.py`, `downloads.py`, `game_detail.py` passing
-  the ROM's regions), five frontend modules (`utils/biosSummary.ts`, `utils/biosGroup.ts`, `utils/biosFetchable.ts`,
-  `bigpicture/BiosTab.tsx`, `bigpicture/library/PlatformDetail.tsx`) and the two type modules they share
-  (`types/firmware.ts`, `api/backend.ts`), and nothing joins them. **Prompt-only**: no consumer reads an option's `need`
-  as its row's `required` — `required` comes off an emulator's plain declarations alone; a group's verdict is never
-  folded into a colour on the wire — the state is one of four words and the frontend picks the colour; `unknown` is
-  never read as `met` or as `unmet`; the level a group reaches is the resolver's verdict, a partly covered group
-  reaching the platform page's amber only under the region rule (the colour entry above); `Download required`'s count
-  and the download it starts both come from `fetch_for_required` (`domain/firmware_groups.py::fetched_as_required`) and
-  never from a second rule; and nothing in the judging knows a console, an emulator or a region by name — a group the
-  resolver states for a console nobody has worded must be judged, counted and fetched with no code change, its regions
-  printed in the resolver's own spelling where no name exists. The region sets the verdict reads beside the options come
-  from the entry's own caveats, and which ones — and which one must never be read as unchecked — is
-  `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. A region whose every name the resolver refused arrives with
-  neither an option nor such a caveat: the resolver names it, with every other region the group carries no option for,
-  only under `unstated` on the group's `core-mode-unestablished` caveat, and that field is the one it is read off
-  (`adapters/atlas_firmware.py::_unstated_regions`; `TestOneOfGroups` pins it read from that statement alone and spelled
-  as the resolver spells it, `tests/domain/test_firmware_groups.py::TestARegionTheGroupStatesNothingFor` that it is
-  unchecked and named, `TestTheRegionDecides` that it keeps the platform off amber)
+  and the download are one set; the frontend halves are `frontend/src/utils/biosSummary.test.ts`,
+  `frontend/src/utils/biosGroup.test.ts`, `frontend/src/utils/biosGamePageRows.test.ts`,
+  `frontend/src/bigpicture/BiosTab.test.tsx` and `frontend/src/bigpicture/library/PlatformsTab.test.tsx`. The rule spans
+  the adapter (`adapters/atlas_firmware.py::_wants` and `_groups`), two domain modules (`domain/firmware_groups.py`
+  judges, `domain/bios_status.py` counts), the service (`services/firmware/status.py`, `downloads.py`, `game_detail.py`
+  passing the ROM's regions), six frontend modules (`frontend/src/utils/biosSummary.ts`,
+  `frontend/src/utils/biosGroup.ts`, `frontend/src/utils/biosFetchable.ts`, `frontend/src/utils/biosGamePageRows.ts`,
+  `frontend/src/bigpicture/BiosTab.tsx`, `frontend/src/bigpicture/library/PlatformDetail.tsx`) and the two type modules
+  they share (`frontend/src/types/firmware.ts`, `frontend/src/api/backend.ts`), and nothing joins them. **Prompt-only**:
+  no consumer reads an option's `need` as its row's `required` — `required` comes off an emulator's plain declarations
+  alone; a group's verdict is never folded into a colour on the wire — the state is one of four words and the frontend
+  picks the colour; `unknown` is never read as `met` or as `unmet`; the level a group reaches is the resolver's verdict,
+  a partly covered group reaching the platform page's amber only under the region rule (the colour entry above);
+  `Download required`'s count and the download it starts both come from `fetch_for_required`
+  (`domain/firmware_groups.py::fetched_as_required`) and never from a second rule; and nothing in the judging knows a
+  console, an emulator or a region by name — a group the resolver states for a console nobody has worded must be judged,
+  counted and fetched with no code change, its regions printed in the resolver's own spelling where no name exists. The
+  region sets the verdict reads beside the options come from the entry's own caveats, and which ones — and which one
+  must never be read as unchecked — is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. A region whose every
+  name the resolver refused arrives with neither an option nor such a caveat: the resolver names it, with every other
+  region the group carries no option for, only under `unstated` on the group's `core-mode-unestablished` caveat, and
+  that field is the one it is read off (`adapters/atlas_firmware.py::_unstated_regions`; `TestOneOfGroups` pins it read
+  from that statement alone and spelled as the resolver spells it,
+  `tests/domain/test_firmware_groups.py::TestARegionTheGroupStatesNothingFor` that it is unchecked and named,
+  `TestTheRegionDecides` that it keeps the platform off amber)
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only —
   `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a
