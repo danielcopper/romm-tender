@@ -2,7 +2,8 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { useEffect, useState, FC } from "react";
-import { PlaytimeScopeBanner, PLAYTIME_SCOPE_TITLE, PLAYTIME_SCOPE_MESSAGE } from "./PlaytimeScopeBanner";
+import { PLAYTIME_SCOPE_MESSAGE, PLAYTIME_SCOPE_TITLE } from "../utils/playtimeScopeWording";
+import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import { getPlaytimeScopeNotice } from "../api/backend";
 import {
   getPlaytimeScopeState,
@@ -53,6 +54,14 @@ describe("PlaytimeScopeBanner component", () => {
     ).length;
     const titleInText = container.textContent.split(PLAYTIME_SCOPE_TITLE).length - 1;
     expect(titleAttributes + titleInText).toBe(1);
+  });
+
+  it("says the title and the message word for word", () => {
+    const { container } = render(<PlaytimeScopeBanner onOpenConnections={vi.fn()} />);
+    expect(container.querySelector("section")?.getAttribute("title")).toBe("Cross-device playtime");
+    expect(container.textContent).toContain(
+      "Your saved login cannot read cross-device playtime. A fresh sign-in enables it.",
+    );
   });
 
   it("renders a Dismiss button", () => {

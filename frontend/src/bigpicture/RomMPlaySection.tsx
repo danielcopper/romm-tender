@@ -1,13 +1,15 @@
 /**
- * RomMPlaySection — wraps CustomPlayButton and adds info items to its right,
- * mimicking Steam's native PlaySection layout:
+ * RomMPlaySection — the game page's play section, mimicking Steam's native
+ * PlaySection: the play row (CustomPlayButton, the disc and version pickers,
+ * the info items, and the gear buttons at the far right), under the save
+ * content-dir warning and VanishedVersionBanner, which are why the root is a
+ * Fragment. The info items, for example:
  *
- *   [▶ Play ▾]   LAST PLAYED    PLAYTIME    ACHIEVEMENTS    SAVE SYNC    BIOS
- *                24. Jan.       14 Hours    To be impl.     ✅ 2h ago    🟢 OK
+ *   [▶ Play ▾]   LAST PLAYED    PLAYTIME    ACHIEVEMENTS    BIOS
+ *                24. Jan.       14 Hours    🏆 12/40        🔴 <bios_label>
  *
- * Uses our own romm-play-section-row CSS class on the root.
- * Individual info items use our own romm-info-* CSS classes.
- * Save Sync and BIOS items only appear when relevant.
+ * Each item appears only when it has something to say; its condition is where
+ * the item is built.
  */
 
 import { useState, useEffect, FC, Fragment, type ReactElement } from "react";
@@ -927,6 +929,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     <Focusable
       key="play-row"
       ref={playRowRef}
+      // The row also carries Steam's PlaySection class; `data-romm` is what keeps
+      // hideNativePlaySection's rule from hiding it with Steam's own section.
       data-romm="true"
       className={`romm-play-section-row ${basicAppDetailsSectionStylerClasses?.PlaySection || ""}`.trim()}
       flow-children="right"

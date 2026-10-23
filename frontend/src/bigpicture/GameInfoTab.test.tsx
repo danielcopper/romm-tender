@@ -30,6 +30,46 @@ function slotsSigned(coverSignature: string): backend.ArtworkSlots {
   };
 }
 
+describe("GameInfoTab's descriptive rows", () => {
+  const metadata = {
+    summary: "A golf game.",
+    genres: ["Sport", "Arcade"],
+    companies: ["Camelot"],
+    first_release_date: null,
+    average_rating: null,
+    game_modes: [],
+    player_count: "",
+    cached_at: 0,
+  };
+
+  it("draws the summary ahead of the metadata rows, and a list value as tags", () => {
+    const { container } = render(<GameInfoTab {...PROPS} metadata={metadata} coverBase64={null} />);
+
+    const summary = container.querySelector(".romm-panel-summary");
+    const rows = [...container.querySelectorAll(".romm-panel-info-row")];
+    expect(summary?.textContent).toBe("A golf game.");
+    expect(summary?.compareDocumentPosition(rows[0]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(rows.map((row) => row.querySelector(".romm-panel-label")?.textContent)).toEqual([
+      "Platform",
+      "Companies",
+      "Genres",
+    ]);
+    expect(rows[1]?.querySelector(".romm-panel-value")?.textContent).toBe("Camelot");
+    expect([...rows[2]!.querySelectorAll(".romm-panel-tag")].map((tag) => tag.textContent)).toEqual([
+      "Sport",
+      "Arcade",
+    ]);
+  });
+
+  it("draws the platform alone where there is no record", () => {
+    const { container } = render(<GameInfoTab {...PROPS} metadata={null} platformName="N64" coverBase64={null} />);
+
+    const rows = [...container.querySelectorAll(".romm-panel-info-row")];
+    expect(rows.map((row) => row.querySelector(".romm-panel-label")?.textContent)).toEqual(["Platform"]);
+    expect(rows[0]?.querySelector(".romm-panel-value")?.textContent).toBe("N64");
+  });
+});
+
 describe("GameInfoTab's cover (#2381 D18)", () => {
   beforeEach(() => {
     _resetArtworkSlotsForTests();

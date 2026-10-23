@@ -89,8 +89,7 @@ import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import {
   capturePruneLeaseAdmission,
   isPruneLeaseAdmissionCurrent,
-  mountPruneLeaseOwner,
-  releasePruneLeasesByOwner,
+  usePruneLeaseOwner,
   withPruneLease,
   type PruneLeaseAdmission,
 } from "../utils/pruneLease";
@@ -238,12 +237,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     [appId],
   );
 
-  useEffect(() => {
-    mountPruneLeaseOwner(leaseOwner);
-    return () => {
-      detach(releasePruneLeasesByOwner(leaseOwner));
-    };
-  }, [leaseOwner]);
+  usePruneLeaseOwner(leaseOwner);
 
   // Hide the native PlaySection via CSS while this component is mounted
   useEffect(() => {

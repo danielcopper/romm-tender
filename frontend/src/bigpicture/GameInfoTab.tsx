@@ -14,7 +14,7 @@ import { FC, useState, type ReactElement } from "react";
 import type { InstalledRom, RomMetadata } from "../types";
 import { coverUrls } from "../utils/artworkThumbs";
 import { artworkThumbToken, heldArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
-import { formatReleaseDate } from "../utils/formatters";
+import { metadataRows, type MetadataRow } from "../utils/metadataRows";
 import { infoRow, section } from "./panelSection";
 
 interface GameInfoTabProps {
@@ -35,59 +35,21 @@ interface GameInfoTabProps {
   installedRom: InstalledRom | null;
 }
 
-/** The rows a RomM metadata record contributes, in display order. */
-function metadataRows(meta: RomMetadata, platformName: string): ReactElement[] {
-  const rows: ReactElement[] = [];
-
-  if (meta.summary) {
-    rows.push(
-      <div key="summary" className="romm-panel-summary">
-        {meta.summary}
-      </div>,
-    );
-  }
-
-  if (platformName) {
-    rows.push(infoRow("platform", "Platform", platformName));
-  }
-
-  if (meta.companies.length > 0) {
-    rows.push(infoRow("companies", "Companies", meta.companies.join(", ")));
-  }
-
-  if (meta.genres.length > 0) {
-    rows.push(
-      <div key="genres" className="romm-panel-info-row">
-        <span className="romm-panel-label">Genres</span>
-        <div className="romm-panel-tags">
-          {meta.genres.map((g) => (
-            <span key={g} className="romm-panel-tag">
-              {g}
-            </span>
-          ))}
-        </div>
-      </div>,
-    );
-  }
-
-  const releaseDate = formatReleaseDate(meta.first_release_date);
-  if (releaseDate) {
-    rows.push(infoRow("release-date", "Release Date", releaseDate));
-  }
-
-  if (meta.game_modes.length > 0) {
-    rows.push(infoRow("game-modes", "Game Modes", meta.game_modes.join(", ")));
-  }
-
-  if (meta.player_count) {
-    rows.push(infoRow("players", "Players", meta.player_count));
-  }
-
-  if (meta.average_rating != null && meta.average_rating > 0) {
-    rows.push(infoRow("rating", "Metadata rating", `${Math.round(meta.average_rating)}%`));
-  }
-
-  return rows;
+/** A metadata row as this pane draws it: a list as tags, anything else as a labelled value. */
+function metadataRow(row: MetadataRow): ReactElement {
+  if (typeof row.value === "string") return infoRow(row.key, row.label, row.value);
+  return (
+    <div key={row.key} className="romm-panel-info-row">
+      <span className="romm-panel-label">{row.label}</span>
+      <div className="romm-panel-tags">
+        {row.value.map((g) => (
+          <span key={g} className="romm-panel-tag">
+            {g}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /** Every descriptive row the pane shows, in display order. */
@@ -109,12 +71,14 @@ function gameInfoRows(props: GameInfoTabProps): ReactElement[] {
     rows.push(infoRow("languages", "Languages", props.languages.join(", ")));
   }
 
-  if (props.metadata) {
-    rows.push(...metadataRows(props.metadata, props.platformName));
-  } else if (props.platformName) {
-    // No metadata — still show platform
-    rows.push(infoRow("platform", "Platform", props.platformName));
+  if (props.metadata?.summary) {
+    rows.push(
+      <div key="summary" className="romm-panel-summary">
+        {props.metadata.summary}
+      </div>,
+    );
   }
+  rows.push(...metadataRows(props.metadata, props.platformName).map(metadataRow));
 
   // "No metadata available" fires only when NO descriptive row was added (name,
   // region/languages, metadata, or platform) — a plain count of the rows above.

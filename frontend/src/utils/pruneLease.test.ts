@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
 import {
   logError,
   releaseOrphanedPruneLeases,
@@ -8,12 +9,14 @@ import {
 import {
   capturePruneLeaseAdmission,
   disownStrandedPruneLeases,
+  isPruneLeaseAdmissionCurrent,
   isPruneLeaseCancellation,
   maintainPruneLease,
   mountPruneLeaseOwner,
   PruneLeaseAdmissionCancelled,
   releasePruneLease,
   releasePruneLeasesByOwner,
+  usePruneLeaseOwner,
   withPruneLease,
 } from "./pruneLease";
 
@@ -139,6 +142,35 @@ it("releases every lease owned by an unmounted component and stops its heartbeat
   expect(releasePruneConflictLease).toHaveBeenCalledWith("lease-1");
   expect(releasePruneConflictLease).toHaveBeenCalledWith("lease-2");
   expect(renewPruneConflictLease).not.toHaveBeenCalled();
+});
+
+it("usePruneLeaseOwner mounts its owner while the component is mounted, and releases its leases on unmount", async () => {
+  vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+  const { unmount } = renderHook(() => usePruneLeaseOwner("play-button:7"));
+  const admission = capturePruneLeaseAdmission("play-button:7");
+  maintainPruneLease("lease-7", "Play", "play-button:7");
+
+  expect(isPruneLeaseAdmissionCurrent(admission)).toBe(true);
+
+  unmount();
+  await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("lease-7"));
+  expect(isPruneLeaseAdmissionCurrent(admission)).toBe(false);
+});
+
+it("usePruneLeaseOwner releases the old owner and mounts the new one when its owner changes", async () => {
+  vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+  const { rerender, unmount } = renderHook(({ owner }) => usePruneLeaseOwner(owner), {
+    initialProps: { owner: "play-button:8" },
+  });
+  const before = capturePruneLeaseAdmission("play-button:8");
+  maintainPruneLease("lease-8", "Play", "play-button:8");
+
+  rerender({ owner: "play-button:9" });
+  await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("lease-8"));
+
+  expect(isPruneLeaseAdmissionCurrent(before)).toBe(false);
+  expect(isPruneLeaseAdmissionCurrent(capturePruneLeaseAdmission("play-button:9"))).toBe(true);
+  unmount();
 });
 
 it("owner teardown aborts a delayed continuation before its next write", async () => {
