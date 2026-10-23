@@ -86,7 +86,7 @@ class PlatformSystems(Protocol):
         ...
 
     def listed_platforms(self) -> frozenset[str] | None:
-        """Every platform whose ids are kept, by slug; ``None`` where none are. Reads nothing from RomM.
+        """Every platform whose ids are kept, by slug; ``None`` where no listing was ever kept. Reads nothing from RomM.
 
         Each platform RomM listed at the last sync, and every one kept since —
         a listing read for a platform with no ids keeps the whole listing.

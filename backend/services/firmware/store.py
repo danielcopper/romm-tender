@@ -368,10 +368,10 @@ class FirmwareStore:
         files for, each system read once. An emulator its source states is not
         installed wants nothing, and so does one whose wants the resolver could
         not read, since it states no place for it; a sealed list's places are
-        wanted. Where a platform or a source could not be read — no ids were
-        ever kept, a platform's system could not be asked, a source could not
-        be read for a system — what it might want is kept, never counted as
-        nothing, and the next update asks again.
+        wanted. Where a platform or a source could not be read — no listing
+        was ever kept, a platform's system could not be asked, a source could
+        not be read for a system — what it might want is kept, never counted
+        as nothing, and the next update asks again.
         """
         if not unwanted:
             return frozenset()

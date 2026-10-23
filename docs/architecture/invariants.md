@@ -1607,9 +1607,9 @@ Format: **invariant** — tier — enforced by.
   only in a source whose list it read whole — never a sealed one — and whose roots it may touch, at a place no emulator
   that source does not state not installed wants any more, for this platform or for any other whose ids are kept — each
   one RomM listed at the last sync, and any kept since — or that Tender holds store files for; it keeps the link where
-  no ids were ever kept or such a platform or its source could not be read, and the next update asks again; an installed
-  emulator whose wants the resolver could not read wants no place, since the resolver states none; a link whose store
-  file is gone goes wherever its place may be touched** — test + prompt-only —
+  no listing was ever kept or such a platform or its source could not be read, and the next update asks again; an
+  installed emulator whose wants the resolver could not read wants no place, since the resolver states none; a link
+  whose store file is gone goes wherever its place may be touched** — test + prompt-only —
   `tests/services/test_firmware_store.py::TestOnlyAnInstalledEmulatorIsLinkedFor` (no link for an emulator stated not
   installed; a link nobody wants removed; a link the user put there, one under a root only assumed, one in a source not
   read and one a sealed list leaves out left alone; its row refusing "Replace…" with the refusal `not_installed`),
@@ -1631,12 +1631,14 @@ Format: **invariant** — tier — enforced by.
   link is unwanted — would misstate what is needed. One place can serve two platforms (D19), and a platform need hold no
   file of Tender's to want a place, so a link one platform no longer wants stays while another platform's emulator in
   the same source wants its place, and a platform or a source that could not be read is never read as wanting nothing.
-  An installed emulator whose wants the resolver could not read (`unread_emulators`) is the one exception: it wants no
-  place only because the resolver states none for it, and any emulator the resolver states a place for counts as wanting
-  it ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42, D43). Prompt-only: a new
-  placing path reads `linkable()`, never `placements`; `not_installed` comes only from the source's own launch reading;
-  a link of Tender's that still points at its store file, in a source switched off or not read, stays whatever that
-  source's list would say; a link whose store file is gone goes in any source, not only the one the test places it in
+  An installed emulator whose wants the resolver could not read (`unread_emulators`) is not such a case: it wants no
+  place, because the resolver states none for it, while an emulator its source does not state not installed wants every
+  place the resolver states for it ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42,
+  D43). Prompt-only: a new placing path reads `linkable()`, never `placements`; `not_installed` comes only from the
+  source's own launch reading; a link of Tender's that still points at its store file, in a source switched off or not
+  read, stays whatever that source's list would say; a link whose store file is gone goes in any source, not only the
+  one the test places it in; an emulator in `unread_emulators` wants no place only because no placement names it —
+  nothing pins that no placing or removal path reads that set
 - **Every save operation sends RomM the device id `SyncEngine.live_device_id` answers — registered or healed a moment
   before — and no other: `RommSaveApi.list_saves` and the sync logic (`do_sync_rom_saves`,
   `MatrixExecutor.sync_rom_saves`, `do_download_save`, `do_upload_save`) take a `LiveDeviceId`, only that entry builds

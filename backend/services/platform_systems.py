@@ -112,7 +112,7 @@ class PlatformSystemService:
         return self.platform_system(platform_slug, reading=reading)
 
     def listed_platforms(self) -> frozenset[str] | None:
-        """Every platform whose ids are kept, or ``None`` where none are. Reads nothing from RomM.
+        """Every platform whose ids are kept, or ``None`` where no listing was ever kept. Reads nothing from RomM.
 
         That is each platform RomM listed at the last sync, every one a listing
         read since named (:meth:`_read_and_keep` keeps the whole listing), and

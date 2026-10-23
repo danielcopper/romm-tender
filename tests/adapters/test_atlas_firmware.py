@@ -2595,19 +2595,19 @@ class TestEverySourceItIsPlacedIn:
         assert sorted(placement.file_name for placement in catalogue.linkable()) == ["a.bin", "b.bin"]
 
     @pytest.mark.parametrize(
-        ("rows", "ruled_out"),
+        ("entries", "ruled_out"),
         [
             (("not-installed", "startable"), False),
             (("not-installed", "unestablished"), False),
             (("not-installed", "not-installed"), True),
         ],
-        ids=["one-row-starts", "one-row-unestablished", "every-row-not-installed"],
+        ids=["one-entry-starts", "one-entry-unestablished", "every-entry-not-installed"],
     )
     def test_an_emulator_listed_twice_is_ruled_out_only_where_every_entry_says_not_installed(
-        self, traces, monkeypatch, rows, ruled_out
+        self, traces, monkeypatch, entries, ruled_out
     ):
         answer = _answer(_core(core_so="cemu", requirements=(_requirement(core_so="cemu", file_name="keys.txt"),)))
-        _detect(monkeypatch, _detecting(_Launching(answer, availability={"cemu": rows})))
+        _detect(monkeypatch, _detecting(_Launching(answer, availability={"cemu": entries})))
         adapter = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
         (catalogue,) = adapter.every_source("wiiu").read

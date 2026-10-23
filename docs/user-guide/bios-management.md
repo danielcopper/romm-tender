@@ -461,13 +461,14 @@ Tender keeps its links up to date by itself whenever you open a platform's page 
 the emulator a platform or game launches with. It places every link an emulator of the platform wants from the store,
 and puts back one of its links that was removed. It removes one whose file is gone. It also removes one no installed
 emulator of that source wants any more, where the source's list was read whole — but only once it has asked every other
-platform RomM listed at your last sync, and every platform you downloaded BIOS files for, and none of their emulators
-wants that place either. A platform is asked whether or not you downloaded anything for it. Until a sync has listed your
-platforms, the link stays. A platform it cannot ask keeps the link, and so does one whose emulator source it cannot
-read; the next update asks again. A link is only placed for an emulator its emulator source has installed — or where the
-source cannot tell — and also into EmuDeck while its emulator list is sealed, wherever the place is known; that sealed
-list never takes a link away. It never downloads anything for that — a download is only ever made when you press a
-button. Until that is done a row whose file is in the store reads _In Tender's firmware store, not linked here yet_.
+platform RomM listed at your last sync or since, and every platform you downloaded BIOS files for, and none of their
+emulators wants that place either. A platform is asked whether or not you downloaded anything for it. Until Tender has
+read the list of your RomM platforms once — at a sync, or when it first needs a platform it knows nothing about — the
+link stays. A platform it cannot ask keeps the link, and so does one whose emulator source it cannot read; the next
+update asks again. A link is only placed for an emulator its emulator source has installed — or where the source cannot
+tell — and also into EmuDeck while its emulator list is sealed, wherever the place is known; that sealed list never
+takes a link away. It never downloads anything for that — a download is only ever made when you press a button. Until
+that is done a row whose file is in the store reads _In Tender's firmware store, not linked here yet_.
 
 A link is only ever placed where the name is free. Where a file, a folder or a link that is not Tender's already lies
 there, Tender leaves it as it is, and the row says what the emulator makes of it: _Another file lies here, and the
