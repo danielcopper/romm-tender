@@ -480,7 +480,7 @@ const BiosFileRow: FC<{
   );
   if (action || stop === "focusable") return row;
   return (
-    <DialogButton data-testid="bios-row-stop" style={ROW_STOP_BUTTON} noFocusRing={false}>
+    <DialogButton className="romm-bios-row-stop" style={ROW_STOP_BUTTON} noFocusRing={false}>
       {row}
     </DialogButton>
   );
@@ -624,6 +624,9 @@ const libraryKey = (file: string) => `library:${file}`;
 const BULK_REQUIRED = "bulk:required";
 const BULK_ALL = "bulk:all";
 const BULK_DELETE = "bulk:delete";
+
+/** A bulk button: as wide as its label, never stretched across the row it stands in. */
+export const BULK_BUTTON = { ...FLAT_BUTTON, flex: "0 1 auto" } as const;
 
 /** The fields of a platform's or a game's BIOS answer the part is drawn from. */
 export interface BiosAnswerFields {
@@ -835,7 +838,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
         <ButtonRow padding="2px 16px 6px">
           <div style={{ display: "contents" }} ref={focus.slot(BULK_REQUIRED)}>
             <DialogButton
-              style={FLAT_BUTTON}
+              style={BULK_BUTTON}
               disabled={bulkDisabled(BULK_REQUIRED, showRequired)}
               onClick={pressBulk(BULK_REQUIRED, () => actions.downloadRequired(slug, shownEmulator))}
             >
@@ -860,7 +863,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
       <ButtonRow padding="2px 16px 6px">
         <div style={{ display: "contents" }} ref={focus.slot(BULK_ALL)}>
           <DialogButton
-            style={FLAT_BUTTON}
+            style={BULK_BUTTON}
             disabled={bulkDisabled(BULK_ALL, showAll)}
             onClick={pressBulk(BULK_ALL, () => actions.downloadAll(slug))}
           >
@@ -869,7 +872,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
         </div>
         <div style={{ display: "contents" }} ref={focus.slot(BULK_DELETE)}>
           <DialogButton
-            style={FLAT_BUTTON}
+            style={BULK_BUTTON}
             disabled={bulkDisabled(BULK_DELETE, deletable > 0)}
             onClick={() => {
               if (busy) return;

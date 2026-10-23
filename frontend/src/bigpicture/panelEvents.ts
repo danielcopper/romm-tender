@@ -155,6 +155,12 @@ async function handleBiosChange(
   // and to skip the wasted re-read (#1082). Read via ref to avoid a stale
   // closure.
   if (!detail.platform_slug || detail.platform_slug !== ctx.platformSlugRef.current) return;
+  await rereadBiosAnswer(ctx);
+}
+
+/** Read the panel's BIOS answer again and fold it in — after an event, or after
+ *  a press on the BIOS tab that changed the game's firmware. */
+export async function rereadBiosAnswer(ctx: PanelEventContext): Promise<void> {
   const romId = ctx.romIdRef.current;
   if (!romId) return;
   // Keyed on the rom rather than the platform: the requirement depends on the
@@ -311,7 +317,7 @@ async function handleVersionSwitched(
       // the cheaper side of the same trade.
       refreshBiosIfStale(cached, binding, ctx.readSeqs, getBiosStatus),
       refreshCoverArtInBackground(binding),
-      // The BIOS tab's Emulator column comes from the dedicated core-info
+      // The BIOS tab's emulator-list line comes from the dedicated core-info
       // path, keyed on rom_id so a per-game override follows the
       // switch. A failed read keeps the previous reading rather than
       // blanking it.

@@ -58,8 +58,8 @@ export interface PanelState {
   // Core info comes from the dedicated get_platform_core_info path (#923), not
   // from biosStatus — the two concerns are decoupled. It stays here rather than
   // in the BIOS tab because it has to reach the render in the SAME update as
-  // biosStatus: two updates would briefly name the previous emulator in the
-  // Emulator column against the new emulator's requirements.
+  // biosStatus: two updates would briefly word the BIOS tab's lines off the
+  // previous emulator against the new emulator's requirements.
   coreInfo: CoreInfo | null;
   saveSyncEnabled: boolean;
   saveStatus: SaveStatus | null;
@@ -422,8 +422,8 @@ export function openingTab(appId: number): string {
 }
 
 /** Cache-first initial render. Resolves the cached game detail for this appId,
- *  pushes it into PanelState, and fires the background refresh tasks whose
- *  results are merged in later. */
+ *  pushes it into PanelState and the game's platform to *onPlatform*, and fires
+ *  the background refresh tasks whose results are merged in later. */
 export async function loadData(
   appId: number,
   cancelled: () => boolean,
@@ -431,6 +431,7 @@ export async function loadData(
   platformSlugRef: MutableRefObject<string>,
   readSeqs: MutableRefObject<PanelReadSeqs>,
   setter: Dispatch<SetStateAction<PanelState>>,
+  onPlatform: (platformSlug: string) => void,
 ): Promise<void> {
   const overtaken = takeReadTicket(readSeqs, "detail");
   try {
@@ -449,6 +450,7 @@ export async function loadData(
 
     romIdRef.current = romId;
     platformSlugRef.current = platformSlug;
+    onPlatform(platformSlug);
 
     // Nothing is shown yet on a first render, so a payload carrying no BIOS
     // answer starts the panel out waiting for the live one.

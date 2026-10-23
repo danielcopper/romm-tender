@@ -7,13 +7,14 @@ import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
 import { act, fireEvent, render } from "@testing-library/react";
 import { showModal } from "@decky/ui";
+import * as backend from "../api/backend";
 import { BiosTab } from "./BiosTab";
+import { BULK_BUTTON } from "./bios/BiosFiles";
 import { EmulatorStepScope } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
-import { libretroEmu, sharedBy, standaloneEmu } from "../test-utils/coreFixtures";
-import { BIOS_MISSING_RED, biosColorForLevel } from "../utils/biosColor";
-import { forgetBiosPresses, noteBiosPress, noteReplaceFailed } from "../utils/biosAttempts";
-import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption, MissingConfiguredImage } from "../types";
+import { libretroEmu } from "../test-utils/coreFixtures";
+import { biosColorForLevel } from "../utils/biosColor";
+import type { BiosFileStatus, BiosStatus, CoreInfo, MissingConfiguredImage } from "../types";
 
 const coreInfo: CoreInfo = {
   active_core: "snes9x_libretro.so",
@@ -63,7 +64,6 @@ describe("BiosTab", () => {
     expect(container.textContent).toContain(
       "The one file the launching emulator opens by name is not in place (0/1 RomM library files)",
     );
-    expect(container.textContent).toContain("Snes9x");
   });
 
   it("renders nothing while another tab is showing", () => {
@@ -145,7 +145,7 @@ describe("BiosTab", () => {
     );
     expect(container.textContent).toContain("1 / 2");
     // The launching emulator's list holds no row, required or not.
-    expect(container.querySelector(".romm-panel-file-row")).toBeNull();
+    expect(container.querySelector('[data-testid="bios-file-row"]')).toBeNull();
   });
 
   it("renders the unknown reading off a status with no counts at all", () => {
@@ -579,23 +579,24 @@ describe("BiosTab", () => {
       />,
     );
 
-    const names = [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent);
+    const rows = [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')];
     // The declared path heads the row — the folder is the one thing a reader
     // placing the file by hand needs, and `file_name` is only its basename —
-    // and what the description still says follows it on the same line, in the
-    // packager's own punctuation. That is the form the packager wrote
-    // (`firmware1_desc`), with our declared path in place of the bare basename.
-    expect(names).toContain("dc/dc_boot.bin (Dreamcast BIOS)");
-    // A description that is nothing but the name adds nothing, so that row is
-    // the name alone rather than the name twice.
-    expect(names).toContain("macventure.dat");
-    expect(container.textContent).not.toContain("macventure.dat — ");
+    // and what the description still says stands on the line under it, in the
+    // packager's own punctuation.
+    expect(rows.map((row) => row.querySelector('[data-testid="bios-file-name"]')?.textContent)).toEqual([
+      "dc/dc_boot.bin",
+      "macventure.dat",
+    ]);
+    expect(rows[0]?.textContent).toContain("(Dreamcast BIOS)");
+    // A description that is nothing but the name adds nothing, so that row says
+    // the name once.
+    expect(rows[1]?.textContent.split("macventure.dat")).toHaveLength(2);
   });
 
-  it("states each row's need beside its name, so a met required file and a met optional one read apart on one line", () => {
-    // Both rows carry the same green dot; the word beside the name is what says
-    // which one this launch cannot do without, and a row with nothing more to
-    // say takes no second line for it.
+  it("states each row's need under its name, so a met required file and a met optional one read apart", () => {
+    // Both rows carry a ✓; the word under the name is what says which one this
+    // launch cannot do without.
     const row = (file_name: string, required: boolean) => ({
       file_name,
       downloaded: true,
@@ -624,71 +625,20 @@ describe("BiosTab", () => {
     );
 
     const rowOf = (name: string) =>
-      [...container.querySelectorAll<HTMLElement>(".romm-panel-file-row")].find(
-        (el) => el.querySelector(".romm-panel-file-name")?.textContent === name,
+      [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')].find(
+        (el) => el.querySelector('[data-testid="bios-file-name"]')?.textContent === name,
       ) as HTMLElement;
-    const needBeside = (name: string) => rowOf(name).querySelector(".romm-panel-file-name")?.nextElementSibling;
-    expect(needBeside("dc_boot.bin")?.textContent).toBe("· required");
-    expect(needBeside("dc_flash.bin")?.textContent).toBe("· optional");
-    // Dot, name, need — and nothing under them.
-    expect(rowOf("dc_flash.bin").children).toHaveLength(3);
-  });
-
-  it("puts the packager's label beside the name, muted, and never under the row", () => {
-    // Under the row it would read as one more line about how the file stands —
-    // the one thing it is not. Beside the name it is one statement with the
-    // name: what this file IS. Muted like the lines under the row rather than
-    // like the name, because the name is what the eye lands on.
-    const { container } = render(
-      <BiosTab
-        biosStatus={{
-          needs_bios: true,
-          server_count: 1,
-          local_count: 0,
-          ratio_server_count: 1,
-          ratio_local_count: 0,
-          all_downloaded: false,
-          required_count: 1,
-          required_downloaded: 0,
-          required_withheld: 0,
-          files: [
-            {
-              file_name: "scph5500.bin",
-              downloaded: false,
-              local_path: "",
-              declared_path: "scph5500.bin",
-              description: "scph5500.bin (PS1 JP BIOS)",
-              declaration: "read",
-              wanted: "needed",
-              required_by_active: true,
-              on_server: true,
-              satisfied: false,
-            },
-          ],
-        }}
-        biosLevel="missing"
-        coreInfo={coreInfo}
-        isActive={true}
-      />,
+    const needUnder = (name: string) => rowOf(name).querySelector('[data-testid="bios-need"]');
+    expect(needUnder("dc_boot.bin")?.textContent).toBe("required");
+    expect(needUnder("dc_flash.bin")?.textContent).toBe("optional");
+    expect(needUnder("dc_flash.bin")?.previousElementSibling).toBe(
+      rowOf("dc_flash.bin").querySelector('[data-testid="bios-file-name"]'),
     );
-
-    const name = container.querySelector(".romm-panel-file-name")!;
-    expect(name.textContent).toBe("scph5500.bin (PS1 JP BIOS)");
-    // A span of its own inside the name, in the muted colour: the label is
-    // beside the name rather than part of it.
-    const label = [...name.querySelectorAll("span")].find((el) => el.textContent.includes("(PS1 JP BIOS)"));
-    expect(label).toBeTruthy();
-    expect(label!.getAttribute("style")).toContain("rgba(255, 255, 255, 0.5)");
-    // Nothing under the row carries it — that block is what the read found.
-    const under = [...container.querySelectorAll("div")].map((div) => div.textContent);
-    expect(under).not.toContain("(PS1 JP BIOS)");
   });
 
-  it("puts a satisfied folder's images on their own lines, under a name short enough to keep its dot", () => {
-    // The row's name and its status dot share one flex line. Folding three
-    // image descriptions into that name ran it to ~150 characters, wrapped the
-    // line and left the dot stranded above the text — so the images go in the
-    // indented block below.
+  it("puts a satisfied folder's images on their own lines under its row, the row named by its folder alone", () => {
+    // Folding the image descriptions into the row's name ran it to ~150
+    // characters — so the images go in the indented block below.
     const images = [
       "USA     v02.00(14/06/2004)  Console 20040614-100909",
       "Europe  v02.00(14/06/2004)  Console 20040614-100914",
@@ -728,7 +678,7 @@ describe("BiosTab", () => {
       />,
     );
 
-    const name = container.querySelector(".romm-panel-file-name");
+    const name = container.querySelector('[data-testid="bios-file-name"]');
     const rendered = [...container.querySelectorAll("div")].map((div) => div.textContent);
     for (const image of images) expect(rendered).toContain(image);
     // The name carries the row and nothing else — no joined run of images, and
@@ -781,14 +731,14 @@ describe("BiosTab", () => {
       />,
     );
 
-    // Three parts on one line, left to right: the name, what the file IS, then
-    // how it STANDS. The note is the last and keeps the em dash, which is what
-    // marks it as a statement about the state rather than about the file (this
-    // description names nothing the row's name already shows, so it is printed
-    // whole and carries no parentheses of its own).
-    expect(container.textContent).toContain(
-      "dc_boot.bin Dreamcast boot ROM — Tender could not look into bios/, so whether dc_boot.bin is there is not known",
+    // Under the row: what the file IS, then how it STANDS — beside a mark
+    // that settles nothing.
+    const row = container.querySelector<HTMLElement>('[data-testid="bios-file-row"]');
+    expect(row?.textContent).toContain("Dreamcast boot ROM");
+    expect(row?.textContent).toContain(
+      "Tender could not look into bios/, so whether dc_boot.bin is there is not known",
     );
+    expect(row?.querySelector('[data-testid="disk-mark"]')?.textContent).toBe("?");
   });
 
   it.each([
@@ -829,10 +779,12 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.querySelector(".romm-panel-file-name")?.textContent).toBe(`scph5501.bin — ${words}`);
+    // In the Contents cell, once: a note the cell already says is not repeated under the row.
+    const row = container.querySelector<HTMLElement>('[data-testid="bios-file-row"]');
+    expect(row?.textContent.split(words)).toHaveLength(2);
   });
 
-  it("draws a missing optional file's dot grey, never amber, where another emulator requires it", () => {
+  it("draws a missing optional file's mark grey, never amber, where another emulator requires it", () => {
     // Amber means only a one-of group whose images cover some regions. What
     // another emulator demands is shown when that emulator is chosen,
     // so a file this launch does not need is grey here whoever else needs it.
@@ -868,8 +820,9 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    const dot = container.querySelector(".romm-panel-file-row .romm-status-dot") as HTMLElement;
-    expect(dot.style.backgroundColor).toBe("#8f98a0");
+    const mark = container.querySelector<HTMLElement>('[data-testid="disk-mark"]');
+    expect(mark?.textContent).toBe("✗");
+    expect(mark?.style.color).toBe("#8f98a0");
   });
 
   it("draws a folder row whose contents could not be read grey, never green", () => {
@@ -911,22 +864,22 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    const dot = container.querySelector(".romm-panel-file-row .romm-status-dot") as HTMLElement;
-    expect(dot.style.backgroundColor).toBe("#8f98a0");
+    const mark = container.querySelector<HTMLElement>('[data-testid="disk-mark"]');
+    expect(mark?.textContent).toBe("?");
+    expect(mark?.style.color).toBe("#8f98a0");
     expect(container.innerHTML).not.toContain("#d4a72c");
     expect(container.innerHTML).not.toContain("#5ba32b");
   });
 
   it.each([
-    ["green over a folder holding an image", true, "#5ba32b", "#d94126", ["firmware-image-identified"], ["Europe"]],
-    ["red over a folder holding none", false, "#d94126", "#5ba32b", ["firmware-directory-holds-no-image"], []],
-  ] as const)("draws %s", (_name, satisfied, colour, otherColour, caveats, images) => {
+    ["green over a folder holding an image", true, "✓", "#5ba32b", ["firmware-image-identified"], ["Europe"]],
+    ["red over a folder holding none", false, "✗", "#d94126", ["firmware-directory-holds-no-image"], []],
+  ] as const)("draws %s", (_name, satisfied, glyph, colour, caveats, images) => {
     // The folder's verdict is what it HOLDS, so it takes the same two colours a
     // declared file does — the amber above is for a verdict, not for a folder.
     //
-    // Asserted on the file row alone, because the header dot beside it emits the
-    // same hex for these two levels: over the whole container the presence check
-    // would pass on the header without the row's dot ever being drawn.
+    // Asserted on the file row's own mark, because the header dot beside it
+    // emits the same hex for these two levels.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -961,126 +914,14 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    const row = container.querySelector(".romm-panel-file-row");
-    expect(row?.innerHTML).toContain(colour);
-    expect(row?.innerHTML).not.toContain(otherColour);
+    const row = container.querySelector('[data-testid="bios-file-row"]');
+    const mark = row?.querySelector<HTMLElement>('[data-testid="disk-mark"]');
+    expect(mark?.textContent).toBe(glyph);
+    expect(mark?.style.color).toBe(colour);
     expect(row?.innerHTML).not.toContain("#d4a72c");
   });
 
-  it("states the launching emulator under the Emulator heading and gives it no label of its own", () => {
-    // A standalone emulator is not a core, and the column's own heading already
-    // names the subject — so the value stands alone under it, the way the BIOS
-    // column's sentence stands under `BIOS`. A label here would be a second name
-    // for the same thing, in a narrow column.
-    const { container } = render(
-      <BiosTab
-        biosStatus={biosStatus}
-        biosLevel="missing"
-        coreInfo={{
-          ...coreInfo,
-          active_core: "DUCKSTATION",
-          active_core_label: "DuckStation (Legacy) (Standalone)",
-          emulators: [standaloneEmu("DuckStation (Legacy) (Standalone)", true, { emulator: "DUCKSTATION" })],
-        }}
-        isActive={true}
-      />,
-    );
-    const titles = [...container.querySelectorAll(".romm-panel-section-title")].map((el) => el.textContent);
-    expect(titles).toEqual(["BIOS", "Emulator"]);
-    const emulatorHeading = [...container.querySelectorAll(".romm-panel-section-title")].find(
-      (el) => el.textContent === "Emulator",
-    );
-    const underTheHeading = emulatorHeading?.nextElementSibling;
-    expect(underTheHeading?.className).toBe("romm-panel-value");
-    expect(underTheHeading?.textContent).toBe("DuckStation (Legacy) (Standalone)");
-    expect(container.querySelector(".romm-panel-label")).toBeNull();
-    expect(container.textContent).not.toContain("Active Core");
-  });
-
-  it("names a launching emulator stored under one of several labels by every label its entry carries", () => {
-    const { container } = render(
-      <BiosTab
-        biosStatus={biosStatus}
-        biosLevel="missing"
-        coreInfo={{
-          ...coreInfo,
-          active_core: "pcsx2_libretro.so",
-          active_core_label: "PCSX2",
-          emulators: [sharedBy(libretroEmu("pcsx2_libretro", "LRPS2", true), ["LRPS2", "PCSX2"])],
-        }}
-        isActive={true}
-      />,
-    );
-    const emulatorHeading = [...container.querySelectorAll(".romm-panel-section-title")].find(
-      (el) => el.textContent === "Emulator",
-    );
-    expect(emulatorHeading?.nextElementSibling?.textContent).toBe("LRPS2 / PCSX2");
-  });
-
-  describe("the Emulator column where no emulator is resolved", () => {
-    // The column takes the Platforms header's words for the same payload
-    // (`emulatorClause`), so each of the three unpinnable states reads its own
-    // way, and the two the games cannot start in are red.
-    const underTheEmulatorHeading = (core: CoreInfo | null) => {
-      const { container } = render(
-        <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={core} isActive={true} />,
-      );
-      const heading = [...container.querySelectorAll(".romm-panel-section-title")].find(
-        (el) => el.textContent === "Emulator",
-      );
-      expect(heading).toBeTruthy();
-      return { container, value: heading?.nextElementSibling as HTMLElement | null };
-    };
-    const unresolved = (emulators: EmulatorOption[]): CoreInfo => ({
-      ...coreInfo,
-      active_core: null,
-      active_core_label: null,
-      emulators,
-    });
-
-    it("reads 'RetroDECK decides', not in red, where the fallback can run", () => {
-      const { container, value } = underTheEmulatorHeading({ ...coreInfo, active_core: null, active_core_label: null });
-      expect(value?.textContent).toBe("RetroDECK decides");
-      expect(value?.style.color).toBe("");
-      expect(container.textContent).not.toContain("Default");
-    });
-
-    it("reads 'no emulator installed' in red where the fallback is not installed", () => {
-      const { value } = underTheEmulatorHeading(
-        unresolved([standaloneEmu("mGBA (Standalone)", false, { bakeable: false, reason: "not_installed" })]),
-      );
-      expect(value?.textContent).toBe("no emulator installed");
-      expect(value?.style.color).toBe(BIOS_MISSING_RED);
-    });
-
-    it("reads 'no emulator' in red where the platform lists none", () => {
-      const { value } = underTheEmulatorHeading(unresolved([]));
-      expect(value?.textContent).toBe("no emulator");
-      expect(value?.style.color).toBe(BIOS_MISSING_RED);
-    });
-
-    it("renders no value under the heading while the core answer is not there", () => {
-      const { value } = underTheEmulatorHeading(null);
-      expect(value).toBeNull();
-    });
-
-    it("renders no value under the heading where the emulator list could not be read", () => {
-      const { value } = underTheEmulatorHeading({
-        ...unresolved([]),
-        emulator_data_available: false,
-        emulator_data_reason: "no_platform_system",
-      });
-      expect(value).toBeNull();
-    });
-  });
-
   describe("which rows the pane shows", () => {
-    // The Dreamcast this was written for listed eight rows, six of them arcade
-    // BIOSes Flycast declares because it also emulates Naomi and AtomisWave.
-    // Not required for the launch, not present, not in the RomM library —
-    // nothing a reader of a Dreamcast game's page could do with any of them,
-    // and they pushed the two rows that mattered off the top. The platform page
-    // keeps listing every one of them; it is the management surface.
     const row = (file_name: string, over: Partial<BiosFileStatus> = {}): BiosFileStatus => ({
       file_name,
       downloaded: false,
@@ -1095,12 +936,6 @@ describe("BiosTab", () => {
       ...over,
     });
 
-    /** The six arcade rows, in the spelling the device showed them in. */
-    const arcadeRows = ["airlbios.zip", "f355bios.zip", "f355dlx.zip", "hod2bios.zip", "naomi.zip", "naomi2.zip"].map(
-      (name) => row(name, { declared_path: `dc/${name}` }),
-    );
-
-    /** Header aggregates held fixed, so a row's fate can never move a number. */
     const statusWith = (files: BiosFileStatus[]): BiosStatus => ({
       needs_bios: true,
       server_count: 20,
@@ -1114,120 +949,67 @@ describe("BiosTab", () => {
       files,
     });
 
-    /** The declared path each row is headed with — `biosFileNote`'s note rides
-     *  on the same span behind a dash, and which rows are drawn is the question
-     *  here, not what each of them says about itself. */
-    const namesOf = (files: BiosFileStatus[]): string[] => {
-      const { container } = render(
-        <BiosTab biosStatus={statusWith(files)} biosLevel="ok" coreInfo={coreInfo} isActive={true} />,
-      );
-      return [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent.split(" — ")[0] ?? "");
-    };
+    const namesIn = (root: Element | null): string[] =>
+      [...(root?.querySelectorAll('[data-testid="bios-file-name"]') ?? [])].map((el) => el.textContent);
 
-    it.each([
-      ["the launching emulator requires it", { required_by_active: true }],
-      // The same requirement in its other shape: one option of the launching
-      // emulator's one-of group, which no emulator marks required. Drop this
-      // answer and the header states the group's verdict over a list with none
-      // of its files in it.
-      [
-        "it is an option of the launching emulator's group",
-        { one_of: { regions: ["ntsc-u"] as string[], every_region: false } },
-      ],
-      ["it is there", { satisfied: true, downloaded: true }],
-      // The condition the platform page's download buttons are built from.
-      ["the platform page can fetch it", { on_server: true }],
-      ["nothing could judge it", { satisfied: null }],
-    ] as const)("keeps a row where %s", (_why, over) => {
-      expect(namesOf([row("dc_boot.bin", over)])).toContain("dc_boot.bin");
-    });
-
-    it("keeps a row that offers Replace…, though it is not required, not an option, not met and not fetchable, and shows its button", () => {
-      const replaceable = row("dc_boot.bin", { replace_offered: true, local_path: "/bios/dc/dc_boot.bin" });
+    it("lists every row of the shown emulator, as the platform page does", () => {
+      // Flycast declares the arcade BIOSes it also emulates Naomi and AtomisWave
+      // with: not required for the launch, not present, not in the library —
+      // each is a row of its own all the same.
+      const arcade = ["airlbios.zip", "naomi.zip"].map((name) => row(name, { declared_path: `dc/${name}` }));
       const { container } = render(
         <BiosTab
-          biosStatus={statusWith([replaceable])}
+          biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), ...arcade])}
+          biosLevel="ok"
+          coreInfo={coreInfo}
+          isActive={true}
+        />,
+      );
+      expect(namesIn(container)).toEqual(["dc_boot.bin", "dc/airlbios.zip", "dc/naomi.zip"]);
+      expect(container.textContent).not.toContain("All files are on the platform page");
+    });
+
+    it("says on a row what the latest press on the page did to it, until the page is left", async () => {
+      const place = "/home/deck/retrodeck/bios/dc_boot.bin";
+      const backup = "/d/backups/bios/2026-10-22_10-00-00/t/bios/dc/dc_boot.bin";
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({
+        success: true,
+        message: "Downloaded dc_boot.bin",
+        downloaded: 1,
+        backups: [backup],
+        link_failures: [{ place, file_name: "dc_boot.bin", reason: "Permission denied" }],
+      });
+      const files = [row("dc_boot.bin", { required_by_active: true, local_path: place, on_server: true })];
+      const tab = () => (
+        <BiosTab
+          biosStatus={statusWith(files)}
           biosLevel="missing"
           coreInfo={coreInfo}
           isActive={true}
-          onReplace={vi.fn()}
-        />,
+          platformSlug="dc"
+        />
       );
-      const rowEl = [...container.querySelectorAll(".romm-panel-file-name")].find((el) =>
-        el.textContent.startsWith("dc_boot.bin"),
-      );
-      expect(rowEl).toBeDefined();
-      expect(container.textContent).toContain("Replace…");
-    });
-
-    it("says on a row what the latest press on the page did to it, until the page is left", () => {
-      const place = "/home/deck/retrodeck/bios/dc_boot.bin";
-      const backup = "/d/backups/bios/2026-10-22_10-00-00/t/bios/dc/dc_boot.bin";
-      act(() => {
-        noteBiosPress({
-          link_failures: [{ place, file_name: "dc_boot.bin", reason: "Permission denied" }],
-          backups: [backup],
-        });
+      const first = render(tab());
+      const download = [...first.container.querySelectorAll("button")].find((b) => b.textContent === "Download");
+      await act(async () => {
+        fireEvent.click(download as HTMLElement);
       });
-      const files = [row("dc_boot.bin", { required_by_active: true, local_path: place, store_file: "dc_boot.bin" })];
-      const { container } = render(
-        <BiosTab biosStatus={statusWith(files)} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
 
-      expect(container.textContent).toContain(`Could not place a link at ${place}: Permission denied`);
-      expect(container.textContent).toContain(
+      const rowEl = first.container.querySelector('[data-testid="bios-file-row"]');
+      expect(rowEl?.textContent).toContain(`Could not place a link at ${place}: Permission denied`);
+      // What the download moved out of the store is said under the buttons, as on the platform page.
+      expect(first.getByTestId("status-bios").textContent).toBe(
         `A different dc_boot.bin was already in Tender's firmware store. It was moved to ${backup}.`,
       );
 
-      act(() => forgetBiosPresses());
-      expect(container.textContent).not.toContain("Could not place a link");
+      first.unmount();
+      const again = render(tab());
+      expect(again.container.textContent).not.toContain("Could not place a link");
     });
 
-    it("leaves the rest to the platform page, counted and pointed at", () => {
-      const names = namesOf([row("dc_boot.bin", { required_by_active: true }), ...arcadeRows]);
-      expect(names).toEqual(["dc_boot.bin"]);
-
-      const { container } = render(
-        <BiosTab
-          biosStatus={{
-            ...statusWith([row("dc_boot.bin", { required_by_active: true }), ...arcadeRows]),
-            active_core_label: "Flycast",
-          }}
-          biosLevel="ok"
-          coreInfo={coreInfo}
-          isActive={true}
-        />,
-      );
-      // Both claims hold of every row counted, and the last clause is the whole
-      // point: a summary that does not say where the summarised rows are hides
-      // them. The emulator named is the one whose rows were counted.
-      expect(container.textContent).toContain(
-        "6 more files Flycast lists — not required for this launch, nothing to download. " +
-          "All files are on the platform page.",
-      );
-    });
-
-    it("counts a single left-out row in the singular", () => {
-      const { container } = render(
-        <BiosTab
-          biosStatus={{
-            ...statusWith([row("dc_boot.bin", { required_by_active: true }), row("naomi.zip")]),
-            active_core_label: "Flycast",
-          }}
-          biosLevel="ok"
-          coreInfo={coreInfo}
-          isActive={true}
-        />,
-      );
-      expect(container.textContent).toContain(
-        "1 more file Flycast lists — not required for this launch, nothing to download. " +
-          "All files are on the platform page.",
-      );
-    });
-
-    it("lists server files nothing asks for in the library's own section, after the emulator's rows", () => {
+    it("lists server files nothing asks for in the library's own section, in the column beside the emulator's rows", () => {
       const nobodys = [0, 1].map((i) => row(`extra${i}.bin`, { wanted: "not_needed", on_server: true }));
-      const { container } = render(
+      const { container, getByTestId } = render(
         <BiosTab
           biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), ...nobodys])}
           biosLevel="ok"
@@ -1235,45 +1017,12 @@ describe("BiosTab", () => {
           isActive={true}
         />,
       );
-      const names = [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent);
-      expect(names.map((name) => name.split(" — ")[0])).toEqual(["dc_boot.bin", "extra0.bin", "extra1.bin"]);
-      const heading = [...container.querySelectorAll<HTMLElement>(".romm-panel-section-title")].find(
-        (el) => el.textContent === "In your RomM library, asked for by no emulator here",
-      );
-      const firstExtra = [...container.querySelectorAll(".romm-panel-file-name")][1];
-      expect(heading?.compareDocumentPosition(firstExtra as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(namesIn(getByTestId("bios-main-column"))).toEqual(["dc_boot.bin"]);
+      const library = getByTestId("bios-library-column");
+      expect(namesIn(library)).toEqual(["extra0.bin", "extra1.bin"]);
+      expect(library.textContent).toContain("IN YOUR ROMM LIBRARY, ASKED FOR BY NO EMULATOR HERE");
       expect(container.textContent).toContain("not required");
       expect(container.textContent).not.toContain("on server no installed emulator asks for");
-    });
-
-    it("moves no number in the header", () => {
-      // This is a display decision and nothing else: every count on the header
-      // line is the backend's, over the set it counted, and none of them may
-      // follow what this page chose to draw. One payload, rendered with the six
-      // left-out rows and again with them taken out of `files` — the aggregates
-      // are identical in both, so the header has to be too.
-      const headerOf = (files: BiosFileStatus[]): { label: string | null; hasNote: boolean } => {
-        const { container } = render(
-          <BiosTab biosStatus={statusWith(files)} biosLevel="ok" coreInfo={coreInfo} isActive={true} />,
-        );
-        return {
-          label: container.querySelector(".romm-panel-value")?.textContent ?? null,
-          hasNote: container.textContent.includes("lists — not required for this launch"),
-        };
-      };
-
-      const kept = row("dc_boot.bin", { satisfied: true, downloaded: true });
-      const withLeftOut = headerOf([kept, ...arcadeRows]);
-      const withoutThem = headerOf([kept]);
-
-      expect(withLeftOut.label).toBe(
-        "The launching emulator marks none of its BIOS files as required (1/20 RomM library files)",
-      );
-      expect(withLeftOut.label).toBe(withoutThem.label);
-      // Non-vacuous: the first render really did leave rows out, so the equality
-      // above is over two different lists rather than two identical ones.
-      expect(withLeftOut.hasNote).toBe(true);
-      expect(withoutThem.hasNote).toBe(false);
     });
   });
 
@@ -1341,10 +1090,6 @@ describe("BiosTab", () => {
       render(<BiosTab biosStatus={status} biosLevel={level} coreInfo={beetle} isActive={true} />).container;
     const sectionTitles = (container: HTMLElement): string[] =>
       [...container.querySelectorAll<HTMLElement>(".romm-panel-section-title")].map((title) => title.textContent);
-    const dotOf = (container: HTMLElement, name: string): string | undefined =>
-      [...container.querySelectorAll<HTMLElement>(".romm-panel-file-row")]
-        .find((row) => row.textContent.startsWith(name))
-        ?.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor;
 
     it("names the regions the group states nothing for on the page of a game with no clear region", () => {
       // A World release: no game region narrows the group, so the platform's
@@ -1397,10 +1142,10 @@ describe("BiosTab", () => {
         "#5ba32b",
         "#8f98a0",
       ]);
-      // Above the file list, and the list keeps every row.
-      const list = container.querySelector(".romm-panel-file-list");
-      expect(block?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-      expect(container.querySelectorAll(".romm-panel-file-list .romm-panel-file-row")).toHaveLength(3);
+      // Above the table, and the table keeps every row.
+      const table = container.querySelector('[data-testid="bios-table-header"]');
+      expect(block?.compareDocumentPosition(table as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(container.querySelectorAll('[data-testid="bios-file-row"]')).toHaveLength(3);
     });
 
     it("words an image that is there but not met by what it is, in the block and on its row", () => {
@@ -1412,22 +1157,26 @@ describe("BiosTab", () => {
 
       const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]')?.textContent ?? "";
       expect(block).toContain("Japan · scph5500.bin · wrong file");
-      // The row says what the file is in its note; its line under the name is
-      // its need, which no verdict changes.
-      expect(container.textContent).toContain("scph5500.bin — wrong file — not the image");
+      // The row says what the file is in its Contents cell; its line under the
+      // name is its need, which no verdict changes.
+      const row = [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')].find(
+        (el) => el.querySelector('[data-testid="bios-file-name"]')?.textContent === "scph5500.bin",
+      );
+      expect(row?.textContent).toContain("wrong file — not the image");
+      expect(row?.querySelector('[data-testid="disk-mark"]')?.textContent).toBe("✗");
       expect(container.textContent).toContain("one of these · for Japan discs");
       expect(container.textContent).not.toContain("· ✗");
       expect(block).not.toContain("scph5500.bin · missing");
     });
 
-    it("heads the group with a subheading in the section label's style, the file list following it", () => {
+    it("heads the group with a subheading in the section label's style, the table following it", () => {
       const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
 
       // Written in sentence case; the class upper-cases it, as it does "BIOS".
-      expect(sectionTitles(container)).toEqual(["BIOS", "Beetle PSX · one image per disc region", "Emulator"]);
+      expect(sectionTitles(container)).toEqual(["BIOS", "Beetle PSX · one image per disc region"]);
       const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
-      const list = container.querySelector(".romm-panel-file-list");
-      expect(block?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      const table = container.querySelector('[data-testid="bios-table-header"]');
+      expect(block?.compareDocumentPosition(table as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       // The intro sentence the subheading replaced is gone.
       expect(container.textContent).not.toContain("needs one BIOS image per disc region");
     });
@@ -1541,17 +1290,7 @@ describe("BiosTab", () => {
       const container = renderFor({ ...forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]), one_of_groups: [] }, "ok");
 
       expect(container.querySelector('[data-testid="bios-group"]')).toBeNull();
-      expect(sectionTitles(container)).toEqual(["BIOS", "Emulator"]);
-    });
-
-    it("draws the missing image of the game's region red and another region's grey", () => {
-      const japanese = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
-      const american = renderFor(forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]), "ok");
-
-      expect(dotOf(japanese, "scph5500.bin")).toBe("#d94126");
-      expect(dotOf(japanese, "scph5502.bin")).toBe("#8f98a0");
-      expect(dotOf(american, "scph5500.bin")).toBe("#8f98a0");
-      expect(dotOf(american, "scph5501.bin")).toBe("#5ba32b");
+      expect(sectionTitles(container)).toEqual(["BIOS"]);
     });
   });
 
@@ -1588,7 +1327,7 @@ describe("BiosTab", () => {
     });
     const lrps2: CoreInfo = { ...coreInfo, active_core: "pcsx2_libretro.so", active_core_label: "LRPS2" };
 
-    it("names the setting under the folder and leaves its dot and sentence alone", () => {
+    it("names the setting under the folder and leaves its mark and sentence alone", () => {
       const withLine = render(
         <BiosTab
           biosStatus={folder({ emulator_label: "LRPS2", file_name: "scph10000.bin" })}
@@ -1605,10 +1344,12 @@ describe("BiosTab", () => {
         "LRPS2's settings name scph10000.bin, which is not here — it uses another BIOS from this folder instead.",
       );
       expect(without.textContent).not.toContain("LRPS2's settings");
-      const dot = (container: HTMLElement) =>
-        container.querySelector<HTMLElement>(".romm-panel-file-row .romm-status-dot")?.style.backgroundColor;
-      expect(dot(withLine)).toBe(dot(without));
-      expect(dot(withLine)).toBe("#5ba32b");
+      const mark = (container: HTMLElement) =>
+        container.querySelector<HTMLElement>('[data-testid="bios-file-row"] [data-testid="disk-mark"]');
+      expect(mark(withLine)?.textContent).toBe(mark(without)?.textContent);
+      expect(mark(withLine)?.style.color).toBe(mark(without)?.style.color);
+      expect(mark(withLine)?.textContent).toBe("✓");
+      expect(mark(withLine)?.style.color).toBe("#5ba32b");
       expect(withLine.querySelector(".romm-panel-value")?.textContent).toBe(
         without.querySelector(".romm-panel-value")?.textContent,
       );
@@ -1698,8 +1439,8 @@ describe("BiosTab", () => {
     const chooseKronos = (container: HTMLElement) => fireEvent.click(entryButton(container, "Kronos"));
     const arrow = (container: HTMLElement, which: "Previous emulator" | "Next emulator") =>
       container.querySelector(`button[aria-label="${which}"]`) as HTMLElement;
-    const names = (container: HTMLElement) =>
-      [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent.split(" ")[0]);
+    const names = (container: Element) =>
+      [...container.querySelectorAll('[data-testid="bios-file-name"]')].map((el) => el.textContent);
 
     it("shows the launching emulator first, marked as the one that launches, and places every emulator in the carousel", () => {
       const { container } = renderSaturn();
@@ -1732,10 +1473,18 @@ describe("BiosTab", () => {
       expect(glyphs[1]?.previousElementSibling).toBe(arrow(container, "Next emulator"));
     });
 
-    it("holds the selector to about the platform page's width, centred on the wide game page", () => {
-      const selector = renderSaturn().container.querySelector<HTMLElement>('[data-testid="emulator-selector"]');
-      expect(selector?.style.maxWidth).toBe("500px");
-      expect(selector?.style.margin).toBe("0px auto");
+    it("spans the left column, aligned with the sentence above it and the table below it", () => {
+      const { container, getByTestId } = renderSaturn();
+      const selector = container.querySelector<HTMLElement>('[data-testid="emulator-selector"]');
+      expect(getByTestId("bios-main-column").contains(selector)).toBe(true);
+      expect(selector?.style.maxWidth).toBe("");
+      expect(selector?.style.margin).toBe("");
+      // One gutter for the three: the sentence's block, the selector and the table's rows.
+      const sentence = container.querySelector(".romm-panel-status-inline")?.parentElement as HTMLElement;
+      const row = container.querySelector<HTMLElement>('[data-testid="bios-file-row"]');
+      expect(sentence.style.padding).toBe("0px 16px");
+      expect(selector?.style.padding).toBe("4px 16px 6px");
+      expect(row?.style.padding).toBe("2px 16px");
     });
 
     it("sets the launching emulator's name in the accent and a not-installed one's in red, red over blue", () => {
@@ -1888,11 +1637,12 @@ describe("BiosTab", () => {
         act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 80));
         });
-      const listOf = (container: HTMLElement) =>
-        (container.querySelector(".romm-panel-file-list")?.closest("button") ?? null) as HTMLElement | null;
+      /** The focus stop of the table's first row: the row itself, or its button. */
+      const firstRowStop = (container: HTMLElement) =>
+        (container.querySelector(".romm-bios-row-stop") ?? null) as HTMLElement | null;
       const stepFromList = async (status: BiosStatus) => {
         const view = render(<BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />);
-        listOf(view.container)?.focus();
+        firstRowStop(view.container)?.focus();
         await act(async () => {
           fireEvent.click(arrow(view.container, "Next emulator"));
         });
@@ -1902,7 +1652,7 @@ describe("BiosTab", () => {
 
       it("stays on the list where the new emulator lists files", async () => {
         const container = await stepFromList(saturn());
-        expect(container.ownerDocument.activeElement).toBe(listOf(container));
+        expect(container.ownerDocument.activeElement).toBe(firstRowStop(container));
       });
 
       it("goes to the carousel's shown entry where the new emulator lists no file", async () => {
@@ -1911,7 +1661,7 @@ describe("BiosTab", () => {
         if (kronos === undefined) throw new Error("fixture has no Kronos entry");
         kronos.rows = [];
         const container = await stepFromList(status);
-        expect(listOf(container)).toBeNull();
+        expect(firstRowStop(container)).toBeNull();
         const active = container.ownerDocument.activeElement as HTMLElement | null;
         expect(active?.querySelector('[data-testid="emulator-entry"]')?.textContent).toBe("Kronos");
       });
@@ -1937,8 +1687,12 @@ describe("BiosTab", () => {
         ];
         return status;
       };
-      const stops = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>(".romm-panel-bios-list")];
-      const stopNames = (container: HTMLElement) => stops(container).map(names);
+      const rowNamed = (container: HTMLElement, name: string) =>
+        [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')].find(
+          (row) => row.querySelector('[data-testid="bios-file-name"]')?.textContent === name,
+        ) as HTMLElement;
+      const replaceButton = (container: HTMLElement) =>
+        [...container.querySelectorAll("button")].find((b) => b.textContent === "Replace…") as HTMLElement | undefined;
       type ConfirmProps = {
         strTitle: string;
         strDescription: string;
@@ -1949,70 +1703,65 @@ describe("BiosTab", () => {
         const calls = vi.mocked(showModal).mock.calls;
         return (calls[calls.length - 1]?.[0] as ReactElement<ConfirmProps> | undefined)?.props;
       };
-
-      it("makes a row that offers it a focus stop of its own, between the rows before and after it", () => {
-        const { container } = render(
-          <BiosTab
-            biosStatus={replaceable()}
-            biosLevel="missing"
-            coreInfo={coreInfo}
-            isActive={true}
-            onReplace={vi.fn()}
-          />,
+      const renderReplaceable = (status = replaceable()) =>
+        render(
+          <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} platformSlug="saturn" />,
         );
-        expect(stopNames(container)).toEqual([["cart.bin"], ["saturn_bios.bin"], ["mpr.bin"]]);
-        expect(stops(container).map((stop) => stop.textContent.includes("Replace…"))).toEqual([false, true, false]);
-      });
 
-      it("offers no Replace… where nothing answers the press", () => {
-        const { container } = render(
-          <BiosTab biosStatus={replaceable()} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-        );
-        expect(stopNames(container)).toEqual([["cart.bin", "saturn_bios.bin", "mpr.bin"]]);
-        expect(container.textContent).not.toContain("Replace…");
+      it("makes every row a focus stop, the one offering it reached as its own Replace… button", () => {
+        const { container } = renderReplaceable();
+        for (const name of ["cart.bin", "mpr.bin"]) {
+          expect(rowNamed(container, name).closest(".romm-bios-row-stop")).not.toBeNull();
+        }
+        const offering = rowNamed(container, "saturn_bios.bin");
+        expect(offering.closest(".romm-bios-row-stop")).toBeNull();
+        expect(offering.contains(replaceButton(container) ?? null)).toBe(true);
       });
 
       it("asks the platform page's confirmation, and replaces only once it is answered", async () => {
         vi.mocked(showModal).mockClear();
-        const onReplace = vi.fn().mockResolvedValue(true);
-        const { container } = render(
-          <BiosTab
-            biosStatus={replaceable()}
-            biosLevel="missing"
-            coreInfo={coreInfo}
-            isActive={true}
-            onReplace={onReplace}
-          />,
-        );
+        vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+          success: true,
+          placed: 1,
+          left_in_place: 0,
+          removed: 0,
+          link_failures: [],
+          backup_path: "/data/backups/bios/x/saturn_bios.bin",
+        });
+        const { container } = renderReplaceable();
 
-        fireEvent.click(stops(container)[1] as HTMLElement);
+        fireEvent.click(replaceButton(container) as HTMLElement);
 
         expect(confirmation()?.strTitle).toBe("Replace saturn_bios.bin?");
         expect(confirmation()?.strDescription).toBe(
           "The file at /bios/saturn_bios.bin goes to /data/backups/bios, and Tender's copy is linked in its place.",
         );
         expect(confirmation()?.strOKButtonText).toBe("Replace");
-        expect(onReplace).not.toHaveBeenCalled();
+        expect(backend.replaceBiosFile).not.toHaveBeenCalled();
         await act(async () => {
           confirmation()?.onOK();
         });
-        expect(onReplace).toHaveBeenCalledWith("/bios/saturn_bios.bin");
+        expect(backend.replaceBiosFile).toHaveBeenCalledWith("saturn", "/bios/saturn_bios.bin");
+        expect(rowNamed(container, "saturn_bios.bin").textContent).toContain(
+          "Replaced. The old file is in /data/backups/bios/x/saturn_bios.bin.",
+        );
       });
 
-      it("says on the row why its replacement failed", () => {
-        const { container } = render(
-          <BiosTab
-            biosStatus={replaceable()}
-            biosLevel="missing"
-            coreInfo={coreInfo}
-            isActive={true}
-            onReplace={vi.fn()}
-          />,
-        );
-        act(() => noteReplaceFailed("/bios/saturn_bios.bin", "the BIOS folder is read-only"));
+      it("says under the buttons why its replacement failed", async () => {
+        vi.mocked(showModal).mockClear();
+        vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+          success: false,
+          reason: "replace_failed",
+          message: "the BIOS folder is read-only",
+        });
+        const { container, getByTestId } = renderReplaceable();
+        fireEvent.click(replaceButton(container) as HTMLElement);
+        await act(async () => {
+          confirmation()?.onOK();
+        });
 
-        expect(stops(container)[1]?.textContent).toContain("Failed to replace the file: the BIOS folder is read-only");
-        act(() => forgetBiosPresses());
+        expect(getByTestId("status-bios").textContent).toBe("Failed to replace the file: the BIOS folder is read-only");
+        expect(rowNamed(container, "saturn_bios.bin").textContent).not.toContain("Failed to replace");
       });
 
       it("leaves the list with a step from the Replace… row, as with a step from its rows", async () => {
@@ -2020,34 +1769,31 @@ describe("BiosTab", () => {
         const kronos = status.emulator_tabs?.[1];
         if (kronos === undefined) throw new Error("fixture has no Kronos entry");
         kronos.rows = [];
-        const { container } = render(
-          <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} onReplace={vi.fn()} />,
-        );
-        stops(container)[1]?.focus();
+        const { container } = renderReplaceable(status);
+        replaceButton(container)?.focus();
         await act(async () => {
           fireEvent.click(arrow(container, "Next emulator"));
         });
         await settle();
 
-        expect(stops(container)).toEqual([]);
+        expect(container.querySelector('[data-testid="bios-file-row"]')).toBeNull();
         const active = container.ownerDocument.activeElement as HTMLElement | null;
         expect(active?.querySelector('[data-testid="emulator-entry"]')?.textContent).toBe("Kronos");
       });
 
-      it("puts focus on the stop that holds the row once the re-read shows it linked", async () => {
+      it("puts focus back on the row once the re-read shows it linked", async () => {
         vi.mocked(showModal).mockClear();
-        const onReplace = vi.fn().mockResolvedValue(true);
-        const { container, rerender } = render(
-          <BiosTab
-            biosStatus={replaceable()}
-            biosLevel="missing"
-            coreInfo={coreInfo}
-            isActive={true}
-            onReplace={onReplace}
-          />,
-        );
-        stops(container)[1]?.focus();
-        fireEvent.click(stops(container)[1] as HTMLElement);
+        vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+          success: true,
+          placed: 1,
+          left_in_place: 0,
+          removed: 0,
+          link_failures: [],
+          backup_path: "/data/backups/bios/x/saturn_bios.bin",
+        });
+        const { container, rerender } = renderReplaceable();
+        replaceButton(container)?.focus();
+        fireEvent.click(replaceButton(container) as HTMLElement);
         await act(async () => {
           confirmation()?.onOK();
         });
@@ -2058,13 +1804,15 @@ describe("BiosTab", () => {
             biosLevel="ok"
             coreInfo={coreInfo}
             isActive={true}
-            onReplace={onReplace}
+            platformSlug="saturn"
           />,
         );
         await settle();
 
-        expect(stopNames(container)).toEqual([["cart.bin", "saturn_bios.bin", "mpr.bin"]]);
-        expect(container.ownerDocument.activeElement).toBe(stops(container)[0]);
+        expect(replaceButton(container)).toBeUndefined();
+        expect(container.ownerDocument.activeElement).toBe(
+          rowNamed(container, "saturn_bios.bin").closest(".romm-bios-row-stop"),
+        );
       });
     });
 
@@ -2110,74 +1858,10 @@ describe("BiosTab", () => {
       chooseKronos(container);
 
       expect(names(container)).toEqual(["kronos/saturn_bios.bin"]);
-      const row = container.querySelector<HTMLElement>(".romm-panel-file-row");
+      const row = container.querySelector<HTMLElement>('[data-testid="bios-file-row"]');
       expect(row?.style.opacity).toBe("");
-      expect(row?.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor).toBe("#5ba32b");
+      expect(row?.querySelector<HTMLElement>('[data-testid="disk-mark"]')?.style.color).toBe("#5ba32b");
       expect(container.querySelector(".romm-panel-value")?.textContent).toBe(header);
-    });
-
-    it("greys another emulator's missing one-of image, which no verdict for this game judged", () => {
-      const status = saturn();
-      // The launching emulator's group, narrowed to this game, misses its USA image.
-      status.one_of_groups = [
-        {
-          state: "unmet",
-          covered: [],
-          missing: ["ntsc-u"],
-          unchecked: [],
-          game_regions: ["ntsc-u"],
-          regions: ["ntsc-u"],
-          options: [{ file_name: "saturn_bios.bin", regions: ["ntsc-u"], satisfied: false }],
-        },
-      ];
-      const kronos = status.emulator_tabs?.[1];
-      if (kronos === undefined) throw new Error("fixture has no Kronos entry");
-      kronos.rows = [
-        own("sega_101.bin", "kronos_libretro.so", {
-          declared_path: "kronos/sega_101.bin",
-          wanted: "optional",
-          required_by_active: false,
-          one_of: { regions: ["ntsc-u"], every_region: false },
-          on_server: true,
-        }),
-      ];
-      const { container } = render(
-        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
-      chooseKronos(container);
-
-      // The launching emulator's group block stays above, whichever emulator is shown.
-      const row = [...container.querySelectorAll<HTMLElement>(".romm-panel-file-row")].find((el) =>
-        el.textContent.startsWith("kronos/sega_101.bin"),
-      );
-      expect(row?.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor).toBe("#8f98a0");
-    });
-
-    it("narrows another emulator's list by that emulator's own need and names it in the note", () => {
-      const status = saturn();
-      const kronos = status.emulator_tabs?.[1];
-      if (kronos === undefined) throw new Error("fixture has no Kronos entry");
-      kronos.rows = [
-        ...(kronos.rows ?? []),
-        // Kronos's own optional cartridge image: not required by it, not there,
-        // not in the library — nothing this page could act on.
-        own("mpr-19367-mx.ic1", "kronos_libretro.so", {
-          declared_path: "kronos/mpr-19367-mx.ic1",
-          wanted: "optional",
-          required_by_active: false,
-          on_server: false,
-        }),
-      ];
-      const { container } = render(
-        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
-      chooseKronos(container);
-
-      expect(names(container)).toEqual(["kronos/saturn_bios.bin"]);
-      expect(container.textContent).toContain(
-        "1 more file Kronos lists — not required by Kronos, nothing to download. " +
-          "All files are on the platform page.",
-      );
     });
 
     it("keeps a row another emulator declares off the launching emulator's list", () => {
@@ -2211,7 +1895,198 @@ describe("BiosTab", () => {
       chooseKronos(container);
 
       expect(names(container)).toEqual(["kronos/saturn_bios.bin", "hisaturn.bin"]);
-      expect(container.textContent).toContain("In your RomM library, asked for by no emulator here");
+      expect(container.textContent).toContain("IN YOUR ROMM LIBRARY, ASKED FOR BY NO EMULATOR HERE");
+    });
+  });
+
+  describe("the platform page's table and buttons, on a game page", () => {
+    const psxFile = (file_name: string, over: Partial<BiosFileStatus> = {}): BiosFileStatus => ({
+      file_name,
+      downloaded: false,
+      local_path: `/bios/${file_name}`,
+      declared_path: file_name,
+      description: "",
+      wanted: "needed",
+      required_by_active: true,
+      on_server: true,
+      declared_kind: "file",
+      satisfied: false,
+      declared_by: "duckstation",
+      ...over,
+    });
+    /** A download, a replace and a delete in one table, and a row with nothing to press. */
+    const psx = (over: Partial<BiosStatus> = {}): BiosStatus => ({
+      needs_bios: true,
+      server_count: 3,
+      local_count: 0,
+      all_downloaded: false,
+      required_count: 1,
+      required_downloaded: 0,
+      active_core_label: "DuckStation",
+      backup_root: "/data/backups/bios",
+      deletable_count: 2,
+      files: [
+        psxFile("scph5501.bin", { fetch_for_required: true }),
+        psxFile("scph5500.bin", {
+          required_by_active: false,
+          wanted: "optional",
+          downloaded: true,
+          replace_offered: true,
+        }),
+        psxFile("scph5502.bin", {
+          required_by_active: false,
+          wanted: "optional",
+          satisfied: true,
+          downloaded: true,
+          store_file: "scph5502.bin",
+          delete_name: "scph5502.bin",
+          deletable_count: 1,
+        }),
+        psxFile("scph1001.bin", { required_by_active: false, wanted: "optional", on_server: false }),
+      ],
+      emulator_tabs: [
+        { emulator: "duckstation", label: "DuckStation", launching: true, requirements_met: false },
+        { emulator: "swanstation_libretro.so", label: "SwanStation", launching: false, requirements_met: null },
+      ],
+      ...over,
+    });
+    const renderPsx = (status = psx()) =>
+      render(
+        <BiosTab
+          biosStatus={status}
+          biosLevel="missing"
+          coreInfo={coreInfo}
+          isActive={true}
+          platformName="PlayStation"
+          platformSlug="psx"
+          romId={42}
+        />,
+      );
+    const button = (container: HTMLElement, label: string) =>
+      [...container.querySelectorAll("button")].find((b) => b.textContent === label) as HTMLElement | undefined;
+    const rowNamed = (container: HTMLElement, name: string) =>
+      [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')].find(
+        (row) => row.querySelector('[data-testid="bios-file-name"]')?.textContent === name,
+      ) as HTMLElement;
+    const confirm = async () => {
+      const calls = vi.mocked(showModal).mock.calls;
+      const props = (calls[calls.length - 1]?.[0] as ReactElement<{ onOK: () => void }> | undefined)?.props;
+      await act(async () => {
+        props?.onOK();
+      });
+    };
+
+    it("names the launching emulator only in its sentence and its selector, with no column of its own", () => {
+      const { container } = renderPsx();
+      const titles = [...container.querySelectorAll(".romm-panel-section-title")].map((el) => el.textContent);
+      expect(titles).not.toContain("Emulator");
+      // The sentence says how the emulator stands; the selector which emulator's
+      // files are shown. Nothing else carries the bare name.
+      const selector = container.querySelector('[data-testid="emulator-selector"]');
+      const bare = [...container.querySelectorAll("*")].filter(
+        (el) => el.children.length === 0 && el.textContent === "DuckStation",
+      );
+      expect(bare.length).toBeGreaterThan(0);
+      for (const el of bare) expect(selector?.contains(el)).toBe(true);
+    });
+
+    it("carries each row's action as a button of its own — Download, Replace… and Delete", () => {
+      const { container } = renderPsx();
+      const pressOn = (name: string) =>
+        [...rowNamed(container, name).querySelectorAll("button")].map((b) => b.textContent);
+      expect(pressOn("scph5501.bin")).toEqual(["Download"]);
+      expect(pressOn("scph5500.bin")).toEqual(["Replace…"]);
+      expect(pressOn("scph5502.bin")).toEqual(["Delete"]);
+      expect(pressOn("scph1001.bin")).toEqual([]);
+    });
+
+    it("makes a row without a button a focus stop that does nothing when pressed", () => {
+      vi.mocked(showModal).mockClear();
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockClear();
+      vi.mocked(backend.deleteBiosFile).mockClear();
+      vi.mocked(backend.replaceBiosFile).mockClear();
+      const { container } = renderPsx();
+      const stop = rowNamed(container, "scph1001.bin").closest<HTMLElement>(".romm-bios-row-stop");
+      expect(stop?.tagName).toBe("BUTTON");
+      fireEvent.click(stop as HTMLElement);
+      expect(showModal).not.toHaveBeenCalled();
+      expect(backend.downloadPlatformFirmwareFile).not.toHaveBeenCalled();
+      expect(backend.deleteBiosFile).not.toHaveBeenCalled();
+      expect(backend.replaceBiosFile).not.toHaveBeenCalled();
+    });
+
+    it("downloads the shown emulator's required files for that emulator, the launching one included", async () => {
+      vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue({ success: true, message: "", downloaded: 1 });
+      const { container } = renderPsx();
+      const required = button(container, "Download required for DuckStation (1)");
+      await act(async () => {
+        fireEvent.click(required as HTMLElement);
+      });
+      expect(backend.downloadRequiredFirmware).toHaveBeenCalledWith("psx", "duckstation");
+    });
+
+    it("downloads every library file of the platform for this game with Download all", async () => {
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({ success: true, message: "", downloaded: 3 });
+      const onReread = vi.fn().mockResolvedValue(undefined);
+      const { container } = render(
+        <BiosTab
+          biosStatus={psx()}
+          biosLevel="missing"
+          coreInfo={coreInfo}
+          isActive={true}
+          platformName="PlayStation"
+          platformSlug="psx"
+          romId={42}
+          onReread={onReread}
+        />,
+      );
+      expect(container.textContent).toContain("FOR ALL OF PLAYSTATION");
+      await act(async () => {
+        fireEvent.click(button(container, "Download all") as HTMLElement);
+      });
+      expect(backend.downloadAllFirmware).toHaveBeenCalledWith("psx", 42);
+      expect(onReread).toHaveBeenCalled();
+    });
+
+    it("deletes Tender's downloads for the platform once the platform page's confirmation is answered", async () => {
+      vi.mocked(showModal).mockClear();
+      vi.mocked(backend.deletePlatformBios).mockResolvedValue({
+        success: true,
+        message: "Deleted 2 BIOS files",
+        deleted_count: 2,
+      } as Awaited<ReturnType<typeof backend.deletePlatformBios>>);
+      const { container, getByTestId } = renderPsx();
+      fireEvent.click(button(container, "Delete downloads (2)") as HTMLElement);
+      const calls = vi.mocked(showModal).mock.calls;
+      const props = (calls[calls.length - 1]?.[0] as ReactElement<{ strTitle: string }> | undefined)?.props;
+      expect(props?.strTitle).toBe("Delete Tender's BIOS downloads for PlayStation?");
+      expect(backend.deletePlatformBios).not.toHaveBeenCalled();
+      await confirm();
+      expect(backend.deletePlatformBios).toHaveBeenCalledWith("psx");
+      expect(getByTestId("status-bios").textContent).toBe("Deleted 2 BIOS files");
+    });
+
+    it("withdraws the downloads while RomM's listing could not be read, and keeps the deletes", () => {
+      const { container } = renderPsx(psx({ server_offline: true }));
+      expect(button(container, "Download")).toBeUndefined();
+      expect(button(container, "Delete")).toBeDefined();
+      expect(button(container, "Download all")?.hasAttribute("disabled")).toBe(true);
+      expect(button(container, "Download required for DuckStation (1)")?.hasAttribute("disabled")).toBe(true);
+    });
+
+    it("stands the column of RomM library files below the left one where the page is narrower than both need", () => {
+      // happy-dom lays nothing out, so what is pinned is the rule the browser
+      // wraps by: a left column of a fixed 760 CSS px, a right one of at least
+      // 400, and a row that wraps.
+      const { getByTestId } = renderPsx();
+      expect(getByTestId("bios-columns").style.flexWrap).toBe("wrap");
+      expect(getByTestId("bios-main-column").style.flex).toBe("0 0 760px");
+      expect(getByTestId("bios-library-column").style.flex).toBe("1 1 400px");
+      expect(getByTestId("bios-main-column").nextElementSibling).toBe(getByTestId("bios-library-column"));
+    });
+
+    it("draws a bulk button as wide as its label, never stretched across its row", () => {
+      expect(BULK_BUTTON.flex).toBe("0 1 auto");
     });
   });
 });

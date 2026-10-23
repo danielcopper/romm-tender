@@ -239,9 +239,7 @@ export const EmulatorSelector: FC<{
   shown: EmulatorTab | null;
   onSelect: (tab: EmulatorTab) => void;
   padding?: string;
-  /** A width it is held to and centred within, where the page is wider. */
-  maxWidth?: string;
-}> = ({ tabs, shown, onSelect, padding = "0", maxWidth }) => {
+}> = ({ tabs, shown, onSelect, padding = "0" }) => {
   const choosable = tabs !== undefined && shown !== null && tabs.length > 1;
   const index = choosable ? Math.max(tabIndex(tabs, shown), 0) : 0;
   const current = choosable ? (tabs[index] ?? shown) : null;
@@ -261,7 +259,6 @@ export const EmulatorSelector: FC<{
         display: "flex",
         flexDirection: "column",
         gap: "4px",
-        ...(maxWidth === undefined ? {} : { maxWidth, margin: "0 auto" }),
       }}
     >
       {/* The shown emulator's dot and name stand on the row's own centre, the

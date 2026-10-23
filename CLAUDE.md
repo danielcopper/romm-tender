@@ -711,9 +711,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the colour is the resolver's verdict and no count's), the progress ratio
   (`services/firmware/status.py::_bios_aggregates`, `on_server` rows only, and the stated pair only those with a
   verdict) and the download affordance (`isFetchable`, `frontend/src/utils/biosFetchable.ts`, which reads the row's
-  `library`, `store_file`, `link` and `place_refusal`). The platform detail and the game page's BIOS tab call
-  `isFetchable`, never a copy, while the game page's row-visibility rule stays its own; display-only readers (the
-  On-disk `⊘` mark, `rowBelongsOnThisPage`) neither count nor gate
+  `library`, `store_file`, `link` and `place_refusal`). The platform detail and the game page's BIOS tab draw one table
+  (`frontend/src/bigpicture/bios/BiosFiles.tsx`) that calls `isFetchable`, never a copy; the display-only On-disk `⊘`
+  mark neither counts nor gates
 - **No link is placed at a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
   `FirmwarePlacement.place_unreadable` is the one reading, and `domain/firmware_places.py::place_refusal` turns it into
   the `unreadable` refusal no link update passes; `tests/domain/test_firmware_places.py`,

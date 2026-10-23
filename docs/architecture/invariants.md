@@ -682,25 +682,18 @@ Format: **invariant** — tier — enforced by.
   condition is `isFetchable` (`frontend/src/utils/biosFetchable.ts`), which reads the row's `library` — the RomM file
   that fills it, by content or, where the resolver's identity is an archive or names no checksum, by name, wherever RomM
   files it — its `store_file`, its `link` and its `place_refusal`, called from
-  `frontend/src/bigpicture/library/PlatformDetail.tsx` — and since #1815 the per-row Download button reads the same
-  filtered set, so a fourth reader of the axis now exists in that one file. A fifth reads it in the same file for the
-  On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
-  out of all three folds below. **A sixth reader is the game page's BIOS tab** (`frontend/src/bigpicture/BiosTab.tsx`,
-  through `frontend/src/utils/biosGamePageRows.ts`'s `rowBelongsOnThisPage`), and it is display alone in the same sense:
-  it decides whether a row gets a LINE — a file no page can fetch, that the shown emulator does not require, that is no
-  option of its one-of group, whose verdict is not met and that offers no Replace…, is nothing that page can act on —
-  and gates no count and offers no action, so it belongs to none of the three folds below either. It is asked about
-  whichever emulator the page shows. What holds the two surfaces together is that they call one predicate,
-  `isFetchable`, rather than spelling its clauses twice: a second copy would let the game page point at a download
-  button the platform page does not offer, or leave off a row it does. What must NOT be shared is the game page's rule
-  around it — required for this launch, an option of the emulator's one-of group, present, fetchable, unjudged, or
-  offering Replace… (`replace_offered`) — which is that page's alone; the platform detail has no such rule, and a shared
-  "visibility" module would invent a notion only one surface has. Each fold has its own quiet failure: drop the row from
-  the required counts and a sentence reads "all in place" under a red verdict; add it to the ratio and a SNES page
-  reports `0 / 26 files, 26 missing` for twenty-six optional files no core wants; add it to the buttons and the page
-  offers a download that cannot succeed. The counts and the ratio read `on_server`, the buttons read `library`
-  (`on_server` only on a payload that states no `library`); the row's `id: None` is an honest absence with no consumer
-  at all, so nothing breaks if it is filled in and nothing is guarded by leaving it empty
+  `frontend/src/bigpicture/bios/BiosFiles.tsx`, the BIOS table both the platform detail and the game page's BIOS tab
+  draw — and since #1815 the per-row Download button reads the same filtered set, so a fourth reader of the axis now
+  exists in that one file. A fifth reads it in the same file for the On-disk cell's second mark (`⊘`), and that one is
+  display alone: it neither counts nor gates, which is what keeps it out of all three folds below. Both pages list every
+  row of the shown emulator ([#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3) and call one
+  predicate, `isFetchable`, through one module rather than spelling its clauses twice: a second copy would let one page
+  point at a download button the other does not offer. Each fold has its own quiet failure: drop the row from the
+  required counts and a sentence reads "all in place" under a red verdict; add it to the ratio and a SNES page reports
+  `0 / 26 files, 26 missing` for twenty-six optional files no core wants; add it to the buttons and the page offers a
+  download that cannot succeed. The counts and the ratio read `on_server`, the buttons read `library` (`on_server` only
+  on a payload that states no `library`); the row's `id: None` is an honest absence with no consumer at all, so nothing
+  breaks if it is filled in and nothing is guarded by leaving it empty
 - **No link is placed at a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
   nobody could see what lies there, so a link could not be judged against it, and a place the resolver cannot read is
   usually one the emulator cannot read either (#2190). The row's verdict is withheld, grey, and its sentence names the
@@ -1398,12 +1391,12 @@ Format: **invariant** — tier — enforced by.
   (`TestAOneOfGroupIsOneRequirement`, the group cases of `TestOnePlatformOneEmulator` and `TestOneRomOneEmulator`, and
   `TestDownloadRequiredFirmware`'s group cases) pins it end to end, the ROM's own region, and that the button's count
   and the download are one set; the frontend halves are `frontend/src/utils/biosSummary.test.ts`,
-  `frontend/src/utils/biosGroup.test.ts`, `frontend/src/utils/biosGamePageRows.test.ts`,
-  `frontend/src/bigpicture/BiosTab.test.tsx` and `frontend/src/bigpicture/library/PlatformsTab.test.tsx`. The rule spans
-  the adapter (`adapters/atlas_firmware.py::_wants` and `_groups`), two domain modules (`domain/firmware_groups.py`
-  judges, `domain/bios_status.py` counts), the service (`services/firmware/status.py`, `downloads.py`, `game_detail.py`
-  passing the ROM's regions), six frontend modules (`frontend/src/utils/biosSummary.ts`,
-  `frontend/src/utils/biosGroup.ts`, `frontend/src/utils/biosFetchable.ts`, `frontend/src/utils/biosGamePageRows.ts`,
+  `frontend/src/utils/biosGroup.test.ts`, `frontend/src/bigpicture/BiosTab.test.tsx` and
+  `frontend/src/bigpicture/library/PlatformsTab.test.tsx`. The rule spans the adapter
+  (`adapters/atlas_firmware.py::_wants` and `_groups`), two domain modules (`domain/firmware_groups.py` judges,
+  `domain/bios_status.py` counts), the service (`services/firmware/status.py`, `downloads.py`, `game_detail.py` passing
+  the ROM's regions), six frontend modules (`frontend/src/utils/biosSummary.ts`, `frontend/src/utils/biosGroup.ts`,
+  `frontend/src/utils/biosFetchable.ts`, `frontend/src/bigpicture/bios/BiosFiles.tsx`,
   `frontend/src/bigpicture/BiosTab.tsx`, `frontend/src/bigpicture/library/PlatformDetail.tsx`) and the two type modules
   they share (`frontend/src/types/firmware.ts`, `frontend/src/api/backend.ts`), and nothing joins them. **Prompt-only**:
   no consumer reads an option's `need` as its row's `required` — `required` comes off an emulator's plain declarations
@@ -1480,12 +1473,12 @@ Format: **invariant** — tier — enforced by.
   (`::test_download_required_fetches_for_the_shown_emulator`), and an identity the answer holds no verdict for is
   refused with `emulator_unknown`, because `placements_for` would answer it with the first declarer's requirement
   (`::test_an_emulator_the_answer_does_not_hold_is_refused`). Where a download is linked follows no pick: every
-  download, a game page's "Download BIOS" and a row's own included, lands in the platform's store folder and is linked
-  wherever an emulator of the platform opens the file ([#2191](https://github.com/danielcopper/romm-tender/issues/2191)
-  D3, `::test_a_game_page_download_links_the_file_for_every_emulator_of_the_platform`). A reader keying a launch's rows
-  on `by_file_name()` instead would read the first declarer's place and verdict wherever two emulators declare one name
-  at different places — Saturn green under YabaSanshiro over a file only under `kronos/`. **What the ROM sibling cannot
-  pin is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds its invocation from the
+  download, a game page's and a row's own included, lands in the platform's store folder and is linked wherever an
+  emulator of the platform opens the file ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D3,
+  `::test_a_game_page_download_links_the_file_for_every_emulator_of_the_platform`). A reader keying a launch's rows on
+  `by_file_name()` instead would read the first declarer's place and verdict wherever two emulators declare one name at
+  different places — Saturn green under YabaSanshiro over a file only under `kronos/`. **What the ROM sibling cannot pin
+  is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds its invocation from the
   `active_core` tuple, which carries no identity, so a test on the bare fake resolves an unpinned ROM to a `None` where
   the live adapter resolves it to an emulator — `_DeclaredDefaultCoreInfo` in that file renders the declared default the
   way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still exercises the weaker resolution

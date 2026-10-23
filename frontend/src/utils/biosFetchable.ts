@@ -15,11 +15,10 @@
  * store: the library holds it, it is not at its destination, it is no folder,
  * and its place could be looked at.
  *
- * It lives here because two surfaces ask it for two different purposes and must
- * never disagree. The **platform detail** builds its download affordances off
- * it — a row it offers a button for is exactly a row this answers `true` for.
- * The **game page's BIOS tab** asks it as one of the answers that earn a row a
- * line at all. A second copy of the expression would let the two drift.
+ * The download affordances of the BIOS table both a platform's page and a
+ * game's BIOS tab draw (`bigpicture/bios/BiosFiles.tsx`) are built off it — a
+ * row it offers a button for is exactly a row this answers `true` for. A second
+ * copy of the expression would let the two drift.
  *
  * This is the fetchability axis alone: readiness is not an input here in any
  * of its shapes, and this answer is an input to no count.

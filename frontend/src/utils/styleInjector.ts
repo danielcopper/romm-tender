@@ -346,12 +346,6 @@ export function hideNativePlaySection(playSectionClass: string) {
   align-items: center;
   gap: 8px;
 }
-.romm-panel-file-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 8px 0;
-}
 .romm-panel-file-row {
   display: flex;
   flex-wrap: wrap;

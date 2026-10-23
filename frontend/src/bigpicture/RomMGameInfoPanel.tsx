@@ -10,7 +10,8 @@
  * The panel body itself takes no ROM-level actions — download, play, uninstall,
  * version and core selection live in the RomMPlaySection gear menu. The panes
  * below it are not all passive: the SAVES pane switches slots and rolls back
- * versions.
+ * versions, and the BIOS pane downloads, replaces and deletes BIOS files for the
+ * game's platform.
  *
  * CSS classes prefixed with `romm-panel-` are injected separately by styleInjector.
  */
@@ -23,7 +24,7 @@ import { BiosTab } from "./BiosTab";
 import { useTriggerHandler } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
 import { bindRomInState, loadData, openingTab, type PanelReadSeqs, type PanelState } from "./panelState";
-import { wirePanelEvents } from "./panelEvents";
+import { rereadBiosAnswer, wirePanelEvents } from "./panelEvents";
 import { useSaveSlotsLoad } from "./panelSlotsLoad";
 import { buildTabContent } from "./panelTabContent";
 import { setMigrationStatus, useMigrationStatus } from "../utils/migrationStore";
@@ -35,8 +36,7 @@ import { SettingsResetCard } from "./SettingsResetCard";
 import { StrandedPanelCard } from "./StrandedPanelCard";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
-import { forgetBiosPresses } from "../utils/biosAttempts";
-import { executeBiosReplace } from "../utils/biosReplace";
+import { refreshBiosStatus } from "../utils/gameDetailStore";
 
 interface RomMGameInfoPanelProps {
   appId: number;
@@ -80,8 +80,8 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   // handler can reject events for other platforms without a stale closure
   // (mirrors romIdRef). bios events fan out to every mounted panel (#1082).
   const platformSlugRef = useRef<string>("");
-  // "Replace…" on the BIOS tab, for this panel's own platform.
-  const replaceBios = useCallback((place: string) => executeBiosReplace(platformSlugRef.current, place), []);
+  // The same platform for the render, which the BIOS tab acts on.
+  const [platformSlug, setPlatformSlug] = useState("");
   // Load-once gate for the lazy SAVES tab data; the rule it enforces is stated
   // at `panelSlotsLoad.ts`. It lives here because a version switch resets it.
   const slotsLoadedRef = useRef(false);
@@ -89,6 +89,24 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   // enforce is stated at `takeReadTicket`. They live here because the loads, the
   // event lane and the lazy slots lane take tickets from the same counters.
   const readSeqs = useRef<PanelReadSeqs>({ detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, bios: 0 });
+  // Whether the load the panel is wired for has been torn down, for a read the
+  // BIOS tab asks for after a press.
+  const cancelledRef = useRef<() => boolean>(() => true);
+  // After a press on the BIOS tab: the tab's own answer, and the play row's.
+  const rereadBios = useCallback(async () => {
+    await Promise.all([
+      rereadBiosAnswer({
+        appId,
+        cancelled: () => cancelledRef.current(),
+        romIdRef,
+        platformSlugRef,
+        slotsLoadedRef,
+        readSeqs,
+        setState,
+      }),
+      refreshBiosStatus(appId),
+    ]);
+  }, [appId]);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
   const stranded = useStrandedAnswer() !== null;
@@ -103,8 +121,9 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
 
   useEffect(() => {
     let cancelled = false;
+    cancelledRef.current = () => cancelled;
 
-    detach(loadData(appId, () => cancelled, romIdRef, platformSlugRef, readSeqs, setState));
+    detach(loadData(appId, () => cancelled, romIdRef, platformSlugRef, readSeqs, setState, setPlatformSlug));
 
     const unwire = wirePanelEvents({
       appId,
@@ -119,7 +138,6 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     return () => {
       cancelled = true;
       unwire();
-      forgetBiosPresses();
     };
   }, [appId]);
 
@@ -201,7 +219,9 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
             itself, and unmounting it on a tab switch would re-fetch (and re-spinner)
             on every visit. Its key is the ROM, so a version switch remounts it —
             which is how its per-rom state and load-once gate re-key. BiosTab needs
-            no key: it renders from props and holds nothing of its own. */}
+            no key: what it holds — a press under way, the line it left, what it
+            did to a row, the emulator shown — is about the game's platform, which
+            a version switch keeps. */}
         <AchievementsTab
           key={`achievements-${romId}`}
           romId={romId}
@@ -215,7 +235,9 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
           coreInfo={state.coreInfo}
           isActive={state.activeTab === "bios"}
           platformName={state.platformName}
-          onReplace={replaceBios}
+          platformSlug={platformSlug}
+          romId={romId}
+          onReread={rereadBios}
         />
       </Focusable>
     </div>
