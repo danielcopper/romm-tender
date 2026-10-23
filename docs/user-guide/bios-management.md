@@ -283,10 +283,6 @@ a library file recognised for it says _/home/deck/retrodeck/bios/pcsx2/bios does
 once, then try again._, and with no such file the folder's own row reads _No BIOS image here yet_. On a stock RetroDECK
 that will not happen for `pcsx2/bios`, which RetroDECK links onto the BIOS folder itself.
 
-<!-- Screenshot: Game detail page showing red BIOS status with "2 of 3 files melonDS opens by name are in place" -->
-
-![BIOS file list overlay showing individual required files with checkmarks and "Missing" labels](../assets/screenshot-bios.jpg)
-
 ## Library › Platforms
 
 The **Platforms** tab of the **Library** page holds everything about one system: its sync toggle, the **active emulator

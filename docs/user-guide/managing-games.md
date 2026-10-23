@@ -839,9 +839,7 @@ The full set of per-game actions — refresh artwork, refresh metadata, sync sav
 the RomM Actions menu in the game detail panel. BIOS files are downloaded from the game's **BIOS** tab
 ([BIOS Status on the Game Detail Page](bios-management.md#bios-status-on-the-game-detail-page)).
 
-<!-- Screenshot: the RomM Actions menu without Download BIOS — screenshot-actions.jpg still shows that entry -->
-
-![RomM Actions context menu with Refresh Artwork, Sync Save Files, Download BIOS, and Uninstall entries](../assets/screenshot-actions.jpg)
+![RomM Actions menu with Refresh Artwork, Refresh Metadata, Sync Save Files, Delete Local Saves, and Uninstall entries](../assets/screenshot-actions.jpg)
 
 ## Download Queue
 
