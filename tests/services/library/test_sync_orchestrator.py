@@ -6575,7 +6575,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
     """
 
     @staticmethod
-    async def _bind_20_then_switch_to_22(library, fake_romm_api, *, same_game=True):
+    async def _bind_20_then_switch_to_22(library, fake_romm_api, *, key_of_22=None):
         _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -6612,7 +6612,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
             app_id=6020,
             platform_slug="gba",
             name="Golf (Europe)",
-            sibling_group_key=key if same_game else "igdb:301:2",
+            sibling_group_key=key_of_22 or key,
         )
         with library.uow as uow:
             assert uow.roms.get(20).shortcut_app_id is None
@@ -6698,16 +6698,99 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
         assert result["summary"]["remove_count"] == 0
 
+    @staticmethod
+    def _record_on_22(library, *, route, mark=None):
+        with library.uow as uow:
+            row = uow.roms.get(22)
+            row.record_delivery(route)
+            if mark is not None:
+                row.mark_gone_from_romm(mark)
+            uow.roms.save(row)
+
+    @staticmethod
+    def _gone_mark_of_22(library):
+        with library.uow as uow:
+            return uow.roms.get(22).gone_from_romm
+
+    @pytest.mark.asyncio
+    async def test_a_switched_version_a_collection_last_delivered_is_asked_and_marked_on_a_404(
+        self, library, fake_romm_api, emit
+    ):
+        await self._bind_20_then_switch_to_22(library, fake_romm_api)
+        self._record_on_22(library, route="collection")
+        fake_romm_api.get_rom_once_side_effect_by_id[22] = RommNotFoundError("Rom with id 22 not found")
+        fake_romm_api.call_log.clear()
+
+        assert await self._run_2(library, emit) == ([[]], 6020)
+        assert ("get_rom_once", (22,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
+        assert self._gone_mark_of_22(library) == "not_found"
+
+    @pytest.mark.asyncio
+    async def test_a_switched_version_romm_still_returns_stays_bound_and_has_its_mark_cleared(
+        self, library, fake_romm_api, emit
+    ):
+        await self._bind_20_then_switch_to_22(library, fake_romm_api)
+        self._record_on_22(library, route="collection", mark="not_found")
+
+        assert await self._run_2(library, emit) == ([[]], 6020)
+        assert self._gone_mark_of_22(library) is None
+
+    @pytest.mark.asyncio
+    async def test_the_preview_counts_no_removal_for_a_switched_version_romm_still_returns(
+        self, library, fake_romm_api
+    ):
+        await self._bind_20_then_switch_to_22(library, fake_romm_api)
+        self._record_on_22(library, route="collection")
+
+        result = await library.sync.sync_preview()
+
+        assert result["summary"]["remove_count"] == 0
+
+    @staticmethod
+    def _rematch_left_22s_key_behind(fake_romm_api):
+        """22's stored key is a fallback no edge parses; RomM still names 22 as 20's sibling."""
+        fake_romm_api.roms[20]["sibling_roms"] = [{"id": 22}]
+        fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
+
+    @pytest.mark.asyncio
+    async def test_a_switched_version_a_fetched_rom_names_as_its_sibling_stays_bound_whatever_its_key(
+        self, library, fake_romm_api, emit
+    ):
+        await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="romm:22:2")
+        self._rematch_left_22s_key_behind(fake_romm_api)
+        box = library.sync._box
+
+        async def bind_new_shortcuts_under_new_app_ids(unit, event):
+            event.set()
+            return {str(rid): 7000 + rid for rid in box.pending_sync}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_new_shortcuts_under_new_app_ids
+
+        assert await self._run_2(library, emit) == ([[]], 6020)
+        with library.uow as uow:
+            assert uow.roms.get(20).sibling_group_key != uow.roms.get(22).sibling_group_key
+
+    @pytest.mark.asyncio
+    async def test_the_preview_counts_no_removal_for_a_version_a_fetched_rom_names_as_its_sibling(
+        self, library, fake_romm_api
+    ):
+        await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="romm:22:2")
+        self._rematch_left_22s_key_behind(fake_romm_api)
+
+        result = await library.sync.sync_preview()
+
+        assert result["summary"]["remove_count"] == 0
+
     @pytest.mark.asyncio
     async def test_a_bound_version_of_another_game_is_still_removed(self, library, fake_romm_api, emit):
         """The contrast: 22 is a game of its own that no unit delivered, on a platform RomM lists."""
-        await self._bind_20_then_switch_to_22(library, fake_romm_api, same_game=False)
+        await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="igdb:301:2")
 
         assert await self._run_2(library, emit) == ([[{"rom_id": 22, "app_id": 6020}]], None)
 
     @pytest.mark.asyncio
     async def test_the_preview_counts_the_other_game_s_removal(self, library, fake_romm_api):
-        await self._bind_20_then_switch_to_22(library, fake_romm_api, same_game=False)
+        await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="igdb:301:2")
 
         result = await library.sync.sync_preview()
 

@@ -19,6 +19,7 @@ from domain.sync_diff import (
     select_stale_removals,
     settle_asked_rows,
     should_include_in_platform_collection,
+    sibling_rom_ids_of,
     sort_stale_rows,
 )
 
@@ -1465,23 +1466,60 @@ class TestSortStaleRows:
             [], read_platform_slugs=set(), listed_platform_slugs=set(), collection_listed_rom_ids=set()
         ) == StaleSort([], [], [])
 
-    def test_a_row_whose_game_a_unit_delivered_is_neither_removed_kept_nor_asked(self):
+    def test_a_row_whose_game_a_unit_delivered_is_never_removed_and_asked_only_where_another_would_be(self):
         """A version switch bound a member no unit delivers; the run delivered another member of its group."""
         listed_turned_off = StaleRow(1, 1001, "gba", None, "igdb:1:1")
         via_collection = StaleRow(2, 1002, "gba", "collection", "igdb:2:1")
         via_platform_turned_off = StaleRow(3, 1003, "gba", "platform", "igdb:3:1")
         via_platform_gone_from_romm = StaleRow(4, 1004, "psx", "platform", "igdb:4:1")
+        unrecorded_listed = StaleRow(5, 1005, "gba", None, "igdb:5:1")
 
         sort = sort_stale_rows(
-            [listed_turned_off, via_collection, via_platform_turned_off, via_platform_gone_from_romm],
+            [
+                listed_turned_off,
+                via_collection,
+                via_platform_turned_off,
+                via_platform_gone_from_romm,
+                unrecorded_listed,
+            ],
             read_platform_slugs=set(),
             listed_platform_slugs={"gba"},
-            collection_listed_rom_ids={2},
-            synced_group_keys={"igdb:1:1", "igdb:2:1", "igdb:3:1", "igdb:4:1"},
+            collection_listed_rom_ids={5},
+            synced_group_keys={"igdb:1:1", "igdb:2:1", "igdb:3:1", "igdb:4:1", "igdb:5:1"},
         )
 
-        assert sort == StaleSort([], [], [])
+        assert sort == StaleSort([], [], [], (via_collection, unrecorded_listed))
         assert sort.gone_from_romm_marks({}, set()) == {}
+
+    def test_a_row_asked_only_for_its_mark_is_marked_and_cleared_like_any_asked_row(self):
+        gone, present, unknown = (StaleRow(rid, 1000 + rid, "gba", "collection", "igdb:1:1") for rid in (1, 2, 3))
+        sort = sort_stale_rows(
+            [gone, present, unknown],
+            read_platform_slugs=set(),
+            listed_platform_slugs={"gba"},
+            collection_listed_rom_ids=(),
+            synced_group_keys={"igdb:1:1"},
+        )
+
+        assert sort.gone_from_romm_marks({1: "gone", 2: "present", 3: "unknown"}, set()) == {1: "not_found", 2: None}
+
+    @pytest.mark.parametrize(("route", "lands_in"), [(None, "nowhere"), ("collection", "ask_only")])
+    def test_a_row_a_fetched_rom_names_as_its_sibling_counts_as_delivered_whatever_its_stored_key(
+        self, route, lands_in
+    ):
+        """A re-match moved the group's canonical source, so the bound row's stored key is no longer the group's."""
+        row = StaleRow(1, 1001, "gba", route, "igdb:9:1")
+
+        sort = sort_stale_rows(
+            [row],
+            read_platform_slugs=set(),
+            listed_platform_slugs={"gba"},
+            collection_listed_rom_ids=(),
+            synced_group_keys={"ra:2:1"},
+            synced_sibling_rom_ids={1},
+        )
+
+        assert sort == StaleSort([], [], [], (row,) if lands_in == "ask_only" else ())
 
     def test_a_row_on_a_platform_read_whole_is_kept_whether_or_not_its_game_was_delivered(self):
         row = StaleRow(1, 1001, "n64", "platform", "igdb:1:1")
@@ -1523,6 +1561,18 @@ class TestGroupKeysOf:
         keys = {1: "igdb:1:1", 2: "igdb:1:1", 3: "igdb:3:1", 4: "igdb:4:1"}
 
         assert group_keys_of({1, 2, 3, 5}, keys) == frozenset({"igdb:1:1", "igdb:3:1"})
+
+
+class TestSiblingRomIdsOf:
+    def test_every_id_the_payloads_name_as_a_sibling(self):
+        roms = [
+            {"id": 1, "sibling_roms": [{"id": 2}, {"id": 3}]},
+            {"id": 4, "sibling_roms": None},
+            {"id": 5},
+            {"id": 6, "sibling_roms": [{"id": 3}, {"name": "no id"}]},
+        ]
+
+        assert sibling_rom_ids_of(roms) == frozenset({2, 3})
 
 
 class TestGoneFromRommMarks:

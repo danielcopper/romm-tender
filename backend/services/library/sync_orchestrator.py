@@ -56,6 +56,7 @@ from domain.sync_diff import (
     count_disabled_platform_removals,
     group_keys_of,
     platform_breakdown,
+    sibling_rom_ids_of,
 )
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
@@ -381,11 +382,11 @@ class SyncOrchestrator:
             collection_listed = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_collection_listed_rom_ids
             )
+            # The apply reads these keys back off the rows its commits upserted;
+            # here they exist only in memory.
+            fresh_keys = {rom["id"]: rom["sibling_group_key"] for rom in all_roms if rom.get("sibling_group_key")}
             # The marks are discarded: docs/architecture/backend-architecture.md,
             # "The stale removal keeps a game gone from RomM".
-            # The apply reads these keys back off the rows its units wrote; here
-            # they exist only in memory.
-            fresh_keys = {rom["id"]: rom["sibling_group_key"] for rom in all_roms if rom.get("sibling_group_key")}
             removals, kept, _marks = await settle_stale_rows(
                 (
                     StaleRow(
@@ -403,6 +404,7 @@ class SyncOrchestrator:
                 listed_platform_slugs=box.run_listed_platform_slugs,
                 collection_listed_rom_ids=collection_listed,
                 synced_group_keys=group_keys_of(synced_rom_ids, {**resident_keys, **fresh_keys}),
+                synced_sibling_rom_ids=sibling_rom_ids_of(all_roms),
             )
             removed_ids = {row.rom_id for row in removals}
             stale = [rid for rid in stale if rid in removed_ids]
@@ -759,6 +761,7 @@ class SyncOrchestrator:
         # happy-path and late-ack commit paths). The stale scan excludes it so
         # a new rom_id reusing an old appId is never wrongly removed (#1036).
         box.committed_app_ids = set()
+        box.fetched_sibling_rom_ids = set()
         box.run_interrupted = False
         # Session-budget gate run-scoped state (#1383): the paused flag, the
         # emitted-chunk counter (first chunk exempt → guaranteed forward progress),
@@ -1077,6 +1080,7 @@ class SyncOrchestrator:
                 progress_step=unit_index + 1,
                 progress_total_steps=total_units,
             )
+        box.fetched_sibling_rom_ids.update(sibling_rom_ids_of(unit_roms))
 
         if box.is_cancelling():
             return 0
@@ -1348,6 +1352,7 @@ class SyncOrchestrator:
             listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
             collection_listed_rom_ids=collection_listed_rom_ids,
             synced_group_keys=group_keys_of(synced_rom_ids, group_keys),
+            synced_sibling_rom_ids=self._sync_state.fetched_sibling_rom_ids,
         )
         platform_rom_ids.update(row.rom_id for row in kept)
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]

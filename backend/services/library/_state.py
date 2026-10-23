@@ -230,6 +230,11 @@ class LibrarySyncStateBox:
     # reuses an old appId (CRC32 of unchanged exe+name) can't wipe the shortcut
     # the run just bound (#1036). Reset at the start of each run.
     committed_app_ids: set[int] = field(default_factory=set)
+    # Every rom_id RomM named in the ``sibling_roms`` of a ROM a unit of the run
+    # fetched. The stale removal keeps a bound row named here, since the run
+    # delivered its game, even where a re-match left its stored group key
+    # behind. Reset at the start of each run.
+    fetched_sibling_rom_ids: set[int] = field(default_factory=set)
     # Every platform slug the run's own platform listing named, on in Tender or
     # not; ``None`` until the run has listed. The stale removal reads this rather
     # than the kept ids under ``platform_ids``, which a game page's read can
