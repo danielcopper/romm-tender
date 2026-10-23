@@ -72,6 +72,7 @@ export function buildTabContent({ appId, binding, state }: TabContentContext): R
 
   return (
     <SavesTab
+      appId={appId}
       romId={romId}
       saveStatus={state.saveStatus}
       conflicts={state.conflicts}

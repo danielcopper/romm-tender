@@ -1,14 +1,15 @@
 /**
  * The save-slot surfaces' feedback, failure and confirmation sentences: what a
  * copy to a slot and a restore of a version answer, why a slot switch failed,
- * what deleting a slot will do and did, the error sentences for a call that
- * threw, and the refusals' own sentences.
+ * what deleting a slot will do and did, the reminder for a stranded version,
+ * the error sentences for a call that threw, and the refusals' own sentences.
  * One home for the surfaces that use them. When and where to show them stays
  * with each caller.
  */
 
 import { isEndpointFailure } from "../api/backend";
 import { displaySlot, formatSaveTimeAgo } from "./saveHelpers";
+import type { StrandedVersion } from "./saveSlotFlow";
 import type {
   CopySaveToSlotStatus,
   EndpointFailure,
@@ -166,6 +167,14 @@ export function rollbackFeedback(
     default:
       return null;
   }
+}
+
+/** The reminder for a stranded version, worded by whether its saves could be checked. */
+export function strandedVersionNotice({ name, stranding }: StrandedVersion): string {
+  return stranding === "unchecked"
+    ? `Tender couldn't check whether version "${name}" has saves that haven't been synced to RomM — switch back to ` +
+        "check and sync them."
+    : `Version "${name}" has saves that haven't been synced to RomM — switch back to sync them.`;
 }
 
 /**

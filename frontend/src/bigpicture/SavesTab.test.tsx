@@ -13,6 +13,7 @@ import type { SaveStatus, SaveSlotSummary, SaveFileStatus, LastKnownSlots } from
 import type { SlotPanel } from "./saves/SlotPanel";
 import { installDomEventListenerSpy, uninstallDomEventListenerSpy } from "../test-utils/dom-event-listener-spy";
 import { switchSlotFailureMessage } from "../utils/saveSlotWording";
+import { LOCAL_CALL_LIMIT_MS } from "../utils/launchGate";
 
 // showModal from the global @decky/ui mock receives the <NewSlotModal> element.
 // Tests pull `props.onSubmit` off the captured element to drive the new-slot flow.
@@ -106,6 +107,7 @@ function defaultProps(
   overrides: Partial<React.ComponentProps<typeof SavesTab>> = {},
 ): React.ComponentProps<typeof SavesTab> {
   return {
+    appId: 100,
     romId: 1,
     saveStatus: null,
     conflicts: [],
@@ -127,11 +129,30 @@ function newSlotModalSubmit(idx = 0): ((name: string) => Promise<void>) | undefi
   return el?.props.onSubmit as ((name: string) => Promise<void>) | undefined;
 }
 
+// Settles the mount-time stranded-version probe (getVersionList → checkLocalDrift).
+// A test that returns before it resolves leaves its setStrandedVersion to land
+// unattributed, outside act.
+const flushAsync = () =>
+  act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
 describe("SavesTab", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedSlotPanelProps = [];
     setRommConnectionState("connected");
+    // Stranded-version banner probes (#1298) — default to "no other versions" so
+    // the banner is absent for the unrelated slot/legacy tests.
+    vi.mocked(backend.getVersionList).mockResolvedValue({ multi_version: false, bound_vanished: false });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+      drifted: false,
+      only_here: false,
+      stranding: "none",
+      rom_id: 0,
+    });
     installDomEventListenerSpy();
   });
 
@@ -145,6 +166,7 @@ describe("SavesTab", () => {
       expect(container.textContent).toContain("Connecting to RomM…");
       expect(container.querySelector(".romm-throbber")).not.toBeNull();
       expect(queryByTestId("slot-panel-default")).toBeNull();
+      await flushAsync();
     });
 
     it("still renders the offline banner alongside the connecting spinner", async () => {
@@ -152,6 +174,7 @@ describe("SavesTab", () => {
       const { container } = render(<SavesTab {...defaultProps({ slotsLoading: true })} />);
       expect(container.textContent).toContain("Connecting to RomM…");
       expect(container.textContent).toContain("RomM is offline");
+      await flushAsync();
     });
   });
 
@@ -159,16 +182,19 @@ describe("SavesTab", () => {
     it("does not render when connection state is 'connected'", async () => {
       const { container } = render(<SavesTab {...defaultProps()} />);
       expect(container.textContent).not.toContain("RomM is offline");
+      await flushAsync();
     });
 
     it("renders when the store is 'offline' at mount", async () => {
       setRommConnectionState("offline");
       const { container } = render(<SavesTab {...defaultProps()} />);
       expect(container.textContent).toContain("RomM is offline");
+      await flushAsync();
     });
 
     it("appears live when the store flips to offline (no remount)", async () => {
       const { container } = render(<SavesTab {...defaultProps()} />);
+      await flushAsync();
       expect(container.textContent).not.toContain("RomM is offline");
       act(() => {
         setRommConnectionState("offline");
@@ -179,6 +205,7 @@ describe("SavesTab", () => {
     it("clears live when the store flips back to connected (no remount)", async () => {
       setRommConnectionState("offline");
       const { container } = render(<SavesTab {...defaultProps()} />);
+      await flushAsync();
       expect(container.textContent).toContain("RomM is offline");
       act(() => {
         setRommConnectionState("connected");
@@ -205,6 +232,7 @@ describe("SavesTab", () => {
         />,
       );
       expect(capturedSlotPanelProps[0]?.isOffline).toBe(true);
+      await flushAsync();
     });
   });
 
@@ -216,6 +244,7 @@ describe("SavesTab", () => {
       const { queryByTestId } = render(<SavesTab {...defaultProps({ activeSlot: null, saveStatus: status })} />);
       expect(queryByTestId("save-file-row-a.srm")).not.toBeNull();
       expect(queryByTestId("save-file-row-b.srm")).not.toBeNull();
+      await flushAsync();
     });
 
     it("renders the 'No save files tracked yet' empty state when activeSlot is null and no files", async () => {
@@ -228,11 +257,13 @@ describe("SavesTab", () => {
         />,
       );
       expect(container.textContent).toContain("No save files tracked yet");
+      await flushAsync();
     });
 
     it("renders the empty state when activeSlot is null and saveStatus is null", async () => {
       const { container } = render(<SavesTab {...defaultProps({ activeSlot: null, saveStatus: null })} />);
       expect(container.textContent).toContain("No save files tracked yet");
+      await flushAsync();
     });
 
     it("hides the legacy '' slot panel when activeSlot is null", async () => {
@@ -249,6 +280,7 @@ describe("SavesTab", () => {
       );
       expect(queryByTestId("slot-panel-legacy")).toBeNull();
       expect(queryByTestId("slot-panel-alpha")).not.toBeNull();
+      await flushAsync();
     });
   });
 
@@ -264,6 +296,7 @@ describe("SavesTab", () => {
       );
       const order = capturedSlotPanelProps.map((p) => p.slot.slot);
       expect(order).toEqual(["b", "a", "c"]);
+      await flushAsync();
     });
 
     it("sorts the legacy '' bucket last, below every named slot (#1478)", async () => {
@@ -283,6 +316,7 @@ describe("SavesTab", () => {
       const order = capturedSlotPanelProps.map((p) => p.slot.slot);
       // active first, then named alphabetically, legacy "" demoted to the end.
       expect(order).toEqual(["b", "a", "c", ""]);
+      await flushAsync();
     });
 
     it("marks the active slot with isActive=true and forwards saveStatus/conflicts only to it", async () => {
@@ -324,6 +358,7 @@ describe("SavesTab", () => {
       expect(inactive?.conflicts).toEqual([]);
       expect(inactive?.defaultExpanded).toBe(false);
       expect(inactive?.romId).toBe(1);
+      await flushAsync();
     });
 
     it("synthesizes a placeholder for an active slot missing from availableSlots", async () => {
@@ -343,6 +378,7 @@ describe("SavesTab", () => {
       expect(ghost?.slot.count).toBe(0);
       expect(ghost?.slot.latest_updated_at).toBeNull();
       expect(ghost?.isActive).toBe(true);
+      await flushAsync();
     });
 
     it("does NOT synthesize a placeholder when activeSlot is null", async () => {
@@ -356,6 +392,7 @@ describe("SavesTab", () => {
       );
       const order = capturedSlotPanelProps.map((p) => p.slot.slot);
       expect(order).toEqual(["alpha"]);
+      await flushAsync();
     });
   });
 
@@ -369,6 +406,7 @@ describe("SavesTab", () => {
       expect(queryByTestId("slot-panel-default")).toBeNull();
       // The offline banner is the one and only word on reachability here.
       expect(container.textContent).toContain("RomM is offline");
+      await flushAsync();
     });
 
     it("keeps the locally tracked save files on screen while no slot answer has landed", async () => {
@@ -382,11 +420,13 @@ describe("SavesTab", () => {
       );
       expect(queryByTestId("save-file-row-zelda.srm")).not.toBeNull();
       expect(capturedSlotPanelProps).toEqual([]);
+      await flushAsync();
     });
 
     it("shows the tracked-files empty state while no slot answer has landed", async () => {
       const { container } = render(<SavesTab {...defaultProps({ activeSlotKnown: false, saveStatus: null })} />);
       expect(container.textContent).toContain("No save files tracked yet");
+      await flushAsync();
     });
 
     it("files go back under the active slot panel once a slot answer has landed", async () => {
@@ -405,6 +445,7 @@ describe("SavesTab", () => {
       // the same file twice.
       expect(capturedSlotPanelProps[0]?.saveStatus).toBe(status);
       expect(queryByTestId("save-file-row-zelda.srm")).toBeNull();
+      await flushAsync();
     });
   });
 
@@ -430,6 +471,7 @@ describe("SavesTab", () => {
       expect(capturedSlotPanelProps).toEqual([]);
       expect(container.textContent).toContain("RomM is offline");
       expect(container.textContent).not.toContain("Server unreachable");
+      await flushAsync();
     });
 
     it("marks no slot active when the snapshot's active slot is not among them", async () => {
@@ -446,6 +488,7 @@ describe("SavesTab", () => {
       );
       expect(getByTestId("last-known-slot-alpha").textContent).not.toContain("active");
       expect(getByTestId("last-known-slot-beta").textContent).not.toContain("active");
+      await flushAsync();
     });
 
     it("renders nothing pressable in the stale list", async () => {
@@ -453,6 +496,7 @@ describe("SavesTab", () => {
         <SavesTab {...defaultProps({ activeSlotKnown: false, lastKnownSlots: lastKnown() })} />,
       );
       expect(getByTestId("last-known-slots").querySelectorAll("button")).toHaveLength(0);
+      await flushAsync();
     });
 
     it("keeps the '+ New Slot' affordance exactly as it is without a snapshot", async () => {
@@ -461,6 +505,7 @@ describe("SavesTab", () => {
       );
       fireEvent.click(getByText("+ New Slot"));
       expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
+      await flushAsync();
     });
 
     it("lists the tracked save files alongside the snapshot, still unfiled (#1747)", async () => {
@@ -476,6 +521,7 @@ describe("SavesTab", () => {
       expect(queryByTestId("save-file-row-zelda.srm")).not.toBeNull();
       expect(queryByTestId("last-known-slots")).not.toBeNull();
       expect(capturedSlotPanelProps).toEqual([]);
+      await flushAsync();
     });
 
     it("falls back to #1747's slot-less view when there is no snapshot", async () => {
@@ -486,6 +532,7 @@ describe("SavesTab", () => {
       expect(queryByTestId("last-known-slots")).toBeNull();
       expect(container.textContent).toContain("No save files tracked yet");
       expect(capturedSlotPanelProps).toEqual([]);
+      await flushAsync();
     });
 
     it("shows the live slots and no snapshot once a slot answer has landed", async () => {
@@ -502,6 +549,7 @@ describe("SavesTab", () => {
       expect(queryByTestId("last-known-slots")).toBeNull();
       expect(capturedSlotPanelProps.map((p) => p.slot.slot)).toEqual(["main"]);
       expect(capturedSlotPanelProps[0]?.isActive).toBe(true);
+      await flushAsync();
     });
 
     it("shows no snapshot while the slot fetch is in flight", async () => {
@@ -510,6 +558,7 @@ describe("SavesTab", () => {
       );
       expect(queryByTestId("last-known-slots")).toBeNull();
       expect(container.textContent).toContain("Connecting to RomM…");
+      await flushAsync();
     });
   });
 
@@ -517,12 +566,14 @@ describe("SavesTab", () => {
     it("renders the '+ New Slot' button", async () => {
       const { getByText } = render(<SavesTab {...defaultProps()} />);
       expect(getByText("+ New Slot")).not.toBeNull();
+      await flushAsync();
     });
 
     it("opens the NewSlotModal when clicked", async () => {
       const { getByText } = render(<SavesTab {...defaultProps()} />);
       fireEvent.click(getByText("+ New Slot"));
       expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
+      await flushAsync();
     });
 
     it("is disabled while the server is unreachable", async () => {
@@ -534,6 +585,7 @@ describe("SavesTab", () => {
       expect(button.disabled).toBe(true);
       fireEvent.click(button);
       expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+      await flushAsync();
     });
   });
 
@@ -590,6 +642,7 @@ describe("SavesTab", () => {
           ),
         );
         expect(onSlotSwitched).toHaveBeenCalledOnce();
+        await flushAsync();
         expect(container.textContent).not.toContain("An error occurred while creating the slot");
         expect(container.textContent).not.toContain("Failed to create slot");
       } finally {
@@ -841,6 +894,7 @@ describe("SavesTab", () => {
   describe("event dispatch — version restored + slot deleted", () => {
     it("dispatches romm_data_changed when a child SlotPanel calls onVersionRestored", async () => {
       render(<SavesTab {...defaultProps({ availableSlots: [makeSlot()] })} />);
+      await flushAsync();
       const listener = vi.fn();
       globalThis.addEventListener("romm_data_changed", listener);
       try {
@@ -858,6 +912,7 @@ describe("SavesTab", () => {
 
     it("dispatches romm_data_changed when a child SlotPanel calls onSlotDeleted", async () => {
       render(<SavesTab {...defaultProps({ availableSlots: [makeSlot()] })} />);
+      await flushAsync();
       const listener = vi.fn();
       globalThis.addEventListener("romm_data_changed", listener);
       try {
@@ -883,21 +938,59 @@ describe("SavesTab", () => {
         />,
       );
       expect(capturedSlotPanelProps[0]?.onSlotSwitched).toBe(onSlotSwitched);
+      await flushAsync();
     });
   });
 
-  describe("other versions of the game", () => {
-    it("asks for no version list and no local-save check when the tab opens, and shows no reminder", async () => {
-      // An inactive installed version with unsynced saves: what the tab's removed
-      // reminder (#2530 D1) would have been shown for, had it still asked.
-      vi.mocked(backend.getVersionList).mockResolvedValue({
-        multi_version: true,
-        bound_vanished: false,
-        versions: [
-          { rom_id: 2, active: true, installed: true },
-          { rom_id: 5, label: "Game (USA)", active: false, installed: true },
-        ] as import("../api/backend").VersionInfo[],
-      });
+  describe("stranded-version banner (#1298)", () => {
+    const UNCHECKED_COPY =
+      "Tender couldn't check whether version \"Game (USA)\" has saves that haven't been synced to RomM — " +
+      "switch back to check and sync them.";
+    const STRANDED_COPY =
+      'Version "Game (USA)" has saves that haven\'t been synced to RomM — switch back to sync them.';
+
+    function makeVersion(
+      overrides: Partial<import("../api/backend").VersionInfo>,
+    ): import("../api/backend").VersionInfo {
+      return {
+        rom_id: 0,
+        name: "",
+        label: "",
+        regions: [],
+        languages: [],
+        revision: "",
+        tags: [],
+        synced: true,
+        installed: false,
+        active: false,
+        is_default: false,
+        switchable: true,
+        vanished: false,
+        ...overrides,
+      };
+    }
+
+    // Active = Japan (installed); an inactive USA build is also on disk.
+    const listWithStranded: import("../api/backend").VersionList = {
+      multi_version: true,
+      bound_vanished: false,
+      versions: [
+        makeVersion({ rom_id: 2, label: "Game (Japan)", active: true, installed: true }),
+        makeVersion({ rom_id: 5, label: "Game (USA)", active: false, installed: true }),
+      ],
+    };
+    // Active = Japan (installed); the other version is NOT downloaded.
+    const listNoStranded: import("../api/backend").VersionList = {
+      multi_version: true,
+      bound_vanished: false,
+      versions: [
+        makeVersion({ rom_id: 2, label: "Game (Japan)", active: true, installed: true }),
+        makeVersion({ rom_id: 5, label: "Game (USA)", active: false, installed: false }),
+      ],
+    };
+
+    it("shows the banner with the verbatim copy when an inactive installed version drifts", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
       vi.mocked(backend.checkLocalDrift).mockResolvedValue({
         drifted: true,
         only_here: false,
@@ -906,14 +999,289 @@ describe("SavesTab", () => {
       });
 
       const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+
+      await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+      expect(backend.checkLocalDrift).toHaveBeenCalledWith(5);
+    });
+
+    it("shows the banner for a save with no recorded sync, which is no drift", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: false,
+        only_here: true,
+        stranding: "unsynced",
+        rom_id: 5,
       });
 
-      expect(backend.getVersionList).not.toHaveBeenCalled();
-      expect(backend.checkLocalDrift).not.toHaveBeenCalled();
-      expect(container.textContent).not.toContain("Game (USA)");
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+    });
+
+    it("says Tender couldn't check where the check could not read", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: false,
+        only_here: false,
+        stranding: "unchecked",
+        rom_id: 5,
+      });
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() => expect(container.textContent).toContain(UNCHECKED_COPY));
+    });
+
+    it("says Tender couldn't check a version whose check call was rejected", async () => {
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+        vi.mocked(backend.checkLocalDrift).mockRejectedValue(new Error("connection lost"));
+
+        const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+        await waitFor(() => expect(container.textContent).toContain(UNCHECKED_COPY));
+        expect(logWarnSpy).toHaveBeenCalledWith(expect.stringContaining("local-save check failed for rom 5"));
+      } finally {
+        logWarnSpy.mockRestore();
+      }
+    });
+
+    it("says Tender couldn't check a version whose check got no answer in time", async () => {
+      vi.useFakeTimers();
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+        vi.mocked(backend.checkLocalDrift).mockReturnValue(new Promise(() => {}));
+
+        const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(LOCAL_CALL_LIMIT_MS - 1);
+        });
+        expect(container.textContent).not.toContain("synced to RomM");
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1);
+        });
+
+        expect(container.textContent).toContain(UNCHECKED_COPY);
+      } finally {
+        logWarnSpy.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+
+    it("hides the banner for a drifted save the verdict does not hold (save sync off)", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "none",
+        rom_id: 5,
+      });
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() => expect(backend.checkLocalDrift).toHaveBeenCalledWith(5));
+      await flushAsync();
       expect(container.textContent).not.toContain("synced to RomM");
+    });
+
+    it("hides the banner when no inactive version is installed", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listNoStranded);
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() => expect(vi.mocked(backend.getVersionList)).toHaveBeenCalled());
+      expect(container.textContent).not.toContain("synced to RomM");
+      // No inactive install → the drift probe is never even fired.
+      expect(backend.checkLocalDrift).not.toHaveBeenCalled();
+    });
+
+    it("hides the banner when the inactive install has no drift", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: false,
+        only_here: false,
+        stranding: "none",
+        rom_id: 5,
+      });
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() => expect(backend.checkLocalDrift).toHaveBeenCalledWith(5));
+      expect(container.textContent).not.toContain("synced to RomM");
+    });
+
+    it("re-runs the check when the bound version changes (version switch)", async () => {
+      // First (romId=2): nothing stranded. After the switch (romId=99): the USA
+      // build is now the inactive-installed drifted sibling → banner appears.
+      vi.mocked(backend.getVersionList).mockResolvedValueOnce(listNoStranded).mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 5,
+      });
+
+      const { container, rerender } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+      await waitFor(() => expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1));
+      expect(container.textContent).not.toContain("synced to RomM");
+
+      rerender(<SavesTab {...defaultProps({ romId: 99 })} />);
+      await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+    });
+
+    it("keeps the banner a newer run set when an older run's list answers late, and probes nothing for it", async () => {
+      // The run for romId 2 still waits on its list when the switch to 99 starts
+      // a second run, which finds the USA build stranded. The late list names a
+      // Europe build the first run must not probe.
+      const lateList: import("../api/backend").VersionList = {
+        multi_version: true,
+        bound_vanished: false,
+        versions: [
+          makeVersion({ rom_id: 2, label: "Game (Japan)", active: true, installed: true }),
+          makeVersion({ rom_id: 7, label: "Game (Europe)", active: false, installed: true }),
+        ],
+      };
+      let answerFirstList: (list: import("../api/backend").VersionList) => void = () => {};
+      vi.mocked(backend.getVersionList)
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            answerFirstList = resolve;
+          }),
+        )
+        .mockResolvedValue(listWithStranded);
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 5,
+      });
+
+      const { container, rerender } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+      await waitFor(() => expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1));
+      rerender(<SavesTab {...defaultProps({ romId: 99 })} />);
+      await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+
+      await act(async () => {
+        answerFirstList(lateList);
+        await flushAsync();
+      });
+      expect(container.textContent).toContain(STRANDED_COPY);
+      expect(backend.checkLocalDrift).not.toHaveBeenCalledWith(7);
+    });
+
+    it("keeps the banner a newer run set when an older run's list fails late", async () => {
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      try {
+        let failFirstList: (e: Error) => void = () => {};
+        vi.mocked(backend.getVersionList)
+          .mockReturnValueOnce(
+            new Promise((_, reject) => {
+              failFirstList = reject;
+            }),
+          )
+          .mockResolvedValue(listWithStranded);
+        vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+          drifted: true,
+          only_here: false,
+          stranding: "unsynced",
+          rom_id: 5,
+        });
+
+        const { container, rerender } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+        await waitFor(() => expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1));
+        rerender(<SavesTab {...defaultProps({ romId: 99 })} />);
+        await waitFor(() => expect(container.textContent).toContain(STRANDED_COPY));
+
+        await act(async () => {
+          failFirstList(new Error("socket closed"));
+          await flushAsync();
+        });
+        expect(container.textContent).toContain(STRANDED_COPY);
+        expect(logWarnSpy).toHaveBeenCalledWith(expect.stringContaining("socket closed"));
+      } finally {
+        logWarnSpy.mockRestore();
+      }
+    });
+
+    it("probes every inactive install and surfaces the first DRIFTED one", async () => {
+      // Two inactive installed siblings: the USA build is clean, the Europe build
+      // drifted. The banner must probe past USA and name Europe.
+      vi.mocked(backend.getVersionList).mockResolvedValue({
+        multi_version: true,
+        bound_vanished: false,
+        versions: [
+          makeVersion({ rom_id: 2, label: "Game (Japan)", active: true, installed: true }),
+          makeVersion({ rom_id: 5, label: "Game (USA)", active: false, installed: true }),
+          makeVersion({ rom_id: 6, label: "Game (Europe)", active: false, installed: true }),
+        ],
+      });
+      vi.mocked(backend.checkLocalDrift).mockImplementation((romId: number) =>
+        Promise.resolve({
+          drifted: romId === 6,
+          only_here: false,
+          stranding: romId === 6 ? "unsynced" : "none",
+          rom_id: romId,
+        }),
+      );
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() =>
+        expect(container.textContent).toContain(
+          'Version "Game (Europe)" has saves that haven\'t been synced to RomM — switch back to sync them.',
+        ),
+      );
+      // Both were probed (USA first, then Europe); the clean USA build isn't named.
+      expect(backend.checkLocalDrift).toHaveBeenCalledWith(5);
+      expect(backend.checkLocalDrift).toHaveBeenCalledWith(6);
+      expect(container.textContent).not.toContain("Game (USA)");
+    });
+
+    it("skips vanished installs and continues to a later live drifted version", async () => {
+      vi.mocked(backend.getVersionList).mockResolvedValue({
+        multi_version: true,
+        bound_vanished: false,
+        versions: [
+          makeVersion({ rom_id: 2, label: "Game (Japan)", active: true, installed: true }),
+          makeVersion({ rom_id: 5, label: "Gone (USA)", installed: true, vanished: true }),
+          makeVersion({ rom_id: 6, label: "Game (Europe)", installed: true }),
+        ],
+      });
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({
+        drifted: true,
+        only_here: false,
+        stranding: "unsynced",
+        rom_id: 6,
+      });
+
+      const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+      await waitFor(() =>
+        expect(container.textContent).toContain(
+          'Version "Game (Europe)" has saves that haven\'t been synced to RomM — switch back to sync them.',
+        ),
+      );
+      expect(backend.checkLocalDrift).not.toHaveBeenCalledWith(5);
+      expect(backend.checkLocalDrift).toHaveBeenCalledWith(6);
+      expect(container.textContent).not.toContain("Gone (USA)");
+    });
+
+    it("logs a warning and hides the banner when the version-list probe rejects", async () => {
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      try {
+        vi.mocked(backend.getVersionList).mockRejectedValue(new Error("offline"));
+
+        const { container } = render(<SavesTab {...defaultProps({ romId: 2 })} />);
+
+        await waitFor(() =>
+          expect(logWarnSpy).toHaveBeenCalledWith(expect.stringContaining("stranded-version check failed")),
+        );
+        expect(container.textContent).not.toContain("synced to RomM");
+      } finally {
+        logWarnSpy.mockRestore();
+      }
     });
   });
 });

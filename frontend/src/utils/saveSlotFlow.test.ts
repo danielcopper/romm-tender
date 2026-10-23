@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeSlotDelete, executeSlotSwitch, loadSlotDeleteInfo } from "./saveSlotFlow";
+import { executeSlotDelete, executeSlotSwitch, findStrandedVersion, loadSlotDeleteInfo } from "./saveSlotFlow";
 import * as backend from "../api/backend";
 import * as connectionState from "./connectionState";
 import * as toast from "./toast";
+import type { SaveStranding, VersionInfo, VersionList } from "../api/backend";
+import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import type { SaveStatus, SlotDeleteInfo } from "../types";
 
 vi.mock("../api/backend", async (importOriginal) => ({
@@ -24,6 +26,36 @@ vi.mock("./toast", () => ({
   showToast: vi.fn(),
 }));
 
+function version(overrides: Partial<VersionInfo>): VersionInfo {
+  return {
+    rom_id: 1,
+    name: "Game (USA)",
+    label: "USA",
+    regions: [],
+    languages: [],
+    revision: "",
+    tags: [],
+    synced: true,
+    installed: true,
+    active: false,
+    is_default: false,
+    switchable: true,
+    vanished: false,
+    ...overrides,
+  };
+}
+
+function versionList(versions: VersionInfo[], multi = true): VersionList {
+  return { multi_version: multi, versions, bound_vanished: false };
+}
+
+function strandBy(verdicts: Record<number, SaveStranding>): void {
+  vi.mocked(backend.checkLocalDrift).mockImplementation((romId: number) => {
+    const stranding = verdicts[romId] ?? "none";
+    return Promise.resolve({ rom_id: romId, drifted: stranding === "unsynced", only_here: false, stranding });
+  });
+}
+
 const STATUS: SaveStatus = {
   rom_id: 7,
   files: [],
@@ -38,8 +70,130 @@ const STATUS: SaveStatus = {
   last_sync_check_at: null,
 };
 
+const notCancelled = () => false;
+
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("findStrandedVersion", () => {
+  it("answers null without probing when the game has one version", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(versionList([version({ rom_id: 2 })], false));
+
+    await expect(findStrandedVersion(10, notCancelled)).resolves.toBeNull();
+    expect(backend.checkLocalDrift).not.toHaveBeenCalled();
+  });
+
+  it("probes only versions that are installed, inactive and not known to be gone from RomM", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(
+      versionList([
+        version({ rom_id: 1, active: true }),
+        version({ rom_id: 2, installed: false }),
+        version({ rom_id: 3, vanished: true }),
+        version({ rom_id: 4 }),
+      ]),
+    );
+    strandBy({});
+
+    await expect(findStrandedVersion(10, notCancelled)).resolves.toBeNull();
+    expect(vi.mocked(backend.checkLocalDrift).mock.calls).toEqual([[4]]);
+  });
+
+  it("answers the first version with unsynced saves, by its label, and probes no further", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(
+      versionList([
+        version({ rom_id: 2, label: "Europe" }),
+        version({ rom_id: 3, label: "Japan" }),
+        version({ rom_id: 4, label: "USA" }),
+      ]),
+    );
+    strandBy({ 3: "unsynced", 4: "unsynced" });
+
+    await expect(findStrandedVersion(10, notCancelled)).resolves.toEqual({ name: "Japan", stranding: "unsynced" });
+    expect(vi.mocked(backend.checkLocalDrift).mock.calls).toEqual([[2], [3]]);
+  });
+
+  it("answers a version whose saves could not be checked the same way", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(
+      versionList([version({ rom_id: 2, label: "Europe" }), version({ rom_id: 3, label: "Japan" })]),
+    );
+    strandBy({ 2: "unchecked", 3: "unsynced" });
+
+    await expect(findStrandedVersion(10, notCancelled)).resolves.toEqual({ name: "Europe", stranding: "unchecked" });
+    expect(vi.mocked(backend.checkLocalDrift).mock.calls).toEqual([[2]]);
+  });
+
+  it("names a version by its name when it has no label, and by its id when it has neither", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(versionList([version({ rom_id: 2, label: "" })]));
+    strandBy({ 2: "unsynced" });
+    await expect(findStrandedVersion(10, notCancelled)).resolves.toMatchObject({ name: "Game (USA)" });
+
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(versionList([version({ rom_id: 3, label: "", name: "" })]));
+    strandBy({ 3: "unsynced" });
+    await expect(findStrandedVersion(10, notCancelled)).resolves.toMatchObject({ name: "3" });
+  });
+
+  it("probes nothing once cancelled during the version list", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(versionList([version({ rom_id: 2 })]));
+    strandBy({ 2: "unsynced" });
+
+    await expect(findStrandedVersion(10, () => true)).resolves.toBeNull();
+    expect(backend.checkLocalDrift).not.toHaveBeenCalled();
+  });
+
+  it("stops probing once cancelled during a probe, even one with unsynced saves", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(
+      versionList([version({ rom_id: 2 }), version({ rom_id: 3 })]),
+    );
+    let cancelled = false;
+    vi.mocked(backend.checkLocalDrift).mockImplementation((romId: number) => {
+      cancelled = true;
+      return Promise.resolve({ rom_id: romId, drifted: true, only_here: false, stranding: "unsynced" });
+    });
+
+    await expect(findStrandedVersion(10, () => cancelled)).resolves.toBeNull();
+    expect(vi.mocked(backend.checkLocalDrift).mock.calls).toEqual([[2]]);
+  });
+
+  it("throws what the version list throws", async () => {
+    vi.mocked(backend.getVersionList).mockRejectedValueOnce(new Error("socket closed"));
+
+    await expect(findStrandedVersion(10, notCancelled)).rejects.toThrow("socket closed");
+  });
+
+  it("answers a probe that rejects as could-not-check, and warns", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(versionList([version({ rom_id: 2, label: "Europe" })]));
+    vi.mocked(backend.checkLocalDrift).mockRejectedValueOnce(new Error("probe failed"));
+
+    await expect(findStrandedVersion(10, notCancelled)).resolves.toEqual({ name: "Europe", stranding: "unchecked" });
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "saveSlotFlow: local-save check failed for rom 2: Error: probe failed",
+    );
+  });
+
+  it("answers a probe with no answer in time as could-not-check, and warns", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(backend.getVersionList).mockResolvedValueOnce(versionList([version({ rom_id: 2, label: "Europe" })]));
+      vi.mocked(backend.checkLocalDrift).mockReturnValueOnce(new Promise(() => {}));
+
+      const answer = findStrandedVersion(10, notCancelled);
+      await vi.advanceTimersByTimeAsync(LOCAL_CALL_LIMIT_MS);
+      await expect(answer).resolves.toEqual({ name: "Europe", stranding: "unchecked" });
+      expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+        `saveSlotFlow: local-save check failed for rom 2: TimeoutError: timed out after ${LOCAL_CALL_LIMIT_MS}ms`,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("answers null without probing when a multi-version list carries no versions", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce({ multi_version: true, bound_vanished: false });
+
+    await expect(findStrandedVersion(10, notCancelled)).resolves.toBeNull();
+    expect(backend.checkLocalDrift).not.toHaveBeenCalled();
+  });
 });
 
 describe("executeSlotSwitch", () => {

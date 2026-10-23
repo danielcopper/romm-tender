@@ -1,13 +1,24 @@
 /**
- * The save-slot surfaces' round trips: switching into a slot, and deleting
- * one. Each surface keeps its own state, timers and dialogs; the sentences are
- * `saveSlotWording.ts`'s.
+ * The save-slot surfaces' round trips: the stranded-version check, switching
+ * into a slot, and deleting one. Each surface keeps its own state, timers and
+ * dialogs; the sentences are `saveSlotWording.ts`'s.
  */
 
-import { debugLog, deleteSlot, getSlotDeleteInfo, switchSlot } from "../api/backend";
+import {
+  checkLocalDrift,
+  debugLog,
+  deleteSlot,
+  getSlotDeleteInfo,
+  getVersionList,
+  logWarn,
+  switchSlot,
+  type SaveStranding,
+} from "../api/backend";
 import { reportServerReachable } from "./connectionState";
 import { detach } from "./detach";
+import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { showToast } from "./toast";
+import { withTimeout } from "./withTimeout";
 import {
   CREATE_SLOT_ERROR_MESSAGE,
   DELETE_SLOT_ERROR_MESSAGE,
@@ -18,6 +29,44 @@ import {
   switchSlotFailureMessage,
 } from "./saveSlotWording";
 import type { SaveStatus, SlotDeleteInfo, WireReason } from "../types";
+
+/** A version the stranded-version check found, by its display name, and the check's verdict on it. */
+export interface StrandedVersion {
+  name: string;
+  stranding: Exclude<SaveStranding, "none">;
+}
+
+/** The local-save check's verdict for `romId`; a call that rejects or gets no answer in time could not check. */
+async function strandingOf(romId: number): Promise<SaveStranding> {
+  try {
+    return (await withTimeout(checkLocalDrift(romId), LOCAL_CALL_LIMIT_MS)).stranding;
+  } catch (e) {
+    logWarn(`saveSlotFlow: local-save check failed for rom ${romId}: ${e}`);
+    return "unchecked";
+  }
+}
+
+/**
+ * The first inactive installed version in `appId`'s group whose verdict is not
+ * `none`, or `null` when there is none. `isCancelled` is asked after every round
+ * trip, and a `true` ends the probing with `null`; the caller still checks it
+ * before using the answer. Throws what the version list throws.
+ */
+export async function findStrandedVersion(appId: number, isCancelled: () => boolean): Promise<StrandedVersion | null> {
+  const list = await getVersionList(appId);
+  if (isCancelled()) return null;
+  const inactiveInstalled = list.multi_version
+    ? (list.versions ?? []).filter((v) => v.installed && !v.active && !v.vanished)
+    : [];
+  // Any inactive-installed sibling can hold stranded saves; answer the first
+  // one the verdict holds for.
+  for (const v of inactiveInstalled) {
+    const stranding = await strandingOf(v.rom_id);
+    if (isCancelled()) return null;
+    if (stranding !== "none") return { name: v.label || v.name || String(v.rom_id), stranding };
+  }
+  return null;
+}
 
 /** Whether the switch activates an existing slot or creates a new one; it picks the failure sentences. */
 type SlotSwitchPurpose = "activate" | "create";

@@ -143,6 +143,11 @@ switch. What happens depends on whether the version you're leaving is downloaded
   same dialog warns you, and says that Tender couldn't check whether the saves have been synced rather than that they
   weren't.
 
+When you leave a downloaded version with unsynced saves behind, the **Saves** tab shows a reminder banner ("switch back
+to sync them") so those saves aren't forgotten; where Tender couldn't check that version's saves, the banner says so. It
+does not recommend switching back to a version positively confirmed as no longer available on RomM; it skips that
+retained row and continues checking any later live versions.
+
 While a download of the game is running, switching is blocked with a short message — cancel the running download first.
 
 While a switch is being applied, the version control briefly shows a spinner and can't be reopened until the switch

@@ -383,8 +383,8 @@ export type SaveStranding = "none" | "unsynced" | "unchecked";
  * The local-save check, answered without asking the server: `drifted` (a save
  * changed since its last recorded sync) and `only_here` (a save with no
  * recorded sync) reported apart, and `stranding`, the one answer the version
- * switch and the removed-game cleanup read. Which field the offline launch
- * reads is `docs/architecture/save-file-sync-architecture.md`'s.
+ * switch, the removed-game cleanup and the Saves tab's reminder read. Which
+ * field the offline launch reads is `docs/architecture/save-file-sync-architecture.md`'s.
  */
 export interface LocalDriftAnswer {
   rom_id: number;

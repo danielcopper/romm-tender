@@ -10,6 +10,7 @@ import {
   formatSlotDeleteLines,
   rollbackFeedback,
   slotDeletedMessage,
+  strandedVersionNotice,
   switchSlotFailureMessage,
   unsupportedCopyMessage,
   unsupportedRestoreMessage,
@@ -275,6 +276,19 @@ describe("createSlotFailureMessage", () => {
 });
 
 describe("the slot switch and delete sentences", () => {
+  it("names the version whose saves haven't been synced", () => {
+    expect(strandedVersionNotice({ name: "Japan", stranding: "unsynced" })).toBe(
+      'Version "Japan" has saves that haven\'t been synced to RomM — switch back to sync them.',
+    );
+  });
+
+  it("says when the version's saves could not be checked", () => {
+    expect(strandedVersionNotice({ name: "Japan", stranding: "unchecked" })).toBe(
+      "Tender couldn't check whether version \"Japan\" has saves that haven't been synced to RomM — switch back to " +
+        "check and sync them.",
+    );
+  });
+
   it("names the deleted slot as given", () => {
     expect(slotDeletedMessage("old")).toBe("Slot 'old' deleted");
   });
