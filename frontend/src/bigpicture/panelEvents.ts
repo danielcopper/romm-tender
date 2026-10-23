@@ -84,10 +84,10 @@ async function handleSaveSyncSettingsChange(
     ctx.setState((prev) => ({
       ...prev,
       saveSyncEnabled: false,
-      // The SAVES tab's button is gated on the same flag, so switching it off
-      // under a user standing on that tab would take the button away and leave
-      // its pane below an unmarked strip. Send them back to the tab every ROM
-      // has — the move `handleVersionSwitched` makes too.
+      // The SAVES tab goes with the flag. GAME INFO is shown in its place
+      // either way (`GamePageTabs`); storing it too keeps the tab from coming
+      // back to SAVES on its own when save sync is switched on again — the move
+      // `handleVersionSwitched` makes too.
       activeTab: prev.activeTab === "saves" ? "info" : prev.activeTab,
     }));
     return;
@@ -282,9 +282,9 @@ async function handleVersionSwitched(
   const biosFields = biosFieldsFromCache(cached) ?? { biosStatus: null, biosLevel: null };
   const saveSyncEnabled = cached.save_sync_enabled ?? false;
   ctx.setState((prev) => {
-    // The SAVES tab can lose its button to this switch, and a user standing on
-    // it is then looking at a body with nothing marked in the strip above it:
-    // back to the tab every version has.
+    // The SAVES tab can go with this switch. GAME INFO is shown in its place
+    // either way (`GamePageTabs`); storing it keeps a later version with save
+    // sync from opening on SAVES by itself.
     const activeTabGone = prev.activeTab === "saves" && !saveSyncEnabled;
     return {
       ...prev,

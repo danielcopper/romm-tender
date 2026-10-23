@@ -46,9 +46,11 @@ interface GamePageTabsProps {
   /** The tabs shown, in order; a tab not shown is not in the list. */
   tabs: Tab[];
   /**
-   * Where it names none of `tabs` — SAVES once save sync is off — Steam's tabbed
-   * page shows the first tab (`steamui/sp.js`), and the play row's L1 and R1
-   * step from there.
+   * The tab to show. Where it names none of `tabs` — ACHIEVEMENTS after a switch
+   * to a version without them — the first tab stands in for it before Steam's
+   * tabbed page is handed it: that page shows its first tab then, but its L1 and
+   * R1 inside a pane step from the id as handed (`steamui/sp.js`), and so would
+   * go nowhere or two tabs back.
    */
   activeTab: string;
   onShowTab: (tabId: string) => void;
@@ -64,7 +66,8 @@ function standAtTop(e: FocusEvent<HTMLDivElement>): void {
   }, AFTER_STEAMS_OWN_SCROLL_MS);
 }
 
-export const GamePageTabs: FC<GamePageTabsProps> = ({ tabs, activeTab, onShowTab }) => {
+export const GamePageTabs: FC<GamePageTabsProps> = ({ tabs, activeTab: asked, onShowTab }) => {
+  const activeTab = tabs.some((tab) => tab.id === asked) ? asked : (tabs[0]?.id ?? asked);
   const onTrigger = useTriggerHandler();
   const focusPlayRow = useFocusPlayRow();
   const latest = useRef({ tabs, activeTab, onShowTab });
@@ -91,8 +94,6 @@ export const GamePageTabs: FC<GamePageTabsProps> = ({ tabs, activeTab, onShowTab
       {...{ scrollIntoViewType: NO_TRANSFORM }}
     >
       {Tabs ? (
-        // B steps back as on Steam's own game page: the pane hands it to the
-        // tab row, and the tab row to the play row.
         <Tabs
           tabs={panes}
           activeTab={activeTab}

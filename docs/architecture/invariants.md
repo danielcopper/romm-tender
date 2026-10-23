@@ -1921,24 +1921,24 @@ Format: **invariant** — tier — enforced by.
   panel's state, event and tab-content modules (`frontend/src/bigpicture/panelState.ts`,
   `frontend/src/bigpicture/panelEvents.ts`, `frontend/src/bigpicture/panelTabContent.tsx` — the panel component itself
   holds none of these writes) via `RomBinding`, built by `bindRom` for a read a run of the `[appId]` effect issued and
-  by `bindRomInState` for the active tab's panes, whose writer is built during render; the achievements tab
-  (`frontend/src/bigpicture/AchievementsTab.tsx`, whose load is `useAchievements` in
-  `frontend/src/utils/achievements.ts`) by construction, its React key being the rom id, so the hook's state cannot
-  outlive the identity it was read for. A version switch re-keys without closing, so neither the store's generation
-  counter nor the panel's `[appId]` effect sees this class. Binding answers the wrong-rom question only; two answers for
-  the SAME rom are ordered instead, by a sequence taken when the read is issued — the store's `loadSeq` and
-  `saveStatusSeq`, the panel's `takeReadTicket` (#1717). Four writes are unbound. Three are ordered: the two identity
-  writes install what a binding would compare against, so ordering is all they can have, and the panel's lazy SAVES-tab
-  slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`) writes through the raw setter, ordered by its own `slots`
-  ticket. The fourth has neither — the store's `cached.bios_status` fold runs in the same synchronous run as its guard.
-  The event lane's `rereadBiosAnswer`, which `handleBiosChange` and a press on the panel's own BIOS tab both read
-  through, is bound and ordered: it re-reads `get_bios_status` for the rom it shows, whose emulator is resolved per ROM
-  — a per-game pin over the platform's pick — and takes the `bios` ticket the panel's other BIOS re-reads take (#1718).
-  The play button is NOT covered (#1714)** — test + prompt-only — the panel's fourteen bound sites each carry a
-  version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site on
-  either are prompt-only, because a checker scoped to the store's own function bodies would be green on the case this
-  rule was written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not
-  restate them here
+  by `bindRomInState` for the active tab's panes, whose writer is built during render; the achievements load
+  (`useAchievements`, `frontend/src/utils/achievements.ts`) by tagging each answer with the rom it was read for
+  (`forRom`) and showing it only while that rom is the one showing, so its state cannot outlive the identity it was read
+  for. A version switch changes the rom without closing, so neither the store's generation counter nor the panel's
+  `[appId]` effect sees this class. Binding answers the wrong-rom question only; two answers for the SAME rom are ordered
+  instead, by a sequence taken when the read is issued — the store's `loadSeq` and `saveStatusSeq`, the panel's
+  `takeReadTicket` (#1717). Four writes are unbound. Three are ordered: the two identity writes install what a binding
+  would compare against, so ordering is all they can have, and the panel's lazy SAVES-tab slot load
+  (`frontend/src/bigpicture/panelSlotsLoad.ts`) writes through the raw setter, ordered by its own `slots` ticket. The
+  fourth has neither — the store's `cached.bios_status` fold runs in the same synchronous run as its guard. The event
+  lane's `rereadBiosAnswer`, which `handleBiosChange` and a press on the panel's own BIOS tab both read through, is
+  bound and ordered: it re-reads `get_bios_status` for the rom it shows, whose emulator is resolved per ROM — a per-game
+  pin over the platform's pick — and takes the `bios` ticket the panel's other BIOS re-reads take (#1718). The play
+  button is NOT covered (#1714)** — test + prompt-only — the panel's fourteen bound sites each carry a version-switch
+  test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site on either are
+  prompt-only, because a checker scoped to the store's own function bodies would be green on the case this rule was
+  written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate
+  them here
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own, so the reader can walk the
   table; text between two stops of the same card is reached through them and is no stop of its own (an emulator source

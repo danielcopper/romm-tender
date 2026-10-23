@@ -1171,9 +1171,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`frontend/src/utils/gameDetailStore.ts`) via `writerForRom`, or the answer's own `rom_id` in `applySaveStatus`; the
   panel's modules `frontend/src/bigpicture/panelState.ts`, `frontend/src/bigpicture/panelEvents.ts` and
   `frontend/src/bigpicture/panelTabContent.tsx` via `RomBinding` (`bindRom`, `bindRomInState`);
-  `frontend/src/bigpicture/AchievementsTab.tsx` (whose load is `useAchievements` in
-  `frontend/src/utils/achievements.ts`) by its rom-id key. Two answers for the SAME rom are ordered by a sequence taken
-  at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes (the store's
+  `useAchievements` (`frontend/src/utils/achievements.ts`) by tagging each answer with the rom it was read for
+  (`forRom`) and showing it only while that rom shows. Two answers for the SAME rom are ordered by a sequence taken at
+  issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes (the store's
   `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
   (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
   `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS tab both

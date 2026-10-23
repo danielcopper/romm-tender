@@ -8,6 +8,8 @@ import type { WideTabsProps } from "../utils/deckyUiInternals";
  * active one, and the active tab's content. Steam's own falls back to the first
  * tab where the active id names none, and so does this. It takes no L1 or R1.
  *
+ * The active id it is handed stands on its root as `data-active-tab`.
+ *
  * B is wired the way Steam's is (`steamui/sp.js`, the tabbed page): the content
  * takes it to put focus on the active tab unless `cancelSkipTabHeader` is
  * passed, the page as a whole hands it to `onCancelFromTabHeader`, and a
@@ -38,7 +40,7 @@ export const StubTabs: FC<WideTabsProps> = ({
         },
       };
   return (
-    <div data-testid="steam-tabs">
+    <div data-testid="steam-tabs" data-active-tab={activeTab}>
       <Focusable className="stub-tabbed-page" {...fromTabRow}>
         {tabs.map((tab) => (
           <button

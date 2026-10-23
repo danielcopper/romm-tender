@@ -6418,7 +6418,7 @@ describe("RomMGameInfoPanel", () => {
       ...overrides,
     });
 
-    it("hands Steam's tabbed page every tab in its fixed order, titled as before", async () => {
+    it("hands Steam's tabbed page every tab in its fixed order, each with its title", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ ra_id: 7, save_sync_enabled: true }));
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -6504,6 +6504,81 @@ describe("RomMGameInfoPanel", () => {
       });
       expect(step.mock.calls).toEqual([[1], [1]]);
       expect(shownTab(container)).toBe("tab-bios");
+    });
+
+    it("hands Steam's tabbed page a shown tab after a switch to a version without the one that was open", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ rom_id: 1, ra_id: 7 }));
+      const { container, getByTestId } = section();
+      await flushAsync();
+      await press(container, "tab-achievements");
+      expect(getByTestId("steam-tabs").getAttribute("data-active-tab")).toBe("achievements");
+
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ rom_id: 2 }));
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", {
+            detail: { type: "version_switched", app_id: testAppId, rom_id: 2 },
+          }),
+        );
+      });
+      await flushAsync();
+      expect(tabIds(container)).toEqual(["tab-info", "tab-bios", "tab-artwork"]);
+      expect(getByTestId("steam-tabs").getAttribute("data-active-tab")).toBe("info");
+
+      await act(async () => {
+        pull(playRow(container), R1);
+      });
+      expect(shownTab(container)).toBe("tab-bios");
+    });
+
+    it("shows no achievements of the version switched away from while the new one's cannot load", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ rom_id: 1, ra_id: 7 }));
+      vi.mocked(backend.getAchievements).mockResolvedValue({
+        success: true,
+        total: 1,
+        achievements: [
+          {
+            ra_id: 1,
+            badge_id: "b1",
+            title: "First Steps",
+            description: "Did the thing",
+            points: 5,
+            badge_url: "http://example/b1.png",
+            badge_url_lock: "http://example/b1-lock.png",
+            display_order: 1,
+            type: "win",
+            num_awarded: 1,
+            num_awarded_hardcore: 0,
+          },
+        ],
+      });
+      vi.mocked(backend.getAchievementProgress).mockResolvedValue({
+        success: true,
+        earned: 0,
+        earned_hardcore: 0,
+        total: 1,
+        earned_achievements: [],
+      });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await press(container, "tab-achievements");
+      expect(container.textContent).toContain("First Steps");
+
+      // Offline, so nothing is loaded for the version switched to.
+      act(() => {
+        setRommConnectionState("offline");
+      });
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ rom_id: 2, ra_id: 8 }));
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", {
+            detail: { type: "version_switched", app_id: testAppId, rom_id: 2 },
+          }),
+        );
+      });
+      await flushAsync();
+      expect(container.textContent).not.toContain("First Steps");
+      expect(backend.getAchievements).not.toHaveBeenCalledWith(2);
     });
 
     describe("what a pane holds across a tab switch", () => {
