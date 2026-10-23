@@ -40,8 +40,9 @@ const NO_ACHIEVEMENTS: Achievement[] = [];
  *  true with a `raId` while RomM is not known offline, and keep them while
  *  `isActive` goes false again. A load torn down mid-flight or one that throws
  *  is tried again on the next activation or reconnect, and one answered
- *  unreachable once RomM reconnects; any other answer stands. Each ROM is loaded
- *  once, and only the answers for `romId` are answered. */
+ *  unreachable once RomM reconnects; any other answer stands. It holds one ROM's
+ *  answers at a time and answers them only while that ROM is `romId`: a switch
+ *  to another ROM loads that one, and a switch back loads the first again. */
 export function useAchievements(romId: number | null, raId: number | null, isActive: boolean): AchievementsLoad {
   const isOffline = useRommConnectionState() === "offline";
   const [loaded, setLoaded] = useState<LoadedAchievements | null>(null);

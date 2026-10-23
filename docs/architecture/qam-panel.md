@@ -674,11 +674,11 @@ Steam's tab row and content pass the triggers on (Library › BIOS, "L2 and R2 s
 
 **A pane keeps what it holds because the panel holds it.** Steam mounts only the active tab's pane, keyed by tab id, so
 a switch unmounts the pane it leaves. The BIOS tab's own state — the emulator shown, a press under way and the line it
-left — is `useBiosTab`'s, and the achievements' load, once per ROM, is `useAchievements`'s; the panel calls both. SAVES
-reads the panel's state already, and ARTWORK's slots are held in `utils/artworkSlotsStore.ts` and read again on every
-opening. Where focus stood is Steam's to put back: its tabbed page saves the pane's navigation state per tab id and
-restores it a moment after the switch, which finds a row only if the pane draws it at once — a pane that came back on a
-spinner would put focus nowhere. Whether that restore lands where it should is a device check; so is the look.
+left — is `useBiosTab`'s, and the achievements' load, made once until the ROM changes, is `useAchievements`'s; the panel
+calls both. SAVES reads the panel's state already, and ARTWORK's slots are held in `utils/artworkSlotsStore.ts` and read
+again on every opening. Where focus stood is Steam's to put back: its tabbed page saves the pane's navigation state per
+tab id and restores it a moment after the switch, which finds a row only if the pane draws it at once — a pane that came
+back on a spinner would put focus nowhere. Whether that restore lands where it should is a device check; so is the look.
 
 ### Scrolling a region without moving focus
 

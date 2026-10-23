@@ -259,8 +259,8 @@ async function handleVersionSwitched(
   // load-once gate and re-key the tab state off the fresh cache (mirroring a
   // fresh mount) so the tab-activation effect re-fetches for the new rom_id —
   // covering both the sitting-on-a-tab case (romId changes → the effect
-  // re-runs) and the open-a-tab-later case. The ACHIEVEMENTS tab re-keys
-  // itself: its React key is the rom_id, so the new one remounts it.
+  // re-runs) and the open-a-tab-later case. The ACHIEVEMENTS load follows
+  // the switch by itself (`useAchievements`, `utils/achievements.ts`).
   //
   // BIOS is the third per-rom tab: the requirement is core-dependent and the
   // core override is keyed on rom_id, so the new version's core may need

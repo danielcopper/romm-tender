@@ -6433,7 +6433,7 @@ describe("RomMGameInfoPanel", () => {
       expect(shownTab(container)).toBe("tab-info");
     });
 
-    it("leaves a tab whose pane has nothing to show out of the tabbed page", async () => {
+    it("leaves ACHIEVEMENTS and SAVES out of the tabbed page for a game without an ra_id and with save sync off", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -6579,6 +6579,53 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       expect(container.textContent).not.toContain("First Steps");
       expect(backend.getAchievements).not.toHaveBeenCalledWith(2);
+    });
+
+    it("shows no achievements of the version switched away from where the new one's cannot be read", async () => {
+      const notFound = { success: false, reason: "not_found", message: "gone" } as const;
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ rom_id: 1, ra_id: 7 }));
+      vi.mocked(backend.getAchievements).mockImplementation(async (romId) =>
+        romId === 1
+          ? {
+              success: true,
+              total: 1,
+              achievements: [
+                {
+                  ra_id: 1,
+                  badge_id: "b1",
+                  title: "First Steps",
+                  description: "Did the thing",
+                  points: 5,
+                  badge_url: "http://example/b1.png",
+                  badge_url_lock: "http://example/b1-lock.png",
+                  display_order: 1,
+                  type: "win",
+                  num_awarded: 1,
+                  num_awarded_hardcore: 0,
+                },
+              ],
+            }
+          : notFound,
+      );
+      vi.mocked(backend.getAchievementProgress).mockImplementation(async (romId) =>
+        romId === 1 ? { success: true, earned: 0, earned_hardcore: 0, total: 1, earned_achievements: [] } : notFound,
+      );
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await press(container, "tab-achievements");
+      expect(container.textContent).toContain("First Steps");
+
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail({ rom_id: 2, ra_id: 8 }));
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", {
+            detail: { type: "version_switched", app_id: testAppId, rom_id: 2 },
+          }),
+        );
+      });
+      await flushAsync();
+      expect(backend.getAchievements).toHaveBeenCalledWith(2);
+      expect(container.textContent).not.toContain("First Steps");
     });
 
     describe("what a pane holds across a tab switch", () => {
