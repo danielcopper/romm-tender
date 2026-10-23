@@ -896,19 +896,26 @@ class TestGetBiosStatusFound:
         assert result["bios_label"] == "OK"
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_no_bios_needed(self, game_detail):
-        """ROM with needs_bios=False returns bios_status / level / label all None.
+    async def test_the_answer_that_no_bios_is_needed_is_sent_whole(self, game_detail):
+        """The checker's needs-none payload ships as the status, so the BIOS tab draws it like any other.
 
-        This is the real negative — the answer the frontend is allowed to clear a
-        shown requirement on, so it must NOT be flagged unknown (#1693).
+        It is a real answer, so it must NOT be flagged unknown (#1693).
         """
         _seed_rom(game_detail, 42, app_id=50000, name="Game", platform_slug="gba")
-        game_detail.service._bios_checker.check_platform_bios = AsyncMock(return_value={"needs_bios": False})
+        payload = {
+            "needs_bios": False,
+            "bios_level": "ok",
+            "bios_label": "OK",
+            "required_count": 0,
+            "files": [],
+            "emulator_tabs": [{"emulator": "mgba_libretro.so", "label": "mGBA", "launching": True}],
+        }
+        game_detail.service._bios_checker.check_platform_bios = AsyncMock(return_value=payload)
 
         result = await game_detail.service.get_bios_status(42)
-        assert result["bios_status"] is None
-        assert result["bios_level"] is None
-        assert result["bios_label"] is None
+        assert result["bios_status"] == {**payload, "platform_slug": "gba"}
+        assert result["bios_level"] == "ok"
+        assert result["bios_label"] == "OK"
         assert result["bios_status_unknown"] is False
 
     @pytest.mark.asyncio
@@ -1028,7 +1035,7 @@ class TestGetBiosStatusFound:
                     "bios_label": "Missing",
                     "files": [{"file_name": "gba_bios.bin", "downloaded": False}],
                 }
-            return {"needs_bios": False}
+            return {"needs_bios": False, "bios_level": "ok", "bios_label": "OK", "files": []}
 
         game_detail.service._bios_checker.check_platform_bios = fake_check
 
@@ -1036,7 +1043,8 @@ class TestGetBiosStatusFound:
         plain = await game_detail.service.get_bios_status(43)
 
         assert pinned["bios_level"] == "missing"
-        assert plain["bios_status"] is None
+        assert plain["bios_level"] == "ok"
+        assert plain["bios_status"]["needs_bios"] is False
         assert active_core_resolver.emulator_calls == [42, 43]
 
 

@@ -123,10 +123,9 @@ class GameDetailService:
         """Build the BIOS half of a game-detail payload.
 
         ``unknown`` marks a payload that carries no BIOS answer — the check
-        raised, or answered from a source that could not see the requirement —
-        as opposed to the answer "the active core needs no BIOS". The two ship
-        the same absent ``bios_status``, and only the latter may take a shown
-        requirement off the frontend, so the flag is what separates them.
+        raised, or answered from a source that could not see the requirement.
+        Every answer the check established, "the active core needs no BIOS"
+        included, ships its ``bios_status`` instead.
 
         Those two reasons for the flag are themselves different answers, and the
         LEVEL is what separates them: a check that ran and could not establish
@@ -411,15 +410,14 @@ class GameDetailService:
         ``bios_label`` (str or ``None``), and ``bios_status_unknown`` (bool). The
         level and label are the checker's own — derived where the reading state
         that decides them is known and threaded through untouched, never
-        re-derived here; the flag separates a check that could not answer from
-        the answer "this core needs no BIOS", which is the only one of the two
-        that clears a shown requirement.
+        re-derived here.
 
-        Two of the four outcomes carry a level: a requirement, and the answer
-        ``"unknown"`` from a check that ran without establishing one. A check
-        that raised carries none, and that absence is how the frontend tells a
-        failed read from an answer it should render; so does the fourth, the
-        plain "no BIOS needed".
+        Every answer the check established ships its ``bios_status`` — the one
+        that no BIOS is needed (``needs_bios: False``, level ``"ok"``) as much as
+        a requirement. The flag carries the other two outcomes: with level
+        ``"unknown"``, a check that ran without establishing the requirement;
+        with no level, a check that raised. A ROM that is gone or has no platform
+        ships neither a status nor the flag; nothing has been asked about it.
         """
         rom_id = int(rom_id)
 
@@ -450,27 +448,25 @@ class GameDetailService:
             bios = await self._bios_checker.check_platform_bios(
                 platform_slug, launching_emulator=emulator, rom_regions=rom.regions, install=install
             )
-            if bios.get("needs_bios"):
-                # The checker's payload IS the wire shape, plus the slug it was
-                # asked about. Re-wrapping it through ``format_bios_status`` here
-                # would ship that dataclass's ``reading_complete`` default beside
-                # the answer — a field no frontend models and whose True is a
-                # claim this call site cannot make.
-                return self._bios_answer(
-                    {**bios, "platform_slug": platform_slug},
-                    bios.get("bios_level"),
-                    bios.get("bios_label"),
-                )
         except Exception as e:
             self._logger.warning(f"BIOS status check failed for {platform_slug}: {e}")
             return self._bios_answer(unknown=True)
 
-        # No requirement — but a check that itself degraded to a source blind to
-        # the requirement reports that, and its verdict travels on unchanged. It
-        # travels as a LEVEL as well as a flag: the flag alone is also what a
-        # failed read ships (the ``except`` above), and the frontend has to tell
-        # the two apart — an answer of "unknown" is shown as one, while a read
-        # that never happened leaves whatever is on the page standing (#1693).
+        # A check that degraded to a source blind to the requirement reports
+        # that, and its verdict travels on unchanged. It travels as a LEVEL as
+        # well as a flag: the flag alone is also what a failed read ships (the
+        # ``except`` above), and the frontend has to tell the two apart — an
+        # answer of "unknown" is shown as one, while a read that never happened
+        # leaves whatever is on the page standing (#1693).
         if bios.get("bios_status_unknown"):
             return self._bios_answer(bios_level=BIOS_LEVEL_UNKNOWN, bios_label=BIOS_LABEL_UNKNOWN, unknown=True)
-        return self._bios_answer()
+        # Every other answer is the checker's payload, the answer that no BIOS is
+        # needed included, plus the slug it was asked about. Re-wrapping it
+        # through ``format_bios_status`` here would ship that dataclass's
+        # ``reading_complete`` default beside the answer — a field no frontend
+        # models and whose True is a claim this call site cannot make.
+        return self._bios_answer(
+            {**bios, "platform_slug": platform_slug},
+            bios.get("bios_level"),
+            bios.get("bios_label"),
+        )

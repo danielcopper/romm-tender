@@ -565,6 +565,11 @@ class FirmwareStatusReader:
         consumer may read it as "this platform needs none". A verdict of
         not met is an answer with no row to show — DuckStation over a BIOS folder
         its search found nothing in declares no file — and is sent whole.
+
+        A verdict of met with no row to show is sent whole too, with
+        ``needs_bios: False``: the game page draws it like any other answer, the
+        sentence read off the verdict and the selector off ``emulator_tabs``. The
+        empty file list says nothing of its own; the verdict is what says met.
         """
         platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, platform_slug, install)
         system = platform.taken
@@ -586,10 +591,12 @@ class FirmwareStatusReader:
         answer = emulator_answer(catalogue, identity, groups)
 
         met = answer.verdict.requirements_met if answer.verdict is not None else None
-        if not files and met is not False:
-            return {"needs_bios": False} if met is True else {"needs_bios": False, "bios_status_unknown": True}
+        if not files and met is None:
+            return {"needs_bios": False, "bios_status_unknown": True}
 
         payload = self._bios_payload(files, platform_slug, answer, pick)
+        if not files and met is True:
+            payload["needs_bios"] = False
         payload["store_only"] = _store_only(system, catalogue, identity)
         payload["backup_root"] = self._store.backup_root()
         payload["emulator_tabs"] = emulator_tabs(
