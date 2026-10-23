@@ -666,7 +666,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   off a RomM payload only through `domain/rom_file.py::has_file_on_romm`, and the stored `Rom.has_file_on_disk` is
   written only from its answer
 - **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
-  from a platform the run read whole is kept; on a platform the run did not read, a row a collection last delivered
+  from a platform the run read whole is kept; on a platform the run did not read, a row whose game the run synced —
+  another member of its sibling group among the ROMs the run counts as synced, a skipped unit's stamp members included —
+  is kept, neither asked nor marked, and a row without a group key is judged alone; a row a collection last delivered
   (`roms.delivered_through`) is asked for by its exact id on every run until it is found or unbound, and kept unless
   RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer names its
   platform and removed unasked when it does; a row with no recorded route is asked only when the collections' last
@@ -681,13 +683,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
   (with `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts`,
   `test_a_platform_romm_no_longer_lists_keeps_its_steam_collection` and
-  `test_a_platform_read_mid_run_still_counts_as_unlisted`) for the two ends, and
+  `test_a_platform_read_mid_run_still_counts_as_unlisted`) for the two ends,
+  `TestAVersionSwitchedOffTheCollectionsMember` for a game only a collection delivers, skipped or fetched, and
   `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route the commit records;
   `tests/domain/test_sync_diff.py::TestGoneFromRommMarks` and `tests/contract/test_gone_from_romm_mark.py` for the mark.
   Prompt-only: the collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the
   platform listing is the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk
   dispatcher names the unit's kind on every commit, the preview and the apply both sort through
-  `services/library/_stale_rows.py::settle_stale_rows`, and the preview names a kept row's platform collection through
+  `services/library/_stale_rows.py::settle_stale_rows` with the group keys `domain/sync_diff.py::group_keys_of` reads
+  for the run's synced ROMs, and the preview names a kept row's platform collection through
   `services/library/_stale_rows.py::with_kept_platform_names`, which must agree with
   `SyncReporter._names_with_bound_platforms_kept`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every

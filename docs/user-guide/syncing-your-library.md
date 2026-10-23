@@ -529,15 +529,16 @@ appId, artwork, collections and playtime. If the old version was downloaded, its
 land, so the new version's page offers **Use Existing Files** instead of a download.
 
 What a sync still removes is a game outside what you sync: its platform is turned off and no enabled collection holds
-it. A game a collection brought in, that no collection returns any more, is asked for by its id: if RomM still has it,
-it left the collection and its shortcut is removed; if RomM answers that it is gone, or does not answer, the shortcut
-stays, and the next sync asks again. A game RomM answered as gone then appears under **Data Management › Gone from
-RomM**, until a sync or the cleanup finds it on RomM again. Tender remembers whether a game last came in through its
-platform or through a collection; a game it has no such record for yet, as after the update that added it, is judged by
-the collections' last completed sync instead. A version gone from RomM stays bound, and does not keep its platform from
-skipping: the next sync reads the platform in full and records what RomM has now, as
-[Time estimate and progress](#time-estimate-and-progress) describes, and later syncs skip the platform again while
-nothing on it changes.
+it. A collection that holds any version of a game holds the game, so a game you switched to a version the collection
+does not list keeps its shortcut while the collection still holds another of its versions. A game a collection brought
+in, that no collection returns any more, is asked for by its id: if RomM still has it, it left the collection and its
+shortcut is removed; if RomM answers that it is gone, or does not answer, the shortcut stays, and the next sync asks
+again. A game RomM answered as gone then appears under **Data Management › Gone from RomM**, until a sync or the cleanup
+finds it on RomM again. Tender remembers whether a game last came in through its platform or through a collection; a
+game it has no such record for yet, as after the update that added it, is judged by the collections' last completed sync
+instead. A version gone from RomM stays bound, and does not keep its platform from skipping: the next sync reads the
+platform in full and records what RomM has now, as [Time estimate and progress](#time-estimate-and-progress) describes,
+and later syncs skip the platform again while nothing on it changes.
 
 Sync itself never purges a retained local ROM row, installed content, saves, or playtime solely because RomM stopped
 returning that id. Removing that state requires the separate confirmed

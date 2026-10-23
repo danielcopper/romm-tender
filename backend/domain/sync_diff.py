@@ -303,10 +303,12 @@ def collapse_sibling_groups(
     * **Grandfathered untouched** (partial view only) — the group holds a binding
       that is not in THIS fetch: emit nothing. Absence from a partial view is not
       absence from the server, so the binding is left alone (no rebind, no second
-      shortcut). The group's real representative rides its own platform unit in
-      the same run; the unbound fetched members still persist via
-      ``pending_all_roms`` and the reporter's collection group-fallback places the
-      group's shortcut in the Steam collection.
+      shortcut). Where the group's platform is synced, the bound member rides
+      that platform unit in the same run; where only collections reach the
+      group, the stale removal keeps the binding, since the run delivered a
+      member of its group (:func:`sort_stale_rows`). The unbound fetched members
+      still persist via ``pending_all_roms`` and the reporter's collection
+      group-fallback places the group's shortcut in the Steam collection.
 
     Bound rows are grouped by their FETCHED sibling key when the row is in this
     fetch (so a legacy row whose stored key is still NULL is placed in its real
