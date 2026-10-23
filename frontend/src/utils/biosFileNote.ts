@@ -69,7 +69,7 @@ export type BiosDescriptionRow = Pick<
  * either.
  */
 export interface BiosFileWords {
-  /** The em-dash note after the row's name, or `""` where there is none. */
+  /** The sentence under the row, or `""` where there is none. */
   note: string;
   /** One line each, rendered under the row: the images a folder's read
    *  identified, where the list IS the content, and the neutral line saying an
