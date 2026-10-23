@@ -744,9 +744,9 @@ export interface BiosStatus extends EmulatorAnswer {
   // which one unread core is already enough for, so it cannot say that nothing
   // is wanted. A failed firmware fetch alone does not raise it: the listing is
   // caught and the file list simply comes back empty, which the machine's own
-  // answer can still fill. The `needs_bios: false` it rides on is
-  // ignorance, not an answer, so no consumer may clear a shown requirement on it
-  // — and the panel renders it as its own state.
+  // answer can still fill. The `needs_bios: false` it rides on never means
+  // that nothing is needed. Whether a payload carrying the flag is an answer is
+  // decided by its level, as `BiosAnswer` in `api/backend.ts` states.
   bios_status_unknown?: boolean;
   /** See {@link StoreOnly}. */
   store_only?: StoreOnly | null;
