@@ -1,12 +1,10 @@
 /**
  * AchievementsTab — the RetroAchievements tab of the game page.
  *
- * Draws what `useAchievements` loads: a summary, a progress bar and a row per
- * achievement. `RomMGameInfoPanel` knows only the `ra_id` that decides whether
- * the tab exists at all.
- *
- * Stays mounted while another tab is showing (rendering nothing) so a loaded
- * list survives a tab switch instead of re-fetching on every visit.
+ * Draws what `useAchievements` (`utils/achievements.ts`) loads: a summary, a
+ * progress bar and a row per achievement. The panel calls the hook, so that a
+ * tab switch does not load again (`docs/architecture/qam-panel.md`, "The game
+ * page's tabs").
  *
  * CSS classes prefixed with `romm-cheevo-` are injected separately by
  * styleInjector.
@@ -16,16 +14,9 @@ import { FC, type ReactElement } from "react";
 import { DialogButton } from "@decky/ui";
 import type { Achievement, AchievementProgress, EarnedAchievement } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
-import { earnedByBadgeId, orderEarnedFirst, useAchievements } from "../utils/achievements";
+import { earnedByBadgeId, orderEarnedFirst, type AchievementsLoad } from "../utils/achievements";
 import { formatCheevoDate } from "../utils/formatters";
 import { ConnectingIndicator } from "./saves/ConnectingIndicator";
-
-interface AchievementsTabProps {
-  romId: number;
-  /** The ROM's RetroAchievements game id — without one there is nothing to load. */
-  raId: number | null;
-  isActive: boolean;
-}
 
 /** Deterministic sparkle positions for a hardcore badge, seeded per achievement
  *  so the same badge always sparkles the same way across re-renders. */
@@ -187,11 +178,9 @@ function renderCheevoList(achievements: Achievement[], progress: AchievementProg
   return <div className="romm-cheevo-list">{cheevoChildren}</div>;
 }
 
-export const AchievementsTab: FC<AchievementsTabProps> = ({ romId, raId, isActive }) => {
-  const { achievements, progress, loading, isOffline } = useAchievements(romId, raId, isActive);
-
-  if (!isActive) return null;
-
+export const AchievementsTab: FC<{ state: AchievementsLoad }> = ({
+  state: { achievements, progress, loading, isOffline },
+}) => {
   if (loading) {
     // The load pays the backend retry ladder — surface the shared
     // ConnectingIndicator (with live "(attempt N/M)" progress) instead of

@@ -2,9 +2,10 @@
  * A ROM's RetroAchievements list and progress: the lazy load of both, the map of
  * what is earned, and the earned-first order a list is drawn in.
  *
- * The hook binds its state to no ROM: a caller must key the component that calls
- * it by the ROM id (`docs/architecture/invariants.md`, the entry on per-rom detail
- * state).
+ * The hook binds what it holds to the ROM it was read for, and shows it only while
+ * that ROM is the one asked about (`docs/architecture/invariants.md`, the entry on
+ * per-rom detail state): the game page calls it from the panel, which a version
+ * switch does not remount.
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -19,52 +20,65 @@ import {
 } from "./connectionState";
 import { detach } from "./detach";
 
-interface AchievementsLoad {
+export interface AchievementsLoad {
   achievements: Achievement[];
   progress: AchievementProgress | null;
   loading: boolean;
   isOffline: boolean;
 }
 
+/** One ROM's answers, tagged with the ROM they were read for. */
+interface LoadedAchievements {
+  romId: number;
+  achievements: Achievement[];
+  progress: AchievementProgress | null;
+}
+
+const NO_ACHIEVEMENTS: Achievement[] = [];
+
 /** Load `romId`'s achievement list and progress the first time `isActive` is
  *  true with a `raId` while RomM is not known offline, and keep them while
  *  `isActive` goes false again. A load torn down mid-flight or one that throws
  *  is tried again on the next activation or reconnect, and one answered
- *  unreachable once RomM reconnects; any other answer stands. */
-export function useAchievements(romId: number, raId: number | null, isActive: boolean): AchievementsLoad {
+ *  unreachable once RomM reconnects; any other answer stands. Each ROM is loaded
+ *  once, and only the answers for `romId` are answered. */
+export function useAchievements(romId: number | null, raId: number | null, isActive: boolean): AchievementsLoad {
   const isOffline = useRommConnectionState() === "offline";
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [progress, setProgress] = useState<AchievementProgress | null>(null);
-  const [loading, setLoading] = useState(false);
-  const loadedRef = useRef(false);
+  const [loaded, setLoaded] = useState<LoadedAchievements | null>(null);
+  const [loadingFor, setLoadingFor] = useState<number | null>(null);
+  // The ROM whose load has answered or is running.
+  const loadedRef = useRef<number | null>(null);
 
   // Mirrors the offline handling of the game page's save-slot load
   // (`useSaveSlotsLoad` in `frontend/src/bigpicture/panelSlotsLoad.ts`): a
   // known-offline fast path (no ladder hang), a reachability feed, a reload on
   // reconnect, and a mid-flight-teardown guard.
   useEffect(() => {
-    if (!isActive || !raId) return;
-    if (loadedRef.current) return;
+    if (!isActive || !raId || romId === null) return;
+    if (loadedRef.current === romId) return;
 
     // Known-offline fast path: the server fetch runs the retry ladder, so on a
     // known-unreachable server it would hang the load for tens of seconds. Skip
     // it — `isOffline` lets the caller show a short degraded line, and any
-    // last-known list stays. The ref stays false, so a flip back to
+    // last-known list stays. The gate stays open, so a flip back to
     // connected re-runs this effect (isOffline dep) and loads.
     if (isOffline) return;
-    loadedRef.current = true;
+    loadedRef.current = romId;
 
     const load = beginServerLoad();
     let cancelled = false;
     let settled = false;
 
-    async function loadAchievements() {
+    async function loadAchievements(forRom: number) {
       // Drop stale retry progress from a prior load, so a caller's retry-progress
       // display (`useServerRetryProgress`) starts without an attempt count.
       setServerRetryProgress(null);
-      setLoading(true);
+      setLoadingFor(forRom);
       try {
-        const [listResult, progressResult] = await Promise.all([getAchievements(romId), getAchievementProgress(romId)]);
+        const [listResult, progressResult] = await Promise.all([
+          getAchievements(forRom),
+          getAchievementProgress(forRom),
+        ]);
         if (cancelled) return;
         settled = true;
         // Conservative reachability feed: report offline only on a genuine
@@ -82,41 +96,53 @@ export function useAchievements(romId: number, raId: number | null, isActive: bo
           reportServerReachable(false);
           // Release the gate on an unreachable answer only, so the reconnect
           // loads again; unlike the save-slot load, any other failed answer stands.
-          loadedRef.current = false;
+          loadedRef.current = null;
         } else if ((listResult.success && !listResult.stale) || (progressResult.success && !progressResult.stale)) {
           reportServerReachable(true);
         }
         // A failed answer keeps the last-known list or progress rather than
         // emptying it on a transient blip.
-        if (listResult.success) setAchievements(listResult.achievements);
-        if (progressResult.success) setProgress(progressResult);
-        setLoading(false);
+        setLoaded((prev) => {
+          const kept = prev?.romId === forRom ? prev : null;
+          return {
+            romId: forRom,
+            achievements: listResult.success ? listResult.achievements : (kept?.achievements ?? NO_ACHIEVEMENTS),
+            progress: progressResult.success ? progressResult : (kept?.progress ?? null),
+          };
+        });
+        setLoadingFor(null);
       } catch (e) {
         detach(debugLog(`Failed to load achievements: ${e}`));
         if (!cancelled) {
           settled = true;
-          loadedRef.current = false;
-          setLoading(false);
+          loadedRef.current = null;
+          setLoadingFor(null);
         }
       } finally {
         settleServerLoad(load);
       }
     }
 
-    detach(loadAchievements());
+    detach(loadAchievements(romId));
     return () => {
       cancelled = true;
       // Torn down mid-flight (e.g. a concurrent call flipped the store offline):
       // release the gate so the re-run or reconnect loads again, and clear
       // `loading`, which the dropped answer never will.
       if (!settled) {
-        loadedRef.current = false;
-        setLoading(false);
+        loadedRef.current = null;
+        setLoadingFor(null);
       }
     };
   }, [isActive, raId, romId, isOffline]);
 
-  return { achievements, progress, loading, isOffline };
+  const shown = loaded?.romId === romId ? loaded : null;
+  return {
+    achievements: shown?.achievements ?? NO_ACHIEVEMENTS,
+    progress: shown?.progress ?? null,
+    loading: loadingFor !== null && loadingFor === romId,
+    isOffline,
+  };
 }
 
 /** Each earned achievement by its badge id (`EarnedAchievement.id`). */

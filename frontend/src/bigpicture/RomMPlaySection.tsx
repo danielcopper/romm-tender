@@ -21,6 +21,7 @@ import {
   MenuSeparator,
   showContextMenu,
   showModal,
+  type GamepadEvent,
 } from "@decky/ui";
 import { basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";
 import { FaGamepad, FaCog, FaMicrochip, FaExclamationTriangle } from "react-icons/fa";
@@ -30,6 +31,7 @@ import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
 import { useTriggerHandler } from "./emulatorStepping";
+import { useBumperHandler } from "./tabStepping";
 import { applyAutomaticArtwork, applyTabSlotImage, cancelArtworkApply } from "../utils/artwork";
 import { settleArtworkGame } from "../utils/artworkGameChange";
 import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
@@ -236,6 +238,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const versionError = useVersionError();
   const migration = useMigrationStatus();
   const onTrigger = useTriggerHandler();
+  const onBumper = useBumperHandler();
 
   // Every field the game page's surfaces share — rom identity, install state,
   // save sync, BIOS, core selection — comes from the per-appId store, which owns
@@ -860,7 +863,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       : [];
 
     infoItems.push(
-      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer-only shortcut into the ACHIEVEMENTS tab, which the tab bar's DialogButton already reaches from the focus ring; a role/tabIndex here would add a gamepad focus stop to the play row.
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer-only shortcut into the ACHIEVEMENTS tab, which Steam's tab row already reaches from the focus ring; a role/tabIndex here would add a gamepad focus stop to the play row.
       <div
         key="achievements"
         className="romm-info-item romm-cheevo-badge"
@@ -901,7 +904,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // Not on a stranded panel: the BIOS tab has given way to the stranded card.
   if (detail.biosRequiredMissing && !stranded) {
     infoItems.push(
-      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer-only shortcut into the BIOS tab, which the tab bar's DialogButton already reaches from the focus ring; a role/tabIndex here would add a gamepad focus stop to the play row.
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer-only shortcut into the BIOS tab, which Steam's tab row already reaches from the focus ring; a role/tabIndex here would add a gamepad focus stop to the play row.
       <div
         key="bios"
         className="romm-info-item"
@@ -925,7 +928,12 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       data-romm="true"
       className={`romm-play-section-row ${basicAppDetailsSectionStylerClasses?.PlaySection || ""}`.trim()}
       flow-children="right"
-      onButtonDown={onTrigger}
+      onButtonDown={(evt: GamepadEvent) => {
+        onTrigger(evt);
+        onBumper(evt);
+      }}
+      // Back to the top of the game page from the tabs below (`GamePageTabs`).
+      onFocus={scrollToTop}
       style={{
         display: "flex",
         alignItems: "center",

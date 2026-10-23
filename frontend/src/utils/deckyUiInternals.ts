@@ -50,17 +50,27 @@ export const quickAccessMenuClasses: typeof _quickAccessMenuClasses | undefined 
 
 /**
  * What the tabbed page accepts beyond the four props `@decky/ui` declares.
- *
- * `cancelSkipTabHeader` is Steam's own — its tabbed page renders the content
- * pane as `onCancelButton: !cancelSkipTabHeader && <focus the tab row>`
- * (`chunk~2dcc5aaf7.js`, the `TabContents` `Focusable`), so passing it true
- * leaves no cancel handler there and B travels on to whatever ancestor binds
- * it. Steam passes it itself in the controller-configurator dialogs. Upstream's
- * `TabsProps` predates the prop; the component is typed `any` there, so nothing
- * would have caught the name being wrong either.
+ * Upstream's `TabsProps` predates both; the component is typed `any` there, so
+ * nothing would have caught a name being wrong either.
  */
 export interface WideTabsProps extends TabsProps {
+  /**
+   * Steam's tabbed page renders the content pane as `onCancelButton:
+   * !cancelSkipTabHeader && <focus the tab row>` (`steamui/sp.js`, the
+   * `TabContents` `Focusable`), so passing it true leaves no cancel handler
+   * there and B travels on to whatever ancestor binds it. Steam passes it itself
+   * in the controller-configurator dialogs.
+   */
   cancelSkipTabHeader?: boolean;
+  /**
+   * The tabbed page has no height of its own — its tab row and its content are
+   * positioned absolutely (`steamui/css/sp.css`, `GamepadTabbedPage`). With
+   * `"on-outer-scroll"` Steam's stylesheet makes it one screen tall less
+   * Steam's header, and pins its tab row under that header once the page
+   * scrolling it has brought it there. Steam's own game page passes it
+   * (`steamui/sp.js`, the app details' tabbed page).
+   */
+  canBeHeaderBackground?: "on-outer-scroll";
 }
 
 /**

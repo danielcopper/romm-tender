@@ -2,9 +2,10 @@
  * RomMGameInfoPanel — the RomM panel injected below the PlaySection on game
  * detail pages.
  *
- * The shell around the GAME INFO / ACHIEVEMENTS / SAVES / BIOS panes: it owns
- * the panel's ROM identity, its event lane, the tab selection, and the
- * whole-panel replacements (stranded panel, version mismatch, corrupt-settings
+ * The shell around the GAME INFO / ACHIEVEMENTS / SAVES / BIOS / ARTWORK panes:
+ * it owns the panel's ROM identity, its event lane, the tab selection, what the
+ * ACHIEVEMENTS and BIOS panes hold across a tab switch, and the whole-panel
+ * replacements (stranded panel, version mismatch, corrupt-settings
  * reset, pending RetroDECK migration) that pre-empt all of them.
  *
  * The panel body itself takes no ROM-level actions — download, play, uninstall,
@@ -17,16 +18,14 @@
  */
 
 import { useState, useEffect, useRef, useCallback, FC } from "react";
-import { Focusable } from "@decky/ui";
 import { refreshMigrationState, logError } from "../api/backend";
-import { AchievementsTab } from "./AchievementsTab";
-import { BiosTab } from "./BiosTab";
-import { useTriggerHandler } from "./emulatorStepping";
-import { PanelTabBar } from "./PanelTabBar";
+import { useAchievements } from "../utils/achievements";
+import { useBiosTab } from "./BiosTab";
+import { GamePageTabs } from "./GamePageTabs";
 import { bindRomInState, loadData, openingTab, type PanelReadSeqs, type PanelState } from "./panelState";
 import { announceOwnBiosChange, rereadBiosAnswer, wirePanelEvents, type PanelEventContext } from "./panelEvents";
 import { useSaveSlotsLoad } from "./panelSlotsLoad";
-import { buildTabContent } from "./panelTabContent";
+import { buildPanelTabs } from "./panelTabContent";
 import { setMigrationStatus, useMigrationStatus } from "../utils/migrationStore";
 import { useSettingsResetState } from "../utils/settingsResetStore";
 import { VersionErrorCard } from "./VersionErrorCard";
@@ -46,7 +45,6 @@ interface RomMGameInfoPanelProps {
 export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   // Subscribe to version error — re-renders when global state changes
   const versionError = useVersionError();
-  const onTrigger = useTriggerHandler();
 
   const [state, setState] = useState<PanelState>({
     loading: true,
@@ -142,6 +140,15 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   }, [appId]);
 
   useSaveSlotsLoad(state, slotsLoadedRef, readSeqs, setState);
+  const achievements = useAchievements(state.romId, state.raId, state.activeTab === "achievements");
+  const bios = useBiosTab({
+    biosStatus: state.biosStatus,
+    platformName: state.platformName,
+    platformSlug,
+    romId: state.romId,
+    onReread: rereadBios,
+    onAnnounce: announceBios,
+  });
 
   // --- Stranded panel — nothing below the play row can reach the backend, so
   // nothing is offered: this outranks every other card, and a page loaded before
@@ -197,50 +204,17 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     return null;
   }
 
-  const romId = state.romId;
+  const tabs = buildPanelTabs({ appId, binding: bindRomInState(state.romId, setState), state, achievements, bios });
+  // The stored tab may be one not shown — SAVES once save sync is off — and the first stands in for it.
+  const activeTab = (tabs.find((tab) => tab.id === state.activeTab) ?? tabs[0])?.id ?? "info";
 
   return (
     <div data-romm="true">
-      <PanelTabBar
-        activeTab={state.activeTab}
-        hasAchievements={!!state.raId}
-        hasSaves={state.saveSyncEnabled}
-        onSelect={(tabId) => setState((prev) => ({ ...prev, activeTab: tabId }))}
+      <GamePageTabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onShowTab={(tabId) => setState((prev) => ({ ...prev, activeTab: tabId }))}
       />
-      <Focusable
-        noFocusRing={true}
-        className="romm-tab-content"
-        style={{ paddingBottom: "48px" }}
-        onButtonDown={onTrigger}
-      >
-        {buildTabContent({ appId, binding: bindRomInState(romId, setState), state })}
-        {/* Mounted for every ROM and rendering nothing until their tab is active.
-            For achievements that is load-bearing: the list is fetched by the tab
-            itself, and unmounting it on a tab switch would re-fetch (and re-spinner)
-            on every visit. Its key is the ROM, so a version switch remounts it —
-            which is how its per-rom state and load-once gate re-key. BiosTab needs
-            no key: what it holds — a press under way, the line it left, what it
-            did to a row, the emulator shown — is about the game's platform, which
-            a version switch keeps. */}
-        <AchievementsTab
-          key={`achievements-${romId}`}
-          romId={romId}
-          raId={state.raId}
-          isActive={state.activeTab === "achievements"}
-        />
-        <BiosTab
-          biosStatus={state.biosStatus}
-          biosLevel={state.biosLevel}
-          readFailed={state.biosReadFailed}
-          coreInfo={state.coreInfo}
-          isActive={state.activeTab === "bios"}
-          platformName={state.platformName}
-          platformSlug={platformSlug}
-          romId={romId}
-          onReread={rereadBios}
-          onAnnounce={announceBios}
-        />
-      </Focusable>
     </div>
   );
 };

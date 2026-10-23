@@ -1,7 +1,6 @@
-// Besides the pane's rendering, this file pins the mounting contract: the panel
-// mounts this tab for every ROM and leaves it mounted, so rendering has to be
-// gated on `isActive` — a panel test cannot tell "the pane rendered nothing"
-// apart from "the pane was never mounted".
+// The pane renders here with the state the panel holds for it
+// (`test-utils/biosTab.tsx`); whether it is mounted at all is the game page's
+// tabs' call, pinned beside the panel (RomMGameInfoPanel.test.tsx).
 
 import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
@@ -9,12 +8,19 @@ import { act, fireEvent, render } from "@testing-library/react";
 import * as deckyUi from "@decky/ui";
 import { showModal } from "@decky/ui";
 import * as backend from "../api/backend";
-import { BiosTab } from "./BiosTab";
 import { EmulatorStepScope } from "./emulatorStepping";
-import { PanelTabBar } from "./PanelTabBar";
+import { GamePageTabs } from "./GamePageTabs";
+import { BiosTabWithState } from "../test-utils/biosTab";
 import { libretroEmu } from "../test-utils/coreFixtures";
 import { biosColorForLevel } from "../utils/biosColor";
 import type { BiosFileStatus, BiosStatus, CoreInfo, MissingConfiguredImage } from "../types";
+
+// The game page's tabs reach Steam's tabbed page through this module, a webpack
+// probe with no answer under happy-dom.
+vi.mock("../utils/deckyUiInternals", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/deckyUiInternals")>()),
+  Tabs: (await import("../test-utils/steamTabs")).StubTabs,
+}));
 
 const coreInfo: CoreInfo = {
   active_core: "snes9x_libretro.so",
@@ -58,24 +64,15 @@ const biosStatus: BiosStatus = {
 
 describe("BiosTab", () => {
   it("renders the requirement and the emulator it is scoped to when it is the active tab", () => {
-    const { container } = render(
-      <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-    );
+    const { container } = render(<BiosTabWithState biosStatus={biosStatus} biosLevel="missing" coreInfo={coreInfo} />);
     expect(container.textContent).toContain(
       "The one file the launching emulator opens by name is not in place (0/1 RomM library files)",
     );
   });
 
-  it("renders nothing while another tab is showing", () => {
-    const { container } = render(
-      <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={coreInfo} isActive={false} />,
-    );
-    expect(container.textContent).toBe("");
-  });
-
   it("shows its heading and Checking… behind Steam's spinner while no answer is held", () => {
     const { container, getByTestId } = render(
-      <BiosTab biosStatus={null} biosLevel={null} coreInfo={coreInfo} isActive={true} />,
+      <BiosTabWithState biosStatus={null} biosLevel={null} coreInfo={coreInfo} />,
     );
     expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("BIOS");
     expect(getByTestId("waiting-line").textContent).toBe("Checking…");
@@ -84,7 +81,7 @@ describe("BiosTab", () => {
 
   it("says the read failed while no answer is held, and never that it is still checking", () => {
     const { container, queryByTestId } = render(
-      <BiosTab biosStatus={null} biosLevel={null} readFailed coreInfo={coreInfo} isActive={true} />,
+      <BiosTabWithState biosStatus={null} biosLevel={null} readFailed coreInfo={coreInfo} />,
     );
     expect(container.textContent).toBe("BIOSCould not read the BIOS state. Open the game page again to retry.");
     expect(queryByTestId("waiting-line")).toBeNull();
@@ -92,7 +89,7 @@ describe("BiosTab", () => {
 
   it("keeps the answer it holds under a notice when its re-read failed", () => {
     const { container, getByTestId } = render(
-      <BiosTab biosStatus={biosStatus} biosLevel="missing" readFailed coreInfo={coreInfo} isActive={true} />,
+      <BiosTabWithState biosStatus={biosStatus} biosLevel="missing" readFailed coreInfo={coreInfo} />,
     );
     expect(getByTestId("bios-stale").textContent).toBe(
       "Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.",
@@ -135,9 +132,7 @@ describe("BiosTab", () => {
         },
       ],
     };
-    const { container } = render(
-      <BiosTab biosStatus={noneNeeded} biosLevel="ok" coreInfo={coreInfo} isActive={true} />,
-    );
+    const { container } = render(<BiosTabWithState biosStatus={noneNeeded} biosLevel="ok" coreInfo={coreInfo} />);
 
     expect(container.textContent).toContain("Snes9x marks none of its BIOS files as required");
     expect(container.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor).toBe(
@@ -154,11 +149,10 @@ describe("BiosTab", () => {
     // aggregates to read. The pane still has to say so rather than fall through
     // to the no-requirement sentence, whose counts would both be zero.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{ needs_bios: false, bios_status_unknown: true }}
         biosLevel="unknown"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
@@ -168,11 +162,10 @@ describe("BiosTab", () => {
 
   it("gives no reason line where the answering source gives an emulator list", () => {
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{ needs_bios: false, bios_status_unknown: true }}
         biosLevel="unknown"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     expect(container.querySelector('[data-testid="bios-reason"]')).toBeNull();
@@ -180,7 +173,7 @@ describe("BiosTab", () => {
 
   it("says on a game page that the source has no system for the game's platform", () => {
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{ needs_bios: false, bios_status_unknown: true }}
         biosLevel="unknown"
         coreInfo={{
@@ -190,7 +183,6 @@ describe("BiosTab", () => {
           emulator_data_reason: "no_platform_system",
           platform_system: { state: "no_system", source: "retrodeck", system: null, platform: "Commodore VIC-20" },
         }}
-        isActive={true}
       />,
     );
     expect(container.querySelector('[data-testid="bios-reason"]')?.textContent).toBe(
@@ -200,7 +192,7 @@ describe("BiosTab", () => {
 
   it("puts the reason line between the BIOS heading and the state", () => {
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{ needs_bios: false, bios_status_unknown: true }}
         biosLevel="unknown"
         coreInfo={{
@@ -210,7 +202,6 @@ describe("BiosTab", () => {
           emulator_source: null,
           platform_system: null,
         }}
-        isActive={true}
       />,
     );
     const reason = container.querySelector('[data-testid="bios-reason"]');
@@ -226,7 +217,7 @@ describe("BiosTab", () => {
     [1, "The one file the launching emulator opens by name is in place (5/20 RomM library files)"],
   ])("states a ready requirement of %i beside a library ratio that counts a different set", (required, sentence) => {
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 20,
@@ -240,7 +231,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     expect(container.textContent).toContain(sentence);
@@ -249,7 +239,7 @@ describe("BiosTab", () => {
   it("drops the ratio when the library holds none of the platform's files", () => {
     // A "(0/0 RomM library files)" beside the sentence counts a set that does not exist.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 0,
@@ -261,7 +251,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     expect(container.textContent).toContain("The launching emulator marks none of its BIOS files as required");
@@ -293,7 +282,7 @@ describe("BiosTab", () => {
         }),
       );
       const { container } = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={{
             needs_bios: true,
             server_count: 20,
@@ -308,7 +297,6 @@ describe("BiosTab", () => {
           }}
           biosLevel="missing"
           coreInfo={coreInfo}
-          isActive={true}
           platformName={platformName}
         />,
       );
@@ -324,7 +312,7 @@ describe("BiosTab", () => {
 
   it("says the console needs an image only under a red verdict", () => {
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 20,
@@ -336,7 +324,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="unknown"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     expect(container.textContent).not.toContain("does not start without a BIOS image");
@@ -345,7 +332,7 @@ describe("BiosTab", () => {
   it("says no BIOS is chosen in the emulator's settings, in the resolver's words", () => {
     // PCSX2 (Standalone) with `[Filenames] BIOS` empty.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 0,
@@ -358,7 +345,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="unknown"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     expect(container.textContent).toContain("No BIOS is chosen in PCSX2's settings, and no game boots until one is");
@@ -369,7 +355,7 @@ describe("BiosTab", () => {
     // would be a claim about an unasked question.
     for (const consoleNeedsImage of [{ console_needs_image: false }, {}]) {
       const { container } = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={{
             needs_bios: true,
             server_count: 20,
@@ -383,7 +369,6 @@ describe("BiosTab", () => {
           }}
           biosLevel="ok"
           coreInfo={coreInfo}
-          isActive={true}
         />,
       );
       expect(container.textContent).toContain(
@@ -400,7 +385,7 @@ describe("BiosTab", () => {
     // headline that dropped the subject was read as an all-clear the reading
     // never gave.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 3,
@@ -413,7 +398,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     expect(container.textContent).toContain(
@@ -432,7 +416,7 @@ describe("BiosTab", () => {
     // counts by, carried on the answer itself — reading it off the core payload
     // beside it would be a second resolution of the same question.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 20,
@@ -446,7 +430,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
 
@@ -459,7 +442,7 @@ describe("BiosTab", () => {
     // then exactly what it always was; inventing a name from the core list on
     // the page is the split this field exists to close.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 20,
@@ -473,7 +456,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
 
@@ -488,7 +470,7 @@ describe("BiosTab", () => {
     // on this pane it filled the row. The register is read off the declaration
     // and never guessed from the row.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 1,
@@ -518,7 +500,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="missing"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
 
@@ -535,7 +516,7 @@ describe("BiosTab", () => {
     // to add. Both are `read` rows, because that is what a `.info` is and only
     // a `.info`'s prose is shown at all.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 2,
@@ -575,7 +556,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="missing"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
 
@@ -610,7 +590,7 @@ describe("BiosTab", () => {
       satisfied: true,
     });
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           locating: "by-name",
@@ -620,7 +600,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
 
@@ -644,7 +623,7 @@ describe("BiosTab", () => {
       "Europe  v02.00(14/06/2004)  Console 20040614-100914",
     ];
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 0,
@@ -674,7 +653,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
 
@@ -698,7 +676,7 @@ describe("BiosTab", () => {
     // so without the note an unreadable destination is indistinguishable from a
     // file that is simply not there.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 1,
@@ -727,7 +705,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="missing"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
 
@@ -746,7 +723,7 @@ describe("BiosTab", () => {
     ["refused", "refused — Beetle PSX does not accept a file of this size"],
   ] as const)("names the emulator on a %s required file, in the platform page's words", (checked, words) => {
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 1,
@@ -776,7 +753,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="missing"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     // In the Contents cell, once: a note the cell already says is not repeated under the row.
@@ -789,7 +765,7 @@ describe("BiosTab", () => {
     // another emulator demands is shown when that emulator is chosen,
     // so a file this launch does not need is grey here whoever else needs it.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 1,
@@ -817,7 +793,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     const mark = container.querySelector<HTMLElement>('[data-testid="disk-mark"]');
@@ -832,7 +807,7 @@ describe("BiosTab", () => {
     // all-clear this row exists to avoid. Grey is the colour of "not
     // established"; amber is no mark of a row's.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 0,
@@ -861,7 +836,6 @@ describe("BiosTab", () => {
         }}
         biosLevel="unknown"
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     const mark = container.querySelector<HTMLElement>('[data-testid="disk-mark"]');
@@ -881,7 +855,7 @@ describe("BiosTab", () => {
     // Asserted on the file row's own mark, because the header dot beside it
     // emits the same hex for these two levels.
     const { container } = render(
-      <BiosTab
+      <BiosTabWithState
         biosStatus={{
           needs_bios: true,
           server_count: 0,
@@ -911,7 +885,6 @@ describe("BiosTab", () => {
         }}
         biosLevel={satisfied ? "ok" : "missing"}
         coreInfo={coreInfo}
-        isActive={true}
       />,
     );
     const row = container.querySelector('[data-testid="bios-file-row"]');
@@ -958,11 +931,10 @@ describe("BiosTab", () => {
       // each is a row of its own all the same.
       const arcade = ["airlbios.zip", "naomi.zip"].map((name) => row(name, { declared_path: `dc/${name}` }));
       const { container } = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), ...arcade])}
           biosLevel="ok"
           coreInfo={coreInfo}
-          isActive={true}
         />,
       );
       expect(namesIn(container)).toEqual(["dc_boot.bin", "dc/airlbios.zip", "dc/naomi.zip"]);
@@ -981,13 +953,7 @@ describe("BiosTab", () => {
       });
       const files = [row("dc_boot.bin", { required_by_active: true, local_path: place, on_server: true })];
       const tab = () => (
-        <BiosTab
-          biosStatus={statusWith(files)}
-          biosLevel="missing"
-          coreInfo={coreInfo}
-          isActive={true}
-          platformSlug="dc"
-        />
+        <BiosTabWithState biosStatus={statusWith(files)} biosLevel="missing" coreInfo={coreInfo} platformSlug="dc" />
       );
       const first = render(tab());
       const download = [...first.container.querySelectorAll("button")].find((b) => b.textContent === "Download");
@@ -1010,11 +976,10 @@ describe("BiosTab", () => {
     it("lists server files nothing asks for in the library's own section, in the column beside the emulator's rows", () => {
       const nobodys = [0, 1].map((i) => row(`extra${i}.bin`, { wanted: "not_needed", on_server: true }));
       const { container, getByTestId } = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), ...nobodys])}
           biosLevel="ok"
           coreInfo={coreInfo}
-          isActive={true}
         />,
       );
       expect(namesIn(getByTestId("bios-main-column"))).toEqual(["dc_boot.bin"]);
@@ -1087,7 +1052,7 @@ describe("BiosTab", () => {
       files,
     });
     const renderFor = (status: BiosStatus, level: "ok" | "missing") =>
-      render(<BiosTab biosStatus={status} biosLevel={level} coreInfo={beetle} isActive={true} />).container;
+      render(<BiosTabWithState biosStatus={status} biosLevel={level} coreInfo={beetle} />).container;
     const sectionTitles = (container: HTMLElement): string[] =>
       [...container.querySelectorAll<HTMLElement>(".romm-panel-section-title")].map((title) => title.textContent);
 
@@ -1098,11 +1063,10 @@ describe("BiosTab", () => {
       const [group] = status.one_of_groups ?? [];
       const open = { ...group!, state: "partial" as const, unchecked: ["pal"], unstated: ["pal"] };
       const container = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={{ ...status, required_downloaded: 0, one_of_groups: [open] }}
           biosLevel="unknown"
           coreInfo={beetle}
-          isActive={true}
         />,
       ).container;
 
@@ -1329,16 +1293,13 @@ describe("BiosTab", () => {
 
     it("names the setting under the folder and leaves its mark and sentence alone", () => {
       const withLine = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={folder({ emulator_label: "LRPS2", file_name: "scph10000.bin" })}
           biosLevel="ok"
           coreInfo={lrps2}
-          isActive={true}
         />,
       ).container;
-      const without = render(
-        <BiosTab biosStatus={folder(null)} biosLevel="ok" coreInfo={lrps2} isActive={true} />,
-      ).container;
+      const without = render(<BiosTabWithState biosStatus={folder(null)} biosLevel="ok" coreInfo={lrps2} />).container;
 
       expect(withLine.textContent).toContain(
         "LRPS2's settings name scph10000.bin, which is not here — it uses another BIOS from this folder instead.",
@@ -1364,12 +1325,7 @@ describe("BiosTab", () => {
         ],
       };
       const { container } = render(
-        <BiosTab
-          biosStatus={status}
-          biosLevel="ok"
-          coreInfo={{ ...lrps2, active_core_label: "PCSX2" }}
-          isActive={true}
-        />,
+        <BiosTabWithState biosStatus={status} biosLevel="ok" coreInfo={{ ...lrps2, active_core_label: "PCSX2" }} />,
       );
 
       expect(container.textContent).toContain(
@@ -1426,7 +1382,7 @@ describe("BiosTab", () => {
     });
 
     const renderSaturn = () =>
-      render(<BiosTab biosStatus={saturn()} biosLevel="missing" coreInfo={coreInfo} isActive={true} />);
+      render(<BiosTabWithState biosStatus={saturn()} biosLevel="missing" coreInfo={coreInfo} />);
     const entries = (container: HTMLElement) =>
       [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry"]')].map((entry) => entry.textContent);
     const shown = (container: HTMLElement) =>
@@ -1492,9 +1448,7 @@ describe("BiosTab", () => {
       status.emulator_tabs = (status.emulator_tabs ?? []).map((entry) =>
         entry.launching ? entry : { ...entry, installed: false },
       );
-      const { container } = render(
-        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
+      const { container } = render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} />);
       const topName = () => container.querySelector<HTMLElement>('[data-testid="emulator-name"]')?.style.color;
       const entryNames = () =>
         [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry-name"]')].map((el) => el.style.color);
@@ -1511,9 +1465,7 @@ describe("BiosTab", () => {
       status.emulator_tabs = (status.emulator_tabs ?? []).map((entry) =>
         entry.launching ? { ...entry, installed: false } : entry,
       );
-      const { container } = render(
-        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
+      const { container } = render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} />);
       const entryNames = [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry-name"]')].map(
         (el) => el.style.color,
       );
@@ -1551,9 +1503,7 @@ describe("BiosTab", () => {
           rows: [],
         },
       ];
-      const { container } = render(
-        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
+      const { container } = render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} />);
       expect(entries(container)).toEqual(["Eden (Standalone)", "Ryubing (Standalone)"]);
       expect(shown(container)).toBe("Eden (Standalone) 1 / 2");
       expect(container.textContent).not.toContain("launches");
@@ -1591,20 +1541,23 @@ describe("BiosTab", () => {
     const R2 = 8;
 
     // Tender's section on a game page as `rommOverviewBlock` builds it: the scope
-    // around it, the tab bar beside the tab's content.
+    // around it, the BIOS pane in the game page's tabs.
     const gamePage = (isActive: boolean) =>
       render(
         <EmulatorStepScope>
           {() => (
-            <>
-              <PanelTabBar
-                activeTab={isActive ? "bios" : "info"}
-                hasAchievements={false}
-                hasSaves={false}
-                onSelect={() => {}}
-              />
-              <BiosTab biosStatus={saturn()} biosLevel="missing" coreInfo={coreInfo} isActive={isActive} />
-            </>
+            <GamePageTabs
+              tabs={[
+                { id: "info", title: "GAME INFO", content: <div>game info</div> },
+                {
+                  id: "bios",
+                  title: "BIOS",
+                  content: <BiosTabWithState biosStatus={saturn()} biosLevel="missing" coreInfo={coreInfo} />,
+                },
+              ]}
+              activeTab={isActive ? "bios" : "info"}
+              onShowTab={() => {}}
+            />
           )}
         </EmulatorStepScope>,
       );
@@ -1641,7 +1594,7 @@ describe("BiosTab", () => {
       const firstRowStop = (container: HTMLElement) =>
         (container.querySelector(".romm-bios-row-stop") ?? null) as HTMLElement | null;
       const stepFromList = async (status: BiosStatus) => {
-        const view = render(<BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />);
+        const view = render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} />);
         firstRowStop(view.container)?.focus();
         await act(async () => {
           fireEvent.click(arrow(view.container, "Next emulator"));
@@ -1704,9 +1657,7 @@ describe("BiosTab", () => {
         return (calls[calls.length - 1]?.[0] as ReactElement<ConfirmProps> | undefined)?.props;
       };
       const renderReplaceable = (status = replaceable()) =>
-        render(
-          <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} platformSlug="saturn" />,
-        );
+        render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} platformSlug="saturn" />);
 
       it("makes every row a focus stop, the one offering it reached as its own Replace… button", () => {
         const { container } = renderReplaceable();
@@ -1799,13 +1750,7 @@ describe("BiosTab", () => {
         });
 
         rerender(
-          <BiosTab
-            biosStatus={replaceable(false)}
-            biosLevel="ok"
-            coreInfo={coreInfo}
-            isActive={true}
-            platformSlug="saturn"
-          />,
+          <BiosTabWithState biosStatus={replaceable(false)} biosLevel="ok" coreInfo={coreInfo} platformSlug="saturn" />,
         );
         await settle();
 
@@ -1829,13 +1774,13 @@ describe("BiosTab", () => {
     it("takes every dot from the answer it is given, so a fresh answer after a download recolours it", () => {
       const before = saturn();
       const { container, rerender } = render(
-        <BiosTab biosStatus={before} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+        <BiosTabWithState biosStatus={before} biosLevel="missing" coreInfo={coreInfo} />,
       );
       const after = saturn();
       after.emulator_tabs = (after.emulator_tabs ?? []).map((entry) =>
         entry.launching ? { ...entry, requirements_met: true } : entry,
       );
-      rerender(<BiosTab biosStatus={after} biosLevel="ok" coreInfo={coreInfo} isActive={true} />);
+      rerender(<BiosTabWithState biosStatus={after} biosLevel="ok" coreInfo={coreInfo} />);
 
       const rowDot = container.querySelector<HTMLElement>(
         '[data-testid="emulator-shown"] [data-testid="emulator-dot"]',
@@ -1867,17 +1812,13 @@ describe("BiosTab", () => {
     it("keeps a row another emulator declares off the launching emulator's list", () => {
       const status = saturn();
       status.files = [...(status.files ?? []), own("mpr-17933.bin", "kronos_libretro.so")];
-      const { container } = render(
-        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
+      const { container } = render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} />);
       expect(names(container)).toEqual(["saturn_bios.bin"]);
     });
 
     it("draws no selector where only one emulator answered", () => {
       const status = { ...saturn(), emulator_tabs: (saturn().emulator_tabs ?? []).slice(0, 1) };
-      const { container } = render(
-        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
+      const { container } = render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} />);
       expect(container.querySelectorAll('[data-testid="emulator-selector"]')).toHaveLength(0);
     });
 
@@ -1887,9 +1828,7 @@ describe("BiosTab", () => {
         ...(status.files ?? []),
         own("hisaturn.bin", null, { wanted: "not_needed", required_by_active: false }),
       ];
-      const { container } = render(
-        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
+      const { container } = render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} />);
       expect(names(container)).toEqual(["saturn_bios.bin", "hisaturn.bin"]);
 
       chooseKronos(container);
@@ -1952,11 +1891,10 @@ describe("BiosTab", () => {
     });
     const renderPsx = (status = psx()) =>
       render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={status}
           biosLevel="missing"
           coreInfo={coreInfo}
-          isActive={true}
           platformName="PlayStation"
           platformSlug="psx"
           romId={42}
@@ -2051,11 +1989,10 @@ describe("BiosTab", () => {
       vi.mocked(backend.downloadAllFirmware).mockResolvedValue({ success: true, message: "", downloaded: 3 });
       const onReread = vi.fn().mockResolvedValue(undefined);
       const { container } = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={psx()}
           biosLevel="missing"
           coreInfo={coreInfo}
-          isActive={true}
           platformName="PlayStation"
           platformSlug="psx"
           romId={42}
@@ -2162,11 +2099,10 @@ describe("BiosTab", () => {
     it("offers the platform's delete and its emulators on an answer nothing could establish", () => {
       const unknown: BiosStatus = { ...psx(), needs_bios: false, bios_status_unknown: true, files: [] };
       const { container } = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={unknown}
           biosLevel="unknown"
           coreInfo={coreInfo}
-          isActive={true}
           platformName="PlayStation"
           platformSlug="psx"
           romId={42}

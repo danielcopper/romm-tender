@@ -111,6 +111,13 @@ vi.mock("../utils/slotState", () => ({
 
 vi.mock("../utils/scrollHelpers", () => ({ scrollFocusedToCenter: vi.fn() }));
 
+// The game page's tabs reach Steam's tabbed page through this module, a webpack
+// probe with no answer under happy-dom.
+vi.mock("../utils/deckyUiInternals", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/deckyUiInternals")>()),
+  Tabs: (await import("../test-utils/steamTabs")).StubTabs,
+}));
+
 // ----- cachedGameDetailStore — re-exported through backend.ts but its
 // canonical home is utils. Mock the store so the re-export and direct
 // consumers route through the same vi.fn.
@@ -430,7 +437,7 @@ describe("RomMGameInfoPanel", () => {
         </EmulatorStepScope>,
       );
       await flushAsync();
-      const content = container.querySelector(".romm-tab-content") as HTMLElement;
+      const content = container.querySelector(".romm-game-page-tabs") as HTMLElement;
       fireEvent(content, new CustomEvent("decky-button-down", { detail: { button: 8 }, bubbles: true }));
       expect(step).toHaveBeenCalledWith(1);
     });
@@ -2140,7 +2147,7 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
+      expect(getByText("BIOS", { selector: '[role="tab"]' })).not.toBeNull();
       expect(container.textContent).toContain(NO_BIOS_NEEDED_SENTENCE);
       expect(container.textContent).not.toContain("1/2");
       // The selector over the platform's two emulators.
@@ -2735,7 +2742,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.getBiosStatus).mockReturnValue(new Promise(() => {}));
       const { getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
+      expect(getByText("BIOS", { selector: '[role="tab"]' })).not.toBeNull();
     });
 
     it("SAVES tab visible only when save_sync_enabled=true", async () => {
@@ -4179,7 +4186,7 @@ describe("RomMGameInfoPanel", () => {
       });
       const { container, getByText, getByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
+      expect(getByText("BIOS", { selector: '[role="tab"]' })).not.toBeNull();
       await showBiosTab();
       expect(getByTestId("waiting-line").textContent).toBe("Checking…");
       expect(getByTestId("spinner")).not.toBeNull();
@@ -4215,7 +4222,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       await showBiosTab();
 
-      expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
+      expect(getByText("BIOS", { selector: '[role="tab"]' })).not.toBeNull();
       expect(container.textContent).toContain(NO_BIOS_NEEDED_SENTENCE);
       expect(container.textContent).not.toContain("Checking…");
     });
@@ -5291,7 +5298,7 @@ describe("RomMGameInfoPanel", () => {
 
         await switchToRom2();
 
-        expect(getByText("BIOS", { selector: ".romm-tab" })).not.toBeNull();
+        expect(getByText("BIOS", { selector: '[role="tab"]' })).not.toBeNull();
         expect(queryByTestId("saves-tab")).toBeNull();
         expect(container.textContent).toContain("Game (Japan)");
       });
@@ -5445,7 +5452,7 @@ describe("RomMGameInfoPanel", () => {
 
         // Asserted on the BIOS tab's BODY as well as its button: the body is
         // what a fallback to GAME INFO would replace.
-        expect(getByText("BIOS", { selector: ".romm-tab" }).className).toContain("romm-tab-active");
+        expect(getByText("BIOS", { selector: '[role="tab"]' }).getAttribute("aria-selected")).toBe("true");
         expect(container.textContent).toContain("Checking…");
         expect(container.textContent).not.toContain("No metadata available");
       });

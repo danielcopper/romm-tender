@@ -1,17 +1,19 @@
 /**
- * The body of the game detail panel's active tab.
+ * The game detail panel's tabs, each with its pane.
  *
- * Only the pane the user is looking at is created. That is load-bearing for
- * SAVES and ARTWORK: both fetch on mount (ARTWORK asks SteamGridDB for the
- * game's name and hashes the slots' images), so building them for a tab nobody
- * opened would fire those requests on every game page.
- *
- * The ACHIEVEMENTS and BIOS panes are not built here — the panel mounts them for
- * every ROM and they decide themselves whether to render.
+ * Every pane is an element here and is mounted only while its tab is shown —
+ * Steam's tabbed page renders the active tab's content alone. That is
+ * load-bearing for SAVES and ARTWORK: both fetch on mount (ARTWORK asks
+ * SteamGridDB for the game's name and hashes the slots' images), so mounting
+ * them for a tab nobody opened would fire those requests on every game page.
  */
 
 import type { ReactElement } from "react";
+import type { Tab } from "@decky/ui";
+import { AchievementsTab } from "./AchievementsTab";
+import type { AchievementsLoad } from "../utils/achievements";
 import { ArtworkTab } from "./ArtworkTab";
+import { BiosTab, type BiosTabState } from "./BiosTab";
 import { GameInfoTab } from "./GameInfoTab";
 import { SavesTab } from "./SavesTab";
 import { SlotSetupWizard } from "./SlotSetupWizard";
@@ -22,38 +24,76 @@ interface TabContentContext {
   readonly appId: number;
   readonly binding: RomBinding;
   readonly state: PanelState;
+  readonly achievements: AchievementsLoad;
+  readonly bios: BiosTabState;
 }
 
-/** Build the pane for the active tab, or null when the active tab builds none. */
-export function buildTabContent({ appId, binding, state }: TabContentContext): ReactElement | null {
+/**
+ * The tabs shown, in their fixed order. ACHIEVEMENTS and SAVES exist only where
+ * their pane has something to show; BIOS is there for every game from the moment
+ * the page opens, since its answer is read after the page stands and the tab
+ * says so while it waits.
+ */
+export function buildPanelTabs(ctx: TabContentContext): Tab[] {
+  const { state } = ctx;
+  const tabs: Tab[] = [{ id: "info", title: "GAME INFO", content: infoPane(ctx) }];
+  if (state.raId) {
+    tabs.push({ id: "achievements", title: "ACHIEVEMENTS", content: <AchievementsTab state={ctx.achievements} /> });
+  }
+  if (state.saveSyncEnabled) tabs.push({ id: "saves", title: "SAVES", content: savesPane(ctx) });
+  tabs.push(
+    {
+      id: "bios",
+      title: "BIOS",
+      content: (
+        <BiosTab
+          biosStatus={state.biosStatus}
+          biosLevel={state.biosLevel}
+          readFailed={state.biosReadFailed}
+          coreInfo={state.coreInfo}
+          platformName={state.platformName}
+          tabState={ctx.bios}
+        />
+      ),
+    },
+    {
+      id: "artwork",
+      title: "ARTWORK",
+      // Keyed by the ROM, so a version switch builds the pane for the version now showing.
+      content: (
+        <ArtworkTab
+          key={`tab-artwork-${ctx.binding.romId}`}
+          appId={ctx.appId}
+          romId={ctx.binding.romId}
+          romName={state.romName}
+        />
+      ),
+    },
+  );
+  return tabs;
+}
+
+function infoPane({ appId, binding, state }: TabContentContext): ReactElement {
+  return (
+    <GameInfoTab
+      key="tab-info"
+      romName={state.romName}
+      regions={state.regions}
+      languages={state.languages}
+      metadata={state.metadata}
+      platformName={state.platformName}
+      coverBase64={state.coverBase64}
+      appId={appId}
+      romId={binding.romId}
+      installed={state.installed}
+      installedRom={state.installedRom}
+    />
+  );
+}
+
+function savesPane({ appId, binding, state }: TabContentContext): ReactElement {
   const romId = binding.romId;
-
-  if (state.activeTab === "info") {
-    return (
-      <GameInfoTab
-        key="tab-info"
-        romName={state.romName}
-        regions={state.regions}
-        languages={state.languages}
-        metadata={state.metadata}
-        platformName={state.platformName}
-        coverBase64={state.coverBase64}
-        appId={appId}
-        romId={romId}
-        installed={state.installed}
-        installedRom={state.installedRom}
-      />
-    );
-  }
-
-  if (state.activeTab === "artwork") {
-    // Keyed by the ROM, so a version switch builds the pane for the version now showing.
-    return <ArtworkTab key={`tab-artwork-${romId}`} appId={appId} romId={romId} romName={state.romName} />;
-  }
-
-  if (state.activeTab !== "saves") return null;
-
-  if (state.saveSyncEnabled && !state.slotConfirmed) {
+  if (!state.slotConfirmed) {
     return (
       <SlotSetupWizard
         romId={romId}

@@ -14,9 +14,11 @@
  * The answer it shows arrives as props, because the requirement (`biosStatus`)
  * and the emulator it is shown against (`coreInfo`) have to reach a render
  * TOGETHER: on a core change the panel reads both in one `Promise.all` and folds
- * them into one update. What it holds itself is the page's own: which emulator
- * the table shows, a press under way, the line it left and what it did to each
- * row.
+ * them into one update. What the page holds of its own — which emulator the
+ * table shows, a press under way, the line it left and what it did to each row —
+ * is {@link useBiosTab}'s, which the panel calls: Steam's tabbed page mounts a
+ * tab's pane only while that tab is shown, and the pane would lose all of it on
+ * every switch.
  *
  * CSS classes prefixed with `romm-panel-` are injected separately by
  * styleInjector.
@@ -40,13 +42,14 @@ import {
   BiosPartLegend,
   BiosShownTable,
   useBiosFiles,
+  type BiosPart,
 } from "./bios/BiosFiles";
 import { announceBiosChange, useBiosActions, type BiosStatusLine } from "./bios/useBiosActions";
 import { PANE_GUTTER } from "./layout/pane";
 import { section } from "./panelSection";
 import { WaitingLine } from "./WaitingLine";
 
-interface BiosTabProps {
+export interface BiosTabProps {
   /** The game's BIOS answer, or null while none is held: still out, or a read
    *  that failed with nothing behind it (`readFailed`). The answer that no BIOS
    *  is needed is a status like any other, drawn the same way. */
@@ -61,10 +64,18 @@ interface BiosTabProps {
    *  From the dedicated `get_platform_core_info` path, never derived from
    *  `biosStatus`. */
   coreInfo: CoreInfo | null;
-  isActive: boolean;
   /** RomM's name for the game's platform, which the console's own demand is
    *  said of. Empty where none is held, and the sentence names the system
    *  without it. */
+  platformName?: string;
+  /** What the page holds of its own, from {@link useBiosTab}. */
+  tabState: BiosTabState;
+}
+
+export interface BiosTabStateInput {
+  /** The game's BIOS answer, which the table's rows come from. */
+  biosStatus: BiosStatus | null;
+  /** RomM's name for the game's platform; the slug stands in where it is empty. */
   platformName?: string;
   /** The game's platform, which every press acts on. */
   platformSlug?: string;
@@ -77,7 +88,44 @@ interface BiosTabProps {
   onAnnounce?: (slug: string) => void;
 }
 
+/** What the BIOS tab holds of its own across the switches that unmount its pane. */
+export interface BiosTabState {
+  part: BiosPart;
+  status: BiosStatusLine | null;
+}
+
 const NO_REREAD = async (): Promise<void> => {};
+
+/** The BIOS tab's own state: which emulator the table shows, a press under way and the line it left. */
+export function useBiosTab({
+  biosStatus,
+  platformName,
+  platformSlug = "",
+  romId = null,
+  onReread = NO_REREAD,
+  onAnnounce = announceBiosChange,
+}: BiosTabStateInput): BiosTabState {
+  const [busySlug, setBusySlug] = useState<string | null>(null);
+  const [status, setStatus] = useState<BiosStatusLine | null>(null);
+  const actions = useBiosActions({
+    setBusy: setBusySlug,
+    setStatus,
+    reread: onReread,
+    announce: onAnnounce,
+    romId,
+  });
+  const part = useBiosFiles({
+    slug: platformSlug,
+    platformName: platformName || platformSlug,
+    answer: biosStatus ?? {},
+    busySlug,
+    serverOffline: biosStatus?.server_offline ?? false,
+    actions,
+    launching: "shown",
+    stop: "button",
+  });
+  return { part, status };
+}
 
 /**
  * The header line: status dot plus the sentence for this platform's BIOS state.
@@ -261,34 +309,10 @@ export const BiosTab: FC<BiosTabProps> = ({
   biosLevel,
   readFailed = false,
   coreInfo,
-  isActive,
   platformName,
-  platformSlug = "",
-  romId = null,
-  onReread = NO_REREAD,
-  onAnnounce = announceBiosChange,
+  tabState: { part, status },
 }) => {
-  const [busySlug, setBusySlug] = useState<string | null>(null);
-  const [status, setStatus] = useState<BiosStatusLine | null>(null);
-  const actions = useBiosActions({
-    setBusy: setBusySlug,
-    setStatus,
-    reread: onReread,
-    announce: onAnnounce,
-    romId,
-  });
-  const part = useBiosFiles({
-    slug: platformSlug,
-    platformName: platformName || platformSlug,
-    answer: biosStatus ?? {},
-    busySlug,
-    serverOffline: biosStatus?.server_offline ?? false,
-    actions,
-    launching: "shown",
-    stop: "button",
-  });
   const { attachRoot } = part.focus;
-  if (!isActive) return null;
   const held = biosStatus !== null;
   if (!held) return unansweredTab(biosReadState(held, readFailed) === "failed");
 

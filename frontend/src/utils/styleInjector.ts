@@ -14,7 +14,6 @@ const ROMM_FOCUS_STYLES_ID = "romm-focus-styles";
 const ROMM_INFO_ITEMS_ID = "romm-info-items-styles";
 const ROMM_GAME_INFO_PANEL_ID = "romm-game-info-panel-styles";
 const ROMM_GEAR_BUTTONS_ID = "romm-gear-btn-styles";
-const ROMM_TABS_ID = "romm-tabs-styles";
 const ROMM_ACHIEVEMENTS_ID = "romm-achievements-styles";
 const ROMM_ARTWORK_ID = "romm-artwork-styles";
 
@@ -597,56 +596,6 @@ export function hideNativePlaySection(playSectionClass: string) {
     sp.window.document.head.appendChild(gearStyle);
   }
 
-  // Tab bar styles for game detail page tabs (GAME INFO | ACHIEVEMENTS | SAVES | BIOS)
-  if (!sp.window.document.getElementById(ROMM_TABS_ID)) {
-    const tabStyle = sp.window.document.createElement("style");
-    tabStyle.id = ROMM_TABS_ID;
-    tabStyle.textContent = `
-.romm-tab-bar {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  padding: 0 2.8vw;
-  background: rgba(14, 20, 27, 0.33);
-}
-.romm-tab {
-  padding: 10px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: #8f98a0;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s ease, border-color 0.15s ease;
-  background: transparent;
-  border-top: none;
-  border-left: none;
-  border-right: none;
-  white-space: nowrap;
-}
-.romm-tab:hover {
-  color: #dcdedf !important;
-}
-.romm-tab.gpfocus,
-.romm-tab:focus,
-.romm-tab.Focusable.gpfocus {
-  color: #dcdedf !important;
-  background: rgba(255,255,255,0.06) !important;
-  outline: none;
-  border-bottom-color: #1a9fff;
-}
-.romm-tab-active {
-  color: #dcdedf !important;
-  border-bottom-color: #1a9fff;
-}
-.romm-tab-content {
-  padding: 16px 2.8vw;
-  background: rgba(14, 20, 27, 0.33);
-}`;
-    sp.window.document.head.appendChild(tabStyle);
-  }
-
   // Achievement badge sparkle + achievements tab styles
   if (!sp.window.document.getElementById(ROMM_ACHIEVEMENTS_ID)) {
     const cheevoStyle = sp.window.document.createElement("style");
@@ -939,7 +888,6 @@ export function showNativePlaySection() {
   sp.window.document.getElementById(ROMM_INFO_ITEMS_ID)?.remove();
   sp.window.document.getElementById(ROMM_GAME_INFO_PANEL_ID)?.remove();
   sp.window.document.getElementById(ROMM_GEAR_BUTTONS_ID)?.remove();
-  sp.window.document.getElementById(ROMM_TABS_ID)?.remove();
   sp.window.document.getElementById(ROMM_ACHIEVEMENTS_ID)?.remove();
   sp.window.document.getElementById(ROMM_ARTWORK_ID)?.remove();
 }

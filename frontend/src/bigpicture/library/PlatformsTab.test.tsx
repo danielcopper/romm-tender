@@ -23,7 +23,7 @@ import type { ReactElement } from "react";
 import * as deckyUi from "@decky/ui";
 import { showContextMenu, showModal } from "@decky/ui";
 import { LibraryPage } from "../LibraryPage";
-import { BiosTab } from "../BiosTab";
+import { BiosTabWithState } from "../../test-utils/biosTab";
 import * as backend from "../../api/backend";
 import { toaster } from "../../api/host";
 import { removeShortcut, setLaunchOptionsConfirmed } from "../../utils/steamShortcuts";
@@ -1656,11 +1656,10 @@ describe("Library › Platforms", () => {
       const pane = render(<LibraryPage onBack={vi.fn()} />).container;
       await flushAsync();
       const gamePage = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={{ needs_bios: true, locating: "by-name", required_count: 1, required_downloaded: 0, ...counts }}
           biosLevel="missing"
           coreInfo={GBA_CORE_INFO}
-          isActive={true}
         />,
       ).container;
 
@@ -1681,11 +1680,10 @@ describe("Library › Platforms", () => {
       const pane = render(<LibraryPage onBack={vi.fn()} />).container;
       await flushAsync();
       const gamePage = render(
-        <BiosTab
+        <BiosTabWithState
           biosStatus={{ needs_bios: true, locating: "by-name", required_count: 1, required_downloaded: 0, ...counts }}
           biosLevel="missing"
           coreInfo={GBA_CORE_INFO}
-          isActive={true}
         />,
       ).container;
 
