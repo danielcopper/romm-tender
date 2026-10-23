@@ -3028,6 +3028,41 @@ class TestAnAdoptOfTheHead:
         assert recorded is False
         assert state.files == {}
 
+    def test_a_file_changed_after_the_decision_is_neither_acknowledged_nor_recorded(self, tmp_path):
+        svc, fake, save_path = self._setup(tmp_path, current=False)
+        head = fake.saves[100]
+        decided_on = hashlib.md5(_PROGRESS).hexdigest()
+        save_path.write_bytes(b"written after the decision")
+        state = RomSaveSyncState()
+        errors: list[str] = []
+
+        direction = svc._sync_engine._matrix._dispatch_sync_action(
+            Skip(reason="synced", adopt_baseline=True, server_save=head, acknowledge=True),
+            ctx=RomDispatchContext(
+                rom_id=42,
+                save_state=state,
+                device_id=LiveDeviceId("device-1"),
+                rom_name="pokemon",
+                save_names=("pokemon.srm",),
+                saves_dir=str(save_path.parent),
+                system="gba",
+                core_so=None,
+            ),
+            filename="pokemon.srm",
+            local_path=str(save_path),
+            local_hash=decided_on,
+            last_sync_hash=None,
+            last_sync_server_hash=None,
+            server_candidates=[head],
+            options=SyncRunOptions(),
+            sink=DispatchSink(errors=errors, conflicts=[]),
+        )
+
+        assert direction is None
+        assert errors == []
+        assert _confirm_calls(fake) == []
+        assert state.files == {}
+
     def test_a_fresh_install_s_adopt_leaves_the_rom_state_a_download_would_have(self, tmp_path):
         def after_first_sync(root, *, local: bool) -> tuple[Any, ...]:
             svc, fake = make_service(root)

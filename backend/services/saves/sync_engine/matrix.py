@@ -296,26 +296,49 @@ class MatrixExecutor:
         decision is never recorded as the head's bytes. Mutates *save_state* in
         memory only.
         """
+        measured = self._measure_unchanged(filename, local_path, local_hash)
+        if measured is None:
+            return False
+        self._record_adopt(save_state, filename, head, *measured, system=system, default_slot=default_slot)
+        return True
+
+    def _measure_unchanged(
+        self, filename: str, local_path: str, local_hash: str
+    ) -> tuple[SaveFileMeasure, float] | None:
+        """Measure *local_path*, or ``None`` when it no longer hashes to *local_hash*, the decision's hash."""
         measure = self._save_file_store.measure(local_path)
         if measure.content_hash != local_hash:
             self._log_debug(f"adopt {filename}: the file changed since the decision, nothing recorded")
-            return False
+            return None
+        return measure, self._save_file_store.get_mtime(local_path)
+
+    def _record_adopt(
+        self,
+        save_state: RomSaveSyncState,
+        filename: str,
+        head: dict[str, Any],
+        measure: SaveFileMeasure,
+        mtime: float,
+        *,
+        system: str,
+        default_slot: str | None,
+    ) -> None:
+        """Seed *save_state* as a download does and record *head* as *filename*'s baseline from *measure*."""
         _seed_at_sync_boundary(save_state, system, default_slot, None, None)
         head_id = int(head["id"])
         save_state.adopt_baseline(
             filename,
             tracked_save_id=head_id,
-            last_sync_hash=local_hash,
+            last_sync_hash=measure.content_hash,
             last_sync_server_hash=head.get("content_hash"),
             last_sync_at=self._clock.now().isoformat(),
             last_sync_server_updated_at=head.get("updated_at") or "",
             last_sync_server_save_id=head_id,
             last_sync_server_size=head.get("file_size_bytes"),
-            last_sync_local_mtime=self._save_file_store.get_mtime(local_path),
+            last_sync_local_mtime=mtime,
             last_sync_local_size=measure.size,
             last_sync_content_size=measure.content_size,
         )
-        return True
 
     # ------------------------------------------------------------------
     # Sync Helpers
@@ -613,11 +636,13 @@ class MatrixExecutor:
     ) -> None:
         """Execute a ``Skip``: nothing, or an adopt of the head the local file is identical to.
 
-        An adopt that must be acknowledged confirms the head to RomM first,
-        through the retry strategy, and records the baseline only once that
-        succeeded; a failure propagates to :meth:`_dispatch_sync_action`, which
-        reports it as this file's error with nothing recorded, and the next sync
-        decides again. No transfer either way, so no synced count.
+        The file is measured first: one that no longer hashes to what the
+        decision saw is neither acknowledged nor recorded. An adopt that must be
+        acknowledged then confirms the head to RomM, through the retry strategy,
+        and records the baseline from that measure only once that succeeded; a
+        failure propagates to :meth:`_dispatch_sync_action`, which reports it as
+        this file's error with nothing recorded, and the next sync decides
+        again. No transfer either way, so no synced count.
         """
         head = action.server_save
         if not action.adopt_baseline or head is None or local_path is None or local_hash is None:
@@ -627,11 +652,12 @@ class MatrixExecutor:
             f"do_sync_rom_saves({ctx.rom_id}): skip + adopt {filename} as save {head.get('id')}"
             f" (acknowledge={action.acknowledge})"
         )
+        measured = self._measure_unchanged(filename, local_path, local_hash)
+        if measured is None:
+            return
         if action.acknowledge:
             self._retry.with_retry(lambda: self._romm_api.confirm_download(int(head["id"]), ctx.device_id))
-        self.adopt_head_as_baseline(
-            ctx.save_state, filename, head, local_path, local_hash, system=ctx.system, default_slot=default_slot
-        )
+        self._record_adopt(ctx.save_state, filename, head, *measured, system=ctx.system, default_slot=default_slot)
 
     def _dispatch_upload(
         self,
