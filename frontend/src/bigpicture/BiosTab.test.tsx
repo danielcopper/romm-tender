@@ -1072,6 +1072,24 @@ describe("BiosTab", () => {
       expect(namesOf([row("dc_boot.bin", over)])).toContain("dc_boot.bin");
     });
 
+    it("keeps a row that offers Replace…, though it is not required, not an option, not met and not fetchable, and shows its button", () => {
+      const replaceable = row("dc_boot.bin", { replace_offered: true, local_path: "/bios/dc/dc_boot.bin" });
+      const { container } = render(
+        <BiosTab
+          biosStatus={statusWith([replaceable])}
+          biosLevel="missing"
+          coreInfo={coreInfo}
+          isActive={true}
+          onReplace={vi.fn()}
+        />,
+      );
+      const rowEl = [...container.querySelectorAll(".romm-panel-file-name")].find((el) =>
+        el.textContent.startsWith("dc_boot.bin"),
+      );
+      expect(rowEl).toBeDefined();
+      expect(container.textContent).toContain("Replace…");
+    });
+
     it("says on a row what the latest press on the page did to it, until the page is left", () => {
       const place = "/home/deck/retrodeck/bios/dc_boot.bin";
       const backup = "/d/backups/bios/2026-10-22_10-00-00/t/bios/dc/dc_boot.bin";

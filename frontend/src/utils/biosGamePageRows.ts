@@ -54,7 +54,7 @@ export function fileDotColor(file: BiosFileStatus, missingRegions: ReadonlySet<s
  * emulates Naomi and AtomisWave — not required, not present, not in the library
  * — and they pushed the two rows that mattered off the top.
  *
- * Five answers keep a row, and the first two are this launch's requirement in
+ * Six answers keep a row, and the first two are this launch's requirement in
  * its two shapes:
  *
  * - **required for this launch** (`required_by_active`).
@@ -69,10 +69,14 @@ export function fileDotColor(file: BiosFileStatus, missingRegions: ReadonlySet<s
  *   that page offers no button for is a dead end pointed at.
  * - **withheld** — nothing could judge the row (`satisfied === null`). An
  *   ignorance is something to say, never something to summarise away.
+ * - **replaceable** — the row offers "Replace…" (`replace_offered`). Its verdict
+ *   is false and `isFetchable` refuses a place another file occupies, so unless
+ *   it is required or an option nothing else keeps it — yet Replace is
+ *   something the reader can do on this page.
  *
- * What is left over is declared, not required for this launch, not met, and
- * fetchable from nowhere — nothing a reader of THIS page could do
- * anything with. A caller counts it on one line instead, which names where the
+ * What is left over is declared, not required for this launch, not met,
+ * fetchable from nowhere and not replaceable — nothing a reader of THIS page
+ * could do anything with. A caller counts it on one line instead, which names where the
  * rows are.
  *
  * A caller asks it of the shown emulator: another emulator's rows carry that
@@ -80,7 +84,7 @@ export function fileDotColor(file: BiosFileStatus, missingRegions: ReadonlySet<s
  * a launch with that emulator.
  */
 export function rowBelongsOnThisPage(file: BiosFileStatus): boolean {
-  if (file.required_by_active || file.one_of) return true;
+  if (file.required_by_active || file.one_of || file.replace_offered) return true;
   // Present and withheld in one test: `false` is the only verdict that leaves a
   // row with nothing to say here.
   if (rowVerdict(file) !== false) return true;
