@@ -1925,8 +1925,8 @@ Format: **invariant** — tier — enforced by.
   (`useAchievements`, `frontend/src/utils/achievements.ts`) by tagging each answer with the rom it was read for
   (`forRom`) and showing it only while that rom is the one showing, so its state cannot outlive the identity it was read
   for. A version switch changes the rom without closing, so neither the store's generation counter nor the panel's
-  `[appId]` effect sees this class. Binding answers the wrong-rom question only; two answers for the SAME rom are ordered
-  instead, by a sequence taken when the read is issued — the store's `loadSeq` and `saveStatusSeq`, the panel's
+  `[appId]` effect sees this class. Binding answers the wrong-rom question only; two answers for the SAME rom are
+  ordered instead, by a sequence taken when the read is issued — the store's `loadSeq` and `saveStatusSeq`, the panel's
   `takeReadTicket` (#1717). Four writes are unbound. Three are ordered: the two identity writes install what a binding
   would compare against, so ordering is all they can have, and the panel's lazy SAVES-tab slot load
   (`frontend/src/bigpicture/panelSlotsLoad.ts`) writes through the raw setter, ordered by its own `slots` ticket. The
