@@ -1801,17 +1801,18 @@ Format: **invariant** — tier — enforced by.
   `tests/adapters/test_gavel_native_table_vectors.py`); the `.so`, the vectors and the `ctypes` structs in
   `adapters/gavel_native.py` are pinned to the same upstream release tag and are bumped together: a struct that lags the
   binary's header is read and written at the wrong offsets, and only a vector that exercises the moved field notices
-- **An adopt the core marks `acknowledge` records its baseline only after `POST /api/saves/{id}/downloaded` succeeded —
-  in the sync and in Keep Local's adopt without an upload; a failed acknowledgement records nothing, and the status read
-  records no such adopt** — test + prompt-only — the core sets `acknowledge` on an adopt of a head this device is not
-  current on (romm-gavel `SPEC.md`, "Bookkeeping"). Without the acknowledgement RomM keeps the device not current on
-  that head, so a baseline recorded anyway would make the next local edit read as one under a head that moved past it —
-  a conflict no other device caused — while recording nothing leaves the next sync to decide the same adopt again. The
-  rule spans three modules: `MatrixExecutor._dispatch_skip` (`services/saves/sync_engine/matrix.py`) confirms through
-  the retry strategy and lets a failure reach `_dispatch_sync_action`, which reports it as that file's error;
-  `RollbackOrchestrator._resolve_conflict_keep_local` (`sync_engine/rollback.py`) confirms before its adopt and lets a
-  failure end the resolution; `StatusService._partition_outcomes` (`services/saves/status/service.py`) records only an
-  adopt without it, because showing a page never writes to RomM. Enforced by
+- **An adopt of a head this device must confirm — one the core marks `acknowledge` in the sync, and Keep Local's adopt
+  without an upload always — records its baseline only after `POST /api/saves/{id}/downloaded` succeeded; a failed
+  acknowledgement records nothing, and the status read records no such adopt** — test + prompt-only — the core sets
+  `acknowledge` on an adopt of a head this device is not current on (romm-gavel `SPEC.md`, "Bookkeeping"). Without the
+  acknowledgement RomM keeps the device not current on that head, so a baseline recorded anyway would make the next
+  local edit read as one under a head that moved past it — a conflict no other device caused — while recording nothing
+  leaves the next sync to decide the same adopt again. The rule spans three modules: `MatrixExecutor._dispatch_skip`
+  (`services/saves/sync_engine/matrix.py`) confirms through the retry strategy and lets a failure reach
+  `_dispatch_sync_action`, which reports it as that file's error; `RollbackOrchestrator._resolve_conflict_keep_local`
+  (`sync_engine/rollback.py`) confirms before its adopt and lets a failure end the resolution;
+  `StatusService._partition_outcomes` (`services/saves/status/service.py`) records only an adopt without it, because
+  showing a page never writes to RomM. Enforced by
   `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
   `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges` and
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`

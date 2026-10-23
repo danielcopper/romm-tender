@@ -1100,9 +1100,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   families run against the core (`tests/adapters/test_gavel_native.py`,
   `tests/adapters/test_gavel_native_table_vectors.py`); the `.so`, the vectors and the `ctypes` structs in
   `adapters/gavel_native.py` are pinned to one upstream release tag and bumped together
-- **An adopt the core marks `acknowledge` records its baseline only after `POST /api/saves/{id}/downloaded` succeeded —
-  in the sync and in Keep Local's adopt without an upload; a failed acknowledgement records nothing, and the status read
-  records no such adopt** — test + prompt-only —
+- **An adopt of a head this device must confirm — one the core marks `acknowledge` in the sync, and Keep Local's adopt
+  without an upload always — records its baseline only after `POST /api/saves/{id}/downloaded` succeeded; a failed
+  acknowledgement records nothing, and the status read records no such adopt** — test + prompt-only —
   `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
   `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges` and
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`

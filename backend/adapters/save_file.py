@@ -220,13 +220,13 @@ class SaveFileAdapter:
 
     @contextlib.contextmanager
     def hash_memo_scope(self) -> Iterator[None]:
-        """Bound a :meth:`content_hash` memo to a single sync run.
+        """Bound a per-run :meth:`measure` memo to a single sync run.
 
         Within the scope, :meth:`measure` (and so ``content_hash``) caches each
         save's measure keyed by ``(path, mtime_ns, size)`` so the several passes
-        of one run that hash the same file read it once. The memo is discarded when the outermost scope
-        exits, so it is never a process-lifetime cache; a file overwritten
-        mid-run gets a new stat key and re-hashes. Reentrant — nested scopes
+        of one run that hash the same file read it once. The memo is discarded
+        when the outermost scope exits, so it is never a process-lifetime cache;
+        a file overwritten mid-run gets a new stat key and is read again. Reentrant — nested scopes
         share one memo and only the outermost clears it — so the engine can open
         it at both the sweep and per-ROM levels. The engine opens exactly one
         (outermost) scope per device-gated save-sync run, so within-scope hashing

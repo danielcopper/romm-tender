@@ -1163,7 +1163,8 @@ def _seed_at_sync_boundary(
 
     Stamps the system when none is known, seeds the active slot from
     *default_slot* when the aggregate has neither an active slot nor any slot,
-    and records the core and emulator the boundary ran under.
+    and records the core when one is given, and the emulator tag (the given
+    one, else the recorded one, else ``retroarch``).
     """
     if not save_state.system and system:
         save_state.adopt_system(system)

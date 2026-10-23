@@ -2705,13 +2705,14 @@ backstop in `_handle_upload_409` (`services/saves/sync_engine/matrix.py`).
   Two conversions are the adapter's, not the core's, and both exist so an "unknown" stays a flag instead of becoming a
   value: a server save's ISO-8601 `updated_at` becomes epoch seconds plus a `has_updated_at` flag (an unparseable
   timestamp arrives as a cleared flag, never as a substitute instant, so it cannot win head selection), and an absent
-  size or content size becomes a cleared `has_*` flag (`0` is exactly what the corrupt-local guard reacts to, so it
-  cannot double as "no size recorded"). A non-integral size raises rather than rounding, and so does a `size_fixed` that
-  is not a `bool`: an absent one is unknown, and anything else would be read as yes or no by a guess. Presence of the
-  local file rides on the pointer alone — a file that exists but could not be measured is a real case, distinct from a
-  missing one. The core answers with the chosen `server_save_id`, which the adapter resolves back to the caller's own
-  save dict so `Download`, `Conflict` and an adopting `Skip` carry the full record their consumers read; an adopting
-  `Skip` also carries `acknowledge`, and a skip that adopts nothing names no head.
+  size or content size becomes a cleared `has_*` flag (a raw size of `0` is what the guard refuses outright, and a
+  content size of `0` is a file of fill only, so neither can double as "no size recorded"). A non-integral size raises
+  rather than rounding, and so does a `size_fixed` that is not a `bool`: an absent one is unknown, and anything else
+  would be read as yes or no by a guess. Presence of the local file rides on the pointer alone — a file that exists but
+  could not be measured is a real case, distinct from a missing one. The core answers with the chosen `server_save_id`,
+  which the adapter resolves back to the caller's own save dict so `Download`, `Conflict` and an adopting `Skip` carry
+  the full record their consumers read; an adopting `Skip` also carries `acknowledge`, and a skip that adopts nothing
+  names no head.
 - **What ships**: `backend/native/libgavel-x86_64-linux.so` (romm-gavel `v2.0.0`, a freestanding build with zero library
   dependencies — it loads on any x86_64 Linux), vendored verbatim from the upstream release with a pinned SHA-256
   checksum. The C ABI has been part of upstream's promise since `v1.0.0`: struct layouts, signatures and enumerator

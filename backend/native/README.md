@@ -56,8 +56,9 @@ per-`(rom, filename, slot)` sync action (`gavel_compute_sync_action`) and the up
 4. Bump the **Release** tag above.
 5. Re-run the save-sync conformance tests (`tests/adapters/test_gavel_native.py`,
    `tests/adapters/test_gavel_native_table_vectors.py`) — the shipped binary must still match the vendored gavel
-   vectors. A gavel major bump means at least one expected outcome changed, so re-copy the vectors
-   (`tests/adapters/gavel_vectors/`) in the same change.
+   vectors. A gavel major bump means a vector's expected value changed, the C ABI changed, or both (upstream
+   `CONTRIBUTING.md`): re-copy the vectors (`tests/adapters/gavel_vectors/`), and bring the `ctypes` structs in
+   `adapters/gavel_native.py` to the new header, in the same change.
 
 The checksum is re-verified by CI (`.github/workflows/ci.yml`), so a swapped binary fails the pipeline. It names one
 path and verifies that file alone, so nothing else in this directory affects it — and nothing else in this directory is

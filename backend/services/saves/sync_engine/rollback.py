@@ -119,8 +119,8 @@ class RollbackOrchestrator:
 
         Raises its refusals, ``SyncEngine.live_device_id``'s among them, taken
         before the server's saves are listed; a RomM error from listing them,
-        from the transfer or from acknowledging an adopt propagates, and an ``OSError`` from the local side
-        refuses with ``resolve_failed``.
+        from the transfer or from acknowledging an adopt propagates, and an
+        ``OSError`` from the local side refuses with ``resolve_failed``.
         """
         rom_id = int(rom_id)
 

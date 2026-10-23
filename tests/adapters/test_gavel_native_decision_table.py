@@ -254,8 +254,9 @@ def test_no_baseline_is_current_true_without_proof_returns_conflict():
     """Row 8b — is_current=true + local present + no baseline yet, and nothing
     proves the local is the head's bytes (the head carries no ``content_hash``) →
     Conflict. Being current says this device synced the head, not that the file
-    on disk is still it; adopting would let its next change upload over the head
-    (romm-gavel#53).
+    on disk is still it; adopting would let its next change upload as an
+    ordinary edit superseding the head, whose progress then survives only as an
+    older version until auto-cleanup prunes it (romm-gavel#53).
     """
     server = _server_save(device_syncs=[_device_sync(DEVICE_ID, is_current=True)])
     result = _ADAPTER.compute_sync_action(

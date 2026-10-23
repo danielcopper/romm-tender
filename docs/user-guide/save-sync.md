@@ -23,14 +23,16 @@ Sync uses a **newest-wins** model with a hash-divergence guard:
 - If the server tracks your device as up-to-date and your local file matches the recorded baseline, there's nothing to
   do.
 - If your local file is already identical to the newest save in RomM — a fresh install, a copied SD card, the same save
-  synced from elsewhere — nothing is transferred: Tender records it as synced and tells RomM this device has it.
+  synced from elsewhere — nothing is transferred: Tender records it as synced and, where RomM does not yet count this
+  device as having it, tells RomM so.
 - If another device pushed a newer save and your local file is unchanged, the new server save is downloaded silently.
 - If you played offline and your local file changed, your save is pushed back to the server.
 - A conflict modal only appears if **both sides changed** to different content since the last sync, if a save on this
   device that Tender never synced meets a different save in RomM, or if your local save looks emptied or cut short —
   Tender won't silently overwrite either version. A save is measured by its content, not counting the empty padding some
   emulators write at its end, so one that is smaller only because its emulator writes less padding is not taken for a
-  cut-short one.
+  cut-short one. (A save already changed before you updated Tender is judged once by its full size; resolving that one
+  prompt with Keep Local settles it.)
 
 This is the same model used by the official RomM clients (Argosy and Grout). It keeps cross-device save sync simple: one
 timeline per slot, newest wins.

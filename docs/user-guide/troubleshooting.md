@@ -639,10 +639,12 @@ Also make sure each person using RomM has their own account — shared accounts 
 instead of uploading — and the local save shown is 0 bytes or much smaller than expected.
 
 **Why**: A crash can leave a 0-byte or truncated save file on disk. Tender refuses to upload it over your good server
-copy: the upload would become the newest save in the slot, every other device would then download it, and once RomM
-prunes the older versions the good one could be gone. So instead of silently destroying your progress, it asks you to
-choose. It goes by the save's content, not counting the empty padding some emulators write at the end of a save, so a
-save that is smaller only because it was written with less padding still uploads.
+copy: the upload would become the newest save in the slot, other devices that have not changed the save would then
+download it, and once RomM prunes the older versions the good one could be gone. So instead of silently destroying your
+progress, it asks you to choose. It goes by the save's content, not counting the empty padding some emulators write at
+the end of a save, so a save that is smaller only because it was written with less padding still uploads. (A save
+already changed before you updated Tender is judged once by its full size; resolving that one prompt with Keep Local
+settles it.)
 
 **Fix**: In the conflict prompt, pick **Use Server** to restore the good copy from RomM (the bad local file is moved
 aside into the `.romm-backup` folder next to your saves first, so nothing is lost). Only pick **Keep Local** if you are

@@ -86,8 +86,8 @@ baseline working. This hash reproduction is what the sync decision needs
 — including legacy `slot:null` saves, which RomM cannot address through the negotiate inventory param.
 
 **Server-hash baseline; parity as the no-history fallback (#1468).** The identity question — "is my local file
-byte-identical to that server save?" — is answered by a two-route disjunction, used at matrix rows 6d / 11a / 12a and in
-the 409 backstop (row 6d is reached by no Tender path — see
+byte-identical to that server save?" — is answered by a two-route disjunction, used at matrix rows 6d / 8a / 10a / 11a /
+12a and in the 409 backstop (row 6d is reached by no Tender path — see
 [Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached)):
 
 - **Provenance (primary).** At each sync boundary Tender stores the server's own `content_hash` alongside the local
@@ -118,7 +118,7 @@ drift check, the slot-switch pending-changes check, and the keep_local adopt-wit
 `SaveFileStore.content_hash`, never the whole-archive `checksum_md5` (#1457). For a single-file save the two are
 bit-identical, so this is a no-op there; for a zip container the whole-archive MD5 could never equal
 `server.content_hash`, so feeding it would silently degrade the byte-identical dedup and adoption to spurious conflicts.
-The hash comes from `SaveFileStore.measure`, which reads the file once for its hash, its size and its
+The hash comes from `SaveFileStore.measure`, which opens the file once for its hash, its size and its
 [content size](#the-content-size). Within one sync run the same file is measured by several passes (negotiate inventory,
 the matrix, the baseline write); `SaveFileStore.hash_memo_scope` memoizes the measure keyed by `(path, mtime_ns, size)`
 so it is read once, bounded to that run and discarded on exit.
@@ -528,8 +528,9 @@ covered by cases and vectors.
 - **`local_hash`** — pre-computed RomM-parity `content_hash` of `local_file` (zip-aware: a plain MD5 for a single-file
   save, the per-entry combined hash for a zipped multi-file save — `SaveFileStore.content_hash`, never the whole-archive
   `checksum_md5`), or `None`. It **must** be the same scheme the server stamps so the parity-route byte-identity checks
-  against `server.content_hash` (rows 6d / 11a) can match for zip saves too (#1457); the provenance route instead
-  compares the stored `last_sync_server_hash` against `server.content_hash` and needs no such agreement (#1468).
+  against `server.content_hash` (rows 6d / 8a / 10a / 11a / 12a) can match for zip saves too (#1457); the provenance
+  route instead compares the stored `last_sync_server_hash` against `server.content_hash` and needs no such agreement
+  (#1468).
 
 ### The content size
 
@@ -538,10 +539,10 @@ the two fill bytes; a file ending in any other byte has a content size equal to 
 an empty one, has content size 0 (romm-gavel's `SPEC.md`, "Inputs"). Emulators disagree on how much fill they write: one
 writes a 128 KiB file for a game whose save holds 32 KiB, another writes the 32 KiB alone, so the raw size of the same
 save can drop to a quarter between two syncs without a byte of the game's data going. Judged by raw size, that is a
-truncated file ([row 9b](#why-row-9b-conflicts-instead-of-uploading)); judged by content size, it is the same save.
+truncated file ([row 9b](#why-row-9b-conflicts-instead-of-uploading)); judged by content size, it has kept its size.
 
 `SaveFileStore.measure` takes it over the file's raw bytes — a zip save's too, whose hash is still taken over its
-entries — in the same read as the hash (`domain/save_measure.py`). It reaches the core beside the raw size, and it is
+entries — in the same open as the hash (`domain/save_measure.py`). It reaches the core beside the raw size, and it is
 recorded in `rom_save_files.last_sync_content_size` at every sync boundary beside `last_sync_local_size`. A baseline
 recorded before Tender took it carries none, and the core then compares raw sizes. Where the local file is still the one
 that baseline was recorded from (`local_hash == last_sync_hash`), the next sync records its content size from those
@@ -596,18 +597,19 @@ must acknowledge it to RomM (`acknowledge`), which the core sets exactly when th
 `is_current=false`. The adopt records a full baseline from the head — its id, its `content_hash` verbatim, its size and
 `updated_at`, and the local file's size, content size and mtime (`MatrixExecutor.adopt_head_as_baseline`) — and, as it
 stands in for a download of the same bytes, seeds the ROM's state as a download does: the system, a first active slot
-from the default slot, the core. If the file no longer hashes to what the decision saw, nothing is recorded. An adopt
-that must be acknowledged first sends `POST /api/saves/{id}/downloaded` with the device id, through the retry strategy
-every RomM request in the sync uses, and records the baseline only after that succeeded: without it RomM keeps this
-device not current on the head, and the next local edit would read as one under a head that moved past it — a conflict
-nobody caused. Where the acknowledgement still fails, nothing is recorded, the file is reported as an error of that sync
-with its reason — not a conflict — and the next sync decides the same way again.
+from the default slot, and the emulator tag already recorded (else `retroarch`). An adopt is recorded only if the file
+still hashes to what the decision saw; one that no longer does is neither acknowledged nor recorded. An adopt that must
+be acknowledged then first sends `POST /api/saves/{id}/downloaded` with the device id, through the retry strategy every
+RomM request in the sync uses, and records the baseline only after that succeeded: without it RomM keeps this device not
+current on the head, and the next local edit would read as one under a head that moved past it — a conflict nobody
+caused. Where the acknowledgement still fails, nothing is recorded, the file is reported as an error of that sync with
+its reason — not a conflict — and the next sync decides the same way again.
 
 The mutating sync path (`SyncEngine.do_sync_rom_saves`) records every adopt. The read-only status path
 (`StatusService._get_save_status_io`) records only one that needs no acknowledgement, and leaves the other to the next
 sync: showing a page never writes to RomM, and the read runs with save sync off too. The alternative — only writing the
-baseline from the mutating path — would leave state incomplete forever for users who only ever open the game-detail
-panel.
+baseline from the mutating path — would leave the adopts that need no acknowledgement incomplete forever for users who
+only ever open the game-detail panel.
 
 ### Implementation
 
@@ -663,40 +665,40 @@ Dimensions:
   be present and non-empty on both sides: a missing or empty hash is uncertainty, and uncertainty never reads as a
   match.
 
-| #   | local file | server in slot | our entry     | local vs baseline               | mtime vs server                              | decision                                          | reason                                                                                                                                                                                               |
-| --- | ---------- | -------------- | ------------- | ------------------------------- | -------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | no         | none           | n/a           | n/a                             | n/a                                          | `Skip(nothing_to_sync)`                           | nothing local, nothing server                                                                                                                                                                        |
-| 2   | yes        | none           | n/a           | n/a                             | n/a                                          | `Upload(POST)`                                    | first push for this save (or recovery after server-side wipe)                                                                                                                                        |
-| 3   | no         | ≥1             | never touched | n/a                             | n/a                                          | `Download(picked)`                                | no relation, pull newest                                                                                                                                                                             |
-| 4   | no         | ≥1             | current=true  | n/a                             | n/a                                          | `Download(picked)`                                | recovery — server still tracks our last version, local is gone                                                                                                                                       |
-| 5   | no         | ≥1             | current=false | n/a                             | n/a                                          | `Download(picked)`                                | server moved forward, nothing local to protect                                                                                                                                                       |
-| 6a  | yes        | ≥1             | never touched | no baseline, local hash known   | any                                          | **`Conflict(picked)`**                            | a local save of unknown provenance beside a different head — with no baseline nothing proves which side moved, and mtime is not trusted to decide in either direction; the user does (#1276)         |
-| 6b  | yes        | ≥1             | never touched | unchanged or local hash unknown | local mtime < server, or either time unknown | `Download(picked)`                                | no local change is known since the baseline, and nothing shows the local save is the newer one                                                                                                       |
-| 6c  | yes        | ≥1             | never touched | changed                         | n/a                                          | **`Conflict(picked)`**                            | baseline held from a prior sync but the picked head is a save we never synced — both sides moved (#1059)                                                                                             |
-| 6d  | yes        | ≥1             | never touched | any                             | any                                          | `Skip(synced, adopt_baseline=true)`               | byte-identical to an existing server save (stored server hash — provenance, or `content_hash == local_hash` — parity); adopt it, never POST a duplicate (#1013 / #1468)                              |
-| 6e  | yes        | ≥1             | never touched | unchanged or local hash unknown | local mtime ≥ server                         | `Upload(POST)`                                    | the local is not older than the head; reached only without a device id, which Tender never lists with — see [Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached)    |
-| 7   | yes        | ≥1             | current=true  | unchanged or local hash unknown | n/a                                          | `Skip(synced)`                                    | steady state                                                                                                                                                                                         |
-| 8a  | yes        | ≥1             | current=true  | no baseline                     | n/a                                          | `Skip(synced, adopt_baseline=true)`               | byte-identical to the head (`server.content_hash == local_hash`, parity only) — adopt it as the baseline; RomM already holds this device current, so nothing is acknowledged                         |
-| 8b  | yes        | ≥1             | current=true  | no baseline                     | n/a                                          | **`Conflict(picked)`**                            | the local differs from the head, the head carries no `content_hash`, or the local hash is unknown — being current says this device synced the head, not that the file on disk is still it            |
-| 9   | yes        | ≥1             | current=true  | changed                         | n/a                                          | `Upload(supersede picked.id)`                     | offline edit (plausible size) — POST our changes as a new version that supersedes the save the server still considers ours                                                                           |
-| 9b  | yes        | ≥1             | current=true  | changed                         | n/a                                          | **`Conflict(picked)`**                            | diverged local is 0-byte or shrunk past half of the baseline — by content size where both sides state one (crash / full disk) — refuse the upload, let the user decide (#1062)                       |
-| 10a | yes        | ≥1             | current=false | unchanged                       | n/a                                          | `Skip(synced, adopt_baseline=true)` + acknowledge | byte-identical to the head (provenance or parity) — adopt it with no transfer and acknowledge it to RomM                                                                                             |
-| 10b | yes        | ≥1             | current=false | unchanged or local hash unknown | n/a                                          | `Download(picked)`                                | another device synced, nothing shows a change of ours, and the head holds other bytes — adopt their version                                                                                          |
-| 11a | yes        | ≥1             | current=false | no baseline                     | n/a                                          | `Skip(synced, adopt_baseline=true)` + acknowledge | no baseline (so parity only, #1468), but `server.content_hash == local_hash` — byte-identical; adopt the head with no transfer and acknowledge it                                                    |
-| 11b | yes        | ≥1             | current=false | no baseline                     | n/a                                          | **`Conflict(picked)`**                            | no baseline and content differs from the server head — cannot prove which side is newer; refuse the silent overwrite (#1276)                                                                         |
-| 12a | yes        | ≥1             | current=false | changed                         | n/a                                          | `Skip(synced, adopt_baseline=true)` + acknowledge | both sides moved off the baseline but landed on the SAME bytes (`server.content_hash == local_hash`, parity only) — adopt the head with no transfer and acknowledge it, nothing to reconcile (#1480) |
-| 12b | yes        | ≥1             | current=false | changed                         | n/a                                          | **`Conflict(picked)`**                            | both sides moved to DIFFERENT content — the user decides                                                                                                                                             |
+| #   | local file | server in slot | our entry     | local vs baseline               | mtime vs server                              | decision                                          | reason                                                                                                                                                                                                |
+| --- | ---------- | -------------- | ------------- | ------------------------------- | -------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | no         | none           | n/a           | n/a                             | n/a                                          | `Skip(nothing_to_sync)`                           | nothing local, nothing server                                                                                                                                                                         |
+| 2   | yes        | none           | n/a           | n/a                             | n/a                                          | `Upload(POST)`                                    | first push for this save (or recovery after server-side wipe)                                                                                                                                         |
+| 3   | no         | ≥1             | never touched | n/a                             | n/a                                          | `Download(picked)`                                | no relation, pull newest                                                                                                                                                                              |
+| 4   | no         | ≥1             | current=true  | n/a                             | n/a                                          | `Download(picked)`                                | recovery — server still tracks our last version, local is gone                                                                                                                                        |
+| 5   | no         | ≥1             | current=false | n/a                             | n/a                                          | `Download(picked)`                                | server moved forward, nothing local to protect                                                                                                                                                        |
+| 6a  | yes        | ≥1             | never touched | no baseline, local hash known   | any                                          | **`Conflict(picked)`**                            | a local save of unknown provenance beside a different head — with no baseline nothing proves which side moved, and mtime is not trusted to decide in either direction; the user does (#1276)          |
+| 6b  | yes        | ≥1             | never touched | unchanged or local hash unknown | local mtime < server, or either time unknown | `Download(picked)`                                | no local change is known since the baseline, and nothing shows the local save is the newer one                                                                                                        |
+| 6c  | yes        | ≥1             | never touched | changed                         | n/a                                          | **`Conflict(picked)`**                            | baseline held from a prior sync but the picked head is a save we never synced — both sides moved (#1059)                                                                                              |
+| 6d  | yes        | ≥1             | never touched | any                             | any                                          | `Skip(synced, adopt_baseline=true)`               | byte-identical to an existing server save (stored server hash — provenance, or `content_hash == local_hash` — parity); adopt it, never POST a duplicate (#1013 / #1468)                               |
+| 6e  | yes        | ≥1             | never touched | unchanged or local hash unknown | local mtime ≥ server                         | `Upload(POST)`                                    | the local is not older than the head; reached only without a device id, which Tender never lists with — see [Where the never-touched rows are reached](#where-the-never-touched-rows-are-reached)     |
+| 7   | yes        | ≥1             | current=true  | unchanged or local hash unknown | n/a                                          | `Skip(synced)`                                    | steady state                                                                                                                                                                                          |
+| 8a  | yes        | ≥1             | current=true  | no baseline                     | n/a                                          | `Skip(synced, adopt_baseline=true)`               | byte-identical to the head (`server.content_hash == local_hash`, parity only) — adopt it as the baseline; RomM already holds this device current, so nothing is acknowledged                          |
+| 8b  | yes        | ≥1             | current=true  | no baseline                     | n/a                                          | **`Conflict(picked)`**                            | the local differs from the head, the head carries no `content_hash`, or the local hash is unknown — being current says this device synced the head, not that the file on disk is still it             |
+| 9   | yes        | ≥1             | current=true  | changed                         | n/a                                          | `Upload(supersede picked.id)`                     | offline edit (plausible size) — POST our changes as a new version that supersedes the save the server still considers ours                                                                            |
+| 9b  | yes        | ≥1             | current=true  | changed                         | n/a                                          | **`Conflict(picked)`**                            | diverged local is 0-byte or below half its recorded size — content size where both sides state one, raw size otherwise — a crash / full-disk artifact; refuse the upload, let the user decide (#1062) |
+| 10a | yes        | ≥1             | current=false | unchanged                       | n/a                                          | `Skip(synced, adopt_baseline=true)` + acknowledge | byte-identical to the head (provenance or parity) — adopt it with no transfer and acknowledge it to RomM                                                                                              |
+| 10b | yes        | ≥1             | current=false | unchanged or local hash unknown | n/a                                          | `Download(picked)`                                | another device synced, nothing shows a change of ours, and nothing proves the head holds the same bytes — adopt their version                                                                         |
+| 11a | yes        | ≥1             | current=false | no baseline                     | n/a                                          | `Skip(synced, adopt_baseline=true)` + acknowledge | no baseline (so parity only, #1468), but `server.content_hash == local_hash` — byte-identical; adopt the head with no transfer and acknowledge it                                                     |
+| 11b | yes        | ≥1             | current=false | no baseline                     | n/a                                          | **`Conflict(picked)`**                            | no baseline and content differs from the server head — cannot prove which side is newer; refuse the silent overwrite (#1276)                                                                          |
+| 12a | yes        | ≥1             | current=false | changed                         | n/a                                          | `Skip(synced, adopt_baseline=true)` + acknowledge | both sides moved off the baseline but landed on the SAME bytes (`server.content_hash == local_hash`, parity only) — adopt the head with no transfer and acknowledge it, nothing to reconcile (#1480)  |
+| 12b | yes        | ≥1             | current=false | changed                         | n/a                                          | **`Conflict(picked)`**                            | both sides moved to DIFFERENT content — the user decides                                                                                                                                              |
 
 Conflict happens in six rows — #12b (we already hold an entry on the picked save and our local diverged from the
 baseline to content that differs from the head), #6c (we hold a baseline from a prior sync but no entry on the picked
 head), #6a (we hold neither a baseline nor an entry on the picked head, and our local content differs from it), #11b (we
 hold an `is_current=false` entry, have no baseline, and our local content differs from the server head), #8b (we are
 current on the picked save but hold no baseline, and nothing proves our local content is the head's), and #9b (we own
-the picked save and our local diverged, but the local file is 0-byte / implausibly shrunk). #12b, #6c, #6a, #11b and #8b
-are all "both sides hold content we never reconciled" situations; #9b is a different hazard — protecting the server's
-only good copy from being superseded by a corrupt-looking local file (#1062). Every other row resolves silently to a
-Skip, Upload, or Download. An adopt marked "+ acknowledge" confirms the head to RomM before it records the baseline
-([Outcomes](#outcomes)).
+the picked save and our local diverged, but the local file is 0-byte / implausibly shrunk). #12b, #6c, #6a and #11b are
+all "both sides hold content we never reconciled" situations, and #8b a local of unknown provenance beside a head we
+synced; #9b is a different hazard — protecting the server's only good copy from being superseded by a corrupt-looking
+local file (#1062). Every other row resolves silently to a Skip, Upload, or Download. An adopt marked "+ acknowledge"
+confirms the head to RomM before it records the baseline ([Outcomes](#outcomes)).
 
 ### Where the never-touched rows are reached
 
@@ -739,11 +741,11 @@ Row 6a fires when a local file exists, a server save also exists in the slot, ou
 server save, the content does **not** match it (or `content_hash` is absent — see row 6d), and there is no baseline
 (`last_sync_hash`) while the local hash is known. Nothing then says where the local save came from: no baseline to show
 whether it changed since a sync, and no `device_syncs` entry to give us a claim on the picked save. Its modification
-time does not settle it either, for the reason [row 11](#why-row-11-splits-into-download-11a-vs-conflict-11b) gives, so
-the row does not compare times at all: whether the local file is older or newer than the head, the answer is a
-`Conflict` the user resolves via Keep Local / Use Server — never a silent `Download` that would overwrite local
-progress, and no upload. This is the same "user decides on ambiguity" exit row 11b takes for a save we do hold an
-`is_current=false` entry on ([#1276](https://github.com/danielcopper/romm-tender/issues/1276) /
+time does not settle it either, for the reason [row 11](#why-row-11-splits-into-adopt-11a-vs-conflict-11b) gives, so the
+row does not compare times at all: whether the local file is older or newer than the head, the answer is a `Conflict`
+the user resolves via Keep Local / Use Server — never a silent `Download` that would overwrite local progress, and no
+upload. This is the same "user decides on ambiguity" exit row 11b takes for a save we do hold an `is_current=false`
+entry on ([#1276](https://github.com/danielcopper/romm-tender/issues/1276) /
 [ADR-0017](../adr/0017-client-baseline-detection-authoritative-negotiate-is-transport.md)).
 
 Rows 6b and 6e still compare times because they are the one never-touched case with nothing else to go on and nothing of
@@ -775,9 +777,10 @@ The content hash decides:
 - **8a — `server.content_hash == local_hash`.** The file is the head's bytes, so it is adopted as the baseline with no
   transfer. RomM already holds this device current, so there is nothing to acknowledge.
 - **8b — anything else**: the content differs, the head carries no `content_hash`, or the local hash is unknown.
-  Adopting here would record a file that is not the head as if it were, and its next change would upload over the head
-  as an ordinary edit, losing whatever the head held (romm-gavel#53). So it is a **`Conflict`** the user resolves via
-  Keep Local / Use Server, the same exit rows 6a and 11b take for a local of unknown provenance.
+  Adopting here would record a file that is not the head as if it were, and its next change would upload as an ordinary
+  edit superseding the head, whose progress then survives only as an older version until auto-cleanup prunes it
+  (romm-gavel#53). So it is a **`Conflict`** the user resolves via Keep Local / Use Server, the same exit rows 6a and
+  11b take for a local of unknown provenance.
 
 Only parity can prove identity here: provenance needs a baseline.
 
@@ -794,18 +797,19 @@ download-overwrite path already quarantines the local file into `.romm-backup` f
 corrupt-looking local had no equivalent guard.
 
 The plausibility check is part of the decision (fed the local file's size and [content size](#the-content-size), and the
-recorded `last_sync_local_size` and `last_sync_content_size`): a new size of **0** fires unconditionally, and below that
-a content size under **50%** of the recorded one fires as a shrink — the raw sizes stand in where either side states no
+recorded `last_sync_local_size` and `last_sync_content_size`): a new size of **0** fires unconditionally; otherwise a
+content size under **50%** of the recorded one fires as a shrink — the raw sizes stand in where either side states no
 content size. Measuring content lets a save whose emulator writes less trailing fill than the last one upload as the
-edit it is, while a save that lost data still trips it; a non-empty file of fill only trips it whenever the recorded
-content was larger than 0. The core has a further rule for a file whose size is fixed, which conflicts as soon as it is
-shorter than the recorded content; Tender does not state that fact yet, so the rule never fires. The threshold is a
-hard-coded conservative default — not a setting. When the guard fires, the decision is `Conflict(picked)` instead of
-`Upload`, routing through the existing `SyncConflictModal` so the user decides: **Use Server** downloads the good server
-copy (quarantining the bad local first), **Keep Local** re-uploads the corrupt file only after an explicit choice. A
-plausible-size divergent edit (or a save that grew) is unaffected and still uploads (row 9).
+edit it is, while a save that lost data still trips it; where both content sizes are stated, a non-empty file of fill
+only trips it whenever the recorded content was larger than 0. The core has a further rule for a file whose size is
+fixed, which conflicts as soon as it is shorter than the recorded content; Tender does not state that fact yet, so the
+rule never fires. The threshold is a hard-coded conservative default — not a setting. When the guard fires, the decision
+is `Conflict(picked)` instead of `Upload`, routing through the existing `SyncConflictModal` so the user decides: **Use
+Server** downloads the good server copy (quarantining the bad local first), **Keep Local** re-uploads the corrupt file
+only after an explicit choice. A plausible-size divergent edit (or a save that grew) is unaffected and still uploads
+(row 9).
 
-### Why row 11 splits into download (11a) vs conflict (11b)
+### Why row 11 splits into adopt (11a) vs conflict (11b)
 
 Row 11 is the `is_current=false` sibling of row 6a — local file exists, mtime is whatever, no baseline. The difference
 is that our device **does** have an entry on the picked save and the entry says `is_current=false`: either some other
@@ -823,11 +827,11 @@ The content hash breaks the tie:
   which is newer. The earlier design silently `Download`ed here, quarantining the local bytes into `.romm-backup` on the
   bet that another device's work mattered more — a silent overwrite of possibly-newer local progress. Under
   [#1276](https://github.com/danielcopper/romm-tender/issues/1276) this is a **`Conflict`** instead: the user decides
-  via Keep Local / Use Server, the same exit rows 6a, 6c and 12b take. When the server save carries no `content_hash`
-  (older / migrated saves) the equality fails closed to this conflict — the safe default. mtime is never trusted to
-  break this tie.
+  via Keep Local / Use Server, the same exit rows 6a, 6c, 8b and 12b take. When the server save carries no
+  `content_hash` (older / migrated saves) the equality fails closed to this conflict — the safe default. mtime is never
+  trusted to break this tie.
 
-### Why row 12 splits into download (12a) vs conflict (12b)
+### Why row 12 splits into adopt (12a) vs conflict (12b)
 
 Row 12 is the both-sides-moved case where we already hold an `is_current=false` entry on the picked head **and** a
 baseline our local has diverged from (`local_hash != last_sync_hash`). The intuition is "two timelines, user decides",
@@ -844,10 +848,10 @@ The content hash breaks the tie, mirroring row 11's split:
 - **12b — the content differs.** Both sides genuinely hold unreconciled bytes → **`Conflict`**, the user decides via
   Keep Local / Use Server. Unchanged from before.
 
-The identity check is the same two-route one rows 6d / 11a use. One subtlety: in this slice the local has **diverged**
-from the baseline, and the provenance route requires it to be _unchanged_ since baseline — so that route is inert here
-and only parity (`local_hash == server.content_hash`) can prove identity. When the head carries no `content_hash` (older
-/ migrated saves) or either hash is empty, parity fails closed to 12b — the safe default.
+The identity check is the same two-route one rows 6d / 10a / 11a use. One subtlety: in this slice the local has
+**diverged** from the baseline, and the provenance route requires it to be _unchanged_ since baseline — so that route is
+inert here and only parity (`local_hash == server.content_hash`) can prove identity. When the head carries no
+`content_hash` (older / migrated saves) or either hash is empty, parity fails closed to 12b — the safe default.
 
 ### Why is there no foreign-save modal anymore
 
@@ -1256,19 +1260,20 @@ endpoint calls. The façade delegates to `SyncEngine.resolve_sync_conflict`, who
    surfaces an error and the user cancels + retries; the next sync re-evaluates the matrix with the fresh head.
 4. Dispatches:
    - `keep_local` → `_resolve_conflict_keep_local` reads the server save's content hash. If it matches local (rare, but
-     possible — both devices ended up at the same content via different paths), the server's id is adopted into state
-     without re-uploading. Otherwise the local file is POSTed as a new version with `overwrite=true` — the user's
-     deliberate overwrite bypasses the 409 gate (#1276). The POST's own `device_save_sync` upsert leaves us
-     `is_current=true`, so the redundant `confirm_download` ack is skipped (#1458).
+     possible — both devices ended up at the same content via different paths), the head is first confirmed to RomM
+     (`POST /api/saves/{id}/downloaded`, through the retry strategy) and then adopted into state without re-uploading:
+     after the user resolved the conflict this device must be current on the head. Otherwise the local file is POSTed as
+     a new version with `overwrite=true` — the user's deliberate overwrite bypasses the 409 gate (#1276). The POST's own
+     `device_save_sync` upsert leaves us `is_current=true`, so the redundant `confirm_download` ack is skipped (#1458).
    - `use_server` → `_resolve_conflict_use_server` downloads the picked save and writes it to the local path.
 
 The modal only accepts `keep_local` or `use_server`; `cancel` never reaches the backend. A wrong action string is
 refused before the server is asked anything.
 
 Before it lists, the resolution takes its device id from `SyncEngine.live_device_id` and refuses as it does
-(`device_not_registered` or `server_unreachable`). A RomM error from fetching the list or from the transfer answers
-`classify_error`'s reason and message. An `OSError` on the local side — a local save missing at the canonical path among
-them — refuses with `resolve_failed`. Anything else is a transport error.
+(`device_not_registered` or `server_unreachable`). A RomM error from fetching the list, from the transfer or from that
+acknowledgement answers `classify_error`'s reason and message. An `OSError` on the local side — a local save missing at
+the canonical path among them — refuses with `resolve_failed`. Anything else is a transport error.
 
 ### Why no defer state
 
@@ -1283,29 +1288,30 @@ input.
 
 `SyncEngine._rom_sync_locks: dict[int, asyncio.Lock]` (`services/saves/sync_engine/engine.py`) serializes
 `pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, `sync_all_saves`, and `resolve_sync_conflict` for the same
-`rom_id`. `StatusService.get_save_status` also takes the lock because of its one write: the executor body adopts a
-baseline hash (`Skip(adopt_baseline=True)`) and persists it through a `rom_save_sync_states` read-modify-write, which
-would otherwise race a concurrent sync and clobber that sync's update. It asks the server first, outside the lock, and
-holds the lock across the save-answer reading, the directory follow and the local probe as well as that write. The slot
-list (`SlotListing.get_save_slots`) takes the lock for the same reason: it merges the server's slots into the stored
-listing and writes the state back. It too asks the server first, outside the lock, and holds the lock only for its one
-unit of work — the read, the merge and the write; a slot list whose server cannot be reached reads the stored state for
-its last-known listing without the lock and writes nothing. The three **slot mutations** — `SlotSwitcher.switch_slot`,
-`SetupWizard.confirm_slot_choice`, and `SlotDeleter.delete_slot` — take the lock too: each loads the `RomSaveSyncState`
-aggregate, mutates it (active-slot flip, slot-confirm, slot/file tracking teardown, switch downloads/deletes), and
-persists, so without the lock a slot op racing an in-flight sync on the same ROM loses updates or PUTs the wrong slot's
-content into the tracked server save (#1057). Unlike the status and the slot list, they hold it across their server I/O:
-`switch_slot` lists the ROM's server saves and downloads the new slot's, `delete_slot` deletes the slot's server saves,
-and `confirm_slot_choice`'s migration lists, downloads and uploads, all under the lock. The lock is held as well by
-`SaveCopyService.copy_save_to_slot`, `VersionsService.rollback_to_version`, the removed-game cleanup
-(`PruneSaveSupport.lock_prune_roms`, one lock for each ROM its save inventory names, taken in ascending id order),
-deleting a ROM's or a platform's local saves and counting a platform's (`SaveService._delete_saves_for_roms`,
-`SaveService.count_platform_saves`), the passes that record each installed ROM's save directory
-(`SyncEngine._record_each_installed_rom`), and the local-save check (`StatusService.check_local_drift`) — the count, the
-record passes and the check hold it for the directory follow, not for a write of the save state; following a moved save
-directory (`SyncEngine.follow_save_directory`) runs inside the lock of whichever holder calls it. Different rom_ids have
-independent locks, so cross-game concurrency (e.g. Sync All Saves running concurrently with a resolve on one specific
-rom) is unaffected. The lock is created lazily on first access (`SyncEngine.rom_lock(rom_id)`).
+`rom_id`. `StatusService.get_save_status` also takes the lock because of its one write: the executor body records an
+adopted baseline (a `Skip(adopt_baseline=True)` that needs no acknowledgement) and persists it through a
+`rom_save_sync_states` read-modify-write, which would otherwise race a concurrent sync and clobber that sync's update.
+It asks the server first, outside the lock, and holds the lock across the save-answer reading, the directory follow and
+the local probe as well as that write. The slot list (`SlotListing.get_save_slots`) takes the lock for the same reason:
+it merges the server's slots into the stored listing and writes the state back. It too asks the server first, outside
+the lock, and holds the lock only for its one unit of work — the read, the merge and the write; a slot list whose server
+cannot be reached reads the stored state for its last-known listing without the lock and writes nothing. The three
+**slot mutations** — `SlotSwitcher.switch_slot`, `SetupWizard.confirm_slot_choice`, and `SlotDeleter.delete_slot` — take
+the lock too: each loads the `RomSaveSyncState` aggregate, mutates it (active-slot flip, slot-confirm, slot/file
+tracking teardown, switch downloads/deletes), and persists, so without the lock a slot op racing an in-flight sync on
+the same ROM loses updates or PUTs the wrong slot's content into the tracked server save (#1057). Unlike the status and
+the slot list, they hold it across their server I/O: `switch_slot` lists the ROM's server saves and downloads the new
+slot's, `delete_slot` deletes the slot's server saves, and `confirm_slot_choice`'s migration lists, downloads and
+uploads, all under the lock. The lock is held as well by `SaveCopyService.copy_save_to_slot`,
+`VersionsService.rollback_to_version`, the removed-game cleanup (`PruneSaveSupport.lock_prune_roms`, one lock for each
+ROM its save inventory names, taken in ascending id order), deleting a ROM's or a platform's local saves and counting a
+platform's (`SaveService._delete_saves_for_roms`, `SaveService.count_platform_saves`), the passes that record each
+installed ROM's save directory (`SyncEngine._record_each_installed_rom`), and the local-save check
+(`StatusService.check_local_drift`) — the count, the record passes and the check hold it for the directory follow, not
+for a write of the save state; following a moved save directory (`SyncEngine.follow_save_directory`) runs inside the
+lock of whichever holder calls it. Different rom_ids have independent locks, so cross-game concurrency (e.g. Sync All
+Saves running concurrently with a resolve on one specific rom) is unaffected. The lock is created lazily on first access
+(`SyncEngine.rom_lock(rom_id)`).
 
 The lock is **not reentrant** (plain `asyncio.Lock`), so a critical section must never call a peer that re-acquires the
 same lock. `switch_slot` is the live instance: its tail `get_save_status` re-takes `rom_lock(rom_id)`, so the lock is
@@ -1403,7 +1409,7 @@ currently-tracked save (via `do_sync_rom_saves`):
 
 | Pre-flight outcome                           | What happens                                                                                                                                                                                                |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Skip(synced)` / `Skip(adopt_baseline=True)` | No I/O. Switch proceeds.                                                                                                                                                                                    |
+| `Skip(synced)` / `Skip(adopt_baseline=True)` | No transfer; an adopt marked `acknowledge` confirms the head to RomM first (a failure is `preflight_failed`). Switch proceeds.                                                                              |
 | `Upload`                                     | Local changes are silently pushed to the server first. Switch proceeds.                                                                                                                                     |
 | `Download(server)`                           | The newer server save is silently adopted. Switch then proceeds (the user's chosen target is still in the slot).                                                                                            |
 | `Conflict(...)`                              | Switch aborts with `{"status": "conflict_blocked", "conflicts": [...]}`. The frontend opens the standard `SyncConflictModal`; the user must resolve via Keep Local / Use Server before retrying the switch. |
@@ -1513,9 +1519,9 @@ neither in place):
    newest save for that file — its id, its `content_hash` and its size — as the baseline, and the next sync reads the
    copy as a local change: row 9 uploads it as a new version superseding that save, where this device is current on it.
    Row 9b still applies — a copy under half that save's size is a conflict, not an upload — and so is a save there this
-   device is not current on: row 12b, whether it never synced that save or another device moved it on since. A new slot
-   has no save to record, and the next sync uploads the copy as its first save (row 2). That baseline is recorded from
-   the server's size alone and carries no [content size](#the-content-size), so row 9b judges the copy by raw size.
+   device is not current on: row 12b, whether it never synced that save or another device moved it on since. That
+   baseline is recorded from the save's size alone and carries no [content size](#the-content-size), so row 9b judges
+   the copy by raw size. A new slot has no save to record, and the next sync uploads the copy as its first save (row 2).
    Where the newest save carries no `content_hash` or no id, there is no baseline to record from it, and the file's
    tracking is dropped instead: with no baseline beside a head it cannot prove the copy identical to, the next sync
    answers a conflict — row 8b where this device is current on that save, row 11b where it is not.
