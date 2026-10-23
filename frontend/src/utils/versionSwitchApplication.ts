@@ -5,7 +5,7 @@ import {
   logWarn,
   type SwitchVersionSuccess,
 } from "../api/backend";
-import { setChosenCover } from "./artwork";
+import { setChosenCover, setSteamGridDbSwitchCover } from "./artwork";
 import { writeSlotArtwork } from "./artworkSlotsStore";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from "./pruneLease";
@@ -69,6 +69,9 @@ export async function publishCommittedVersionSwitch(
       onCover?.(romId, cover.base64);
       const base64 = cover.base64;
       await writeSlotArtwork(appId, "cover", () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", 0));
+    } else if (cover) {
+      // Neither a chosen cover nor RomM's: the version's cover is Tender's SteamGridDB pick (#2381 D28).
+      await setSteamGridDbSwitchCover(romId, appId, (base64) => onCover?.(romId, base64));
     }
   } catch (e) {
     logWarn(`Version switch: cover apply after switch failed for rom ${romId}: ${e}`);

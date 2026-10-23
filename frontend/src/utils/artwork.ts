@@ -527,6 +527,29 @@ export async function setChosenCover(
 }
 
 /**
+ * Set Tender's pick among SteamGridDB's covers as *appId*'s cover after a version switch to *romId*, a version with
+ * neither a chosen cover nor one from RomM (#2381 D28), as the first visit's fill sets it, and report what Steam made
+ * of it; *onCover* hears the image first. Answers whether Steam took it.
+ */
+export async function setSteamGridDbSwitchCover(
+  romId: number,
+  appId: number,
+  onCover?: (base64: string) => void,
+): Promise<boolean> {
+  const answer = await getSgdbSlotArtwork(romId, appId, "cover", true).catch((e: unknown): SgdbSlotArtwork => {
+    detach(debugLog(`Version switch: the SteamGridDB cover for rom ${romId} was not served: ${e}`));
+    return { status: "failed" };
+  });
+  if (isEndpointFailure(answer) || answer.status !== "image") return false;
+  onCover?.(answer.base64);
+  const outcome = await withPruneLeases([answer.prune_lease_token], "Version switch", (signal) =>
+    setSlotImage(appId, "cover", answer, STEAM_ASSET_TYPES.cover, signal, () => false),
+  );
+  if (outcome !== null) await reportSlotOutcome(romId, "cover", outcome, answer);
+  return outcome === "set";
+}
+
+/**
  * Remove the image set through Steam for *appId*'s slot *assetType* before Tender sets its own (#2381 D13): Steam
  * shows a `.jpg` before a `.png` (D14), so Tender's image would not show while Steam's stays. What Steam's call
  * removes is not measured yet; if it leaves the hand-set file, this is the one place that changes.

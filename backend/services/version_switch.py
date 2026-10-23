@@ -34,6 +34,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from domain.artwork_slot import ArtworkSlot
 from domain.main_sibling import main_sibling_flag
 from domain.rom import Rom
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
@@ -882,6 +883,11 @@ class VersionSwitchService:
         Raises a ``not_in_group`` or ``bound_elsewhere`` refusal before it writes
         anything, or returns whether the target is downloaded; the caller resolves
         the launch command outside this UoW (the relaunch resolver opens its own).
+
+        In the same UoW it forgets the target's record and hand-over of an
+        automatic cover Tender picked from SteamGridDB: the cover the switch
+        writes next — RomM's, or that pick again — is the one to judge "Set in
+        Steam" by (#2381 D28). A chosen cover keeps its record.
         """
         with self._uow_factory() as uow:
             target = uow.roms.get(target_rom_id)
@@ -899,6 +905,9 @@ class VersionSwitchService:
                 raise Refused("bound_elsewhere", f"Version {target_rom_id} is already used by another shortcut.")
             target.bind_shortcut(app_id)
             uow.roms.save(target)
+            if uow.artwork_slot_choices.get(target_rom_id, ArtworkSlot.COVER) is None:
+                uow.artwork_slot_outcomes.delete_slot(target_rom_id, ArtworkSlot.COVER)
+                uow.artwork_slot_handovers.delete_slot(target_rom_id, ArtworkSlot.COVER)
             return uow.rom_installs.get(target_rom_id) is not None
 
     def _persist_and_bind(
