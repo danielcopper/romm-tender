@@ -37,6 +37,7 @@ from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
 from domain.platform_system import PLATFORM_IDS_KEY, decode_platform_ids
+from domain.rom_install import RomInstall
 from domain.sync_diff import BIND_ROM_ID_KEY
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
@@ -6796,6 +6797,174 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         result = await library.sync.sync_preview()
 
         assert result["summary"]["remove_count"] == 1
+
+
+class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
+    """The preview collapses a game only collections reach with the partial view its apply uses (#2536 D2).
+
+    RomM lists GBA. Faves holds Golf (USA), 20, which the first run binds;
+    Golf (Europe), 22, and Golf (Japan), 23, are its other versions on GBA.
+    Each case runs the preview, then the apply it would start, so the two
+    answer over the same library.
+    """
+
+    @staticmethod
+    def _golf(rom_id, region, *, fs_name=None, **extra):
+        """A version of Golf on GBA, as RomM lists it."""
+        stem = f"Golf ({region})"
+        return {
+            "id": rom_id,
+            "name": stem,
+            "fs_name": fs_name or f"{stem}.zip",
+            "fs_name_no_ext": stem,
+            "igdb_id": 300,
+            "platform_id": 2,
+            "platform_name": "GBA",
+            "platform_slug": "gba",
+            **extra,
+        }
+
+    @classmethod
+    async def _bind_20(cls, library, fake_romm_api, *, gba_synced=False):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=2,
+            name="GBA",
+            slug="gba",
+            roms=[
+                cls._golf(20, "USA", rom_user={"is_main_sibling": True}),
+                cls._golf(22, "Europe"),
+                cls._golf(23, "Japan"),
+            ],
+        )
+        library.settings["enabled_platforms"] = {"2": gba_synced}
+        # With GBA synced no collection takes part: a collection skipped as
+        # unchanged hands the preview its stored members back, 20 among them.
+        if not gba_synced:
+            _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
+            fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
+            library.settings["enabled_collections"] = {"standard": {"7": True}}
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
+        await library.sync._orchestrator._do_sync_per_unit()
+        assert cls._bindings(library) == {20: 6020}
+
+    @staticmethod
+    def _bindings(library):
+        with library.uow as uow:
+            return {rom.rom_id: rom.shortcut_app_id for rom in uow.roms.iter_all() if rom.shortcut_app_id}
+
+    @staticmethod
+    def _fetch_faves_again(fake_romm_api, rom_ids):
+        faves = fake_romm_api.collections[0]
+        for rom in fake_romm_api.roms.values():
+            rom["collection_ids"] = [cid for cid in rom.get("collection_ids") or [] if cid != 7]
+        for rom_id in rom_ids:
+            fake_romm_api.roms[rom_id].setdefault("collection_ids", []).append(7)
+        faves["rom_ids"] = list(rom_ids)
+        faves["rom_count"] = len(rom_ids)
+        faves["updated_at"] = "2030-01-01T00:00:00"
+
+    @classmethod
+    async def _preview_then_apply(cls, library, emit):
+        """The preview's ``(new, changed, removed)``, then its apply's ``(shortcuts sent, removals, bindings)``."""
+        summary = (await library.sync.sync_preview())["summary"]
+        counted = (summary["new_count"], summary["changed_count"], summary["remove_count"])
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        run_2_starts_at = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
+        sent = [
+            shortcut["rom_id"]
+            for name, *payload in frames
+            if name == "sync_apply_unit"
+            for shortcut in payload[0]["shortcuts"]
+        ]
+        removed = [rom["rom_id"] for name, *payload in frames if name == "sync_stale" for rom in payload[0]["remove"]]
+        return counted, (sent, removed, cls._bindings(library))
+
+    @pytest.mark.asyncio
+    async def test_a_version_gone_from_romm_whose_dump_the_collection_lists_under_a_new_id(
+        self, library, fake_romm_api, emit
+    ):
+        await self._bind_20(library, fake_romm_api)
+        del fake_romm_api.roms[20]
+        fake_romm_api.get_rom_once_side_effect_by_id[20] = RommNotFoundError("Rom with id 20 not found")
+        fake_romm_api.roms[24] = self._golf(24, "USA")
+        self._fetch_faves_again(fake_romm_api, [24])
+
+        assert await self._preview_then_apply(library, emit) == ((0, 0, 0), ([], [], {20: 6020}))
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("installed", [False, True], ids=["not-installed", "installed"])
+    async def test_the_collection_listing_a_same_stem_copy_of_a_live_version(
+        self, library, fake_romm_api, emit, installed
+    ):
+        await self._bind_20(library, fake_romm_api)
+        if installed:
+            with library.uow as uow:
+                uow.rom_installs.save(
+                    RomInstall.mark_installed(
+                        rom_id=20,
+                        file_path="/roms/gba/Golf (USA).zip",
+                        rom_dir=None,
+                        platform_slug="gba",
+                        system="gba",
+                        installed_at="2025-01-01T00:00:00",
+                    )
+                )
+        fake_romm_api.roms[25] = self._golf(25, "USA", fs_name="Golf (USA).7z")
+        self._fetch_faves_again(fake_romm_api, [25])
+
+        assert await self._preview_then_apply(library, emit) == ((0, 0, 0), ([], [], {20: 6020}))
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("same_collection", [True, False], ids=["same-collection", "another-collection"])
+    async def test_a_version_without_a_file_beside_a_same_stem_version_with_one(
+        self, library, fake_romm_api, emit, same_collection
+    ):
+        await self._bind_20(library, fake_romm_api)
+        fake_romm_api.roms[20]["has_file_on_disk"] = False
+        fake_romm_api.roms[21] = self._golf(21, "USA", fs_name="Golf (USA)")
+        if same_collection:
+            self._fetch_faves_again(fake_romm_api, [20, 21])
+        else:
+            self._fetch_faves_again(fake_romm_api, [20])
+            _seed_collection(fake_romm_api, collection_id=8, name="Mine", rom_ids=[21])
+            library.settings["enabled_collections"] = {"standard": {"7": True, "8": True}}
+
+        assert await self._preview_then_apply(library, emit) == ((0, 0, 0), ([], [], {20: 6020}))
+
+    @pytest.mark.asyncio
+    async def test_a_game_its_platform_delivers_still_moves_onto_the_dump_under_a_new_id(
+        self, library, fake_romm_api, emit
+    ):
+        """The contrast: GBA is synced, so its unit holds the whole game and the move is counted and made."""
+        await self._bind_20(library, fake_romm_api, gba_synced=True)
+        del fake_romm_api.roms[20]
+        fake_romm_api.roms[24] = self._golf(24, "USA")
+
+        assert await self._preview_then_apply(library, emit) == ((0, 1, 0), ([20], [], {24: 6020}))
+
+    @pytest.mark.asyncio
+    async def test_a_game_its_platform_delivers_still_moves_off_a_version_without_a_file(
+        self, library, fake_romm_api, emit
+    ):
+        await self._bind_20(library, fake_romm_api, gba_synced=True)
+        fake_romm_api.roms[20]["has_file_on_disk"] = False
+        fake_romm_api.roms[21] = self._golf(21, "USA", fs_name="Golf (USA)")
+
+        assert await self._preview_then_apply(library, emit) == ((0, 1, 0), ([20], [], {21: 6020}))
 
 
 class TestRegression738CacheCorruption:

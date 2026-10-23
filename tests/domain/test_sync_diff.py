@@ -1064,6 +1064,46 @@ class TestCollapseSiblingGroupsPartialView:
         assert all(BIND_ROM_ID_KEY not in e for e in emitted)
 
 
+class TestCollapseSiblingGroupsViewPerGroup:
+    """``complete_group_view`` as the set of groups held whole: the preview's union (#2536 D2)."""
+
+    @staticmethod
+    def _vanished_and_fileless():
+        """g1's bound 1 left RomM, its dump is 2; g2's bound 3 has no file, its dump is 4."""
+        members = [
+            _gsd(2, group_key="g1", fs_name_no_ext="a"),
+            _no_file(_gsd(3, group_key="g2", fs_name_no_ext="b")),
+            _gsd(4, group_key="g2", fs_name_no_ext="b"),
+        ]
+        registry = {
+            "1": _greg(1, app_id=1001, group_key="g1", fs_name="a.z64"),
+            "3": _greg(3, app_id=1003, group_key="g2", fs_name="b.z64"),
+        }
+        return members, registry
+
+    @pytest.mark.parametrize(
+        ("whole", "expected"),
+        [
+            ({"g1", "g2"}, [(1, 2), (3, 4)]),
+            ({"g1"}, [(1, 2), (3, None)]),
+            ({"g2"}, [(3, 4)]),
+            (set(), [(3, None)]),
+        ],
+        ids=["both", "g1", "g2", "none"],
+    )
+    def test_only_a_group_held_whole_rebinds(self, whole, expected):
+        members, registry = self._vanished_and_fileless()
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=whole)
+        assert sorted((e["rom_id"], e.get(BIND_ROM_ID_KEY)) for e in emitted) == expected
+
+    @pytest.mark.parametrize(("whole", "flag"), [({"g1", "g2"}, True), (set(), False)], ids=["every", "none"])
+    def test_a_set_naming_every_group_or_none_answers_as_the_flag_does(self, whole, flag):
+        members, registry = self._vanished_and_fileless()
+        by_set = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=whole)
+        by_flag = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=flag)
+        assert by_set == by_flag
+
+
 class TestPlatformBreakdown:
     """platform_breakdown — the preview's library-wide counts split per platform."""
 

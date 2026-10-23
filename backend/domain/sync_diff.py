@@ -21,6 +21,7 @@ from domain.sibling_resolution import AUTO_REGION, canonical_group_name, fs_name
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
+    from collections.abc import Set as AbstractSet
 
     from domain.rom import DeliveryRoute, GoneEvidence
 
@@ -250,7 +251,7 @@ def collapse_sibling_groups(
     registry: dict[str, dict[str, Any]],
     installed_rom_ids: set[int],
     *,
-    complete_group_view: bool,
+    complete_group_view: bool | AbstractSet[str | None],
     preferred_region: str = AUTO_REGION,
 ) -> list[dict[str, Any]]:
     """Collapse per-ROM shortcut entries to one Steam shortcut per sibling group.
@@ -262,14 +263,17 @@ def collapse_sibling_groups(
     ``sibling_group_key``); *installed_rom_ids* are the ROMs currently on disk.
 
     *complete_group_view* asserts whether *shortcuts_data* holds the WHOLE
-    membership of every group a bound row belongs to — the load-bearing safety
-    input. A sibling group is per-platform, so a **platform** unit fetch and the
-    whole-library **preview** union are complete views; a **collection** unit is
-    a PARTIAL view (it spans platforms and may fetch just one unbound sibling of
-    a group whose other members — including the bound one — were never in this
-    fetch). Only a complete view may conclude "bound sibling absent from members
-    ⇒ vanished from the server"; inferring that from a partial view would rebind
-    a live installed game's shortcut onto an uninstalled sibling (#1296 CRITICAL).
+    membership of a group a bound row belongs to — the load-bearing safety
+    input: ``True`` for every group, ``False`` for none, or the set of group keys
+    it holds whole. A sibling group is per-platform, so a **platform** unit fetch
+    is a complete view; a **collection** unit is a PARTIAL view (it spans
+    platforms and may fetch just one unbound sibling of a group whose other
+    members — including the bound one — were never in this fetch). The
+    whole-library **preview** union holds whole exactly the groups a platform
+    unit delivered a member of, and passes their keys. Only a complete view may
+    conclude "bound sibling absent from members ⇒ vanished from the server";
+    inferring that from a partial view would rebind a live installed game's
+    shortcut onto an uninstalled sibling (#1296 CRITICAL).
 
     Returns the subset of entries to actually emit as shortcuts, one lane per
     group:
@@ -356,16 +360,24 @@ def collapse_sibling_groups(
             continue
         # A partial view (collection unit) may not read a bound sibling's absence
         # as absence from the server: the group's platform unit owns it.
+        whole = _holds_whole(complete_group_view, group_key)
         emitted.extend(
             _bound_sibling_entries(
                 members,
                 surviving=[item for item in bound_here if item[0] in fetched_ids],
-                vanished=[item for item in bound_here if item[0] not in fetched_ids] if complete_group_view else [],
+                vanished=[item for item in bound_here if item[0] not in fetched_ids] if whole else [],
                 chain=_GroupChain(installed_rom_ids, bound_rom_ids, fileless, preferred_region),
-                complete_group_view=complete_group_view,
+                complete_group_view=whole,
             )
         )
     return emitted
+
+
+def _holds_whole(complete_group_view: bool | AbstractSet[str | None], group_key: str | None) -> bool:
+    """Whether :func:`collapse_sibling_groups`' *complete_group_view* holds the group *group_key* whole."""
+    if isinstance(complete_group_view, bool):
+        return complete_group_view
+    return group_key in complete_group_view
 
 
 class _GroupChain(NamedTuple):
