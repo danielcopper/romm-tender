@@ -942,7 +942,17 @@ describe("gameDetailStore", () => {
       );
       subscribe(nextAppId);
       await flush();
-      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null, bios_label: null });
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({
+        bios_status: {
+          platform_slug: "snes",
+          needs_bios: false,
+          server_count: 0,
+          local_count: 0,
+          all_downloaded: true,
+        },
+        bios_level: "ok",
+        bios_label: "OK",
+      });
 
       await act(async () => {
         dispatchCoreChanged();
@@ -1117,10 +1127,10 @@ describe("gameDetailStore", () => {
       expect(getGameDetail(nextAppId)).toMatchObject({ romId: 43, romName: "Other version" });
     });
 
-    // #1690 — the BIOS requirement is core-dependent and the core override is
-    // keyed on rom_id, so two versions of one game genuinely can differ here.
-    // The switched-to detail below carries no `stale_fields`, so the cached fold
-    // is the only writer in play.
+    // The BIOS requirement is core-dependent and the core override is keyed on
+    // rom_id, so two versions of one game genuinely can differ here. The
+    // switched-to detail below carries no BIOS answer and marks it stale, so its
+    // live read is what answers.
     it("clears the BIOS requirement when the switched-to version's core needs none", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
         found({
@@ -1140,7 +1150,20 @@ describe("gameDetailStore", () => {
       await flush();
       expect(getGameDetail(nextAppId)).toMatchObject({ biosNeeded: true, biosRequiredMissing: true, biosLabel: "0/3" });
 
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ rom_id: 43 }));
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
+        found({ rom_id: 43, bios_status_unknown: true, stale_fields: ["bios"] }),
+      );
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({
+        bios_status: {
+          platform_slug: "snes",
+          needs_bios: false,
+          server_count: 0,
+          local_count: 0,
+          all_downloaded: true,
+        },
+        bios_level: "ok",
+        bios_label: "OK",
+      });
       await act(async () => {
         dispatchVersionSwitch(nextAppId);
         await Promise.resolve();
@@ -1236,7 +1259,17 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
         found({ ...switchedDetail, stale_fields: ["bios"] }),
       );
-      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null, bios_label: null });
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({
+        bios_status: {
+          platform_slug: "snes",
+          needs_bios: false,
+          server_count: 0,
+          local_count: 0,
+          all_downloaded: true,
+        },
+        bios_level: "ok",
+        bios_label: "OK",
+      });
 
       await act(async () => {
         dispatchVersionSwitch(nextAppId);
@@ -2070,7 +2103,17 @@ describe("gameDetailStore", () => {
       );
       subscribe(nextAppId);
       await flush();
-      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null, bios_label: null });
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({
+        bios_status: {
+          platform_slug: "snes",
+          needs_bios: false,
+          server_count: 0,
+          local_count: 0,
+          all_downloaded: true,
+        },
+        bios_level: "ok",
+        bios_label: "OK",
+      });
 
       await refreshCoreAndBios(nextAppId);
 

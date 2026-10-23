@@ -101,14 +101,6 @@ describe("extractBiosInfo", () => {
     expect(result!.biosLabel).toBe("");
   });
 
-  it("reports the cleared shape when the answer carries no requirement (#1690)", () => {
-    expect(extractBiosInfo({ bios_status: null, bios_level: null, bios_label: null })).toEqual({
-      biosNeeded: false,
-      biosLabel: "",
-      biosRequiredMissing: false,
-    });
-  });
-
   it("reports the cleared shape for the whole status that says no BIOS is needed", () => {
     // The game page draws that answer as a status like any other; the play row
     // reads it as no requirement, label and badge included.
@@ -117,14 +109,11 @@ describe("extractBiosInfo", () => {
     ).toEqual({ biosNeeded: false, biosLabel: "", biosRequiredMissing: false });
   });
 
-  it("ignores a level and label left over next to an absent requirement (#1690)", () => {
-    // The three fields move together — a cleared requirement never leaves a
-    // label or a warning behind for the row to render against nothing.
-    expect(extractBiosInfo({ bios_level: "missing", bios_label: "0/3" })).toEqual({
-      biosNeeded: false,
-      biosLabel: "",
-      biosRequiredMissing: false,
-    });
+  it("a payload with neither a status nor the flag is no answer, whatever level and label ride along", () => {
+    // What `get_bios_status` sends for a ROM that is gone or has no platform:
+    // nothing was asked, so nothing is written — the split
+    // `panelState.biosFieldsFromCache` draws off the same payload.
+    expect(extractBiosInfo({ bios_level: "missing", bios_label: "0/3" })).toBeNull();
   });
 
   it("returns null when the payload carries no BIOS answer (#1693)", () => {
@@ -156,7 +145,12 @@ describe("extractBiosInfo", () => {
 
   it("treats an explicit bios_status_unknown: false as the answer it is", () => {
     expect(
-      extractBiosInfo({ bios_status: null, bios_level: null, bios_label: null, bios_status_unknown: false }),
+      extractBiosInfo({
+        bios_status: { ...requirement, needs_bios: false },
+        bios_level: "ok",
+        bios_label: "OK",
+        bios_status_unknown: false,
+      }),
     ).toEqual({ biosNeeded: false, biosLabel: "", biosRequiredMissing: false });
   });
 

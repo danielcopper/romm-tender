@@ -359,19 +359,21 @@ describe("RomMPlaySection", () => {
       status: "synced",
       label: "synced label",
     });
-    // MUST honour the answer it is handed, the way the real helper does: an
-    // absent `bios_status` is the answer "no BIOS need" and yields the cleared
-    // shape (#1690), while a payload flagged as carrying no answer yields null
-    // and the caller writes nothing (#1693). The store folds the result in, so a
-    // fixed return here would fold a BIOS need into EVERY mount — including the
-    // cached details below that carry no `bios_status` — and every test in this
-    // file that renders one would then be asserting against a row state
-    // production never produces.
+    // MUST honour the answer it is handed, the way the real helper does: the
+    // answer that no BIOS is needed (`needs_bios: false`) and the "unknown"
+    // level yield the cleared shape, while a payload carrying no answer — the
+    // flag with no level, or neither a status nor the flag — yields null and the
+    // caller writes nothing. The store folds the result in, so a fixed return
+    // here would fold a BIOS need into EVERY mount — including the cached
+    // details below that carry no `bios_status` — and every test in this file
+    // that renders one would then be asserting against a row state production
+    // never produces.
     vi.mocked(playSectionUtils.extractBiosInfo).mockImplementation((answer) => {
-      if (answer.bios_status_unknown) return null;
-      return answer.bios_status
-        ? { biosNeeded: true, biosLabel: "OK", biosRequiredMissing: false }
-        : { biosNeeded: false, biosLabel: "", biosRequiredMissing: false };
+      const cleared = { biosNeeded: false, biosLabel: "", biosRequiredMissing: false };
+      if (answer.bios_status_unknown) return answer.bios_level === "unknown" ? cleared : null;
+      if (!answer.bios_status) return null;
+      if (answer.bios_status.needs_bios === false) return cleared;
+      return { biosNeeded: true, biosLabel: "OK", biosRequiredMissing: false };
     });
     vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue({
       activeCoreLabel: null,
@@ -2506,8 +2508,8 @@ describe("RomMPlaySection", () => {
     });
 
     it("core_changed: no-BIOS → needs-BIOS switch surfaces the missing-BIOS badge (#923)", async () => {
-      // Mount with a core that needs no BIOS: cached has no bios_status, so the
-      // badge starts hidden (biosNeeded=false).
+      // Mount with a cached detail that carries no BIOS answer, so the badge
+      // starts hidden (biosNeeded=false).
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 60,

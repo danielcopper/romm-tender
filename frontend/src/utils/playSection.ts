@@ -89,34 +89,27 @@ export function applySaveSyncDisplay(
 /** Project a whole BIOS answer — the backend's `bios_status` plus the label it
  *  pre-computed for it — into the BIOS-only fields the play-section row needs,
  *  or `null` when the payload carries no answer at all. The label is never
- *  re-derived here.
+ *  re-derived here. Which payloads are answers is the wire type's to say
+ *  (`BiosAnswer` in `api/backend.ts`).
  *
- *  Four payloads. `bios_status` present: the requirement, and whether this launch
- *  is missing firmware it cannot start without — the resolver's verdict for the
- *  launching emulator, not met. `bios_status` with `needs_bios: false`, or
- *  absent: the backend answering "this emulator needs no BIOS" (or asked about
- *  no platform), which clears the fields so a requirement can be taken back off
- *  the page (#1690). `bios_status_unknown`
- *  with an `"unknown"` level: a check that RAN and could not establish the
- *  requirement — an answer, and it clears too, because leaving a stale warning
- *  standing would assert what nothing can establish any more.
- *  `bios_status_unknown` with no level: a read that never happened, the one
- *  payload that must change nothing, so it projects to `null` and the caller
- *  writes nothing (#1693).
+ *  An answer with a requirement sets the fields, and the badge rises on the
+ *  verdict alone: not met. Every other answer clears them — the one that no BIOS
+ *  is needed (`needs_bios: false`), and the `"unknown"` level, because leaving a
+ *  stale warning standing would assert what nothing can establish any more. A
+ *  payload carrying no answer projects to `null`, and the caller writes nothing.
  *
- *  `bios_level` decides the badge and tells those last two apart, and is never projected —
- *  that is the same split `panelState.biosFieldsFromCache` draws off the same
- *  payload, and a divergence would leave the badge and the BIOS tab disagreeing
+ *  That is the same split `panelState.biosFieldsFromCache` draws off the same
+ *  payload; a divergence would leave the badge and the BIOS tab disagreeing
  *  about whether a question was answered.
  *
- *  Core data is sourced separately via `extractCoreInfo` (the BIOS payload no
- *  longer carries it, #923). */
+ *  Core data is sourced separately via `extractCoreInfo`. */
 export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
   if (answer.bios_status_unknown) {
     if (answer.bios_level !== "unknown") return null;
     return { biosNeeded: false, biosLabel: "", biosRequiredMissing: false };
   }
-  if (!answer.bios_status || answer.bios_status.needs_bios === false) {
+  if (!answer.bios_status) return null;
+  if (answer.bios_status.needs_bios === false) {
     return { biosNeeded: false, biosLabel: "", biosRequiredMissing: false };
   }
   return {
