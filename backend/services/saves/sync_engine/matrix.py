@@ -223,55 +223,32 @@ class MatrixExecutor:
         """Update per-file sync tracking on *save_state* after a successful sync op.
 
         Mutates the passed aggregate in memory via its verb methods; the
-        operation entry owns the surrounding write Unit of Work. When the
-        aggregate is brand new (no active slot, default emulator) it seeds the
-        active slot from *default_slot* so the first sync lands in the
-        configured slot. The per-file baseline is recorded via
-        :meth:`RomSaveSyncState.adopt_baseline` — the server response always
-        carries the tracked save id. Its ``content_hash`` (RomM's own digest of
-        the bytes: the save it holds after a download, the bytes it received
-        after an upload) is stored as ``last_sync_server_hash`` so the next sync's
-        identity check can compare server-produced hashes; a response without one
-        records ``None`` and the identity check falls back to parity (#1468). The
-        local hash, size and content size come from one read of the file.
+        operation entry owns the surrounding write Unit of Work. Measures the
+        local file — its hash, size and content size from one open, and its
+        mtime — and hands the measure to
+        :meth:`RomSaveSyncState.reach_sync_boundary` and
+        :meth:`RomSaveSyncState.record_transfer`, which hold what the boundary
+        records; a response or file with nothing to record is logged.
         """
-        _seed_at_sync_boundary(save_state, system, default_slot, emulator_tag, core_so)
-
-        now = self._clock.now().isoformat()
+        save_state.reach_sync_boundary(system, default_slot, emulator_tag=emulator_tag, core=core_so)
         local_exists = self._save_file_store.is_file(local_path)
         # RomM-parity content hash (zip-aware) so a zip save's baseline is on the
         # same scheme the matrix compares against server.content_hash — never the
         # whole-archive MD5, which no server content_hash could match (#1457).
         measure = self._save_file_store.measure(local_path) if local_exists else None
-        local_hash = measure.content_hash if measure is not None else ""
-
-        server_save_id = server_response.get("id")
-        if server_save_id is None or not local_hash:
-            # A baseline needs a server save id and a content hash (invariant 1).
+        mtime = self._save_file_store.get_mtime(local_path) if local_exists else None
+        if not save_state.record_transfer(
+            filename, server_response, measure, mtime, synced_at=self._clock.now().isoformat()
+        ):
             # A sync response missing the id, or a save file that vanished before
             # we could hash it, is genuinely untrackable — log and skip the
             # baseline rather than abort the whole rom-level sync.
             self._logger.warning(
                 "update_file_sync_state: skipping untrackable baseline for %s (id=%r, has_hash=%s)",
                 filename,
-                server_save_id,
-                bool(local_hash),
+                server_response.get("id"),
+                measure is not None,
             )
-            return
-
-        save_state.adopt_baseline(
-            filename,
-            tracked_save_id=int(server_save_id),
-            last_sync_hash=local_hash,
-            last_sync_server_hash=server_response.get("content_hash"),
-            last_sync_at=now,
-            last_sync_server_updated_at=server_response.get("updated_at", now) or now,
-            last_sync_server_save_id=server_save_id,
-            last_sync_server_size=server_response.get("file_size_bytes"),
-            last_sync_local_mtime=self._save_file_store.get_mtime(local_path) if local_exists else None,
-            last_sync_local_size=measure.size if measure is not None else None,
-            last_sync_content_size=measure.content_size if measure is not None else None,
-        )
 
     def adopt_head_as_baseline(
         self,
@@ -286,11 +263,10 @@ class MatrixExecutor:
     ) -> bool:
         """Record the local file, identical to *head*, as *filename*'s baseline for that head.
 
-        The adopt a ``Skip(adopt_baseline=True)`` asks for: no transfer, a full
-        baseline — the head's id, its ``content_hash`` verbatim, its size and
-        ``updated_at``, the local file's size, content size and mtime. It stands
-        in for a download of the same bytes, so it seeds *save_state* as
-        :meth:`update_file_sync_state` does after one. *local_hash* is the hash
+        The adopt a ``Skip(adopt_baseline=True)`` asks for, with no transfer:
+        the baseline is :meth:`RomSaveSyncState.adopt_head`'s, and as the adopt
+        stands in for a download of the same bytes, *save_state* is seeded as
+        :meth:`update_file_sync_state` seeds it. *local_hash* is the hash
         the decision was made on; when the file no longer hashes to it, nothing
         is recorded and ``False`` is returned, so a file written since the
         decision is never recorded as the head's bytes. Mutates *save_state* in
@@ -299,7 +275,7 @@ class MatrixExecutor:
         measured = self._measure_unchanged(filename, local_path, local_hash)
         if measured is None:
             return False
-        self._record_adopt(save_state, filename, head, *measured, system=system, default_slot=default_slot)
+        self._record_adopt(save_state, filename, head, measured, system=system, default_slot=default_slot)
         return True
 
     def _measure_unchanged(
@@ -317,28 +293,14 @@ class MatrixExecutor:
         save_state: RomSaveSyncState,
         filename: str,
         head: dict[str, Any],
-        measure: SaveFileMeasure,
-        mtime: float,
+        measured: tuple[SaveFileMeasure, float],
         *,
         system: str,
         default_slot: str | None,
     ) -> None:
-        """Seed *save_state* as a download does and record *head* as *filename*'s baseline from *measure*."""
-        _seed_at_sync_boundary(save_state, system, default_slot, None, None)
-        head_id = int(head["id"])
-        save_state.adopt_baseline(
-            filename,
-            tracked_save_id=head_id,
-            last_sync_hash=measure.content_hash,
-            last_sync_server_hash=head.get("content_hash"),
-            last_sync_at=self._clock.now().isoformat(),
-            last_sync_server_updated_at=head.get("updated_at") or "",
-            last_sync_server_save_id=head_id,
-            last_sync_server_size=head.get("file_size_bytes"),
-            last_sync_local_mtime=mtime,
-            last_sync_local_size=measure.size,
-            last_sync_content_size=measure.content_size,
-        )
+        """Seed *save_state* as a download does and record *head* as *filename*'s baseline from *measured*."""
+        save_state.reach_sync_boundary(system, default_slot)
+        save_state.adopt_head(filename, head, *measured, synced_at=self._clock.now().isoformat())
 
     # ------------------------------------------------------------------
     # Sync Helpers
@@ -657,7 +619,7 @@ class MatrixExecutor:
             return
         if action.acknowledge:
             self._retry.with_retry(lambda: self._romm_api.confirm_download(int(head["id"]), ctx.device_id))
-        self._record_adopt(ctx.save_state, filename, head, *measured, system=ctx.system, default_slot=default_slot)
+        self._record_adopt(ctx.save_state, filename, head, measured, system=ctx.system, default_slot=default_slot)
 
     def _dispatch_upload(
         self,
@@ -1150,27 +1112,6 @@ def _upload_response_proves_current(response: dict[str, Any], device_id: str) ->
         isinstance(ds, dict) and ds.get("device_id") == device_id and ds.get("is_current") is True
         for ds in device_syncs
     )
-
-
-def _seed_at_sync_boundary(
-    save_state: RomSaveSyncState,
-    system: str,
-    default_slot: str | None,
-    emulator_tag: str | None,
-    core_so: str | None,
-) -> None:
-    """Seed the ROM-level state a sync boundary leaves on a brand-new aggregate.
-
-    Stamps the system when none is known, seeds the active slot from
-    *default_slot* when the aggregate has neither an active slot nor any slot,
-    and records the core when one is given, and the emulator tag (the given
-    one, else the recorded one, else ``retroarch``).
-    """
-    if not save_state.system and system:
-        save_state.adopt_system(system)
-    if save_state.active_slot is None and not save_state.slots:
-        save_state.switch_active_slot(default_slot or "autosave")
-    save_state.record_synced_core(core_so, emulator_tag or save_state.emulator or "retroarch")
 
 
 def _file_state_to_dict(file_state: FileSyncState) -> dict[str, Any]:

@@ -104,9 +104,9 @@ byte-identical to that server save?" — is answered by a two-route disjunction,
   against the RomM source on server version bumps. If it ever drifts, the fallback degrades to spurious conflict prompts
   (never data loss); the stored-server-hash primary route is unaffected.
 
-The baseline pair is written together at the recorded-baseline writer sites (`update_file_sync_state` on
-upload/download, the adopt of an identical head (`MatrixExecutor.adopt_head_as_baseline`) and the keep_local
-adopt-without-upload path) with honest provenance per flow — the upload response's `content_hash` (RomM hashed the bytes
+The baseline pair is written together at the recorded-baseline writer sites (`RomSaveSyncState.record_transfer` on
+upload/download, and `RomSaveSyncState.adopt_head` for the adopt of an identical head, in the sync and in keep_local's
+adopt without an upload) with honest provenance per flow — the upload response's `content_hash` (RomM hashed the bytes
 it received), the adopted server save's `content_hash` on download or adopt — recording `None` when a response/save
 carries none rather than fabricating one from a local recomputation, so a stored server hash always truthfully pairs
 with its `last_sync_hash`. The negotiate inventory (`build_save_inventory`) still sends the locally-computed
@@ -595,15 +595,16 @@ authority (see [Upload-time conflicts (the 409 backstop)](#upload-time-conflicts
 An adopting `Skip` names the head it adopts (`server_save`, the caller's own save dict) and says whether this device
 must acknowledge it to RomM (`acknowledge`), which the core sets exactly when this device's entry on that head is
 `is_current=false`. The adopt records a full baseline from the head — its id, its `content_hash` verbatim, its size and
-`updated_at`, and the local file's size, content size and mtime (`MatrixExecutor.adopt_head_as_baseline`) — and, as it
-stands in for a download of the same bytes, seeds the ROM's state as a download does: the system, a first active slot
-from the default slot, and the emulator tag already recorded (else `retroarch`). An adopt is recorded only if the file
-still hashes to what the decision saw; one that no longer does is neither acknowledged nor recorded. An adopt that must
-be acknowledged then first sends `POST /api/saves/{id}/downloaded` with the device id, through the retry strategy every
-RomM request in the sync uses, and records the baseline only after that succeeded: without it RomM keeps this device not
-current on the head, and the next local edit would read as one under a head that moved past it — a conflict nobody
-caused. Where the acknowledgement still fails, nothing is recorded, the file is reported as an error of that sync with
-its reason — not a conflict — and the next sync decides the same way again.
+`updated_at`, and the local file's size, content size and mtime (`RomSaveSyncState.adopt_head`) — and, as it stands in
+for a download of the same bytes, seeds the ROM's state as a download does: the system, a first active slot from the
+default slot, and the emulator tag already recorded (else `retroarch`) (`RomSaveSyncState.reach_sync_boundary`).
+`MatrixExecutor` measures the file and keeps the order; what a boundary records is the aggregate's. An adopt is recorded
+only if the file still hashes to what the decision saw; one that no longer does is neither acknowledged nor recorded. An
+adopt that must be acknowledged then first sends `POST /api/saves/{id}/downloaded` with the device id, through the retry
+strategy every RomM request in the sync uses, and records the baseline only after that succeeded: without it RomM keeps
+this device not current on the head, and the next local edit would read as one under a head that moved past it — a
+conflict nobody caused. Where the acknowledgement still fails, nothing is recorded, the file is reported as an error of
+that sync with its reason — not a conflict — and the next sync decides the same way again.
 
 The mutating sync path (`SyncEngine.do_sync_rom_saves`) records every adopt. The read-only status path
 (`StatusService._get_save_status_io`) records only one that needs no acknowledgement, and leaves the other to the next

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
+from domain.save_measure import SaveFileMeasure
 
 
 class TestDefaults:
@@ -396,3 +397,125 @@ class TestTheContentSize:
         state = RomSaveSyncState(files={"game.srm": FileSyncState(last_sync_hash="")})
         state.backfill_content_size("game.srm", local_hash="", content_size=1)
         assert state.files["game.srm"].last_sync_content_size is None
+
+
+_MEASURE = SaveFileMeasure(content_hash="local-hash", size=131072, content_size=32768)
+_HEAD = {
+    "id": 77,
+    "content_hash": "server-hash",
+    "updated_at": "2026-02-17T06:00:00Z",
+    "file_size_bytes": 131072,
+}
+
+
+class TestReachSyncBoundary:
+    def test_a_brand_new_aggregate_gets_its_system_the_default_slot_and_the_emulator(self):
+        state = RomSaveSyncState(emulator="")
+        state.reach_sync_boundary("gba", "quicksave")
+        assert (state.system, state.active_slot, state.emulator, state.last_synced_core) == (
+            "gba",
+            "quicksave",
+            "retroarch",
+            None,
+        )
+        assert "quicksave" in state.slots
+
+    def test_without_a_default_slot_the_first_slot_is_autosave(self):
+        state = RomSaveSyncState()
+        state.reach_sync_boundary("gba", None)
+        assert state.active_slot == "autosave"
+
+    def test_a_known_system_slot_and_core_stay_unless_a_core_is_given(self):
+        state = RomSaveSyncState(system="snes", active_slot="mine", emulator="mgba", last_synced_core="old_libretro.so")
+        state.slots["mine"] = {"source": "server"}
+
+        state.reach_sync_boundary("gba", "quicksave")
+        assert (state.system, state.active_slot, state.emulator, state.last_synced_core) == (
+            "snes",
+            "mine",
+            "mgba",
+            "old_libretro.so",
+        )
+
+        state.reach_sync_boundary("gba", "quicksave", emulator_tag="retroarch-snes9x", core="snes9x_libretro.so")
+        assert (state.emulator, state.last_synced_core) == ("retroarch-snes9x", "snes9x_libretro.so")
+
+    def test_a_legacy_aggregate_with_slots_keeps_its_legacy_slot(self):
+        state = RomSaveSyncState(active_slot=None, slots={"": {"source": "server"}})
+        state.reach_sync_boundary("gba", "quicksave")
+        assert state.active_slot is None
+
+
+class TestRecordTransfer:
+    def test_the_baseline_is_composed_from_the_server_save_and_the_local_measure(self):
+        state = RomSaveSyncState()
+
+        recorded = state.record_transfer("game.srm", _HEAD, _MEASURE, 1700000000.5, synced_at="2026-03-01T00:00:00Z")
+
+        assert recorded is True
+        assert state.files["game.srm"] == FileSyncState(
+            tracked_save_id=77,
+            last_sync_hash="local-hash",
+            last_sync_server_hash="server-hash",
+            last_sync_at="2026-03-01T00:00:00Z",
+            last_sync_server_updated_at="2026-02-17T06:00:00Z",
+            last_sync_server_save_id=77,
+            last_sync_server_size=131072,
+            last_sync_local_mtime=1700000000.5,
+            last_sync_local_size=131072,
+            last_sync_content_size=32768,
+        )
+
+    def test_a_server_save_without_updated_at_records_the_sync_time(self):
+        state = RomSaveSyncState()
+        head = {k: v for k, v in _HEAD.items() if k != "updated_at"}
+        state.record_transfer("game.srm", head, _MEASURE, None, synced_at="2026-03-01T00:00:00Z")
+        assert state.files["game.srm"].last_sync_server_updated_at == "2026-03-01T00:00:00Z"
+
+    def test_a_server_save_without_a_hash_records_none_for_it(self):
+        state = RomSaveSyncState()
+        head = {k: v for k, v in _HEAD.items() if k != "content_hash"}
+        state.record_transfer("game.srm", head, _MEASURE, None, synced_at="t")
+        assert state.files["game.srm"].last_sync_server_hash is None
+
+    @pytest.mark.parametrize(
+        ("server_save", "local"),
+        [
+            ({k: v for k, v in _HEAD.items() if k != "id"}, _MEASURE),
+            (_HEAD, None),
+            (_HEAD, SaveFileMeasure(content_hash="", size=1, content_size=1)),
+        ],
+        ids=["no-server-id", "no-local-file", "no-local-hash"],
+    )
+    def test_nothing_to_track_records_nothing(self, server_save, local):
+        earlier = FileSyncState(tracked_save_id=5, last_sync_hash="earlier")
+        state = RomSaveSyncState(files={"game.srm": earlier})
+
+        assert state.record_transfer("game.srm", server_save, local, None, synced_at="t") is False
+        assert state.files == {"game.srm": earlier}
+
+
+class TestAdoptHead:
+    def test_the_baseline_is_the_one_a_download_of_the_same_bytes_would_leave(self):
+        state = RomSaveSyncState()
+
+        state.adopt_head("game.srm", _HEAD, _MEASURE, 1700000000.5, synced_at="2026-03-01T00:00:00Z")
+
+        assert state.files["game.srm"] == FileSyncState(
+            tracked_save_id=77,
+            last_sync_hash="local-hash",
+            last_sync_server_hash="server-hash",
+            last_sync_at="2026-03-01T00:00:00Z",
+            last_sync_server_updated_at="2026-02-17T06:00:00Z",
+            last_sync_server_save_id=77,
+            last_sync_server_size=131072,
+            last_sync_local_mtime=1700000000.5,
+            last_sync_local_size=131072,
+            last_sync_content_size=32768,
+        )
+
+    def test_a_head_without_updated_at_records_none_known(self):
+        state = RomSaveSyncState()
+        head = {k: v for k, v in _HEAD.items() if k != "updated_at"}
+        state.adopt_head("game.srm", head, _MEASURE, 1.0, synced_at="2026-03-01T00:00:00Z")
+        assert state.files["game.srm"].last_sync_server_updated_at == ""

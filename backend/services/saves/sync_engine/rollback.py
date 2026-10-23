@@ -314,18 +314,12 @@ class RollbackOrchestrator:
                 f"keep_local: hash matches server, adopting without upload (rom={rom_id} filename={target})"
             )
             self._retry.with_retry(lambda: self._romm_api.confirm_download(int(server_id), device_id))
-            save_state.adopt_baseline(
+            save_state.adopt_head(
                 target,
-                tracked_save_id=int(server_id),
-                last_sync_hash=local_hash,
-                last_sync_server_hash=server.get("content_hash"),
-                last_sync_at=self._clock.now().isoformat(),
-                last_sync_server_updated_at=server.get("updated_at", "") or "",
-                last_sync_server_save_id=server_id,
-                last_sync_server_size=server.get("file_size_bytes"),
-                last_sync_local_mtime=self._save_file_store.get_mtime(local_path),
-                last_sync_local_size=measure.size,
-                last_sync_content_size=measure.content_size,
+                server,
+                measure,
+                self._save_file_store.get_mtime(local_path),
+                synced_at=self._clock.now().isoformat(),
             )
             return
 
