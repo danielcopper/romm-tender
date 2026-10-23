@@ -1793,6 +1793,76 @@ describe("RomMGameInfoPanel", () => {
       expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("psx", "/bios/scph5501.bin");
     });
 
+    it("bios: reads the tab's BIOS answer once after a press", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail({ platform_slug: "psx" }));
+      const answer: BiosAnswer = {
+        bios_status: {
+          platform_slug: "psx",
+          needs_bios: true,
+          server_count: 1,
+          local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
+          all_downloaded: false,
+          required_count: 1,
+          required_downloaded: 0,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: true,
+              local_path: "/bios/scph5501.bin",
+              description: "",
+              wanted: "needed",
+              required_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+              replace_offered: true,
+            },
+          ],
+        },
+        bios_level: "missing",
+      };
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(answer);
+      vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+        success: true,
+        placed: 1,
+        left_in_place: 0,
+        removed: 0,
+        link_failures: [],
+        backup_path: "/data/backups/bios/x/bios/scph5501.bin",
+      });
+      vi.mocked(showModal).mockClear();
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      await flushAsync();
+      vi.mocked(backend.getBiosStatus).mockClear();
+
+      const replace = [...container.querySelectorAll<HTMLElement>("button")].find(
+        (el) => el.textContent === "Replace…",
+      );
+      fireEvent.click(replace as HTMLElement);
+      const calls = vi.mocked(showModal).mock.calls;
+      const confirm = (calls[calls.length - 1]?.[0] as ReactElement<{ onOK: () => void }> | undefined)?.props;
+      await act(async () => {
+        confirm?.onOK();
+      });
+      await flushAsync();
+
+      // The press's `bios` event asks for it; nothing else does. (No play row is
+      // mounted here, so the play row's own re-read reads nothing.)
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledTimes(1);
+    });
+
     it("bios: threads bios_level from the endpoint result into the rendered status-dot color (#461)", async () => {
       // The re-read ships bios_level straight from the backend
       // (compute_bios_level) — the handler threads it through, never re-deriving

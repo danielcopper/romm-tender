@@ -11,10 +11,12 @@
  * are the platform page's (`bios/BiosFiles.tsx`), so a file reads and acts the
  * same on both pages.
  *
- * Everything it shows arrives as props, because the requirement (`biosStatus`)
+ * The answer it shows arrives as props, because the requirement (`biosStatus`)
  * and the emulator it is shown against (`coreInfo`) have to reach a render
  * TOGETHER: on a core change the panel reads both in one `Promise.all` and folds
- * them into one update.
+ * them into one update. What it holds itself is the page's own: which emulator
+ * the table shows, a press under way, the line it left and what it did to each
+ * row.
  *
  * CSS classes prefixed with `romm-panel-` are injected separately by
  * styleInjector.
@@ -67,7 +69,8 @@ interface BiosTabProps {
   platformSlug?: string;
   /** The game, whose links "Download all" follows. */
   romId?: number | null;
-  /** Read the game's BIOS answer again; a press's spinner ends once it has. */
+  /** What a press brings up to date before its spinner ends — the play row's BIOS answer. The tab's own is read
+   *  again by the `bios` event the press sends where firmware changed. */
   onReread?: () => Promise<void>;
 }
 

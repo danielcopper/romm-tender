@@ -24,7 +24,7 @@ import { BiosTab } from "./BiosTab";
 import { useTriggerHandler } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
 import { bindRomInState, loadData, openingTab, type PanelReadSeqs, type PanelState } from "./panelState";
-import { rereadBiosAnswer, wirePanelEvents } from "./panelEvents";
+import { wirePanelEvents } from "./panelEvents";
 import { useSaveSlotsLoad } from "./panelSlotsLoad";
 import { buildTabContent } from "./panelTabContent";
 import { setMigrationStatus, useMigrationStatus } from "../utils/migrationStore";
@@ -89,24 +89,9 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   // enforce is stated at `takeReadTicket`. They live here because the loads, the
   // event lane and the lazy slots lane take tickets from the same counters.
   const readSeqs = useRef<PanelReadSeqs>({ detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, bios: 0 });
-  // Whether the load the panel is wired for has been torn down, for a read the
-  // BIOS tab asks for after a press.
-  const cancelledRef = useRef<() => boolean>(() => true);
-  // After a press on the BIOS tab: the tab's own answer, and the play row's.
-  const rereadBios = useCallback(async () => {
-    await Promise.all([
-      rereadBiosAnswer({
-        appId,
-        cancelled: () => cancelledRef.current(),
-        romIdRef,
-        platformSlugRef,
-        slotsLoadedRef,
-        readSeqs,
-        setState,
-      }),
-      refreshBiosStatus(appId),
-    ]);
-  }, [appId]);
+  // After a press on the BIOS tab, the play row's answer; the tab's own is read
+  // again by the `bios` event the press sends where firmware changed.
+  const rereadBios = useCallback(() => refreshBiosStatus(appId), [appId]);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
   const stranded = useStrandedAnswer() !== null;
@@ -121,7 +106,6 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
 
   useEffect(() => {
     let cancelled = false;
-    cancelledRef.current = () => cancelled;
 
     detach(loadData(appId, () => cancelled, romIdRef, platformSlugRef, readSeqs, setState, setPlatformSlug));
 

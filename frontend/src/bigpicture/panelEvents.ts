@@ -155,12 +155,6 @@ async function handleBiosChange(
   // and to skip the wasted re-read (#1082). Read via ref to avoid a stale
   // closure.
   if (!detail.platform_slug || detail.platform_slug !== ctx.platformSlugRef.current) return;
-  await rereadBiosAnswer(ctx);
-}
-
-/** Read the panel's BIOS answer again and fold it in — after an event, or after
- *  a press on the BIOS tab that changed the game's firmware. */
-export async function rereadBiosAnswer(ctx: PanelEventContext): Promise<void> {
   const romId = ctx.romIdRef.current;
   if (!romId) return;
   // Keyed on the rom rather than the platform: the requirement depends on the
