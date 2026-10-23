@@ -19,6 +19,7 @@ from _zip_poison import corrupt_central_dir_zip_bytes
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
+from domain.live_device_id import LiveDeviceId
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer
 from lib.errors import (
@@ -34,6 +35,7 @@ from lib.errors import (
     RommTimeoutError,
     ServerUnreachable,
     SyncBusy,
+    classify_error,
 )
 from lib.list_result import ErrorCode
 from models.sync import ClientSaveState
@@ -53,6 +55,7 @@ from tests.services.saves._helpers import (
     _server_save,
     _server_save_with_syncs,
     _set_device_id,
+    _stored_device_id,
     make_service,
 )
 
@@ -496,7 +499,7 @@ class TestDeviceSyncDisabled:
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
         fake.fail_on_next(RommConnectionError("transient"))
-        session_id = await svc._sync_engine._open_negotiate_session(42, "test-device")
+        session_id = await svc._sync_engine._open_negotiate_session(42, LiveDeviceId("test-device"))
         assert session_id is None
 
     @pytest.mark.asyncio
@@ -505,8 +508,9 @@ class TestDeviceSyncDisabled:
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
+        device_id = LiveDeviceId("test-device")
         with pytest.raises(RommSyncDisabledError):
-            await svc._sync_engine._open_negotiate_session(42, "test-device")
+            await svc._sync_engine._open_negotiate_session(42, device_id)
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_refuses_with_the_policy_stop(self, tmp_path):
@@ -1809,7 +1813,9 @@ class TestRunRomSyncSession:
         _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"local")
         _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
 
-        uploaded, downloaded, errors, conflicts = await svc._sync_engine._run_rom_sync(42)
+        uploaded, downloaded, errors, conflicts = await svc._sync_engine._run_rom_sync(
+            42, device_id=_stored_device_id(svc)
+        )
 
         assert uploaded == 1  # local-only save → matrix POST upload
         assert downloaded == 0
@@ -1831,7 +1837,7 @@ class TestRunRomSyncSession:
         st.switch_active_slot("default")  # active_slot set, slot_confirmed stays False
         _seed_save_state(svc, 42, st)
 
-        await svc._sync_engine._run_rom_sync(42)
+        await svc._sync_engine._run_rom_sync(42, device_id=_stored_device_id(svc))
 
         assert any(c[0] == "list_saves" for c in fake.call_log)
         # Unconfirmed → no transport session wrapper.
@@ -1849,7 +1855,9 @@ class TestRunRomSyncSession:
         # The session-open negotiate POST raises; the run proceeds without a session.
         fake.fail_on_next(RommConnectionError("negotiate down"))
 
-        uploaded, downloaded, errors, conflicts = await svc._sync_engine._run_rom_sync(42)
+        uploaded, downloaded, errors, conflicts = await svc._sync_engine._run_rom_sync(
+            42, device_id=_stored_device_id(svc)
+        )
 
         # Session open was attempted and failed; the matrix still ran and POSTed.
         assert any(c[0] == "negotiate_sync" for c in fake.call_log)
@@ -1876,7 +1884,9 @@ class TestRunRomSyncSession:
         )
         fake.set_server_save_content(888, b"other device save")
 
-        uploaded, downloaded, errors, conflicts = await svc._sync_engine._run_rom_sync(42)
+        uploaded, downloaded, errors, conflicts = await svc._sync_engine._run_rom_sync(
+            42, device_id=_stored_device_id(svc)
+        )
 
         # The transport session opened and the matrix drove the download.
         assert any(c[0] == "negotiate_sync" for c in fake.call_log)
@@ -1898,7 +1908,7 @@ class TestRunRomSyncSession:
         # Only the session id is consumed from negotiate — its operations are ignored.
         fake.stage_negotiate([], session_id=77)
 
-        await svc._sync_engine._run_rom_sync(42)
+        await svc._sync_engine._run_rom_sync(42, device_id=_stored_device_id(svc))
 
         complete = [c for c in fake.call_log if c[0] == "complete_sync_session"]
         assert len(complete) == 1
@@ -1915,7 +1925,7 @@ class TestRunRomSyncSession:
         _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"local")
         _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
 
-        await svc._sync_engine._run_rom_sync(42)
+        await svc._sync_engine._run_rom_sync(42, device_id=_stored_device_id(svc))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1
@@ -1936,7 +1946,9 @@ class TestRunRomSyncSession:
 
         fake.negotiate_sync = malformed  # type: ignore[method-assign]
 
-        uploaded, downloaded, errors, conflicts = await svc._sync_engine._run_rom_sync(42)
+        uploaded, downloaded, errors, conflicts = await svc._sync_engine._run_rom_sync(
+            42, device_id=_stored_device_id(svc)
+        )
 
         # The matrix ran and POSTed; no session was completed (none opened).
         assert any(c[0] == "list_saves" for c in fake.call_log)
@@ -1956,7 +1968,7 @@ class TestRunRomSyncSession:
         _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"local save")
         _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
 
-        await svc._sync_engine._run_rom_sync(42)
+        await svc._sync_engine._run_rom_sync(42, device_id=_stored_device_id(svc))
 
         file_state = _require_save_state(svc, 42).files["pokemon.srm"]
         assert file_state.tracked_save_id is not None
@@ -1976,7 +1988,7 @@ class TestRunRomSyncSession:
         )
         fake.set_server_save_content(888, b"server save bytes")
 
-        await svc._sync_engine._run_rom_sync(42)
+        await svc._sync_engine._run_rom_sync(42, device_id=_stored_device_id(svc))
 
         file_state = _require_save_state(svc, 42).files["pokemon.srm"]
         assert file_state.last_sync_server_save_id == 888
@@ -2239,7 +2251,7 @@ class TestBulkNegotiateScope:
         rom_ids = list(range(1, NEGOTIATE_ROM_IDS_CAP + 1))
         self._hand_the_engine_an_inventory_over(svc, rom_ids)
 
-        await svc._sync_engine._bulk_pre_negotiate("device-1")
+        await svc._sync_engine._bulk_pre_negotiate(LiveDeviceId("device-1"))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1
@@ -2254,7 +2266,7 @@ class TestBulkNegotiateScope:
         # One ROM twice: a save more than the cap, over exactly the cap's ROMs.
         self._hand_the_engine_an_inventory_over(svc, [*rom_ids, rom_ids[0]])
 
-        await svc._sync_engine._bulk_pre_negotiate("device-1")
+        await svc._sync_engine._bulk_pre_negotiate(LiveDeviceId("device-1"))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1
@@ -2267,7 +2279,7 @@ class TestBulkNegotiateScope:
         svc, fake = make_service(tmp_path, log_debug=logged.append)
         self._hand_the_engine_an_inventory_over(svc, range(1, NEGOTIATE_ROM_IDS_CAP + 2))
 
-        await svc._sync_engine._bulk_pre_negotiate("device-1")
+        await svc._sync_engine._bulk_pre_negotiate(LiveDeviceId("device-1"))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1
@@ -2280,12 +2292,12 @@ class TestBulkNegotiateScope:
 
 class TestSyncPathsHealDeadDevice:
     """#1560 (caller-level): the four sync callers gate the device-registration
-    heal on liveness, not mere presence. ``_ensure_device_live_or_fail`` runs
+    heal on liveness, not mere presence. ``live_device_id`` runs
     ``ensure_device_registered`` UNCONDITIONALLY before each sync, so a
     dead-but-present cached id (kv_config holds it, the server 404s it) is
     healed by the ``update_device`` liveness touch BEFORE ``_run_rom_sync``
-    reads the id — and the sync then queries the server with the fresh, healed
-    id (read via ``_read_sync_inputs`` / the bulk re-read), never the dead one.
+    is handed the id — and the sync then queries the server with the fresh,
+    healed id the entry answered, never the dead one.
     """
 
     # ------------------------------------------------------------------
@@ -2300,13 +2312,12 @@ class TestSyncPathsHealDeadDevice:
         # The present id is dead → the update_device liveness touch 404s.
         fake.fail_on_next(RommNotFoundError("Device with ID dead-uuid not found"))
 
-        await svc._sync_engine._ensure_device_live_or_fail()
+        new_id = await svc._sync_engine.live_device_id()
 
-        # Heal succeeded → nothing refused, and get_device_id (what
-        # _read_sync_inputs reads) now yields the fresh id, not the dead one.
-        new_id = svc._sync_engine.get_device_id()
-        assert new_id is not None
+        # Heal succeeded → nothing refused, and the entry answers the fresh id,
+        # not the dead one, as the stored id does.
         assert new_id != "dead-uuid"
+        assert svc._sync_engine.get_device_id() == new_id
         assert _get_device_id(svc) == new_id
 
     @pytest.mark.asyncio
@@ -2315,7 +2326,7 @@ class TestSyncPathsHealDeadDevice:
         _enable_sync_with_device(svc, "live-device")
         fake.set_version("4.9.0")
 
-        await svc._sync_engine._ensure_device_live_or_fail()
+        assert await svc._sync_engine.live_device_id() == "live-device"
 
         # Live id: the liveness touch fired, no re-registration, id unchanged.
         assert any(c[0] == "update_device" and c[1][0] == "live-device" for c in fake.call_log)
@@ -2323,7 +2334,7 @@ class TestSyncPathsHealDeadDevice:
         assert svc._sync_engine.get_device_id() == "live-device"
 
     @pytest.mark.asyncio
-    async def test_helper_reregister_failure_refuses_with_device_not_registered(self, tmp_path):
+    async def test_helper_reregister_failure_refuses_with_server_unreachable(self, tmp_path):
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc, "dead-uuid")
         fake.set_version("4.9.0")
@@ -2336,13 +2347,14 @@ class TestSyncPathsHealDeadDevice:
 
         fake.update_device = _touch_404
         fake.fail_on_next(RommConnectionError("server gone"))
-        ensure = svc._sync_engine._ensure_device_live_or_fail()
+        ensure = svc._sync_engine.live_device_id()
 
         with pytest.raises(Refused) as refused:
             await ensure
 
-        # The caller is refused with device_not_registered, not the RomM error...
-        assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
+        # A registration that could not reach RomM is server_unreachable, not the RomM error...
+        unreachable = classify_error(RommConnectionError("server gone"))[1]
+        assert (refused.value.reason, refused.value.message) == ("server_unreachable", unreachable)
         assert refused.value.details == {}
         # ...and the dead id was cleared (not left to poison the next sync).
         assert _get_device_id(svc) is None

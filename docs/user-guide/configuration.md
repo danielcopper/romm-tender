@@ -57,8 +57,10 @@ The **Connections** section manages your RomM server connection.
   sign in through the address, and the window says "Tender cannot sign in through a user name and password in the RomM
   URL — leave them out. Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom
   headers." A login your proxy asks for goes into [Custom headers](#custom-headers-for-an-authenticating-proxy) instead.
-- **RomM Account** — shows **Signed in** once a token is stored, or **Not signed in** otherwise. Tap **Sign in** to open
-  a one-time prompt. The prompt offers three sign-in methods, chosen from the **Sign-in method** dropdown:
+- **RomM Account** — shows **Signed in** once a token is stored, or **Not signed in** otherwise. Signing in registers
+  this device with RomM — it appears in RomM's device list — whether or not save sync is on, because the play sessions
+  Tender sends to RomM name the device as well. Tap **Sign in** to open a one-time prompt. The prompt offers three
+  sign-in methods, chosen from the **Sign-in method** dropdown:
   - **Username & password** (default) — enter your RomM username and password once. Tender exchanges them for a RomM
     Client API Token and stores only the token; your password is discarded after the token is minted and never saved. If
     your account cannot create API tokens, the status reports that.
@@ -179,8 +181,11 @@ Pairing hands the device the token over a short-lived one-time code, so you neve
 Both methods validate the token at sign-in with an authenticated probe against your RomM profile: a wrong, revoked, or
 expired credential is rejected there with an actionable message. Sign-in only confirms that the token **authenticates**,
 though — Tender cannot verify the token's granted scopes, so double-check that you granted the write scopes
-(`assets.write`, `devices.write`, `roms.user.write`) when creating it. A missing write scope is not caught at sign-in;
-it surfaces later as a permissions error on the affected action (save upload, device sync, or playtime).
+(`assets.write`, `devices.write`, `roms.user.write`) when creating it. A missing write scope is not caught at sign-in: a
+token without `assets.write` or `roms.user.write` surfaces later as a permissions error on the affected action (save
+upload or playtime). A token without `devices.write` cannot register this device: until it is registered, the Saves tab,
+the save-slot setup and the previous versions say it could not be registered with RomM — see
+[Troubleshooting](troubleshooting.md#this-device-could-not-be-registered-with-romm).
 
 #### Required scopes
 

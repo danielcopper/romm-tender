@@ -2,15 +2,17 @@
 
 Owns the rom-level concurrency seam (``_rom_sync_locks``) and the
 sequencing rules the public save-sync use cases follow (save-sync
-enabled check, retrodeck migration rule, device-registration fallback,
+enabled check, retrodeck migration rule, device registration,
 dispatch into the matrix executor, persistence), plus following a moved
 save directory, which the sync entry points and ``resolve_sync_conflict`` do
 here and the other write paths and the delete, count and status paths of the
 peer services do through ``follow_save_directory``.
 Each public use case owns a narrow Unit of Work (ADR-0006): it reads the
-``RomSaveSyncState`` aggregate + ``device_id`` at the start, performs all
+``RomSaveSyncState`` aggregate at the start, performs all
 server/file I/O outside any transaction, and writes the mutated
-aggregate back in a short write UoW at the end. The implementation of
+aggregate back in a short write UoW at the end. The device id every save
+operation sends to RomM comes from :meth:`SyncEngine.live_device_id`, the one
+entry that registers or heals the device first. The implementation of
 the actual file/server transfers lives in
 :mod:`services.saves.sync_engine.matrix`; device registration lives in
 :mod:`services.saves.sync_engine.devices`; conflict-resolution rollback
@@ -37,7 +39,7 @@ import functools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.rom_save_sync_state import RomSaveSyncState
+from domain.live_device_id import LiveDeviceId
 from lib.conflict_rules import MIGRATION_MESSAGE, UPDATE_MESSAGE
 from lib.errors import (
     DeviceSyncDisabled,
@@ -48,7 +50,9 @@ from lib.errors import (
     RommTimeoutError,
     ServerUnreachable,
     SyncBusy,
+    classify_error,
 )
+from lib.list_result import ErrorCode
 from services.saves._messages import (
     DEVICE_NOT_REGISTERED,
     DEVICE_SYNC_DISABLED,
@@ -57,7 +61,7 @@ from services.saves._messages import (
     SAVE_SYNC_IN_CONTENT_DIR,
 )
 from services.saves._refusals import SavefilesInContentDir
-from services.saves._save_state import write_save_state
+from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import (
     autocleanup_limit,
     resolve_default_slot,
@@ -83,6 +87,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Iterator
 
+    from domain.rom_save_sync_state import RomSaveSyncState
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
@@ -168,8 +173,9 @@ class SyncEngineConfig:
 
     Holds the live ``settings.json`` dict (home of the save-sync feature
     toggles), the Unit-of-Work factory (the transactional seam over the
-    SQLite repositories), the peer save sub-services (rom_info and the
-    shared :class:`DeviceRegistry` that owns the server device id), the
+    SQLite repositories), the peer save sub-service rom_info, the
+    :class:`DeviceRegistry` that owns the server device id and that no other
+    save service holds, the
     Protocol-typed RomM adapter and retry strategy, the two save-sync
     decision kernels (``compute_sync_action`` and its upload-409 backstop
     ``resolve_upload_conflict``), runtime infrastructure (loop, logger,
@@ -240,7 +246,7 @@ class SyncEngine:
         self._rollback = RollbackOrchestrator(
             uow_factory=config.uow_factory,
             rom_info=config.rom_info,
-            device_registry=self._devices,
+            live_device_id=self.live_device_id,
             romm_api=config.romm_api,
             matrix=self._matrix,
             retry=config.retry,
@@ -264,6 +270,9 @@ class SyncEngine:
         # in-flight one, bounded so a stuck run never traps the launch path.
         # Sits OUTSIDE the per-ROM ``rom_lock`` — wraps the whole run body.
         self._device_gate = SaveSyncGate()
+        # Innermost: nothing is taken under it, so a holder of ``rom_lock`` or
+        # the device gate may wait for it.
+        self._registration_lock = asyncio.Lock()
         self._follows_in_flight = 0
 
     def rom_lock(self, rom_id: int) -> asyncio.Lock:
@@ -293,13 +302,17 @@ class SyncEngine:
         return self.is_save_sync_enabled() and sync_after_exit(self._settings)
 
     def get_device_id(self) -> str | None:
-        """Server-side device id (None when unregistered).
+        """The stored server device id, ``None`` when unregistered — never one a save operation sends.
 
-        Delegates to the shared :class:`DeviceRegistry` — the single owner of
-        ``kv_config["device_id"]`` — so the id is read once and cached rather
-        than re-queried per sync flow.
+        Delegates to the :class:`DeviceRegistry`, the single owner of
+        ``kv_config["device_id"]``. A save operation takes its id from
+        :meth:`live_device_id` instead.
         """
         return self._devices.get_device_id()
+
+    def forget_device(self) -> None:
+        """Drop the stored server device id (delegate to :class:`DeviceRegistry`)."""
+        self._devices.forget_device()
 
     def resolve_core(self, rom_id: int) -> str | None:
         """Resolve the active RetroArch core for a ROM, or ``None``.
@@ -327,7 +340,7 @@ class SyncEngine:
         self,
         rom_id: int,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         core_so: str | None,
         default_slot: str | None = None,
         autocleanup_limit: int | None = None,
@@ -350,7 +363,7 @@ class SyncEngine:
         saves_dir: str,
         filename: str,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         system: str,
         default_slot: str | None = None,
     ) -> None:
@@ -367,7 +380,7 @@ class SyncEngine:
         file_path: str,
         filename: str,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         system: str,
         core_so: str | None,
         server_save: dict[str, Any] | None = None,
@@ -426,67 +439,66 @@ class SyncEngine:
         return self._matrix.build_sync_conflict_entry(rom_id, filename, server, local_path, local_hash)
 
     # ------------------------------------------------------------------
-    # Device registration — entrypoint for every sync flow that needs
-    # ``device_id``. Kept on SyncEngine because pre_launch_sync,
-    # post_exit_sync, sync_rom_saves, and sync_all_saves all fall back
-    # to this when ``device_id`` is missing; co-locating the fallback
-    # with its callers avoids a constructor callback.
+    # Device registration
     # ------------------------------------------------------------------
 
     async def ensure_device_registered(self) -> dict[str, Any]:
-        """Ensure this device is registered with the RomM server for save sync tracking."""
+        """Register or heal this device with the RomM server, one registration at a time.
+
+        Whether save sync is on or off. The start-up and the settings page reach
+        it through the endpoint, a successful sign-in through the
+        ``DeviceRegisterFn`` seam, and a save operation only through
+        :meth:`live_device_id`.
+        """
+        async with self._registration_lock:
+            return await self._register_device()
+
+    async def _register_device(self) -> dict[str, Any]:
         return await self._devices.ensure_device_registered(
             loop=self._loop,
             hostname_provider=self._hostname_provider,
             machine_id_provider=self._machine_id_provider,
         )
 
-    async def _ensure_device_live_or_fail(self) -> None:
-        """Register-or-heal the server device id before a sync consumes it.
+    async def live_device_id(self) -> LiveDeviceId:
+        """The device id a save operation sends to RomM, registered or healed a moment before.
 
-        Runs :meth:`ensure_device_registered` UNCONDITIONALLY — not only when
-        the id is absent. Its best-effort ``update_device`` touch doubles as a
-        liveness probe, so a dead-but-present cached id (e.g. after a RomM
-        database wipe/restore, where ``kv_config`` still holds an id the server
-        now 404s) is detected and re-registered HERE, before
-        :meth:`_run_rom_sync` reads the id and calls ``list_saves`` with a dead
-        one (#1560). Gating the heal on ``if not get_device_id()`` — presence,
-        not liveness — is the exact bug one level up from the touch's own
-        presence-not-liveness gate. A live id costs one extra 200 touch per
-        sync: the accepted price of correctness (no "recently validated"
-        caching).
+        The one entry every save operation calls once, before its first request
+        to RomM, and hands the answer down. It runs the registration
+        UNCONDITIONALLY — not only when no id is stored: the registration's
+        ``update_device`` touch doubles as a liveness probe, so a stored id the
+        server now 404s (a RomM database wiped or restored) is replaced here
+        rather than sent. A live id costs one touch per operation, reads
+        included. Concurrent callers wait for one another, so two of them
+        never register twice.
 
-        Refuses with ``device_not_registered`` when a live registration could
-        not be established — registration refused, or a RomM error answered it
-        — else returns, and the sync reads the fresh, possibly-healed id through
-        :meth:`_read_sync_inputs` (and, for the bulk sweep, the re-read at
-        ``sync_all_saves``), never a value captured before the heal.
+        Refuses with ``server_unreachable`` when the registration could not
+        reach RomM (an error :func:`classify_error` calls unreachable), and with
+        ``device_not_registered`` when it failed any other way: RomM, or a proxy
+        in front of it, answered without registering the device (the id-less
+        answer included), or the stored token could not be sent.
+
+        Takes only the registration lock, and nothing under it, so a caller
+        may hold ``rom_lock`` or the device gate.
         """
-        try:
-            await self.ensure_device_registered()
-        except (Refused, RommApiError) as e:
-            raise Refused("device_not_registered", DEVICE_NOT_REGISTERED) from e
+        async with self._registration_lock:
+            try:
+                await self._register_device()
+            except RommApiError as e:
+                reason, message = classify_error(e)
+                if reason == ErrorCode.SERVER_UNREACHABLE.value:
+                    raise ServerUnreachable(message) from e
+                raise Refused("device_not_registered", DEVICE_NOT_REGISTERED) from e
+            except Refused as e:
+                raise Refused("device_not_registered", DEVICE_NOT_REGISTERED) from e
+            device_id = await self._loop.run_in_executor(None, self._devices.get_device_id)
+        if not device_id:
+            raise Refused("device_not_registered", DEVICE_NOT_REGISTERED)
+        return LiveDeviceId(device_id)
 
     async def list_devices(self) -> dict[str, Any]:
         """List all devices registered with the RomM server for this user."""
         return await self._devices.list_devices(loop=self._loop)
-
-    # ------------------------------------------------------------------
-    # Narrow-UoW read/write helpers (ADR-0006)
-    # ------------------------------------------------------------------
-
-    def _read_sync_inputs(self, rom_id: int) -> tuple[RomSaveSyncState, str | None]:
-        """Short read UoW: load the ROM's save state + device id.
-
-        Returns the loaded :class:`RomSaveSyncState` (a fresh default when absent)
-        and the server device id (read through the shared
-        :class:`DeviceRegistry`, the single device-id owner). The aggregate is
-        mutated outside the transaction by the matrix worker;
-        :func:`write_save_state` persists it.
-        """
-        with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
-        return state, self._devices.get_device_id()
 
     # ------------------------------------------------------------------
     # Public sync orchestration use cases
@@ -599,6 +611,7 @@ class SyncEngine:
         self,
         rom_id: int,
         *,
+        device_id: LiveDeviceId,
         require_confirmed: bool = False,
         session_id: int | None = None,
         session_counts: list[int] | None = None,
@@ -612,9 +625,10 @@ class SyncEngine:
         close and the bulk-sweep *session_counts* accumulator record the
         combined ``uploaded + downloaded`` as the session's completed-op count.
 
-        The narrow-UoW shape (ADR-0006): a short read UoW loads the aggregate +
-        device id, the matrix transfer runs outside any transaction mutating the
-        aggregate in memory, then a short write UoW persists it.
+        The narrow-UoW shape (ADR-0006): a short read UoW loads the aggregate,
+        the matrix transfer runs outside any transaction mutating the
+        aggregate in memory, then a short write UoW persists it. *device_id* is
+        the one the entry point took from :meth:`live_device_id`.
 
         A ROM with no install record has nothing to sync — and no ``roms`` row
         to anchor a ``rom_save_sync_states`` write against (ADR-0007 FK) — so we
@@ -649,7 +663,7 @@ class SyncEngine:
         if not await self._loop.run_in_executor(None, self._rom_info.is_content_installed, rom_id):
             self._log_debug(f"_run_rom_sync({rom_id}): ROM not installed, skipping")
             return 0, 0, [], []
-        save_state, device_id = await self._loop.run_in_executor(None, self._read_sync_inputs, rom_id)
+        save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
         if require_confirmed and not save_state.slot_confirmed:
             self._log_debug(f"_run_rom_sync({rom_id}): slot not confirmed, skipping bulk sync")
             return 0, 0, [], []
@@ -703,7 +717,7 @@ class SyncEngine:
             return uploaded, downloaded, errors, conflicts
 
     async def _open_negotiate_session(
-        self, rom_id: int, device_id: str | None, save_answer: SaveAnswer | None = None
+        self, rom_id: int, device_id: LiveDeviceId, save_answer: SaveAnswer | None = None
     ) -> int | None:
         """Open a transport-only negotiate session for a confirmed ROM; ``None`` on failure.
 
@@ -730,7 +744,7 @@ class SyncEngine:
             response = await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(
-                    lambda: self._romm_api.negotiate_sync(device_id or "", inventory, rom_ids=[rom_id])
+                    lambda: self._romm_api.negotiate_sync(device_id, inventory, rom_ids=[rom_id])
                 ),
             )
             return response["session_id"]
@@ -795,9 +809,11 @@ class SyncEngine:
                 except (RommConnectionError, RommTimeoutError) as e:
                     raise self._server_offline("pre_launch_sync", e) from e
 
-                await self._ensure_device_live_or_fail()
+                device_id = await self.live_device_id()
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
+                    rom_id, device_id=device_id, save_answer=save_answer
+                )
                 synced = uploaded + downloaded
 
                 msg = f"Downloaded {synced} save(s)"
@@ -865,9 +881,11 @@ class SyncEngine:
                 except (RommConnectionError, RommTimeoutError) as e:
                     raise self._server_offline("post_exit_sync", e) from e
 
-                await self._ensure_device_live_or_fail()
+                device_id = await self.live_device_id()
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
+                    rom_id, device_id=device_id, save_answer=save_answer
+                )
                 synced = uploaded + downloaded
 
                 self._logger.info(
@@ -923,9 +941,11 @@ class SyncEngine:
                 await self.follow_save_directory(rom_id, save_answer)
                 refuse_unsyncable(save_answer)
 
-                await self._ensure_device_live_or_fail()
+                device_id = await self.live_device_id()
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
+                    rom_id, device_id=device_id, save_answer=save_answer
+                )
                 synced = uploaded + downloaded
 
                 msg = _summarize_sync_result(
@@ -957,7 +977,7 @@ class SyncEngine:
         with self._uow_factory() as uow:
             return sorted(install.rom_id for install in uow.rom_installs.iter_all())
 
-    async def _bulk_pre_negotiate(self, device_id: str | None) -> int | None:
+    async def _bulk_pre_negotiate(self, device_id: LiveDeviceId) -> int | None:
         """Open one whole-device transport-only negotiate session for the bulk sweep.
 
         Builds the full ``ClientSaveState`` inventory (every confirmed non-legacy
@@ -992,7 +1012,7 @@ class SyncEngine:
             response = await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(
-                    lambda: self._romm_api.negotiate_sync(device_id or "", full_inventory, rom_ids=rom_ids)
+                    lambda: self._romm_api.negotiate_sync(device_id, full_inventory, rom_ids=rom_ids)
                 ),
             )
             # Read the key INSIDE the guard: a 200 body missing session_id must
@@ -1019,13 +1039,12 @@ class SyncEngine:
                 # Defense in depth, as in sync_rom_saves.
                 if self._is_update_in_progress():
                     raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0, conflicts=0)
-                await self._ensure_device_live_or_fail()
+                device_id = await self.live_device_id()
 
                 # One whole-device transport-only negotiate session wraps the
                 # sweep (ADR-0017); when it can't open, each confirmed non-legacy
                 # ROM opens its own session inside _run_rom_sync. Detection is the
                 # local matrix for every ROM regardless.
-                device_id = self.get_device_id()
                 # Share one content_hash per save across the whole sweep: the bulk
                 # pre-negotiate inventory and every per-ROM matrix hash the same
                 # files (#1457). The per-ROM scope inside _run_rom_sync nests under
@@ -1050,6 +1069,7 @@ class SyncEngine:
                             async with self.rom_lock(rom_id_int):
                                 uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
                                     rom_id_int,
+                                    device_id=device_id,
                                     require_confirmed=True,
                                     session_id=session_id,
                                     session_counts=session_counts if session_id is not None else None,

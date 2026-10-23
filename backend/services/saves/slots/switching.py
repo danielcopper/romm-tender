@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_slot import save_in_slot
 from lib.errors import NamedRefused, NotInstalled, Refused
 from lib.partial_failure import PartialFailure
@@ -19,12 +18,14 @@ from services.saves._helpers import newest_server_saves_by_target
 from services.saves._local_changes import changed_since_last_sync
 from services.saves._messages import SAVE_SYNC_DISABLED, SAVE_SYNC_IN_CONTENT_DIR
 from services.saves._refusals import SavefilesInContentDir, shape_refusal
-from services.saves._save_state import write_save_state
+from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import resolve_default_slot, save_sync_enabled
 
 if TYPE_CHECKING:
     import asyncio
 
+    from domain.live_device_id import LiveDeviceId
+    from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import (
         Clock,
         DebugLogger,
@@ -36,7 +37,6 @@ if TYPE_CHECKING:
     from services.saves.rom_info import RomInfoService
     from services.saves.status import StatusService
     from services.saves.sync_engine import SyncEngine
-    from services.saves.sync_engine.devices import DeviceRegistry
 
 
 class PendingUploads(NamedRefused):
@@ -70,7 +70,6 @@ class SlotSwitcher:
         settings: dict[str, Any],
         uow_factory: UnitOfWorkFactory,
         sync_engine: SyncEngine,
-        device_registry: DeviceRegistry,
         status_service: StatusService,
         rom_info: RomInfoService,
         romm_api: RommSaveApi,
@@ -83,7 +82,6 @@ class SlotSwitcher:
         self._settings = settings
         self._uow_factory = uow_factory
         self._sync_engine = sync_engine
-        self._device_registry = device_registry
         self._status_service = status_service
         self._rom_info = rom_info
         self._romm_api = romm_api
@@ -92,11 +90,6 @@ class SlotSwitcher:
         self._clock = clock
         self._save_file_store = save_file_store
         self._log_debug = log_debug
-
-    def _read_inputs(self, rom_id: int) -> tuple[RomSaveSyncState, str | None]:
-        with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
-        return state, self._device_registry.get_device_id()
 
     def _pending_local_changes(self, rom_id: int, save_state: RomSaveSyncState) -> list[str]:
         """The local saves changed since the last sync to the current slot; empty when there are none.
@@ -125,8 +118,8 @@ class SlotSwitcher:
            raises ``SaveShapeUnsupported`` with that answer's own message.
         5. No local files with pending changes (changed since last sync to
            current slot), else ``PendingUploads`` naming them.
-        6. Server must be reachable: a RomM error fetching the new slot's saves
-           propagates.
+        6. The device id comes from ``SyncEngine.live_device_id``, whose refusal
+           is raised; a RomM error fetching the new slot's saves propagates.
 
         On success the local saves dir and per-file tracking are made coherent
         with the new slot: every local file the new slot does not provide is
@@ -180,7 +173,7 @@ class SlotSwitcher:
             # A moved save directory is followed before the pending-changes
             # check, or that check would look where the files no longer are.
             await self._sync_engine.follow_save_directory(rom_id, save_answer)
-            save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
+            save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
 
             # 5. Check for pending local changes (hashing — run in executor)
             pending = await self._loop.run_in_executor(None, self._pending_local_changes, rom_id, save_state)
@@ -189,6 +182,7 @@ class SlotSwitcher:
                 raise PendingUploads("Pending local changes — upload or discard first", files=pending)
 
             # 6. Fetch server saves for the new slot (also proves server is reachable)
+            device_id = await self._sync_engine.live_device_id()
             all_server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(
@@ -240,7 +234,7 @@ class SlotSwitcher:
         saves_dir: str,
         system: str,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         targets: dict[str, dict[str, Any]],
         default_slot: str | None,
     ) -> list[str]:

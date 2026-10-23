@@ -779,10 +779,24 @@ class DeviceForgetFn(Protocol):
     ConnectionService invokes it on a successful sign-in whose origin differs
     from the previous token's origin: the registered device id is bound to the
     origin it was minted against, so a server switch must drop it (negotiate
-    hard-404s a foreign device id) and let the next sync re-register.
+    hard-404s a foreign device id), and the sign-in then registers this device
+    against the new server (``DeviceRegisterFn``).
     """
 
     def __call__(self) -> None: ...
+
+
+class DeviceRegisterFn(Protocol):
+    """Device registration consumed by ConnectionService.
+
+    The composition root satisfies this with
+    ``SaveService.ensure_device_registered``. ConnectionService awaits it after
+    every successful sign-in, whether save sync is on or off, so the device id
+    the play-session upload and the save operations send exists from the
+    sign-in on; whatever it raises is the sign-in's to log, never to fail on.
+    """
+
+    async def __call__(self) -> dict[str, Any]: ...
 
 
 class PlaytimeScopeNoticeClearFn(Protocol):

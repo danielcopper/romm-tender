@@ -210,6 +210,17 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         storedSsl.current = s.romm_allow_insecure_ssl;
         setUrl(s.romm_url);
         setHasToken(s.has_token);
+        // While signed in, whether save sync is on or off: the play-session
+        // upload sends the device id too.
+        if (s.has_token) {
+          ensureDeviceRegistered()
+            .then((result) => {
+              if (result.success) {
+                setDeviceInfo({ device_id: result.device_id, device_name: result.device_name });
+              }
+            })
+            .catch(() => {});
+        }
         setAllowInsecureSsl(s.romm_allow_insecure_ssl);
         setCustomHeaderNames(s.romm_custom_header_names ?? []);
         setSgdbApiKey(s.sgdb_api_key_masked);
@@ -236,13 +247,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       .then((settings) => {
         setSaveSyncSettings(settings);
         if (settings.save_sync_enabled) {
-          ensureDeviceRegistered()
-            .then((result) => {
-              if (result.success) {
-                setDeviceInfo({ device_id: result.device_id, device_name: result.device_name });
-              }
-            })
-            .catch(() => {});
           loadDevices();
         }
       })

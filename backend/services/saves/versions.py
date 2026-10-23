@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import parse_iso_to_epoch
-from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import (
     SAVE_SHAPE_UNSUPPORTED_REASON,
     SAVE_SYNC_CONTENT_DIR_REASON,
@@ -25,9 +24,9 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot, slot_query_param
 from domain.save_status import compute_multi_file_slot
-from lib.errors import RommApiError, RommNotFoundError, classify_error, with_system_text
+from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target
-from services.saves._save_state import write_save_state
+from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import resolve_default_slot
 
 if TYPE_CHECKING:
@@ -35,10 +34,11 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
+    from domain.live_device_id import LiveDeviceId
+    from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import DebugLogger, RetryStrategy, RommSaveApi, UnitOfWorkFactory
     from services.saves.rom_info import RomInfoService
     from services.saves.sync_engine import SyncEngine
-    from services.saves.sync_engine.devices import DeviceRegistry
 
 
 @dataclass(frozen=True)
@@ -48,8 +48,8 @@ class VersionsServiceConfig:
     Holds the live ``settings.json`` dict (default-slot seeding), the
     Unit-of-Work factory (the transactional seam over the SQLite
     repositories), the peer save sub-services consumed during rollback
-    orchestration (sync_engine, rom_info, and the shared
-    :class:`DeviceRegistry` that owns the server device id), the core
+    orchestration (sync_engine, whose ``live_device_id`` answers the device
+    id, and rom_info), the core
     resolver used to stamp the upload emulator tag, the Protocol-typed
     RomM adapter and retry strategy, the backend's event loop, the
     standard-library logger, and the ``DebugLogger`` seam.
@@ -58,7 +58,6 @@ class VersionsServiceConfig:
     settings: dict[str, Any]
     uow_factory: UnitOfWorkFactory
     sync_engine: SyncEngine
-    device_registry: DeviceRegistry
     rom_info: RomInfoService
     resolve_core: Callable[[int], str | None]
     romm_api: RommSaveApi
@@ -81,7 +80,6 @@ class VersionsService:
         self._settings = config.settings
         self._uow_factory = config.uow_factory
         self._sync_engine = config.sync_engine
-        self._device_registry = config.device_registry
         self._rom_info = config.rom_info
         self._resolve_core = config.resolve_core
         self._romm_api = config.romm_api
@@ -89,15 +87,6 @@ class VersionsService:
         self._loop = config.loop
         self._logger = config.logger
         self._log_debug = config.log_debug
-
-    # ------------------------------------------------------------------
-    # Narrow-UoW read/write helpers (ADR-0006)
-    # ------------------------------------------------------------------
-
-    def _read_inputs(self, rom_id: int) -> tuple[RomSaveSyncState, str | None]:
-        with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
-        return state, self._device_registry.get_device_id()
 
     def _local_component_filenames(self, rom_id: int) -> list[str]:
         """Distinct local save filenames on disk for the ROM (one per extension).
@@ -143,9 +132,13 @@ class VersionsService:
           ``get_save_status``'s ``multi_file`` flag; this is the defensive
           backstop for any direct caller.
         - ``{"status": "server_unreachable", "message": ...}`` if the
-          ``list_saves`` call failed (network, server, auth, etc.). The
-          frontend distinguishes this from an empty list so it can show a
-          retry affordance instead of "no versions available".
+          ``list_saves`` call failed (network, server, auth, etc.), or the
+          device's registration could not reach RomM. The frontend
+          distinguishes this from an empty list so it can show a retry
+          affordance instead of "no versions available".
+        - ``{"status": "device_not_registered", "message": ...}`` for any
+          other failure to register the device, as ``SyncEngine.live_device_id``
+          refuses; nothing was listed.
         - ``{"status": "not_found", "message": ...}`` if the ``list_saves``
           call drew a definitive 404 — RomM no longer has this ROM or the
           registered device id. Distinct from ``server_unreachable``: the
@@ -157,12 +150,18 @@ class VersionsService:
           message.
         """
         rom_id = int(rom_id)
-        save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
+        save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
 
         component_files = await self._loop.run_in_executor(None, self._local_component_filenames, rom_id)
         if compute_multi_file_slot(component_files).is_multi_file:
             self._log_debug(f"list_file_versions: multi-file slot for rom {rom_id} ({component_files}); suppressing")
             return {"status": "multi_file_unsupported", "versions": []}
+
+        try:
+            device_id = await self._sync_engine.live_device_id()
+        except Refused as e:
+            self._log_debug(f"list_file_versions: no live device id: {e.reason}")
+            return {"status": e.reason, "message": e.message}
 
         try:
             server_saves = await self._loop.run_in_executor(
@@ -211,7 +210,7 @@ class VersionsService:
         self,
         rom_id: int,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         core_so: str | None,
         save_id: int,
         info: dict[str, Any],
@@ -360,6 +359,9 @@ class VersionsService:
           any other RomM answer ``classify_error`` does not call unreachable —
           a 429, a refused request, an error RomM reports itself — with its
           message.
+        - The refusal of ``SyncEngine.live_device_id``
+          (``device_not_registered`` or ``server_unreachable``) is raised, after
+          the guards above and before the pre-flight.
         - ``{"status": "conflict_blocked", "conflicts": [...]}`` if the
           pre-flight surfaced a conflict on the currently-tracked save.
           The frontend resolves it via the standard conflict modal.
@@ -413,9 +415,10 @@ class VersionsService:
                     **save_finding_details(info["save_answer"]),
                 }
 
-            save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
+            save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
             core_so = await self._loop.run_in_executor(None, self._resolve_core, rom_id)
             default_slot = resolve_default_slot(self._settings)
+            device_id = await self._sync_engine.live_device_id()
 
             # Matrix pre-flight: get the tracked save in sync first, or surface
             # a conflict that the user must resolve before any switch can run.

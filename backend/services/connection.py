@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         ConflictRules,
         DeviceForgetFn,
+        DeviceRegisterFn,
         PlaytimeScopeNoticeClearFn,
         RommConnectionApi,
         SettingsPersister,
@@ -150,6 +151,7 @@ class ConnectionServiceConfig:
     logger: logging.Logger
     min_required_version: tuple[int, ...]
     forget_device: DeviceForgetFn
+    register_device: DeviceRegisterFn
     clear_playtime_scope_notice: PlaytimeScopeNoticeClearFn
     conflict_rules: ConflictRules
 
@@ -170,6 +172,7 @@ class ConnectionService:
         self._logger = config.logger
         self._min_required_version = config.min_required_version
         self._forget_device = config.forget_device
+        self._register_device = config.register_device
         self._clear_playtime_scope_notice = config.clear_playtime_scope_notice
         self._rules = config.conflict_rules
 
@@ -243,12 +246,14 @@ class ConnectionService:
         persisted. On a successful sign-in whose origin differs from the
         previous token's, the registered server device id is forgotten
         (best-effort) — it is bound to its minting origin and would otherwise
-        404 against the new server's negotiate. Raises ``NotConfigured`` for a
-        missing or invalid URL or one carrying a user name or password,
-        ``VersionUnsupported`` as :meth:`test_connection` does, ``AuthFailed``
-        when RomM answers the mint with a 403, ``ServerUnreachable`` when RomM
-        answers no usable token, and ``Refused`` with ``save_failed`` when the
-        settings file cannot be written; a RomM error propagates as it is.
+        404 against the new server's negotiate — and every successful sign-in
+        then registers this device (best-effort, whether save sync is on or
+        off). Raises ``NotConfigured`` for a missing or invalid URL or one
+        carrying a user name or password, ``VersionUnsupported`` as
+        :meth:`test_connection` does, ``AuthFailed`` when RomM answers the mint
+        with a 403, ``ServerUnreachable`` when RomM answers no usable token, and
+        ``Refused`` with ``save_failed`` when the settings file cannot be
+        written; a RomM error propagates as it is.
         """
         async with self._rules.hold("connect_with_credentials", prune=True):
             return await self._establish_token(romm_url, username, password, allow_insecure_ssl)
@@ -331,6 +336,7 @@ class ConnectionService:
             raise
 
         await self._forget_device_on_origin_change(old_token_origin, trimmed)
+        await self._register_device_best_effort()
         await self._clear_playtime_scope_notice_best_effort()
 
         return self._success_result(version)
@@ -516,10 +522,11 @@ class ConnectionService:
         ``romm_api_token_source = "user"``. Runs the authenticated
         ``/api/users/me`` probe (a 401 means the token is invalid/revoked, a 403
         means it lacks a required scope), persists the token with ``id = None``
-        and ``"user"`` provenance, then fires the device-forget-on-origin-change
-        and playtime-scope-notice clear. Rolls the in-memory auth state back to
-        *snapshot* on any failure up to a successful save; disk is untouched until
-        validation passes. The token value is never logged.
+        and ``"user"`` provenance, then fires the device-forget-on-origin-change,
+        the device registration and the playtime-scope-notice clear. Rolls the
+        in-memory auth state back to *snapshot* on any failure up to a successful
+        save; disk is untouched until validation passes. The token value is never
+        logged.
         """
         try:
             try:
@@ -543,9 +550,23 @@ class ConnectionService:
             raise
 
         await self._forget_device_on_origin_change(old_token_origin, trimmed)
+        await self._register_device_best_effort()
         await self._clear_playtime_scope_notice_best_effort()
 
         return self._success_result(version)
+
+    async def _register_device_best_effort(self) -> None:
+        """Register this device with the server just signed in to, whether save sync is on or off.
+
+        After :meth:`_forget_device_on_origin_change`, so a server switch
+        registers against the new server. Best-effort: the new token is valid
+        whatever the registration answers, and every save operation registers
+        again before its first request to RomM.
+        """
+        try:
+            await self._register_device()
+        except Exception as e:
+            self._logger.warning(f"Could not register this device after sign-in: {e}")
 
     async def _clear_playtime_scope_notice_best_effort(self) -> None:
         """Clear the durable playtime read-scope notice after a fresh sign-in.
@@ -564,11 +585,11 @@ class ConnectionService:
         """Forget the registered device id only when the sign-in origin genuinely changed.
 
         A device id is bound to the origin it was minted against, so a real
-        server switch must drop it (RomM's negotiate hard-404s a foreign id) and
-        let the next sync re-register. A same-server re-sign-in — including a
-        token swap on the unchanged URL — must KEEP the id, or the next post-exit
-        sync flags a spurious conflict for a save this device itself synced
-        (#1437). An *unknown* old origin (``None`` — a legacy/unstamped token, or
+        server switch must drop it (RomM's negotiate hard-404s a foreign id), and
+        the sign-in then registers this device against the new server. A
+        same-server re-sign-in — including a token swap on the unchanged URL —
+        must KEEP the id, or the next post-exit sync flags a spurious conflict
+        for a save this device itself synced (#1437). An *unknown* old origin (``None`` — a legacy/unstamped token, or
         the origin cleared by a prior sign-out) is treated as unknown, not
         different, and never forgets; only two known, differing normalized
         origins are a real change (:func:`is_origin_change`). *old_token_origin*

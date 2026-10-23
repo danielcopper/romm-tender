@@ -16,17 +16,12 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
-from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_slot import save_in_slot
 from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, classify_error
 from services.saves._helpers import newest_server_saves_by_target
-from services.saves._messages import (
-    MIGRATION_DEVICE_NOT_REGISTERED,
-    MIGRATION_LOCAL_FILES_FAILED,
-    SAVE_SYNC_IN_CONTENT_DIR,
-)
+from services.saves._messages import MIGRATION_LOCAL_FILES_FAILED, SAVE_SYNC_IN_CONTENT_DIR
 from services.saves._refusals import SavefilesInContentDir, shape_refusal
-from services.saves._save_state import read_save_state, write_save_state
+from services.saves._save_state import read_save_state, read_save_state_or_new, write_save_state
 from services.saves._settings import autocleanup_limit, resolve_default_slot
 
 if TYPE_CHECKING:
@@ -34,6 +29,8 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
+    from domain.live_device_id import LiveDeviceId
+    from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import (
         DebugLogger,
         RetryStrategy,
@@ -43,7 +40,6 @@ if TYPE_CHECKING:
     )
     from services.saves.rom_info import RomInfoService
     from services.saves.sync_engine import SyncEngine
-    from services.saves.sync_engine.devices import DeviceRegistry
 
 
 class SetupWizard:
@@ -54,7 +50,6 @@ class SetupWizard:
         *,
         settings: dict[str, Any],
         uow_factory: UnitOfWorkFactory,
-        device_registry: DeviceRegistry,
         rom_info: RomInfoService,
         resolve_core: Callable[[int], str | None],
         romm_api: RommSaveApi,
@@ -67,7 +62,6 @@ class SetupWizard:
     ) -> None:
         self._settings = settings
         self._uow_factory = uow_factory
-        self._device_registry = device_registry
         self._rom_info = rom_info
         self._resolve_core = resolve_core
         self._romm_api = romm_api
@@ -153,9 +147,13 @@ class SetupWizard:
         query raises: ``server_unreachable`` for a transport failure,
         ``not_found`` when the server answered that it has no such ROM or
         device id, and ``romm_refused`` with ``classify_error``'s ``message``
-        for any other RomM answer it does not call unreachable. All three hold
-        the wizard identically — only the copy and the frontend's reachability
-        verdict differ (#1570).
+        for any other RomM answer it does not call unreachable. It carries the
+        refusal of ``SyncEngine.live_device_id``, asked before the query, the
+        same way: ``server_unreachable`` when the registration could not reach
+        RomM, ``device_not_registered`` for any other failure, as
+        ``SyncEngine.live_device_id`` refuses, and the query is not sent. All
+        of them hold the wizard identically — only the copy and the frontend's
+        reachability verdict differ (#1570).
         """
         rom_id = int(rom_id)
 
@@ -172,8 +170,19 @@ class SetupWizard:
         # and the first post-confirmation sync could clobber real server
         # saves the user already had. Surface a distinct recommendation so
         # the frontend can hold the wizard and offer a retry instead.
-        game_state, device_id = await self._loop.run_in_executor(None, self._read_setup_inputs, rom_id)
+        game_state = await self._loop.run_in_executor(None, read_save_state, self._uow_factory, rom_id)
         default_slot = resolve_default_slot(self._settings)
+        try:
+            device_id = await self._sync_engine.live_device_id()
+        except Refused as e:
+            self._logger.warning(f"get_save_setup_info({rom_id}): no live device id: {e.reason}")
+            return self._setup_query_failed(
+                local_files=local_files,
+                local_file_info=local_file_info,
+                game_state=game_state,
+                default_slot=default_slot,
+                recommended_action=e.reason,
+            )
         try:
             server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
                 None,
@@ -247,11 +256,6 @@ class SetupWizard:
             "server_query_failed": False,
         }
 
-    def _read_setup_inputs(self, rom_id: int) -> tuple[RomSaveSyncState | None, str | None]:
-        with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id)
-        return state, self._device_registry.get_device_id()
-
     async def confirm_slot_choice(
         self,
         rom_id: int,
@@ -296,11 +300,12 @@ class SetupWizard:
         metadata flip — is still persisted before the refusal is raised. The
         non-migration path is never gated (no file write).
 
-        Before anything is confirmed, a migration refuses with
-        ``device_not_registered`` or ``NotInstalled``. A RomM error before the
-        apply phase propagates, and a save on this device that cannot be read
-        or written, or a saves folder that cannot be created, refuses with
-        ``migration_failed``; either way nothing is confirmed.
+        Before anything is confirmed, a migration refuses with ``NotInstalled``,
+        or, once the local checks have passed, as ``SyncEngine.live_device_id``
+        does. A RomM error before the apply phase propagates, and a save on this
+        device that cannot be read or written, or a saves folder that cannot be
+        created, refuses with ``migration_failed``; either way nothing is
+        confirmed.
         """
         rom_id = int(rom_id)
         # Legacy ``slot:null`` confirmation is retired (#1276): a slot must carry
@@ -319,9 +324,7 @@ class SetupWizard:
         # read_save_answer and _migrate_slot_saves_io do NOT acquire rom_lock,
         # so calling them inside the held lock is safe (no re-entry).
         async with self._sync_engine.rom_lock(rom_id):
-            save_state = (
-                await self._loop.run_in_executor(None, read_save_state, self._uow_factory, rom_id) or RomSaveSyncState()
-            )
+            save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
 
             # Non-migration path: a plain, non-destructive metadata flip.
             if not migrate:
@@ -343,12 +346,7 @@ class SetupWizard:
 
             # Migration preconditions, checked BEFORE any confirm or mutation so
             # a precondition failure holds the wizard open (no half-state) and the
-            # user can retry Track (#1498 review). A missing device would only
-            # surface as the #1478 upload guard AFTER local files were already
-            # touched, so it must be caught here first.
-            device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
-            if not device_id:
-                raise Refused("device_not_registered", MIGRATION_DEVICE_NOT_REGISTERED)
+            # user can retry Track (#1498 review).
             info = await self._loop.run_in_executor(
                 None, functools.partial(self._rom_info.get_rom_save_info, rom_id, save_answer=save_answer)
             )
@@ -361,6 +359,10 @@ class SetupWizard:
                 save_state.confirm_slot(normalized_slot)
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 raise shape_refusal(info["save_answer"])
+
+            # Asked only once the local checks above have passed, so a ROM they
+            # refuse never costs a registration request.
+            device_id = await self._sync_engine.live_device_id()
 
             # Confirm in memory so the migration uploads resolve to the chosen
             # slot, but persist only once the migration reaches the apply phase
@@ -422,7 +424,7 @@ class SetupWizard:
         migrate_from_slot: str | None,
         use_server_on_conflict: bool,
         save_state: RomSaveSyncState,
-        device_id: str,
+        device_id: LiveDeviceId,
         info: dict[str, Any],
     ) -> dict[str, Any]:
         """Copy the newest legacy save per canonical target into the confirmed slot.
@@ -531,7 +533,7 @@ class SetupWizard:
         plan: dict[str, Any],
         rom_id: int,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         saves_dir: str,
         system: str,
         core_so: str | None,

@@ -1024,6 +1024,18 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `linkable()`, never `placements`; `not_installed` comes only from the source's own launch reading; a link whose store
   file is gone goes in any source, not only the one the test places it in
   ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42, D43)
+- **Every save operation sends RomM the device id `SyncEngine.live_device_id` answers — registered or healed a moment
+  before — and no other: `RommSaveApi.list_saves` and the sync logic (`do_sync_rom_saves`,
+  `MatrixExecutor.sync_rom_saves`, `do_download_save`, `do_upload_save`) take a `LiveDeviceId`, only that entry builds
+  one, and no save service but `SyncEngine` holds the `DeviceRegistry`** — check + test + prompt-only — basedpyright
+  refuses a stored id or `None` where a `LiveDeviceId` is taken, but not a value typed `Any` (a `dict[str, Any]` read
+  such as `ensure_device_registered()["device_id"]`) nor one an unannotated parameter carries (basic mode);
+  `scripts/check_live_device_id.py` fails on a `LiveDeviceId(...)` or a `cast` to it outside the entry and on a renamed
+  import; `tests/services/saves/test_device_registry_holder.py` fails on an annotation naming `DeviceRegistry` outside
+  `SyncEngineConfig` and on a `DeviceRegistry(...)` kept on `self`. What the two miss is listed in their docstrings.
+  Prompt-only: each save operation calls the entry once, before its first request to RomM; a new request that names the
+  device (`upload_save`, `download_save_content`, `negotiate_sync` and `confirm_download` take a plain `str`) takes the
+  id from there
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes

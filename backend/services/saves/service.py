@@ -88,13 +88,11 @@ class SaveService:
         # asks it on every selection.
         self._loop = config.loop
         self._tasks = BackgroundTasks(logger=config.logger)
-        # The single owner of the server device id (kv_config["device_id"]).
-        # Built once here and shared into every sub-service that needs the id
-        # (sync_engine, status, versions, slots) — the same-bounded-context
-        # peer-ref carve-out — so the id is read once and cached, never
-        # re-queried per flow through a fresh UoW. The device label stays in
-        # settings.json (ADR-0003).
-        self._device_registry = DeviceRegistry(
+        # The single owner of the server device id (kv_config["device_id"]),
+        # built here and held by the sync engine alone: every other save
+        # service takes its id from ``SyncEngine.live_device_id``. The device
+        # label stays in settings.json (ADR-0003).
+        device_registry = DeviceRegistry(
             uow_factory=config.uow_factory,
             settings=config.settings,
             romm_api=config.romm_api,
@@ -122,7 +120,7 @@ class SaveService:
                 settings=config.settings,
                 uow_factory=config.uow_factory,
                 rom_info=self._rom_info,
-                device_registry=self._device_registry,
+                device_registry=device_registry,
                 romm_api=config.romm_api,
                 retry=config.retry,
                 resolve_upload_conflict=config.resolve_upload_conflict,
@@ -146,7 +144,6 @@ class SaveService:
                 settings=config.settings,
                 uow_factory=config.uow_factory,
                 sync_engine=self._sync_engine,
-                device_registry=self._device_registry,
                 rom_info=self._rom_info,
                 romm_api=config.romm_api,
                 retry=config.retry,
@@ -164,7 +161,6 @@ class SaveService:
                 settings=config.settings,
                 uow_factory=config.uow_factory,
                 sync_engine=self._sync_engine,
-                device_registry=self._device_registry,
                 rom_info=self._rom_info,
                 resolve_core=self._sync_engine.resolve_core,
                 romm_api=config.romm_api,
@@ -180,7 +176,6 @@ class SaveService:
                 settings=config.settings,
                 uow_factory=config.uow_factory,
                 sync_engine=self._sync_engine,
-                device_registry=self._device_registry,
                 rom_info=self._rom_info,
                 resolve_core=self._sync_engine.resolve_core,
                 romm_api=config.romm_api,
@@ -196,7 +191,6 @@ class SaveService:
                 settings=config.settings,
                 uow_factory=config.uow_factory,
                 sync_engine=self._sync_engine,
-                device_registry=self._device_registry,
                 status_service=self._status,
                 rom_info=self._rom_info,
                 resolve_core=self._sync_engine.resolve_core,
@@ -231,7 +225,11 @@ class SaveService:
     # ------------------------------------------------------------------
 
     async def ensure_device_registered(self) -> dict[str, Any]:
-        """Ensure this device is registered with the RomM server for save sync tracking."""
+        """Register or heal this device with the RomM server, whether save sync is on or off.
+
+        Satisfies the ``DeviceRegisterFn`` seam ConnectionService calls after a
+        successful sign-in.
+        """
         return await self._sync_engine.ensure_device_registered()
 
     async def list_devices(self) -> dict[str, Any]:
@@ -490,23 +488,24 @@ class SaveService:
     def forget_device(self) -> None:
         """Drop the registered server device id on a server-origin change.
 
-        Delegates to the DeviceRegistry — the single owner of
-        ``kv_config["device_id"]``. The composition root wires this as the
+        Delegates to the sync engine, which holds the DeviceRegistry — the single
+        owner of ``kv_config["device_id"]``. The composition root wires this as the
         ``DeviceForgetFn`` handed to ConnectionService, which invokes it after
         a successful sign-in to a different origin so the stale id cannot 404
         against the new server's negotiate.
         """
-        self._device_registry.forget_device()
+        self._sync_engine.forget_device()
 
     def get_device_id(self) -> str | None:
         """Return the registered server device id (``None`` when unregistered).
 
-        Delegates to the DeviceRegistry — the single owner of
-        ``kv_config["device_id"]``. The composition root wires this as the
+        Delegates to the sync engine, which holds the DeviceRegistry — the single
+        owner of ``kv_config["device_id"]``. The composition root wires this as the
         ``DeviceIdProvider`` handed to PlaytimeService, which reads the id to
-        attribute native play-session ingests and gate the offline outbox.
+        attribute native play-session ingests and gate the offline outbox. No
+        save operation reads it: each takes ``SyncEngine.live_device_id``'s.
         """
-        return self._device_registry.get_device_id()
+        return self._sync_engine.get_device_id()
 
     # ------------------------------------------------------------------
     # Negotiate inventory (Phase 1c)

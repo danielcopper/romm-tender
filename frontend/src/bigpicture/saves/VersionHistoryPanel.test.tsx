@@ -167,6 +167,18 @@ describe("VersionHistoryPanel", () => {
     expect(container.textContent).not.toMatch(/no saves|has no save|without saves/i);
   });
 
+  it("says the device could not be registered, NOT the entity-gone body, when RomM did not register it", async () => {
+    vi.mocked(backend.savesListFileVersions).mockResolvedValue({
+      status: "device_not_registered",
+      message: "Device not registered",
+    });
+    const { getByText, container } = render(<VersionHistoryPanel {...defaultProps()} />);
+    fireEvent.click(getByText("Previous Versions"));
+    await flushAsync();
+    expect(container.textContent).toContain("This device could not be registered with RomM. Tap retry.");
+    expect(container.textContent).not.toContain("RomM couldn't find this game's save data.");
+  });
+
   it("shows what RomM answered, NOT the connection prompt, when RomM refused the listing", async () => {
     vi.mocked(backend.savesListFileVersions).mockResolvedValue({
       status: "romm_refused",

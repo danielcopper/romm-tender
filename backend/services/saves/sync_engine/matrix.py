@@ -25,14 +25,14 @@ from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.save_backup import BACKUP_DIR_NAME, backup_name, select_backups_to_prune
 from domain.save_slot import filter_saves_to_slot
 from domain.sync_action import Conflict, Download, Skip, SyncAction, Upload
-from lib.errors import DeviceNotRegisteredError, DeviceWriteError, RommApiError, RommConflictError, classify_error
+from lib.errors import DeviceWriteError, RommApiError, RommConflictError, classify_error
 from services.saves._helpers import local_save_target
-from services.saves._messages import DEVICE_NOT_REGISTERED
 
 if TYPE_CHECKING:
     import logging
     from collections.abc import Iterator
 
+    from domain.live_device_id import LiveDeviceId
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         Clock,
@@ -128,7 +128,7 @@ class RomDispatchContext:
 
     rom_id: int
     save_state: RomSaveSyncState
-    device_id: str | None
+    device_id: LiveDeviceId
     rom_name: str
     save_names: tuple[str, ...]
     saves_dir: str
@@ -282,7 +282,7 @@ class MatrixExecutor:
         saves_dir: str,
         filename: str,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         system: str,
         default_slot: str | None = None,
     ) -> None:
@@ -360,9 +360,9 @@ class MatrixExecutor:
     def _resolve_upload_slot(save_state: RomSaveSyncState, default_slot: str | None = None) -> str | None:
         """The slot field to send with an upload; ``None`` only for an explicit-legacy save.
 
-        Reached only once :meth:`do_upload_save` has confirmed a registered
-        ``device_id`` (a missing one refuses the upload outright, #1478), so the
-        slot resolves purely from the aggregate's slot state. A named
+        An upload always carries a live ``device_id`` (``do_upload_save`` takes
+        a :class:`LiveDeviceId`), so the slot resolves purely from the
+        aggregate's slot state. A named
         ``active_slot`` uploads to that slot; an ``active_slot`` of ``None`` is
         ambiguous and is disambiguated by the ``slots`` map (the same signal
         :meth:`update_file_sync_state` uses to seed the active slot):
@@ -381,7 +381,7 @@ class MatrixExecutor:
             return None
         return default_slot or "autosave"
 
-    def _confirm_upload_sync(self, response: dict[str, Any], device_id: str | None) -> None:
+    def _confirm_upload_sync(self, response: dict[str, Any], device_id: LiveDeviceId) -> None:
         """Ack the uploaded save on the server's DeviceSaveSync row, unless redundant.
 
         Skipped when *response* already shows this device ``is_current`` (#1458);
@@ -392,7 +392,7 @@ class MatrixExecutor:
         ack is debug-logged and swallowed.
         """
         upload_id = response.get("id")
-        if not device_id or not upload_id:
+        if not upload_id:
             return
         if _upload_response_proves_current(response, device_id):
             self._log_debug(f"confirm_download after upload skipped for save {upload_id} (already current)")
@@ -408,7 +408,7 @@ class MatrixExecutor:
         file_path: str,
         filename: str,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         system: str,
         core_so: str | None,
         server_save: dict[str, Any] | None = None,
@@ -439,16 +439,7 @@ class MatrixExecutor:
         the same 409 backstop that catches a write-time stale-current race
         surfaces the true state — no false "synced", no currency stamped on the
         non-head response.
-
-        A missing *device_id* refuses the upload outright, raising
-        :class:`DeviceNotRegisteredError` (which states why) before any server
-        call. The raise reaches every caller's error funnel (the sync dispatch's
-        per-file errors, rollback / version-switch surfaced failures) so the
-        file is reported rather than uploaded without its device.
         """
-        if not device_id:
-            raise DeviceNotRegisteredError(DEVICE_NOT_REGISTERED)
-
         save_id = server_save.get("id") if server_save else None
         emulator = build_emulator_tag(core_so)
 
@@ -762,14 +753,6 @@ class MatrixExecutor:
                     self.build_sync_conflict_entry(ctx.rom_id, filename, action.server_save, local_path, local_hash)
                 )
                 return None
-        except DeviceNotRegisteredError:
-            # Precondition refusal, not a transfer error: surface the same
-            # device-not-registered message the automatic pre-flight uses so the
-            # per-file error reads consistently (#1478). No slug field exists on a
-            # per-file sync error (the list is message-only); the keep_local
-            # resolve path refuses with the ``device_not_registered`` reason.
-            self._logger.warning(f"_dispatch_sync_action({ctx.rom_id}): {filename}: {DEVICE_NOT_REGISTERED}")
-            sink.errors.append(f"{filename}: {DEVICE_NOT_REGISTERED}")
         except RommApiError as e:
             _code, _msg = classify_error(e)
             self._logger.warning(f"_dispatch_sync_action({ctx.rom_id}): {filename} failed: {_msg}")
@@ -912,7 +895,7 @@ class MatrixExecutor:
         self,
         rom_id: int,
         save_state: RomSaveSyncState,
-        device_id: str | None,
+        device_id: LiveDeviceId,
         core_so: str | None,
         default_slot: str | None = None,
         autocleanup_limit: int | None = None,

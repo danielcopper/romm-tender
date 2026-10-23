@@ -547,9 +547,10 @@ screen reload themselves on the spot — no need to leave and re-open the page.
 
 Only a genuine connection failure marks Tender offline. If RomM replies that it no longer has the thing being asked
 about — most often because the game was deleted and re-added on the server, which gives it a brand-new id, or because
-the RomM database was reset and this device's registration disappeared with it — that is the server _answering_, so the
-**RomM offline** badge stays clear and the surface tells you what's missing instead. If you see such a message while the
-badge is clear, the fix is on the RomM side (re-sync the library, or re-check the game), not with your network.
+the RomM database was reset and this device's registration disappeared with it (Tender re-registers this device first,
+so this rarely shows) — that is the server _answering_, so the **RomM offline** badge stays clear and the surface tells
+you what's missing instead. If you see such a message while the badge is clear, the fix is on the RomM side (re-sync the
+library, or re-check the game), not with your network.
 
 A slow answer isn't a failure either. The check a game page runs when it opens can take a while on a busy server or over
 a remote connection; while it's still outstanding the page simply keeps waiting, and the **RomM offline** badge appears
@@ -557,18 +558,33 @@ only once something actually reports the server as unreachable. A page that take
 same thing as a page that found RomM missing.
 
 When the missing thing is this device's own registration — the RomM database was wiped or restored and the id this
-device was issued no longer exists — you don't have to do anything. Both when Tender's panel loads (installing an update
-counts: the panel is loaded again after one) and before every save-sync (before a game launches, after it exits, or a
-manual sync), Tender first checks that this device's id still exists on the server; the moment it finds the id is gone
-it registers this device afresh and carries on under the new id. A new entry shows up in RomM's device list; the old,
-dead one can be ignored. Play time that was recorded but not yet uploaded — sessions played while RomM was away — is
-carried over to the new registration, so it still lands on the server under this device rather than being stranded.
+device was issued no longer exists — you don't have to do anything. When you sign in, when Tender's panel loads
+(installing an update counts: the panel is loaded again after one), and before everything that asks RomM about this
+game's saves (a sync before a game launches, after it exits or by hand, the saves status, the previous versions, a copy
+into another slot, a restore, resolving a conflict, a slot switch, listing or deleting a slot's saves, the save-slot
+setup), Tender first checks that this device's id still exists on the server; the moment it finds the id is gone it
+registers this device afresh and carries on under the new id. A new entry shows up in RomM's device list; the old, dead
+one can be ignored. Play time that was recorded but not yet uploaded — sessions played while RomM was away — is carried
+over to the new registration, so it still lands on the server under this device rather than being stranded.
 
 The first-time save-slot setup screen is the clearest example. If RomM can't find the save data that setup needs, it
 pauses with "RomM couldn't find the save data for this setup" rather than the "server is not reachable" message, and the
 offline badge stays clear. Setup deliberately stops there instead of picking a slot for you: Tender has no trustworthy
 view of what's on the server, and choosing a slot on that basis could overwrite real saves on the first sync. Re-check
 the game in RomM (a server database reset re-registers this device automatically — see above), then tap **Retry**.
+
+### "This device could not be registered with RomM"
+
+**Symptom**: the Saves tab's sync line reads "Device not registered with RomM", the save-slot setup pauses with "This
+device could not be registered with RomM", the previous versions show the same message, resolving a conflict says "This
+device could not be registered with RomM — conflict left unresolved", or a sync, copy, restore or slot switch fails with
+"Device not registered with RomM"; the **RomM offline** badge stays clear.
+
+Tender registers this device with RomM before it asks about a game's saves, and here RomM answered without registering
+it — or a proxy in front of RomM answered in its place, or Tender could not send your saved login. Tender listed nothing
+from RomM, and no save was synced. The usual cause is a token without the `devices.write` scope (see
+[Required scopes](configuration.md#required-scopes)); sign in again with a token that has it. If a proxy sits in front
+of RomM, check that it lets `/api/devices` through. Then tap **Retry**, or open the game page again.
 
 ### Save file not found
 

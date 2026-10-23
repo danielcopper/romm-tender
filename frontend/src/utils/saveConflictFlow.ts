@@ -9,7 +9,7 @@ import { reportServerReachable } from "./connectionState";
 import { detach } from "./detach";
 import { formatBytes, formatTimestamp } from "./formatters";
 import { showToast } from "./toast";
-import type { SyncConflict } from "../types";
+import type { SaveStatus, SyncConflict } from "../types";
 import { announceSaveSync } from "./saveSyncEvents";
 
 export type SyncConflictAction = "keep_local" | "use_server";
@@ -45,6 +45,15 @@ export function serverSaveDetail(conflict: SyncConflict): string {
 
 export const STALE_CONFLICT_MESSAGE =
   "The server save has been updated by another device. Please cancel and retry sync to get the latest version.";
+
+/** The toast for a status read that could not list the server's saves, worded by why it could not. */
+export function conflictStatusFailureToast(reason: SaveStatus["server_query_reason"]): string {
+  if (reason === "server_unreachable") return "Couldn't reach server to resolve conflict";
+  if (reason === "device_not_registered") {
+    return "This device could not be registered with RomM — conflict left unresolved";
+  }
+  return "RomM couldn't find this game's save data — conflict left unresolved";
+}
 
 // ── One resolution ──
 
@@ -158,11 +167,7 @@ export async function resolveKnownConflicts(
         reportServerReachable(false);
       }
       detach(debugLog(`${logContext}: resolve conflict — server query failed for rom ${romId}`));
-      showToast(
-        unreachable
-          ? "Couldn't reach server to resolve conflict"
-          : "RomM couldn't find this game's save data — conflict left unresolved",
-      );
+      showToast(conflictStatusFailureToast(result.server_query_reason));
       return "failed";
     }
     // A clean status read proves the server is reachable again (#1345).

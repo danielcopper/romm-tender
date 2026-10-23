@@ -22,7 +22,7 @@ import socket
 import urllib.error
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _factories import (
@@ -616,6 +616,7 @@ def _dispatcher_over_connection(romm_api: MagicMock, settings: dict[str, Any], p
             logger=LOGGER,
             min_required_version=(5, 3, 0),
             forget_device=MagicMock(),
+            register_device=AsyncMock(),
             clear_playtime_scope_notice=MagicMock(),
             conflict_rules=_make_conflict_rules(),
         )
@@ -796,7 +797,7 @@ class TestTheConflictResolutionOnTheWire:
     async def test_a_romm_error_listing_the_servers_saves_answers_classify_errors_verdict(self, tmp_path):
         svc, fake = _a_shown_conflict(tmp_path)
         failure = RommServerError("bad gateway", status_code=502)
-        fake.fail_on_next(failure)
+        fake.fail_next_list_saves(failure)
 
         message = json.loads(
             await _dispatcher_over_saves(svc).dispatch(
@@ -1176,7 +1177,7 @@ class TestTheSlotRefusalsOnTheWire:
 
             fake.delete_server_saves = failing_delete  # type: ignore[method-assign]
         else:
-            fake.fail_on_next(failure)
+            fake.fail_next_list_saves(failure)
 
         message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, route_name, [42, "save1"]))
 

@@ -686,6 +686,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             logger=cfg.runtime.logger,
             min_required_version=cfg.min_required_version,
             forget_device=save_sync_service.forget_device,
+            register_device=save_sync_service.ensure_device_registered,
             clear_playtime_scope_notice=playtime_service.clear_scope_notice,
             conflict_rules=conflict_rules,
         ),

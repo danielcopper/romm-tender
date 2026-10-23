@@ -41,19 +41,22 @@ class DeviceRegistry:
 
     The single source of truth for ``kv_config["device_id"]`` — the
     server-issued device id every sync, slot, status, and version flow
-    needs to attribute uploads and filter per-slot server views. Every
-    consumer reads the id through :meth:`get_device_id` (one cached
-    Unit-of-Work read, reused for the process lifetime) rather than
-    opening its own transaction, and registration is the only writer.
-    The device *label* lives in ``settings.json`` (ADR-0003: server
-    identity in ``kv_config``, user-set label in settings) and flows
-    through the injected ``SettingsPersister``.
+    needs to attribute uploads and filter per-slot server views. A save
+    operation never reads it here: it takes the id
+    ``SyncEngine.live_device_id`` answers, which registers or heals the
+    device through :meth:`ensure_device_registered` first, and
+    :class:`SyncEngine` is the one save service that holds this registry.
+    The cached id (:meth:`get_device_id`, one Unit-of-Work read reused for
+    the process lifetime) is for that entry, for the play-session upload,
+    and for the device list. Registration is the only writer. The device
+    *label* lives in ``settings.json`` (ADR-0003: server identity in
+    ``kv_config``, user-set label in settings) and flows through the
+    injected ``SettingsPersister``.
 
-    Also co-locates the device-identity fallback every sync use case
-    reaches when no id is registered yet. The async entry points take
-    ``loop``, ``hostname_provider``, and ``machine_id_provider`` per call
-    so :class:`SyncEngine` can pass its live (test-rebindable) attributes
-    without having to thread reassignments through this sub-module.
+    The async entry points take ``loop``, ``hostname_provider``, and
+    ``machine_id_provider`` per call so :class:`SyncEngine` can pass its live
+    (test-rebindable) attributes without having to thread reassignments
+    through this sub-module.
     """
 
     def __init__(
@@ -118,8 +121,8 @@ class DeviceRegistry:
 
         Called on a sign-in whose server origin changed: the device id is
         bound to the origin it was minted against, so a foreign id makes
-        RomM's ``negotiate`` hard-404. Deleting the row lets the next
-        :meth:`ensure_device_registered` re-register against the new server,
+        RomM's ``negotiate`` hard-404. Deleting the row lets the sign-in's
+        :meth:`ensure_device_registered` register against the new server,
         and the cache is set coherent (the id is now absent, not stale).
         Local-only — the row on the old server is left for RomM's machine-id
         dedup to reconcile on a later re-registration.
@@ -218,13 +221,11 @@ class DeviceRegistry:
         touch failure is a transient miss that leaves the cached id in
         force — a server blip must never churn a re-registration.
 
-        Refuses with ``sync_disabled`` while save sync is off, and with
-        ``server_unreachable`` when the server answers the registration without
-        an id; anything the registration raises propagates.
+        Registers whether save sync is on or off: the play-session upload sends
+        the id too. Refuses with ``server_unreachable`` when the server answers
+        the registration without an id; anything the registration raises
+        propagates.
         """
-        if not save_sync_enabled(self._settings):
-            raise Refused("sync_disabled", SAVE_SYNC_DISABLED)
-
         # Probe the RomM version when it has not been observed yet. Device
         # registration is the entrypoint reached from background launchers
         # that never call test_connection first, so the version on the API

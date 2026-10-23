@@ -88,8 +88,11 @@ export interface SaveStatus {
   server_query_failed?: boolean;
   /** Why it failed (`null` when it didn't). The flag says the server's view is
    *  unknown — true for a 404 as much as for an outage; this says why, so only
-   *  `"server_unreachable"` may drive the connection store (#1570). */
-  server_query_reason?: RommErrorReason | null;
+   *  `"server_unreachable"` may drive the connection store (#1570).
+   *  `"device_not_registered"`: the device could not be registered for a
+   *  reason other than an unreachable RomM (backend `SyncEngine.live_device_id`),
+   *  so nothing was listed. */
+  server_query_reason?: RommErrorReason | "device_not_registered" | null;
   /** True when the active slot's current save spans more than one distinct
    *  file (e.g. Sega Saturn `.bkr`/`.bcr`/`.smpc`). Those siblings are
    *  components of one game state, not prior versions — so the frontend
@@ -178,9 +181,18 @@ export interface SaveSetupInfo {
   // real server saves on first sync). They differ only in cause: "not_found"
   // is the server ANSWERING that it has no such ROM or device id, so it must
   // not report the server offline (#1570). "romm_refused" holds the same way
-  // for any other answer RomM gave, worded in `message`. See backend
+  // for any other answer RomM gave, worded in `message`, and
+  // "device_not_registered" where the device could not be registered for a
+  // reason other than an unreachable RomM (backend `SyncEngine.live_device_id`),
+  // so nothing was listed. See backend
   // `get_save_setup_info`.
-  recommended_action: "auto_confirm_default" | "show_wizard" | "server_unreachable" | "not_found" | "romm_refused";
+  recommended_action:
+    | "auto_confirm_default"
+    | "show_wizard"
+    | "server_unreachable"
+    | "not_found"
+    | "romm_refused"
+    | "device_not_registered";
   // True whenever that query failed, any way — for call sites routing on a
   // boolean rather than the enum.
   server_query_failed?: boolean;
@@ -258,7 +270,10 @@ export type ListFileVersionsResult =
   // See RollbackStatus — the server answered, it just has no such entry.
   | { status: "not_found"; message: string }
   // Any other answer RomM gave to the listing, worded by `classify_error`.
-  | { status: "romm_refused"; message: string };
+  | { status: "romm_refused"; message: string }
+  // The device could not be registered for a reason other than an unreachable
+  // RomM (backend `SyncEngine.live_device_id`), so nothing was listed.
+  | { status: "device_not_registered"; message: string };
 
 /** Discriminated-status result of `copySaveToSlot` — copies one server save into
  *  a target slot, which becomes the ROM's active slot (the source is preserved).

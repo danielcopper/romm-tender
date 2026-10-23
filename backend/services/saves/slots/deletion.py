@@ -21,6 +21,7 @@ from services.saves._settings import save_sync_enabled
 if TYPE_CHECKING:
     import asyncio
 
+    from domain.live_device_id import LiveDeviceId
     from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import (
         DebugLogger,
@@ -30,7 +31,6 @@ if TYPE_CHECKING:
     )
     from services.saves.rom_info import RomInfoService
     from services.saves.sync_engine import SyncEngine
-    from services.saves.sync_engine.devices import DeviceRegistry
 
 
 class SlotDeleter:
@@ -41,7 +41,6 @@ class SlotDeleter:
         *,
         settings: dict[str, Any],
         uow_factory: UnitOfWorkFactory,
-        device_registry: DeviceRegistry,
         rom_info: RomInfoService,
         romm_api: RommSaveApi,
         retry: RetryStrategy,
@@ -51,7 +50,6 @@ class SlotDeleter:
     ) -> None:
         self._settings = settings
         self._uow_factory = uow_factory
-        self._device_registry = device_registry
         self._rom_info = rom_info
         self._romm_api = romm_api
         self._retry = retry
@@ -82,8 +80,9 @@ class SlotDeleter:
     async def get_slot_delete_info(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Return info about what deleting a slot would do, for the confirmation modal.
 
-        Refuses as :meth:`_validate_slot_operation` does. A RomM error listing a
-        server slot's saves propagates.
+        Refuses as :meth:`_validate_slot_operation` does, and for a server slot
+        as ``SyncEngine.live_device_id`` does. A RomM error listing a server
+        slot's saves propagates.
         """
         rom_id = int(rom_id)
         slot = str(slot).strip() if slot else ""
@@ -98,7 +97,7 @@ class SlotDeleter:
         # Server save count
         server_save_ids: list[int] = []
         if source == "server":
-            device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
+            device_id = await self._sync_engine.live_device_id()
             # Legacy slot ("" → null on the server) is addressed by omitting
             # ``slot=`` and filtering client-side (#1061), so a legacy delete
             # inspects ONLY the null saves. Named slots filter server-side and
@@ -133,9 +132,8 @@ class SlotDeleter:
             "is_active": is_active,
         }
 
-    async def _delete_server_slot_saves(self, rom_id: int, slot: str) -> list[int]:
+    async def _delete_server_slot_saves(self, rom_id: int, slot: str, device_id: LiveDeviceId) -> list[int]:
         """Delete all server saves in a slot and return their ids; a RomM error propagates."""
-        device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
         # Legacy slot ("" → null on the server) deletes ONLY the null saves:
         # omit ``slot=`` and filter client-side (#1061). Named slots filter
         # server-side and re-filter for safety.
@@ -166,8 +164,9 @@ class SlotDeleter:
         acquisition, server I/O, or state change — mirroring the switch-target
         refusal in :class:`SlotSwitcher` (#1276). The active slot refuses with
         ``active_slot``; otherwise it refuses as :meth:`_validate_slot_operation`
-        does, and a RomM error deleting the server saves propagates with the
-        slot left as it was.
+        does, and for a server slot as ``SyncEngine.live_device_id`` does, and a
+        RomM error deleting the server saves propagates with the slot left as it
+        was.
         """
         rom_id = int(rom_id)
         slot = str(slot).strip() if slot else ""
@@ -198,7 +197,8 @@ class SlotDeleter:
             deleted_ids: set[int] = set()
 
             if source == "server":
-                deleted_save_ids = await self._delete_server_slot_saves(rom_id, slot)
+                device_id = await self._sync_engine.live_device_id()
+                deleted_save_ids = await self._delete_server_slot_saves(rom_id, slot, device_id)
                 deleted_server_saves = len(deleted_save_ids)
                 deleted_ids = set(deleted_save_ids)
 

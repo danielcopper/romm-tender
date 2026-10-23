@@ -3,7 +3,7 @@
 import hashlib
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from _factories import _make_conflict_rules, _make_retry
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
@@ -20,11 +20,12 @@ from fakes.system_time import FakeClock
 
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.save_file import SaveFileAdapter
+from domain.live_device_id import LiveDeviceId
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from services.saves import SaveService, SaveServiceConfig
-from services.saves._save_state import write_save_state
+from services.saves._save_state import read_save_state_or_new, write_save_state
 
 # One ctypes load for the whole SaveService suite — the adapter is stateless,
 # so every service built here can share the same instance.
@@ -183,8 +184,8 @@ def _seed_save_state_dict(svc, rom_id: int, data: dict[str, Any], *, platform_sl
 def _do_sync(svc, rom_id: int):
     """Run the matrix sync worker for *rom_id* the way the op-entry does.
 
-    Loads the ``RomSaveSyncState`` + device id from the shared UoW, resolves the
-    active core, runs ``do_sync_rom_saves`` (the matrix worker), persists the
+    Loads the ``RomSaveSyncState`` from the shared UoW and the stored device id
+    (:func:`_stored_device_id`), resolves the active core, runs ``do_sync_rom_saves`` (the matrix worker), persists the
     mutated aggregate, and returns ``(uploaded, downloaded, errors, conflicts)``.
     The direct-worker tests use this in place of the old ``do_sync_rom_saves(rom_id)``
     call that reached into a global state dict.
@@ -192,13 +193,22 @@ def _do_sync(svc, rom_id: int):
     engine = svc._sync_engine
     if engine._rom_info.get_rom_save_info(rom_id) is None:
         # Not installed → nothing to sync and no roms row to anchor a write.
-        return engine.do_sync_rom_saves(rom_id, RomSaveSyncState(), None, None, _default_slot(svc))
-    save_state, device_id = engine._read_sync_inputs(rom_id)
+        return engine.do_sync_rom_saves(rom_id, RomSaveSyncState(), _stored_device_id(svc), None, _default_slot(svc))
+    save_state, device_id = read_save_state_or_new(engine._uow_factory, rom_id), _stored_device_id(svc)
     core_so = engine.resolve_core(rom_id)
     default_slot = _default_slot(svc)
     result = engine.do_sync_rom_saves(rom_id, save_state, device_id, core_so, default_slot)
     write_save_state(engine._uow_factory, rom_id, save_state)
     return result
+
+
+def _stored_device_id(svc) -> LiveDeviceId:
+    """The stored device id, handed to a sync worker as the live one an operation would hand it.
+
+    The worker tests drive the workers below the entry (``SyncEngine.live_device_id``),
+    so the id is whatever the test seeded, ``None`` included.
+    """
+    return cast("LiveDeviceId", svc._sync_engine.get_device_id())
 
 
 def _default_slot(svc):
@@ -211,12 +221,12 @@ def _default_slot(svc):
 def _do_upload(svc, rom_id, file_path, filename, system, *, server_save=None, core_so=None):
     """Run the upload worker the way the op-entry does and return the mutated state.
 
-    Loads the ``RomSaveSyncState`` + device id from the shared UoW, calls
+    Loads the ``RomSaveSyncState`` from the shared UoW and the stored device id, calls
     ``do_upload_save`` (which mutates the aggregate in memory), persists it, and
     returns the in-memory state so the test can assert on the same object.
     """
     engine = svc._sync_engine
-    save_state, device_id = engine._read_sync_inputs(rom_id)
+    save_state, device_id = read_save_state_or_new(engine._uow_factory, rom_id), _stored_device_id(svc)
     engine.do_upload_save(
         rom_id, file_path, filename, save_state, device_id, system, core_so, server_save, _default_slot(svc)
     )
@@ -227,7 +237,7 @@ def _do_upload(svc, rom_id, file_path, filename, system, *, server_save=None, co
 def _do_download(svc, server_save, saves_dir, filename, rom_id, system):
     """Run the download worker the way the op-entry does and return the mutated state."""
     engine = svc._sync_engine
-    save_state, device_id = engine._read_sync_inputs(rom_id)
+    save_state, device_id = read_save_state_or_new(engine._uow_factory, rom_id), _stored_device_id(svc)
     engine.do_download_save(server_save, saves_dir, filename, save_state, device_id, system, _default_slot(svc))
     write_save_state(engine._uow_factory, rom_id, save_state)
     return save_state
@@ -332,7 +342,7 @@ def _enable_sync_with_device(svc, device_id: str = "device-1") -> None:
     svc._config.settings["save_sync_enabled"] = True
     with _uow(svc) as uow:
         uow.kv_config.set("device_id", device_id)
-    svc._device_registry.invalidate_device_id_cache()
+    svc._sync_engine._devices.invalidate_device_id_cache()
 
 
 def _set_device_id(svc, device_id: str | None) -> None:
@@ -346,7 +356,7 @@ def _set_device_id(svc, device_id: str | None) -> None:
             uow.kv_config.delete("device_id")
         else:
             uow.kv_config.set("device_id", device_id)
-    svc._device_registry.invalidate_device_id_cache()
+    svc._sync_engine._devices.invalidate_device_id_cache()
 
 
 def _get_device_id(svc) -> str | None:

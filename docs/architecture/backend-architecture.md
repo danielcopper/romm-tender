@@ -2035,20 +2035,26 @@ DELETE. The pairing code and the returned token are never logged.
 (`POST /api/devices`, its id stored in `kv_config["device_id"]`) is bound to the server it was registered against —
 RomM's `negotiate` save-sync transport hard-404s a foreign device id. So a successful sign-in that **genuinely changes
 origin** forgets the stored device id (`SaveService.forget_device` → `DeviceRegistry.forget_device`, wired as the
-`DeviceForgetFn` injected into `ConnectionService`), so the next save-sync run re-registers against the new server. The
-decision is `is_origin_change(old_token_origin, new_url)` in `lib/url_host` — both origins are normalized and the id is
-forgotten **only** when both are known (parseable) and differ. This is deliberately the _opposite_ failure posture to
-the old-token DELETE guard (`same_origin`, which fails closed): a **same-server re-sign-in keeps the device identity**,
-including a token swap on the unchanged URL, URL-formatting variants, and a `None`/unstamped old origin (an unknown old
-origin is treated as unknown, not different — never a change). Without this, a same-server token swap dropped the
-identity and the next post-exit sync flagged a spurious conflict for a save this device itself synced (#1437). The
-`old_token_origin` comparison input is captured from the pre-clear auth-state snapshot, so the leak-safety in-memory
-token clear (which zeroes the origin) never poisons the comparison. The forget is **local-only** (the row on the old
-server is left for RomM's machine-id dedup to reconcile on a later re-registration) and **best-effort on the success
-path** — a failed local clear never turns a good sign-in into a failure, and a failed sign-in (in-memory snapshot
-restored) keeps the still-current server's id. `ensure_device_registered` never deletes the id on any failure, so a
-permission-degraded (403/timeout) session leaves the identity intact. This is Phase 0a of the RomM Device Sync negotiate
-adoption ([ADR-0016](../adr/0016-save-sync-hands-detection-to-romm-negotiate.md)).
+`DeviceForgetFn` injected into `ConnectionService`), and the sign-in then registers this device against the new server
+(below). The decision is `is_origin_change(old_token_origin, new_url)` in `lib/url_host` — both origins are normalized
+and the id is forgotten **only** when both are known (parseable) and differ. This is deliberately the _opposite_ failure
+posture to the old-token DELETE guard (`same_origin`, which fails closed): a **same-server re-sign-in keeps the device
+identity**, including a token swap on the unchanged URL, URL-formatting variants, and a `None`/unstamped old origin (an
+unknown old origin is treated as unknown, not different — never a change). Without this, a same-server token swap
+dropped the identity and the next post-exit sync flagged a spurious conflict for a save this device itself synced
+(#1437). The `old_token_origin` comparison input is captured from the pre-clear auth-state snapshot, so the leak-safety
+in-memory token clear (which zeroes the origin) never poisons the comparison. The forget is **local-only** (the row on
+the old server is left for RomM's machine-id dedup to reconcile on a later re-registration) and **best-effort on the
+success path** — a failed local clear never turns a good sign-in into a failure, and a failed sign-in (in-memory
+snapshot restored) keeps the still-current server's id. `ensure_device_registered` never deletes the id on any failure,
+so a permission-degraded (403/timeout) session leaves the identity intact. This is Phase 0a of the RomM Device Sync
+negotiate adoption ([ADR-0016](../adr/0016-save-sync-hands-detection-to-romm-negotiate.md)).
+
+**Every successful sign-in registers this device, whether save sync is on or off.** After the origin forget above, each
+of the three sign-ins calls `SaveService.ensure_device_registered`, wired as the `DeviceRegisterFn` injected into
+`ConnectionService`, so the id the play-session upload and the save operations send exists from the sign-in on. It is
+best-effort: a registration that fails is logged and the sign-in still succeeds, since every save operation registers
+again before its first request to RomM.
 
 **The signed-in user's own id (`romm_user_id`) is bound to the token — stamped at sign-in, backfilled lazily, cleared on
 sign-out.** It drives the collection owner scope (`build_work_queue` + `get_collections`, described in the
@@ -3310,7 +3316,8 @@ package, organised topically (consumers always deep-import `from services.protoc
   `RomFileStore`, `SaveFileStore`, `SgdbArtworkCache`.
 - **`cross_service`** — narrowly-typed multi-method seams one service exposes to another so services stay independent:
   `BiosChecker`, `AchievementsReader`, `ArtworkManager`, `ArtworkRemover`, `RetryStrategy`, `MigrationPendingFn`,
-  `DeviceForgetFn`, `DeviceIdProvider` (server device id, `SaveService.get_device_id` → PlaytimeService),
+  `DeviceForgetFn`, `DeviceRegisterFn` (device registration after a sign-in, `SaveService.ensure_device_registered` →
+  ConnectionService), `DeviceIdProvider` (server device id, `SaveService.get_device_id` → PlaytimeService),
   `PlaytimeScopeNoticeClearFn` (PlaytimeService clears its re-sign-in notice on a fresh sign-in from ConnectionService),
   and the `Session*` seams.
 - **`repositories`** — one repository Protocol per aggregate root, plus `KvConfigRepository` for the `kv_config`
@@ -3477,7 +3484,7 @@ Protocol-typed (services never import each other's concrete classes). Selected w
 | **ShortcutRemovalService**  | `SteamConfigStore`, `ArtworkRemover` peer, `UnitOfWorkFactory` (unbinds via `roms`, offline name via `kv_config`), `ConflictRules` (the rules its use cases check at their entry, and the removal lease), `ShortcutArtworkJob` (stopped while a removal is under way, and asked to run at its end)                                                                                                                                                                                                                                                                                                                                                                                             |
 | **SessionLifecycleService** | `Session*` cross-service seams (playtime / post-exit sync / achievement sync / migration reader), `UpdateInProgressFn` (which holds the post-exit sync off), `ConflictRules` (the rule the finalize checks at its entry)                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **GameProcessService**      | `GameProcessControl` (instance discovery + signals), `RomLaunchPathReader` (the launch target each live instance is matched against, from the same resolver that bakes it), `Sleeper` (the grace window — the service owns no clock), and RetroDECK's flatpak app id from the single `domain.shortcut_data.RETRODECK_APP_ID` constant the launch command is built from                                                                                                                                                                                                                                                                                                                         |
-| **ConnectionService**       | `RommConnectionApi`, `SettingsPersister`, `min_required_version`, `DeviceForgetFn` (cross-service — forgets the device id on an origin change), `PlaytimeScopeNoticeClearFn` (cross-service — clears the playtime re-sign-in notice on a fresh sign-in), `ConflictRules` (the rule the connection test, the sign-ins and the sign-out check at their entry)                                                                                                                                                                                                                                                                                                                                    |
+| **ConnectionService**       | `RommConnectionApi`, `SettingsPersister`, `min_required_version`, `DeviceForgetFn` (cross-service — forgets the device id on an origin change), `DeviceRegisterFn` (cross-service — registers the device after every successful sign-in), `PlaytimeScopeNoticeClearFn` (cross-service — clears the playtime re-sign-in notice on a fresh sign-in), `ConflictRules` (the rule the connection test, the sign-ins and the sign-out check at their entry)                                                                                                                                                                                                                                          |
 | **VersionSwitchService**    | `RommRomReader` (live `sibling_roms` view + per-sibling detail), `Clock`, `UnitOfWorkFactory` (resolves a sibling group via `iter_by_group_key` and moves its binding on `roms`), `settings` (reads `preferred_region` for the default-badge ranking), `SaveDriftProbeFn` + `ReachabilityProbeFn` (the switch-away save-stranding soft block), `RomRelaunchItemReader` (re-bakes a switched-onto install's `launch_options`), `ActiveDownloadRomIdsFn` (refuse a switch while a group member is downloading), `ConflictRules` (the rules a switch checks at its entry, and its lease)                                                                                                          |
 | **PruneLeaseService**       | `ConflictRules` (renews, releases and disowns the frontend's leases; checks no rule)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **UpdateCheckService**      | `LatestReleaseFn`, `Clock`, `Sleeper` + `EventEmitter` (the check while the backend runs), `SettingsPersister`, `UnitOfWorkFactory` (`kv_config` `update_check_last_seen`, `update_available_toasted_version` and `update_available_seen_version`), the running `VERSION`, and whether this process is the installed program                                                                                                                                                                                                                                                                                                                                                                   |

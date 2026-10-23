@@ -213,7 +213,7 @@ class TestListFileVersions:
         """
         svc, fake = make_service(tmp_path)
 
-        fake.fail_on_next(OSError("network error"))
+        fake.fail_next_list_saves(OSError("network error"))
 
         result = await svc.list_file_versions(42, "default", "pokemon.srm")
 
@@ -230,7 +230,7 @@ class TestListFileVersions:
         """RomM rate-limiting the listing answered — the panel names that, never an outage."""
         svc, fake = make_service(tmp_path)
 
-        fake.fail_on_next(RommRateLimitedError("Rate limited"))
+        fake.fail_next_list_saves(RommRateLimitedError("Rate limited"))
 
         result = await svc.list_file_versions(42, "default", "pokemon.srm")
 
@@ -247,7 +247,7 @@ class TestListFileVersions:
         """
         svc, fake = make_service(tmp_path)
 
-        fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        fake.fail_next_list_saves(RommNotFoundError("HTTP 404: Not Found"))
 
         result = await svc.list_file_versions(42, "default", "pokemon.srm")
 
@@ -642,7 +642,7 @@ class TestRollbackToVersion:
 
         _install_rom(svc, tmp_path)
         _enable_sync_with_device(svc)
-        fake.fail_on_next(Exception("network error"))
+        fake.fail_next_list_saves(Exception("network error"))
 
         result = await svc.rollback_to_version(42, "default", 50)
 

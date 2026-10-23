@@ -24,6 +24,7 @@ from lib.errors import (
     RommNotFoundError,
     RommSSLError,
     RommTimeoutError,
+    classify_error,
 )
 from services.saves.sync_engine.devices import DeviceRegistry
 from tests.services.saves._helpers import (
@@ -176,32 +177,33 @@ class TestEnsureDeviceRegisteredVersionProbe:
 
 
 class TestEnsureDeviceRegisteredFailurePaths:
-    """When register_device fails, the four sync use cases must refuse with
-    ``device_not_registered`` instead of proceeding with a missing device_id."""
+    """When register_device cannot reach RomM, the four sync use cases refuse with
+    ``server_unreachable`` instead of proceeding with a missing device_id."""
 
     @staticmethod
-    async def _assert_device_not_registered(sync):
+    async def _assert_server_unreachable(sync):
         with pytest.raises(Refused) as refused:
             await sync
 
-        assert (refused.value.reason, refused.value.message) == ("device_not_registered", "Device not registered")
+        unreachable = classify_error(RommApiError("Server unreachable"))[1]
+        assert (refused.value.reason, refused.value.message) == ("server_unreachable", unreachable)
 
     @pytest.mark.asyncio
-    async def test_pre_launch_sync_refuses_with_device_not_registered_on_failure(self, tmp_path):
+    async def test_pre_launch_sync_refuses_with_server_unreachable_on_failure(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set — triggers ensure_device_registered.
         _install_rom(svc, tmp_path)
-        # register_device raises → the sync refuses with device_not_registered.
+        # register_device raises → the sync refuses with server_unreachable.
         fake.fail_on_next(RommApiError("Server unreachable"))
 
-        await self._assert_device_not_registered(svc.pre_launch_sync(42))
+        await self._assert_server_unreachable(svc.pre_launch_sync(42))
 
         # No sync ran — the guard returned early.
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_post_exit_sync_refuses_with_device_not_registered_on_failure(self, tmp_path):
+    async def test_post_exit_sync_refuses_with_server_unreachable_on_failure(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set.
@@ -209,32 +211,32 @@ class TestEnsureDeviceRegisteredFailurePaths:
         _create_save(tmp_path, content=b"data")
         fake.fail_on_next(RommApiError("Server unreachable"))
 
-        await self._assert_device_not_registered(svc.post_exit_sync(42))
+        await self._assert_server_unreachable(svc.post_exit_sync(42))
 
         # No upload ran.
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_sync_rom_saves_refuses_with_device_not_registered_on_failure(self, tmp_path):
+    async def test_sync_rom_saves_refuses_with_server_unreachable_on_failure(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set.
         _install_rom(svc, tmp_path)
         fake.fail_on_next(RommApiError("Server unreachable"))
 
-        await self._assert_device_not_registered(svc.sync_rom_saves(42))
+        await self._assert_server_unreachable(svc.sync_rom_saves(42))
 
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_sync_all_saves_refuses_with_device_not_registered_on_failure(self, tmp_path):
+    async def test_sync_all_saves_refuses_with_server_unreachable_on_failure(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set.
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
         fake.fail_on_next(RommApiError("Server unreachable"))
 
-        await self._assert_device_not_registered(svc.sync_all_saves())
+        await self._assert_server_unreachable(svc.sync_all_saves())
 
         # No per-ROM sync ran.
         assert not any(c[0] == "list_saves" for c in fake.call_log)

@@ -25,6 +25,7 @@ from tests.services.saves._helpers import (
     _server_save,
     _server_save_with_syncs,
     _set_device_id,
+    _stored_device_id,
     make_service,
 )
 
@@ -323,7 +324,7 @@ class TestGetSaveStatusComputeAction:
             },
         )
 
-        result = svc._status._get_save_status_io(42, [ss])
+        result = svc._status._get_save_status_io(42, [ss], device_id=_stored_device_id(svc))
 
         assert len(result["conflicts"]) == 1
         c = result["conflicts"][0]
@@ -366,12 +367,12 @@ class TestGetSaveStatusComputeAction:
         )
 
         # Sanity: the identical setup is conflict-producing while save sync is on.
-        assert len(svc._status._get_save_status_io(42, [ss])["conflicts"]) == 1
+        assert len(svc._status._get_save_status_io(42, [ss], device_id=_stored_device_id(svc))["conflicts"]) == 1
 
         # Disable save sync → the conflict array is empty; the rest of the
         # payload is still produced (only the conflict signal is gated).
         svc._config.settings["save_sync_enabled"] = False
-        result = svc._status._get_save_status_io(42, [ss])
+        result = svc._status._get_save_status_io(42, [ss], device_id=_stored_device_id(svc))
         assert result["conflicts"] == []
         assert result["rom_id"] == 42
         assert "files" in result
@@ -401,13 +402,13 @@ class TestGetSaveStatusComputeAction:
                 }
             },
         )
-        result_skip = svc._status._get_save_status_io(42, [ss_skip])
+        result_skip = svc._status._get_save_status_io(42, [ss_skip], device_id=_stored_device_id(svc))
         assert result_skip["files"][0]["status"] == "synced"
 
         # ---------- Upload ----------
         # Reset state for next case: no server saves
         _seed_save_state(svc, 42, RomSaveSyncState())
-        result_upload = svc._status._get_save_status_io(42, [])
+        result_upload = svc._status._get_save_status_io(42, [], device_id=_stored_device_id(svc))
         assert result_upload["files"][0]["status"] == "upload"
 
         # ---------- Download ----------
@@ -429,7 +430,7 @@ class TestGetSaveStatusComputeAction:
                 }
             },
         )
-        result_dl = svc._status._get_save_status_io(42, [ss_dl])
+        result_dl = svc._status._get_save_status_io(42, [ss_dl], device_id=_stored_device_id(svc))
         assert result_dl["files"][0]["status"] == "download"
 
         # ---------- Conflict ----------
@@ -446,7 +447,7 @@ class TestGetSaveStatusComputeAction:
                 }
             },
         )
-        result_conflict = svc._status._get_save_status_io(42, [ss_dl])
+        result_conflict = svc._status._get_save_status_io(42, [ss_dl], device_id=_stored_device_id(svc))
         assert result_conflict["files"][0]["status"] == "conflict"
 
     def test_get_save_status_server_only_collapses_to_one_entry(self, tmp_path):
@@ -473,7 +474,7 @@ class TestGetSaveStatusComputeAction:
 
         _seed_save_state(svc, 42, RomSaveSyncState())
 
-        result = svc._status._get_save_status_io(42, [ss_old, ss_new])
+        result = svc._status._get_save_status_io(42, [ss_old, ss_new], device_id=_stored_device_id(svc))
 
         assert len(result["files"]) == 1
         entry = result["files"][0]
@@ -489,7 +490,7 @@ class TestGetSaveStatusComputeAction:
 
         _seed_save_state(svc, 42, RomSaveSyncState())
 
-        result = svc._status._get_save_status_io(42, [])
+        result = svc._status._get_save_status_io(42, [], device_id=_stored_device_id(svc))
 
         assert result["files"] == []
         assert result["conflicts"] == []
@@ -560,7 +561,7 @@ class TestSaveSyncDisplayEnrichment:
         _install_rom(svc, tmp_path)
         _seed_save_state(svc, 42, RomSaveSyncState())
 
-        result = svc._status._get_save_status_io(42, [])
+        result = svc._status._get_save_status_io(42, [], device_id=_stored_device_id(svc))
 
         assert result["save_sync_display"] == {
             "status": "none",
@@ -595,7 +596,7 @@ class TestSaveSyncDisplayEnrichment:
             },
         )
 
-        result = svc._status._get_save_status_io(42, [ss])
+        result = svc._status._get_save_status_io(42, [ss], device_id=_stored_device_id(svc))
 
         assert result["save_sync_display"] == {
             "status": "synced",
@@ -624,7 +625,7 @@ class TestSaveSyncDisplayEnrichment:
             },
         )
 
-        result = svc._status._get_save_status_io(42, [ss])
+        result = svc._status._get_save_status_io(42, [ss], device_id=_stored_device_id(svc))
 
         assert result["save_sync_display"]["status"] == "conflict"
         assert result["save_sync_display"]["label"] == "Conflict"
@@ -643,7 +644,7 @@ class TestServerQueryFailed:
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
-        fake.fail_on_next(OSError("connection reset"))
+        fake.fail_next_list_saves(OSError("connection reset"))
 
         result = await svc.get_save_status(42)
 
@@ -686,7 +687,7 @@ class TestServerQueryFailed:
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
-        fake.fail_on_next(RommConnectionError("connection reset"))
+        fake.fail_next_list_saves(RommConnectionError("connection reset"))
 
         result = await svc.get_save_status(42)
 
@@ -706,7 +707,7 @@ class TestServerQueryFailed:
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
-        fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        fake.fail_next_list_saves(RommNotFoundError("HTTP 404: Not Found"))
 
         result = await svc.get_save_status(42)
 
@@ -773,7 +774,7 @@ class TestServerQueryFailed:
 
         # Drive the IO helper directly with the failure flag so we exercise
         # the redaction path against a "successful" matrix result.
-        result = svc._status._get_save_status_io(42, [ss], server_query_failed=True)
+        result = svc._status._get_save_status_io(42, [ss], device_id=_stored_device_id(svc), server_query_failed=True)
 
         assert result["server_query_failed"] is True
         assert len(result["files"]) == 1
@@ -862,7 +863,7 @@ class TestMultiFileSlotConflictAggregation:
         fake.saves[200] = bkr_ss
         fake.saves[201] = bcr_ss
 
-        result = svc._status._get_save_status_io(42, [bkr_ss, bcr_ss])
+        result = svc._status._get_save_status_io(42, [bkr_ss, bcr_ss], device_id=_stored_device_id(svc))
 
         assert len(result["conflicts"]) >= 1
         conflict_files = {c["filename"] for c in result["conflicts"]}
@@ -895,7 +896,12 @@ class TestMultiFileSlotConflictAggregation:
         fake.saves[200] = bkr_ss
         fake.saves[201] = bcr_ss
 
-        status_conflicts = {c["filename"] for c in svc._status._get_save_status_io(42, [bkr_ss, bcr_ss])["conflicts"]}
+        status_conflicts = {
+            c["filename"]
+            for c in svc._status._get_save_status_io(42, [bkr_ss, bcr_ss], device_id=_stored_device_id(svc))[
+                "conflicts"
+            ]
+        }
         _uploaded, _downloaded, _errors, sync_conflicts = _do_sync(svc, 42)
         sync_conflict_files = {c["filename"] for c in sync_conflicts}
 
@@ -912,7 +918,7 @@ class TestMultiFileSlotConflictAggregation:
         fake.saves[200] = bkr_ss
         fake.saves[201] = bcr_ss
 
-        result = svc._status._get_save_status_io(42, [bkr_ss, bcr_ss])
+        result = svc._status._get_save_status_io(42, [bkr_ss, bcr_ss], device_id=_stored_device_id(svc))
 
         conflict_files = {c["filename"] for c in result["conflicts"]}
         assert conflict_files == {"rally.bkr", "rally.bcr"}
@@ -932,7 +938,7 @@ class TestMultiFileSlotConflictAggregation:
         fake.saves[200] = bkr_ss
         fake.saves[201] = bcr_ss
 
-        result = svc._status._get_save_status_io(42, [bkr_ss, bcr_ss])
+        result = svc._status._get_save_status_io(42, [bkr_ss, bcr_ss], device_id=_stored_device_id(svc))
 
         assert len(result["conflicts"]) == 1
         assert result["conflicts"][0]["filename"] == "rally.bcr"
@@ -955,9 +961,14 @@ class TestMultiFileSlotConflictAggregation:
 
         # Sanity: identical setup surfaces both conflicts when the server query
         # succeeded — the failure flag is the only thing that empties them.
-        assert len(svc._status._get_save_status_io(42, [bkr_ss, bcr_ss])["conflicts"]) == 2
+        assert (
+            len(svc._status._get_save_status_io(42, [bkr_ss, bcr_ss], device_id=_stored_device_id(svc))["conflicts"])
+            == 2
+        )
 
-        result = svc._status._get_save_status_io(42, [bkr_ss, bcr_ss], server_query_failed=True)
+        result = svc._status._get_save_status_io(
+            42, [bkr_ss, bcr_ss], device_id=_stored_device_id(svc), server_query_failed=True
+        )
 
         assert result["conflicts"] == []
         assert len(result["files"]) == 2
@@ -988,7 +999,7 @@ class TestMultiFileSlotConflictAggregation:
         fake.saves[201] = ss_new
         _seed_save_state(svc, 42, RomSaveSyncState())
 
-        result = svc._status._get_save_status_io(42, [ss_old, ss_new])
+        result = svc._status._get_save_status_io(42, [ss_old, ss_new], device_id=_stored_device_id(svc))
 
         assert len(result["files"]) == 1
         assert result["files"][0]["server_save_id"] == 201  # newest
@@ -1023,7 +1034,7 @@ class TestSingleFileConflictRegression:
             },
         )
 
-        result = svc._status._get_save_status_io(42, [ss])
+        result = svc._status._get_save_status_io(42, [ss], device_id=_stored_device_id(svc))
 
         assert len(result["conflicts"]) == 1
         assert result["conflicts"][0]["filename"] == "pokemon.srm"
@@ -1053,7 +1064,7 @@ class TestSingleFileConflictRegression:
             },
         )
 
-        result = svc._status._get_save_status_io(42, [ss])
+        result = svc._status._get_save_status_io(42, [ss], device_id=_stored_device_id(svc))
 
         assert result["conflicts"] == []
         assert len(result["files"]) == 1

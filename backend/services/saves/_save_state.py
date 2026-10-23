@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from domain.rom_save_sync_state import RomSaveSyncState
+
 if TYPE_CHECKING:
-    from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import UnitOfWorkFactory
 
 
@@ -17,6 +18,11 @@ def read_save_state(uow_factory: UnitOfWorkFactory, rom_id: int) -> RomSaveSyncS
     """Return the stored save state for *rom_id*, or ``None`` when there is none."""
     with uow_factory() as uow:
         return uow.rom_save_sync_states.get(rom_id)
+
+
+def read_save_state_or_new(uow_factory: UnitOfWorkFactory, rom_id: int) -> RomSaveSyncState:
+    """Return the stored save state for *rom_id*, or a new default one when there is none."""
+    return read_save_state(uow_factory, rom_id) or RomSaveSyncState()
 
 
 def write_save_state(uow_factory: UnitOfWorkFactory, rom_id: int, save_state: RomSaveSyncState) -> None:

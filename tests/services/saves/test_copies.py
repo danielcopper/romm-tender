@@ -772,7 +772,7 @@ class TestCopySaveToSlotRefusals:
         _install_rom(svc, tmp_path)
         _enable_sync_with_device(svc)
         _seed_save_state_dict(svc, 42, {"system": "gba", "active_slot": "autosave", "slot_confirmed": True})
-        fake.fail_on_next(Exception("network error"))
+        fake.fail_next_list_saves(Exception("network error"))
 
         result = await svc.copy_save_to_slot(42, 10, TARGET)
 
