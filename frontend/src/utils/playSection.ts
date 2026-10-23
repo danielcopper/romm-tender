@@ -93,9 +93,10 @@ export function applySaveSyncDisplay(
  *
  *  Four payloads. `bios_status` present: the requirement, and whether this launch
  *  is missing firmware it cannot start without — the resolver's verdict for the
- *  launching emulator, not met. `bios_status` absent: the
- *  backend answering "this emulator needs no BIOS", which clears the fields so a
- *  requirement can be taken back off the page (#1690). `bios_status_unknown`
+ *  launching emulator, not met. `bios_status` with `needs_bios: false`, or
+ *  absent: the backend answering "this emulator needs no BIOS" (or asked about
+ *  no platform), which clears the fields so a requirement can be taken back off
+ *  the page (#1690). `bios_status_unknown`
  *  with an `"unknown"` level: a check that RAN and could not establish the
  *  requirement — an answer, and it clears too, because leaving a stale warning
  *  standing would assert what nothing can establish any more.
@@ -115,7 +116,7 @@ export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
     if (answer.bios_level !== "unknown") return null;
     return { biosNeeded: false, biosLabel: "", biosRequiredMissing: false };
   }
-  if (!answer.bios_status) {
+  if (!answer.bios_status || answer.bios_status.needs_bios === false) {
     return { biosNeeded: false, biosLabel: "", biosRequiredMissing: false };
   }
   return {

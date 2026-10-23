@@ -28,6 +28,7 @@ import { detach } from "../utils/detach";
 import {
   bindRom,
   biosFieldsFromCache,
+  foldBiosRead,
   refreshBiosIfStale,
   refreshPanelCoreInfo,
   refreshCoverArtInBackground,
@@ -82,7 +83,7 @@ async function handleSaveSyncSettingsChange(
       // The SAVES tab's button is gated on the same flag, so switching it off
       // under a user standing on that tab would take the button away and leave
       // its pane below an unmarked strip. Send them back to the tab every ROM
-      // has — the move `handleVersionSwitched` makes for BIOS.
+      // has — the move `handleVersionSwitched` makes too.
       activeTab: prev.activeTab === "saves" ? "info" : prev.activeTab,
     }));
     return;
@@ -163,13 +164,8 @@ async function handleBiosChange(
   const binding = bindCurrentRom(ctx, romId);
   const overtaken = takeReadTicket(ctx.readSeqs, "bios");
   const answer = await getBiosStatus(binding.romId).catch((): BiosAnswer | null => null);
-  if (!answer || overtaken()) return;
-  // A rejected read is not an answer, and neither is a payload carrying none —
-  // writing either would drop the whole BIOS tab while the play row above keeps
-  // its level (#1693).
-  const biosFields = biosFieldsFromCache(answer);
-  if (!biosFields) return;
-  binding.write((prev) => ({ ...prev, ...biosFields }));
+  if (overtaken()) return;
+  foldBiosRead(binding, answer);
 }
 
 async function handleCoreChange(ctx: PanelEventContext): Promise<void> {
@@ -244,7 +240,7 @@ async function handleVersionSwitched(
   //
   // BIOS is the third per-rom tab: the requirement is core-dependent and the
   // core override is keyed on rom_id, so the new version's core may need
-  // different files — or none, which hides the tab (#1681).
+  // different files, or none (#1681).
   //
   // Two switches in quick succession read the cache twice and can finish in
   // either order, so this read is ordered like the mount load's — see `loadData`.
@@ -256,18 +252,16 @@ async function handleVersionSwitched(
   ctx.romIdRef.current = newRomId;
   ctx.slotsLoadedRef.current = false;
   const saveStatus = newRomId != null ? saveStatusFromCache(newRomId, cached.save_status) : null;
-  // A detail carrying no BIOS answer keeps the shown status: the switched-to
-  // version's requirement is unread, not absent (#1693).
-  const biosFields = biosFieldsFromCache(cached);
+  // The shown BIOS answer is the previous version's, so a detail carrying no
+  // answer for this one leaves the tab waiting for the live read below rather
+  // than showing another ROM's.
+  const biosFields = biosFieldsFromCache(cached) ?? { biosStatus: null, biosLevel: null };
   const saveSyncEnabled = cached.save_sync_enabled ?? false;
   ctx.setState((prev) => {
-    const biosStatus = biosFields ? biosFields.biosStatus : prev.biosStatus;
-    // Both gated tabs can lose their button to this switch, and a user standing
-    // on one is then looking at a body with nothing marked in the strip above
-    // it. Asked as one question because the answer is the same either way and
-    // only one tab is active: back to the tab every version has.
-    const activeTabGone =
-      (prev.activeTab === "bios" && !biosStatus) || (prev.activeTab === "saves" && !saveSyncEnabled);
+    // The SAVES tab can lose its button to this switch, and a user standing on
+    // it is then looking at a body with nothing marked in the strip above it:
+    // back to the tab every version has.
+    const activeTabGone = prev.activeTab === "saves" && !saveSyncEnabled;
     return {
       ...prev,
       romId: newRomId,
@@ -293,6 +287,7 @@ async function handleVersionSwitched(
       lastKnownSlots: null,
       slotsLoading: false,
       ...biosFields,
+      biosReadFailed: false,
       activeTab: activeTabGone ? "info" : prev.activeTab,
     };
   });
@@ -305,9 +300,8 @@ async function handleVersionSwitched(
   if (newRomId) {
     const binding = bindCurrentRom(ctx, newRomId);
     const reads = [
-      // The switched-to version's requirement is its own, so a detail that could
-      // not answer leaves the PREVIOUS version's on the page — the one case
-      // where keeping the shown status is showing another ROM's (#1752).
+      // The switched-to version's requirement is its own, and the tab waits
+      // for it from the switch on.
       //
       // Read directly even though the store's own `version_switched` load reads
       // this same new rom_id microtasks away, which a join would collapse: a

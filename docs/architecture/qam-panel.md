@@ -1634,6 +1634,18 @@ it, for the focused platform:
   fits. "Emulator" and never "core": what a platform launches with can be a STANDALONE emulator, which is not a core,
   and the whole answer is keyed on the emulator's identity for that reason.
 
+  **The game page's BIOS tab is in the tab bar for every game from the moment the page opens**, and no answer takes it
+  away. The cached detail carries no BIOS answer, so the tab's comes from the live `get_bios_status` read a moment
+  later, and the tab tells three states apart off `frontend/src/utils/biosReadState.ts`, the derivation the platform
+  page's BIOS block reads too: while the answer is still out, the `BIOS` heading over "Checking…" behind Steam's spinner
+  (`WaitingLine`); a read that failed with nothing shown, "Could not read the BIOS state. Open the game page again to
+  retry."; a re-read that failed over an answer the tab holds, that answer under "Could not re-read the BIOS state, so
+  what is below may be out of date. Open the game page again to retry." A read that comes back carrying no answer — the
+  flag with no level, a check that raised — counts as failed. A version switch starts the tab over at "Checking…",
+  because the answer it holds is the previous version's. The answer that the launching emulator needs no BIOS is a
+  status like any other (`needs_bios: false`, level `ok`) and is drawn the same way: its sentence with the green dot,
+  the selector where the platform offers more than one emulator, and a list with no required row.
+
   **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the same ratio appended in the
   same words. Where the answering source gives no emulator list, a line between the `BIOS` heading and that sentence
   says why, in the platform page's words (`emulatorDataReasonSentence`, over the `get_platform_core_info` answer the tab
@@ -1950,7 +1962,9 @@ reads and the answers arrive underneath it, and five rules hold:
   holds no entry yet and the other holds one whose level is `unknown`, so the level cannot tell them apart — the row's
   read state (`pending` against `answered`) does. Drawn off the level, both would be the grey dot that means "unknown" —
   an ANSWER, and the wrong one, over most of the list for the first seconds of every visit. A waiting row draws the dot
-  as an **outline** and says "Checking…"; the solid grey dot keeps its meaning.
+  as an **outline** and says "Checking…"; the solid grey dot keeps its meaning. Its pane says "Checking what this
+  platform needs…" behind Steam's spinner (`WaitingLine`), as a game's BIOS tab waits for its own answer. The read state
+  is derived in `frontend/src/utils/biosReadState.ts`, which the game page's BIOS tab reads too.
 - **Leaving the page stops the work.** No further platform is asked for, and an answer already in flight is dropped
   rather than written — a visit's answers belong to that visit, and a fresh one has re-read them.
 - **A BIOS download or delete, and a core change, re-read that platform and no other.** The files (or the emulator)

@@ -43,6 +43,7 @@ import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
 import { fileDotColor, rowBelongsOnThisPage } from "../utils/biosGamePageRows";
 import { needWords, type GroupLineTone } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
+import { biosAnswerStale, biosReadState } from "../utils/biosReadState";
 import {
   backupLines,
   biosPlaceLines,
@@ -62,16 +63,19 @@ import { detach } from "../utils/detach";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { EmulatorSelector, SHOWN_ENTRY_ATTR } from "./EmulatorSelector";
 import { section } from "./panelSection";
+import { WaitingLine } from "./WaitingLine";
 
 interface BiosTabProps {
-  /** The platform's BIOS requirement, or null when its core needs none — in
-   *  which case there is no tab to render. A platform whose requirement could
-   *  not be established passes a status with no files rather than null: not
-   *  knowing is something to say, and no tab would have said the opposite. */
+  /** The game's BIOS answer, or null while none is held: still out, or a read
+   *  that failed with nothing behind it (`readFailed`). The answer that no BIOS
+   *  is needed is a status like any other, drawn the same way. */
   biosStatus: BiosStatus | null;
   /** Backend-computed readiness verdict driving the status-dot color;
-   *  null whenever there is no requirement. */
+   *  null while no answer is held. */
   biosLevel: BiosLevel | null;
+  /** Whether the latest read of the answer failed — with `biosStatus` held, what
+   *  is shown is from before it (`utils/biosReadState.ts`). */
+  readFailed?: boolean;
   /** The launching emulator as the Emulator column names it, plus the
    *  platform's emulator list. From the dedicated `get_platform_core_info` path,
    *  never derived from `biosStatus`. */
@@ -132,9 +136,7 @@ function buildBiosHeader(
       : null;
 
   return [
-    <div key="bios-title" className="romm-panel-section-title" style={{ marginBottom: "8px" }}>
-      BIOS
-    </div>,
+    biosTitle(),
     ...(listReason === null
       ? []
       : [
@@ -162,6 +164,36 @@ function buildBiosHeader(
           </div>,
         ]),
   ];
+}
+
+function biosTitle(): ReactElement {
+  return (
+    <div key="bios-title" className="romm-panel-section-title" style={{ marginBottom: "8px" }}>
+      BIOS
+    </div>
+  );
+}
+
+/**
+ * The tab while no answer is held: its heading, and either that the answer is
+ * on its way or that the read for it failed. The two never read alike — a
+ * reader takes a silent tab for an answer.
+ */
+function unansweredTab(failed: boolean): ReactElement {
+  return section(
+    "bios-core",
+    null,
+    biosTitle(),
+    failed ? (
+      <div key="bios-read-failed" className="romm-panel-value" data-testid="bios-read-failed">
+        Could not read the BIOS state. Open the game page again to retry.
+      </div>
+    ) : (
+      <div key="bios-checking" className="romm-panel-value">
+        <WaitingLine>Checking…</WaitingLine>
+      </div>
+    ),
+  );
 }
 
 /** The dot beside one line of the group block — the same colours a file row's dot uses. */
@@ -481,7 +513,15 @@ function stopHolding(root: ParentNode, place: string): HTMLElement | null {
   return row?.closest<HTMLElement>(`.${LIST_PART_CLASS}`) ?? null;
 }
 
-export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isActive, platformName, onReplace }) => {
+export const BiosTab: FC<BiosTabProps> = ({
+  biosStatus,
+  biosLevel,
+  readFailed = false,
+  coreInfo,
+  isActive,
+  platformName,
+  onReplace,
+}) => {
   // Which emulator the list shows: the launching one until another is chosen —
   // a view, never a change of what launches.
   const [tabKey, setTabKey] = useState<string | null>(null);
@@ -527,11 +567,24 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
     }, ENTRY_FOCUS_DELAY_MS);
     return () => clearTimeout(timer);
   }, [replacedPlace, biosStatus]);
-  if (!isActive || !biosStatus) return null;
+  if (!isActive) return null;
+  const held = biosStatus !== null;
+  if (!held) return unansweredTab(biosReadState(held, readFailed) === "failed");
 
   // Left column: BIOS status, the launching emulator's group. The header is the
   // launching emulator's whichever emulator the list below shows.
   const biosColumn = buildBiosHeader(biosStatus, biosLevel, coreInfo, platformName || null);
+  if (biosAnswerStale(held, readFailed)) {
+    biosColumn.unshift(
+      <div
+        key="bios-stale"
+        data-testid="bios-stale"
+        style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "12px", marginBottom: "4px" }}
+      >
+        Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.
+      </div>,
+    );
+  }
   const groupBlockElement = buildGroupBlock(biosStatus);
   if (groupBlockElement) biosColumn.push(groupBlockElement);
 

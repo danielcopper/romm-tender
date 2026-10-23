@@ -12,21 +12,19 @@ import { PanelTabBar } from "./PanelTabBar";
 describe("PanelTabBar", () => {
   it("reports the pressed tab's id", () => {
     const onSelect = vi.fn();
-    const { getByText } = render(<PanelTabBar activeTab="info" hasAchievements hasSaves hasBios onSelect={onSelect} />);
+    const { getByText } = render(<PanelTabBar activeTab="info" hasAchievements hasSaves onSelect={onSelect} />);
     fireEvent.click(getByText("SAVES"));
     expect(onSelect).toHaveBeenCalledWith("saves");
   });
 
   it("marks the active tab and only the active tab", () => {
-    const { getByText } = render(<PanelTabBar activeTab="bios" hasAchievements hasSaves hasBios onSelect={vi.fn()} />);
+    const { getByText } = render(<PanelTabBar activeTab="bios" hasAchievements hasSaves onSelect={vi.fn()} />);
     expect(getByText("BIOS").className).toContain("romm-tab-active");
     expect(getByText("GAME INFO").className).not.toContain("romm-tab-active");
   });
 
   it("renders the tabs in their fixed order", () => {
-    const { getAllByRole } = render(
-      <PanelTabBar activeTab="info" hasAchievements hasSaves hasBios onSelect={vi.fn()} />,
-    );
+    const { getAllByRole } = render(<PanelTabBar activeTab="info" hasAchievements hasSaves onSelect={vi.fn()} />);
     expect(getAllByRole("button").map((b) => b.textContent)).toEqual([
       "GAME INFO",
       "ACHIEVEMENTS",
@@ -38,18 +36,18 @@ describe("PanelTabBar", () => {
 
   it("drops the tabs whose pane has nothing to show", () => {
     const { getByText, queryByText } = render(
-      <PanelTabBar activeTab="info" hasAchievements={false} hasSaves={false} hasBios={false} onSelect={vi.fn()} />,
+      <PanelTabBar activeTab="info" hasAchievements={false} hasSaves={false} onSelect={vi.fn()} />,
     );
     expect(getByText("GAME INFO")).not.toBeNull();
     expect(queryByText("ACHIEVEMENTS")).toBeNull();
     expect(queryByText("SAVES")).toBeNull();
-    expect(queryByText("BIOS")).toBeNull();
+    expect(getByText("BIOS")).not.toBeNull();
   });
 
-  it("shows ARTWORK with every other pane absent", () => {
+  it("shows BIOS and ARTWORK with every other pane absent", () => {
     const { getAllByRole } = render(
-      <PanelTabBar activeTab="info" hasAchievements={false} hasSaves={false} hasBios={false} onSelect={vi.fn()} />,
+      <PanelTabBar activeTab="info" hasAchievements={false} hasSaves={false} onSelect={vi.fn()} />,
     );
-    expect(getAllByRole("button").map((b) => b.textContent)).toEqual(["GAME INFO", "ARTWORK"]);
+    expect(getAllByRole("button").map((b) => b.textContent)).toEqual(["GAME INFO", "BIOS", "ARTWORK"]);
   });
 });

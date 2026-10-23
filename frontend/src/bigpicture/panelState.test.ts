@@ -52,6 +52,7 @@ function basePanelState(): PanelState {
     coverBase64: null,
     biosStatus: null,
     biosLevel: null,
+    biosReadFailed: false,
     coreInfo: null,
     saveSyncEnabled: true,
     saveStatus: null,

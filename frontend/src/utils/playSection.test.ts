@@ -109,6 +109,14 @@ describe("extractBiosInfo", () => {
     });
   });
 
+  it("reports the cleared shape for the whole status that says no BIOS is needed", () => {
+    // The game page draws that answer as a status like any other; the play row
+    // reads it as no requirement, label and badge included.
+    expect(
+      extractBiosInfo({ bios_status: { ...requirement, needs_bios: false }, bios_level: "ok", bios_label: "OK" }),
+    ).toEqual({ biosNeeded: false, biosLabel: "", biosRequiredMissing: false });
+  });
+
   it("ignores a level and label left over next to an absent requirement (#1690)", () => {
     // The three fields move together — a cleared requirement never leaves a
     // label or a warning behind for the row to render against nothing.

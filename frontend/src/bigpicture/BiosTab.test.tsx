@@ -11,7 +11,7 @@ import { BiosTab } from "./BiosTab";
 import { EmulatorStepScope } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
 import { libretroEmu, sharedBy, standaloneEmu } from "../test-utils/coreFixtures";
-import { BIOS_MISSING_RED } from "../utils/biosColor";
+import { BIOS_MISSING_RED, biosColorForLevel } from "../utils/biosColor";
 import { forgetBiosPresses, noteBiosPress, noteReplaceFailed } from "../utils/biosAttempts";
 import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption, MissingConfiguredImage } from "../types";
 
@@ -73,9 +73,79 @@ describe("BiosTab", () => {
     expect(container.textContent).toBe("");
   });
 
-  it("renders nothing when nothing needs BIOS", () => {
-    const { container } = render(<BiosTab biosStatus={null} biosLevel={null} coreInfo={coreInfo} isActive={true} />);
-    expect(container.textContent).toBe("");
+  it("shows its heading and Checking… behind Steam's spinner while no answer is held", () => {
+    const { container, getByTestId } = render(
+      <BiosTab biosStatus={null} biosLevel={null} coreInfo={coreInfo} isActive={true} />,
+    );
+    expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("BIOS");
+    expect(getByTestId("waiting-line").textContent).toBe("Checking…");
+    expect(getByTestId("waiting-line").querySelector('[data-testid="spinner"]')).not.toBeNull();
+  });
+
+  it("says the read failed while no answer is held, and never that it is still checking", () => {
+    const { container, queryByTestId } = render(
+      <BiosTab biosStatus={null} biosLevel={null} readFailed coreInfo={coreInfo} isActive={true} />,
+    );
+    expect(container.textContent).toBe("BIOSCould not read the BIOS state. Open the game page again to retry.");
+    expect(queryByTestId("waiting-line")).toBeNull();
+  });
+
+  it("keeps the answer it holds under a notice when its re-read failed", () => {
+    const { container, getByTestId } = render(
+      <BiosTab biosStatus={biosStatus} biosLevel="missing" readFailed coreInfo={coreInfo} isActive={true} />,
+    );
+    expect(getByTestId("bios-stale").textContent).toBe(
+      "Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.",
+    );
+    expect(container.textContent).toContain("The one file the launching emulator opens by name is not in place");
+  });
+
+  it("draws the answer that no BIOS is needed like any other: a green sentence, the selector and the list", () => {
+    const noneNeeded: BiosStatus = {
+      needs_bios: false,
+      server_count: 0,
+      local_count: 0,
+      all_downloaded: true,
+      required_count: 0,
+      required_downloaded: 0,
+      emulator_read: true,
+      active_core_label: "Snes9x",
+      files: [],
+      emulator_tabs: [
+        {
+          emulator: "snes9x_libretro.so",
+          label: "Snes9x",
+          launching: true,
+          requirements_met: true,
+          rows: [],
+        },
+        {
+          emulator: "bsnes_libretro.so",
+          label: "bsnes",
+          launching: false,
+          requirements_met: true,
+          rows: [
+            {
+              file_name: "optional.bin",
+              wanted: "optional",
+              required_by_active: false,
+              downloaded: false,
+            } as BiosFileStatus,
+          ],
+        },
+      ],
+    };
+    const { container } = render(
+      <BiosTab biosStatus={noneNeeded} biosLevel="ok" coreInfo={coreInfo} isActive={true} />,
+    );
+
+    expect(container.textContent).toContain("Snes9x marks none of its BIOS files as required");
+    expect(container.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor).toBe(
+      biosColorForLevel("ok"),
+    );
+    expect(container.textContent).toContain("1 / 2");
+    // The launching emulator's list holds no row, required or not.
+    expect(container.querySelector(".romm-panel-file-row")).toBeNull();
   });
 
   it("renders the unknown reading off a status with no counts at all", () => {
@@ -1764,7 +1834,6 @@ describe("BiosTab", () => {
                 activeTab={isActive ? "bios" : "info"}
                 hasAchievements={false}
                 hasSaves={false}
-                hasBios={true}
                 onSelect={() => {}}
               />
               <BiosTab biosStatus={saturn()} biosLevel="missing" coreInfo={coreInfo} isActive={isActive} />

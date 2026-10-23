@@ -176,15 +176,23 @@ reporting "no BIOS needed". So a check that could not be completed never quietly
 the game launch without its files; it leaves the warning where it was.
 
 "The requirement is unknown" is itself an answer, and a different one. A check that ran and could not establish what the
-system needs says so on the page — grey dot, "Nothing could be established about what mGBA needs" — instead of hiding
-the BIOS tab. Hiding it would say the system needs nothing, which is exactly the claim that could not be made. Every PS3
-game is in that position, since RPCS3 is not a RetroArch core and cannot be asked.
+system needs says so on the page — grey dot, "Nothing could be established about what mGBA needs" — rather than reading
+as if the system needed nothing, which is exactly the claim that could not be made. Every PS3 game is in that position,
+since RPCS3 is not a RetroArch core and cannot be asked.
 
-It does not leave it there indefinitely, though. Whenever the game detail page is shown a BIOS state it could not work
-out — when the page opens, after switching the emulator core, after switching to another version of the game — it asks
-again in the background and fills the answer in a moment later. So a game opened while its requirement is still unread
-gets its BIOS tab a beat after the rest of the page, and a core or version switch settles on the new core's or new
-version's readiness rather than the one before it.
+Every game has a **BIOS** tab, from the moment its page opens, whatever its system needs. The page reads the game's BIOS
+state in the background and fills it in a moment later; until then the tab shows a spinner and **Checking…**. A game
+whose emulator needs no BIOS keeps its tab too, and it reads like any other: a green dot and "Snes9x marks none of its
+BIOS files as required", the emulator selector where the system offers more than one emulator, and a list with no
+required file in it. After switching the emulator core, the page asks again and settles on the new core's readiness.
+After switching to another version of the game, the tab goes back to **Checking…** until that version's answer arrives,
+because the one before was about the other version.
+
+When the BIOS state cannot be read at all, the tab says **"Could not read the BIOS state. Open the game page again to
+retry."** When it was read before and a later read fails — after a BIOS download, say — the tab keeps what it showed
+under **"Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry."**
+The platform page in **Library › Platforms** does the same for a platform, and shows its own spinner beside **Checking
+what this platform needs…** while a platform's answer is on its way.
 
 An unreachable RomM server usually does **not** put Tender in that position. Everything the readiness line needs is
 local: which emulator is active comes from your RetroDECK configuration, what that emulator needs comes from the

@@ -50,8 +50,12 @@ export interface PanelState {
   // "unknown" (no installed emulator's answer could be established) renders
   // neutral grey, and is the one level that stands beside a `biosStatus` holding
   // no files.
-  // null when no BIOS need.
+  // null while no answer is held.
   biosLevel: BiosLevel | null;
+  // Whether the latest live BIOS read failed. Beside `biosStatus` it is the
+  // platform page's pair (`utils/biosReadState.ts`): with no status held the
+  // read failed, with one held that status is from before the failed read.
+  biosReadFailed: boolean;
   // Core info comes from the dedicated get_platform_core_info path (#923), not
   // from biosStatus — the two concerns are decoupled. It stays here rather than
   // in the BIOS tab because it has to reach the render in the SAME update as
@@ -260,27 +264,29 @@ const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_
 
 /** The panel's two BIOS fields as a BIOS answer carries them — a cached game
  *  detail or the live `get_bios_status` read below, which ship the identical
- *  shape — or `null` when the payload carries no BIOS answer at all: a detail
- *  derived while the firmware cache was cold, which every BIOS download and
- *  delete makes it. The caller then leaves the shown status standing instead of
- *  hiding the BIOS tab on a non-answer (#1693).
+ *  shape — or `null` when the payload carries no BIOS answer at all: a cached
+ *  detail, which never carries one, or a live check that raised. The caller then
+ *  leaves the shown status standing instead of replacing an answer with a
+ *  non-answer (#1693).
  *
  *  `bios_status_unknown` rides two payloads and only one of them is a
  *  non-answer. The level tells them apart: an "unknown" level is a check that
  *  RAN and could not establish the requirement, which is an answer and is shown
- *  as one — a platform whose only emulators are standalone has no other outcome,
- *  and dropping its tab said it needed nothing (#1660). No level is a read that
- *  never happened, and that one still leaves the page as it is.
+ *  as one (#1660). No level is a read that never happened.
+ *
+ *  Every answer the check established carries `bios_status`, the one that no
+ *  BIOS is needed included (`needs_bios: false`). A payload with neither the
+ *  status nor the flag was asked about a ROM the backend holds no platform for,
+ *  and answers nothing either.
  *
  *  `bios_level` is computed by the backend (`compute_bios_level`) and threaded
- *  straight through, never re-derived; it is null whenever there is no
- *  requirement. */
+ *  straight through, never re-derived. */
 export function biosFieldsFromCache(cached: BiosAnswer): Pick<PanelState, "biosStatus" | "biosLevel"> | null {
   if (cached.bios_status_unknown) {
     if (cached.bios_level !== "unknown") return null;
     return { biosStatus: UNKNOWN_REQUIREMENT_STATUS, biosLevel: "unknown" };
   }
-  if (!cached.bios_status) return { biosStatus: null, biosLevel: null };
+  if (!cached.bios_status) return null;
   return {
     biosStatus: { needs_bios: true, ...cached.bios_status },
     biosLevel: cached.bios_level ?? null,
@@ -290,12 +296,12 @@ export function biosFieldsFromCache(cached: BiosAnswer): Pick<PanelState, "biosS
 /** Go back for the BIOS answer the cached detail could not give, and fold it in.
  *
  *  Every fold of {@link biosFieldsFromCache} leaves the shown status standing on
- *  a non-answer (#1693), and nothing else re-reads it — so a panel opened while
- *  the firmware cache was cold showed the previous answer, or no BIOS tab at
- *  all, until an unrelated event moved it (#1752). The backend marks exactly
- *  that payload's `bios` field stale, which is what turns "we don't know" into a
- *  read; a payload with no stale list at all is one nobody marked, so it is left
- *  alone rather than re-read on every fold.
+ *  a non-answer (#1693), and nothing else re-reads it — so without this read the
+ *  tab would wait on a cached detail's non-answer until an unrelated event moved
+ *  it (#1752). The backend marks exactly that payload's `bios` field stale,
+ *  which is what turns "we don't know" into a read; a payload with no stale list
+ *  at all is one nobody marked, so it is left alone rather than re-read on every
+ *  fold.
  *
  *  The ticket is taken whether or not the read is issued: the caller has just
  *  folded the newest cached answer for these two fields, so a live read left
@@ -316,13 +322,24 @@ export function refreshBiosIfStale(
   const overtaken = takeReadTicket(readSeqs, "bios");
   if (!(cached.stale_fields ?? []).includes("bios")) return Promise.resolve();
   return read(binding.romId)
+    .catch((e): null => {
+      detach(debugLog(`RomMGameInfoPanel: BIOS status refresh error: ${e}`));
+      return null;
+    })
     .then((answer) => {
       if (overtaken()) return;
-      const biosFields = biosFieldsFromCache(answer);
-      if (!biosFields) return;
-      binding.write((prev) => ({ ...prev, ...biosFields }));
-    })
-    .catch((e) => detach(debugLog(`RomMGameInfoPanel: BIOS status refresh error: ${e}`)));
+      foldBiosRead(binding, answer);
+    });
+}
+
+/** Fold a live BIOS read into the panel: an answer replaces the shown one, and a
+ *  read that failed (`null`) or came back carrying no answer keeps whatever is
+ *  shown and marks the read failed — see {@link PanelState.biosReadFailed}. */
+export function foldBiosRead(binding: RomBinding, answer: BiosAnswer | null): void {
+  const biosFields = answer === null ? null : biosFieldsFromCache(answer);
+  binding.write((prev) =>
+    biosFields === null ? { ...prev, biosReadFailed: true } : { ...prev, ...biosFields, biosReadFailed: false },
+  );
 }
 
 /** Build a `SaveStatus` from a cached game detail's `save_status` field. */
@@ -441,7 +458,7 @@ export async function loadData(
     platformSlugRef.current = platformSlug;
 
     // Nothing is shown yet on a first render, so a payload carrying no BIOS
-    // answer starts the panel out with none either.
+    // answer starts the panel out waiting for the live one.
     const { biosStatus, biosLevel } = biosFieldsFromCache(cached) ?? { biosStatus: null, biosLevel: null };
     const saveStatus = saveStatusFromCache(romId, cached.save_status);
     const conflicts: SyncConflict[] = cached.save_status?.conflicts ?? [];
@@ -463,6 +480,7 @@ export async function loadData(
       coverBase64: null, // Will be filled by background fetch
       biosStatus,
       biosLevel,
+      biosReadFailed: false,
       coreInfo: null, // Will be filled by background fetch (get_platform_core_info)
       saveSyncEnabled: cached.save_sync_enabled ?? false,
       saveStatus,
