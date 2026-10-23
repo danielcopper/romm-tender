@@ -5,7 +5,10 @@ The check asks SteamGridDB for the candidates of every slot
 rule, and puts each image the rule now picks instead of the one shown into the
 artwork cache; handing it to Steam is the frontend's, through the per-slot
 fetch. The time of the check is recorded on the ROM when it starts and taken
-back when SteamGridDB left a slot unanswered.
+back when SteamGridDB left a slot unanswered — no connection, a 429, a server
+error, a refused key, an unsuccessful answer, a download that failed — or the
+check raised. Every visit, checked or not, also names the slots downloaded so
+before and not yet handed to Steam (#2381 D29).
 """
 
 from __future__ import annotations
@@ -20,10 +23,11 @@ from domain.sgdb_artwork import choose_candidate, sgdb_endpoint_path
 from lib.errors import SgdbApiError, SgdbRateLimitedError
 from services.steamgrid._files import CachedArtwork
 from services.steamgrid._refusals import refuse_a_key_that_cannot_be_sent
+from services.steamgrid._slots import TAB_SLOTS
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from domain.artwork_slot import ArtworkSlot
     from domain.sgdb_artwork import SgdbCandidate
@@ -33,7 +37,7 @@ if TYPE_CHECKING:
 
 
 class _Unanswered(Enum):
-    """SteamGridDB gave no answer for a slot: no connection, a 429, a server error, a refused key."""
+    """SteamGridDB gave no answer for a slot: no connection, a 429, a server error, a refused key, a failed answer."""
 
     UNANSWERED = "unanswered"
 
@@ -89,12 +93,16 @@ class KeepingCurrent:
 
         Answers ``replaced``, the slots whose image Tender's rule now picks
         instead of the one shown, each downloaded into the artwork cache for
-        the frontend to fetch with ``get_sgdb_slot_artwork`` and hand to Steam,
-        and ``status``: ``checked``; ``unanswered`` where SteamGridDB left a slot
-        without an answer, so the check stopped there and its time was taken
-        back; ``not_due`` within seven days of the last check; ``no_api_key``;
-        ``no_sgdb_game``; ``not_synced`` for a ROM with no ``roms`` row. Refuses
-        ``auth_failed`` for a key no header can carry.
+        the frontend to fetch with ``get_sgdb_slot_artwork`` and hand to Steam —
+        also, whether due or not and without asking SteamGridDB, every slot
+        downloaded so before and not yet handed over (#2381 D29), in the tab's
+        order — and ``status``: ``checked``; ``unanswered`` where SteamGridDB
+        left a slot without an answer — no connection, a 429, a server error, a
+        refused key, an unsuccessful answer, a download that failed — so the
+        check stopped there and its time was taken back, as it is for any other
+        error the check raises; ``not_due`` within seven days of the last check;
+        ``no_api_key``; ``no_sgdb_game``; ``not_synced`` for a ROM with no
+        ``roms`` row. Refuses ``auth_failed`` for a key no header can carry.
         """
         async with self._rules.hold("keep_artwork_current", prune=True):
             rom_id = int(rom_id)
@@ -102,17 +110,23 @@ class KeepingCurrent:
             if not api_key:
                 return {"status": "no_api_key", "replaced": []}
             refuse_a_key_that_cannot_be_sent(api_key)
+            pending = await self._loop.run_in_executor(None, self._slots.downloaded_not_set_io, rom_id)
             sgdb_id = await self._loop.run_in_executor(None, self._effective_sgdb_id, rom_id)
             if not sgdb_id:
-                return {"status": "no_sgdb_game", "replaced": []}
+                return {"status": "no_sgdb_game", "replaced": _in_tab_order(pending)}
             async with self._starting:
                 started = await self._loop.run_in_executor(None, self._start_io, rom_id)
             if not isinstance(started, _Started):
-                return {"status": started, "replaced": []}
-            replaced, answered = await self._loop.run_in_executor(None, self._check_io, rom_id, int(sgdb_id))
+                return {"status": started, "replaced": _in_tab_order(pending)}
+            try:
+                replaced, answered = await self._loop.run_in_executor(None, self._check_io, rom_id, int(sgdb_id))
+            except Exception:
+                await self._loop.run_in_executor(None, self._withdraw_io, rom_id, started)
+                raise
             if not answered:
                 await self._loop.run_in_executor(None, self._withdraw_io, rom_id, started)
-            return {"status": "checked" if answered else "unanswered", "replaced": [slot.value for slot in replaced]}
+            status = "checked" if answered else "unanswered"
+            return {"status": status, "replaced": _in_tab_order([*pending, *replaced])}
 
     def _start_io(self, rom_id: int) -> _Started | str:
         """Record that a check of *rom_id* starts now, where one is due; else the status that says why not."""
@@ -194,3 +208,9 @@ class KeepingCurrent:
             )
             return False
         return isinstance(stored, CachedArtwork)
+
+
+def _in_tab_order(slots: Iterable[ArtworkSlot]) -> list[str]:
+    """*slots* once each, in the ARTWORK tab's order, as the wire names them."""
+    held = set(slots)
+    return [slot.value for slot in TAB_SLOTS if slot in held]

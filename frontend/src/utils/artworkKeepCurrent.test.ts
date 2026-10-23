@@ -51,6 +51,18 @@ describe("keepArtworkCurrentOnVisit (#2381 D5, D26)", () => {
     expect(coverRefreshed).not.toHaveBeenCalled();
   });
 
+  it("hands Steam what an earlier visit downloaded and did not set, inside the seven days too (#2381 D29)", async () => {
+    vi.mocked(backend.keepArtworkCurrent).mockResolvedValue({ status: "not_due", replaced: ["logo"] });
+    vi.mocked(artwork.applyKeptCurrentArtwork).mockResolvedValue(["logo"]);
+
+    await keepArtworkCurrentOnVisit(5000, 42);
+
+    expect(vi.mocked(artwork.applyKeptCurrentArtwork)).toHaveBeenCalledWith(42, 5000, ["logo"]);
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+      expect.objectContaining({ body: "Updated the logo from SteamGridDB" }),
+    );
+  });
+
   it("names only the slots Steam took", async () => {
     vi.mocked(backend.keepArtworkCurrent).mockResolvedValue(checked(["hero", "logo"]));
     vi.mocked(artwork.applyKeptCurrentArtwork).mockResolvedValue(["logo"]);

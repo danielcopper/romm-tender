@@ -161,6 +161,26 @@ class ArtworkSlots:
         """The views of *rom_id*'s slots keeping current asks about (``domain.artwork_keep_current``), read as above."""
         return slots_kept_current(self._views_of_rom_io(rom_id))
 
+    def downloaded_not_set_io(self, rom_id: int) -> list[ArtworkSlot]:
+        """The slots keeping current asks about whose cached image is not the one Steam last took (#2381 D29).
+
+        Each has a ``set`` record naming another image id than the cached
+        file's: a replacement downloaded and not yet handed to Steam, as when
+        the page was left, or Steam rebuilt it, partway through handing over.
+        """
+        views = self.kept_current_views_io(rom_id)
+        with self._uow_factory() as uow:
+            recorded = {view.slot: uow.artwork_slot_outcomes.get(rom_id, view.slot) for view in views}
+        pending: list[ArtworkSlot] = []
+        for view in views:
+            record = recorded[view.slot]
+            cached = self._files.cached(rom_id, view.slot.value)
+            if record is None or record.outcome is not SlotOutcome.SET or cached is None:
+                continue
+            if cached.image_id != record.image_id:
+                pending.append(view.slot)
+        return pending
+
     def is_set_in_steam_io(self, rom_id: int, slot: ArtworkSlot) -> bool:
         """Whether *rom_id*'s *slot* is set in Steam, read as :meth:`slots_left_to_tender_io`."""
         return any(view.slot is slot and view.state is SlotState.SET_IN_STEAM for view in self._views_of_rom_io(rom_id))

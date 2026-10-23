@@ -4921,3 +4921,94 @@ class TestTheCoverWhereRommHasNone:
 
         covers_asked = [path for path in fake_steamgrid_db_api.requested_paths if "dimensions=600x900" in path]
         assert covers_asked == []
+
+
+class TestWhatAVisitLeftNotHandedOver:
+    """D29: a visit names every automatic slot downloaded anew and not yet set, inside the seven days too."""
+
+    @pytest.mark.asyncio
+    async def test_a_handover_cut_short_finishes_at_the_next_visit(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.WIDE_GRID, 5)
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _seed_candidates(fake_steamgrid_db_api, "grid", (6, 920, 430))
+        _seed_candidates(fake_steamgrid_db_api, "logo", (8, 800, 300))
+        first = await steamgrid.service.keep_artwork_current(42)
+        # Steam took the wide grid; the page was rebuilt before the logo was handed over.
+        (slot_ready / f"{_APP_ID}.png").write_bytes(b"image 6")
+        await steamgrid.service.report_sgdb_slot_artwork(42, "grid", "set", 9999, 6, _sha(b"image 6"))
+        asked = len(fake_steamgrid_db_api.requested_paths)
+
+        second = await steamgrid.service.keep_artwork_current(42)
+
+        assert first == {"status": "checked", "replaced": ["grid", "logo"]}
+        assert second == {"status": "not_due", "replaced": ["logo"]}
+        assert len(fake_steamgrid_db_api.requested_paths) == asked
+
+    @pytest.mark.asyncio
+    async def test_a_visit_with_nothing_left_names_nothing(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _seed_candidates(fake_steamgrid_db_api, "logo", (8, 800, 300))
+        await steamgrid.service.keep_artwork_current(42)
+        (slot_ready / f"{_APP_ID}_logo.png").write_bytes(b"image 8")
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "set", 9999, 8, _sha(b"image 8"))
+
+        again = await steamgrid.service.keep_artwork_current(42)
+
+        assert again == {"status": "not_due", "replaced": []}
+
+    @pytest.mark.asyncio
+    async def test_a_due_check_names_what_was_left_beside_what_it_replaced(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api, sgdb_artwork_cache
+    ):
+        _show_tenders(slot_ready, uow, ArtworkSlot.WIDE_GRID, 5)
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "logo", 8)] = b"image 8"
+        _seed_candidates(fake_steamgrid_db_api, "grid", (6, 920, 430))
+        _seed_candidates(fake_steamgrid_db_api, "logo", (8, 800, 300))
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "checked", "replaced": ["grid", "logo"]}
+
+    @pytest.mark.asyncio
+    async def test_a_chosen_slot_is_never_left_over(self, steamgrid, uow, slot_ready, sgdb_artwork_cache):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 7)
+        _choose(uow, ArtworkSlot.LOGO, 7)
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "logo", 8)] = b"image 8"
+        _check_was(uow, steamgrid.clock.time())
+
+        answer = await steamgrid.service.keep_artwork_current(42)
+
+        assert answer == {"status": "not_due", "replaced": []}
+
+
+class TestACheckThatRaises:
+    @pytest.mark.asyncio
+    async def test_its_time_is_taken_back(self, steamgrid, uow, slot_ready, monkeypatch):
+        _show_tenders(slot_ready, uow, ArtworkSlot.LOGO, 5)
+        earlier = steamgrid.clock.time() - 30 * 24 * 60 * 60
+        _check_was(uow, earlier)
+
+        def boom(_rom_id):
+            raise RuntimeError("unexpected")
+
+        monkeypatch.setattr(steamgrid.service._slots, "kept_current_views_io", boom)
+        checking = steamgrid.service.keep_artwork_current(42)
+
+        with pytest.raises(RuntimeError):
+            await checking
+
+        assert _checked_at(uow) == earlier
+
+    def test_a_withdrawal_for_a_rom_gone_meanwhile_does_nothing(self, steamgrid, uow, slot_ready):
+        from services.steamgrid._current import _Started
+
+        with uow:
+            uow.roms.delete(42)
+
+        steamgrid.service._keeping_current._withdraw_io(42, _Started(at=400.0, previous=None))
+
+        with uow:
+            assert uow.roms.get(42) is None
