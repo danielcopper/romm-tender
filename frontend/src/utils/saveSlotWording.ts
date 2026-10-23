@@ -205,9 +205,9 @@ export function switchSlotFailureMessage(
 }
 
 /**
- * Error message for a failed switch into a new slot: `pending_uploads` and
- * `server_unreachable` get {@link switchSlotFailureMessage}'s wording, and
- * `not_installed` its own.
+ * Error message for a failed switch into a new slot. `not_installed` has a
+ * sentence of its own rather than {@link switchSlotFailureMessage}'s, whose
+ * "Can't switch" names an action New Slot's reader did not take.
  */
 export function createSlotFailureMessage(reason: WireReason): string {
   if (reason === "pending_uploads" || reason === "server_unreachable") {
