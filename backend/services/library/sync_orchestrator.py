@@ -361,10 +361,9 @@ class SyncOrchestrator:
             # shortcut and its unbound siblings stop reading as perpetual "new".
             # Each group is collapsed with the view its apply unit will use, so the
             # preview counts can't diverge from what the apply produces (the #1292
-            # bug class): a group is per-platform, so the union holds whole every
-            # group a platform unit delivered a member of, as that unit will; a
-            # group only collections reach is the partial view a collection unit
-            # has (#2536).
+            # bug class). A group is per-platform: one a platform unit delivers a
+            # member of arrives whole, and one only collections reach is the
+            # partial view a collection unit has (#2536).
             whole_groups = {sd.get("sibling_group_key") for sd in shortcuts_data if sd["rom_id"] in platform_rom_ids}
             emitted = collapse_sibling_groups(
                 shortcuts_data,

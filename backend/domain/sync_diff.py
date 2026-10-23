@@ -268,12 +268,12 @@ def collapse_sibling_groups(
     it holds whole. A sibling group is per-platform, so a **platform** unit fetch
     is a complete view; a **collection** unit is a PARTIAL view (it spans
     platforms and may fetch just one unbound sibling of a group whose other
-    members — including the bound one — were never in this fetch). The
-    whole-library **preview** union holds whole exactly the groups a platform
-    unit delivered a member of, and passes their keys. Only a complete view may
-    conclude "bound sibling absent from members ⇒ vanished from the server";
-    inferring that from a partial view would rebind a live installed game's
-    shortcut onto an uninstalled sibling (#1296 CRITICAL).
+    members — including the bound one — were never in this fetch); the
+    whole-library **preview** union holds some groups whole and others not, so
+    it passes the keys. Only a complete view may conclude "bound sibling absent
+    from members ⇒ vanished from the server"; inferring that from a partial view
+    would rebind a live installed game's shortcut onto an uninstalled sibling
+    (#1296 CRITICAL).
 
     Returns the subset of entries to actually emit as shortcuts, one lane per
     group:
