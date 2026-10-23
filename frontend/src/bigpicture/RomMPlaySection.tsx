@@ -31,7 +31,7 @@ import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
 import { useTriggerHandler } from "./emulatorStepping";
-import { useBumperHandler } from "./tabStepping";
+import { useBumperHandler, usePlayRowRef } from "./tabStepping";
 import { applyAutomaticArtwork, applyTabSlotImage, cancelArtworkApply } from "../utils/artwork";
 import { settleArtworkGame } from "../utils/artworkGameChange";
 import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
@@ -239,6 +239,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const migration = useMigrationStatus();
   const onTrigger = useTriggerHandler();
   const onBumper = useBumperHandler();
+  const playRowRef = usePlayRowRef();
 
   // Every field the game page's surfaces share — rom identity, install state,
   // save sync, BIOS, core selection — comes from the per-appId store, which owns
@@ -925,6 +926,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const playSectionRow = (
     <Focusable
       key="play-row"
+      ref={playRowRef}
       data-romm="true"
       className={`romm-play-section-row ${basicAppDetailsSectionStylerClasses?.PlaySection || ""}`.trim()}
       flow-children="right"
@@ -932,7 +934,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         onTrigger(evt);
         onBumper(evt);
       }}
-      // Back to the top of the game page from the tabs below (`GamePageTabs`).
+      // Back to the top of the game page from the tabs below, by the d-pad or by B (`GamePageTabs`).
       onFocus={scrollToTop}
       style={{
         display: "flex",

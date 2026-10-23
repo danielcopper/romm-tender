@@ -544,6 +544,24 @@ describe("RomMPlaySection", () => {
       expect(step).toHaveBeenLastCalledWith(-1);
     });
 
+    it("lets B on the play row go on to Steam, which leaves the game page", async () => {
+      const { container } = render(
+        <TabStepScope>
+          <RomMPlaySection appId={testAppId} />
+        </TabStepScope>,
+      );
+      await flushAsync();
+      let reachedSteam = false;
+      const listener = () => {
+        reachedSteam = true;
+      };
+      container.ownerDocument.body.addEventListener("decky-button-down", listener);
+      const row = container.querySelector(".romm-play-section-row") as HTMLElement;
+      fireEvent(row, new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }));
+      container.ownerDocument.body.removeEventListener("decky-button-down", listener);
+      expect(reachedSteam).toBe(true);
+    });
+
     it("scrolls the game page back to its top when focus comes to the play row", async () => {
       vi.mocked(scrollToTop).mockClear();
       const { queryByTestId } = render(<RomMPlaySection appId={testAppId} />);

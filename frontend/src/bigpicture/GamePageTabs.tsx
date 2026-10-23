@@ -1,8 +1,9 @@
 /**
  * The game page's tabs: Steam's own tabbed page, as Steam's own game page has
  * it, with the scroll that brings the tabs to the top of the game page as focus
- * enters them, and one handler around it through which L2 and R2 reach the BIOS
- * tab's emulator selector from the tab row and from every pane.
+ * enters them, B on the tab row putting focus on the play row, and one handler
+ * around it through which L2 and R2 reach the BIOS tab's emulator selector from
+ * the tab row and from every pane.
  *
  * What is Steam's here, what is Tender's, and why: `docs/architecture/qam-panel.md`,
  * "The game page's tabs".
@@ -13,7 +14,7 @@ import { Focusable, type Tab } from "@decky/ui";
 import { Tabs } from "../utils/deckyUiInternals";
 import { findOutermostScrollParent, offsetWithinScroller } from "../utils/scrollHelpers";
 import { useTriggerHandler } from "./emulatorStepping";
-import { steppedTab, useStepTabsOnBumpers } from "./tabStepping";
+import { steppedTab, useFocusPlayRow, useStepTabsOnBumpers } from "./tabStepping";
 
 /**
  * How far below the top of the scrolling game page Steam's own game page stops
@@ -49,6 +50,7 @@ function standAtTop(e: FocusEvent<HTMLDivElement>): void {
 
 export const GamePageTabs: FC<GamePageTabsProps> = ({ tabs, activeTab, onShowTab }) => {
   const onTrigger = useTriggerHandler();
+  const focusPlayRow = useFocusPlayRow();
   const latest = useRef({ tabs, activeTab, onShowTab });
   useLayoutEffect(() => {
     latest.current = { tabs, activeTab, onShowTab };
@@ -67,14 +69,14 @@ export const GamePageTabs: FC<GamePageTabsProps> = ({ tabs, activeTab, onShowTab
   return (
     <Focusable className="romm-game-page-tabs" onButtonDown={onTrigger} onFocus={standAtTop}>
       {Tabs ? (
-        // `cancelSkipTabHeader`: B does on a game page what it did before the
-        // tabs were Steam's, so the pane leaves it alone.
+        // B steps back as on Steam's own game page: the pane hands it to the
+        // tab row, and the tab row to the play row.
         <Tabs
           tabs={tabs}
           activeTab={activeTab}
           onShowTab={onShowTab}
           autoFocusContents={false}
-          cancelSkipTabHeader
+          onCancelFromTabHeader={focusPlayRow}
           canBeHeaderBackground="on-outer-scroll"
         />
       ) : (

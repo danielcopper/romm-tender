@@ -28,7 +28,9 @@ something to show. **L1** and **R1** step to the previous and the next tab from 
 the play row included, going round from the last tab to the first and skipping a tab that is not there. Moving focus
 onto a tab shows it, and a tab you come back to puts focus where it stood in it. The tab area is one screen tall and a
 tab's content scrolls inside it: moving down from the play row into the tabs scrolls the page so the tab row stands at
-the top, and moving back up to the play row scrolls it back.
+the top, and moving back up to the play row scrolls it back. **B** steps back the same way a Steam game's page does: in
+a tab's content it moves focus up to the tab row, on the tab row it moves focus to the play row and scrolls the page
+back to the top, and on the play row it leaves the game's page.
 
 ![Game detail page showing the Tender panel for an installed game](../assets/screenshot-game-detail.jpg)
 

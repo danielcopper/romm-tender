@@ -63,6 +63,14 @@ export interface WideTabsProps extends TabsProps {
    */
   cancelSkipTabHeader?: boolean;
   /**
+   * Bound as the tabbed page's own `onCancelButton` (`steamui/sp.js`), so B
+   * reaches it from wherever nothing inside the page takes B first — the tab
+   * row, since the content pane takes it to move focus up to the tab row. As
+   * with every Steam button handler, an answer of `false` lets B go on
+   * unhandled. Steam's own game page puts focus on its Play button with it.
+   */
+  onCancelFromTabHeader?: () => boolean | undefined;
+  /**
    * The tabbed page has no height of its own — its tab row and its content are
    * positioned absolutely (`steamui/css/sp.css`, `GamepadTabbedPage`). With
    * `"on-outer-scroll"` Steam's stylesheet makes it one screen tall less

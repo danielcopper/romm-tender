@@ -638,10 +638,16 @@ play bar; Tender's does the same. Focus coming into the tabs from outside them s
 below its top — Steam's `headerPadding`, the value its own page takes off — and focus coming to the play row scrolls it
 back (`scrollToTop` on the row). Moving inside the tabs scrolls nothing.
 
-**B is left alone** (#2421 D5): `cancelSkipTabHeader`, as on the Library page, so a pane takes no B and it does what it
-did before the tabs were Steam's. Steam's own game page instead sends B in a pane to the tab row and B on the tab row to
-the Play button. Entry focus is not placed in a pane (`autoFocusContents: false`, as Steam's game page passes), so the
-page still opens on the play row.
+**B steps back as on Steam's own game page** (#2421 D5): in a pane it puts focus on the tab row, on the tab row it puts
+focus on the play row, and only on the play row does it leave the page. The first step is Steam's tabbed page's own —
+its content pane takes B to focus the tab row unless `cancelSkipTabHeader` is passed, which the Library page passes and
+the game page does not. The second is `onCancelFromTabHeader`, which the tabbed page binds as its own cancel handler, so
+B reaches it from the tab row; Steam's game page puts focus on its Play button there, and Tender's puts it on the play
+row's first stop, its Play button, which the row registers with the scope (`bigpicture/tabStepping.tsx`). Focus landing
+on the play row scrolls the page back to the top, as moving there by the d-pad does. Where no play row is registered the
+handler answers `false`, and B goes on as it would from the play row. Nothing on the play row takes B, so there it
+reaches Steam's page. Entry focus is not placed in a pane (`autoFocusContents: false`, as Steam's game page passes), so
+the page still opens on the play row.
 
 **L1 and R1 from the play row are Tender's own.** Steam handles the bumpers on its tab row and its content and stops
 them there; the play row is outside the tabbed page, and Steam's own play bar handles no bumper. So the play row carries

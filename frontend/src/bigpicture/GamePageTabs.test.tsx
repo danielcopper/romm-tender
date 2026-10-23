@@ -9,6 +9,7 @@ import type { FC } from "react";
 import { StubTabs } from "../test-utils/steamTabs";
 import type { WideTabsProps } from "../utils/deckyUiInternals";
 import { GamePageTabs, STEAM_HEADER_PADDING_PX } from "./GamePageTabs";
+import { TabStepScope, usePlayRowRef } from "./tabStepping";
 
 const seen: WideTabsProps[] = [];
 const RecordingTabs: FC<WideTabsProps> = (props) => {
@@ -36,11 +37,11 @@ describe("GamePageTabs", () => {
     tabsProbe = RecordingTabs;
   });
 
-  it("hands Steam's tabbed page a screen-tall area, B left alone and entry focus left where it is", () => {
+  it("hands Steam's tabbed page a screen-tall area, B in a pane for its tab row and entry focus left where it is", () => {
     render(<GamePageTabs tabs={tabs} activeTab="info" onShowTab={vi.fn()} />);
     const props = seen[seen.length - 1];
     expect(props?.canBeHeaderBackground).toBe("on-outer-scroll");
-    expect(props?.cancelSkipTabHeader).toBe(true);
+    expect(props?.cancelSkipTabHeader).toBeUndefined();
     expect(props?.autoFocusContents).toBe(false);
     expect(props?.tabs.map((tab) => tab.id)).toEqual(["info", "bios"]);
     expect(props?.activeTab).toBe("info");
@@ -50,6 +51,48 @@ describe("GamePageTabs", () => {
     tabsProbe = undefined;
     const { container } = render(<GamePageTabs tabs={tabs} activeTab="bios" onShowTab={vi.fn()} />);
     expect(container.textContent).toBe("bios pane");
+  });
+
+  describe("B on the tab row", () => {
+    const CANCEL = 2;
+    /** Press B on *from*, and answer whether it got past Tender's section to Steam's page. */
+    const pressB = (from: Element) => {
+      let reachedSteam = false;
+      const outside = from.ownerDocument.body;
+      const listener = () => {
+        reachedSteam = true;
+      };
+      outside.addEventListener("decky-button-down", listener);
+      fireEvent(from, new CustomEvent("decky-button-down", { detail: { button: CANCEL }, bubbles: true }));
+      outside.removeEventListener("decky-button-down", listener);
+      return reachedSteam;
+    };
+    /** The play row's stand-in, registered as the play row registers itself. */
+    const PlayRow: FC = () => (
+      <div ref={usePlayRowRef()}>
+        <button type="button">Play</button>
+      </div>
+    );
+
+    it("puts focus on the play row and goes no further", () => {
+      const { getByText, getByTestId } = render(
+        <TabStepScope>
+          <PlayRow />
+          <GamePageTabs tabs={tabs} activeTab="info" onShowTab={vi.fn()} />
+        </TabStepScope>,
+      );
+      expect(pressB(getByTestId("tab-bios"))).toBe(false);
+      expect(getByText("Play").ownerDocument.activeElement).toBe(getByText("Play"));
+    });
+
+    it("goes on to Steam's page where there is no play row to take focus", () => {
+      const { getByTestId } = render(
+        <TabStepScope>
+          <GamePageTabs tabs={tabs} activeTab="info" onShowTab={vi.fn()} />
+        </TabStepScope>,
+      );
+      expect(pressB(getByTestId("tab-bios"))).toBe(true);
+    });
   });
 
   describe("scrolling the game page", () => {
