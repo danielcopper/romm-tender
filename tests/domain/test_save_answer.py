@@ -28,6 +28,7 @@ from domain.save_answer import (
     UNESTABLISHED_NOT_ASKED,
     UNESTABLISHED_NOTHING,
     SaveGroup,
+    agreed_size_fixed,
     build_save_answer,
     pick_download_name,
     save_finding_details,
@@ -188,8 +189,8 @@ class TestProgressAndConfiguration:
         assert answer.synced_names == ("Game.bkr", "Game.bcr")
 
     def test_a_file_no_group_claimed_counts_as_progress(self):
-        # The plain per-game case: the placement names files and decomposes
-        # nothing, so there is no role to read and the file is the save.
+        # A placement the resolver answered without groups names files and
+        # decomposes nothing, so there is no role to read and the file is the save.
         answer = _answer(files=("Game.srm",), groups=())
 
         assert answer.components[0].role is None
@@ -226,6 +227,63 @@ class TestProgressAndConfiguration:
 
         assert answer.owned_files[0].name == "Game.srm"
         assert answer.synced_names == ()
+
+
+class TestTheSizeClaim:
+    """Each file carries whether its emulator writes it at a fixed size, read off its groups (#2538 D2, D4)."""
+
+    @staticmethod
+    def _group(name: str, size_fixed: bool | None, directory: str = _DIR) -> SaveGroup:
+        return SaveGroup(
+            directory=directory, files=(name,), role="battery", granularity="per-game-file", size_fixed=size_fixed
+        )
+
+    @pytest.mark.parametrize("claim", [True, False, None])
+    def test_a_file_carries_its_groups_claim(self, claim):
+        answer = _answer(files=("Game.srm",), groups=(self._group("Game.srm", claim),))
+
+        assert [component.size_fixed for component in answer.synced_files] == [claim]
+
+    def test_each_file_carries_its_own_groups_claim(self):
+        answer = _answer(
+            files=("Game.srm", "Game.rtc"),
+            groups=(self._group("Game.srm", True), self._group("Game.rtc", False)),
+        )
+
+        assert [(c.name, c.size_fixed) for c in answer.synced_files] == [("Game.srm", True), ("Game.rtc", False)]
+
+    def test_a_placement_answered_without_groups_establishes_no_claim(self):
+        answer = _answer(files=("Game.srm",), groups=())
+
+        assert [component.size_fixed for component in answer.synced_files] == [None]
+
+    @pytest.mark.parametrize("claim", [True, False])
+    def test_two_groups_that_agree_give_the_file_their_claim(self, claim):
+        answer = _answer(groups=(self._group("Game.srm", claim), self._group("Game.srm", claim)))
+
+        assert {component.size_fixed for component in answer.components} == {claim}
+
+    @pytest.mark.parametrize("claims", [(True, False), (True, None), (False, None)])
+    def test_two_groups_that_disagree_establish_nothing(self, claims):
+        answer = _answer(groups=tuple(self._group("Game.srm", claim) for claim in claims))
+
+        assert {component.size_fixed for component in answer.components} == {None}
+
+    def test_the_claim_is_looked_up_by_directory_as_well_as_name(self):
+        # The same name in two directories is two files, and neither lends the
+        # other its claim.
+        answer = _answer(
+            groups=(self._group("Game.srm", True), self._group("Game.srm", False, directory="/elsewhere")),
+        )
+
+        assert [(c.directory, c.size_fixed) for c in answer.components] == [(_DIR, True), ("/elsewhere", False)]
+
+    @pytest.mark.parametrize(
+        ("claims", "agreed"),
+        [((), None), ((True,), True), ((None,), None), ((False, False), False), ((True, False), None)],
+    )
+    def test_the_agreed_claim(self, claims, agreed):
+        assert agreed_size_fixed(claims) is agreed
 
 
 class TestPickDownloadName:

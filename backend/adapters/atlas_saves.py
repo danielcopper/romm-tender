@@ -333,6 +333,7 @@ def _translate(placement: Any, emulator_label: str, content_installed: bool) -> 
                 files=None if group.files is None else tuple(group.files),
                 role=group.role,
                 granularity=group.granularity,
+                size_fixed=group.size_fixed,
             )
             for group in file_set.groups
         ),

@@ -1283,6 +1283,65 @@ class TestWhatTheAnswerCarries:
         assert answer.concrete_directory == _SAVES
 
 
+class TestTheSizeClaim:
+    """Whether the emulator writes a file at a fixed size rides from its group onto the file (#2538)."""
+
+    @staticmethod
+    def _group(name: str, **size: Any) -> FileGroup:
+        return FileGroup(dir=_SAVES, files=(name,), granularity=GRANULARITY_PER_GAME_FILE, role=ROLE_BATTERY, **size)
+
+    @pytest.mark.parametrize("claim", [True, False, None])
+    def test_a_groups_claim_rides_onto_its_file(self, traces, claim):
+        answer = _ask(_placement(groups=(self._group("Game Title.srm", size_fixed=claim),)), traces)
+
+        assert [component.size_fixed for component in answer.synced_files] == [claim]
+
+    def test_a_group_that_states_nothing_is_no_claim(self, traces):
+        answer = _ask(_placement(groups=(self._group("Game Title.srm"),)), traces)
+
+        assert [component.size_fixed for component in answer.synced_files] == [None]
+
+
+class TestRetroArchsStandardRuleNowCarriesGroups:
+    """emu-atlas 0.26.0 answers RetroArch's standard rule with one group per file it writes, where 0.25.0 had none.
+
+    The shapes are the ones a Game Boy game under Gambatte answers at each
+    release; the groups add a role and a size claim, and change nothing about
+    which files a sync carries or where (#2538 D5).
+    """
+
+    _FILES = ("Game Title.srm", "Game Title.rtc")
+
+    def _before(self) -> SavefilePlacement:
+        return _placement(files=self._FILES, groups=())
+
+    def _after(self) -> SavefilePlacement:
+        return _placement(
+            files=self._FILES,
+            groups=tuple(
+                FileGroup(
+                    dir=_SAVES, files=(name,), granularity=GRANULARITY_PER_GAME_FILE, role=ROLE_BATTERY, size_fixed=True
+                )
+                for name in self._FILES
+            ),
+        )
+
+    def test_the_same_files_are_synced_from_the_same_directory(self, traces):
+        before, after = _ask(self._before(), traces), _ask(self._after(), traces)
+
+        assert (after.state, after.synced_names, after.sync_directory) == (
+            before.state,
+            before.synced_names,
+            before.sync_directory,
+        )
+        assert after.synced_names == self._FILES
+
+    def test_the_groups_role_and_claim_ride_along(self, traces):
+        answer = _ask(self._after(), traces)
+
+        assert [(c.role, c.size_fixed) for c in answer.synced_files] == [(ROLE_BATTERY, True), (ROLE_BATTERY, True)]
+
+
 class TestTheSavestateQuestion:
     """Where the same entry keeps the game's savestates — three outcomes, kept apart."""
 
