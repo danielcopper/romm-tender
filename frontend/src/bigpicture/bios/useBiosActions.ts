@@ -106,8 +106,10 @@ export interface BiosActions {
  *
  * Call it only when firmware actually changed. The event fans out to every
  * mounted panel and each one that matches the slug pays a live
- * `get_bios_status` for it (#1082), so a run that moved no files must stay
- * silent rather than send an event no panel can act on.
+ * `get_bios_status` for it (#1082) — all but the panel whose own BIOS tab was
+ * pressed, which has read its answer already and skips its own event
+ * (`announceOwnBiosChange` in `panelEvents.ts`) — so a run that moved no files
+ * must stay silent rather than send an event no panel can act on.
  */
 export function announceBiosChange(platformSlug: string): void {
   globalThis.dispatchEvent(

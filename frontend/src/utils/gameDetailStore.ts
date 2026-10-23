@@ -529,11 +529,14 @@ async function updateLinksOnOpen(appId: number, entry: Entry): Promise<void> {
   }
 }
 
-/** Re-read the BIOS answer after a firmware download. Leaves what is shown
- *  alone when the read fails, when it reports no BIOS need, or when a version
- *  switch re-keyed the entry while the read was open. Downloading firmware
- *  cannot remove a requirement — it only fills one, or reveals one the cache had
- *  not seen — so this path adopts a refreshed answer and never clears one. */
+/** Re-read the BIOS answer after a press on the BIOS tab that went through — a
+ *  download, a delete, a Replace… — and after a link update that changed
+ *  something. Leaves
+ *  what is shown alone when the read fails, when it reports no BIOS need, or
+ *  when a version switch re-keyed the entry while the read was open. Nothing
+ *  done to firmware removes a requirement, which is the emulator's own demand —
+ *  it fills one, empties one, or reveals one the cache had not seen — so this
+ *  path adopts a refreshed answer and never clears one. */
 export async function refreshBiosStatus(appId: number): Promise<void> {
   const entry = _entries.get(appId);
   const romId = entry?.state.romId;
