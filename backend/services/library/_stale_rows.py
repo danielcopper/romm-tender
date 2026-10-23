@@ -61,7 +61,6 @@ async def settle_stale_rows(
     listed_platform_slugs: Collection[str] | None,
     collection_listed_rom_ids: Collection[int],
     synced_group_keys: Collection[str],
-    synced_sibling_rom_ids: Collection[int],
 ) -> tuple[list[StaleRow], list[StaleRow], dict[int, GoneEvidence | None]]:
     """``(remove, kept_in_platform_collections, gone_marks)`` for the stale *rows*.
 
@@ -72,8 +71,8 @@ async def settle_stale_rows(
     established nothing — is in neither list: its shortcut stays, and being kept
     does not file it in its platform's collection; only the platform-groups
     setting can. Neither list holds a row whose game the run synced
-    (*synced_group_keys*, *synced_sibling_rom_ids*) either, though RomM is
-    asked about it where it would be asked about any other row.
+    (*synced_group_keys*) either, though RomM is asked about it where it would
+    be asked about any other row.
     """
     sort = sort_stale_rows(
         rows,
@@ -81,7 +80,6 @@ async def settle_stale_rows(
         listed_platform_slugs=listed_platform_slugs,
         collection_listed_rom_ids=collection_listed_rom_ids,
         synced_group_keys=synced_group_keys,
-        synced_sibling_rom_ids=synced_sibling_rom_ids,
     )
     asked = [*sort.ask, *sort.ask_only]
     answers = await ask_romm([row.rom_id for row in asked]) if asked else {}

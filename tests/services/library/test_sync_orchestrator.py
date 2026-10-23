@@ -6748,14 +6748,15 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @staticmethod
     def _rematch_left_22s_key_behind(fake_romm_api):
-        """22's stored key is a fallback no edge parses; RomM still names 22 as 20's sibling."""
+        """22's stored key no longer matches its game's; RomM names 22 as 20's sibling, and Faves is fetched again."""
         fake_romm_api.roms[20]["sibling_roms"] = [{"id": 22}]
         fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
 
     @pytest.mark.asyncio
-    async def test_a_switched_version_a_fetched_rom_names_as_its_sibling_stays_bound_whatever_its_key(
+    async def test_a_switched_version_whose_stored_key_a_rematch_left_behind_is_judged_by_that_key(
         self, library, fake_romm_api, emit
     ):
+        """The gap #2533 D10 accepts: 22 is removed, and the collection mints a new shortcut for 20."""
         await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="romm:22:2")
         self._rematch_left_22s_key_behind(fake_romm_api)
         box = library.sync._box
@@ -6766,45 +6767,12 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
         library.sync._chunk_dispatcher._wait_for_unit_complete = bind_new_shortcuts_under_new_app_ids
 
-        run_2_starts_at = len(emit.call_args_list)
-
-        assert await self._run_2(library, emit) == ([[]], 6020)
+        assert await self._run_2(library, emit) == ([[{"rom_id": 22, "app_id": 6020}]], None)
         with library.uow as uow:
-            assert uow.roms.get(22).sibling_group_key == uow.roms.get(20).sibling_group_key == "igdb:300:2"
-            assert uow.roms.get(20).shortcut_app_id is None, "the game keeps one shortcut, the user's"
-        applied = [
-            sd["rom_id"]
-            for c in emit.call_args_list[run_2_starts_at:]
-            if c.args and c.args[0] == "sync_apply_unit"
-            for sd in c.args[1]["shortcuts"]
-        ]
-        assert applied == []
+            assert uow.roms.get(20).shortcut_app_id == 7020
 
     @pytest.mark.asyncio
-    async def test_the_repaired_key_keeps_the_switched_version_once_the_collection_is_skipped_again(
-        self, library, fake_romm_api, emit
-    ):
-        """Run 3: Faves is unchanged since run 2, so nothing is fetched and no sibling edge is seen."""
-        await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="romm:22:2")
-        self._rematch_left_22s_key_behind(fake_romm_api)
-        await self._run_2(library, emit)
-        fake_romm_api.call_log.clear()
-        box = library.sync._box
-        box.sync_state = SyncState.RUNNING
-        box.current_sync_id = "run-3"
-        run_3_starts_at = len(emit.call_args_list)
-
-        await library.sync._orchestrator._do_sync_per_unit()
-
-        assert not self._faves_was_fetched(fake_romm_api)
-        stale = [c.args[1] for c in emit.call_args_list[run_3_starts_at:] if c.args and c.args[0] == "sync_stale"]
-        assert [event["remove"] for event in stale] == [[]]
-        with library.uow as uow:
-            assert uow.roms.get(22).shortcut_app_id == 6020
-        assert (await library.sync.sync_preview())["summary"]["remove_count"] == 0
-
-    @pytest.mark.asyncio
-    async def test_the_preview_counts_neither_a_removal_nor_a_new_shortcut_for_a_version_a_fetched_rom_names(
+    async def test_the_preview_counts_the_same_removal_and_new_shortcut_for_a_key_a_rematch_left_behind(
         self, library, fake_romm_api
     ):
         await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="romm:22:2")
@@ -6812,7 +6780,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
         result = await library.sync.sync_preview()
 
-        assert (result["summary"]["remove_count"], result["summary"]["new_count"]) == (0, 0)
+        assert (result["summary"]["remove_count"], result["summary"]["new_count"]) == (1, 1)
 
     @pytest.mark.asyncio
     async def test_a_bound_version_of_another_game_is_still_removed(self, library, fake_romm_api, emit):

@@ -16,12 +16,9 @@ from domain.sync_diff import (
     group_keys_of,
     platform_breakdown,
     platform_collection_name,
-    regrouped_keys,
     select_stale_removals,
     settle_asked_rows,
     should_include_in_platform_collection,
-    sibling_joins,
-    sibling_naming_keys,
     sort_stale_rows,
 )
 
@@ -1067,109 +1064,6 @@ class TestCollapseSiblingGroupsPartialView:
         assert all(BIND_ROM_ID_KEY not in e for e in emitted)
 
 
-class TestABoundRowAFetchedMemberNamesAsItsSibling:
-    """A bound row outside the fetch, named in a fetched member's ``sibling_roms``, is that group's binding.
-
-    A re-match left the bound row's stored key (``romm:22``) behind the group's
-    current one (``g1``); RomM still names it as a sibling of the fetched rom 20.
-    """
-
-    @staticmethod
-    def _collapse(*, complete, named):
-        return collapse_sibling_groups(
-            [_gsd(20, name="Golf (USA)", fs_name="golf_usa.gba", fs_name_no_ext="golf_usa")],
-            {"22": _greg(22, app_id=6020, name="Golf (Europe)", group_key="romm:22", fs_name="golf_eur.gba")},
-            installed_rom_ids=set(),
-            complete_group_view=complete,
-            sibling_key_by_rom_id=named,
-        )
-
-    @pytest.mark.parametrize("complete", [False, True], ids=["partial view", "complete view"])
-    def test_the_group_is_grandfathered_and_mints_no_second_shortcut(self, complete):
-        assert self._collapse(complete=complete, named={22: "g1"}) == []
-
-    @pytest.mark.parametrize("complete", [False, True], ids=["partial view", "complete view"])
-    def test_a_group_whose_members_name_no_bound_row_still_mints(self, complete):
-        assert [e["rom_id"] for e in self._collapse(complete=complete, named={23: "g1"})] == [20]
-
-
-class TestABoundRowFetchedMembersOfTwoGroupsName:
-    """A bridge: fetched members of two groups the keying kept apart both name bound rom 22 (#2533 D9).
-
-    Whichever order the fetch lists them in, 22 joins neither group, mints no
-    group's shortcut away, and is judged by its own stored key.
-    """
-
-    _ROMS = (
-        {"id": 20, "sibling_group_key": "g1", "sibling_roms": [{"id": 22}]},
-        {"id": 30, "sibling_group_key": "g2", "sibling_roms": [{"id": 22}]},
-    )
-
-    @pytest.mark.parametrize("order", [(0, 1), (1, 0)], ids=["g1 first", "g2 first"])
-    @pytest.mark.parametrize("complete", [False, True], ids=["partial view", "complete view"])
-    def test_the_row_joins_neither_group_whichever_names_it_first(self, order, complete):
-        joins = sibling_joins(sibling_naming_keys([self._ROMS[i] for i in order]))
-        members = [
-            _gsd(20, name="Golf (USA)", group_key="g1", fs_name_no_ext="golf_usa"),
-            _gsd(30, name="Other (USA)", group_key="g2", fs_name_no_ext="other_usa"),
-        ]
-        registry = {"22": _greg(22, app_id=6020, name="Golf (Europe)", group_key="romm:22", fs_name="golf_eur.gba")}
-
-        emitted = collapse_sibling_groups(
-            members, registry, installed_rom_ids=set(), complete_group_view=complete, sibling_key_by_rom_id=joins
-        )
-
-        assert joins == {}
-        assert sorted(e["rom_id"] for e in emitted) == [20, 30]
-
-    @pytest.mark.parametrize("order", [(0, 1), (1, 0)], ids=["g1 first", "g2 first"])
-    def test_the_row_is_judged_by_its_stored_key_and_given_no_new_one(self, order):
-        joins = sibling_joins(sibling_naming_keys([self._ROMS[i] for i in order]))
-        row = StaleRow(22, 6020, "gba", None, "romm:22")
-
-        sort = sort_stale_rows(
-            [row],
-            read_platform_slugs=set(),
-            listed_platform_slugs={"gba"},
-            collection_listed_rom_ids=(),
-            synced_group_keys={"g1", "g2"},
-            synced_sibling_rom_ids=joins.keys(),
-        )
-
-        assert sort.remove == [row]
-        assert regrouped_keys([row], joins) == {}
-
-
-class TestSiblingNamingKeys:
-    def test_every_named_id_with_every_key_that_names_it(self):
-        roms = [
-            {"id": 1, "sibling_group_key": "g1", "sibling_roms": [{"id": 2}, {"id": 3}]},
-            {"id": 4, "sibling_group_key": "g2", "sibling_roms": [{"id": 3}, {"name": "no id"}]},
-            {"id": 5, "sibling_roms": [{"id": 6}]},
-            {"id": 7, "sibling_group_key": "g3"},
-            {"id": 8, "sibling_group_key": "g1", "sibling_roms": [{"id": 2}]},
-        ]
-
-        assert sibling_naming_keys(roms) == {2: {"g1"}, 3: {"g1", "g2"}}
-
-
-class TestSiblingJoins:
-    def test_only_an_id_exactly_one_group_names_joins_it(self):
-        assert sibling_joins({2: {"g1"}, 3: {"g1", "g2"}, 4: set()}) == {2: "g1"}
-
-
-class TestRegroupedKeys:
-    def test_a_joined_row_whose_stored_key_differs_takes_the_group_s_and_any_other_row_nothing(self):
-        stale_key = StaleRow(1, 1001, "gba", None, "romm:1")
-        no_key = StaleRow(2, 1002, "gba", None, None)
-        already_there = StaleRow(3, 1003, "gba", None, "g1")
-        not_joined = StaleRow(4, 1004, "gba", None, "romm:4")
-
-        regrouped = regrouped_keys([stale_key, no_key, already_there, not_joined], {1: "g1", 2: "g1", 3: "g1"})
-
-        assert regrouped == {1: "g1", 2: "g1"}
-
-
 class TestPlatformBreakdown:
     """platform_breakdown — the preview's library-wide counts split per platform."""
 
@@ -1607,24 +1501,6 @@ class TestSortStaleRows:
         )
 
         assert sort.gone_from_romm_marks({1: "gone", 2: "present", 3: "unknown"}, set()) == {1: "not_found", 2: None}
-
-    @pytest.mark.parametrize(("route", "lands_in"), [(None, "nowhere"), ("collection", "ask_only")])
-    def test_a_row_a_fetched_rom_names_as_its_sibling_counts_as_delivered_whatever_its_stored_key(
-        self, route, lands_in
-    ):
-        """A re-match moved the group's canonical source, so the bound row's stored key is no longer the group's."""
-        row = StaleRow(1, 1001, "gba", route, "igdb:9:1")
-
-        sort = sort_stale_rows(
-            [row],
-            read_platform_slugs=set(),
-            listed_platform_slugs={"gba"},
-            collection_listed_rom_ids=(),
-            synced_group_keys={"ra:2:1"},
-            synced_sibling_rom_ids={1},
-        )
-
-        assert sort == StaleSort([], [], [], (row,) if lands_in == "ask_only" else ())
 
     def test_a_row_on_a_platform_read_whole_is_kept_whether_or_not_its_game_was_delivered(self):
         row = StaleRow(1, 1001, "n64", "platform", "igdb:1:1")

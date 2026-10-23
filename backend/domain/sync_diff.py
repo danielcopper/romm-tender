@@ -252,7 +252,6 @@ def collapse_sibling_groups(
     *,
     complete_group_view: bool,
     preferred_region: str = AUTO_REGION,
-    sibling_key_by_rom_id: Mapping[int, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Collapse per-ROM shortcut entries to one Steam shortcut per sibling group.
 
@@ -313,11 +312,8 @@ def collapse_sibling_groups(
 
     Bound rows are grouped by their FETCHED sibling key when the row is in this
     fetch (so a legacy row whose stored key is still NULL is placed in its real
-    group and grandfathered rather than churned). A bound row outside this fetch
-    that fetched members of exactly one group name among their ``sibling_roms``
-    joins that group (*sibling_key_by_rom_id*, :func:`sibling_joins`), so a
-    re-match that left its stored key behind does not mint a second shortcut
-    for the game. Any other bound row falls back to its stored key.
+    group and grandfathered rather than churned), falling back to the stored key
+    for a vanished bound row.
 
     *preferred_region* re-heads the region ranking that both the representative
     and the canonical name fall back to (``"auto"`` = the build-time default
@@ -331,7 +327,6 @@ def collapse_sibling_groups(
         by_group.setdefault(sd.get("sibling_group_key"), []).append(sd)
 
     fetched_key_by_id: dict[Any, str | None] = {sd["rom_id"]: sd.get("sibling_group_key") for sd in shortcuts_data}
-    named_key_by_id = sibling_key_by_rom_id or {}
     bound_by_group: dict[str | None, list[tuple[int, dict[str, Any]]]] = {}
     bound_rom_ids: set[int] = set()
     for rid_str, reg in registry.items():
@@ -339,7 +334,7 @@ def collapse_sibling_groups(
             continue
         rid = int(rid_str)
         bound_rom_ids.add(rid)
-        group_key = fetched_key_by_id.get(rid, named_key_by_id.get(rid, reg.get("sibling_group_key")))
+        group_key = fetched_key_by_id.get(rid, reg.get("sibling_group_key"))
         bound_by_group.setdefault(group_key, []).append((rid, reg))
 
     emitted: list[dict[str, Any]] = []
@@ -510,42 +505,6 @@ def group_keys_of(rom_ids: Iterable[int], key_by_rom_id: Mapping[int, str]) -> f
     return frozenset(key_by_rom_id[rom_id] for rom_id in rom_ids if rom_id in key_by_rom_id)
 
 
-def sibling_naming_keys(roms: Iterable[Mapping[str, Any]]) -> dict[int, set[str]]:
-    """Each ``rom_id`` a ROM of *roms* names among its ``sibling_roms``, with every group key that names it.
-
-    *roms* are fetched payloads whose ``sibling_group_key`` is stamped; a ROM
-    without one names nothing. :func:`sibling_joins` reads the answer.
-    """
-    naming: dict[int, set[str]] = {}
-    for rom in roms:
-        key = rom.get("sibling_group_key")
-        if not key:
-            continue
-        for sibling in rom.get("sibling_roms") or []:
-            if sibling.get("id"):
-                naming.setdefault(int(sibling["id"]), set()).add(key)
-    return naming
-
-
-def sibling_joins(naming: Mapping[int, Collection[str]]) -> dict[int, str]:
-    """The group each named ``rom_id`` joins: the one key that names it, where exactly one does.
-
-    *naming* is :func:`sibling_naming_keys`' answer, for one unit or merged over
-    a run. An id named by two groups joins neither: the edges bridge two games
-    the group keying kept apart, so they say nothing about which one it is.
-    """
-    return {rom_id: next(iter(keys)) for rom_id, keys in naming.items() if len(keys) == 1}
-
-
-def regrouped_keys(rows: Iterable[StaleRow], joins: Mapping[int, str]) -> dict[int, str]:
-    """The group key an apply writes onto each of *rows* that *joins* places in a group its stored key is not."""
-    return {
-        row.rom_id: joins[row.rom_id]
-        for row in rows
-        if row.rom_id in joins and joins[row.rom_id] != row.sibling_group_key
-    }
-
-
 # What one exact-id question to RomM established about a ROM: a proven 404
 # (``gone``), the very ROM (``present``), or nothing (``unknown``).
 RomAnswer = Literal["gone", "present", "unknown"]
@@ -597,7 +556,6 @@ def sort_stale_rows(
     listed_platform_slugs: Collection[str] | None,
     collection_listed_rom_ids: Collection[int],
     synced_group_keys: Collection[str] = frozenset(),
-    synced_sibling_rom_ids: Collection[int] = frozenset(),
 ) -> StaleSort:
     """Split the stale rows into the ones to remove, to keep, and to ask RomM about.
 
@@ -606,12 +564,9 @@ def sort_stale_rows(
     run, on in Tender or not (``None`` where that is not known, which reads as
     every platform listed); *collection_listed_rom_ids* the members every
     collection held at its last completed apply, read before the run rewrote
-    any of them. *synced_group_keys* and *synced_sibling_rom_ids* say which
-    games the run synced: the group keys (:func:`group_keys_of`) of every ROM a
-    unit returned, a skipped unit's stamp members included, and every id that
-    fetched ROMs of exactly one group name as their sibling
-    (:func:`sibling_joins`), which holds where a re-match left the row's stored
-    key behind.
+    any of them; *synced_group_keys* the games the run synced — the group keys
+    (:func:`group_keys_of`) of every ROM a unit returned, a skipped unit's stamp
+    members included.
 
     * **keep** — the row's platform was read whole and did not return it, so it
       is gone from RomM. A skipped platform rebuilds every bound row, so only a
@@ -630,7 +585,7 @@ def sort_stale_rows(
     * **none of these** — any other row whose game the run synced, on a
       platform the run did not read: the row holds the game's one shortcut. A
       version switch binds a member no unit delivers. A row with no group key
-      that no fetched ROM names as a sibling is judged alone.
+      is judged alone.
     * **remove** — the rest: the row's platform is listed and turned off in
       Tender, no collection reached it, and no unit delivered its game.
     """
@@ -638,7 +593,7 @@ def sort_stale_rows(
     sort = StaleSort(remove=[], keep=[], ask=[])
     ask_only: list[StaleRow] = []
     for row in rows:
-        game_synced = row.sibling_group_key in synced_group_keys or row.rom_id in synced_sibling_rom_ids
+        game_synced = row.sibling_group_key in synced_group_keys
         if row.platform_slug in read_platform_slugs:
             sort.keep.append(row)
         elif _reached_through_a_collection(row, collection_listed_rom_ids):

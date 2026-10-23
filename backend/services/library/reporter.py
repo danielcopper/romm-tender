@@ -36,7 +36,6 @@ from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import BIND_ROM_ID_KEY, platform_collection_name
 from domain.sync_stage import SyncStage
 from domain.version_metadata import VersionMetadata
-from services.library._stale_writes import write_gone_marks, write_group_keys
 
 if TYPE_CHECKING:
     import asyncio
@@ -301,7 +300,6 @@ class SyncReporter:
         stale_rom_ids: list[int] | None,
         processed_platform_slugs: frozenset[str],
         gone_marks: Mapping[int, GoneEvidence | None],
-        group_keys: Mapping[int, str],
     ) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
         """Unbind stale ROMs, refresh the name cache, and build collection maps.
 
@@ -316,7 +314,7 @@ class SyncReporter:
         (:meth:`_names_with_bound_platforms_kept`) — and
         (3) build the cross-unit collection mappings. Before (2) it writes
         *gone_marks* onto their rows: a mark where one is given, a clear for
-        ``None``, and *group_keys*. The last-sync timestamp
+        ``None``. The last-sync timestamp
         and the synced platform/collection lists live on the ``SyncRun``
         record :class:`SyncRunRecorder` writes — they are not persisted here.
 
@@ -338,8 +336,7 @@ class SyncReporter:
             for slug in unprocessed_slugs_unbound:
                 uow.platform_sync_state.revoke_skip(slug)
             uow.collection_sync_state.delete_intersecting(unbound_rom_ids)
-            write_gone_marks(uow, gone_marks)
-            write_group_keys(uow, group_keys)
+            self._write_gone_marks(uow, gone_marks)
 
             names = self._names_with_bound_platforms_kept(uow, platform_names)
             uow.kv_config.set(_PLATFORM_NAMES_KEY, json.dumps(names))
@@ -350,6 +347,19 @@ class SyncReporter:
                 pending_collection_memberships,
                 names,
             )
+
+    @staticmethod
+    def _write_gone_marks(uow: UnitOfWork, gone_marks: Mapping[int, GoneEvidence | None]) -> None:
+        """Record on each row what the run established about RomM still serving it."""
+        for rom_id, evidence in gone_marks.items():
+            rom = uow.roms.get(rom_id)
+            if rom is None or rom.gone_from_romm == evidence:
+                continue
+            if evidence is None:
+                rom.clear_gone_from_romm()
+            else:
+                rom.mark_gone_from_romm(evidence)
+            uow.roms.save(rom)
 
     @staticmethod
     def _names_with_bound_platforms_kept(uow: UnitOfWork, platform_names: dict[str, str]) -> dict[str, str]:
@@ -378,7 +388,6 @@ class SyncReporter:
         *,
         processed_platform_slugs: Collection[str],
         gone_marks: Mapping[int, GoneEvidence | None] | None = None,
-        group_keys: Mapping[int, str] | None = None,
     ):
         """Unbind stale ROMs, rebuild Steam-collection maps, and emit ``sync_collections``.
 
@@ -402,10 +411,8 @@ class SyncReporter:
 
         ``gone_marks`` is the stale removal's verdict per row on whether RomM
         still serves it (:meth:`domain.sync_diff.StaleSort.gone_from_romm_marks`), written
-        in the same UoW, and so is ``group_keys``, the stale rows' repaired group
-        keys (:func:`domain.sync_diff.regrouped_keys`). Who may pass either is
-        docs/architecture/backend-architecture.md, "The stale removal keeps a game
-        gone from RomM".
+        in the same UoW. Who may pass it is docs/architecture/backend-architecture.md,
+        "The stale removal keeps a game gone from RomM".
 
         Returns the ``(platform_app_ids, romm_collection_app_ids)`` maps the caller
         needs for the completed-run ``SyncRun`` write and the terminal emit. The
@@ -425,7 +432,6 @@ class SyncReporter:
             stale_rom_ids,
             frozenset(processed_platform_slugs),
             gone_marks or {},
-            group_keys or {},
         )
 
         await self._emit(

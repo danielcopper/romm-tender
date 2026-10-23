@@ -27,7 +27,6 @@ class TestSettleStaleRows:
             listed_platform_slugs={"gba"},
             collection_listed_rom_ids=set(),
             synced_group_keys=frozenset(),
-            synced_sibling_rom_ids=frozenset(),
         )
 
         assert [row.rom_id for row in remove] == [1]
@@ -49,7 +48,6 @@ class TestSettleStaleRows:
             listed_platform_slugs={"n64"},
             collection_listed_rom_ids=set(),
             synced_group_keys=frozenset(),
-            synced_sibling_rom_ids=frozenset(),
         )
 
         assert (remove, [row.rom_id for row in kept]) == ([], [1])
@@ -61,7 +59,7 @@ class TestSettleStaleRows:
         rows = [
             StaleRow(1, 1001, "gba", "collection", "igdb:1:1"),
             StaleRow(2, 1002, "gba", None, "igdb:1:1"),
-            StaleRow(3, 1003, "gba", "collection", "igdb:9:1"),
+            StaleRow(3, 1003, "gba", "collection", "igdb:1:1"),
         ]
 
         remove, kept, marks = await settle_stale_rows(
@@ -72,7 +70,6 @@ class TestSettleStaleRows:
             listed_platform_slugs={"gba"},
             collection_listed_rom_ids=set(),
             synced_group_keys=frozenset({"igdb:1:1"}),
-            synced_sibling_rom_ids=frozenset({3}),
         )
 
         assert (remove, kept, marks) == ([], [], {1: None, 3: "not_found"})
