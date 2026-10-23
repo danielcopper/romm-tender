@@ -901,43 +901,42 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   (#2533 D10). It is still asked about wherever any other row would be, below, and RomM's answer sets or clears its mark
   as for any asked row (D6). A version switch binds the shortcut to a member no unit delivers while a collection still
   delivers the game through another version, and collecting any version puts the game's one shortcut in the collection
-  (the group fallback below). A row without a group key that no fetched ROM names is judged alone. Any other row was
-  reached either through a collection or through its platform. The row itself says which: `roms.delivered_through`
-  records the kind of unit whose commit last upserted it (`Rom.record_delivery`, written by
-  `SyncReporter.commit_unit_results` for the unit the chunk dispatcher names; a commit that names none, such as a unit
-  acknowledged after its run ended, keeps the row's value). A row last delivered through a collection is asked for once
-  by its exact id (`LibraryFetcher.ask_romm_for_roms`, single attempt), and removed only when RomM returns the very ROM,
-  since it left the collection — a 404 and an answer that establishes nothing both keep the shortcut, so the row is
-  asked again on every later run until it is found or unbound, and a stopped run, which sorts nothing, leaves it as it
-  was. A row last delivered through its platform is removed unasked, its platform turned off — unless RomM no longer
-  lists that platform, below. A row no commit has recorded a route for since migration `029` falls back to the
-  collections' completion stamps, read once before the run's first unit rewrites any of them
-  (`do_read_collection_listed_rom_ids`): one a stamp lists is asked, any other removed. **A platform RomM no longer
-  lists is gone from RomM, not turned off**: the fetcher records every slug RomM's platform listing names on the run
-  state (`LibrarySyncStateBox.run_listed_platform_slugs`) when it builds the work queue, preview included, and a row
-  whose platform is not among them keeps its shortcut, with no request, unless it was last delivered through a
-  collection. The kept ids under `kv_config`'s `platform_ids` are not the answer, because a game page that asks for an
-  unknown platform's system during the run writes it back there (`PlatformSystemService`). A listing that fails stops
-  the run, so a run that reaches the stale removal always has its own. Which platforms are on in Tender is keyed by
-  RomM's platform id, which an unlisted platform no longer has, so the route is what says the platform was on: a row
-  last delivered through its platform had it on. A kept row stays in its platform's Steam collection; for a platform
-  RomM no longer lists, that collection keeps the display name the `platform_names` cache holds. Every finalize, a
-  stopped run's included, rewrites that cache and carries forward the name of each platform outside the live work queue
-  a bound row is still on (`SyncReporter._names_with_bound_platforms_kept`), so a cancelled or paused run in between
-  does not rename the collection to the slug. The preview reads the same name (`do_read_kept_platform_names`, through
-  `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. Force Full Sync leaves
-  the routes in place. The preview asks the same question for the same rows, through the same
-  `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. Both
-  judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
-  apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes
-  nothing, lays the keys its fetch stamped over the same read. **Only the apply records what it established**
-  (`StaleSort.gone_from_romm_marks`, written in the finalize's write UoW by `SyncReporter.finalize_per_unit_run`): an
-  asked row RomM answered with a proven 404 is marked `roms.gone_from_romm = 'not_found'`, one RomM returned has its
-  mark cleared, and an answer that establishes nothing writes nothing; a row kept on a platform RomM no longer lists is
-  marked `delisted`. A row kept on a platform the run read whole is not marked, since that platform's stamp already
-  names it. Any commit of a row clears its mark, because the column rides the sync UPSERT with no merge. The mark is
-  what lets the removed-game cleanup list such a row ([Removed-game cleanup](removed-game-cleanup.md#discovery)); Force
-  Full Sync leaves it in place.
+  (the group fallback below). A row without a group key is judged alone. Any other row was reached either through a
+  collection or through its platform. The row itself says which: `roms.delivered_through` records the kind of unit whose
+  commit last upserted it (`Rom.record_delivery`, written by `SyncReporter.commit_unit_results` for the unit the chunk
+  dispatcher names; a commit that names none, such as a unit acknowledged after its run ended, keeps the row's value). A
+  row last delivered through a collection is asked for once by its exact id (`LibraryFetcher.ask_romm_for_roms`, single
+  attempt), and removed only when RomM returns the very ROM, since it left the collection — a 404 and an answer that
+  establishes nothing both keep the shortcut, so the row is asked again on every later run until it is found or unbound,
+  and a stopped run, which sorts nothing, leaves it as it was. A row last delivered through its platform is removed
+  unasked, its platform turned off — unless RomM no longer lists that platform, below. A row no commit has recorded a
+  route for since migration `029` falls back to the collections' completion stamps, read once before the run's first
+  unit rewrites any of them (`do_read_collection_listed_rom_ids`): one a stamp lists is asked, any other removed. **A
+  platform RomM no longer lists is gone from RomM, not turned off**: the fetcher records every slug RomM's platform
+  listing names on the run state (`LibrarySyncStateBox.run_listed_platform_slugs`) when it builds the work queue,
+  preview included, and a row whose platform is not among them keeps its shortcut, with no request, unless it was last
+  delivered through a collection. The kept ids under `kv_config`'s `platform_ids` are not the answer, because a game
+  page that asks for an unknown platform's system during the run writes it back there (`PlatformSystemService`). A
+  listing that fails stops the run, so a run that reaches the stale removal always has its own. Which platforms are on
+  in Tender is keyed by RomM's platform id, which an unlisted platform no longer has, so the route is what says the
+  platform was on: a row last delivered through its platform had it on. A kept row stays in its platform's Steam
+  collection; for a platform RomM no longer lists, that collection keeps the display name the `platform_names` cache
+  holds. Every finalize, a stopped run's included, rewrites that cache and carries forward the name of each platform
+  outside the live work queue a bound row is still on (`SyncReporter._names_with_bound_platforms_kept`), so a cancelled
+  or paused run in between does not rename the collection to the slug. The preview reads the same name
+  (`do_read_kept_platform_names`, through `services/library/_stale_rows.py::with_kept_platform_names`) and counts the
+  collection as kept. Force Full Sync leaves the routes in place. The preview asks the same question for the same rows,
+  through the same `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the
+  apply makes. Both judge a row's game by the group keys of the ROMs the run counts as synced
+  (`domain/sync_diff.py::group_keys_of`): the apply reads them off the rows its commits upserted
+  (`do_read_resident_group_keys`), and the preview, which writes nothing, lays the keys its fetch stamped over the same
+  read. **Only the apply records what it established** (`StaleSort.gone_from_romm_marks`, written in the finalize's
+  write UoW by `SyncReporter.finalize_per_unit_run`): an asked row RomM answered with a proven 404 is marked
+  `roms.gone_from_romm = 'not_found'`, one RomM returned has its mark cleared, and an answer that establishes nothing
+  writes nothing; a row kept on a platform RomM no longer lists is marked `delisted`. A row kept on a platform the run
+  read whole is not marked, since that platform's stamp already names it. Any commit of a row clears its mark, because
+  the column rides the sync UPSERT with no merge. The mark is what lets the removed-game cleanup list such a row
+  ([Removed-game cleanup](removed-game-cleanup.md#discovery)); Force Full Sync leaves it in place.
 - **Grandfathering.** A group that already carries several bound shortcuts (a library synced before this model) keeps
   them all — each surviving bound sibling stays its own tracked shortcut; no new shortcut is minted for a group with a
   binding. Convergence to one-shortcut-per-group happens naturally as the user uninstalls duplicates.
