@@ -4613,6 +4613,9 @@ class TestKeepingArtworkCurrent:
         _seed_candidates(fake_steamgrid_db_api, "logo", (6, 800, 300))
         await steamgrid.service.keep_artwork_current(42)
         asked = list(fake_steamgrid_db_api.requested_paths)
+        # The write that makes Steam rebuild the page: the new logo set and reported.
+        (slot_ready / f"{_APP_ID}_logo.png").write_bytes(b"image 6")
+        await steamgrid.service.report_sgdb_slot_artwork(42, "logo", "set", 9999, 6, _sha(b"image 6"))
         steamgrid.clock.advance(5)
 
         again = await steamgrid.service.keep_artwork_current(42)

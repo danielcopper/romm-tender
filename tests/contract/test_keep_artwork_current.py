@@ -90,6 +90,11 @@ async def test_the_visit_after_the_write_checks_nothing(harness):
     _seed_logos(harness, 6)
     await harness.endpoints.keep_artwork_current(_ROM_ID)
     asked = len(harness.sgdb.requested_paths)
+    # The write that makes Steam rebuild the page: the new logo set and reported.
+    (grid / f"{_ROM_ID}_logo.png").write_bytes(b"logo 6")
+    await harness.endpoints.report_sgdb_slot_artwork(
+        _ROM_ID, "logo", "set", 9999, 6, hashlib.sha256(b"logo 6").hexdigest()
+    )
 
     again = await harness.endpoints.keep_artwork_current(_ROM_ID)
 
@@ -129,3 +134,16 @@ async def test_a_key_no_header_can_carry_answers_the_failure_shape(harness):
 
     assert (answer["success"], answer["reason"]) == (False, "auth_failed")
     assert set(answer) == {"success", "reason", "message"}
+
+
+async def test_a_replacement_the_page_was_rebuilt_before_handing_over_is_named_at_the_next_visit(harness):
+    grid = _grid(harness)
+    _show_tenders_logo(harness, grid, 5)
+    _seed_logos(harness, 6)
+    await harness.endpoints.keep_artwork_current(_ROM_ID)
+    asked = len(harness.sgdb.requested_paths)
+
+    again = await harness.endpoints.keep_artwork_current(_ROM_ID)
+
+    assert again == {"status": "not_due", "replaced": ["logo"]}
+    assert len(harness.sgdb.requested_paths) == asked
