@@ -16,6 +16,7 @@ from domain.sync_diff import (
     group_keys_of,
     platform_breakdown,
     platform_collection_name,
+    rebuilt_rows_filed_as_kept,
     select_stale_removals,
     settle_asked_rows,
     should_include_in_platform_collection,
@@ -1582,6 +1583,19 @@ class TestGroupKeysOf:
         keys = {1: "igdb:1:1", 2: "igdb:1:1", 3: "igdb:3:1", 4: "igdb:4:1"}
 
         assert group_keys_of({1, 2, 3, 5}, keys) == frozenset({"igdb:1:1", "igdb:3:1"})
+
+
+class TestRebuiltRowsFiledAsKept:
+    """``rebuilt_rows_filed_as_kept`` — the rebuilt rows filed in their platform's collection as kept rows are."""
+
+    def test_a_row_its_platform_read_whole_did_not_return_is_filed(self):
+        assert rebuilt_rows_filed_as_kept({20: "gba"}, {"gba"}, {22, 23}) == [20]
+
+    def test_a_row_on_a_platform_the_run_did_not_read_is_not_filed(self):
+        assert rebuilt_rows_filed_as_kept({20: "gba"}, {"n64"}, set()) == []
+
+    def test_a_row_its_platform_returned_is_not_filed_again(self):
+        assert rebuilt_rows_filed_as_kept({20: "gba"}, {"gba"}, {20}) == []
 
 
 class TestGoneFromRommMarks:

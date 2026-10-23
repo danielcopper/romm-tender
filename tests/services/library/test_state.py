@@ -48,6 +48,14 @@ class TestTryBeginRun:
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is False
         assert box.current_sync_id == "run-1"
 
+    def test_drops_the_rows_the_previous_run_s_skips_rebuilt(self):
+        box = LibrarySyncStateBox()
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
+        box.run_skip_rebuilt_rows[20] = "gba"
+        box.finish_run("run-1")
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        assert box.run_skip_rebuilt_rows == {}
+
 
 class TestRunKind:
     """The kind is claimed with the slot and cleared with it.

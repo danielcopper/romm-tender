@@ -56,6 +56,7 @@ from domain.sync_diff import (
     count_disabled_platform_removals,
     group_keys_of,
     platform_breakdown,
+    rebuilt_rows_filed_as_kept,
 )
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
@@ -403,6 +404,8 @@ class SyncOrchestrator:
             )
             removed_ids = {row.rom_id for row in removals}
             stale = [rid for rid in stale if rid in removed_ids]
+            rebuilt = {rom["id"]: rom["platform_slug"] for rom in all_roms if rom["id"] in classify_skipped}
+            kept += stale_rows_of(rebuilt_rows_filed_as_kept(rebuilt, set(slug_to_name), platform_rom_ids), registry)
             kept_names = await with_kept_platform_names(
                 kept,
                 slug_to_name,
@@ -1090,6 +1093,7 @@ class SyncOrchestrator:
             # every platform it finished before the pause, and those games ARE done
             # (#1383).
             box.run_done_items += len(unit_roms)
+            box.run_skip_rebuilt_rows.update((rom["id"], rom["platform_slug"]) for rom in unit_roms)
             return len(unit_roms)
 
         # Build shortcut data for every fetched ROM. Installed ROMs carry the
@@ -1325,7 +1329,9 @@ class SyncOrchestrator:
         # paths) is excluded so a new rom_id reusing an old appId is never
         # wrongly removed (#1036). Of the rest, only a game outside what the
         # run syncs is removed (``sort_stale_rows``); a version gone from RomM
-        # stays bound and in its platform's Steam collection.
+        # stays bound and in its platform's Steam collection, and so does one a
+        # collection skip rebuilt (``rebuilt_rows_filed_as_kept``), which no
+        # unit left stale. A stopped run keeps neither.
         candidates: list[StaleRow] = []
         group_keys: dict[int, str] = {}
         if not cancelled:
@@ -1347,6 +1353,8 @@ class SyncOrchestrator:
             synced_group_keys=group_keys_of(synced_rom_ids, group_keys),
         )
         platform_rom_ids.update(row.rom_id for row in kept)
+        rebuilt = {} if cancelled else self._sync_state.run_skip_rebuilt_rows
+        platform_rom_ids.update(rebuilt_rows_filed_as_kept(rebuilt, processed_platform_slugs, platform_rom_ids))
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]
         if remove:
             await self._rules.emit_under_lease(

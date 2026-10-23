@@ -626,6 +626,27 @@ def _reached_through_a_collection(row: StaleRow, collection_listed_rom_ids: Coll
     )
 
 
+def rebuilt_rows_filed_as_kept(
+    rebuilt: Mapping[int, str], read_platform_slugs: Collection[str], platform_rom_ids: Collection[int]
+) -> list[int]:
+    """The rows of *rebuilt* the run files in their platform's Steam collection as it files a kept stale row.
+
+    *rebuilt* maps each bound row a skipped unit rebuilt from its stored row to
+    its platform slug, *read_platform_slugs* and *platform_rom_ids* are what
+    :func:`sort_stale_rows` and the platform-collection filing take as the
+    platforms the run read whole and the rows they returned. A rebuilt row
+    whose platform the run read whole without returning it is filed: no unit
+    left it stale, but it is the row :func:`sort_stale_rows` keeps where the
+    collection that lists it is fetched instead of skipped. A skipped platform
+    returns every row it rebuilds, so only a collection's skip contributes one.
+    """
+    return [
+        rom_id
+        for rom_id, platform_slug in rebuilt.items()
+        if platform_slug in read_platform_slugs and rom_id not in platform_rom_ids
+    ]
+
+
 def settle_asked_rows(
     asked: Iterable[StaleRow], answers: Mapping[int, RomAnswer]
 ) -> tuple[list[StaleRow], list[StaleRow]]:

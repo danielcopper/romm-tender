@@ -7099,16 +7099,14 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         assert (summary["platform_collection_diff"]["has_changes"], platform_collections) == (False, {"GBA"})
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("platform_groups", "gba_removed"), [(False, 1), (True, 0)], ids=["platform-groups-off", "platform-groups-on"]
-    )
+    @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_a_hidden_member_without_a_same_stem_copy_keeps_its_binding(
-        self, library, fake_romm_api, emit, monkeypatch, platform_groups, gba_removed
+        self, library, fake_romm_api, emit, monkeypatch, platform_groups
     ):
         """The binding stays, and 20 keeps its place in the preview's union, so both collection diffs are the apply's.
 
-        With platform groups off, GBA's collection holds the games GBA's unit
-        returned, and 20 rides only Faves' skip, so the apply drops it.
+        GBA's fetch no longer returns 20, which Faves' skip rebuilds, so GBA's
+        collection files it as a kept row whatever the setting.
         """
         await self._bind_20(library, fake_romm_api)
         library.settings["collection_create_platform_groups"] = platform_groups
@@ -7119,14 +7117,116 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         )
 
         assert (self._counted(summary), applied) == ((0, 0, 0), ([], [], {20: 6020}))
-        assert platform_collections == ({"GBA"} if platform_groups else set())
-        assert summary["platform_collection_diff"] == {
-            "has_changes": bool(gba_removed),
-            "added_count": 0,
-            "removed_count": gba_removed,
-        }
+        assert platform_collections == {"GBA"}
+        assert summary["platform_collection_diff"] == {"has_changes": False, "added_count": 0, "removed_count": 0}
         assert summary["collection_diff"] == {"has_changes": True, "added": [], "removed": []}
         assert classified_as_skipped == [frozenset({20})]
+
+
+class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedOrFetched:
+    """A hidden bound version a collection lists gets the same platform collections either way (#2549 D1).
+
+    GBA is synced and holds Golf (USA), 20, which the first run binds, beside
+    Golf (Europe), 22, and Golf (Japan), 23. The user then hides 20 in RomM, so
+    GBA's fetch no longer returns it, while Faves still lists it. Faves is
+    skipped as unchanged, or fetched because its listing changed for another
+    reason. Each case runs the preview, then the apply it would start.
+    """
+
+    _bind_20 = TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt._bind_20
+
+    @staticmethod
+    async def _preview_then_apply(library, emit, monkeypatch):
+        """``(faves_skips, platform_collection_diff, platform_app_ids)`` over one preview and the apply it starts."""
+        fetcher = library.sync._collection_fetcher
+        fetch_collection_unit = fetcher.fetch_collection_unit
+        faves_skips: list[bool] = []
+
+        async def recording_fetch_collection_unit(*args, **kwargs):
+            answer = await fetch_collection_unit(*args, **kwargs)
+            faves_skips.append(answer[2])
+            return answer
+
+        monkeypatch.setattr(fetcher, "fetch_collection_unit", recording_fetch_collection_unit)
+        summary = (await library.sync.sync_preview())["summary"]
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        run_2_starts_at = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
+        (platform_app_ids,) = [
+            payload[0]["platform_app_ids"] for name, *payload in frames if name == "sync_collections"
+        ]
+        return faves_skips, summary["platform_collection_diff"], platform_app_ids
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
+    async def test_the_game_stays_in_its_platform_s_collection(
+        self, library, fake_romm_api, emit, monkeypatch, faves_skipped, platform_groups
+    ):
+        await self._bind_20(library, fake_romm_api)
+        library.settings["collection_create_platform_groups"] = platform_groups
+        fake_romm_api.hidden_rom_ids = {20}
+        if not faves_skipped:
+            fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
+
+        faves_skips, platform_collection_diff, platform_app_ids = await self._preview_then_apply(
+            library, emit, monkeypatch
+        )
+
+        assert faves_skips == [faves_skipped, faves_skipped]
+        assert platform_collection_diff == {"has_changes": False, "added_count": 0, "removed_count": 0}
+        assert platform_app_ids == {"GBA": [6020]}
+
+    @pytest.mark.asyncio
+    async def test_a_game_on_a_platform_the_run_does_not_read_stays_out_of_its_collection(
+        self, library, fake_romm_api, emit, monkeypatch
+    ):
+        """With GBA off and platform groups off, the game Faves' skip rebuilds is filed under no platform."""
+        await TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt._bind_20(library, fake_romm_api)
+        library.settings["collection_create_platform_groups"] = False
+
+        faves_skips, platform_collection_diff, platform_app_ids = await self._preview_then_apply(
+            library, emit, monkeypatch
+        )
+
+        assert faves_skips == [True, True]
+        assert platform_collection_diff == {"has_changes": False, "added_count": 0, "removed_count": 0}
+        assert platform_app_ids == {}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    async def test_a_stopped_apply_files_it_by_the_setting_alone(
+        self, library, fake_romm_api, emit, monkeypatch, faves_skipped
+    ):
+        """A stopped run keeps no stale row, so with platform groups off it files neither case under GBA."""
+        await self._bind_20(library, fake_romm_api)
+        library.settings["collection_create_platform_groups"] = False
+        fake_romm_api.hidden_rom_ids = {20}
+        if not faves_skipped:
+            fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
+        orchestrator = library.sync._orchestrator
+        sync_one_unit = orchestrator._sync_one_unit
+        box = library.sync._box
+
+        async def stop_after_faves(unit, **kwargs):
+            processed = await sync_one_unit(unit, **kwargs)
+            if unit.type == "collection":
+                box.request_cancel()
+            return processed
+
+        monkeypatch.setattr(orchestrator, "_sync_one_unit", stop_after_faves)
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        run_2_starts_at = len(emit.call_args_list)
+        await orchestrator._do_sync_per_unit()
+
+        frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
+        (platform_app_ids,) = [
+            payload[0]["platform_app_ids"] for name, *payload in frames if name == "sync_collections"
+        ]
+        assert platform_app_ids == {}
 
 
 class TestRegression738CacheCorruption:

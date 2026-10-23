@@ -235,6 +235,10 @@ class LibrarySyncStateBox:
     # than the kept ids under ``platform_ids``, which a game page's read can
     # widen mid-run (``PlatformSystemService``). Reset by ``try_begin_run``.
     run_listed_platform_slugs: frozenset[str] | None = None
+    # Every bound row a skipped unit of the apply rebuilt from its stored row,
+    # by ``rom_id`` to its platform slug, for the finalize's
+    # ``domain.sync_diff.rebuilt_rows_filed_as_kept``. Reset by ``try_begin_run``.
+    run_skip_rebuilt_rows: dict[int, str] = field(default_factory=dict)
     # Count of apply chunks emitted so far this run — the session-budget gate
     # skips its very first chunk (this counter still 0) so every run/resume makes
     # at least one chunk of forward progress before it can pause, never an
@@ -310,6 +314,7 @@ class LibrarySyncStateBox:
         self.current_sync_id = run_id
         self.run_kind = kind
         self.run_listed_platform_slugs = None
+        self.run_skip_rebuilt_rows = {}
         # Bounded stash lifetime: a heartbeat-timed-out chunk whose late ack
         # never arrived is dropped when the next run starts, so stale abandoned
         # data can never outlive one run (#1367).
