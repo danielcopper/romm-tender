@@ -33,7 +33,7 @@ from domain.sync_state import SyncState
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import Mapping
+    from collections.abc import Collection, Mapping
 
     from domain.sync_run_kind import SyncRunKind
 
@@ -231,10 +231,11 @@ class LibrarySyncStateBox:
     # the run just bound (#1036). Reset at the start of each run.
     committed_app_ids: set[int] = field(default_factory=set)
     # Every rom_id RomM named in the ``sibling_roms`` of a ROM a unit of the run
-    # fetched. The stale removal keeps a bound row named here, since the run
-    # delivered its game, even where a re-match left its stored group key
-    # behind. Reset at the start of each run.
-    fetched_sibling_rom_ids: set[int] = field(default_factory=set)
+    # fetched, with each group key that named it (``sync_diff.sibling_naming_keys``,
+    # merged across units by ``record_fetched_siblings``). The stale removal
+    # joins and keeps a bound row exactly one group names. Reset at the start of
+    # each run.
+    fetched_sibling_keys: dict[int, set[str]] = field(default_factory=dict)
     # Every platform slug the run's own platform listing named, on in Tender or
     # not; ``None`` until the run has listed. The stale removal reads this rather
     # than the kept ids under ``platform_ids``, which a game page's read can
@@ -320,6 +321,11 @@ class LibrarySyncStateBox:
         # data can never outlive one run (#1367).
         self.abandoned_chunk = None
         return True
+
+    def record_fetched_siblings(self, naming: Mapping[int, Collection[str]]) -> None:
+        """Merge one unit's :func:`domain.sync_diff.sibling_naming_keys` answer into :attr:`fetched_sibling_keys`."""
+        for rom_id, keys in naming.items():
+            self.fetched_sibling_keys.setdefault(rom_id, set()).update(keys)
 
     def request_cancel(self, run_id: str | None = None) -> str:
         """Request cancellation of the in-flight run, scoped to ``run_id``.

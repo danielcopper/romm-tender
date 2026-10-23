@@ -1761,6 +1761,26 @@ class TestFinalizePerUnitRun:
             }
 
     @pytest.mark.asyncio
+    async def test_writes_each_repaired_group_key_onto_its_row(self, library, emit):
+        uow = library.uow
+        _seed_rom(uow, 22, app_id=6020, platform_slug="gba", name="Golf (Europe)", group_key="romm:22")
+        _seed_rom(uow, 23, app_id=6023, platform_slug="gba", name="Other", group_key="igdb:9:2")
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids=set(),
+            processed_platform_slugs=set(),
+            group_keys={22: "igdb:300:2"},
+        )
+
+        with uow:
+            assert (uow.roms.get(22).sibling_group_key, uow.roms.get(23).sibling_group_key) == (
+                "igdb:300:2",
+                "igdb:9:2",
+            )
+            assert uow.roms.get(22).shortcut_app_id == 6020
+
+    @pytest.mark.asyncio
     async def test_builds_romm_collection_app_ids_excluding_unbound(self, library, emit):
         """RomM collections resolve rom_id→app_id via uow.roms and skip unbound rows."""
 

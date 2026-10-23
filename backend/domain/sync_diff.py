@@ -314,8 +314,8 @@ def collapse_sibling_groups(
     Bound rows are grouped by their FETCHED sibling key when the row is in this
     fetch (so a legacy row whose stored key is still NULL is placed in its real
     group and grandfathered rather than churned). A bound row outside this fetch
-    that a fetched member names among its ``sibling_roms`` joins that member's
-    group (*sibling_key_by_rom_id*, :func:`sibling_group_key_by_rom_id`), so a
+    that fetched members of exactly one group name among their ``sibling_roms``
+    joins that group (*sibling_key_by_rom_id*, :func:`sibling_joins`), so a
     re-match that left its stored key behind does not mint a second shortcut
     for the game. Any other bound row falls back to its stored key.
 
@@ -510,28 +510,40 @@ def group_keys_of(rom_ids: Iterable[int], key_by_rom_id: Mapping[int, str]) -> f
     return frozenset(key_by_rom_id[rom_id] for rom_id in rom_ids if rom_id in key_by_rom_id)
 
 
-def sibling_group_key_by_rom_id(roms: Iterable[Mapping[str, Any]]) -> dict[int, str]:
-    """Each ``rom_id`` a ROM of *roms* names among its ``sibling_roms``, mapped to that ROM's group key.
+def sibling_naming_keys(roms: Iterable[Mapping[str, Any]]) -> dict[int, set[str]]:
+    """Each ``rom_id`` a ROM of *roms* names among its ``sibling_roms``, with every group key that names it.
 
     *roms* are fetched payloads whose ``sibling_group_key`` is stamped; a ROM
-    without one names nothing, and of two that name the same id the first wins.
+    without one names nothing. :func:`sibling_joins` reads the answer.
     """
-    named: dict[int, str] = {}
+    naming: dict[int, set[str]] = {}
     for rom in roms:
         key = rom.get("sibling_group_key")
         if not key:
             continue
         for sibling in rom.get("sibling_roms") or []:
             if sibling.get("id"):
-                named.setdefault(int(sibling["id"]), key)
-    return named
+                naming.setdefault(int(sibling["id"]), set()).add(key)
+    return naming
 
 
-def sibling_rom_ids_of(roms: Iterable[Mapping[str, Any]]) -> frozenset[int]:
-    """Every ``rom_id`` RomM names in the ``sibling_roms`` of *roms*, fetched payloads."""
-    return frozenset(
-        int(sibling["id"]) for rom in roms for sibling in rom.get("sibling_roms") or [] if sibling.get("id")
-    )
+def sibling_joins(naming: Mapping[int, Collection[str]]) -> dict[int, str]:
+    """The group each named ``rom_id`` joins: the one key that names it, where exactly one does.
+
+    *naming* is :func:`sibling_naming_keys`' answer, for one unit or merged over
+    a run. An id named by two groups joins neither: the edges bridge two games
+    the group keying kept apart, so they say nothing about which one it is.
+    """
+    return {rom_id: next(iter(keys)) for rom_id, keys in naming.items() if len(keys) == 1}
+
+
+def regrouped_keys(rows: Iterable[StaleRow], joins: Mapping[int, str]) -> dict[int, str]:
+    """The group key an apply writes onto each of *rows* that *joins* places in a group its stored key is not."""
+    return {
+        row.rom_id: joins[row.rom_id]
+        for row in rows
+        if row.rom_id in joins and joins[row.rom_id] != row.sibling_group_key
+    }
 
 
 # What one exact-id question to RomM established about a ROM: a proven 404
@@ -596,9 +608,10 @@ def sort_stale_rows(
     collection held at its last completed apply, read before the run rewrote
     any of them. *synced_group_keys* and *synced_sibling_rom_ids* say which
     games the run synced: the group keys (:func:`group_keys_of`) of every ROM a
-    unit returned, a skipped unit's stamp members included, and every id RomM
-    names as a sibling of a ROM a unit fetched (:func:`sibling_rom_ids_of`),
-    which holds where a re-match left the row's stored key behind.
+    unit returned, a skipped unit's stamp members included, and every id that
+    fetched ROMs of exactly one group name as their sibling
+    (:func:`sibling_joins`), which holds where a re-match left the row's stored
+    key behind.
 
     * **keep** — the row's platform was read whole and did not return it, so it
       is gone from RomM. A skipped platform rebuilds every bound row, so only a

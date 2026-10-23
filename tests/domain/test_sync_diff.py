@@ -16,11 +16,12 @@ from domain.sync_diff import (
     group_keys_of,
     platform_breakdown,
     platform_collection_name,
+    regrouped_keys,
     select_stale_removals,
     settle_asked_rows,
     should_include_in_platform_collection,
-    sibling_group_key_by_rom_id,
-    sibling_rom_ids_of,
+    sibling_joins,
+    sibling_naming_keys,
     sort_stale_rows,
 )
 
@@ -1092,16 +1093,81 @@ class TestABoundRowAFetchedMemberNamesAsItsSibling:
         assert [e["rom_id"] for e in self._collapse(complete=complete, named={23: "g1"})] == [20]
 
 
-class TestSiblingGroupKeyByRomId:
-    def test_each_named_sibling_takes_the_naming_rom_s_key_and_the_first_naming_wins(self):
+class TestABoundRowFetchedMembersOfTwoGroupsName:
+    """A bridge: fetched members of two groups the keying kept apart both name bound rom 22 (#2533 D9).
+
+    Whichever order the fetch lists them in, 22 joins neither group, mints no
+    group's shortcut away, and is judged by its own stored key.
+    """
+
+    _ROMS = (
+        {"id": 20, "sibling_group_key": "g1", "sibling_roms": [{"id": 22}]},
+        {"id": 30, "sibling_group_key": "g2", "sibling_roms": [{"id": 22}]},
+    )
+
+    @pytest.mark.parametrize("order", [(0, 1), (1, 0)], ids=["g1 first", "g2 first"])
+    @pytest.mark.parametrize("complete", [False, True], ids=["partial view", "complete view"])
+    def test_the_row_joins_neither_group_whichever_names_it_first(self, order, complete):
+        joins = sibling_joins(sibling_naming_keys([self._ROMS[i] for i in order]))
+        members = [
+            _gsd(20, name="Golf (USA)", group_key="g1", fs_name_no_ext="golf_usa"),
+            _gsd(30, name="Other (USA)", group_key="g2", fs_name_no_ext="other_usa"),
+        ]
+        registry = {"22": _greg(22, app_id=6020, name="Golf (Europe)", group_key="romm:22", fs_name="golf_eur.gba")}
+
+        emitted = collapse_sibling_groups(
+            members, registry, installed_rom_ids=set(), complete_group_view=complete, sibling_key_by_rom_id=joins
+        )
+
+        assert joins == {}
+        assert sorted(e["rom_id"] for e in emitted) == [20, 30]
+
+    @pytest.mark.parametrize("order", [(0, 1), (1, 0)], ids=["g1 first", "g2 first"])
+    def test_the_row_is_judged_by_its_stored_key_and_given_no_new_one(self, order):
+        joins = sibling_joins(sibling_naming_keys([self._ROMS[i] for i in order]))
+        row = StaleRow(22, 6020, "gba", None, "romm:22")
+
+        sort = sort_stale_rows(
+            [row],
+            read_platform_slugs=set(),
+            listed_platform_slugs={"gba"},
+            collection_listed_rom_ids=(),
+            synced_group_keys={"g1", "g2"},
+            synced_sibling_rom_ids=joins.keys(),
+        )
+
+        assert sort.remove == [row]
+        assert regrouped_keys([row], joins) == {}
+
+
+class TestSiblingNamingKeys:
+    def test_every_named_id_with_every_key_that_names_it(self):
         roms = [
             {"id": 1, "sibling_group_key": "g1", "sibling_roms": [{"id": 2}, {"id": 3}]},
             {"id": 4, "sibling_group_key": "g2", "sibling_roms": [{"id": 3}, {"name": "no id"}]},
             {"id": 5, "sibling_roms": [{"id": 6}]},
             {"id": 7, "sibling_group_key": "g3"},
+            {"id": 8, "sibling_group_key": "g1", "sibling_roms": [{"id": 2}]},
         ]
 
-        assert sibling_group_key_by_rom_id(roms) == {2: "g1", 3: "g1"}
+        assert sibling_naming_keys(roms) == {2: {"g1"}, 3: {"g1", "g2"}}
+
+
+class TestSiblingJoins:
+    def test_only_an_id_exactly_one_group_names_joins_it(self):
+        assert sibling_joins({2: {"g1"}, 3: {"g1", "g2"}, 4: set()}) == {2: "g1"}
+
+
+class TestRegroupedKeys:
+    def test_a_joined_row_whose_stored_key_differs_takes_the_group_s_and_any_other_row_nothing(self):
+        stale_key = StaleRow(1, 1001, "gba", None, "romm:1")
+        no_key = StaleRow(2, 1002, "gba", None, None)
+        already_there = StaleRow(3, 1003, "gba", None, "g1")
+        not_joined = StaleRow(4, 1004, "gba", None, "romm:4")
+
+        regrouped = regrouped_keys([stale_key, no_key, already_there, not_joined], {1: "g1", 2: "g1", 3: "g1"})
+
+        assert regrouped == {1: "g1", 2: "g1"}
 
 
 class TestPlatformBreakdown:
@@ -1600,18 +1666,6 @@ class TestGroupKeysOf:
         keys = {1: "igdb:1:1", 2: "igdb:1:1", 3: "igdb:3:1", 4: "igdb:4:1"}
 
         assert group_keys_of({1, 2, 3, 5}, keys) == frozenset({"igdb:1:1", "igdb:3:1"})
-
-
-class TestSiblingRomIdsOf:
-    def test_every_id_the_payloads_name_as_a_sibling(self):
-        roms = [
-            {"id": 1, "sibling_roms": [{"id": 2}, {"id": 3}]},
-            {"id": 4, "sibling_roms": None},
-            {"id": 5},
-            {"id": 6, "sibling_roms": [{"id": 3}, {"name": "no id"}]},
-        ]
-
-        assert sibling_rom_ids_of(roms) == frozenset({2, 3})
 
 
 class TestGoneFromRommMarks:

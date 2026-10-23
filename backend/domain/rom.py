@@ -141,6 +141,14 @@ class Rom:
         """
         self.delivered_through = route
 
+    def adopt_sibling_group_key(self, key: str) -> None:
+        """Adopt the group *key* that fetched siblings name this ROM under, while no unit returns the ROM itself.
+
+        Which rows the stale removal repairs, and when, is
+        :func:`domain.sync_diff.regrouped_keys`'s.
+        """
+        self.sibling_group_key = key
+
     def mark_gone_from_romm(self, evidence: GoneEvidence) -> None:
         """Record the *evidence* that RomM no longer serves this ROM.
 

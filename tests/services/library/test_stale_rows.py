@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from domain.sync_diff import StaleRow
-from services.library._stale_rows import registry_stale_rows, settle_stale_rows, with_kept_platform_names
+from services.library._stale_rows import settle_stale_rows, stale_rows_of, with_kept_platform_names
 
 _LOGGER = logging.getLogger("test_stale_rows")
 
@@ -79,14 +79,14 @@ class TestSettleStaleRows:
         ask.assert_awaited_once_with([1, 3])
 
 
-class TestRegistryStaleRows:
+class TestStaleRowsOf:
     def test_each_row_carries_what_the_registry_holds_for_it(self):
         registry = {
             "1": {"app_id": 1001, "platform_slug": "gba", "delivered_through": "collection", "sibling_group_key": "g1"},
             "2": {"app_id": 1002, "platform_slug": "n64", "delivered_through": None, "sibling_group_key": None},
         }
 
-        assert registry_stale_rows([2, 1], registry) == [
+        assert stale_rows_of([2, 1], registry) == [
             StaleRow(2, 1002, "n64", None, None),
             StaleRow(1, 1001, "gba", "collection", "g1"),
         ]

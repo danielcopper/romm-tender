@@ -2,16 +2,16 @@
 
 Shared by :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s
 preview and its apply's finalize, so the removals a preview promises are the
-ones its apply makes. The preview also builds its stale rows here
-(:func:`registry_stale_rows`) and reads the name of a kept row's platform
-(:func:`with_kept_platform_names`).
+ones its apply makes. The preview also builds its stale rows and synced group
+keys here (:func:`stale_rows_of`, :func:`preview_group_keys`) and reads
+the name of a kept row's platform (:func:`with_kept_platform_names`).
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from domain.sync_diff import StaleRow, settle_asked_rows, sort_stale_rows
+from domain.sync_diff import StaleRow, group_keys_of, settle_asked_rows, sort_stale_rows
 
 if TYPE_CHECKING:
     import logging
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     ReadKeptNamesFn = Callable[[Collection[str]], Awaitable[dict[str, str]]]
 
 
-def registry_stale_rows(stale_rom_ids: Iterable[int], registry: Mapping[str, Mapping[str, Any]]) -> list[StaleRow]:
+def stale_rows_of(stale_rom_ids: Iterable[int], registry: Mapping[str, Mapping[str, Any]]) -> list[StaleRow]:
     """A :class:`StaleRow` per *stale_rom_ids* entry, off the preview's registry (``do_read_preview_baseline``)."""
     rows: list[StaleRow] = []
     for rom_id in stale_rom_ids:
@@ -37,6 +37,19 @@ def registry_stale_rows(stale_rom_ids: Iterable[int], registry: Mapping[str, Map
             )
         )
     return rows
+
+
+def preview_group_keys(
+    synced_rom_ids: Iterable[int], resident_keys: Mapping[int, str], fetched: Iterable[Mapping[str, Any]]
+) -> frozenset[str]:
+    """The preview's synced group keys: *resident_keys* with the keys stamped on its *fetched* ROMs laid over them.
+
+    The apply reads the same keys back off the rows its commits upserted
+    (``do_read_resident_group_keys``); the preview writes nothing, so its fresh
+    keys exist only in memory.
+    """
+    fresh = {rom["id"]: rom["sibling_group_key"] for rom in fetched if rom.get("sibling_group_key")}
+    return group_keys_of(synced_rom_ids, {**resident_keys, **fresh})
 
 
 async def settle_stale_rows(
