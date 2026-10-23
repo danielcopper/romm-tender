@@ -22,11 +22,15 @@ Sync uses a **newest-wins** model with a hash-divergence guard:
   `updated_at`).
 - If the server tracks your device as up-to-date and your local file matches the recorded baseline, there's nothing to
   do.
+- If your local file is already identical to the newest save in RomM — a fresh install, a copied SD card, the same save
+  synced from elsewhere — nothing is transferred: Tender records it as synced and tells RomM this device has it.
 - If another device pushed a newer save and your local file is unchanged, the new server save is downloaded silently.
 - If you played offline and your local file changed, your save is pushed back to the server.
 - A conflict modal only appears if **both sides changed** to different content since the last sync, if a save on this
   device that Tender never synced meets a different save in RomM, or if your local save looks emptied or cut short —
-  Tender won't silently overwrite either version.
+  Tender won't silently overwrite either version. A save is measured by its content, not counting the empty padding some
+  emulators write at its end, so one that is smaller only because its emulator writes less padding is not taken for a
+  cut-short one.
 
 This is the same model used by the official RomM clients (Argosy and Grout). It keeps cross-device save sync simple: one
 timeline per slot, newest wins.
@@ -97,7 +101,7 @@ Open **Save Sync** from the main QAM page to configure sync behavior.
 Tender uses a single, automatic resolution policy:
 
 - **Newest server save in your slot wins** by default. If your local save hasn't changed since the last successful sync,
-  the server version is downloaded silently.
+  the server version is downloaded silently; if it is already identical to that version, nothing is downloaded at all.
 - **Your local edits push automatically** when the server still considers your device up-to-date — for example, you
   played offline and no other device synced in the meantime.
 - **A conflict modal appears only when both sides changed** to different content since the last sync, when a save on

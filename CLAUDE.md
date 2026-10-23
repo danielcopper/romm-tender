@@ -1098,8 +1098,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `ResolveUploadConflictFn` seams; `domain/sync_action.py` holds only the `SyncAction` vocabulary the core answers in,
   so a change to either decision is a contract change carried by re-copied gavel vectors** — test — both vendored vector
   families run against the core (`tests/adapters/test_gavel_native.py`,
-  `tests/adapters/test_gavel_native_table_vectors.py`); the `.so` and the vectors are pinned to one upstream release tag
-  and bumped together
+  `tests/adapters/test_gavel_native_table_vectors.py`); the `.so`, the vectors and the `ctypes` structs in
+  `adapters/gavel_native.py` are pinned to one upstream release tag and bumped together
+- **An adopt the core marks `acknowledge` records its baseline only after `POST /api/saves/{id}/downloaded` succeeded —
+  in the sync and in Keep Local's adopt without an upload; a failed acknowledgement records nothing, and the status read
+  records no such adopt** — test + prompt-only —
+  `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
+  `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges` and
+  `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`
+  reads `acknowledge` and confirms the head through the retry strategy before it records
 - **`applied_launch_options` is written only by the six recorded-state writer sites (sync ack-commit, download-complete,
   adopt-complete, uninstall, home-migration, version-switch), each recording the exact command the frontend wrote;
   excluded from the sync UPSERT; the only sanctioned reset is Force Full Sync's clear-to-NULL** — test + prompt-only —

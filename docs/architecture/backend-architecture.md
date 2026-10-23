@@ -2705,16 +2705,18 @@ backstop in `_handle_upload_409` (`services/saves/sync_engine/matrix.py`).
   Two conversions are the adapter's, not the core's, and both exist so an "unknown" stays a flag instead of becoming a
   value: a server save's ISO-8601 `updated_at` becomes epoch seconds plus a `has_updated_at` flag (an unparseable
   timestamp arrives as a cleared flag, never as a substitute instant, so it cannot win head selection), and an absent
-  size becomes a cleared `has_size` flag (`0` is exactly what the corrupt-local guard reacts to, so it cannot double as
-  "no size recorded"). Presence of the local file rides on the pointer alone — a file that exists but could not be
-  measured is a real case, distinct from a missing one. The core answers with the chosen `server_save_id`, which the
-  adapter resolves back to the caller's own save dict so `Download` / `Conflict` carry the full record their consumers
-  read.
-- **What ships**: `backend/native/libgavel-x86_64-linux.so` (romm-gavel `v1.0.1`, a freestanding build with zero library
+  size or content size becomes a cleared `has_*` flag (`0` is exactly what the corrupt-local guard reacts to, so it
+  cannot double as "no size recorded"). A non-integral size raises rather than rounding, and so does a `size_fixed` that
+  is not a `bool`: an absent one is unknown, and anything else would be read as yes or no by a guess. Presence of the
+  local file rides on the pointer alone — a file that exists but could not be measured is a real case, distinct from a
+  missing one. The core answers with the chosen `server_save_id`, which the adapter resolves back to the caller's own
+  save dict so `Download`, `Conflict` and an adopting `Skip` carry the full record their consumers read; an adopting
+  `Skip` also carries `acknowledge`, and a skip that adopts nothing names no head.
+- **What ships**: `backend/native/libgavel-x86_64-linux.so` (romm-gavel `v2.0.0`, a freestanding build with zero library
   dependencies — it loads on any x86_64 Linux), vendored verbatim from the upstream release with a pinned SHA-256
   checksum. The C ABI has been part of upstream's promise since `v1.0.0`: struct layouts, signatures and enumerator
-  values now cost a major bump to change, which is what makes pinning a compiled artifact meaningful. Provenance and the
-  update procedure live in
+  values cost a major bump to change, which is what makes pinning a compiled artifact meaningful — and why the binary
+  and the `ctypes` structs in `adapters/gavel_native.py` move together. Provenance and the update procedure live in
   [`native/README.md`](https://github.com/danielcopper/romm-tender/blob/main/backend/native/README.md). The checksum is
   re-verified by CI, so a swapped binary fails the pipeline; nothing asserts the `.so` reaches a built package, because
   no build here produces one.
