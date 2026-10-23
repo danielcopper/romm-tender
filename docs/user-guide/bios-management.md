@@ -855,8 +855,9 @@ setup.
   replacement
 - With **gpSP**, `gba_bios.bin` is shown as _required_ — gpSP cannot run without it
 
-The active core name appears on the game detail page's **BIOS** tab, whose emulator selector opens on it, and on the
-platform's header line in **Library › Platforms**. This tells you at a glance which core Tender is filtering for.
+The active core name appears on the game detail page's **BIOS** tab (see
+[BIOS Status on the Game Detail Page](#bios-status-on-the-game-detail-page)) and on the platform's header line in
+**Library › Platforms**. This tells you at a glance which core Tender is filtering for.
 
 **How the core is determined:**
 
