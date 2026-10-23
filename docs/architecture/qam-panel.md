@@ -29,6 +29,7 @@ without restating it. The width mechanism's decision record is
 | `frontend/src/bigpicture/DataManagementPage.tsx`, `data/`, `RemovedGamesCleanup.tsx`, `CleanupList.tsx`, `cleanupPlan.ts` | Data Management — the inventory rows, their panes and the page's state; the cleanup dialog, its list and the prediction of what a run would do                      |
 | `frontend/src/bigpicture/DownloadQueue.tsx`                                                                               | Downloads                                                                                                                                                           |
 | `frontend/src/bigpicture/library/`                                                                                        | The Library tabs: `usePlatformsPage`, `PlatformsTab`, `PlatformDetail`; `useCollectionsPage`, `collectionKinds`, `CollectionsTab`, `CollectionsDetail`              |
+| `frontend/src/bigpicture/bios/`                                                                                           | The BIOS part a platform's pane and a game's BIOS tab both draw: `BiosFiles` (table, marks, legend, buttons), `useBiosActions` (the presses), `useBiosFocus`        |
 | `frontend/src/utils/deckyUiInternals.ts`                                                                                  | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
 | `frontend/src/utils/qamExpansion.ts`                                                                                      | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
 | `frontend/src/bigpicture/layout/`                                                                                         | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus on a swap), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                |
@@ -1657,27 +1658,28 @@ it, for the focused platform:
   bottom, the sentence and the group block, the emulator selector, the shown emulator's files and the buttons; the right
   one takes the rest of the width (at least 400 CSS px) and holds the library section and the legend. Where the page is
   narrower than both need — the Deck's game page, where Big Picture's desktop one is not — the right column wraps below
-  the left; nothing measures, the wrap is CSS's (`BiosTab.tsx`). Everything under the sentence is the platform page's
-  part, drawn from the same module (`frontend/src/bigpicture/bios/`): the selector in the left column's gutter, aligned
-  with the sentence and the table; the table with every row the shown emulator lists (#2429 D3), its marks, `Contents`
-  and one button per row — Download, Replace… or Delete — under the same rules, confirmations and lines;
-  `Download required for <emulator> (N)`, which on the game page sends the shown entry's identity for the launching
-  emulator too, since a game can launch with another emulator than its platform's pick; under `For all of <platform>`,
-  `Download all`, which sends the game's ROM id so the links follow the system its install record holds, and
-  `Delete downloads (N)`; the status line under them; the library section; one legend for both columns. The game's BIOS
-  answer carries what those buttons stand on, as the platform's does: the delete counts (`deletable_count`,
-  `delete_name`) and `server_offline`, which withdraws the downloads while RomM's listing cannot be read
-  (`check_platform_bios` in `backend/services/firmware/status.py`). **Every row is a focus stop** (#2429 D6): a row with
-  a button is reached as that button, and a row without one is a `DialogButton` around the row that does nothing when
-  pressed — on the game page a `Focusable` around content that is not a control registers no gamepad stop
+  the left; nothing measures, the wrap is CSS's (`BiosTab.tsx`). Everything under the sentence and the group block is
+  the platform page's part, drawn from the same module (`frontend/src/bigpicture/bios/`): the selector in the left
+  column's gutter, aligned with the sentence and the table; the table with every row the shown emulator lists (#2429
+  D3), its marks, `Contents` and one button per row — Download, Replace… or Delete — under the same rules, confirmations
+  and lines; `Download required for <emulator> (N)`, which on the game page sends the shown entry's identity for the
+  launching emulator too, since a game can launch with another emulator than its platform's pick; under
+  `For all of <platform>`, `Download all`, which sends the game's ROM id so the links follow the system its install
+  record holds, and `Delete downloads (N)`; the status line under them; the library section; one legend for both
+  columns. The game's BIOS answer carries what those buttons stand on, as the platform's does: the delete counts
+  (`deletable_count`, `delete_name`) and `server_offline`, which withdraws the downloads while RomM's listing cannot be
+  read (`check_platform_bios` in `backend/services/firmware/status.py`). **Every row is a focus stop** (#2429 D6): a row
+  with a button is reached as that button, and a row without one is a `DialogButton` around the row that does nothing
+  when pressed — on the game page a `Focusable` around content that is not a control registers no gamepad stop
   (`utils/scrollHelpers.ts`), which is why that page's rows are not the table's own `Focusable`. Every stop in the tab
-  is centred when focus lands on it, as a section is. After a press the tab reads its own answer again and the play
-  row's (`rereadBiosAnswer` in `panelEvents.ts`, `refreshBiosStatus`), and where firmware changed it tells every open
-  game page, as the platform page does. What a press did stays until the game page is left, across a version switch too:
-  the tab holds it for the platform the versions share. The play row's gear menu has no "Download BIOS" (#2429 D7); the
-  red BIOS badge in the play row leads to this tab. The ratio is a third set again, which is why it rides along on both
-  rather than being folded in. **The ratio names that set in its own words**, because the sentence in front of it counts
-  another one and the numbers cannot say which is which:
+  is centred when focus lands on it, as a section is. After a press the play row's answer is read again
+  (`refreshBiosStatus`), and where firmware changed the press tells every open game page, as the platform page does —
+  the tab's own page included, which reads its answer again from that event (`romm_data_changed`, `bios`) and from
+  nowhere else, so a press costs one read of the tab's answer. What a press did stays until the game page is left,
+  across a version switch too: the tab holds it for the platform the versions share. The play row's gear menu has no
+  "Download BIOS" (#2429 D7); the red BIOS badge in the play row leads to this tab. The ratio is a third set again,
+  which is why it rides along on both rather than being folded in. **The ratio names that set in its own words**,
+  because the sentence in front of it counts another one and the numbers cannot say which is which:
   `The one file … opens by name is in place (1/20 RomM library files)` states three correct numbers over three sets, and
   the words are the only thing that tells them apart. The pair is the library's inventory for the platform — what it
   holds, and how many of those Tender found at their destination (GLOSSARY.md → Library inventory) — and the tail names

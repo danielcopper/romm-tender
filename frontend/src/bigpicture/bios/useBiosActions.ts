@@ -6,8 +6,9 @@
  *
  * The page that holds it decides two things only: what is held while a press
  * runs and where its line goes (`setBusy`, `setStatus` — the platform page's
- * hold covers its core switch and its removal too), and how its BIOS answer is
- * read again once a press changed something (`reread`).
+ * hold covers its core switch and its removal too), how its BIOS answer is
+ * read again once a press changed something (`reread`), and which game the
+ * press is for, if any (`romId`).
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */

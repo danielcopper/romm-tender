@@ -106,8 +106,8 @@ opens by name are in place (3/5 RomM library files)" is one count of each kind, 
 file your library does not hold is counted in the sentence and never in the ratio, and a library file the emulator does
 not require is counted in the ratio and never in the sentence. A file that reads "could not be established" is left out
 of the ratio, since nothing showed it missing, and where no file could be established there is no ratio at all. A file
-your library does not hold still gets its own row wherever it matters — a file this game requires, or one the console
-itself needs, is listed whether your library holds it or not.
+your library does not hold still gets its own row: every file the chosen emulator names is listed, whether your library
+holds it or not.
 
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.
@@ -138,7 +138,8 @@ and words, a **Download**, **Replace…** or **Delete** button on every row that
 _emulator_**, and under **For all of _platform_** **Download all** and **Delete downloads**, all acting on the game's
 platform. **Download all** links what it fetches for the system the game was downloaded under. Every row is a stop the
 controller lands on, so you can scroll to each one; a row without a button does nothing when you press it. What a press
-could not do, or moved out of the way, is said in a line under the buttons.
+did to a row — a link it could not place, a download that arrived damaged, a file it replaced — is said on that row;
+what else it could not do, or what it moved out of the way, is said in a line under the buttons.
 
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. It follows the red
 verdict and nothing else: the resolver says the emulator you launch with does not have what it needs — a required file
@@ -352,11 +353,11 @@ and the row you focus is the one the right-hand pane describes.
    file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) — that is where it has to go,
    and it is the one thing you need when placing a file by hand. The description in parentheses is printed under the row
    rather than beside the name: this column is narrow enough that anything after the name would push the name itself off
-   the row. Like there, it is shown only where the emulator itself wrote it. Above it, first under the name, a small
-   line says what the chosen emulator needs of the file: _required_, _optional_, or _one of these · for USA discs_ for a
-   per-region image (the library's own section, step 12, has two words of its own). On disk holds marks and no words.
-   The first mark carries two things — a green ✓ for a file that is there and required, a red ✗ for one that is required
-   and is not, and the paler green ✓ / grey ✗ for a file the chosen emulator does not need either way. Whether a file is
+   the row. It is shown only where the emulator itself wrote it. Above it, first under the name, a small line says what
+   the chosen emulator needs of the file: _required_, _optional_, or _one of these · for USA discs_ for a per-region
+   image (the library's own section, step 12, has two words of its own). On disk holds marks and no words. The first
+   mark carries two things — a green ✓ for a file that is there and required, a red ✗ for one that is required and is
+   not, and the paler green ✓ / grey ✗ for a file the chosen emulator does not need either way. Whether a file is
    "there" is the resolver's verdict, not just its presence: a file that is the wrong image reads ✗, and one the
    resolver could not compare reads `?`. A ✗'s tooltip and legend line say which it is — _missing_, _wrong file_ or
    _refused_ — in the words the Contents column uses. A grey `?` means not established, either way: a row whose verdict
@@ -499,8 +500,9 @@ under the section says so: _A different scph5501.bin was already in Tender's fir
 
 ### Deleting BIOS Files
 
-You can remove BIOS files from a platform's pane in **Library › Platforms**, one at a time or all at once. Both only
-ever remove what Tender downloaded; because deletion is local, both work with your RomM server offline.
+You can remove BIOS files from a platform's pane in **Library › Platforms**, or from the **BIOS** tab of any of its
+games, one at a time or all at once. Both only ever remove what Tender downloaded; because deletion is local, both work
+with your RomM server offline.
 
 The **Delete downloads** button under **For all of _platform_** takes every BIOS file Tender downloaded for the
 platform, and its label shows how many (e.g. "Delete downloads (3)"). Its confirmation reads _Delete Tender's BIOS
@@ -513,7 +515,8 @@ saturn_bios.bin?_ — _Tender removes it from its firmware store and every link 
 file Saturn's Kronos and YabaSanshiro both want lies once in the store with a link at each emulator's place, and one
 **Delete** removes the file and both links.
 
-1. In **Library › Platforms**, pick the platform whose BIOS files you want to remove
+1. In **Library › Platforms**, pick the platform whose BIOS files you want to remove — or open the **BIOS** tab of one
+   of its games
 2. Tap **Delete downloads**, or the **Delete** on a single row
 3. Confirm the action in the dialog that appears — every one of them asks first
 

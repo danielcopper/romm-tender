@@ -1,6 +1,7 @@
-// The panel's core info is state the BIOS tab is handed, and nothing on the tab
-// prints the launching emulator's name from it — so where it comes from, and
-// which answer may replace it, is pinned here on the state itself.
+// The panel's core info is state the BIOS tab is handed, and the tab prints its
+// emulator's name only where the BIOS answer names none (the store-only
+// sentence) — so where it comes from, and which answer may replace it, is
+// pinned here on the state itself.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SetStateAction } from "react";

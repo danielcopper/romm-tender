@@ -2977,22 +2977,23 @@ answers `null` where nothing is left.
 **No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
 emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing
 could be read for still has a library behind it, and fetching from it is the one action that moves the platform along at
-all — so every download `PlatformDetail` offers is built off the fetchable set
-(`on_server && !downloaded && declared_kind !== "directory"`, plus the offline server) and reads the verdict
-**nowhere**: not `bios_level`, not `required_withheld`. The two further inputs those buttons do read are of the same two
-kinds — each row's `fetch_for_required` is its emulator's own demand and is what `Download required` counts over the
-shown emulator's rows, and the library's own finished ratio is what stops `Download all` offering a set already complete
-— so neither is a readiness gate either. `fetch_for_required` is `domain/firmware_groups.py`'s `fetched_as_required`,
-the one rule `FirmwareDownloader.download_required_firmware` applies too: the files the emulator requires, and the
-options of its one-of groups that serve a region nothing in place covers yet. A pick nothing could identify — a platform
-with no emulator listed, or one whose first listed emulator the resolver names no identity for — is no emulator (#2190
-D26): no row is its requirement or one it uses, nothing is fetched for it, it has no entry in the emulator selector — so
-the platform page opens on the first other emulator and offers that one's `Download required`, and none where there is
-no other (#2190 D34) — and the header reads that nothing could be established — the empty required set is an absence of
-an answer, never "nothing required" (the verdict for no identity is none, so `emulator_read` is false and the level
-unknown). Reading readiness there is what took the buttons off PS2, GameCube and PSP the moment a BIOS answer was scoped
-to the emulator that actually launches: those launch standalone emulators the resolver holds no card for, so the verdict
-declines over a library that still holds their files.
+all — so every download the BIOS table offers (`frontend/src/bigpicture/bios/BiosFiles.tsx`, on a platform's pane and on
+a game's BIOS tab) is built off the fetchable set (`on_server && !downloaded && declared_kind !== "directory"`, plus the
+offline server) and reads the verdict **nowhere**: not `bios_level`, not `required_withheld`. The two further inputs
+those buttons do read are of the same two kinds — each row's `fetch_for_required` is its emulator's own demand and is
+what `Download required` counts over the shown emulator's rows, and the library's own finished ratio is what stops
+`Download all` offering a set already complete — so neither is a readiness gate either. `fetch_for_required` is
+`domain/firmware_groups.py`'s `fetched_as_required`, the one rule `FirmwareDownloader.download_required_firmware`
+applies too: the files the emulator requires, and the options of its one-of groups that serve a region nothing in place
+covers yet. A pick nothing could identify — a platform with no emulator listed, or one whose first listed emulator the
+resolver names no identity for — is no emulator (#2190 D26): no row is its requirement or one it uses, nothing is
+fetched for it, it has no entry in the emulator selector — so the platform page opens on the first other emulator and
+offers that one's `Download required`, and none where there is no other (#2190 D34) — and the header reads that nothing
+could be established — the empty required set is an absence of an answer, never "nothing required" (the verdict for no
+identity is none, so `emulator_read` is false and the level unknown). Reading readiness there is what took the buttons
+off PS2, GameCube and PSP the moment a BIOS answer was scoped to the emulator that actually launches: those launch
+standalone emulators the resolver holds no card for, so the verdict declines over a library that still holds their
+files.
 
 **What the narrowest decline does decide is wording.** "Not read" (`emulator_read` false, `reading_complete_for`) means
 the emulator stated nothing about what it wants — a `read` declaration with an empty list is read, and says it needs
