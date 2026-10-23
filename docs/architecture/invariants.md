@@ -574,23 +574,22 @@ Format: **invariant** — tier — enforced by.
   the old one is left unbound beside it, still playable and no longer started by anything
 - **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
   from a platform the run read whole is kept; on a platform the run did not read, a row whose game the run synced —
-  another member of its sibling group among the ROMs the run counts as synced, a skipped unit's stamp members included,
-  or named among the `sibling_roms` of fetched ROMs of exactly one group, whose key the apply then writes onto the row —
+  another member of its sibling group among the ROMs the run counts as synced, a skipped unit's stamp members included —
   stays bound whatever RomM answers, and is asked about and marked only where any other row would be, while a row
-  without a group key that no single group's fetched ROMs name is judged alone (#2533 D6, D7, D9); any other row a
-  collection last delivered (`roms.delivered_through`) is asked for by its exact id on every run until it is found or
-  unbound, and kept unless RomM's answer is the ROM itself, while any other row is kept when the run's own platform
-  listing no longer names its platform and removed unasked when it does; a row with no recorded route is asked only when
-  the collections' last completed members list it; a kept row stays in its platform's Steam collection; the preview
-  counts exactly the removals and the platform collections the apply makes; and of the two, only the apply records what
-  the stale removal established on the row (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists
-  marks it, the ROM itself clears the mark, and any other answer writes nothing. The removed-game cleanup's own proof
-  marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test +
-  prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`,
-  `settle_asked_rows`), `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection`
-  for the apply and the preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is
-  asked again on the third run, a stopped run leaves the row asked at the next, a row its platform last delivered is
-  removed unasked, and a row with no recorded route is asked only when a collection record lists it),
+  without a group key is judged alone (#2533 D6); any other row a collection last delivered (`roms.delivered_through`)
+  is asked for by its exact id on every run until it is found or unbound, and kept unless RomM's answer is the ROM
+  itself, while any other row is kept when the run's own platform listing no longer names its platform and removed
+  unasked when it does; a row with no recorded route is asked only when the collections' last completed members list it;
+  a kept row stays in its platform's Steam collection; the preview counts exactly the removals and the platform
+  collections the apply makes; and of the two, only the apply records what the stale removal established on the row
+  (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM itself clears the mark,
+  and any other answer writes nothing. The removed-game cleanup's own proof marks and clears rows too, by its rule in
+  docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
+  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
+  preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
+  run, a stopped run leaves the row asked at the next, a row its platform last delivered is removed unasked, and a row
+  with no recorded route is asked only when a collection record lists it),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
   for the two ends — a game gone from RomM keeps its shortcut, a platform turned off loses its games, and
   `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts` holds a platform gone from RomM's list apart
@@ -599,59 +598,45 @@ Format: **invariant** — tier — enforced by.
   judges it by the run's own listing after a game page's read wrote it back into the kept ids —
   `TestAVersionSwitchedOffTheCollectionsMember` for a game only a collection delivers, bound to a version the collection
   does not list (kept whether the collection was skipped or fetched, or delivers a version for the first time; asked,
-  marked on a 404 and cleared when RomM returns it where a collection last delivered it; kept, with no second shortcut,
-  when a fetched ROM names it as a sibling under a stale key, and kept on the next run, with the collection skipped,
-  once its key is repaired; the preview agreeing each time; and a bound version of another game, which no unit
-  delivered, still removed), `tests/domain/test_sync_diff.py::TestABoundRowAFetchedMemberNamesAsItsSibling` for the
-  collapse, `TestABoundRowFetchedMembersOfTwoGroupsName` for a row two groups name, in either order and either view,
-  `tests/services/library/test_reporter.py::TestFinalizePerUnitRun::test_writes_each_repaired_group_key_onto_its_row`
-  for the repair, and `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route a commit records.
-  The stale removal judges the game rather than the row, because a sibling group is one game with one shortcut: a
-  version switch binds that shortcut to a member no unit delivers — and records no route on it — while a collection
-  still delivers the game through another version (#2533 D1). Such a row is still asked about where any other row would
-  be, because its mark is the removed-game cleanup's only evidence for it (D6). A row fetched ROMs name among their
-  `sibling_roms` counts as delivered whatever its stored key, because a re-match can leave an undelivered version's key
-  behind its group's (D7); for the same reason the collapse places such a row in the naming group, so the game is not
-  given a second shortcut (D8). Both hold only where the names come from exactly one group: edges from two groups bridge
-  games the group keying kept apart, and taking either would let the order of a fetch decide the game. The apply writes
-  the one group's key onto the row, because the edges are seen only on a run that fetches a naming ROM, and a stored key
-  keeps the row with its game on every run after (D9). The group keys come from `domain/sync_diff.py::group_keys_of`
-  over the ROMs the run counts as synced, which the apply reads off the rows its commits upserted and the preview lays
-  the keys its fetch stamped over the same read; the sibling joins from `sibling_joins` over `sibling_naming_keys`,
-  which the apply collects across its units (`LibrarySyncStateBox.fetched_sibling_keys`) and the preview reads off its
-  fetch; the key the apply writes from `regrouped_keys`, through `Rom.adopt_sibling_group_key` in the finalize's write
-  UoW (`services/library/_stale_writes.py`). A skipped platform rebuilds every bound row, so only a fetched one can
-  leave a bound row out, and RomM is then the only thing that dropped it. A platform the run did not read says nothing
-  about RomM; the route the row's last commit recorded tells a game reached through a collection from one reached
-  through its platform. A collection's completion stamp cannot carry that, because every collection apply rewrites its
-  members from RomM's current membership: a game the collection dropped is off the stamp after the run that asked about
-  it, and a route recorded only at a unit's commit is untouched by the question, so a 404 is asked again on every later
-  run. A row with no recorded route falls back to the collection records, read before the run's first unit rewrites any
-  of them (`LocalLibraryReader.do_read_collection_listed_rom_ids`). A platform RomM no longer lists is read off the
-  run's own platform listing (`LibrarySyncStateBox.run_listed_platform_slugs`), never off the kept ids under
-  `platform_ids`, which a game page's read can widen during the run; which platforms are on in Tender is keyed by a RomM
-  id such a platform no longer has, so the route stands in for it. Only a 404 is evidence of absence, so every other
-  answer keeps the shortcut. The apply's finalize writes what it established onto the row
+  marked on a 404 and cleared when RomM returns it where a collection last delivered it; the preview agreeing each time;
+  a bound version of another game, which no unit delivered, still removed; and the gap #2533 D10 accepts, pinned as it
+  is), and `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route a commit records. The stale
+  removal judges the game rather than the row, because a sibling group is one game with one shortcut: a version switch
+  binds that shortcut to a member no unit delivers — and records no route on it — while a collection still delivers the
+  game through another version (#2533 D1). Such a row is still asked about where any other row would be, because its
+  mark is the removed-game cleanup's only evidence for it (D6). The group keys come from
+  `domain/sync_diff.py::group_keys_of` over the ROMs the run counts as synced, which the apply reads off the rows its
+  commits upserted and the preview lays the keys its fetch stamped over the same read. A skipped platform rebuilds every
+  bound row, so only a fetched one can leave a bound row out, and RomM is then the only thing that dropped it. A
+  platform the run did not read says nothing about RomM; the route the row's last commit recorded tells a game reached
+  through a collection from one reached through its platform. A collection's completion stamp cannot carry that, because
+  every collection apply rewrites its members from RomM's current membership: a game the collection dropped is off the
+  stamp after the run that asked about it, and a route recorded only at a unit's commit is untouched by the question, so
+  a 404 is asked again on every later run. A row with no recorded route falls back to the collection records, read
+  before the run's first unit rewrites any of them (`LocalLibraryReader.do_read_collection_listed_rom_ids`). A platform
+  RomM no longer lists is read off the run's own platform listing (`LibrarySyncStateBox.run_listed_platform_slugs`),
+  never off the kept ids under `platform_ids`, which a game page's read can widen during the run; which platforms are on
+  in Tender is keyed by a RomM id such a platform no longer has, so the route stands in for it. Only a 404 is evidence
+  of absence, so every other answer keeps the shortcut. The apply's finalize writes what it established onto the row
   (`StaleSort.gone_from_romm_marks`, written by `SyncReporter.finalize_per_unit_run`), which is the only evidence the
   removed-game cleanup has for a version reached through a collection or kept on a platform RomM no longer lists, since
   no platform stamp names either; `tests/domain/test_sync_diff.py::TestGoneFromRommMarks` pins which answer writes what,
   and `tests/contract/test_gone_from_romm_mark.py` that the apply marks, a later delivery clears, and a preview writes
   nothing. The rule spans the domain sort, the reader, the reporter's commit, the chunk dispatcher, the fetcher's
   exact-id question (`LibraryFetcher.ask_romm_for_roms`) and the orchestrator, and the preview and the apply each read
-  it — through `services/library/_stale_rows.py::settle_stale_rows` with the same group keys and sibling ids, which is
-  prompt-only, as is that the chunk dispatcher names the unit's kind on every commit, that the listing comes off the run
-  state, and that the preview names a kept row's platform collection through
+  it — through `services/library/_stale_rows.py::settle_stale_rows` with the same group keys, which is prompt-only, as
+  is that the chunk dispatcher names the unit's kind on every commit, that the listing comes off the run state, and that
+  the preview names a kept row's platform collection through
   `services/library/_stale_rows.py::with_kept_platform_names`, which must agree with
   `SyncReporter._names_with_bound_platforms_kept`. **What breaks without it:** a kept row the preview counts as a
   removal offers Apply on every preview; a game only a collection delivers loses its shortcut on every sync after a
-  switch to a version the collection does not list, or, once a re-match left that version's key behind, gains a second
-  one, or keeps it only for the run that fetched the naming ROM; a kept version never asked about keeps a mark RomM
-  disproved, or never gets the one the cleanup needs; a removal on a platform read whole takes a game gone from RomM out
-  of Steam with its playtime and collections; a rule read off the collection stamps alone removes a game gone from RomM
-  at the second run after its collection dropped it; a platform RomM stopped listing loses every shortcut as if it had
-  been turned off; a kept row left out of the platform's collection drops out of it, or keeps its game under a
-  collection renamed to the slug; and a mark a preview wrote, or an answer that established nothing set or cleared,
-  would offer the cleanup a game RomM still serves or hide one it no longer does
+  switch to a version the collection does not list; a kept version never asked about keeps a mark RomM disproved, or
+  never gets the one the cleanup needs; a removal on a platform read whole takes a game gone from RomM out of Steam with
+  its playtime and collections; a rule read off the collection stamps alone removes a game gone from RomM at the second
+  run after its collection dropped it; a platform RomM stopped listing loses every shortcut as if it had been turned
+  off; a kept row left out of the platform's collection drops out of it, or keeps its game under a collection renamed to
+  the slug; and a mark a preview wrote, or an answer that established nothing set or cleared, would offer the cleanup a
+  game RomM still serves or hide one it no longer does
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

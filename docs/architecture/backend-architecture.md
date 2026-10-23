@@ -840,12 +840,9 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   member it never fetched, so it is a **partial** view (`complete_group_view=False`): a group that already holds a
   binding anywhere is grandfathered untouched — never rebound onto the partial member, never given a second shortcut.
   Where the group's platform is synced, its bound member rides that platform unit in the same run; where only
-  collections reach the group, the stale removal keeps the binding (below). A bound row outside the fetch that fetched
-  members of exactly one group name among their `sibling_roms` is that group's binding, whatever its stored key, in the
-  preview's collapse as in a unit's, so a re-match that left the key behind gives the game no second shortcut (#2533 D8,
-  D9). A row two groups name joins neither and keeps its stored key. (Inferring "bound sibling absent ⇒ vanished" from a
-  partial view would rebind a live installed game onto an uninstalled sibling — #1296.) `classify_roms` runs over the
-  collapsed set, so its new / changed / unchanged / stale buckets count **games, not dumps**, and an unbound sibling
+  collections reach the group, the stale removal keeps the binding (below). (Inferring "bound sibling absent ⇒ vanished"
+  from a partial view would rebind a live installed game onto an uninstalled sibling — #1296.) `classify_roms` runs over
+  the collapsed set, so its new / changed / unchanged / stale buckets count **games, not dumps**, and an unbound sibling
   stops reading as a perpetual "new".
 - **Resolution chain** (`domain/sibling_resolution.py::resolve_group_representative`, total + shuffle-stable): an
   installed sibling wins; else an existing binding; else RomM's per-user default (`is_main_sibling`); else the **1G1R
@@ -899,14 +896,14 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   `domain/sync_diff.py::sort_stale_rows`: on a platform the run read whole it is gone from RomM and stays bound — and
   stays in its platform's Steam collection. On a platform the run did not read, **a row whose game the run synced stays
   bound**: when another member of its sibling group is among the ROMs a unit returned, a skipped unit's stamp members
-  included, or fetched ROMs of exactly one group name the row among their `sibling_roms` (#2533 D7, D9), the row is
-  never removed; in the second case the apply writes that group's key onto the row, so on a later run that fetches no
-  naming ROM the key alone keeps it. It is still asked about wherever any other row would be, below, and RomM's answer
-  sets or clears its mark as for any asked row (D6). A version switch binds the shortcut to a member no unit delivers
-  while a collection still delivers the game through another version, and collecting any version puts the game's one
-  shortcut in the collection (the group fallback below). A row without a group key that no fetched ROM names is judged
-  alone. Any other row was reached either through a collection or through its platform. The row itself says which:
-  `roms.delivered_through` records the kind of unit whose commit last upserted it (`Rom.record_delivery`, written by
+  included (#2533 D1), the row is never removed. A row's group is read off its stored key: a bound version whose stored
+  key no longer matches its game's, after RomM matched the game anew, is judged by that stored key, as before this rule
+  (#2533 D10). It is still asked about wherever any other row would be, below, and RomM's answer sets or clears its mark
+  as for any asked row (D6). A version switch binds the shortcut to a member no unit delivers while a collection still
+  delivers the game through another version, and collecting any version puts the game's one shortcut in the collection
+  (the group fallback below). A row without a group key that no fetched ROM names is judged alone. Any other row was
+  reached either through a collection or through its platform. The row itself says which: `roms.delivered_through`
+  records the kind of unit whose commit last upserted it (`Rom.record_delivery`, written by
   `SyncReporter.commit_unit_results` for the unit the chunk dispatcher names; a commit that names none, such as a unit
   acknowledged after its run ended, keeps the row's value). A row last delivered through a collection is asked for once
   by its exact id (`LibraryFetcher.ask_romm_for_roms`, single attempt), and removed only when RomM returns the very ROM,
@@ -931,19 +928,16 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. Force Full Sync leaves
   the routes in place. The preview asks the same question for the same rows, through the same
   `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. Both
-  judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`) and
-  by the ids fetched ROMs of exactly one group name among their `sibling_roms` (`sibling_joins` over
-  `sibling_naming_keys`). The apply reads the keys off the rows its commits upserted (`do_read_resident_group_keys`) and
-  collects the naming keys across its units on the run state (`LibrarySyncStateBox.fetched_sibling_keys`); the preview,
-  which writes nothing, lays the keys its fetch stamped over the same read and reads the naming keys off its fetch.
-  **Only the apply records what it established** (`StaleSort.gone_from_romm_marks`, written in the finalize's write UoW
-  by `SyncReporter.finalize_per_unit_run`): an asked row RomM answered with a proven 404 is marked
-  `roms.gone_from_romm = 'not_found'`, one RomM returned has its mark cleared, and an answer that establishes nothing
-  writes nothing; a row kept on a platform RomM no longer lists is marked `delisted`; and a row a single group's sibling
-  edges kept takes that group's key (`regrouped_keys`, written through `Rom.adopt_sibling_group_key`). A row kept on a
-  platform the run read whole is not marked, since that platform's stamp already names it. Any commit of a row clears
-  its mark, because the column rides the sync UPSERT with no merge. The mark is what lets the removed-game cleanup list
-  such a row ([Removed-game cleanup](removed-game-cleanup.md#discovery)); Force Full Sync leaves it in place.
+  judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
+  apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes
+  nothing, lays the keys its fetch stamped over the same read. **Only the apply records what it established**
+  (`StaleSort.gone_from_romm_marks`, written in the finalize's write UoW by `SyncReporter.finalize_per_unit_run`): an
+  asked row RomM answered with a proven 404 is marked `roms.gone_from_romm = 'not_found'`, one RomM returned has its
+  mark cleared, and an answer that establishes nothing writes nothing; a row kept on a platform RomM no longer lists is
+  marked `delisted`. A row kept on a platform the run read whole is not marked, since that platform's stamp already
+  names it. Any commit of a row clears its mark, because the column rides the sync UPSERT with no merge. The mark is
+  what lets the removed-game cleanup list such a row ([Removed-game cleanup](removed-game-cleanup.md#discovery)); Force
+  Full Sync leaves it in place.
 - **Grandfathering.** A group that already carries several bound shortcuts (a library synced before this model) keeps
   them all — each surviving bound sibling stays its own tracked shortcut; no new shortcut is minted for a group with a
   binding. Convergence to one-shortcut-per-group happens naturally as the user uninstalls duplicates.
