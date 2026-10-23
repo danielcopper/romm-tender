@@ -5791,7 +5791,23 @@ describe("RomMPlaySection", () => {
       expect(vi.mocked(backend.setArtworkSlotAutomatic)).toHaveBeenCalledWith(77, "cover");
       expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(testAppId, "CO==", "png", 0);
       expect(vi.mocked(backend.reportSgdbSlotArtwork)).toHaveBeenCalledWith(77, "cover", "set", 42, 6, "sha-cover");
-      expect(toasts()).toEqual(["No artwork available for this game"]);
+      expect(toasts()).toEqual(["Artwork refreshed (1/5 images applied)"]);
+    });
+
+    it("hands Steam the RomM cover it reloaded, so it shows without a restart", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: true,
+        message: "Cover refreshed",
+        cover_path: "/covers/77.png",
+      });
+      vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "RC==" });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "needs_pick", candidates: [] });
+      vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockClear();
+      await refresh();
+      expect(vi.mocked(backend.getArtworkBase64)).toHaveBeenCalledWith(77);
+      expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(testAppId, "RC==", "png", 0);
+      expect(toasts()).toEqual(["Choose a SteamGridDB game in the ARTWORK tab first."]);
     });
 
     it("says so where Steam did not take Tender's SteamGridDB cover", async () => {
