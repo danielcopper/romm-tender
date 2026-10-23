@@ -6839,12 +6839,9 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
             ],
         )
         library.settings["enabled_platforms"] = {"2": gba_synced}
-        # With GBA synced no collection takes part: a collection skipped as
-        # unchanged hands the preview its stored members back, 20 among them.
-        if not gba_synced:
-            _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
-            fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
-            library.settings["enabled_collections"] = {"standard": {"7": True}}
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
@@ -7064,32 +7061,42 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         return summary["new_count"], summary["changed_count"], summary["remove_count"]
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_a_hidden_member_beside_a_same_stem_copy_on_its_platform(
-        self, library, fake_romm_api, emit, monkeypatch
+        self, library, fake_romm_api, emit, monkeypatch, platform_groups
     ):
         await self._bind_20(library, fake_romm_api)
+        library.settings["collection_create_platform_groups"] = platform_groups
         fake_romm_api.hidden_rom_ids = {20}
         fake_romm_api.roms[25] = self._golf(25, "USA", fs_name="Golf (USA).7z")
 
-        summary, classified_as_skipped, applied, _ = await self._preview_then_apply(library, emit, monkeypatch)
+        summary, classified_as_skipped, applied, platform_collections = await self._preview_then_apply(
+            library, emit, monkeypatch
+        )
 
         assert (self._counted(summary), applied) == ((0, 1, 0), ([20], [], {25: 6020}))
         assert classified_as_skipped == [frozenset()]
+        assert (summary["platform_collection_diff"]["has_changes"], platform_collections) == (False, {"GBA"})
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_a_member_gone_from_romm_whose_dump_returned_on_its_platform_under_a_new_id(
-        self, library, fake_romm_api, emit, monkeypatch
+        self, library, fake_romm_api, emit, monkeypatch, platform_groups
     ):
         await self._bind_20(library, fake_romm_api)
+        library.settings["collection_create_platform_groups"] = platform_groups
         del fake_romm_api.roms[20]
         fake_romm_api.get_rom_once_side_effect_by_id[20] = RommNotFoundError("Rom with id 20 not found")
         fake_romm_api.roms[24] = self._golf(24, "USA")
         assert fake_romm_api.list_collections()[0]["rom_ids"] == [20]
 
-        summary, classified_as_skipped, applied, _ = await self._preview_then_apply(library, emit, monkeypatch)
+        summary, classified_as_skipped, applied, platform_collections = await self._preview_then_apply(
+            library, emit, monkeypatch
+        )
 
         assert (self._counted(summary), applied) == ((0, 1, 0), ([20], [], {24: 6020}))
         assert classified_as_skipped == [frozenset()]
+        assert (summary["platform_collection_diff"]["has_changes"], platform_collections) == (False, {"GBA"})
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
