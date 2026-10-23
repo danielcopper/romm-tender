@@ -1211,10 +1211,9 @@ describe("gameDetailStore", () => {
       });
     });
 
-    // The cold-cache window (#1693): every firmware download and every platform
-    // BIOS delete invalidates the in-memory firmware cache, and a detail derived
-    // while it is cold carries no BIOS answer at all. It ships the same absent
-    // `bios_status` as the clear above, so only the flag keeps the badge on.
+    // The re-derived detail carries no BIOS answer and marks nothing stale
+    // (`stale_fields: []`), so nothing reads the answer again: the badge keeps
+    // the requirement it shows.
     it("keeps the shown requirement when the re-derived detail carries no BIOS answer", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
         found({

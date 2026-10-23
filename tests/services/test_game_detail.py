@@ -741,8 +741,8 @@ class TestGetCachedGameDetailCarriesNoBiosAnswer:
     What an emulator wants is read off the machine, and an answer read for a
     previous page open may not stand in for this one — so every open starts
     not-knowing and the live ``get_bios_status`` fills it in a moment later. The
-    flag is what marks the payload as no answer, so the frontend keeps what it
-    shows rather than reading the absent ``bios_status`` as an answer.
+    flag with no level marks the payload as no answer, by ``get_bios_status``'s
+    contract, so the frontend keeps what it shows.
     """
 
     @pytest.mark.asyncio
@@ -899,7 +899,7 @@ class TestGetBiosStatusFound:
     async def test_the_answer_that_no_bios_is_needed_is_sent_whole(self, game_detail):
         """The checker's needs-none payload ships as the status, so the BIOS tab draws it like any other.
 
-        It is a real answer, so it must NOT be flagged unknown (#1693).
+        It is a real answer, so it must NOT be flagged unknown.
         """
         _seed_rom(game_detail, 42, app_id=50000, name="Game", platform_slug="gba")
         payload = {

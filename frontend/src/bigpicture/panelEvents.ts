@@ -192,9 +192,8 @@ async function handleCoreChange(ctx: PanelEventContext): Promise<void> {
   // re-issue it. `cancelled` does not cover this: a switch re-keys the rom
   // without changing the appId (#1713).
   if (ctx.cancelled() || ctx.romIdRef.current !== rid || !cached.found) return;
-  // A detail carrying no BIOS answer leaves the shown status alone — the
-  // core switch invalidated the cached detail, but a cold firmware cache
-  // makes the re-read a non-answer rather than a "needs none" (#1693).
+  // A cached detail carries no BIOS answer, so the shown status stands until
+  // the read below answers.
   const biosFields = biosFieldsFromCache(cached);
   binding.write((prev) => ({ ...prev, ...biosFields, coreInfo: coreInfo ?? prev.coreInfo }));
   // The core the requirement is computed against just changed, so a re-read that

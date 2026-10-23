@@ -1851,7 +1851,7 @@ describe("RomMGameInfoPanel", () => {
       expect(vi.mocked(backend.getBiosStatus)).not.toHaveBeenCalled();
     });
 
-    it("bios: a rejected re-read → the shown requirement stands, said to be out of date (#1693, non-vacuous .catch)", async () => {
+    it("bios: a rejected re-read → the shown requirement stands, said to be out of date", async () => {
       // A `bios` event whose re-read fails. The panel mounts WITH a requirement,
       // and it has to survive under the notice that it may be out of date.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
@@ -2239,9 +2239,8 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("core_changed: a cached detail with no BIOS answer keeps the tab (#1693)", async () => {
-      // The firmware cache is invalidated by every BIOS download and delete, and
-      // a detail derived while it is cold carries no BIOS answer. Reading that
-      // as "needs none" hid the tab until something else refreshed it.
+      // A cached detail carries no BIOS answer, the one a core change re-derives
+      // included, so the tab keeps the requirement it shows.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -4276,7 +4275,7 @@ describe("RomMGameInfoPanel", () => {
 
     it("replaces the requirement when the live answer is that no BIOS is needed", async () => {
       // The other direction has to keep working: a re-read IS an answer, so one
-      // reporting no requirement takes the shown one off (#1690).
+      // reporting no requirement takes the shown one off.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(staleDetail(biosAnswer(1)));
       vi.mocked(backend.getBiosStatus).mockResolvedValue(noBiosNeededAnswer());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);

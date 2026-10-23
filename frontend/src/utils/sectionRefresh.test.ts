@@ -127,8 +127,9 @@ describe("refreshBiosInBackground", () => {
   });
 
   it("clears the shown requirement when the read reports none", async () => {
-    // A read that ANSWERS "no BIOS need" is the only thing that may take a shown
-    // requirement back — the core it was read for may genuinely need none. This
+    // Only a read that ANSWERS may take a shown requirement back — that no BIOS
+    // is needed, as here, or the "unknown" level; the core it was read for may
+    // genuinely need none. This
     // case asserted the opposite until #1690, and that expectation was the
     // defect: the fields could only ever move one way, so a version switch to a
     // core needing no BIOS left the previous level standing (both writers on the

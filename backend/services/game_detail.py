@@ -122,15 +122,7 @@ class GameDetailService:
     ) -> dict[str, Any]:
         """Build the BIOS half of a game-detail payload.
 
-        ``unknown`` marks a payload that carries no BIOS answer — the check
-        raised, or answered from a source that could not see the requirement.
         Which payload ships what is :meth:`get_bios_status`'s contract.
-
-        Those two reasons for the flag are themselves different answers, and the
-        LEVEL is what separates them: a check that ran and could not establish
-        the requirement ships ``bios_level`` ``"unknown"``, a read that never
-        happened ships none. Both leave a shown requirement alone; only the first
-        is something to show in its own right.
         """
         return {
             "bios_status": bios_status,
