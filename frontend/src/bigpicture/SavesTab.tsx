@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef, FC, type ReactElement } from "react";
 import { DialogButton, Focusable, showModal } from "@decky/ui";
-import { debugLog, logError, logWarn } from "../api/backend";
+import { debugLog, logError } from "../api/backend";
 import { getRommConnectionState, onRommConnectionChange } from "../utils/connectionState";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, LastKnownSlots } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
@@ -21,12 +21,9 @@ import { renderSaveFileRow } from "./saves/SaveFileRow";
 import { useCopyToSlot } from "./saves/useCopyToSlot";
 import { detach } from "../utils/detach";
 import { announceSaveSync } from "../utils/saveSyncEvents";
-import { strandedVersionNotice } from "../utils/saveSlotWording";
-import { executeSlotSwitch, findStrandedVersion, type StrandedVersion } from "../utils/saveSlotFlow";
+import { executeSlotSwitch } from "../utils/saveSlotFlow";
 
 interface SavesTabProps {
-  /** The group's sticky Steam appId — drives the stranded-version check. */
-  appId: number;
   romId: number;
   saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];
@@ -44,7 +41,6 @@ interface SavesTabProps {
 }
 
 export const SavesTab: FC<SavesTabProps> = ({
-  appId,
   romId,
   saveStatus,
   conflicts,
@@ -58,7 +54,6 @@ export const SavesTab: FC<SavesTabProps> = ({
   const [newSlotError, setNewSlotError] = useState<string | null>(null);
   const newSlotErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOffline, setIsOffline] = useState(getRommConnectionState() === "offline");
-  const [strandedVersion, setStrandedVersion] = useState<StrandedVersion | null>(null);
 
   const handleVersionRestored = () => {
     announceSaveSync(romId);
@@ -78,28 +73,6 @@ export const SavesTab: FC<SavesTabProps> = ({
       if (newSlotErrorTimerRef.current) clearTimeout(newSlotErrorTimerRef.current);
     };
   }, []);
-
-  // Stranded-saves reminder: after a version switch the previously-bound
-  // install is an INACTIVE sibling whose saves stay on disk and sync only once
-  // the user switches back to it. Re-runs on saves-tab load (mount) and on a
-  // version switch (romId changes).
-  useEffect(() => {
-    let cancelled = false;
-    const isCancelled = () => cancelled;
-    const check = async (): Promise<void> => {
-      try {
-        const stranded = await findStrandedVersion(appId, isCancelled);
-        if (!isCancelled()) setStrandedVersion(stranded);
-      } catch (e) {
-        if (!isCancelled()) setStrandedVersion(null);
-        logWarn(`SavesTab: stranded-version check failed for appId ${appId}: ${e}`);
-      }
-    };
-    detach(check());
-    return () => {
-      cancelled = true;
-    };
-  }, [appId, romId]);
 
   // Copy-to-slot opener, shared by every save row across the slot panels. The
   // picker's target list is derived from availableSlots (minus the source slot
@@ -125,24 +98,6 @@ export const SavesTab: FC<SavesTabProps> = ({
     </div>
   ) : null;
 
-  // --- Stranded-version reminder banner ---
-  const strandedBanner = strandedVersion ? (
-    <div
-      key="stranded-banner"
-      style={{
-        padding: "8px",
-        background: "rgba(255, 136, 0, 0.15)",
-        borderRadius: "4px",
-        border: "1px solid rgba(255, 136, 0, 0.3)",
-        marginBottom: "12px",
-        fontSize: "12px",
-        color: "#ff8800",
-      }}
-    >
-      {strandedVersionNotice(strandedVersion)}
-    </div>
-  ) : null;
-
   // --- Loading state ---
   // A spinner + live retry progress (#1345) instead of bare italic text — the
   // slot fetch pays the backend retry ladder, so surface "Connecting to RomM…
@@ -151,7 +106,6 @@ export const SavesTab: FC<SavesTabProps> = ({
     return (
       <Focusable noFocusRing={true}>
         {offlineBanner}
-        {strandedBanner}
         <ConnectingIndicator key="connecting" />
       </Focusable>
     );
@@ -220,7 +174,6 @@ export const SavesTab: FC<SavesTabProps> = ({
   return (
     <Focusable noFocusRing={true} style={{ display: "flex", flexDirection: "column" as const, gap: "0" }}>
       {offlineBanner}
-      {strandedBanner}
 
       {/* Save files that belong to no slot panel — above the panels, if any. */}
       {unslottedFilesSection}

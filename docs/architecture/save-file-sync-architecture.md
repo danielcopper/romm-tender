@@ -963,10 +963,9 @@ verdict over them:
 Two kinds of caller read different fields, because "nothing recorded" answers their questions in opposite ways. Play
 while RomM is unreachable ([Pre-launch sync](#pre-launch-sync), step 8) asks whether a later sync could overwrite a
 local change, and reads `drifted` alone: a save with no recorded sync has nothing to overwrite, and an unknown counts as
-no change, since a false warning there is worse than none. The version switch, the removed-game cleanup and the Saves
-tab's reminder ask whether a save exists anywhere but here, and read `stranding` alone; each words `unchecked` as Tender
-not having been able to check rather than as saves never uploaded. On the Saves tab a check call that rejects, or gets
-no answer within `LOCAL_CALL_LIMIT_MS`, counts as `unchecked` too.
+no change, since a false warning there is worse than none. The version switch and the removed-game cleanup ask whether a
+save exists anywhere but here, and read `stranding` alone; each words `unchecked` as Tender not having been able to
+check rather than as saves never uploaded.
 
 The check follows a moved save directory first ([below](#following-a-moved-save-directory)), and so holds the ROM's
 `rom_lock` and waits for any other holder of it.
@@ -996,9 +995,8 @@ live reading the caller already took, before the caller looks at any local file:
 - by the two deletes and the two reads that count local saves — `delete_local_saves`, `delete_platform_saves`,
   `count_platform_saves` and `get_save_status` (for an installed ROM) — so a delete after a sort flip takes the old
   folder's files too, and nothing is carried back in by the next path that follows;
-- by [the local-save check](#the-local-save-check), `check_local_drift` (for an installed ROM), so the version switch,
-  the removed-game cleanup and the Saves tab's reminder do not find the new directory empty while the saves still lie in
-  the old one.
+- by [the local-save check](#the-local-save-check), `check_local_drift` (for an installed ROM), so the version switch
+  and the removed-game cleanup do not find the new directory empty while the saves still lie in the old one.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
 once save sync is on again, for a game whose directory was recorded. It does nothing while an update of Tender is being

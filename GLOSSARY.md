@@ -416,8 +416,8 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
   the reachable versions as the sync's collection filing resolves them, with no such exclusion. Both start from one
   computation, `domain/sibling_resolution.py`'s `reachable_rom_ids`.
 - **Stranded version** — an installed version whose local saves the stranding verdict answers `unsynced`, or `unchecked`
-  where the check could not tell, so leaving it strands them: the active version a switch would leave, or an inactive
-  one already left. Unrelated to a **stranded panel**.
+  where the check could not tell, so leaving it strands them: the active version a switch would leave. Unrelated to a
+  **stranded panel**.
 
 **Region** and **Languages** are **attributes of a single version**, parsed from its filename tags: `(Spain)` → where
 that release shipped; `(En,Fr,De,Es)` → the languages contained in that one dump. A multi-language version is still one
