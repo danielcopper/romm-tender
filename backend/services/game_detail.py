@@ -406,8 +406,11 @@ class GameDetailService:
         Every answer the check established ships its ``bios_status`` — the one
         that no BIOS is needed (``needs_bios: False``, level ``"ok"``) as much as
         a requirement. The flag carries the other two outcomes: with level
-        ``"unknown"``, a check that ran without establishing the requirement;
-        with no level, a check that raised. A ROM that is gone or has no platform
+        ``"unknown"`` and a ``bios_status`` of its own, a check that ran without
+        establishing the requirement — that status holds no rows and no
+        aggregates, only what the page's BIOS part stands on (the emulator
+        entries and the delete counts among it); with no level and no status, a
+        check that raised. A ROM that is gone or has no platform
         ships neither a status nor the flag; nothing has been asked about it.
         The frontend reads this contract as ``BiosAnswer`` in
         ``frontend/src/api/backend.ts``.
@@ -452,7 +455,12 @@ class GameDetailService:
         # answer of "unknown" is shown as one, while a read that never happened
         # leaves whatever is on the page standing.
         if bios.get("bios_status_unknown"):
-            return self._bios_answer(bios_level=BIOS_LEVEL_UNKNOWN, bios_label=BIOS_LABEL_UNKNOWN, unknown=True)
+            return self._bios_answer(
+                {**bios, "platform_slug": platform_slug},
+                BIOS_LEVEL_UNKNOWN,
+                BIOS_LABEL_UNKNOWN,
+                unknown=True,
+            )
         # Every other answer is the checker's payload plus the slug it was asked
         # about. Re-wrapping it through ``format_bios_status`` here would ship
         # that dataclass's ``reading_complete`` default beside the answer — a

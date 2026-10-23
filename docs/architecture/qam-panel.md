@@ -1664,44 +1664,47 @@ it, for the focused platform:
   D3), its marks, `Contents` and one button per row — Download, Replace… or Delete — under the same rules, confirmations
   and lines; `Download required for <emulator> (N)`, which on the game page sends the shown entry's identity for the
   launching emulator too, since a game can launch with another emulator than its platform's pick; under
-  `For all of <platform>`, `Download all`, which sends the game's ROM id so the links follow the system its install
-  record holds, and `Delete downloads (N)`; the status line under them; the library section; one legend for both
-  columns. The game's BIOS answer carries what those buttons stand on, as the platform's does: the delete counts
-  (`deletable_count`, `delete_name`) and `server_offline`, which withdraws the downloads while RomM's listing cannot be
-  read (`check_platform_bios` in `backend/services/firmware/status.py`). **Every row is a focus stop** (#2429 D6): a row
-  with a button is reached as that button, and a row without one is a `DialogButton` around the row that does nothing
-  when pressed — on the game page a `Focusable` around content that is not a control registers no gamepad stop
-  (`utils/scrollHelpers.ts`), which is why that page's rows are not the table's own `Focusable`. Every stop in the tab
-  is centred when focus lands on it, as a section is. After a press the play row's answer is read again
-  (`refreshBiosStatus`), and where firmware changed the press tells every open game page, as the platform page does —
-  the tab's own page included, which reads its answer again from that event (`romm_data_changed`, `bios`) and from
-  nowhere else, so a press costs one read of the tab's answer. What a press did stays until the game page is left,
-  across a version switch too: the tab holds it for the platform the versions share. The play row's gear menu has no
-  "Download BIOS" (#2429 D7); the red BIOS badge in the play row leads to this tab. The ratio is a third set again,
-  which is why it rides along on both rather than being folded in. **The ratio names that set in its own words**,
-  because the sentence in front of it counts another one and the numbers cannot say which is which:
-  `The one file … opens by name is in place (1/20 RomM library files)` states three correct numbers over three sets, and
-  the words are the only thing that tells them apart. The pair is the library's inventory for the platform — what it
-  holds, and how many of those Tender found at their destination (GLOSSARY.md → Library inventory) — and the tail names
-  no axis of its own deliberately: the ratio form carries that, and each candidate word for the numerator was worse than
-  none. Two of them are already on the screen under this sentence and stand for something else there — `present` is the
-  row marks and `on disk` the column beside them, both the row's own verdict rather than this pair — and the third,
-  `downloaded`, would read as a claim about who put the file there, which is more than `local_count` counts: `on_server`
-  rows whose file is at its destination, the field itself answering presence and nothing more. Neither surface prints
-  the ratio where the library holds nothing for the platform: `(0/0 RomM library files)` counts a set that does not
-  exist. Nor does it count a row that reads "could not be established", which is no file missing: the ratio is the
-  payload's own pair (`ratio_server_count` / `ratio_local_count`, over the rows whose verdict was established), and
-  where no row was established neither surface prints one. The level, its label and the download buttons read
-  `server_count` / `local_count`, which still count every row the library holds. What stops a surface writing one of
-  these sentences back into itself is `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and
-  fails on any phrase the module builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and
-  `biosGroup.test.ts` over the region names and a file's place in a group. **All three SWEEP the set they search rather
-  than naming it** — every non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
-  `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two while three
-  surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted. Deriving the
-  set from who imports the module would be worse still, since a surface wording a state for itself is precisely one that
-  does not import it. **What the sweep cannot see is a NEW wording** invented for one of these states; no string search
-  can, so a green run is evidence about copied sentences alone.
+  `For all of <platform>`, `Download all` and `Delete downloads (N)`; the status line under them; the library section;
+  one legend for both columns. Every download and Replace… on the game page sends the game's ROM id, so the requirement
+  it reads, the place it replaces at and the links it places follow the system the game's install record holds — the
+  system the tab's rows were read for (`platform_system(slug, rom_id)` in `backend/services/firmware/downloads.py`); the
+  platform page sends none and acts for the platform's main system. The game's BIOS answer carries what those buttons
+  stand on, as the platform's does, the answer that nothing could be established included: the emulator entries, the
+  delete counts (`deletable_count`, `delete_name`) and `server_offline`, which withdraws the downloads while RomM's
+  listing cannot be read (`check_platform_bios` in `backend/services/firmware/status.py`); that answer still holds no
+  row and no count. **Every row is a focus stop** (#2429 D6): a row with a button is reached as that button, and a row
+  without one is a `DialogButton` around the row that does nothing when pressed — on the game page a `Focusable` around
+  content that is not a control registers no gamepad stop (`utils/scrollHelpers.ts`), which is why that page's rows are
+  not the table's own `Focusable`. Every stop in the tab is centred when focus lands on it, as a section is. After a
+  press the play row's answer is read again (`refreshBiosStatus`), and where firmware changed the press tells every open
+  game page, as the platform page does — the tab's own page included, which reads its answer again from that event
+  (`romm_data_changed`, `bios`) and from nowhere else, so a press costs one read of the tab's answer. What a press did
+  stays until the game page is left, across a version switch too: the tab holds it for the platform the versions share.
+  The play row's gear menu has no "Download BIOS" (#2429 D7); the red BIOS badge in the play row leads to this tab. The
+  ratio is a third set again, which is why it rides along on both rather than being folded in. **The ratio names that
+  set in its own words**, because the sentence in front of it counts another one and the numbers cannot say which is
+  which: `The one file … opens by name is in place (1/20 RomM library files)` states three correct numbers over three
+  sets, and the words are the only thing that tells them apart. The pair is the library's inventory for the platform —
+  what it holds, and how many of those Tender found at their destination (GLOSSARY.md → Library inventory) — and the
+  tail names no axis of its own deliberately: the ratio form carries that, and each candidate word for the numerator was
+  worse than none. Two of them are already on the screen under this sentence and stand for something else there —
+  `present` is the row marks and `on disk` the column beside them, both the row's own verdict rather than this pair —
+  and the third, `downloaded`, would read as a claim about who put the file there, which is more than `local_count`
+  counts: `on_server` rows whose file is at its destination, the field itself answering presence and nothing more.
+  Neither surface prints the ratio where the library holds nothing for the platform: `(0/0 RomM library files)` counts a
+  set that does not exist. Nor does it count a row that reads "could not be established", which is no file missing: the
+  ratio is the payload's own pair (`ratio_server_count` / `ratio_local_count`, over the rows whose verdict was
+  established), and where no row was established neither surface prints one. The level, its label and the download
+  buttons read `server_count` / `local_count`, which still count every row the library holds. What stops a surface
+  writing one of these sentences back into itself is `frontend/src/utils/biosSummary.test.ts`, which reads the
+  components as SOURCE and fails on any phrase the module builds its answers from, with `biosHeldRatio.test.ts` doing
+  the same over the ratio and `biosGroup.test.ts` over the region names and a file's place in a group. **All three SWEEP
+  the set they search rather than naming it** — every non-test `.tsx` under `frontend/src/bigpicture` or
+  `frontend/src/shared`, via `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists
+  held two while three surfaces rendered these states, and a surface left off a list cannot be told from one that never
+  drifted. Deriving the set from who imports the module would be worse still, since a surface wording a state for itself
+  is precisely one that does not import it. **What the sweep cannot see is a NEW wording** invented for one of these
+  states; no string search can, so a green run is evidence about copied sentences alone.
 
   **The Platforms list's row tooltip reads the same module too** (`PlatformsTab.tsx`'s `biosTooltip`) and takes the
   `sentence`, so hovering a row and opening its pane give one wording rather than two. It was the last one in, and while

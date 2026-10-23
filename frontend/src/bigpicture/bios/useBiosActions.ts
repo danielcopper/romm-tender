@@ -49,8 +49,9 @@ export interface BiosActionsConfig {
   setStatus: (line: BiosStatusLine | null) => void;
   /** Read *slug*'s BIOS answer again; the press's spinner ends once it has. */
   reread: (slug: string) => Promise<void>;
-  /** The game "Download all" is pressed for — its links then follow the system
-   *  the game's install record holds — or `null` for the platform's own. */
+  /** The game every press is for — the system its install record holds is the
+   *  one its rows were read for and its links placed for — or `null` for the
+   *  platform's own system. */
   romId: number | null;
 }
 
@@ -217,8 +218,8 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
 
   const downloadRequired = useCallback(
     (slug: string, emulator: string | null) =>
-      runDownload(slug, "required", () => downloadRequiredFirmware(slug, emulator)),
-    [runDownload],
+      runDownload(slug, "required", () => downloadRequiredFirmware(slug, emulator, romId)),
+    [romId, runDownload],
   );
   const downloadAll = useCallback(
     (slug: string) => runDownload(slug, "all", () => downloadAllFirmware(slug, romId)),
@@ -233,9 +234,9 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
         delete next[key];
         return next;
       });
-      runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName, firmwareId));
+      runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName, firmwareId, romId));
     },
-    [runDownload],
+    [romId, runDownload],
   );
 
   const replaceBios = useCallback(
@@ -245,7 +246,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
       detach(
         (async () => {
           try {
-            const result = await replaceBiosFile(slug, place);
+            const result = await replaceBiosFile(slug, place, romId);
             if (!result.success) {
               setStatus({ slug, scope: "bios", text: `Failed to replace the file: ${result.message}` });
               return;
@@ -267,7 +268,7 @@ export function useBiosActions({ setBusy, setStatus, reread, romId }: BiosAction
         })(),
       );
     },
-    [noteLinkFailures, reread, setBusy, setStatus],
+    [noteLinkFailures, reread, romId, setBusy, setStatus],
   );
 
   const attemptFor = useCallback(

@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.firmware.store import FirmwareStore
-    from services.protocols import FirmwareFileStore, PlatformSystems
+    from services.protocols import FirmwareFileStore
 
 # The reason a Replace whose conditions no longer hold is refused with.
 NOT_REPLACEABLE = "not_replaceable"
@@ -42,14 +42,13 @@ class FirmwareReplacerConfig:
 
     Holds the peer sub-services (the listing the library copy comes from, the
     demand the place is read from, the store it is fetched into and linked
-    from), the platform's system mapping, the file store the place is looked at
-    through, and runtime infrastructure.
+    from), the file store the place is looked at through, and runtime
+    infrastructure.
     """
 
     listing: FirmwareListing
     demand: FirmwareDemand
     store: FirmwareStore
-    platform_systems: PlatformSystems
     firmware_file_store: FirmwareFileStore
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
@@ -62,13 +61,15 @@ class FirmwareReplacer:
         self._listing = config.listing
         self._demand = config.demand
         self._store = config.store
-        self._platform_systems = config.platform_systems
         self._files = config.firmware_file_store
         self._loop = config.loop
         self._logger = config.logger
 
-    async def replace_bios_file(self, platform_slug: str, place: str) -> dict[str, Any]:
+    async def replace_bios_file(self, platform_slug: str, place: str, system: str | None) -> dict[str, Any]:
         """Replace the file at *place* with Tender's copy for *platform_slug*; answer where the old file went.
+
+        *system* is the one the page's rows were read for, whose reading names the
+        place, and the one the links are brought up to date for.
 
         Refuses :data:`NOT_REPLACEABLE` where the conditions no longer hold,
         and as a download refuses where the copy cannot be fetched or checked
@@ -80,7 +81,6 @@ class FirmwareReplacer:
         answers as one that did not, naming the backup, where the file stands
         too.
         """
-        system = (await self._loop.run_in_executor(None, self._platform_systems.platform_system, platform_slug)).taken
         firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
         firmware, source = await self._loop.run_in_executor(None, self._replaceable, system, place, firmware_list)
         backup = await self._loop.run_in_executor(None, self._replace_io, platform_slug, place, firmware, source)

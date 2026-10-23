@@ -3330,12 +3330,9 @@ describe("RomMPlaySection", () => {
       globalThis.addEventListener("romm_rom_uninstalled", listener);
       try {
         await act(async () => {
-          // Last MenuItem (uninstall) — find via tone or position. The order
-          // is [refresh-artwork, refresh-metadata, sync-saves, download-bios,
-          // separator, delete-saves, uninstall] but we filtered to MenuItems
-          // only, so it's index 5 (after delete-saves at 4).
-          // Actually after dropping the separator from filtered MenuItems,
-          // uninstall is the last one (index 5).
+          // The last MenuItem: the order is [refresh-artwork, refresh-metadata,
+          // sync-saves, separator, delete-saves, uninstall], and with the
+          // separator filtered out uninstall is at index 4.
           const uninstall = items[items.length - 1]!;
           await uninstall.props.onClick?.();
           await settleDetachedUninstall();

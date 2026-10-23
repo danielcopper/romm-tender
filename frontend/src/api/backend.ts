@@ -158,8 +158,11 @@ export function isRenameCollisions(value: object): value is RenameCollisionsResu
  *   launching emulator needs no BIOS included (`needs_bios: false`, level
  *   `"ok"`) — it clears a shown requirement and is drawn on the game page's BIOS
  *   tab like any other answer.
- * - `bios_status_unknown` with level `"unknown"` and no status is an answer
- *   too: a check that ran and could not establish the requirement.
+ * - `bios_status_unknown` with level `"unknown"` is an answer too: a check that
+ *   ran and could not establish the requirement. Its `bios_status` holds no
+ *   rows and no aggregates, only what the BIOS tab's buttons and selector stand
+ *   on (the emulator entries, the delete counts, `server_offline`); a cached
+ *   game detail never carries it.
  * - Every other payload is no answer: `bios_status_unknown` with no level (a
  *   cached game detail, which never carries one, or a live check that raised),
  *   and a payload with neither a status nor the flag (a ROM that is gone or has
@@ -802,17 +805,22 @@ export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDow
 );
 // The emulator is the identity the page shows — the files fetched are what IT
 // requires; `null` asks for the platform's own pick. Every file is linked for
-// every emulator that asks for it and is not stated not installed.
-export const downloadRequiredFirmware = endpoint<[string, string | null], FirmwareDownloadResult | EndpointFailure>(
-  "download_required_firmware",
-);
+// every emulator that asks for it and is not stated not installed. The ROM is the
+// game whose page asked, whose install record names the system the requirement is
+// read and linked for; `null` from the platform page.
+export const downloadRequiredFirmware = endpoint<
+  [string, string | null, number | null],
+  FirmwareDownloadResult | EndpointFailure
+>("download_required_firmware");
 // One row's Download button. Addressed by the file's name in RomM and by the id of
 // the library file the row shows, so two files of one name fetch the one shown; an
 // id the listing no longer holds under that name falls back to the name alone. The
 // file lands in the platform's store folder and is linked for every emulator that
-// wants it and is not stated not installed, whichever the page shows.
+// wants it and is not stated not installed, whichever the page shows — for the
+// system the game's install record names where a game's page asked (the ROM),
+// `null` from the platform page.
 export const downloadPlatformFirmwareFile = endpoint<
-  [string, string, number | null],
+  [string, string, number | null, number | null],
   FirmwareDownloadResult | EndpointFailure
 >("download_platform_firmware_file");
 // Brings a platform's links up to date in every enabled source and downloads
@@ -821,8 +829,12 @@ export const downloadPlatformFirmwareFile = endpoint<
 // an emulator switch.
 export const updateBiosLinks = endpoint<[string, number | null], BiosLinkResult | EndpointFailure>("update_bios_links");
 // "Replace…" on a row: the file at the place goes to the backup folder and
-// Tender's copy is linked there. Addressed by the place the row named.
-export const replaceBiosFile = endpoint<[string, string], BiosReplaceResult | EndpointFailure>("replace_bios_file");
+// Tender's copy is linked there. Addressed by the place the row named, read for
+// the system the game's install record names where a game's page asked (the
+// ROM), `null` from the platform page.
+export const replaceBiosFile = endpoint<[string, string, number | null], BiosReplaceResult | EndpointFailure>(
+  "replace_bios_file",
+);
 // What the resolver knows a library file's content as, by its MD5 — slow for
 // each file, so asked one row at a time after the page is shown.
 export const identifyLibraryFirmware = endpoint<[string], FirmwareIdentification | EndpointFailure>(

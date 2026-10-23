@@ -561,8 +561,9 @@ class FirmwareStatusReader:
         answer: what the platform's emulators want is read locally either way.
         The one payload that still says nothing is a platform with no row to show
         whose launching emulator the resolver answered neither met nor not met —
-        that ``needs_bios: False`` carries ``bios_status_unknown: True`` and no
-        consumer may read it as "this platform needs none". A verdict of
+        that ``needs_bios: False`` carries ``bios_status_unknown: True``, no rows
+        and no aggregates, and no consumer may read it as "this platform needs
+        none". A verdict of
         not met is an answer with no row to show — DuckStation over a BIOS folder
         its search found nothing in declares no file — and is sent whole.
 
@@ -570,9 +571,11 @@ class FirmwareStatusReader:
         ``needs_bios: False``. The empty file list says nothing of its own; the
         verdict is what says met.
 
-        A sent answer carries what the game page's BIOS buttons stand on, as the
-        platform entry does: the delete counts (:meth:`_stamp_deletable`) and
-        ``server_offline``, whether the library's listing could be read.
+        Every answer, that one included, carries what the game page's BIOS part
+        stands on, as the platform entry does: the emulator entries, where a
+        download lands (``store_only``, ``backup_root``), the delete counts
+        (:meth:`_stamp_deletable`) and ``server_offline``, whether the library's
+        listing could be read.
         """
         platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, platform_slug, install)
         system = platform.taken
@@ -597,11 +600,11 @@ class FirmwareStatusReader:
 
         met = answer.verdict.requirements_met if answer.verdict is not None else None
         if not files and met is None:
-            return {"needs_bios": False, "bios_status_unknown": True}
-
-        payload = self._bios_payload(files, platform_slug, answer, pick)
-        if not files and met is True:
-            payload["needs_bios"] = False
+            payload: dict[str, Any] = {"needs_bios": False, "bios_status_unknown": True, "files": []}
+        else:
+            payload = self._bios_payload(files, platform_slug, answer, pick)
+            if not files and met is True:
+                payload["needs_bios"] = False
         payload["store_only"] = _store_only(system, catalogue, identity)
         payload["backup_root"] = self._store.backup_root()
         payload["emulator_tabs"] = emulator_tabs(

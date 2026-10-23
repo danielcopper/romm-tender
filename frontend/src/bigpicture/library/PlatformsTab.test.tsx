@@ -3571,7 +3571,7 @@ describe("Library › Platforms", () => {
           fireEvent.click(buttonByText(container, "Download required for YabaSanshiro (1)")!);
         });
 
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null);
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null, null);
       });
 
       it("takes the selector's dot and the header from the same fresh answer after a download", async () => {
@@ -3630,12 +3630,17 @@ describe("Library › Platforms", () => {
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download")!);
         });
-        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "saturn_bios.bin", null);
+        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith(
+          "gba",
+          "saturn_bios.bin",
+          null,
+          null,
+        );
         await flushAsync();
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download required for Kronos (1)")!);
         });
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", "kronos_libretro.so");
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", "kronos_libretro.so", null);
         // The header stays the launching emulator's.
         expect(summary).toContain("The one file YabaSanshiro opens by name is not in place");
         expect(container.textContent).toContain("The one file YabaSanshiro opens by name is not in place");
@@ -3780,7 +3785,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null, null);
       // No notice on success: the spinner ending and the re-read rows are the
       // message, which is what the device pass asked for.
       expect(within(container).queryByTestId("status-bios")).toBeNull();
@@ -3817,7 +3822,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", 42);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", 42, null);
     });
 
     it("offers no Download for a file already here, nor for one the library does not hold", async () => {
@@ -4562,7 +4567,7 @@ describe("Library › Platforms", () => {
           for (let i = 0; i < 8; i++) await Promise.resolve();
         });
 
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null);
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null, null);
         expect(events.map((e) => e.detail.type)).toContain("bios");
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
@@ -4914,7 +4919,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null, null);
     });
 
     it("says the console does not start without an image where the counts would say nothing is required", async () => {
@@ -5326,7 +5331,7 @@ describe("Library › Platforms", () => {
       await confirmLastModal();
       await flushAsync();
 
-      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("gba", PLACE);
+      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("gba", PLACE, null);
       expect(container.textContent).toContain(`Replaced. The old file is in ${BACKUP}.`);
     });
 

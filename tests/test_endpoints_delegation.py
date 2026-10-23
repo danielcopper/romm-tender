@@ -276,14 +276,16 @@ class TestFirmwareEndpointDelegation:
     async def test_download_required_firmware_delegates(self, endpoints, services):
         services.firmware_service.download_required_firmware = AsyncMock(return_value={"success": True})
         result = await endpoints.download_required_firmware("snes", None)
-        services.firmware_service.download_required_firmware.assert_awaited_once_with("snes", None)
+        services.firmware_service.download_required_firmware.assert_awaited_once_with("snes", None, None)
         assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_download_required_firmware_passes_the_shown_emulator(self, endpoints, services):
         services.firmware_service.download_required_firmware = AsyncMock(return_value={"success": True})
         await endpoints.download_required_firmware("saturn", "kronos_libretro.so")
-        services.firmware_service.download_required_firmware.assert_awaited_once_with("saturn", "kronos_libretro.so")
+        services.firmware_service.download_required_firmware.assert_awaited_once_with(
+            "saturn", "kronos_libretro.so", None
+        )
 
     @pytest.mark.asyncio
     async def test_check_platform_bios_delegates(self, endpoints, services):

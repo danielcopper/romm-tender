@@ -160,8 +160,8 @@ async def test_bios_status_unreachable_server_is_unknown(harness):
     The verdict rides the LEVEL as well as the flag (#1660). The check ran and
     could not establish the requirement, which is an answer the game-detail page
     shows as one — where a check that RAISED carries no level at all and leaves
-    the page as it is. Both keep ``bios_status`` absent and both keep the flag,
-    so the level is the only thing that tells them apart.
+    the page as it is. Both keep the flag, and only the answer carries a status
+    of its own, with no rows: the level and that status tell them apart.
     """
     _seed_versioned_rom(harness, platform_slug="psvita")
     # The platform's ids were kept by an earlier reading, so only the firmware
@@ -172,7 +172,9 @@ async def test_bios_status_unreachable_server_is_unknown(harness):
 
     result = await harness.endpoints.get_bios_status(42)
 
-    assert result["bios_status"] is None
+    assert result["bios_status"]["files"] == []
+    assert result["bios_status"]["server_offline"] is True
+    assert result["bios_status"]["deletable_count"] == 0
     assert result["bios_level"] == "unknown"
     assert result["bios_label"] == "Unknown"
     assert result["bios_status_unknown"] is True
@@ -191,7 +193,8 @@ async def test_bios_status_without_an_emulator_list_is_unknown(harness):
 
     result = await harness.endpoints.get_bios_status(42)
 
-    assert result["bios_status"] is None
+    assert result["bios_status"]["files"] == []
+    assert result["bios_status"]["bios_status_unknown"] is True
     assert result["bios_status_unknown"] is True
 
 

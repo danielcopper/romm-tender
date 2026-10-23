@@ -1790,7 +1790,7 @@ describe("RomMGameInfoPanel", () => {
       });
       await flushAsync();
 
-      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("psx", "/bios/scph5501.bin");
+      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("psx", "/bios/scph5501.bin", 60);
     });
 
     it("bios: reads the tab's BIOS answer once after a press", async () => {
@@ -3506,7 +3506,7 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      // Core info (label map + Emulator column) from the dedicated path (#923).
+      // Core info from the dedicated path.
       vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
         active_core: "snes9x_libretro.so",
         active_core_label: "Snes9x",
@@ -5171,12 +5171,11 @@ describe("RomMGameInfoPanel", () => {
       });
     });
 
-    // #1681 — BIOS is the third per-rom tab. The requirement is core-dependent
-    // and the core override is keyed on rom_id, so both the level and the
-    // Emulator column it is shown against must follow the new active version.
+    // BIOS is the third per-rom tab. The requirement is core-dependent and the
+    // core override is keyed on rom_id, so both the level and the core info it is
+    // shown against must follow the new active version.
     describe("BIOS tab across a version switch (#1681)", () => {
-      /** A `get_platform_core_info` answer whose launching emulator is `label`
-       *  — the BIOS tab's Emulator column reads it. */
+      /** A `get_platform_core_info` answer whose launching emulator is `label`. */
       const coreInfoFor = (label: string, coreSo: string): CoreInfo => ({
         active_core: coreSo,
         active_core_label: label,
@@ -5419,9 +5418,8 @@ describe("RomMGameInfoPanel", () => {
       const openBiosTab = () => openTab("bios");
       const openSavesTab = () => openTab("saves");
 
-      /** A BIOS requirement on both versions, so the BIOS tab (and with it the
-       *  Emulator column the core-info reads land in) stays visible across the
-       *  switch. */
+      /** A BIOS requirement on both versions, so the BIOS tab stays visible across
+       *  the switch. */
       const biosNeed: Partial<CachedGameDetail> = {
         bios_status: {
           platform_slug: "snes",

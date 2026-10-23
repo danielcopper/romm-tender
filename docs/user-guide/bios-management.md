@@ -136,7 +136,8 @@ for. On the Steam Deck, where the page is too narrow for both, the right column 
 its buttons are the ones **Library › Platforms** shows for the platform (steps 8 to 12 there): the same columns, marks
 and words, a **Download**, **Replace…** or **Delete** button on every row that has one, **Download required for
 _emulator_**, and under **For all of _platform_** **Download all** and **Delete downloads**, all acting on the game's
-platform. **Download all** links what it fetches for the system the game was downloaded under. Every row is a stop the
+platform, for the system the game was downloaded under. Where nothing could be established about what the emulator
+needs, the tab still offers the deletes and the emulator selector, as the platform's page does. Every row is a stop the
 controller lands on, so you can scroll to each one; a row without a button does nothing when you press it. What a press
 did to a row — a link it could not place, a download that arrived damaged, a file it replaced — is said on that row;
 what else it could not do, or what it moved out of the way, is said in a line under the buttons.

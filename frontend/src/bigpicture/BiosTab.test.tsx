@@ -1741,7 +1741,7 @@ describe("BiosTab", () => {
         await act(async () => {
           confirmation()?.onOK();
         });
-        expect(backend.replaceBiosFile).toHaveBeenCalledWith("saturn", "/bios/saturn_bios.bin");
+        expect(backend.replaceBiosFile).toHaveBeenCalledWith("saturn", "/bios/saturn_bios.bin", null);
         expect(rowNamed(container, "saturn_bios.bin").textContent).toContain(
           "Replaced. The old file is in /data/backups/bios/x/saturn_bios.bin.",
         );
@@ -2022,7 +2022,29 @@ describe("BiosTab", () => {
       await act(async () => {
         fireEvent.click(required as HTMLElement);
       });
-      expect(backend.downloadRequiredFirmware).toHaveBeenCalledWith("psx", "duckstation");
+      expect(backend.downloadRequiredFirmware).toHaveBeenCalledWith("psx", "duckstation", 42);
+    });
+
+    it("sends the game's ROM id with a row's Download and with Replace…", async () => {
+      vi.mocked(showModal).mockClear();
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({ success: true, message: "", downloaded: 1 });
+      vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+        success: true,
+        placed: 1,
+        left_in_place: 0,
+        removed: 0,
+        link_failures: [],
+        backup_path: "/data/backups/bios/x/scph5500.bin",
+      });
+      const { container } = renderPsx();
+      await act(async () => {
+        fireEvent.click(button(container, "Download") as HTMLElement);
+      });
+      expect(backend.downloadPlatformFirmwareFile).toHaveBeenCalledWith("psx", "scph5501.bin", null, 42);
+
+      fireEvent.click(button(container, "Replace…") as HTMLElement);
+      await confirm();
+      expect(backend.replaceBiosFile).toHaveBeenCalledWith("psx", "/bios/scph5500.bin", 42);
     });
 
     it("downloads every library file of the platform for this game with Download all", async () => {
@@ -2083,6 +2105,24 @@ describe("BiosTab", () => {
       expect(getByTestId("bios-main-column").style.flex).toBe("0 0 760px");
       expect(getByTestId("bios-library-column").style.flex).toBe("1 1 400px");
       expect(getByTestId("bios-main-column").nextElementSibling).toBe(getByTestId("bios-library-column"));
+    });
+
+    it("offers the platform's delete and its emulators on an answer nothing could establish", () => {
+      const unknown: BiosStatus = { ...psx(), needs_bios: false, bios_status_unknown: true, files: [] };
+      const { container } = render(
+        <BiosTab
+          biosStatus={unknown}
+          biosLevel="unknown"
+          coreInfo={coreInfo}
+          isActive={true}
+          platformName="PlayStation"
+          platformSlug="psx"
+          romId={42}
+        />,
+      );
+      expect(button(container, "Delete downloads (2)")?.hasAttribute("disabled")).toBe(false);
+      expect(container.querySelector('[data-testid="emulator-selector"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="bios-file-row"]')).toBeNull();
     });
 
     it("draws a bulk button as wide as its label, never stretched across its row", () => {
