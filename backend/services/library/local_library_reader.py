@@ -202,7 +202,8 @@ class LocalLibraryReader:
         The preview builds one shortcut set over every enabled platform, so it
         needs the DB's canonical summaries for a fresh member that edges into a
         sibling on a skipped (incremental) platform, which the preview reconstructs
-        only its bound rows of. One short read UoW.
+        only its bound rows of. The stale removal reads here which games the run
+        synced, a skipped unit's members included. One short read UoW.
         """
         with self._uow_factory() as uow:
             return {
@@ -271,6 +272,12 @@ class LocalLibraryReader:
             synced_app_ids,
         )
         return [
-            StaleRow(rom_id, app_id, candidates[rom_id].platform_slug, candidates[rom_id].delivered_through)
+            StaleRow(
+                rom_id,
+                app_id,
+                candidates[rom_id].platform_slug,
+                candidates[rom_id].delivered_through,
+                candidates[rom_id].sibling_group_key,
+            )
             for rom_id, app_id in kept
         ]

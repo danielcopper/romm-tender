@@ -26,6 +26,7 @@ class TestSettleStaleRows:
             read_platform_slugs=set(),
             listed_platform_slugs={"gba"},
             collection_listed_rom_ids=set(),
+            synced_group_keys=frozenset(),
         )
 
         assert [row.rom_id for row in remove] == [1]
@@ -46,9 +47,28 @@ class TestSettleStaleRows:
             read_platform_slugs={"n64"},
             listed_platform_slugs={"n64"},
             collection_listed_rom_ids=set(),
+            synced_group_keys=frozenset(),
         )
 
         assert (remove, [row.rom_id for row in kept]) == ([], [1])
+        ask.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_row_whose_game_the_run_synced_is_neither_asked_nor_removed(self):
+        ask = AsyncMock(return_value={1: "present"})
+        rows = [StaleRow(1, 1001, "gba", "collection", "igdb:1:1"), StaleRow(2, 1002, "gba", None, "igdb:1:1")]
+
+        remove, kept, marks = await settle_stale_rows(
+            rows,
+            ask_romm=ask,
+            logger=_LOGGER,
+            read_platform_slugs=set(),
+            listed_platform_slugs={"gba"},
+            collection_listed_rom_ids=set(),
+            synced_group_keys=frozenset({"igdb:1:1"}),
+        )
+
+        assert (remove, kept, marks) == ([], [], {})
         ask.assert_not_awaited()
 
 

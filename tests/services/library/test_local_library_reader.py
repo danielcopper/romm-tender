@@ -151,7 +151,15 @@ class TestStaleScan:
 
         stale = library.sync._local_library_reader.do_scan_stale_roms({1}, set())
 
-        assert stale == [StaleRow(2, 200, "gba")]
+        assert stale == [StaleRow(2, 200, "gba", sibling_group_key="romm:seed:1")]
+
+    def test_a_stale_row_carries_its_group_key_or_none(self, library):
+        _seed_rom_row(library, 1, app_id=100, platform_slug="gba", sibling_group_key="igdb:7:1")
+        _seed_rom_row(library, 2, app_id=200, platform_slug="gba", sibling_group_key=None)
+
+        stale = library.sync._local_library_reader.do_scan_stale_roms(set(), set())
+
+        assert sorted((row.rom_id, row.sibling_group_key) for row in stale) == [(1, "igdb:7:1"), (2, None)]
 
 
 class TestKeptPlatformNames:

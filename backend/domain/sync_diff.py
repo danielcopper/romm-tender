@@ -489,12 +489,18 @@ def select_stale_removals(
 
 
 class StaleRow(NamedTuple):
-    """A bound row no unit of the run returned: its id, its shortcut's appId, its platform, and how it last arrived."""
+    """A bound row no unit of the run returned: its id, its appId, its platform, how it last arrived, and its group."""
 
     rom_id: int
     app_id: int
     platform_slug: str
     delivered_through: DeliveryRoute | None = None
+    sibling_group_key: str | None = None
+
+
+def group_keys_of(rom_ids: Iterable[int], key_by_rom_id: Mapping[int, str]) -> frozenset[str]:
+    """The sibling-group keys *key_by_rom_id* holds for *rom_ids*; a ROM it holds none for adds none."""
+    return frozenset(key_by_rom_id[rom_id] for rom_id in rom_ids if rom_id in key_by_rom_id)
 
 
 # What one exact-id question to RomM established about a ROM: a proven 404
@@ -542,6 +548,7 @@ def sort_stale_rows(
     read_platform_slugs: Collection[str],
     listed_platform_slugs: Collection[str] | None,
     collection_listed_rom_ids: Collection[int],
+    synced_group_keys: Collection[str] = frozenset(),
 ) -> StaleSort:
     """Split the stale rows into the ones to remove, to keep, and to ask RomM about.
 
@@ -550,7 +557,9 @@ def sort_stale_rows(
     run, on in Tender or not (``None`` where that is not known, which reads as
     every platform listed); *collection_listed_rom_ids* the members every
     collection held at its last completed apply, read before the run rewrote
-    any of them.
+    any of them; *synced_group_keys* the games the run synced — the group keys
+    (:func:`group_keys_of`) of every ROM a unit returned, a skipped unit's stamp
+    members included.
 
     * **keep** — the row's platform was read whole and did not return it, so it
       is gone from RomM. A skipped platform rebuilds every bound row, so only a
@@ -559,6 +568,10 @@ def sort_stale_rows(
       platform RomM no longer lists — that platform was on, and RomM's listing
       is a complete answer, so the game is gone from RomM rather than turned
       off.
+    * **none of the three** — the run did not read the row's platform, and a
+      unit delivered another member of its sibling group: the run synced its
+      game, whose one shortcut the row holds. A version switch binds a member
+      no unit may deliver. A row with no group key is judged alone.
     * **ask** — the run did not read the row's platform, and the row was last
       delivered through a collection, or, with no route recorded, a
       collection's last completed apply listed it. Only RomM's answer to its
@@ -572,6 +585,8 @@ def sort_stale_rows(
         unlisted = listed is not None and row.platform_slug not in listed
         if row.platform_slug in read_platform_slugs:
             sort.keep.append(row)
+        elif row.sibling_group_key in synced_group_keys:
+            continue
         elif row.delivered_through == "collection" or (
             row.delivered_through is None and row.rom_id in collection_listed_rom_ids
         ):

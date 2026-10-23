@@ -54,6 +54,7 @@ from domain.sync_diff import (
     compute_collection_diff,
     compute_platform_collection_diff,
     count_disabled_platform_removals,
+    group_keys_of,
     platform_breakdown,
 )
 from domain.sync_run_kind import SyncRunKind
@@ -382,6 +383,9 @@ class SyncOrchestrator:
             )
             # The marks are discarded: docs/architecture/backend-architecture.md,
             # "The stale removal keeps a game gone from RomM".
+            # The apply reads these keys back off the rows its units wrote; here
+            # they exist only in memory.
+            fresh_keys = {rom["id"]: rom["sibling_group_key"] for rom in all_roms if rom.get("sibling_group_key")}
             removals, kept, _marks = await settle_stale_rows(
                 (
                     StaleRow(
@@ -389,6 +393,7 @@ class SyncOrchestrator:
                         registry[str(rid)]["app_id"],
                         registry[str(rid)]["platform_slug"],
                         registry[str(rid)].get("delivered_through"),
+                        registry[str(rid)].get("sibling_group_key"),
                     )
                     for rid in stale
                 ),
@@ -397,6 +402,7 @@ class SyncOrchestrator:
                 read_platform_slugs=set(slug_to_name),
                 listed_platform_slugs=box.run_listed_platform_slugs,
                 collection_listed_rom_ids=collection_listed,
+                synced_group_keys=group_keys_of(synced_rom_ids, {**resident_keys, **fresh_keys}),
             )
             removed_ids = {row.rom_id for row in removals}
             stale = [rid for rid in stale if rid in removed_ids]
@@ -1324,6 +1330,7 @@ class SyncOrchestrator:
         # run syncs is removed (``sort_stale_rows``); a version gone from RomM
         # stays bound and in its platform's Steam collection.
         candidates: list[StaleRow] = []
+        group_keys: dict[int, str] = {}
         if not cancelled:
             candidates = await self._loop.run_in_executor(
                 None,
@@ -1331,6 +1338,8 @@ class SyncOrchestrator:
                 synced_rom_ids,
                 set(self._sync_state.committed_app_ids),
             )
+        if candidates:
+            group_keys = await self._loop.run_in_executor(None, self._local_library_reader.do_read_resident_group_keys)
         stale, kept, gone_marks = await settle_stale_rows(
             candidates,
             ask_romm=self._fetcher.ask_romm_for_roms,
@@ -1338,6 +1347,7 @@ class SyncOrchestrator:
             read_platform_slugs=processed_platform_slugs,
             listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
             collection_listed_rom_ids=collection_listed_rom_ids,
+            synced_group_keys=group_keys_of(synced_rom_ids, group_keys),
         )
         platform_rom_ids.update(row.rom_id for row in kept)
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]

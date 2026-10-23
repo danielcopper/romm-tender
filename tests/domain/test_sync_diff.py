@@ -13,6 +13,7 @@ from domain.sync_diff import (
     collapse_sibling_groups,
     compute_collection_diff,
     compute_platform_collection_diff,
+    group_keys_of,
     platform_breakdown,
     platform_collection_name,
     select_stale_removals,
@@ -1464,12 +1465,64 @@ class TestSortStaleRows:
             [], read_platform_slugs=set(), listed_platform_slugs=set(), collection_listed_rom_ids=set()
         ) == StaleSort([], [], [])
 
+    def test_a_row_whose_game_a_unit_delivered_is_neither_removed_kept_nor_asked(self):
+        """A version switch bound a member no unit delivers; the run delivered another member of its group."""
+        listed_turned_off = StaleRow(1, 1001, "gba", None, "igdb:1:1")
+        via_collection = StaleRow(2, 1002, "gba", "collection", "igdb:2:1")
+        via_platform_turned_off = StaleRow(3, 1003, "gba", "platform", "igdb:3:1")
+        via_platform_gone_from_romm = StaleRow(4, 1004, "psx", "platform", "igdb:4:1")
+
+        sort = sort_stale_rows(
+            [listed_turned_off, via_collection, via_platform_turned_off, via_platform_gone_from_romm],
+            read_platform_slugs=set(),
+            listed_platform_slugs={"gba"},
+            collection_listed_rom_ids={2},
+            synced_group_keys={"igdb:1:1", "igdb:2:1", "igdb:3:1", "igdb:4:1"},
+        )
+
+        assert sort == StaleSort([], [], [])
+        assert sort.gone_from_romm_marks({}, set()) == {}
+
+    def test_a_row_on_a_platform_read_whole_is_kept_whether_or_not_its_game_was_delivered(self):
+        row = StaleRow(1, 1001, "n64", "platform", "igdb:1:1")
+
+        sort = sort_stale_rows(
+            [row],
+            read_platform_slugs={"n64"},
+            listed_platform_slugs={"n64"},
+            collection_listed_rom_ids=(),
+            synced_group_keys={"igdb:1:1"},
+        )
+
+        assert sort.keep == [row]
+
+    @pytest.mark.parametrize("key", [None, "igdb:2:1"], ids=["no group key", "another game"])
+    def test_a_row_whose_own_game_no_unit_delivered_is_judged_alone(self, key):
+        row = StaleRow(1, 1001, "gba", None, key)
+
+        sort = sort_stale_rows(
+            [row],
+            read_platform_slugs=set(),
+            listed_platform_slugs={"gba"},
+            collection_listed_rom_ids=(),
+            synced_group_keys={"igdb:1:1"},
+        )
+
+        assert sort.remove == [row]
+
     def test_only_a_rom_romm_returned_is_removed(self):
         gone, present, unknown, unasked = (StaleRow(rid, 1000 + rid, "gba") for rid in (1, 2, 3, 4))
 
         remove, keep = settle_asked_rows([gone, present, unknown, unasked], {1: "gone", 2: "present", 3: "unknown"})
 
         assert (remove, keep) == ([present], [gone, unknown, unasked])
+
+
+class TestGroupKeysOf:
+    def test_the_keys_held_for_the_ids_asked_and_nothing_for_an_id_without_one(self):
+        keys = {1: "igdb:1:1", 2: "igdb:1:1", 3: "igdb:3:1", 4: "igdb:4:1"}
+
+        assert group_keys_of({1, 2, 3, 5}, keys) == frozenset({"igdb:1:1", "igdb:3:1"})
 
 
 class TestGoneFromRommMarks:
