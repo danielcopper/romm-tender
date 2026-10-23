@@ -88,7 +88,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from domain.rom_save_sync_state import RomSaveSyncState
-    from domain.save_answer import SaveAnswer
+    from domain.save_answer import SaveAnswer, SaveComponent
     from services.protocols import (
         ActiveCoreReader,
         Clock,
@@ -410,7 +410,7 @@ class SyncEngine:
         save_state: RomSaveSyncState | None,
         device_id: str | None,
         info: dict[str, Any],
-        save_names: tuple[str, ...],
+        synced_files: tuple[SaveComponent, ...],
         saves_dir: str | None,
     ) -> Iterator[MatrixOutcome]:
         """Yield one :class:`MatrixOutcome` per save file in the ROM's active slot."""
@@ -419,7 +419,7 @@ class SyncEngine:
             save_state=save_state,
             device_id=device_id,
             info=info,
-            save_names=save_names,
+            synced_files=synced_files,
             saves_dir=saves_dir,
         )
 

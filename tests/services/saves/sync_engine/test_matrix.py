@@ -13,9 +13,11 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.live_device_id import LiveDeviceId
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
+from domain.save_answer import SaveGroup, build_save_answer
 from domain.sync_action import Conflict, Skip
 from lib.errors import DeviceWriteError, RommApiError, RommConflictError, RommTimeoutError, classify_error
 from services.saves.sync_engine.matrix import (
@@ -1226,7 +1228,7 @@ class TestMultiFileSaveSetGrouping:
                 save_state=save_state,
                 device_id="dev-1",
                 info=info,
-                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
+                synced_files=info["save_answer"].synced_files,
                 saves_dir=info["saves_dir"],
             )
         }
@@ -1300,7 +1302,7 @@ class TestZipSaveContentHashParity:
                 save_state=save_state,
                 device_id="dev-1",
                 info=info,
-                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
+                synced_files=info["save_answer"].synced_files,
                 saves_dir=info["saves_dir"],
             )
         )
@@ -3171,3 +3173,130 @@ class TestTheContentSizeAtTheBoundaries:
         assert errors == []
         assert [c["server_save_id"] for c in conflicts] == [100]
         assert _require_save_state(svc, 42).files["pokemon.srm"].last_sync_content_size is None
+
+
+# Each shape a save answer can state ``pokemon.srm``'s size in — one group per
+# claim, listing that file — and the ``size_fixed`` the decision is handed for
+# it; ``_ABSENT`` is the key left out.
+_ABSENT = object()
+_CLAIMS: dict[str, tuple[tuple[bool | None, ...], object]] = {
+    "fixed": ((True,), True),
+    "not-fixed": ((False,), False),
+    "null": ((None,), _ABSENT),
+    "no-group": ((), _ABSENT),
+    "two-groups-agree": ((True, True), True),
+    "two-groups-disagree": ((True, False), _ABSENT),
+}
+
+
+class TestTheSizeClaimReachesTheDecision:
+    """Each save file's ``size_fixed`` reaches the decision as the save answer states it (#2538 D3, D4).
+
+    The sync and the save status's preview walk the same matrix with the same
+    synced components, so both hand the decision the same claim. A file two
+    groups list is two components today, and so two decisions; what is pinned
+    here is the claim each of them is handed, not how many there are.
+    """
+
+    @staticmethod
+    def _setup(tmp_path, claims: tuple[bool | None, ...]):
+        decided: list[dict[str, Any] | None] = []
+
+        def recording(**kwargs: Any):
+            decided.append(kwargs["local_file"])
+            return _GAVEL.compute_sync_action(**kwargs)
+
+        svc, fake = make_service(tmp_path, compute_sync_action=recording)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        saves_dir = str(tmp_path / "saves" / "gba")
+        groups = tuple(
+            SaveGroup(
+                directory=saves_dir,
+                files=("pokemon.srm",),
+                role="battery",
+                granularity="per-game-file",
+                size_fixed=claim,
+            )
+            for claim in claims
+        )
+        save_locations = svc._rom_info._save_locations
+        assert isinstance(save_locations, FakeSaveLocationReader)
+        save_locations.answer_with(
+            "gba",
+            build_save_answer(
+                emulator="mGBA",
+                directory=saves_dir,
+                backing_directory=None,
+                granularity="per-game-file",
+                needs=(),
+                file_set_state="declared",
+                files=("pokemon.srm",),
+                groups=groups,
+                caveats=(),
+                content_installed=True,
+            ),
+        )
+        return svc, fake, decided
+
+    @staticmethod
+    def _stated(local_file: dict[str, Any] | None) -> object:
+        assert local_file is not None
+        return local_file.get("size_fixed", _ABSENT)
+
+    @pytest.mark.parametrize("shape", sorted(_CLAIMS))
+    def test_the_sync_hands_the_decision_the_files_claim(self, tmp_path, shape: str):
+        claims, expected = _CLAIMS[shape]
+        svc, _fake, decided = self._setup(tmp_path, claims)
+        _create_save(tmp_path, content=_PROGRESS)
+
+        _do_sync(svc, 42)
+
+        assert decided
+        assert {self._stated(local_file) for local_file in decided} == {expected}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", sorted(_CLAIMS))
+    async def test_the_save_status_hands_the_decision_the_files_claim(self, tmp_path, shape: str):
+        claims, expected = _CLAIMS[shape]
+        svc, _fake, decided = self._setup(tmp_path, claims)
+        _create_save(tmp_path, content=_PROGRESS)
+
+        await svc.get_save_status(42)
+
+        assert decided
+        assert {self._stated(local_file) for local_file in decided} == {expected}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("claim", "conflicts"), [(True, [100]), (None, [])])
+    async def test_a_fixed_size_file_cut_short_conflicts_in_the_sync_and_in_the_status_alike(
+        self, tmp_path, claim: bool | None, conflicts: list[int]
+    ):
+        # 100 bytes of content where 128 were recorded: no shrink under 50%, so
+        # only the fixed size makes it a cut-short file. The unknown claim is
+        # the control, which uploads it as an edit.
+        svc, fake, _decided = self._setup(tmp_path, (claim,))
+        _create_save(tmp_path, content=b"\x01" * 100)
+        fake.saves[100] = _head(b"the head's bytes")
+        fake.stage_device_sync(100, "device-1", "2026-02-17T06:00:00Z")
+        _seed_save_state(
+            svc,
+            42,
+            RomSaveSyncState(
+                files={
+                    "pokemon.srm": FileSyncState(
+                        tracked_save_id=100,
+                        last_sync_hash="the-baseline",
+                        last_sync_local_size=128,
+                        last_sync_content_size=128,
+                    )
+                }
+            ),
+        )
+
+        status = await svc.get_save_status(42)
+        uploaded, _downloaded, errors, synced = _do_sync(svc, 42)
+
+        assert [c["server_save_id"] for c in status["conflicts"]] == conflicts
+        assert [c["server_save_id"] for c in synced] == conflicts
+        assert (uploaded, errors) == (0 if conflicts else 1, [])

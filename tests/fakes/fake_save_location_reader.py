@@ -44,6 +44,11 @@ class FakeSaveLocationReader:
     which is what RetroArch's ``savefiles_in_content_dir`` produces. A test may
     flip that attribute after construction.
 
+    Every file of the default answer carries *size_fixed* as its size claim —
+    ``None``, nothing established, unless the test states one. A test about how
+    the resolver's groups become that claim seeds an answer built from groups
+    with :meth:`answer_with` instead.
+
     Savestates answer *states_root* itself when it is given — RetroDECK's stock
     layout, which does not sort them — and nothing established otherwise, unless
     :meth:`savestates_with` seeded the system. ``beside_content`` moves them next
@@ -65,8 +70,10 @@ class FakeSaveLocationReader:
         saves_root: str | None = None,
         states_root: str | None = None,
         beside_content: bool = False,
+        size_fixed: bool | None = None,
     ) -> None:
         self._extensions = extensions
+        self._size_fixed = size_fixed
         self._saves_root = saves_root
         self._states_root = states_root
         self.beside_content = beside_content
@@ -126,7 +133,13 @@ class FakeSaveLocationReader:
             granularity="per-game-files",
             needs=(),
             components=tuple(
-                SaveComponent(name=f"{stem}{ext}", directory=directory, role=role, granularity="per-game-file")
+                SaveComponent(
+                    name=f"{stem}{ext}",
+                    directory=directory,
+                    role=role,
+                    granularity="per-game-file",
+                    size_fixed=self._size_fixed,
+                )
                 for ext, role in parts
             ),
             caveats=(),

@@ -162,7 +162,7 @@ class StatusService:
             save_state=save_state,
             device_id=device_id,
             info=info,
-            save_names=save_answer.synced_names,
+            synced_files=save_answer.synced_files,
             saves_dir=info["saves_dir"],
         ):
             all_filenames.append(outcome.filename)
