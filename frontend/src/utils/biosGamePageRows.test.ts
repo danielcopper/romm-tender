@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { BiosFileStatus } from "../types";
+import type { BiosFileStatus, LibraryMatch } from "../types";
 import { fileDotColor, rowBelongsOnThisPage } from "./biosGamePageRows";
 
 const GREEN = "#5ba32b";
@@ -7,8 +7,8 @@ const RED = "#d94126";
 const GREY = "#8f98a0";
 
 /** A declared file that is not required, not an option, not met and not
- *  fetchable: the baseline the cases below change. `one_of` is `null`, not
- *  absent, because the backend sends the key on every row. */
+ *  fetchable: the baseline the cases below change. `one_of` and `library` are
+ *  `null`, not absent, because the backend sends both keys on every row. */
 const row = (over: Partial<BiosFileStatus> = {}): BiosFileStatus => ({
   file_name: "bios.bin",
   downloaded: false,
@@ -21,8 +21,20 @@ const row = (over: Partial<BiosFileStatus> = {}): BiosFileStatus => ({
   declared_kind: "file",
   satisfied: false,
   one_of: null,
+  library: null,
   ...over,
 });
+
+/** The RomM library file that fills a row, with a checksum to check a download against. */
+const LIBRARY_FILE: LibraryMatch = {
+  firmware_id: 7,
+  file_name: "bios.bin",
+  platform_slug: "gba",
+  matched: "content",
+  md5: "a860e8c0b6d573d191e4ec7db1b1e4f6",
+  size: 16384,
+  no_checksum: false,
+};
 
 /** A row from a payload that carries no verdict at all. */
 const withoutVerdict = (over: Partial<BiosFileStatus> = {}): BiosFileStatus => {
@@ -84,7 +96,7 @@ describe("rowBelongsOnThisPage", () => {
   });
 
   it("keeps a file the platform page can fetch", () => {
-    expect(rowBelongsOnThisPage(row({ on_server: true }))).toBe(true);
+    expect(rowBelongsOnThisPage(row({ on_server: true, library: LIBRARY_FILE }))).toBe(true);
   });
 
   it("leaves out an unmet file that is not required, not an option and not fetchable", () => {
@@ -92,7 +104,8 @@ describe("rowBelongsOnThisPage", () => {
   });
 
   it("leaves out a row the library holds that the platform page offers no button for", () => {
-    expect(rowBelongsOnThisPage(row({ on_server: true, downloaded: true }))).toBe(false);
+    // Already in this platform's firmware store, so there is nothing to download.
+    expect(rowBelongsOnThisPage(row({ on_server: true, library: LIBRARY_FILE, store_file: "bios.bin" }))).toBe(false);
   });
 
   it("reads `downloaded` where the payload carries no verdict", () => {
