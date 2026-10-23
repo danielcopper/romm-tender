@@ -855,8 +855,8 @@ setup.
   replacement
 - With **gpSP**, `gba_bios.bin` is shown as _required_ — gpSP cannot run without it
 
-The active core name appears on the game detail page (the **Emulator** column) and on the platform's header line in
-**Library › Platforms**. This tells you at a glance which core Tender is filtering for.
+The active core name appears on the game detail page's **BIOS** tab, whose emulator selector opens on it, and on the
+platform's header line in **Library › Platforms**. This tells you at a glance which core Tender is filtering for.
 
 **How the core is determined:**
 
@@ -1017,10 +1017,8 @@ The CPU button changes color to indicate the active core status:
 - **Gray** — the default core is active (no overrides)
 - **Yellow** — a non-default core is active (per-game or per-platform override)
 
-The game detail info panel shows the emulator this game launches with in a dedicated "Emulator" column alongside the
-BIOS status, using a two-column layout. The column heading is its only label — the emulator's name stands under it on
-its own, the way the BIOS column's readiness line stands under "BIOS", and it reads the same whether what launches the
-game is a RetroArch core or a standalone emulator.
+On the game detail page, the emulator this game launches with is the one the **BIOS** tab's line speaks for and the one
+its emulator selector opens on, its name in blue — a RetroArch core or a standalone emulator alike.
 
 ---
 
