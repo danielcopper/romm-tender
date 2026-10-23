@@ -841,14 +841,20 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   keys it holds whole, so each group gets the view the apply's units have: every group a platform unit of the run
   delivered a member of is complete, whether or not that unit is skipped as unchanged, and a group only collections
   reach is partial (#2536). The rebinds the view decides are therefore counted as the apply makes them (the #1292
-  counts-vs-reality bug class) — except where a collection skipped as unchanged hands the preview a bound member that
-  the apply's platform unit no longer has (#2544). Collapsed whole, a game only collections reach would count a rebind
-  of a bound member gone from RomM, or without a file, that its collection unit never makes. Where the group's platform
-  is synced, its bound member rides that platform unit in the same run; where only collections reach the group, the
-  stale removal keeps the binding (below). (Inferring "bound sibling absent ⇒ vanished" from a partial view would rebind
-  a live installed game onto an uninstalled sibling — #1296.) `classify_roms` runs over the collapsed set, so its new /
-  changed / unchanged / stale buckets count **games, not dumps**, and an unbound sibling stops reading as a perpetual
-  "new".
+  counts-vs-reality bug class). Collapsed whole, a game only collections reach would count a rebind of a bound member
+  gone from RomM, or without a file, that its collection unit never makes. Where the group's platform is synced, its
+  bound member rides that platform unit in the same run; where only collections reach the group, the stale removal keeps
+  the binding (below). (Inferring "bound sibling absent ⇒ vanished" from a partial view would rebind a live installed
+  game onto an uninstalled sibling — #1296.) A collection skipped as unchanged hands the preview the bound members it
+  lists, rebuilt from their stored rows, among them one its platform's fetch no longer returns: a user's own hide in
+  RomM drops the member from `/api/roms` but not from a standard or virtual collection's listing. The apply's platform
+  unit commits before that collection unit runs and collapses the group without the member, so it rebinds the shortcut
+  where a same-stem sibling is fetched. The preview collapses such a group a second time without the rebuilt rows
+  (`services/library/_preview_union.py::collapse_counting_platform_rebinds`); where that pass rebinds a row, its answer
+  is taken and the row is no longer classified as skipped, and where it does not, the row keeps its place and stays
+  skipped, so the platform-collection diff files it as the apply does (#2544 D1). The run counts the row as synced
+  either way, which the stale removal reads. `classify_roms` runs over the collapsed set, so its new / changed /
+  unchanged / stale buckets count **games, not dumps**, and an unbound sibling stops reading as a perpetual "new".
 - **Resolution chain** (`domain/sibling_resolution.py::resolve_group_representative`, total + shuffle-stable): an
   installed sibling wins; else an existing binding; else RomM's per-user default (`is_main_sibling`); else the **1G1R
   ranking** — prerelease demotion > **region priority** > revision (newest) > alphabetical `fs_name_no_ext` > `rom_id`.
