@@ -249,7 +249,7 @@ class TestDecisionTable:
     def test_adopt_baseline_survives_the_boundary(self, adapter: GavelNativeAdapter) -> None:
         head = _save(101, updated_at=_HEAD_UPDATED_AT, device_syncs=_ours(is_current=True))
         action = adapter.compute_sync_action(_local(size=8192, mtime=_MTIME_NEWER), [head], {}, _DEVICE, _SERVER_HASH)
-        assert action == Skip(reason="synced", adopt_baseline=True)
+        assert action == Skip(reason="synced", adopt_baseline=True, server_save=head, acknowledge=False)
 
     def test_head_without_a_device_syncs_key_decides_on_its_content_hash(self, adapter: GavelNativeAdapter) -> None:
         # A RomM payload can omit ``device_syncs`` entirely, so the head arrives
@@ -259,7 +259,7 @@ class TestDecisionTable:
         # for a file that is in sync.
         head = _save(101, updated_at=_HEAD_UPDATED_AT)
         action = adapter.compute_sync_action(_local(size=8192, mtime=_MTIME_NEWER), [head], {}, _DEVICE, _SERVER_HASH)
-        assert action == Skip(reason="synced", adopt_baseline=True)
+        assert action == Skip(reason="synced", adopt_baseline=True, server_save=head, acknowledge=False)
 
     def test_upload_echoes_the_superseded_save_id(self, adapter: GavelNativeAdapter) -> None:
         head = _save(101, updated_at=_HEAD_UPDATED_AT, device_syncs=_ours(is_current=True))
@@ -289,3 +289,78 @@ class TestDecisionTable:
         ``nothing_to_sync`` and leave the only copy of that save unsynced.
         """
         assert adapter.compute_sync_action({}, [], {}, _DEVICE, None) == Upload(target_save_id=None)
+
+
+class TestTheInputsAndAnswersOfVersion2:
+    """What romm-gavel 2.0.0 added at the boundary: the adopted head, its acknowledgement, the sizes."""
+
+    def test_an_adopt_of_a_head_this_device_is_not_current_on_asks_for_an_acknowledgement(
+        self, adapter: GavelNativeAdapter
+    ) -> None:
+        head = _save(101, updated_at=_HEAD_UPDATED_AT, device_syncs=_ours(is_current=False))
+        action = adapter.compute_sync_action(_local(size=8192, mtime=_MTIME_NEWER), [head], {}, _DEVICE, _SERVER_HASH)
+        assert isinstance(action, Skip)
+        assert (action.reason, action.adopt_baseline, action.acknowledge) == ("synced", True, True)
+        assert action.server_save is head
+
+    def test_an_adopt_of_a_head_this_device_is_current_on_asks_for_none(self, adapter: GavelNativeAdapter) -> None:
+        head = _save(101, updated_at=_HEAD_UPDATED_AT, device_syncs=_ours(is_current=True))
+        action = adapter.compute_sync_action(_local(size=8192, mtime=_MTIME_NEWER), [head], {}, _DEVICE, _SERVER_HASH)
+        assert isinstance(action, Skip)
+        assert (action.adopt_baseline, action.acknowledge) == (True, False)
+        assert action.server_save is head
+
+    def test_a_skip_that_adopts_nothing_names_no_head(self, adapter: GavelNativeAdapter) -> None:
+        head = _save(101, updated_at=_HEAD_UPDATED_AT, device_syncs=_ours(is_current=True))
+        action = adapter.compute_sync_action(
+            _local(size=8192, mtime=_MTIME_NEWER), [head], {"last_sync_hash": _SERVER_HASH}, _DEVICE, _SERVER_HASH
+        )
+        assert action == Skip(reason="synced")
+
+    def test_the_content_sizes_reach_the_guard(self, adapter: GavelNativeAdapter) -> None:
+        # The raw size dropped below half of the recorded one, but only fill went:
+        # judged by content sizes the edit uploads; judged by raw sizes it conflicts.
+        head = _save(101, updated_at=_HEAD_UPDATED_AT, device_syncs=_ours(is_current=True))
+        recorded = {"last_sync_hash": _BASELINE_HASH, "last_sync_local_size": 131072}
+        local = _local(size=32768, mtime=_MTIME_NEWER)
+
+        by_content = adapter.compute_sync_action(
+            {**local, "content_size": 32000},
+            [head],
+            {**recorded, "last_sync_content_size": 32000},
+            _DEVICE,
+            "drifted-hash",
+        )
+        by_raw = adapter.compute_sync_action(local, [head], recorded, _DEVICE, "drifted-hash")
+
+        assert by_content == Upload(target_save_id=101)
+        assert by_raw == Conflict(server_save=head)
+
+    def test_a_fixed_size_reaches_the_guard(self, adapter: GavelNativeAdapter) -> None:
+        # Shorter than the recorded content but above half of it: only a file
+        # whose size is fixed is refused for that.
+        head = _save(101, updated_at=_HEAD_UPDATED_AT, device_syncs=_ours(is_current=True))
+        recorded = {"last_sync_hash": _BASELINE_HASH, "last_sync_local_size": 1000, "last_sync_content_size": 1000}
+        local = {**_local(size=900, mtime=_MTIME_NEWER), "content_size": 900}
+
+        def decide(size_fixed: bool | None) -> object:
+            local_file = {**local, "size_fixed": size_fixed}
+            return adapter.compute_sync_action(local_file, [head], recorded, _DEVICE, "drifted-hash")
+
+        fixed, not_fixed, unknown = decide(True), decide(False), decide(None)
+
+        assert fixed == Conflict(server_save=head)
+        assert not_fixed == unknown == Upload(target_save_id=101)
+
+    @pytest.mark.parametrize("value", [1, 0, "true", "false"])
+    def test_a_size_fixed_that_is_not_a_bool_is_refused(self, adapter: GavelNativeAdapter, value: object) -> None:
+        local_file = {**_local(size=900, mtime=None), "size_fixed": value}
+        with pytest.raises(ValueError, match="size_fixed must be true, false or absent"):
+            adapter.compute_sync_action(local_file, [], {}, _DEVICE, None)
+
+    def test_a_non_integral_content_size_is_refused_on_either_side(self, adapter: GavelNativeAdapter) -> None:
+        local_file = {**_local(size=900, mtime=None), "content_size": 1.5}
+        with pytest.raises(ValueError, match=r"local_file\.content_size"):
+            adapter.compute_sync_action(local_file, [], {}, _DEVICE, None)
+        with pytest.raises(ValueError, match=r"files_state\.last_sync_content_size"):
+            adapter.compute_sync_action(None, [], {"last_sync_content_size": 1.5}, _DEVICE, None)

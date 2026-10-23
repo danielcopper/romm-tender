@@ -253,20 +253,29 @@ def test_action_stable_under_timestamp_format(
     reformatted = [_reformat_server(ss, zulu=zulu, micros=micros) for ss in server_saves]
     other = _action(local_file, reformatted, files_state, local_hash)
 
-    # Compare by value. Download/Conflict carry the server dict, which differs
-    # only in updated_at formatting between the two runs; compare structurally
-    # on everything except that one field. Skip/Upload carry no timestamp, so
-    # they must be value-equal outright.
+    # Compare by value. Download/Conflict and an adopting Skip carry the server
+    # dict, which differs only in updated_at formatting between the two runs;
+    # compare structurally on everything except that one field. Upload and a
+    # Skip that adopts nothing carry no timestamp, so they must be value-equal
+    # outright.
     assert type(base) is type(other)
-    if isinstance(base, (Download, Conflict)):
-        other_save = other.server_save  # type: ignore[union-attr]
-        picked = base.server_save
-        assert picked["id"] == other_save["id"]
-        epoch_picked = datetime.fromisoformat(picked["updated_at"].replace("Z", "+00:00")).timestamp()
-        epoch_other = datetime.fromisoformat(other_save["updated_at"].replace("Z", "+00:00")).timestamp()
-        assert epoch_picked == epoch_other
-    else:
+    picked = base.server_save if isinstance(base, (Download, Conflict, Skip)) else None
+    if picked is None:
         assert base == other
+        return
+    other_save = other.server_save  # type: ignore[union-attr]
+    assert other_save is not None
+    assert picked["id"] == other_save["id"]
+    epoch_picked = datetime.fromisoformat(picked["updated_at"].replace("Z", "+00:00")).timestamp()
+    epoch_other = datetime.fromisoformat(other_save["updated_at"].replace("Z", "+00:00")).timestamp()
+    assert epoch_picked == epoch_other
+    if isinstance(base, Skip):
+        assert isinstance(other, Skip)
+        assert (base.reason, base.adopt_baseline, base.acknowledge) == (
+            other.reason,
+            other.adopt_baseline,
+            other.acknowledge,
+        )
 
 
 # ---------------------------------------------------------------------------

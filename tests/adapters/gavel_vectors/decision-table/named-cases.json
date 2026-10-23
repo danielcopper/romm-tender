@@ -148,8 +148,42 @@
       }
     },
     {
-      "name": "current-no-baseline-adopts",
-      "rationale": "Current on the head, local present, but no baseline recorded yet \u2014 adopt one so future runs can detect drift. Pure bookkeeping, no transfer.",
+      "name": "current-no-baseline-parity",
+      "rationale": "Current on the head, local present without a baseline, but byte-identical to the head (parity \u2014 the only identity route without history): adopt it as the baseline so future runs can detect drift. Pure bookkeeping, no transfer.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {},
+        "device_id": "device-a",
+        "local_hash": "cccccccccccccccccccccccccccccccc"
+      },
+      "expected": {
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": false
+      }
+    },
+    {
+      "name": "current-no-baseline-different",
+      "rationale": "Current on the head, local present without a baseline and NOT identical to the head: the differing hash is either an edit made since or local hashing drifting from the server's scheme, and without a baseline nothing tells which. Adopting it would hide an edit from every later run, and uploading it is a guess \u2014 unknown provenance, the user decides.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -174,9 +208,69 @@
         "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       "expected": {
-        "action": "skip",
-        "reason": "synced",
-        "adopt_baseline": true
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-no-baseline-head-hash-unknown",
+      "rationale": "Current on the head, local present without a baseline, and the head states no content_hash: identity cannot be proven, and unknown never proves anything \u2014 conflict, not an adoption.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {},
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-no-baseline-local-hash-unknown",
+      "rationale": "Current on the head, local present without a baseline, but the local hash could not be computed: identity cannot be proven \u2014 conflict, not an adoption.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {},
+        "device_id": "device-a",
+        "local_hash": null
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
       }
     },
     {
@@ -319,8 +413,675 @@
       }
     },
     {
+      "name": "current-diverged-fill-dropped",
+      "rationale": "The save recorded at the last sync held fill only (content size 0): mGBA's 131072 bytes of 0xFF before the game first reads its save. The local file is now the real 32768-byte save. Both sides state a content size, so the guard compares those, and content grown from nothing is no shrink, although the raw size fell below half.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 32768,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 131072,
+          "last_sync_content_size": 0
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-blank-save",
+      "rationale": "Same raw size as at the last sync, but the local file is fill only (content size 0) where the recorded content was larger: an emulator that failed to load the save and wrote a blank one of full size back. The raw size cannot see it; the content comparison does. Never auto-upload it.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 0,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 24576
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-content-shrunken",
+      "rationale": "Same raw size as at the last sync, but the content shrank below half of what was recorded, the rest of the file now fill. A real shrink behind trailing fill is still a shrink.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 4096,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 24576
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-content-shrink-within-half",
+      "rationale": "The raw size fell below half of the recorded one, the content did not (24576 to 16384 bytes): what the file lost beyond that was fill. Both sides state a content size, so the content comparison decides, and a shrink within half is a plausible edit.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 16384,
+          "content_size": 16384,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 65536,
+          "last_sync_content_size": 24576
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-content-size-local-only",
+      "rationale": "The local file states a content size, the record of the last sync does not (it was recorded without one). With either side absent the raw-size rule stands: 32768 is below half of 131072. An absent recorded content size is unknown, not 0.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 32768,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 131072
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-content-size-recorded-only",
+      "rationale": "The record of the last sync states a content size, the local file does not. With either side absent the raw-size rule stands: 1024 is below half of 8192. The local raw size does not stand in for its content size.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 1024,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 8192,
+          "last_sync_content_size": 1024
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-zero-byte-content-size",
+      "rationale": "A 0-byte local file is refused on its raw size, even where both sides state a content size and the comparison alone would let it through (no content then, none now).",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 0,
+          "content_size": 0,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 131072,
+          "last_sync_content_size": 0
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fill-only-still-no-content",
+      "rationale": "The local file is fill only (content size 0), and so was the save recorded at the last sync. A content size of 0 is not refused outright: it goes through the comparison, and nothing is below half of no content.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 65536,
+          "content_size": 0,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 131072,
+          "last_sync_content_size": 0
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-content-size-without-raw-size",
+      "rationale": "The local file states a content size but no raw size. Both sides state a content size, so those are compared without the raw size: 1024 is below half of 8192.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "content_size": 1024,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_content_size": 8192
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-truncated",
+      "rationale": "A save whose size the format fixes, 32768 bytes at the last sync, is now 20480 bytes, its content cut with it. That is within half of what was recorded, so the half rule lets it through. A fixed-size file never legitimately loses content; it can get shorter only by dropping trailing fill. Its raw size is below the 32768 bytes of content recorded at the last sync, so it is a truncated write. Never auto-upload it.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 20480,
+          "content_size": 20480,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-size-not-fixed-truncated",
+      "rationale": "The same shortening as current-diverged-fixed-size-truncated, but the caller states that the size is not fixed: the file may legitimately get shorter. Only the half rule applies, and 20480 is not below half of 32768.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 20480,
+          "content_size": 20480,
+          "size_fixed": false,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-size-fixed-unknown-truncated",
+      "rationale": "The same shortening as current-diverged-fixed-size-truncated, but the caller does not know whether the size is fixed and leaves size_fixed out. Unknown is not fixed: only the half rule applies, and 20480 is not below half of 32768.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 20480,
+          "content_size": 20480,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-fill-dropped",
+      "rationale": "current-diverged-fill-dropped on a file stated fixed: mGBA's 131072 bytes of 0xFF, recorded with content size 0, give way to the real 32768-byte save. The fixed rule compares the raw size with the content recorded at the last sync, and 32768 is not below 0: what the file lost was fill.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 32768,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 131072,
+          "last_sync_content_size": 0
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-trailing-fill-dropped",
+      "rationale": "A fixed-size file went from 32768 to 20480 bytes, but the content recorded at the last sync was 16384 bytes and the raw size is not below it: what the file lost was trailing fill. The fixed rule compares against the recorded content, not the recorded raw size, so a shortening that drops only fill loses nothing and does not trip it.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 20480,
+          "content_size": 16384,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 16384
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-no-content-recorded",
+      "rationale": "The record of the last sync holds no content size, so the fixed rule compares against the recorded raw size: 30000 is below 32768. The half rule alone would let it through.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 30000,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-blank-save",
+      "rationale": "current-diverged-blank-save on a file stated fixed: full size, fill only, where the recorded content was 24576 bytes. The fixed rule sees no shortening, since 32768 is not below 24576. The half rule on the content sizes applies to a fixed-size file all the same and refuses it: the fixed rule comes in addition, so a fixed-size file is never guarded more weakly than one whose size can change.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 0,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 24576
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-raw-size-unknown",
+      "rationale": "The file is stated fixed, but its raw size could not be read. The fixed rule has nothing to compare and does not fire; an unknown size is not 0. Both sides state a content size, so the half rule compares those, and 20480 is not below half of 32768.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "content_size": 20480,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-unchanged-size",
+      "rationale": "An ordinary edit of a fixed-size save: the size is what it was at the last sync. Not below is not shrunken, so it uploads.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 32768,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
       "name": "current-hash-unknown",
-      "rationale": "Current on the head but the local hash could not be computed: without it drift cannot be claimed \u2014 treat as in sync rather than guessing.",
+      "rationale": "Current on the head with a baseline recorded, but the local hash could not be computed: without it drift from the baseline cannot be claimed \u2014 treat as in sync rather than guessing.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -385,7 +1146,7 @@
     },
     {
       "name": "moved-past-no-baseline-parity",
-      "rationale": "Head moved past, local present without a baseline, but byte-identical to the head (parity \u2014 the only identity route without history): adopting loses nothing and re-anchors the baseline.",
+      "rationale": "Device not current on the head (moved past, or on RomM never synced), local present without a baseline, but byte-identical to the head (parity \u2014 the only identity route without history): identical bytes never travel \u2014 adopt the local file as the baseline instead of downloading the same content again. The server still holds this device not current on the head, so the result asks for an acknowledgement.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -410,8 +1171,11 @@
         "local_hash": "cccccccccccccccccccccccccccccccc"
       },
       "expected": {
-        "action": "download",
-        "server_save_id": 101
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": true
       }
     },
     {
@@ -447,7 +1211,7 @@
     },
     {
       "name": "moved-past-unchanged",
-      "rationale": "Head moved past but local is unchanged since the baseline: this device holds no un-synced work \u2014 adopt the head.",
+      "rationale": "Head moved past, local unchanged since the baseline and not identical to the head: this device holds no un-synced work \u2014 download the head.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -480,8 +1244,82 @@
       }
     },
     {
+      "name": "moved-past-unchanged-provenance",
+      "rationale": "PROVENANCE route on a moved head: local unchanged since the baseline AND the stored server hash equals the head's content_hash \u2014 the head moved to the very content this device last synced, proven by two server-produced hashes even though the local hash differs from the head's. Identical bytes never travel \u2014 adopt, no download. The server still holds this device not current on the head, so the result asks for an acknowledgement.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": false
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "last_sync_server_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": true
+      }
+    },
+    {
+      "name": "moved-past-unchanged-parity",
+      "rationale": "PARITY route on a moved head with the local file unchanged since its baseline: the stored server hash differs from the head's, but the local hash equals the head's content_hash directly. Identical bytes never travel \u2014 adopt, no download. The server still holds this device not current on the head, so the result asks for an acknowledgement.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": false
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_server_hash": "dddddddddddddddddddddddddddddddd"
+        },
+        "device_id": "device-a",
+        "local_hash": "cccccccccccccccccccccccccccccccc"
+      },
+      "expected": {
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": true
+      }
+    },
+    {
       "name": "moved-past-diverged-identical",
-      "rationale": "Both sides moved independently but landed on the SAME bytes: nothing to reconcile \u2014 adopt, which re-establishes baseline and currency.",
+      "rationale": "Both sides moved independently but landed on the SAME bytes: nothing to reconcile and nothing to transfer \u2014 adopt the local file as the baseline. The server still holds this device not current on the head, so the result asks for an acknowledgement.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -509,8 +1347,11 @@
         "local_hash": "cccccccccccccccccccccccccccccccc"
       },
       "expected": {
-        "action": "download",
-        "server_save_id": 101
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": true
       }
     },
     {
@@ -583,7 +1424,7 @@
     },
     {
       "name": "never-synced-local-gone",
-      "rationale": "Never synced this head and no local file \u2014 adopt the head.",
+      "rationale": "No entry for this device on the head and no local file \u2014 adopt the head.",
       "input": {
         "local_file": null,
         "server_saves_in_slot": [
@@ -610,7 +1451,7 @@
     },
     {
       "name": "never-synced-parity-dedup",
-      "rationale": "Local content is byte-identical to a head this device never synced (parity route): adopt it as the baseline instead of POSTing a duplicate.",
+      "rationale": "Local content is byte-identical to a head that carries no entry for this device (parity route): adopt it as the baseline instead of POSTing a duplicate.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -637,7 +1478,9 @@
       "expected": {
         "action": "skip",
         "reason": "synced",
-        "adopt_baseline": true
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": false
       }
     },
     {
@@ -672,12 +1515,14 @@
       "expected": {
         "action": "skip",
         "reason": "synced",
-        "adopt_baseline": true
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": false
       }
     },
     {
       "name": "never-synced-baseline-diverged",
-      "rationale": "Local diverged from its baseline while the chosen head is one this device never synced: both sides moved \u2014 conflict.",
+      "rationale": "Local diverged from its baseline while the chosen head carries no entry for this device: both sides moved \u2014 conflict.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -711,7 +1556,7 @@
     },
     {
       "name": "never-synced-no-baseline-mtime-newer-still-conflicts",
-      "rationale": "No baseline, local hash known and NOT identical to the never-synced head: unknown provenance \u2014 conflict, even though the local mtime is newer. mtime never rescues this case.",
+      "rationale": "No baseline, local hash known and NOT identical to a head with no entry for this device: unknown provenance \u2014 conflict, even though the local mtime is newer. mtime never rescues this case.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -742,7 +1587,7 @@
     },
     {
       "name": "never-synced-unchanged-mtime-newer",
-      "rationale": "Local provably unchanged since its baseline, head never synced and not identical (stored hash differs): fall through to the timestamp comparison \u2014 local at-or-after the head uploads as a new save.",
+      "rationale": "Local provably unchanged since its baseline, no entry for this device on the head and not identical (stored hash differs): fall through to the timestamp comparison \u2014 local at-or-after the head uploads as a new save.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -810,7 +1655,7 @@
     },
     {
       "name": "never-synced-unchanged-mtime-older",
-      "rationale": "Local provably unchanged and older than the never-synced head \u2014 adopt the head.",
+      "rationale": "Local provably unchanged and older than a head with no entry for this device \u2014 adopt the head.",
       "input": {
         "local_file": {
           "filename": "game.srm",

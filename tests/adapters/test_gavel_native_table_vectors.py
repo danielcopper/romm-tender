@@ -41,11 +41,17 @@ def _serialize(result: SyncAction) -> dict[str, Any]:
     """Map a ``SyncAction`` onto the decision-table vector dialect.
 
     The dialect is a tagged dict keyed by ``action``: ``skip`` carries ``reason`` +
-    ``adopt_baseline``; ``upload`` carries ``target_save_id``; ``download`` / ``conflict``
-    carry the chosen server save's ``id`` as ``server_save_id``.
+    ``adopt_baseline``, and an adopting one also the adopted head's ``id`` as
+    ``server_save_id`` and ``acknowledge``; ``upload`` carries ``target_save_id``;
+    ``download`` / ``conflict`` carry the chosen server save's ``id`` as ``server_save_id``.
     """
     if isinstance(result, Skip):
-        return {"action": "skip", "reason": result.reason, "adopt_baseline": result.adopt_baseline}
+        skip: dict[str, Any] = {"action": "skip", "reason": result.reason, "adopt_baseline": result.adopt_baseline}
+        if result.adopt_baseline:
+            assert result.server_save is not None
+            skip["server_save_id"] = result.server_save["id"]
+            skip["acknowledge"] = result.acknowledge
+        return skip
     if isinstance(result, Upload):
         return {"action": "upload", "target_save_id": result.target_save_id}
     if isinstance(result, Download):

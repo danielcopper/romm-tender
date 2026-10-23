@@ -21,14 +21,18 @@ class Skip:
 
     ``reason`` is one of: ``"synced"``, ``"nothing_to_sync"``.
 
-    ``adopt_baseline`` signals that the service must persist the current
-    ``local_hash`` as the file's ``last_sync_hash`` (state mutation only —
-    no network I/O). Used for the "is_current=true, local exists, no
-    baseline" recovery case where we want subsequent runs to detect drift.
+    ``adopt_baseline`` means the local file is identical to the slot's head and
+    the service records it as the file's baseline for that head, which
+    ``server_save`` carries (raw RomM API dict) — no transfer. ``acknowledge``
+    means this device is not current on that head, so the service must first
+    tell RomM it synced it, and records the baseline only once RomM accepted
+    that. A skip that adopts nothing carries neither.
     """
 
     reason: str
     adopt_baseline: bool = False
+    server_save: dict[str, Any] | None = None
+    acknowledge: bool = False
 
 
 @dataclass(frozen=True)

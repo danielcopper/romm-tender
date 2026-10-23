@@ -250,10 +250,12 @@ def test_recovery_no_local_is_current_true_returns_download():
     assert result == Download(server_save=server)
 
 
-def test_no_baseline_is_current_true_returns_skip_with_adopt_baseline():
-    """Row 8 — is_current=true + local present + no baseline yet → Skip with
-    adopt_baseline=True so the service records the current local_hash as the
-    new baseline.
+def test_no_baseline_is_current_true_without_proof_returns_conflict():
+    """Row 8b — is_current=true + local present + no baseline yet, and nothing
+    proves the local is the head's bytes (the head carries no ``content_hash``) →
+    Conflict. Being current says this device synced the head, not that the file
+    on disk is still it; adopting would let its next change upload over the head
+    (romm-gavel#53).
     """
     server = _server_save(device_syncs=[_device_sync(DEVICE_ID, is_current=True)])
     result = _ADAPTER.compute_sync_action(
@@ -263,15 +265,14 @@ def test_no_baseline_is_current_true_returns_skip_with_adopt_baseline():
         device_id=DEVICE_ID,
         local_hash="abc",
     )
-    assert result == Skip(reason="synced", adopt_baseline=True)
+    assert result == Conflict(server_save=server)
 
 
-def test_no_baseline_is_current_false_content_identical_returns_download():
+def test_no_baseline_is_current_false_content_identical_adopts():
     """Row 11a (#1276) — is_current=false + local present + no baseline, and the
     picked server save's ``content_hash`` equals ``local_hash`` (byte-identical).
-    The local bytes already exist on the moved-past server head, so adopting via
-    Download is harmless and re-establishes the baseline + is_current — no
-    spurious Conflict.
+    The local bytes already exist on the moved-past server head, so it is adopted
+    with no transfer and acknowledged to RomM — no spurious Conflict.
     """
     server = _server_save(
         content_hash="same-hash",
@@ -284,7 +285,7 @@ def test_no_baseline_is_current_false_content_identical_returns_download():
         device_id=DEVICE_ID,
         local_hash="same-hash",  # byte-identical to the server content_hash
     )
-    assert result == Download(server_save=server)
+    assert result == Skip(reason="synced", adopt_baseline=True, server_save=server, acknowledge=True)
 
 
 def test_no_baseline_is_current_false_content_differs_returns_conflict():
@@ -338,13 +339,13 @@ def test_both_changed_returns_conflict():
 # ---------------------------------------------------------------------------
 
 
-def test_not_current_diverged_but_identical_to_head_downloads():
+def test_not_current_diverged_but_identical_to_head_adopts():
     """Row 12a (#1480) — is_current=false, baseline held, local diverged from it
     (``local_hash != last_sync_hash``), but the picked head's ``content_hash``
     equals ``local_hash`` (both sides independently moved to the SAME bytes). The
     two moves collide on identical content, so there is nothing to reconcile:
-    adopt the head via ``Download`` (re-establishes baseline + is_current), never
-    a spurious Conflict. Only the parity route can prove identity here — the
+    adopt the head with no transfer and acknowledge it, never a spurious
+    Conflict. Only the parity route can prove identity here — the
     diverged local can't satisfy the provenance route's unchanged-since-baseline
     precondition.
     """
@@ -359,7 +360,7 @@ def test_not_current_diverged_but_identical_to_head_downloads():
         device_id=DEVICE_ID,
         local_hash="moved-content",  # != baseline, but == server.content_hash
     )
-    assert result == Download(server_save=server)
+    assert result == Skip(reason="synced", adopt_baseline=True, server_save=server, acknowledge=True)
 
 
 def test_not_current_diverged_and_differs_from_head_returns_conflict():
@@ -550,8 +551,8 @@ def test_local_hash_none_skips_divergence_check_in_synced_branch():
 def test_last_sync_hash_none_skips_divergence_check():
     """No `last_sync_hash` baseline → cannot detect divergence on either branch.
 
-    is_current=true: Skip with adopt_baseline=True so the missing baseline
-    gets recorded for next time.
+    is_current=true (row 8b): with no baseline and no proof the local is the
+    head's bytes (no ``content_hash``), this is a Conflict too.
     is_current=false (#1276): with no baseline AND no proof the local is
     byte-identical to the moved-past server head (the save here carries no
     ``content_hash``), silently downloading would clobber an unbacked local
@@ -566,7 +567,7 @@ def test_last_sync_hash_none_skips_divergence_check():
         device_id=DEVICE_ID,
         local_hash="abc",
     )
-    assert result_current == Skip(reason="synced", adopt_baseline=True)
+    assert result_current == Conflict(server_save=server_current)
 
     # is_current=false branch (server moved), no content_hash to prove identity:
     # cannot silently overwrite an unbacked local → Conflict.
@@ -603,7 +604,7 @@ def test_empty_last_sync_hash_reads_as_no_baseline():
         device_id=DEVICE_ID,
         local_hash="local-content",
     )
-    assert result_absent == Skip(reason="synced", adopt_baseline=True)
+    assert result_absent == Conflict(server_save=server_absent)
 
     server_empty = _server_save(save_id=42, device_syncs=[_device_sync(DEVICE_ID, is_current=True)])
     result_empty = _ADAPTER.compute_sync_action(
@@ -613,7 +614,7 @@ def test_empty_last_sync_hash_reads_as_no_baseline():
         device_id=DEVICE_ID,
         local_hash="local-content",
     )
-    assert result_empty == Skip(reason="synced", adopt_baseline=True)
+    assert result_empty == Conflict(server_save=server_empty)
 
     server_held = _server_save(save_id=42, device_syncs=[_device_sync(DEVICE_ID, is_current=True)])
     result_held = _ADAPTER.compute_sync_action(
@@ -815,7 +816,7 @@ def test_no_device_entry_identical_content_returns_skip_adopt_baseline():
         device_id=DEVICE_ID,
         local_hash="abc",  # byte-identical to the server save
     )
-    assert result == Skip(reason="synced", adopt_baseline=True)
+    assert result == Skip(reason="synced", adopt_baseline=True, server_save=server, acknowledge=False)
 
 
 def test_no_device_entry_no_baseline_different_content_returns_conflict():
@@ -916,7 +917,7 @@ def test_no_device_entry_provenance_adopts_despite_scheme_drift():
         device_id=DEVICE_ID,
         local_hash="local-scheme-hash",  # unchanged since baseline, but != server.content_hash
     )
-    assert result == Skip(reason="synced", adopt_baseline=True)
+    assert result == Skip(reason="synced", adopt_baseline=True, server_save=server, acknowledge=False)
 
 
 def test_not_current_provenance_does_not_apply_without_baseline():
@@ -956,7 +957,7 @@ def test_no_device_entry_parity_adopts_fresh_install_no_stored_hash():
         device_id=DEVICE_ID,
         local_hash="same-hash",
     )
-    assert result == Skip(reason="synced", adopt_baseline=True)
+    assert result == Skip(reason="synced", adopt_baseline=True, server_save=server, acknowledge=False)
 
 
 def test_no_device_entry_provenance_not_taken_when_local_changed():
@@ -1059,12 +1060,12 @@ def test_no_device_entry_non_numeric_local_mtime_returns_download():
 # ---------------------------------------------------------------------------
 
 
-def test_not_current_zero_byte_local_identical_to_head_downloads():
+def test_not_current_zero_byte_local_identical_to_head_adopts():
     """Row 12a (#1480) with an empty local — is_current=false, baseline held and
     diverged from, the head's ``content_hash`` equal to ``local_hash``, and the
     local 0 bytes against a recorded 8192-byte baseline. The head carries the
-    same (empty) content, so the download writes back what is already there →
-    ``Download``, not the branch-4 corrupt-local ``Conflict``.
+    same (empty) content, so it is adopted with no transfer and acknowledged —
+    not the branch-4 corrupt-local ``Conflict``.
     """
     server = _server_save(
         content_hash="moved-content",
@@ -1077,7 +1078,7 @@ def test_not_current_zero_byte_local_identical_to_head_downloads():
         device_id=DEVICE_ID,
         local_hash="moved-content",  # != baseline, but == server.content_hash
     )
-    assert result == Download(server_save=server)
+    assert result == Skip(reason="synced", adopt_baseline=True, server_save=server, acknowledge=True)
 
 
 def test_no_device_entry_zero_byte_local_identical_to_head_adopts_baseline():
@@ -1098,7 +1099,7 @@ def test_no_device_entry_zero_byte_local_identical_to_head_adopts_baseline():
         device_id=DEVICE_ID,
         local_hash="same-hash",
     )
-    assert result == Skip(reason="synced", adopt_baseline=True)
+    assert result == Skip(reason="synced", adopt_baseline=True, server_save=server, acknowledge=False)
 
 
 # ---------------------------------------------------------------------------

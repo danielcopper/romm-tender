@@ -14,13 +14,14 @@ per-`(rom, filename, slot)` sync action (`gavel_compute_sync_action`) and the up
 (`gavel_resolve_upload_conflict`).
 
 - **Upstream:** <https://github.com/danielcopper/romm-gavel>
-- **Release:** `v1.0.1` — the C ABI has been part of upstream's promise since `v1.0.0`. Struct layouts, signatures and
-  enumerator values cannot change now without a major bump, which is what makes pinning a compiled artifact meaningful
-  rather than hopeful. The binary is byte-identical to `v0.4.0`; only the guarantee attached to it changed.
+- **Release:** `v2.0.0` — the C ABI has been part of upstream's promise since `v1.0.0`. Struct layouts, signatures and
+  enumerator values cannot change without a major bump, which is what makes pinning a compiled artifact meaningful
+  rather than hopeful. `v2.0.0` is such a bump: `gavel_local_file`, `gavel_bookkeeping` and `gavel_sync_action` each
+  grew trailing fields, so the binary and the structs in `adapters/gavel_native.py` move together.
 - **Architecture:** `x86_64` Linux — freestanding (zero library dependencies: no NEEDED entries, no global undefined
   symbols; upstream release CI enforces this), so it loads on any x86_64 Linux regardless of libc flavor or version
 - **Checksum:** pinned in `libgavel-x86_64-linux.so.sha256` (SHA-256)
-- **License:** MIT — `libgavel-x86_64-linux.so.LICENSE`, upstream's own `LICENSE` at `v1.0.1`, copied verbatim (git blob
+- **License:** MIT — `libgavel-x86_64-linux.so.LICENSE`, upstream's own `LICENSE` at `v2.0.0`, copied verbatim (git blob
   `f29abcb0ab339eab33753b0eb3266fb5af3dfa5a`; `git hash-object` on the copy answers the same). Nothing is owed to a
   third party — gavel is this project's own — but the two shipped trees under `backend/_vendor/` carry their text, and a
   reader should not have to go and find out why this one did not.

@@ -96,6 +96,10 @@ class _LocalFile(ctypes.Structure):
         ("has_size", ctypes.c_int),
         ("mtime", ctypes.c_double),
         ("has_mtime", ctypes.c_int),
+        ("content_size", ctypes.c_int64),
+        ("has_content_size", ctypes.c_int),
+        ("size_fixed", ctypes.c_int),
+        ("has_size_fixed", ctypes.c_int),
     )
 
 
@@ -107,6 +111,8 @@ class _Bookkeeping(ctypes.Structure):
         ("last_sync_server_hash", ctypes.c_char_p),
         ("last_sync_local_size", ctypes.c_int64),
         ("has_last_sync_local_size", ctypes.c_int),
+        ("last_sync_content_size", ctypes.c_int64),
+        ("has_last_sync_content_size", ctypes.c_int),
     )
 
 
@@ -120,6 +126,7 @@ class _SyncActionResult(ctypes.Structure):
         ("target_save_id", ctypes.c_int64),
         ("has_target_save_id", ctypes.c_int),
         ("server_save_id", ctypes.c_int64),
+        ("acknowledge", ctypes.c_int),
     )
 
 
@@ -202,8 +209,14 @@ class GavelNativeAdapter:
 
         Every server save must carry an integer ``id`` (RomM's primary key): the
         core addresses its chosen save by that id, and it is what a returned
-        ``Download`` / ``Conflict`` is resolved back through to the caller's own
-        save dict.
+        ``Download`` / ``Conflict`` / adopting ``Skip`` is resolved back through
+        to the caller's own save dict.
+
+        ``local_file`` may state ``content_size`` and ``size_fixed`` beside
+        ``size`` and ``mtime``, and ``files_state`` ``last_sync_content_size``
+        beside ``last_sync_local_size``; each absent key is unknown.
+        ``size_fixed`` is ``True``, ``False`` or absent, and anything else
+        raises.
         """
         # Every buffer the C structs point at has to outlive the call. CPython's
         # ctypes does track this itself — a value assigned to a pointer field is
@@ -252,16 +265,31 @@ def _optional_timestamp(value: object) -> tuple[float, int]:
 def _optional_size(value: object, field: str) -> tuple[int, int]:
     """Marshal an optional byte count to the core's ``(size, has_size)`` pair.
 
-    Sizes are whole numbers of bytes and the ABI carries them as ``int64_t``. A
-    value that is not integral cannot be represented, and rounding it would land
-    on 0 — the one value the corrupt-local guard reacts to — so it raises rather
-    than quietly answering a different question. Absent stays absent.
+    Sizes and content sizes are whole numbers of bytes and the ABI carries them
+    as ``int64_t``. A value that is not integral cannot be represented, and
+    rounding it could land on 0 — a raw size the corrupt-local guard refuses
+    outright, a content size it reads as a file of fill only — so it raises
+    rather than quietly answering a different question. Absent stays absent.
     """
     if value is None:
         return 0, 0
     if isinstance(value, int) or (isinstance(value, float) and value.is_integer()):
         return int(value), 1
     raise ValueError(f"{field} must be a whole number of bytes, got {value!r}")
+
+
+def _optional_flag(value: object, field: str) -> tuple[int, int]:
+    """Marshal an optional yes/no fact to the core's ``(flag, has_flag)`` pair.
+
+    Only a ``bool`` states the fact. Anything else would be read as yes or no by
+    a guess — ``"false"`` is truthy, and ``1`` passes for ``True`` only because
+    ``bool`` subclasses ``int`` — so it raises. Absent stays absent: unknown.
+    """
+    if value is None:
+        return 0, 0
+    if isinstance(value, bool):
+        return int(value), 1
+    raise ValueError(f"{field} must be true, false or absent, got {value!r}")
 
 
 def _build_local_file(local_file: dict[str, Any] | None) -> Any:
@@ -275,7 +303,20 @@ def _build_local_file(local_file: dict[str, Any] | None) -> Any:
         return None
     size, has_size = _optional_size(local_file.get("size"), "local_file.size")
     mtime, has_mtime = _optional_timestamp(local_file.get("mtime"))
-    return ctypes.pointer(_LocalFile(size=size, has_size=has_size, mtime=mtime, has_mtime=has_mtime))
+    content_size, has_content_size = _optional_size(local_file.get("content_size"), "local_file.content_size")
+    size_fixed, has_size_fixed = _optional_flag(local_file.get("size_fixed"), "local_file.size_fixed")
+    return ctypes.pointer(
+        _LocalFile(
+            size=size,
+            has_size=has_size,
+            mtime=mtime,
+            has_mtime=has_mtime,
+            content_size=content_size,
+            has_content_size=has_content_size,
+            size_fixed=size_fixed,
+            has_size_fixed=has_size_fixed,
+        )
+    )
 
 
 def _build_bookkeeping(files_state: dict[str, Any], keepalive: list[object]) -> Any:
@@ -289,12 +330,17 @@ def _build_bookkeeping(files_state: dict[str, Any], keepalive: list[object]) -> 
     last_sync_server_hash = _encode(files_state.get("last_sync_server_hash"))
     keepalive.extend((last_sync_hash, last_sync_server_hash))
     size, has_size = _optional_size(files_state.get("last_sync_local_size"), "files_state.last_sync_local_size")
+    content_size, has_content_size = _optional_size(
+        files_state.get("last_sync_content_size"), "files_state.last_sync_content_size"
+    )
     return ctypes.pointer(
         _Bookkeeping(
             last_sync_hash=last_sync_hash,
             last_sync_server_hash=last_sync_server_hash,
             last_sync_local_size=size,
             has_last_sync_local_size=has_size,
+            last_sync_content_size=content_size,
+            has_last_sync_content_size=has_content_size,
         )
     )
 
@@ -342,13 +388,22 @@ def _build_saves(
 def _decode_action(result: _SyncActionResult, saves_by_id: dict[int, dict[str, Any]]) -> SyncAction:
     """Map the C result struct onto this codebase's ``SyncAction`` dataclasses.
 
-    ``Download`` and ``Conflict`` carry the whole server-save dict their
-    consumers read (``id``, ``updated_at``, ``content_hash``,
-    ``file_size_bytes``), so the chosen ``server_save_id`` is resolved back
-    through *saves_by_id* — the same dicts the caller passed in.
+    ``Download``, ``Conflict`` and an adopting ``Skip`` carry the whole
+    server-save dict their consumers read (``id``, ``updated_at``,
+    ``content_hash``, ``file_size_bytes``), so the chosen ``server_save_id`` is
+    resolved back through *saves_by_id* — the same dicts the caller passed in. A
+    skip that adopts nothing names no head, and its ``server_save_id`` and
+    ``acknowledge`` are 0.
     """
     if result.action == _ACTION_SKIP:
-        return Skip(reason=_SKIP_REASONS[result.reason], adopt_baseline=bool(result.adopt_baseline))
+        if not result.adopt_baseline:
+            return Skip(reason=_SKIP_REASONS[result.reason])
+        return Skip(
+            reason=_SKIP_REASONS[result.reason],
+            adopt_baseline=True,
+            server_save=saves_by_id[result.server_save_id],
+            acknowledge=bool(result.acknowledge),
+        )
     if result.action == _ACTION_UPLOAD:
         return Upload(target_save_id=result.target_save_id if result.has_target_save_id else None)
     if result.action not in (_ACTION_DOWNLOAD, _ACTION_CONFLICT):
