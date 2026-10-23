@@ -6967,6 +6967,161 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
         assert await self._preview_then_apply(library, emit) == ((0, 1, 0), ([20], [], {21: 6020}))
 
 
+class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt:
+    """The preview counts the same-dump rebind a platform unit makes for a member a skipped collection still lists.
+
+    GBA is synced and holds Golf (USA), 20, which the first run binds, beside
+    Golf (Europe), 22, and Golf (Japan), 23. Faves lists 20 and is skipped as
+    unchanged on the second run, so the skip hands the preview 20's stored row
+    while GBA's fetch no longer returns 20. Each case runs the preview, then the
+    apply it would start, so the two answer over the same library.
+    """
+
+    _golf = staticmethod(TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt._golf)
+    _bindings = staticmethod(TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt._bindings)
+
+    @classmethod
+    async def _bind_20(cls, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=2,
+            name="GBA",
+            slug="gba",
+            roms=[
+                cls._golf(20, "USA", rom_user={"is_main_sibling": True}),
+                cls._golf(22, "Europe"),
+                cls._golf(23, "Japan"),
+            ],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
+        library.settings["enabled_platforms"] = {"2": True}
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
+        await library.sync._orchestrator._do_sync_per_unit()
+        assert cls._bindings(library) == {20: 6020}
+
+    @classmethod
+    async def _preview_then_apply(cls, library, emit, monkeypatch):
+        """The preview's summary and the ids it classified as skipped, then its apply's outcome.
+
+        The outcome is ``(sent, removals, bindings)`` and the platform
+        collections the apply sends. Asserts that the preview took Faves as
+        skipped.
+        """
+        import services.library.sync_orchestrator as orchestrator_module
+
+        fetcher = library.sync._collection_fetcher
+        fetch_collection_unit = fetcher.fetch_collection_unit
+        collection_skips: list[bool] = []
+
+        async def recording_fetch_collection_unit(*args, **kwargs):
+            answer = await fetch_collection_unit(*args, **kwargs)
+            collection_skips.append(answer[2])
+            return answer
+
+        classify_roms = orchestrator_module.classify_roms
+        classified_as_skipped: list[frozenset[int]] = []
+
+        def recording_classify_roms(*args, skipped_rom_ids, **kwargs):
+            classified_as_skipped.append(skipped_rom_ids)
+            return classify_roms(*args, skipped_rom_ids=skipped_rom_ids, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(fetcher, "fetch_collection_unit", recording_fetch_collection_unit)
+            patch.setattr(orchestrator_module, "classify_roms", recording_classify_roms)
+            summary = (await library.sync.sync_preview())["summary"]
+        assert collection_skips == [True]
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        run_2_starts_at = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
+        sent = [
+            shortcut["rom_id"]
+            for name, *payload in frames
+            if name == "sync_apply_unit"
+            for shortcut in payload[0]["shortcuts"]
+        ]
+        removed = [rom["rom_id"] for name, *payload in frames if name == "sync_stale" for rom in payload[0]["remove"]]
+        (platform_collections,) = [
+            set(payload[0]["platform_app_ids"]) for name, *payload in frames if name == "sync_collections"
+        ]
+        return summary, classified_as_skipped, (sent, removed, cls._bindings(library)), platform_collections
+
+    @staticmethod
+    def _counted(summary):
+        return summary["new_count"], summary["changed_count"], summary["remove_count"]
+
+    @pytest.mark.asyncio
+    async def test_a_hidden_member_beside_a_same_stem_copy_on_its_platform(
+        self, library, fake_romm_api, emit, monkeypatch
+    ):
+        await self._bind_20(library, fake_romm_api)
+        fake_romm_api.hidden_rom_ids = {20}
+        fake_romm_api.roms[25] = self._golf(25, "USA", fs_name="Golf (USA).7z")
+
+        summary, classified_as_skipped, applied, _ = await self._preview_then_apply(library, emit, monkeypatch)
+
+        assert (self._counted(summary), applied) == ((0, 1, 0), ([20], [], {25: 6020}))
+        assert classified_as_skipped == [frozenset()]
+
+    @pytest.mark.asyncio
+    async def test_a_member_gone_from_romm_whose_dump_returned_on_its_platform_under_a_new_id(
+        self, library, fake_romm_api, emit, monkeypatch
+    ):
+        await self._bind_20(library, fake_romm_api)
+        del fake_romm_api.roms[20]
+        fake_romm_api.get_rom_once_side_effect_by_id[20] = RommNotFoundError("Rom with id 20 not found")
+        fake_romm_api.roms[24] = self._golf(24, "USA")
+        assert fake_romm_api.list_collections()[0]["rom_ids"] == [20]
+
+        summary, classified_as_skipped, applied, _ = await self._preview_then_apply(library, emit, monkeypatch)
+
+        assert (self._counted(summary), applied) == ((0, 1, 0), ([20], [], {24: 6020}))
+        assert classified_as_skipped == [frozenset()]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("platform_groups", "gba_removed"), [(False, 1), (True, 0)], ids=["platform-groups-off", "platform-groups-on"]
+    )
+    async def test_a_hidden_member_without_a_same_stem_copy_keeps_its_binding(
+        self, library, fake_romm_api, emit, monkeypatch, platform_groups, gba_removed
+    ):
+        """The binding stays, and 20 keeps its place in the preview's union, so both collection diffs are the apply's.
+
+        With platform groups off, GBA's collection holds the games GBA's unit
+        returned, and 20 rides only Faves' skip, so the apply drops it.
+        """
+        await self._bind_20(library, fake_romm_api)
+        library.settings["collection_create_platform_groups"] = platform_groups
+        fake_romm_api.hidden_rom_ids = {20}
+
+        summary, classified_as_skipped, applied, platform_collections = await self._preview_then_apply(
+            library, emit, monkeypatch
+        )
+
+        assert (self._counted(summary), applied) == ((0, 0, 0), ([], [], {20: 6020}))
+        assert platform_collections == ({"GBA"} if platform_groups else set())
+        assert summary["platform_collection_diff"] == {
+            "has_changes": bool(gba_removed),
+            "added_count": 0,
+            "removed_count": gba_removed,
+        }
+        assert summary["collection_diff"] == {"has_changes": True, "added": [], "removed": []}
+        assert classified_as_skipped == [frozenset({20})]
+
+
 class TestRegression738CacheCorruption:
     """Regression for #738 — delta sync must not erase populated metadata.
 

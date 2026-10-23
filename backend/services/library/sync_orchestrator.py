@@ -62,6 +62,7 @@ from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
+from services.library._preview_union import collapse_counting_platform_rebinds
 from services.library._stale_rows import preview_group_keys, settle_stale_rows, stale_rows_of, with_kept_platform_names
 from services.library._state import CollectionMembership
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
@@ -365,20 +366,26 @@ class SyncOrchestrator:
             # delivers a member of is complete, the view that unit collapses with
             # (a unit skipped as unchanged collapses nothing, and its groups stay
             # complete here), and one only collections reach is the partial view a
-            # collection unit has (#2536).
+            # collection unit has (#2536). A row a collection skip rebuilt in a
+            # group a platform unit delivers is collapsed as that unit has it.
             whole_groups = {sd.get("sibling_group_key") for sd in shortcuts_data if sd["rom_id"] in platform_rom_ids}
-            emitted = collapse_sibling_groups(
+            emitted, classify_skipped = collapse_counting_platform_rebinds(
                 shortcuts_data,
-                registry,
-                set(installed_paths),
-                complete_group_view=whole_groups,
-                preferred_region=self._settings.get("preferred_region", AUTO_REGION),
+                lambda entries: collapse_sibling_groups(
+                    entries,
+                    registry,
+                    set(installed_paths),
+                    complete_group_view=whole_groups,
+                    preferred_region=self._settings.get("preferred_region", AUTO_REGION),
+                ),
+                skipped_rom_ids=skipped_rom_ids,
+                platform_rom_ids=platform_rom_ids,
             )
             new, changed, unchanged_ids, stale, _disabled_count = classify_roms(
                 emitted,
                 registry,
                 platform_name_set,
-                skipped_rom_ids=frozenset(skipped_rom_ids),
+                skipped_rom_ids=classify_skipped,
             )
             collection_listed = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_collection_listed_rom_ids
