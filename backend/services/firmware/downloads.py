@@ -107,7 +107,7 @@ class FirmwareDownloader:
         return await self._fetch_and_link(platform_slug, rows, await self.platform_system(platform_slug, rom_id))
 
     async def download_platform_firmware_file(
-        self, platform_slug, file_name, firmware_id: int | None = None
+        self, platform_slug, file_name, firmware_id: int | None = None, rom_id: int | None = None
     ) -> dict[str, Any]:
         """Fetch the library file *file_name* into *platform_slug*'s store folder, and link it.
 
@@ -129,7 +129,7 @@ class FirmwareDownloader:
         if not wanted:
             raise Refused("not_in_library", f"{file_name} is not in your RomM library for {platform_slug}")
         fetched = await self._loop.run_in_executor(None, self._store.do_fetch, platform_slug, wanted[0])
-        links = await self._update(platform_slug, await self.platform_system(platform_slug))
+        links = await self._update(platform_slug, await self.platform_system(platform_slug, rom_id))
         return {
             "success": True,
             "message": f"Downloaded {file_name}" if fetched.downloaded else f"{file_name} is already here",
@@ -138,7 +138,9 @@ class FirmwareDownloader:
             **links.payload(),
         }
 
-    async def download_required_firmware(self, platform_slug, emulator: str | None = None) -> dict[str, Any]:
+    async def download_required_firmware(
+        self, platform_slug, emulator: str | None = None, rom_id: int | None = None
+    ) -> dict[str, Any]:
         """Fetch what *emulator* will not run without, where nothing lies at its place yet, and link it.
 
         *emulator* is the one the page shows; without one it is the platform's
@@ -149,7 +151,7 @@ class FirmwareDownloader:
         there is never replaced from here, and a link of Tender's into another
         platform's folder already serves the place.
         """
-        system = await self.platform_system(platform_slug)
+        system = await self.platform_system(platform_slug, rom_id)
         catalogue = await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
         identity = await self._shown_emulator(catalogue, system, platform_slug, emulator)
         firmware_list = await self._firmware_list()

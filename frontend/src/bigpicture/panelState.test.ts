@@ -2,6 +2,7 @@ import { _resetArtworkSlotsForTests, keepArtworkTabOpen } from "../utils/artwork
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { MutableRefObject, SetStateAction } from "react";
 import {
+  biosFieldsFromCache,
   openingTab,
   bindRomInState,
   refreshPanelCoreInfo,
@@ -12,6 +13,7 @@ import {
   type RomBinding,
 } from "./panelState";
 import * as backend from "../api/backend";
+import type { BiosAnswer } from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { refreshCoreInfoInBackground } from "../utils/sectionRefresh";
 import type { CoreInfoFields } from "../utils/playSection";
@@ -294,5 +296,38 @@ describe("openingTab (#2381 device test)", () => {
     keepArtworkTabOpen(5000, "logo");
     expect(openingTab(5000)).toBe("artwork");
     expect(openingTab(6000)).toBe("info");
+  });
+});
+
+describe("biosFieldsFromCache", () => {
+  it("keeps what an answer nothing could establish carries for the tab's buttons and selector", () => {
+    const tabs = [{ emulator: "n64_libretro.so", label: "Mupen64", launching: true, requirements_met: null }];
+    const fields = biosFieldsFromCache({
+      bios_status: {
+        needs_bios: false,
+        bios_status_unknown: true,
+        files: [],
+        platform_slug: "n64",
+        deletable_count: 2,
+        server_offline: false,
+        emulator_tabs: tabs,
+      } as unknown as NonNullable<BiosAnswer["bios_status"]>,
+      bios_level: "unknown",
+      bios_label: "Unknown",
+      bios_status_unknown: true,
+    });
+
+    expect(fields?.biosLevel).toBe("unknown");
+    expect(fields?.biosStatus).toMatchObject({
+      needs_bios: false,
+      bios_status_unknown: true,
+      files: [],
+      deletable_count: 2,
+      emulator_tabs: tabs,
+    });
+  });
+
+  it("is no answer where the flag comes without a level", () => {
+    expect(biosFieldsFromCache({ bios_status: null, bios_level: null, bios_status_unknown: true })).toBeNull();
   });
 });

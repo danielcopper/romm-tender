@@ -2646,6 +2646,112 @@ class TestGetFirmwareStatusDeletableCount:
         assert plat["deletable_count"] == 0
 
 
+class TestTheGamePageAnswerCarriesWhatItsButtonsStandOn:
+    """``check_platform_bios`` carries the delete counts and the listing's state, as the platform entry does.
+
+    The game page's BIOS tab offers the platform page's buttons, and they stand
+    on the same fields: a row's Delete on ``delete_name``, the platform-wide
+    delete on ``deletable_count``, and every download on ``server_offline``.
+    """
+
+    @staticmethod
+    def _service(firmware, tmp_path, files: dict[str, bytes]) -> tuple[FirmwareService, str]:
+        bios_dir = str(tmp_path / "bios")
+        fw = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            firmware_file_store=FakeFirmwareFileStore({os.path.join(bios_dir, n): b for n, b in files.items()}),
+            retrodeck_folders=FakeRetroDeckFolders(bios=bios_dir),
+            core_info=_test_core_info(),
+        )
+        _inline_executor(fw)
+        return fw, bios_dir
+
+    @pytest.mark.asyncio
+    async def test_it_counts_tenders_downloads_for_the_platform_and_per_row(self, firmware, tmp_path):
+        """``IPL.bin`` was placed by hand and ``ours.bin`` downloaded by Tender: only ours is deletable."""
+        fw, bios_dir = self._service(firmware, tmp_path, {"IPL.bin": b"\x00" * 8, "ours.bin": b"\x00" * 8})
+        _declare(fw, ("IPL.bin", "GameCube IPL", True))
+        firmware.uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_slug="gc",
+                file_name="ours.bin",
+                file_path=os.path.join(bios_dir, "ours.bin"),
+                downloaded_at="2026-01-01T00:00:00+00:00",
+                firmware_id=9,
+            )
+        )
+        _stub_listing(
+            fw,
+            [
+                {"id": 7, "file_name": "IPL.bin", "platform_slug": "gc", "file_size_bytes": 8, "md5_hash": ""},
+                {"id": 9, "file_name": "ours.bin", "platform_slug": "gc", "file_size_bytes": 8, "md5_hash": ""},
+            ],
+        )
+
+        result = await fw.check_platform_bios("gc")
+
+        assert result["deletable_count"] == 1
+        rows = {f["file_name"]: f for f in result["files"]}
+        assert rows["IPL.bin"]["downloaded"] is True
+        assert rows["IPL.bin"]["deletable_count"] == 0
+        assert rows["IPL.bin"]["delete_name"] is None
+        assert rows["ours.bin"]["deletable_count"] == 1
+        assert rows["ours.bin"]["delete_name"] == "ours.bin"
+
+    @pytest.mark.asyncio
+    async def test_it_says_whether_the_librarys_listing_could_be_read(self, firmware, tmp_path):
+        fw, _ = self._service(firmware, tmp_path, {})
+        _declare(fw, ("IPL.bin", "GameCube IPL", True))
+        _stub_listing(fw, [])
+
+        reachable = await fw.check_platform_bios("gc")
+        api = fw._config.romm_api
+        assert isinstance(api, MagicMock)
+        api.list_platforms.side_effect = RuntimeError("offline")
+        fw._listing.invalidate()
+        offline = await fw.check_platform_bios("gc")
+
+        assert reachable["server_offline"] is False
+        # Still an answer: the machine's demand is read locally either way.
+        assert offline["files"][0]["file_name"] == "IPL.bin"
+        assert offline["server_offline"] is True
+
+    @pytest.mark.asyncio
+    async def test_an_answer_nothing_could_establish_carries_them_too(self, firmware, tmp_path):
+        """The unknown answer carries the delete counts and the emulator entries, and still no row."""
+        from tests.fakes.fake_core_info_provider import libretro_option
+
+        bios_dir = str(tmp_path / "bios")
+        fw = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            firmware_file_store=FakeFirmwareFileStore({os.path.join(bios_dir, "ours.bin"): b"\x00" * 8}),
+            retrodeck_folders=FakeRetroDeckFolders(bios=bios_dir),
+            firmware_resolver=FakeFirmwareResolver(unread_emulators=frozenset({_id("n64_libretro")})),
+            core_info=FakeCoreInfoProvider(options=[libretro_option("n64_libretro", "Mupen64")]),
+        )
+        _inline_executor(fw)
+        firmware.uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_slug="n64",
+                file_name="ours.bin",
+                file_path=os.path.join(bios_dir, "ours.bin"),
+                downloaded_at="2026-01-01T00:00:00+00:00",
+                firmware_id=None,
+            )
+        )
+        _stub_listing(fw, [])
+
+        result = await fw.check_platform_bios("n64")
+
+        assert result["bios_status_unknown"] is True
+        assert result["files"] == []
+        assert result["deletable_count"] == 1
+        assert "emulator_tabs" in result
+        assert result["server_offline"] is False
+
+
 class TestCheckPlatformBiosUnknown:
     """``check_platform_bios`` surfaces the 'unknown' state for unanswerable platforms.
 
@@ -3054,7 +3160,14 @@ class TestTheConsolesOwnFirmwareDemand:
 
         result = await fw.check_platform_bios("psx")
 
-        assert result == {"needs_bios": False, "bios_status_unknown": True}
+        assert result["needs_bios"] is False
+        assert result["bios_status_unknown"] is True
+        assert result["files"] == []
+        # No aggregate that could read as an answer, and the stamps the page's buttons stand on.
+        assert "required_count" not in result
+        assert "bios_level" not in result
+        assert result["deletable_count"] == 0
+        assert result["server_offline"] is False
 
     @pytest.mark.asyncio
     async def test_the_platform_entry_stamps_the_same_answer_the_game_page_reads(self):
@@ -5798,7 +5911,11 @@ class TestCheckPlatformBiosOffline:
         with patch.object(firmware.romm_api, "list_platforms", side_effect=Exception("offline")):
             result = await fw.check_platform_bios("n64")
 
-        assert result == {"needs_bios": False, "bios_status_unknown": True}
+        assert result["needs_bios"] is False
+        assert result["bios_status_unknown"] is True
+        assert result["files"] == []
+        assert "required_count" not in result
+        assert result["server_offline"] is True
 
     @pytest.mark.asyncio
     async def test_a_cached_listing_still_contributes_its_own_files(self, firmware, fw, tmp_path):
@@ -7108,6 +7225,51 @@ class TestThePlatformsSystem:
             await fw.download_all_firmware("dc", None)
 
         assert resolver.calls == ["dreamcast"]
+
+    @pytest.mark.parametrize("press", ["required", "one file", "replace"])
+    @pytest.mark.asyncio
+    async def test_a_downloaded_games_presses_read_and_place_for_its_recorded_system(self, firmware, tmp_path, press):
+        """A game's page reads its rows for the system its install record holds, and so does every press there."""
+        resolver = FakeFirmwareResolver()
+        fw, _ = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "platform_slug": "dc"}])
+        with firmware.uow:
+            firmware.uow.roms.save(
+                Rom(
+                    rom_id=7,
+                    platform_slug="dc",
+                    name="Game",
+                    fs_name="g.zip",
+                    shortcut_app_id=None,
+                    last_synced_at="2026-01-01T00:00:00",
+                )
+            )
+            firmware.uow.rom_installs.save(
+                RomInstall(
+                    rom_id=7,
+                    file_path="/roms/naomi/g.zip",
+                    rom_dir=None,
+                    platform_slug="dc",
+                    system="naomi",
+                    installed_at="2026-01-01T00:00:00+00:00",
+                )
+            )
+
+        with (
+            patch.object(_resolver(fw), "bios_root", str(tmp_path / "bios")),
+            patch.object(fw._store, "do_fetch", return_value=FetchOutcome(file_name="dc_boot.bin", downloaded=True)),
+        ):
+            if press == "required":
+                await fw.download_required_firmware("dc", None, 7)
+            elif press == "one file":
+                await fw.download_platform_firmware_file("dc", "dc_boot.bin", 1, 7)
+            else:
+                # Nothing is replaceable at that place; the press is refused after reading it.
+                with pytest.raises(Refused):
+                    await fw.replace_bios_file("dc", str(tmp_path / "bios" / "dc_boot.bin"), 7)
+
+        assert resolver.calls
+        assert set(resolver.calls) == {"naomi"}
 
     @pytest.mark.parametrize("state", [NO_SYSTEM, SWITCHED_OFF])
     @pytest.mark.asyncio

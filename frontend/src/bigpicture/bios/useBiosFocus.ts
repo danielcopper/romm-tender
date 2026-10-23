@@ -1,5 +1,5 @@
 /**
- * Where focus goes on the platform page's BIOS part when what it stood on
+ * Where focus goes on a BIOS part — a platform's page, a game's BIOS tab — when what it stood on
  * changes under it — a row's or a bulk button's work, and a step of
  * the emulator selector.
  *

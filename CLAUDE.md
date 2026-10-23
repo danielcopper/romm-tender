@@ -711,9 +711,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the colour is the resolver's verdict and no count's), the progress ratio
   (`services/firmware/status.py::_bios_aggregates`, `on_server` rows only, and the stated pair only those with a
   verdict) and the download affordance (`isFetchable`, `frontend/src/utils/biosFetchable.ts`, which reads the row's
-  `library`, `store_file`, `link` and `place_refusal`). The platform detail and the game page's BIOS tab call
-  `isFetchable`, never a copy, while the game page's row-visibility rule stays its own; display-only readers (the
-  On-disk `⊘` mark, `rowBelongsOnThisPage`) neither count nor gate
+  `library`, `store_file`, `link` and `place_refusal`). The platform detail and the game page's BIOS tab draw one table
+  (`frontend/src/bigpicture/bios/BiosFiles.tsx`) that calls `isFetchable`, never a copy; the display-only On-disk `⊘`
+  mark neither counts nor gates
 - **No link is placed at a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
   `FirmwarePlacement.place_unreadable` is the one reading, and `domain/firmware_places.py::place_refusal` turns it into
   the `unreadable` refusal no link update passes; `tests/domain/test_firmware_places.py`,
@@ -1175,9 +1175,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes
   (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
   (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
-  `cached.bios_status` fold. The panel's `handleBiosChange` is bound and ordered (`bios` ticket). The play button is NOT
-  covered** — test + prompt-only — the panel's bound sites each carry a version-switch test
-  (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site are prompt-only
+  `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS tab both
+  read through, is bound and ordered (`bios` ticket). The play button is NOT covered** — test + prompt-only — the
+  panel's bound sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store
+  side and every new write site are prompt-only
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own; text between two stops of
   the same card is reached through them and is no stop of its own (an emulator source card's folder and health lines,

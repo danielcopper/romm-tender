@@ -1,20 +1,16 @@
 /**
- * What one BIOS file row says about itself — its note, which rides beside the
- * name, and its description, which goes on the line under it.
+ * What one BIOS file row says about itself — its note and its description,
+ * which the BIOS table both a platform's page and a game's BIOS tab draw
+ * (`bigpicture/bios/BiosFiles.tsx`) puts on the lines under the row.
  *
- * Two surfaces render a firmware row (the game detail panel's BIOS tab and the
- * Library page's platform detail) and they used to word the same facts
- * separately, so a fact gained on one surface was a fact missing on the other.
- * This is the one place that decides; each surface still frames the result its
- * own way, because the BIOS tab leaves plain absence to its status dot while the
- * platform detail states it in the row's On-disk cell. What it hands over is a
- * sentence and a list of lines ({@link BiosFileWords}), plus the row's
- * description ({@link biosFileDescription}); where those go on the page is each
- * surface's own business, what they SAY is decided only here.
+ * What a row SAYS is decided only here; the table frames it, stating plain
+ * absence in the row's On-disk cell rather than in words. What it hands over is
+ * a sentence and a list of lines ({@link BiosFileWords}), plus the row's
+ * description ({@link biosFileDescription}).
  *
- * **A row is headed by the file the emulator DECLARED on both surfaces, never
- * by its description** — `declared_path`, folder and all, which the platform
- * detail splits into a muted prefix and a name and the BIOS tab prints whole.
+ * **A row is headed by the file the emulator DECLARED, never by its
+ * description** — `declared_path`, folder and all, which the table splits into
+ * a muted prefix and a name.
  * The description is the packager's prose out of a core's `.info`, deliberately
  * outside the resolver's contract, so it is not a field to render as a row's
  * identity — and it routinely spells the name into its own words besides, which
@@ -40,8 +36,8 @@ import type { BiosFileStatus } from "../types";
 import { PATH_INACCESSIBLE } from "./biosFetchable";
 import { lastPathSegment } from "./formatters";
 
-/** The subset of a row this note is derived from — both surfaces' row shapes
- *  satisfy it, so neither has to be converted into the other's. */
+/** The subset of a row this note is derived from — a platform answer's row and
+ *  a game's both satisfy it, so neither has to be converted into the other. */
 export type BiosNoteRow = Pick<
   BiosFileStatus,
   | "downloaded"
@@ -56,7 +52,7 @@ export type BiosNoteRow = Pick<
 > &
   Partial<Pick<BiosFileStatus, "file_name" | "declared_path" | "local_path">>;
 
-/** The subset {@link biosFileDescription} reads — the same both-surfaces rule. */
+/** The subset {@link biosFileDescription} reads. */
 export type BiosDescriptionRow = Pick<
   BiosFileStatus,
   "file_name" | "description" | "declared_kind" | "declaration" | "caveats"
@@ -67,13 +63,13 @@ export type BiosDescriptionRow = Pick<
  *
  * Both come back together because they are alternatives as often as they are
  * companions — a folder that lists what it holds needs no sentence saying it
- * holds something — and a surface taking one without the other would render a
- * satisfied folder as a bare name. Both surfaces put them under the row they
- * belong to — the BIOS tab in an indented block, the platform detail alongside
- * the note, whose own cells are too narrow to hold either.
+ * holds something — and a table taking one without the other would render a
+ * satisfied folder as a bare name. The table puts them under the row they
+ * belong to, beside the note, because its own cells are too narrow to hold
+ * either.
  */
 export interface BiosFileWords {
-  /** The em-dash note after the row's name, or `""` where there is none. */
+  /** The sentence under the row, or `""` where there is none. */
   note: string;
   /** One line each, rendered under the row: the images a folder's read
    *  identified, where the list IS the content, and the neutral line saying an
@@ -85,10 +81,9 @@ export interface BiosFileWords {
    *
    * It is the one note that says the same thing on every row it applies to, and
    * on a platform whose library holds little it applies to nearly all of them.
-   * A surface that carries that fact some other way — the platform detail marks
-   * it in the row's own cell — drops the sentence and keeps the rest; the game
-   * page's BIOS tab has room for it and prints it. The flag exists so neither
-   * has to re-derive this function's precedence to know which note it got.
+   * The table carries that fact in the row's own cell instead, so it drops the
+   * sentence and keeps the rest; the flag exists so it need not re-derive this
+   * function's precedence to know which note it got.
    */
   fromLibrary: boolean;
 }
@@ -240,7 +235,7 @@ function fileAtItsDestination(
  *
  * The images ARE the sentence here. "holds" above a list of three would be a
  * heading for a list that needs none, and folding them into the row's own name
- * is what pushed the status dot onto a line of its own.
+ * would cut that name off in its table cell.
  */
 function folderHolding(images: string[]): BiosFileWords {
   return images.length > 0 ? { note: "", lines: [...images], fromLibrary: false } : said("holds a BIOS image");
@@ -263,12 +258,10 @@ function folderWithheld(satisfied: boolean | null | undefined, has: (code: strin
  * The description on the line under a file's name, with the name itself taken
  * back out.
  *
- * Both surfaces head the row with the declared file, so the rule for what the
- * description still adds has to be ONE rule — otherwise the same row prints the
- * name twice on one surface and once on the other. Where the result GOES is each
- * surface's own: the game page's BIOS tab sets it beside the name, the platform
- * detail on a muted line under the row, because that name sits in a clipping
- * table cell narrow enough that a label beside it would cut the name itself.
+ * The row is headed by the declared file, so the description must leave out
+ * what that name already says. The table sets it on a muted line under the row,
+ * because the name sits in a clipping table cell narrow enough that a label
+ * beside it would cut the name itself.
  *
  * **It is not RomM's description** — `_server_files` builds no `description`
  * key at all, and `_wanted_fields` overwrites whatever came in.
@@ -287,9 +280,8 @@ function folderWithheld(satisfied: boolean | null | undefined, has: (code: strin
  * kind of writing under the same field: atlas explaining the requirement in
  * whole sentences ("a PlayStation BIOS image — the console runs it before any
  * disc, and DuckStation starts nothing without one — found by the search, not
- * named by any setting"), which is an essay on a line sized for a label. Neither
- * surface has room for it: on the platform detail it broke off mid-sentence, on
- * the game page it filled the row. So the register is read off the DECLARATION
+ * named by any setting"), which is an essay on a line sized for a label, and it
+ * breaks off mid-sentence there. So the register is read off the DECLARATION
  * and never guessed from the row — an identity ending in `_libretro.so` is a
  * libretro core today and is the resolver's spelling to change, and a row is
  * declared by several emulators while this prose comes from exactly one of them
@@ -439,9 +431,8 @@ export function foundByContent(row: { caveats?: string[] }): boolean {
 /**
  * What *row* says about itself — an empty note where its own state is the whole story.
  *
- * The note is `""` for a plain library file, present or missing alike: what the
- * surfaces disagree about is how to say "missing", so that word is left to them
- * (the platform detail marks it in its On-disk cell; the tab's dot carries it).
+ * The note is `""` for a plain library file, present or missing alike: "missing"
+ * is the table's On-disk mark to say, not a word.
  * *emulator* names the emulator the row is shown for — the one a wrong image is
  * checked against, and whose settings name a file that is not there.
  */
@@ -457,7 +448,7 @@ export function biosFileNote(row: BiosNoteRow, emulator: string | null = null): 
  * it uses another BIOS from this folder instead."
  *
  * It changes nothing about the row: the emulator lists the folder instead, so
- * the folder's verdict is what the launch rests on, and the dot and the counts
+ * the folder's verdict is what the launch rests on, and the mark and the counts
  * read that verdict alone. The emulator is named as the surface names the
  * emulator it shows, *emulator*: the answer's `emulator_label` is the one label
  * of the entry the reading came from, and RetroDECK gives `pcsx2_libretro.so`

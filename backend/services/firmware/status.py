@@ -561,14 +561,21 @@ class FirmwareStatusReader:
         answer: what the platform's emulators want is read locally either way.
         The one payload that still says nothing is a platform with no row to show
         whose launching emulator the resolver answered neither met nor not met —
-        that ``needs_bios: False`` carries ``bios_status_unknown: True`` and no
-        consumer may read it as "this platform needs none". A verdict of
+        that ``needs_bios: False`` carries ``bios_status_unknown: True``, no rows
+        and no aggregates, and no consumer may read it as "this platform needs
+        none". A verdict of
         not met is an answer with no row to show — DuckStation over a BIOS folder
         its search found nothing in declares no file — and is sent whole.
 
         A verdict of met with no row to show is sent whole too, with
         ``needs_bios: False``. The empty file list says nothing of its own; the
         verdict is what says met.
+
+        Every answer, that one included, carries what the game page's BIOS part
+        stands on, as the platform entry does: the emulator entries, where a
+        download lands (``store_only``, ``backup_root``), the delete counts
+        (:meth:`_stamp_deletable`) and ``server_offline``, whether the library's
+        listing could be read.
         """
         platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, platform_slug, install)
         system = platform.taken
@@ -576,11 +583,13 @@ class FirmwareStatusReader:
         pick = self._resolve_launching_emulator(platform_slug, options, launching_emulator)
         identity = pick.emulator if pick is not None else None
 
+        server_offline = False
         try:
             firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
         except Exception as e:
             self._logger.warning(f"Answering BIOS status without the server listing: {e}")
             firmware_list = []
+            server_offline = True
 
         catalogue, rows, others = await self._loop.run_in_executor(
             None, self._platform_rows, system, platform_slug, firmware_list, identity
@@ -591,16 +600,22 @@ class FirmwareStatusReader:
 
         met = answer.verdict.requirements_met if answer.verdict is not None else None
         if not files and met is None:
-            return {"needs_bios": False, "bios_status_unknown": True}
-
-        payload = self._bios_payload(files, platform_slug, answer, pick)
-        if not files and met is True:
-            payload["needs_bios"] = False
+            payload: dict[str, Any] = {"needs_bios": False, "bios_status_unknown": True, "files": []}
+        else:
+            payload = self._bios_payload(files, platform_slug, answer, pick)
+            if not files and met is True:
+                payload["needs_bios"] = False
         payload["store_only"] = _store_only(system, catalogue, identity)
         payload["backup_root"] = self._store.backup_root()
         payload["emulator_tabs"] = emulator_tabs(
             catalogue, identity, pick.label if pick is not None else None, options["options"], others
         )
+        payload["server_offline"] = server_offline
+        # After the listing, as for the platform entry: a fresh read moves older
+        # records to their platform, and the count must see them where they now are.
+        payload["store_files"] = await self._loop.run_in_executor(None, self._store_files, platform_slug)
+        records = await self._loop.run_in_executor(None, self._read_bios_records)
+        self._stamp_deletable(payload, platform_slug, records)
         return payload
 
 

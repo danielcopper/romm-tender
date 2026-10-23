@@ -348,14 +348,14 @@ produces relative to the old first-libretro default.
 
 **The BIOS part names the emulator; the launch places name the entry.** Two names stand on a page, and they answer two
 questions. Where Tender offers or names what a platform or game launches with — the emulator menus on the platform page
-and a game's page, the platform header, the game page's Emulator column, the toast after a game's switch, the line under
-the button while a platform switches, and the emulator RetroDECK would fall back to — it prints the picker entry's
-`name`, one per launch command (D37). The BIOS part — its selector, its header sentence, the tie clause, the group
-headings and the row notes — names the emulator by its identity, every label the resolver gives that identity joined in
-the list's order (`_labels_by_emulator`, D28), because the firmware is the same for every way an emulator launches. The
-two agree wherever an emulator has one launch command (LRPS2 / PCSX2 is both one entry and one emulator) and differ
-where it has several: on PlayStation 3 the header can read "RPCS3 Directory (Standalone) / RPCS3 ISO (Standalone)" while
-the BIOS sentences name RPCS3 by every label the resolver gives it.
+and a game's page, the platform header, the toast after a game's switch, the line under the button while a platform
+switches, and the emulator RetroDECK would fall back to — it prints the picker entry's `name`, one per launch command
+(D37). The BIOS part — its selector, its header sentence, the tie clause, the group headings and the row notes — names
+the emulator by its identity, every label the resolver gives that identity joined in the list's order
+(`_labels_by_emulator`, D28), because the firmware is the same for every way an emulator launches. The two agree
+wherever an emulator has one launch command (LRPS2 / PCSX2 is both one entry and one emulator) and differ where it has
+several: on PlayStation 3 the header can read "RPCS3 Directory (Standalone) / RPCS3 ISO (Standalone)" while the BIOS
+sentences name RPCS3 by every label the resolver gives it.
 
 Adding a new standalone system needs **no change to Tender** — the moment a RetroDECK update lists its emulator in
 `es_systems.xml` in preference order, Tender's default follows.

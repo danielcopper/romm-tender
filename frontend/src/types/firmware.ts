@@ -752,6 +752,11 @@ export interface BiosStatus extends EmulatorAnswer {
   store_only?: StoreOnly | null;
   /** As on {@link FirmwarePlatformExt}. */
   backup_root?: string;
+  /** As on {@link FirmwarePlatformExt}. */
+  deletable_count?: number;
+  /** Whether RomM's firmware listing could not be read — as `FirmwareStatus`
+   *  says it for the platform page: the downloads are withdrawn. */
+  server_offline?: boolean;
 }
 
 /** A firmware download's success answer — a batch whose files partly or wholly failed answers it too; its failure is

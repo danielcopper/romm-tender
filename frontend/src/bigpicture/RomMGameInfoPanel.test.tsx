@@ -1779,10 +1779,10 @@ describe("RomMGameInfoPanel", () => {
       });
       await flushAsync();
 
-      const stop = [...container.querySelectorAll<HTMLElement>(".romm-panel-bios-list")].find((el) =>
-        el.textContent.includes("Replace…"),
+      const replace = [...container.querySelectorAll<HTMLElement>("button")].find(
+        (el) => el.textContent === "Replace…",
       );
-      fireEvent.click(stop as HTMLElement);
+      fireEvent.click(replace as HTMLElement);
       const calls = vi.mocked(showModal).mock.calls;
       const confirm = (calls[calls.length - 1]?.[0] as ReactElement<{ onOK: () => void }> | undefined)?.props;
       await act(async () => {
@@ -1790,7 +1790,203 @@ describe("RomMGameInfoPanel", () => {
       });
       await flushAsync();
 
-      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("psx", "/bios/scph5501.bin");
+      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("psx", "/bios/scph5501.bin", 60);
+    });
+
+    it("bios: reads the tab's BIOS answer once after a press", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail({ platform_slug: "psx" }));
+      const answer: BiosAnswer = {
+        bios_status: {
+          platform_slug: "psx",
+          needs_bios: true,
+          server_count: 1,
+          local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
+          all_downloaded: false,
+          required_count: 1,
+          required_downloaded: 0,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: true,
+              local_path: "/bios/scph5501.bin",
+              description: "",
+              wanted: "needed",
+              required_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+              replace_offered: true,
+            },
+          ],
+        },
+        bios_level: "missing",
+      };
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(answer);
+      vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+        success: true,
+        placed: 1,
+        left_in_place: 0,
+        removed: 0,
+        link_failures: [],
+        backup_path: "/data/backups/bios/x/bios/scph5501.bin",
+      });
+      vi.mocked(showModal).mockClear();
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      await flushAsync();
+      vi.mocked(backend.getBiosStatus).mockClear();
+
+      const replace = [...container.querySelectorAll<HTMLElement>("button")].find(
+        (el) => el.textContent === "Replace…",
+      );
+      fireEvent.click(replace as HTMLElement);
+      const calls = vi.mocked(showModal).mock.calls;
+      const confirm = (calls[calls.length - 1]?.[0] as ReactElement<{ onOK: () => void }> | undefined)?.props;
+      await act(async () => {
+        confirm?.onOK();
+      });
+      await flushAsync();
+
+      // The press reads it; the `bios` event the press sends reads nothing more
+      // here. (No play row is mounted here, so the play row's own re-read reads
+      // nothing.)
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledTimes(1);
+    });
+
+    it("bios: a press holds the tab until its answer is read again, also where nothing changed", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail({ platform_slug: "psx" }));
+      const answer: BiosAnswer = {
+        bios_status: {
+          platform_slug: "psx",
+          needs_bios: true,
+          server_count: 1,
+          local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
+          all_downloaded: false,
+          required_count: 1,
+          required_downloaded: 0,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: false,
+              local_path: "/bios/scph5501.bin",
+              description: "",
+              wanted: "needed",
+              required_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+            },
+          ],
+        },
+        bios_level: "missing",
+      };
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(answer);
+      // A run that moved nothing: no `bios` event follows it.
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({ success: true, message: "", downloaded: 0 });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      await flushAsync();
+      let release!: (value: BiosAnswer) => void;
+      vi.mocked(backend.getBiosStatus).mockClear();
+      vi.mocked(backend.getBiosStatus).mockReturnValue(
+        new Promise<BiosAnswer>((resolve) => {
+          release = resolve;
+        }),
+      );
+      const labelled = (label: string) =>
+        [...container.querySelectorAll<HTMLElement>("button")].find((el) => el.textContent === label);
+
+      fireEvent.click(labelled("Download all") as HTMLElement);
+      await flushAsync();
+
+      // Read once although nothing changed, and while it is out the press's
+      // spinner stands in for its label and the row's Download is held.
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledTimes(1);
+      expect(labelled("Download all")).toBeUndefined();
+      expect(labelled("Download")?.hasAttribute("disabled")).toBe(true);
+      await act(async () => {
+        release(answer);
+      });
+      await flushAsync();
+      expect(labelled("Download all")?.hasAttribute("disabled")).toBe(false);
+      expect(labelled("Download")?.hasAttribute("disabled")).toBe(false);
+    });
+
+    it("bios: a press that changed firmware has every other panel of the platform read again", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail({ platform_slug: "psx" }));
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({
+        bios_status: {
+          platform_slug: "psx",
+          needs_bios: true,
+          server_count: 1,
+          local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
+          all_downloaded: false,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: false,
+              local_path: "/bios/scph5501.bin",
+              description: "",
+              wanted: "needed",
+              required_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+            },
+          ],
+        },
+        bios_level: "missing",
+      });
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({ success: true, message: "", downloaded: 1 });
+      const pressing = render(<RomMGameInfoPanel appId={testAppId} />);
+      render(<RomMGameInfoPanel appId={testAppId + 1} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      await flushAsync();
+      vi.mocked(backend.getBiosStatus).mockClear();
+
+      const downloadAll = [...pressing.container.querySelectorAll<HTMLElement>("button")].find(
+        (el) => el.textContent === "Download all",
+      );
+      expect(downloadAll?.hasAttribute("disabled")).toBe(false);
+      fireEvent.click(downloadAll as HTMLElement);
+      await flushAsync();
+      await flushAsync();
+
+      // One read for the pressing panel's press, one for the other panel's event.
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledTimes(2);
     });
 
     it("bios: threads bios_level from the endpoint result into the rendered status-dot color (#461)", async () => {
@@ -2094,13 +2290,12 @@ describe("RomMGameInfoPanel", () => {
           },
         ],
       });
-      const view = render(<RomMGameInfoPanel appId={testAppId} />);
+      render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       await act(async () => {
         globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
         await Promise.resolve();
       });
-      expect(view.container.textContent).toContain("INITIAL_CORE");
       vi.mocked(backend.getPlatformCoreInfo).mockClear();
       vi.mocked(backend.getSaveStatus).mockClear();
       vi.mocked(cachedStore.invalidateCachedGameDetail).mockClear();
@@ -2126,7 +2321,6 @@ describe("RomMGameInfoPanel", () => {
       expect(vi.mocked(cachedStore.invalidateCachedGameDetail)).toHaveBeenCalledWith(testAppId);
       expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(60);
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(60);
-      expect(view.container.textContent).not.toContain("INITIAL_CORE");
     });
 
     it("emulator_sources: leaves the save status and the slots unread while save sync is off", async () => {
@@ -2233,9 +2427,6 @@ describe("RomMGameInfoPanel", () => {
       // handler's `setState((prev) => ({ ..., biosStatus }))` line
       // makes this assertion fail.
       expect(container.textContent).toContain("marks none of its BIOS files as required (1/1 RomM library files)");
-      // The new active core label (from the dedicated core-info path) reached
-      // the rendered Emulator column.
-      expect(container.textContent).toContain("FROM_CORE_CHANGED");
     });
 
     it("core_changed: a cached detail with no BIOS answer keeps the tab (#1693)", async () => {
@@ -2349,11 +2540,10 @@ describe("RomMGameInfoPanel", () => {
       });
       // Outer catch did NOT fire …
       expect(vi.mocked(backend.debugLog)).not.toHaveBeenCalledWith(expect.stringContaining("onDataChanged error"));
-      // … and biosStatus is unchanged from the initial value (its answer and
-      // the INITIAL_CORE label still reach the BIOS section after a tab switch).
+      // … and biosStatus is unchanged from the initial value (its answer still
+      // reaches the BIOS section after a tab switch).
       await showBiosTab();
       expect(view.container.textContent).toContain("marks none of its BIOS files as required (1/1 RomM library files)");
-      expect(view.container.textContent).toContain("INITIAL_CORE");
     });
 
     it("metadata: matching rom_id → getRomMetadata + updates metadata state", async () => {
@@ -3406,7 +3596,7 @@ describe("RomMGameInfoPanel", () => {
       }
     });
 
-    it("bios tab activation renders biosSection content (BIOS file list + Emulator column)", async () => {
+    it("bios tab activation renders biosSection content (BIOS file list)", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 55,
@@ -3442,7 +3632,7 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      // Core info (label map + Emulator column) from the dedicated path (#923).
+      // Core info from the dedicated path.
       vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
         active_core: "snes9x_libretro.so",
         active_core_label: "Snes9x",
@@ -3472,12 +3662,10 @@ describe("RomMGameInfoPanel", () => {
         globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
         await Promise.resolve();
       });
-      expect(container.textContent).toContain("Emulator");
-      expect(container.textContent).toContain("Snes9x");
       // A file no emulator asks for stands in the library's own section, apart
       // from the files an emulator owns, and its need line says which of the
       // two remaining answers this one is.
-      expect(container.textContent).toContain("In your RomM library, asked for by no emulator here");
+      expect(container.textContent).toContain("IN YOUR ROMM LIBRARY, ASKED FOR BY NO EMULATOR HERE");
       expect(container.textContent).toContain("need not established");
     });
   });
@@ -3723,14 +3911,20 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      // Present but unfetchable: the library note survives, the "missing" drops.
-      // Name, then the packager's label, then the note behind its dash — this
-      // label names no file the row already shows, so it is printed whole and
-      // sits between the two.
-      expect(container.textContent).toContain("codehandler.bin Dolphin 'Sys' folder — not in your RomM library");
-      expect(container.textContent).not.toContain("codehandler.bin — missing");
-      // Genuinely absent: both halves stay.
-      expect(container.textContent).toContain("absent.bin — missing, not in your RomM library");
+      const rowOf = (name: string) =>
+        [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')].find(
+          (row) => row.querySelector('[data-testid="bios-file-name"]')?.textContent === name,
+        );
+      const marks = (name: string) =>
+        [
+          rowOf(name)?.querySelector('[data-testid="disk-mark"]'),
+          rowOf(name)?.querySelector('[data-testid="library-mark"]'),
+        ].map((mark) => mark?.textContent ?? null);
+      // Present but unfetchable: the library's mark stays, beside a present one.
+      expect(marks("codehandler.bin")).toEqual(["✓", "⊘"]);
+      expect(rowOf("codehandler.bin")?.textContent).not.toContain("missing");
+      // Genuinely absent: both marks say so.
+      expect(marks("absent.bin")).toEqual(["✗", "⊘"]);
     });
 
     it("says the distribution provides a file rather than that RomM lacks it", async () => {
@@ -3778,8 +3972,9 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      expect(container.textContent).toContain("codehandler.bin Dolphin 'Sys' folder — provided by RetroDECK");
-      expect(container.textContent).not.toContain("not in your RomM library");
+      const row = container.querySelector('[data-testid="bios-file-row"]');
+      expect(row?.querySelector('[data-testid="bios-file-name"]')?.textContent).toBe("codehandler.bin");
+      expect(row?.textContent).toContain("provided by RetroDECK");
     });
 
     it("declines the readiness claim over a folder whose contents could not be read", async () => {
@@ -3839,7 +4034,9 @@ describe("RomMGameInfoPanel", () => {
       // packager's prose: `'pcsx2/bios' folder` is that path plus the word
       // "folder", which is a restatement of the declaration kind, so the
       // description adds nothing and the row shows none of it.
-      expect(container.textContent).toContain("pcsx2/bios — its contents could not be read in full");
+      const row = container.querySelector('[data-testid="bios-file-row"]');
+      expect(row?.querySelector('[data-testid="bios-file-name"]')?.textContent).toBe("pcsx2/bios");
+      expect(row?.textContent).toContain("its contents could not be read in full");
       expect(container.textContent).not.toContain("missing");
       // The bare word left of that description is the whole of what a line
       // under this row would say, so its absence is what pins "none of it".
@@ -3906,8 +4103,8 @@ describe("RomMGameInfoPanel", () => {
       // back to every declaring core only when no active core resolves), and the
       // point here is that it could not be asked.
       expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
-      expect(container.textContent).toContain("In your RomM library, asked for by no emulator here");
-      expect([...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent)).toEqual([
+      expect(container.textContent).toContain("IN YOUR ROMM LIBRARY, ASKED FOR BY NO EMULATOR HERE");
+      expect([...container.querySelectorAll('[data-testid="bios-file-name"]')].map((el) => el.textContent)).toEqual([
         "a.bin",
         "b.bin",
       ]);
@@ -3987,56 +4184,6 @@ describe("RomMGameInfoPanel", () => {
       expect(getByTestId("waiting-line").textContent).toBe("Checking…");
       expect(getByTestId("spinner")).not.toBeNull();
       expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("BIOS");
-    });
-
-    it("biosStatusFromCache drives BIOS tab; active core comes from the dedicated path (#923)", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 1,
-        platform_slug: "snes",
-        bios_status: {
-          platform_slug: "snes",
-          server_count: 1,
-          local_count: 1,
-          ratio_server_count: 1,
-          ratio_local_count: 1,
-          all_downloaded: true,
-        } as never,
-        metadata: makeMetadata(),
-        stale_fields: [],
-      });
-      // Active core label is served from get_platform_core_info, not bios_status.
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "mycore.so",
-        active_core_label: "MyCore",
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label: "MyCore",
-            labels: ["MyCore"],
-            name: "MyCore",
-            kind: "libretro",
-            core_so: "mycore.so",
-            emulator: "mycore.so",
-            is_default: true,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
-      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-      // Active core label from the dedicated path reaches the BIOS tab's Emulator column.
-      await act(async () => {
-        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
-        await Promise.resolve();
-      });
-      expect(container.textContent).toContain("MyCore");
     });
   });
 
@@ -5150,12 +5297,11 @@ describe("RomMGameInfoPanel", () => {
       });
     });
 
-    // #1681 — BIOS is the third per-rom tab. The requirement is core-dependent
-    // and the core override is keyed on rom_id, so both the level and the
-    // Emulator column it is shown against must follow the new active version.
+    // BIOS is the third per-rom tab. The requirement is core-dependent and the
+    // core override is keyed on rom_id, so both the level and the core info it is
+    // shown against must follow the new active version.
     describe("BIOS tab across a version switch (#1681)", () => {
-      /** A `get_platform_core_info` answer whose launching emulator is `label`
-       *  — the BIOS tab's Emulator column reads it. */
+      /** A `get_platform_core_info` answer whose launching emulator is `label`. */
       const coreInfoFor = (label: string, coreSo: string): CoreInfo => ({
         active_core: coreSo,
         active_core_label: label,
@@ -5287,7 +5433,6 @@ describe("RomMGameInfoPanel", () => {
         const { container, getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
         await openBiosTab();
-        expect(container.textContent).toContain("Snes9x");
 
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
           found: true,
@@ -5314,7 +5459,6 @@ describe("RomMGameInfoPanel", () => {
         expect(container.textContent).toContain(
           "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
         );
-        expect(container.textContent).toContain("Snes9x");
 
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailNeedingBios(2, 3));
         vi.mocked(backend.getPlatformCoreInfo).mockClear();
@@ -5325,8 +5469,6 @@ describe("RomMGameInfoPanel", () => {
         expect(container.textContent).toContain(
           "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
         );
-        expect(container.textContent).toContain("bsnes");
-        expect(container.textContent).not.toContain("Snes9x");
       });
 
       // The over-fix this change invites: a read that FAILED is "we don't know",
@@ -5348,21 +5490,6 @@ describe("RomMGameInfoPanel", () => {
           "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
         );
         expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("onDataChanged error"));
-      });
-
-      it("leaves the shown active core standing when the new version's core read fails", async () => {
-        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailNeedingBios(1, 1));
-        vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFor("Snes9x", "snes9x_libretro.so"));
-        const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
-        await flushAsync();
-        await openBiosTab();
-        expect(container.textContent).toContain("Snes9x");
-
-        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailNeedingBios(2, 3));
-        vi.mocked(backend.getPlatformCoreInfo).mockRejectedValue(new Error("offline"));
-        await switchVersion();
-
-        expect(container.textContent).toContain("Snes9x");
       });
     });
 
@@ -5417,9 +5544,8 @@ describe("RomMGameInfoPanel", () => {
       const openBiosTab = () => openTab("bios");
       const openSavesTab = () => openTab("saves");
 
-      /** A BIOS requirement on both versions, so the BIOS tab (and with it the
-       *  Emulator column the core-info reads land in) stays visible across the
-       *  switch. */
+      /** A BIOS requirement on both versions, so the BIOS tab stays visible across
+       *  the switch. */
       const biosNeed: Partial<CachedGameDetail> = {
         bios_status: {
           platform_slug: "snes",
@@ -5431,18 +5557,6 @@ describe("RomMGameInfoPanel", () => {
         },
         bios_level: "partial",
       };
-
-      const coreInfoNamed = (label: string): CoreInfo => ({
-        active_core: `${label}_libretro.so`,
-        active_core_label: label,
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [],
-      });
 
       const emptySaveStatus = (romId: number): SaveStatus => ({
         rom_id: romId,
@@ -5532,26 +5646,6 @@ describe("RomMGameInfoPanel", () => {
         await flushAsync();
 
         expect(container.textContent).not.toContain("USA SUMMARY");
-      });
-
-      it("does not fold the previous version's core info into the switched-to version", async () => {
-        const coreInfo = holdReadFor(1, coreInfoNamed("bsnes"));
-        vi.mocked(backend.getPlatformCoreInfo).mockImplementation(coreInfo.impl);
-        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, biosNeed));
-        const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
-        await flushAsync();
-
-        await switchToRom2(biosNeed);
-        await openBiosTab();
-        expect(container.textContent).toContain("bsnes");
-
-        await act(async () => {
-          coreInfo.release(coreInfoNamed("Snes9x"));
-        });
-        await flushAsync();
-
-        expect(container.textContent).toContain("bsnes");
-        expect(container.textContent).not.toContain("Snes9x");
       });
 
       it("refuses a BIOS answer read for the previous version — by the binding and the switch's ticket alike", async () => {
@@ -5787,32 +5881,6 @@ describe("RomMGameInfoPanel", () => {
         expect(capturedSavesTab.some((props) => props.saveStatus?.files[0]?.filename === "OLD_VERSION.srm")).toBe(
           false,
         );
-      });
-
-      it("does not fold a core-change read issued for the previous version", async () => {
-        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, biosNeed));
-        vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoNamed("Snes9x"));
-        const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
-        await flushAsync();
-        await openBiosTab();
-        expect(container.textContent).toContain("Snes9x");
-
-        // A core change for rom 1 re-reads its core info and its BIOS answer.
-        const coreInfo = holdReadFor(1, coreInfoNamed("bsnes"));
-        vi.mocked(backend.getPlatformCoreInfo).mockImplementation(coreInfo.impl);
-        await act(async () => {
-          globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "core_changed" } }));
-        });
-        await switchToRom2(biosNeed);
-        expect(container.textContent).toContain("bsnes");
-
-        await act(async () => {
-          coreInfo.release(coreInfoNamed("Mesen"));
-        });
-        await flushAsync();
-
-        expect(container.textContent).toContain("bsnes");
-        expect(container.textContent).not.toContain("Mesen");
       });
 
       it("does not fold a metadata read issued for the previous version", async () => {

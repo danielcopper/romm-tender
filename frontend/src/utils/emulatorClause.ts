@@ -1,10 +1,8 @@
 /**
- * The words a surface prints for the emulator a platform or a game launches
- * with — the Platforms header's core clause and the game page's BIOS tab under
- * its `Emulator` heading. One derivation, so the two never read a payload two
- * ways. Why a `null` label is two states rather than one, and which of them the
- * games start in, is `docs/architecture/qam-panel.md`, "The clause names the
- * core".
+ * The words the Platforms header prints for the emulator a platform launches
+ * with — its core clause. Why a `null` label is two states rather than one, and
+ * which of them the games start in, is `docs/architecture/qam-panel.md`, "The
+ * clause names the core".
  */
 
 import type { SystemCoreInfo } from "../types";

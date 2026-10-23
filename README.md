@@ -67,11 +67,11 @@ _Named after the railway car behind a steam locomotive, or the boat that shuttle
 
 ## Screenshots
 
-|                Quick Access panel                |                    Game detail page                    |
-| :----------------------------------------------: | :----------------------------------------------------: |
-| ![Quick Access panel](assets/screenshot-qam.jpg) | ![Game detail page](assets/screenshot-game-detail.jpg) |
-|               **BIOS management**                |                  **Per-game actions**                  |
-|    ![BIOS status](assets/screenshot-bios.jpg)    |     ![Actions menu](assets/screenshot-actions.jpg)     |
+|                                                                   Quick Access panel                                                                   |                    Game detail page                    |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------: |
+|                                                    ![Quick Access panel](assets/screenshot-qam.jpg)                                                    | ![Game detail page](assets/screenshot-game-detail.jpg) |
+|                                                                  **Per-game actions**                                                                  |                                                        |
+| ![RomM Actions menu with Refresh Artwork, Refresh Metadata, Sync Save Files, Delete Local Saves, and Uninstall entries](assets/screenshot-actions.jpg) |                                                        |
 
 ## Requirements
 

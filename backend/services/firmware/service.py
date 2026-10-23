@@ -165,7 +165,6 @@ class FirmwareService:
                 listing=self._listing,
                 demand=self._demand,
                 store=config.store,
-                platform_systems=config.platform_systems,
                 firmware_file_store=config.firmware_file_store,
                 loop=config.loop,
                 logger=config.logger,
@@ -233,18 +232,28 @@ class FirmwareService:
                 return await self._downloads.download_all_firmware(platform_slug, rom_id)
 
     async def download_platform_firmware_file(
-        self, platform_slug, file_name, firmware_id: int | None = None
+        self, platform_slug, file_name, firmware_id: int | None = None, rom_id: int | None = None
     ) -> dict[str, Any]:
-        """Download one library file into a platform's store folder — by its id where given — and link it."""
+        """Download one library file into a platform's store folder — by its id where given — and link it.
+
+        With *rom_id*, the links follow the system the game's install record holds.
+        """
         async with self._rules.hold("download_platform_firmware_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_platform_firmware_file(platform_slug, file_name, firmware_id)
+                return await self._downloads.download_platform_firmware_file(
+                    platform_slug, file_name, firmware_id, rom_id
+                )
 
-    async def download_required_firmware(self, platform_slug, emulator: str | None = None) -> dict[str, Any]:
-        """Download only the firmware *emulator* — the platform's pick without one — will not run without."""
+    async def download_required_firmware(
+        self, platform_slug, emulator: str | None = None, rom_id: int | None = None
+    ) -> dict[str, Any]:
+        """Download only the firmware *emulator* — the platform's pick without one — will not run without.
+
+        With *rom_id*, the requirement is read, and the links placed, for the system the game's install record holds.
+        """
         async with self._rules.hold("download_required_firmware", update=True, folder=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_required_firmware(platform_slug, emulator)
+                return await self._downloads.download_required_firmware(platform_slug, emulator, rom_id)
 
     async def update_bios_links(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
         """Bring a platform's links up to date in every enabled source, for *rom_id*'s recorded system where given.
@@ -259,11 +268,15 @@ class FirmwareService:
             outcome = await self._config.loop.run_in_executor(None, self._store.do_update_links, platform_slug, system)
             return {"success": True, **outcome.payload()}
 
-    async def replace_bios_file(self, platform_slug, place) -> dict[str, Any]:
-        """Replace the wrong file at *place* with Tender's proven-right copy; the old file goes to the backup folder."""
+    async def replace_bios_file(self, platform_slug, place, rom_id: int | None = None) -> dict[str, Any]:
+        """Replace the wrong file at *place* with Tender's proven-right copy; the old file goes to the backup folder.
+
+        With *rom_id*, the place is read, and the links placed, for the system the game's install record holds.
+        """
         async with self._rules.hold("replace_bios_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
-                return await self._replacer.replace_bios_file(platform_slug, place)
+                system = await self._downloads.platform_system(platform_slug, rom_id)
+                return await self._replacer.replace_bios_file(platform_slug, place, system)
 
     async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete every BIOS file Tender put on the machine for a platform, and its links."""

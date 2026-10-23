@@ -33,10 +33,10 @@
  * **Every sentence names the emulator**, because every one of these states is
  * about ONE emulator's declaration and nothing else — the pick the whole answer
  * was scoped to, named as its selector entry names it ({@link launchingName}).
- * On the game page the same pick is named two inches away, under the pane's
- * Emulator heading, so a sentence about "the launching emulator" says less than
- * everything around it. The two names can differ: the BIOS part names the
- * emulator, the Emulator heading the launch entry
+ * The emulator selector names the same pick right above the table, so a
+ * sentence about "the launching emulator" says less than everything around it.
+ * The name can differ from the one the platform header prints: the BIOS part
+ * names the emulator, the header the launch entry
  * (docs/architecture/core-emulator-selection.md, "The BIOS part names the
  * emulator; the launch places name the entry"). Where the payload carries no label the pick could not
  * be made or has no name of its own, and the sentences fall back to naming the

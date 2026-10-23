@@ -58,8 +58,8 @@ export interface PanelState {
   // Core info comes from the dedicated get_platform_core_info path (#923), not
   // from biosStatus — the two concerns are decoupled. It stays here rather than
   // in the BIOS tab because it has to reach the render in the SAME update as
-  // biosStatus: two updates would briefly name the previous emulator in the
-  // Emulator column against the new emulator's requirements.
+  // biosStatus: two updates would briefly word the BIOS tab's lines off the
+  // previous emulator against the new emulator's requirements.
   coreInfo: CoreInfo | null;
   saveSyncEnabled: boolean;
   saveStatus: SaveStatus | null;
@@ -253,12 +253,14 @@ function refreshMetadataInBackground(binding: RomBinding): Promise<void> {
     .catch(() => {});
 }
 
-/** The status the BIOS tab stands on when the requirement could not be
- *  established — what {@link biosFieldsFromCache} folds in for an answer that
- *  ran and said so (the flag with the `"unknown"` level). `BiosTab` renders the
+/** What the BIOS tab's status says when the requirement could not be
+ *  established — what {@link biosFieldsFromCache} lays over an answer that ran
+ *  and said so (the flag with the `"unknown"` level). `BiosTab` renders the
  *  grey dot off that level, over the sentence `utils/biosSummary.ts` gives a
  *  declined level with no gap it can name. No file rows, because there is
- *  nothing Tender could say about any file. */
+ *  nothing Tender could say about any file; what the answer's own status carries
+ *  besides — its emulator entries and delete counts — stands, as on the platform
+ *  page. */
 const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
 
 /** The panel's two BIOS fields as a BIOS answer carries them — a cached game
@@ -278,7 +280,7 @@ const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_
 export function biosFieldsFromCache(cached: BiosAnswer): Pick<PanelState, "biosStatus" | "biosLevel"> | null {
   if (cached.bios_status_unknown) {
     if (cached.bios_level !== "unknown") return null;
-    return { biosStatus: UNKNOWN_REQUIREMENT_STATUS, biosLevel: "unknown" };
+    return { biosStatus: { ...cached.bios_status, ...UNKNOWN_REQUIREMENT_STATUS, files: [] }, biosLevel: "unknown" };
   }
   if (!cached.bios_status) return null;
   return {
@@ -422,8 +424,8 @@ export function openingTab(appId: number): string {
 }
 
 /** Cache-first initial render. Resolves the cached game detail for this appId,
- *  pushes it into PanelState, and fires the background refresh tasks whose
- *  results are merged in later. */
+ *  pushes it into PanelState and the game's platform to *onPlatform*, and fires
+ *  the background refresh tasks whose results are merged in later. */
 export async function loadData(
   appId: number,
   cancelled: () => boolean,
@@ -431,6 +433,7 @@ export async function loadData(
   platformSlugRef: MutableRefObject<string>,
   readSeqs: MutableRefObject<PanelReadSeqs>,
   setter: Dispatch<SetStateAction<PanelState>>,
+  onPlatform: (platformSlug: string) => void,
 ): Promise<void> {
   const overtaken = takeReadTicket(readSeqs, "detail");
   try {
@@ -449,6 +452,7 @@ export async function loadData(
 
     romIdRef.current = romId;
     platformSlugRef.current = platformSlug;
+    onPlatform(platformSlug);
 
     // Nothing is shown yet on a first render, so a payload carrying no BIOS
     // answer starts the panel out waiting for the live one.

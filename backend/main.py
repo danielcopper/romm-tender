@@ -345,13 +345,13 @@ class Endpoints:
         return await self._services.firmware_service.download_all_firmware(platform_slug, rom_id)
 
     @route
-    async def download_required_firmware(self, platform_slug, emulator):
-        return await self._services.firmware_service.download_required_firmware(platform_slug, emulator)
+    async def download_required_firmware(self, platform_slug, emulator, rom_id=None):
+        return await self._services.firmware_service.download_required_firmware(platform_slug, emulator, rom_id)
 
     @route
-    async def download_platform_firmware_file(self, platform_slug, file_name, firmware_id=None):
+    async def download_platform_firmware_file(self, platform_slug, file_name, firmware_id=None, rom_id=None):
         return await self._services.firmware_service.download_platform_firmware_file(
-            platform_slug, file_name, firmware_id
+            platform_slug, file_name, firmware_id, rom_id
         )
 
     @route
@@ -359,8 +359,8 @@ class Endpoints:
         return await self._services.firmware_service.update_bios_links(platform_slug, rom_id)
 
     @route
-    async def replace_bios_file(self, platform_slug, place):
-        return await self._services.firmware_service.replace_bios_file(platform_slug, place)
+    async def replace_bios_file(self, platform_slug, place, rom_id=None):
+        return await self._services.firmware_service.replace_bios_file(platform_slug, place, rom_id)
 
     @route
     async def identify_library_firmware(self, md5):

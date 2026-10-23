@@ -40,12 +40,8 @@ export interface RowAttempt {
   linkFailure?: string;
   /** Where the file a "Replace…" moved aside went. */
   replacedTo?: string;
-  /** Why a "Replace…" was refused or failed. */
-  replaceFailure?: string;
   /** Whether the row's download arrived damaged. */
   damaged?: boolean;
-  /** Where a download moved a file of the row's name that lay in the store without a record. */
-  movedAside?: string;
 }
 
 /**
@@ -88,8 +84,6 @@ export function biosPlaceLines(
   if (attempt.linkFailure) lines.push(`Could not place a link at ${row.local_path}: ${attempt.linkFailure}`);
   if (attempt.damaged) lines.push(DOWNLOAD_DAMAGED);
   if (attempt.replacedTo) lines.push(`Replaced. The old file is in ${attempt.replacedTo}.`);
-  if (attempt.replaceFailure) lines.push(`Failed to replace the file: ${attempt.replaceFailure}`);
-  lines.push(...backupLines(attempt.movedAside ? [attempt.movedAside] : []));
   return lines;
 }
 

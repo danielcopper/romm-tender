@@ -88,9 +88,9 @@ export interface NeedRow {
  * where the launching emulator was read and "need not established" where
  * nothing could answer for the file. Both pages word it here for whichever
  * emulator is shown, so a met required file and a met optional file never read
- * alike. Whether the file is in place is never in it: the row's
- * mark or dot, its Contents words and its note say that. The marks' tooltips
- * keep their own words.
+ * alike. Whether the file is in place is never in it: the row's mark, its
+ * Contents words and its note say that. The marks' tooltips keep their own
+ * words.
  */
 export function needWords(row: NeedRow): string {
   if (row.required_by_active) return REQUIRED;

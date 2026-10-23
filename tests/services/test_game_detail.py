@@ -1107,7 +1107,7 @@ class TestGetBiosStatusNotFound:
         )
 
         result = await game_detail.service.get_bios_status(42)
-        assert result["bios_status"] is None
+        assert result["bios_status"] == {"needs_bios": False, "bios_status_unknown": True, "platform_slug": "gba"}
         assert result["bios_status_unknown"] is True
 
     @pytest.mark.asyncio
@@ -1132,7 +1132,7 @@ class TestGetBiosStatusNotFound:
         raised = await game_detail.service.get_bios_status(42)
 
         assert answered == {
-            "bios_status": None,
+            "bios_status": {"needs_bios": False, "bios_status_unknown": True, "platform_slug": "ps3"},
             "bios_level": "unknown",
             "bios_label": "Unknown",
             "bios_status_unknown": True,

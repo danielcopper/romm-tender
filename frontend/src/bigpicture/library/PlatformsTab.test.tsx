@@ -20,6 +20,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, act, within } from "@testing-library/react";
 import type { ReactElement } from "react";
+import * as deckyUi from "@decky/ui";
 import { showContextMenu, showModal } from "@decky/ui";
 import { LibraryPage } from "../LibraryPage";
 import { BiosTab } from "../BiosTab";
@@ -3231,6 +3232,37 @@ describe("Library › Platforms", () => {
       },
     );
 
+    it("draws each bulk button as wide as its label, never stretched across its row", async () => {
+      mockFirmware([firmwarePlatform({ platform_slug: "gba", files: [firmwareFile({ file_name: "gba_bios.bin" })] })]);
+      const dialogButton = vi.spyOn(deckyUi, "DialogButton");
+      render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      const textOf = (node: unknown): string => {
+        if (typeof node === "string") return node;
+        if (node && typeof node === "object" && "props" in node) {
+          return textOf((node as { props: { children?: unknown } }).props.children);
+        }
+        return "";
+      };
+      const bulk = dialogButton.mock.calls
+        .map(([props]) => props as { children?: unknown; style?: unknown })
+        .filter((props) =>
+          ["Download required", "Download all", "Delete downloads"].some((start) =>
+            textOf(props.children).startsWith(start),
+          ),
+        );
+      dialogButton.mockRestore();
+      const labels = new Set(
+        bulk.map((props) =>
+          textOf(props.children)
+            .replace(/ \(.*$/, "")
+            .replace(/ for .*$/, ""),
+        ),
+      );
+      expect([...labels].sort()).toEqual(["Delete downloads", "Download all", "Download required"]);
+      for (const props of bulk) expect(props.style).toMatchObject({ width: "auto", flex: "0 1 auto" });
+    });
+
     it("offers no download for a file whose place could not be looked at, and says where", async () => {
       mockFirmware([
         firmwarePlatform({
@@ -3539,7 +3571,7 @@ describe("Library › Platforms", () => {
           fireEvent.click(buttonByText(container, "Download required for YabaSanshiro (1)")!);
         });
 
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null);
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null, null);
       });
 
       it("takes the selector's dot and the header from the same fresh answer after a download", async () => {
@@ -3598,12 +3630,17 @@ describe("Library › Platforms", () => {
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download")!);
         });
-        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "saturn_bios.bin", null);
+        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith(
+          "gba",
+          "saturn_bios.bin",
+          null,
+          null,
+        );
         await flushAsync();
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download required for Kronos (1)")!);
         });
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", "kronos_libretro.so");
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", "kronos_libretro.so", null);
         // The header stays the launching emulator's.
         expect(summary).toContain("The one file YabaSanshiro opens by name is not in place");
         expect(container.textContent).toContain("The one file YabaSanshiro opens by name is not in place");
@@ -3748,7 +3785,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null, null);
       // No notice on success: the spinner ending and the re-read rows are the
       // message, which is what the device pass asked for.
       expect(within(container).queryByTestId("status-bios")).toBeNull();
@@ -3785,7 +3822,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", 42);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", 42, null);
     });
 
     it("offers no Download for a file already here, nor for one the library does not hold", async () => {
@@ -4530,7 +4567,7 @@ describe("Library › Platforms", () => {
           for (let i = 0; i < 8; i++) await Promise.resolve();
         });
 
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null);
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null, null);
         expect(events.map((e) => e.detail.type)).toContain("bios");
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
@@ -4882,7 +4919,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null, null);
     });
 
     it("says the console does not start without an image where the counts would say nothing is required", async () => {
@@ -5294,7 +5331,7 @@ describe("Library › Platforms", () => {
       await confirmLastModal();
       await flushAsync();
 
-      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("gba", PLACE);
+      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("gba", PLACE, null);
       expect(container.textContent).toContain(`Replaced. The old file is in ${BACKUP}.`);
     });
 

@@ -106,8 +106,8 @@ opens by name are in place (3/5 RomM library files)" is one count of each kind, 
 file your library does not hold is counted in the sentence and never in the ratio, and a library file the emulator does
 not require is counted in the ratio and never in the sentence. A file that reads "could not be established" is left out
 of the ratio, since nothing showed it missing, and where no file could be established there is no ratio at all. A file
-your library does not hold still gets its own row wherever it matters — a file this game requires, or one the console
-itself needs, is listed whether your library holds it or not.
+your library does not hold still gets its own row: every file the chosen emulator names is listed, whether your library
+holds it or not.
 
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.
@@ -127,29 +127,22 @@ same, and where none of a system's emulators is one Tender can start itself, the
 default — the first it lists, unless you chose another in ES-DE — as launching. The list shows the chosen emulator's own
 files, exactly where it opens them and with its own verdict for each: with YabaSanshiro launching Saturn, the list shows
 `saturn_bios.bin` directly in the BIOS folder, and with Kronos chosen `kronos/saturn_bios.bin`. Choosing another
-emulator changes only the list — never which emulator launches. The line above and the **BIOS** badge beside Play stay
-those of the emulator you launch with. A per-region image another emulator lacks shows a grey dot here, not a red one:
-only the emulator you launch with is checked against this game's region. This page deletes no BIOS file, and its one
-press, **Replace…** on a row where a wrong file is in the way (see below), downloads only the copy it links in its
-place. **Download BIOS** in the game's RomM Actions menu fetches every file your library holds for the platform into
-Tender's firmware store and links it for every emulator that asks for it and is installed — its notification says how
-many files it downloaded, and what it could not link or moved aside is said under the rows here — and every file of
-every emulator can be downloaded or deleted on the platform's page (see **Library › Platforms** below). Files in your
-RomM library that no emulator was found to ask for are listed in a section of their own under the list, the same
-whichever emulator is chosen (see below). A row is headed by the file the emulator declares, with its folder where it
-asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one thing you need when placing one by
-hand. Whatever the emulator's packager wrote about the file follows the name on the same line, in the packager's own
-wording and punctuation — `scph5500.bin (PS1 JP BIOS)` — and only where it says something the name does not: those
-descriptions usually repeat the file name, and many are nothing else. Where the file also has something to say about its
-state, that comes last, behind a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
-your RomM library`. It is the
-**emulator's own** wording — a RetroArch core's description file — and it is shown for no other source. Where Tender's
-own card stands in for an emulator that ships no description of its own, that card explains the requirement in full
-sentences, which is a paragraph on a line meant for a few words; the row shows the file and its state instead.
+emulator changes only the table — never which emulator launches. The line above and the **BIOS** badge beside Play stay
+those of the emulator you launch with.
 
-Under every name a small line says what the chosen emulator needs of the file — _required_, _optional_, or _one of these
-· for USA discs_ for one of the per-region images below — so a file the launch needs and one it can do without read
-apart even where both dots are green.
+The tab stands in two columns. The left one holds this line, the emulator selector, the chosen emulator's files as a
+table, and the buttons under it; the right one holds the files in your RomM library that no emulator was found to ask
+for. On the Steam Deck, where the page is too narrow for both, the right column stands below the left one. The table and
+its buttons are the ones **Library › Platforms** shows for the platform (steps 8 to 12 there): the same columns, marks
+and words, a **Download**, **Replace…** or **Delete** button on every row that has one, **Download required for
+_emulator_**, and under **For all of _platform_** **Download all** and **Delete downloads**, all acting on the game's
+platform, for the system the game was downloaded under. Where nothing could be established about what the emulator
+needs, the tab still offers the deletes and the emulator selector, as the platform's page does. Every row is a stop the
+controller lands on, so you can scroll to each one; a row without a button does nothing when you press it. Up and down
+move within a column, and left and right move between the two, back to where you last were in the other one; on the
+Steam Deck, where the right column stands below, moving down past the left column's last button reaches it. What a press
+did to a row — a link it could not place, a download that arrived damaged, a file it replaced — is said on that row;
+what else it could not do, or what it moved out of the way, is said in a line under the buttons.
 
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. It follows the red
 verdict and nothing else: the resolver says the emulator you launch with does not have what it needs — a required file
@@ -183,7 +176,7 @@ since RPCS3 is not a RetroArch core and cannot be asked.
 Every game has a **BIOS** tab, from the moment its page opens, whatever its system needs. The page reads the game's BIOS
 state in the background and fills it in a moment later; until then the tab shows a spinner and **Checking…**. A game
 whose emulator needs no BIOS keeps its tab too, and it reads like any other: a green dot and "Snes9x marks none of its
-BIOS files as required", the emulator selector where the system offers more than one emulator, and a list with no
+BIOS files as required", the emulator selector where the system offers more than one emulator, and a table with no
 required file in it. After switching the emulator core, the page asks again and settles on the new core's readiness.
 After switching to another version of the game, the tab goes back to **Checking…** until that version's answer arrives,
 because the one before was about the other version.
@@ -200,37 +193,19 @@ emulator itself, and what you already have comes from your BIOS folder. Your ser
 while it is unreachable you still see what is needed and what is missing, you just cannot fetch anything, and files that
 exist only in your RomM library are not listed.
 
-For each emulator the list shows that emulator's own files — nothing borrowed from another emulator, whose files are
-shown when you choose it — and not every one of them, but the ones this game gives you something to do or to know: files
-the emulator requires, the images it would start the console from (one of them per region), files you already have,
-files you can still download, files Tender could not judge, and files you can **Replace…**. What is left over — the
-emulator names it, does not require it, it is not one of the images it could start the console from, it is not met, no
-page offers a download for it and it offers no Replace… — is counted on one line instead, naming the emulator: _6 more
-files Flycast lists — not required for this launch, nothing to download. All files are on the platform page._ With
-another emulator chosen the line names that emulator's own need instead: _not required by Kronos_.
+For each emulator the table lists every file that emulator names — nothing borrowed from another emulator, whose files
+are shown when you choose it — exactly as **Library › Platforms** does. Under each file's name a small line says what
+the chosen emulator needs of it — _required_, _optional_, or, where the file is one of the images an emulator needs
+**one of**, picked by the region of the disc, which region it serves: _one of these · for Japan discs_, or _one of these
+· for every region_ for an image that emulator starts every disc from. None of those images is _required_ on its own:
+each is what the discs of its own region start from, and the group, not the image, is the requirement. See
+[When the console needs a BIOS image](#when-the-console-needs-a-bios-image) for what the line above the table does with
+them.
 
-A Dreamcast is the everyday case. Flycast also emulates Naomi and AtomisWave, so it declares six arcade BIOS files
-beside the two the Dreamcast itself needs, and none of the six is anything a Dreamcast game's page could act on. The
-**Platforms** tab of the **Library** page lists every file of every emulator without exception — that is where BIOS
-files are managed, and it is the page the summary line points at.
-
-With the emulator you launch with chosen, each row's dot says how that file stands for this launch: green where it is in
-place, red where the launch requires it and it is not — or where it is one of the images below and its region is left
-uncovered — and grey otherwise: a file the launch does not need, whether missing, the wrong image or refused, and a file
-nothing could judge. Amber is never a row's colour.
-
-Beside each file's name and its description, after a dot, a word says what the chosen emulator needs of it — _bios7.bin
-(ARM7 BIOS) · optional_. Where the file is one of the images an emulator needs **one of**, picked by the region of the
-disc, that word says which region it serves: _one of these · for Japan discs_, or _one of these · for every region_ for
-an image that emulator starts every disc from. Whether it is in place is the dot's to say, as on every other row. None
-of those images is _required_ on its own: each is what the discs of its own region start from, and the group, not the
-image, is the requirement. See [When the console needs a BIOS image](#when-the-console-needs-a-bios-image) for what the
-line above the list does with them.
-
-Files in your RomM library that no emulator was found to ask for are no emulator's files, so they are listed in a
-section of their own under the list, headed **In your RomM library, asked for by no emulator here**, which stays the
-same whichever emulator is chosen. The word beside each name gives one of two answers — every one of those files turns
-on the same question, whether the emulator you launch with could be read, so they all get the same answer:
+Files in your RomM library that no emulator was found to ask for are no emulator's files, so they are listed in the
+right-hand column, headed **In your RomM library, asked for by no emulator here**, which stays the same whichever
+emulator is chosen. The line under each name gives one of two answers — every one of those files turns on the same
+question, whether the emulator you launch with could be read, so they all get the same answer:
 
 - _not required_ — the emulator you launch with was read, and none of the emulators RetroDECK offers for the system was
   found to ask for the file. That is a finished answer for this launch, and not a promise about every emulator you have
@@ -238,15 +213,15 @@ on the same question, whether the emulator you launch with could be read, so the
 - _need not established_ — the emulator you launch with could not be read, or Tender could not tell which emulator that
   is, so nothing could be said about the file either way.
 
-A file your emulator needs that is **not in your RomM library** is listed too, marked _not in your RomM library_. Tender
+A file your emulator needs that is **not in your RomM library** is listed too, with a violet ⊘ beside its mark. Tender
 cannot fetch it — nothing in it can — so it is shown for what it is rather than left out. Adding the file to RomM makes
 it downloadable like any other.
 
-Not holding a file is a different question from not having it, and the row says both. If it is also absent from your
-BIOS folder it reads _missing, not in your RomM library_; if it is already sitting there it reads only _not in your RomM
-library_, green where the resolver judges it the right file.
+Not holding a file is a different question from not having it, and the row says both: the ⊘ stands beside a red ✗ where
+the file is also absent from your BIOS folder, and beside a green ✓ where it is already there and the resolver judges it
+the right file.
 
-A grey row has a cause worth knowing about. Where Tender could not look at the place a file goes at all — broken
+A grey `?` has a cause worth knowing about. Where Tender could not look at the place a file goes at all — broken
 permissions, or storage going bad — the row names that place rather than calling the file missing: _Tender could not
 look into bios/kronos/, so whether saturn_bios.bin is there is not known_. You know to check the folder instead of
 hunting for a download, and no page offers one: Tender places nothing where it cannot see what is already there, and a
@@ -299,7 +274,7 @@ reads them the way the core does, and lists the folder **one row per file**, lik
   it, one row stands for the folder itself, with what the emulator found there and the line _No BIOS image here yet_; it
   goes as soon as a file is there.
 - Where the read could not finish — a file whose bytes would not come back, a folder that could not be listed in full,
-  or an image Tender's identity table and the emulator's own check disagree about — the row says so and gets a grey dot,
+  or an image Tender's identity table and the emulator's own check disagree about — the row says so and gets a grey `?`,
   and the system's readiness line declines (see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
   below). Nothing is being claimed either way.
 
@@ -307,10 +282,6 @@ A folder that is **absent** is red like any other requirement that is not there.
 a library file recognised for it says _/home/deck/retrodeck/bios/pcsx2/bios does not exist yet. Start LRPS2 / PCSX2
 once, then try again._, and with no such file the folder's own row reads _No BIOS image here yet_. On a stock RetroDECK
 that will not happen for `pcsx2/bios`, which RetroDECK links onto the BIOS folder itself.
-
-<!-- Screenshot: Game detail page showing red BIOS status with "2 of 3 files melonDS opens by name are in place" -->
-
-![BIOS file list overlay showing individual required files with checkmarks and "Missing" labels](../assets/screenshot-bios.jpg)
 
 ## Library › Platforms
 
@@ -339,8 +310,7 @@ and the row you focus is the one the right-hand pane describes.
    setting up, or ES-DE's command for them is not one Tender can bake — so RetroDECK chooses one itself when a game
    starts. If it reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this
    machine, and the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at
-   all. The sentence below the line says which of the three it is. A game's BIOS tab reads the same words in its
-   Emulator column, the red ones in red, when nothing can be pinned for that game
+   all. The sentence below the line says which of the three it is
 6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
@@ -381,19 +351,19 @@ and the row you focus is the one the right-hand pane describes.
    the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where the emulator asks for the
    file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) — that is where it has to go,
    and it is the one thing you need when placing a file by hand. The description in parentheses is printed under the row
-   rather than beside the name, as it is on a game's page: this column is narrow enough that anything after the name
-   would push the name itself off the row. Like there, it is shown only where the emulator itself wrote it. Above it,
-   first under the name, a small line says what the chosen emulator needs of the file: _required_, _optional_, or _one
-   of these · for USA discs_ for a per-region image (the library's own section, step 12, has two words of its own). On
-   disk holds marks and no words. The first mark carries two things — a green ✓ for a file that is there and required, a
-   red ✗ for one that is required and is not, and the paler green ✓ / grey ✗ for a file the chosen emulator does not
-   need either way. Whether a file is "there" is the resolver's verdict, not just its presence: a file that is the wrong
-   image reads ✗, and one the resolver could not compare reads `?`. A ✗'s tooltip and legend line say which it is —
-   _missing_, _wrong file_ or _refused_ — in the words the Contents column uses. A grey `?` means not established,
-   either way: a row whose verdict nothing could settle — including a place that could not be looked at, which is never
-   read as missing — and a file whose need nothing could establish, because no emulator was found to ask for it and the
-   emulator you launch with could not be read or named. Its tooltip and the legend still say whether that file is there.
-   Amber is never a mark here. Where the system needs **one image per region** (see
+   rather than beside the name: this column is narrow enough that anything after the name would push the name itself off
+   the row. It is shown only where the emulator itself wrote it. Above it, first under the name, a small line says what
+   the chosen emulator needs of the file: _required_, _optional_, or _one of these · for USA discs_ for a per-region
+   image (the library's own section, step 12, has two words of its own). On disk holds marks and no words. The first
+   mark carries two things — a green ✓ for a file that is there and required, a red ✗ for one that is required and is
+   not, and the paler green ✓ / grey ✗ for a file the chosen emulator does not need either way. Whether a file is
+   "there" is the resolver's verdict, not just its presence: a file that is the wrong image reads ✗, and one the
+   resolver could not compare reads `?`. A ✗'s tooltip and legend line say which it is — _missing_, _wrong file_ or
+   _refused_ — in the words the Contents column uses. A grey `?` means not established, either way: a row whose verdict
+   nothing could settle — including a place that could not be looked at, which is never read as missing — and a file
+   whose need nothing could establish, because no emulator was found to ask for it and the emulator you launch with
+   could not be read or named. Its tooltip and the legend still say whether that file is there. Amber is never a mark
+   here. Where the system needs **one image per region** (see
    [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)) each of those images is marked as one of
    the group: a green ✓ where it is there, a red ✗ where it is not — that region's discs have nothing to start from —
    and the line under its name says which region it serves: _one of these · for USA discs_. A violet ⊘ appears
@@ -446,9 +416,6 @@ and the row you focus is the one the right-hand pane describes.
     That answer only labels the row; it changes no colour and no count. A file of these that Tender downloaded reads _In
     Tender's firmware store, used by no emulator_, and is linked as soon as an emulator asks for it. Its rows offer
     **Download** and **Delete** like any other
-
-**Download BIOS** in a game's RomM Actions menu carries on past a file it cannot fetch the same way, and names the
-failed files in its notification.
 
 <!-- Screenshot: Library › Platforms with a platform selected, its core button above the BIOS table -->
 
@@ -513,18 +480,17 @@ Files_).
 
 Tender never overwrites a file it did not put there, and **Download required** leaves such a file in place. Where the
 emulator reads the file at a place as the wrong image, or refuses it, and your RomM library holds a copy whose checksum
-is the one the emulator expects, the row offers **Replace…**, on the platform's page and on a game's BIOS tab, where you
-select the row itself and press A. Its confirmation names the exact path and where the old file goes: _The file at
-/home/deck/retrodeck/bios/scph5501.bin goes to /home/deck/.local/share/romm-tender/backups/bios, and Tender's copy is
-linked in its place._ Only once you confirm is the old file moved to Tender's backup folder — `backups/bios/` in
-[Tender's data folder](where-your-data-lives.md), under the date and time on your device's clock
-(`2026-10-22_14-18-11`), followed by the file's original path — never deleted, and the link placed. Afterwards the row
-says _Replaced. The old file is in …_ until you leave the page. Where it cannot be done, Tender says _Failed to replace
-the file: …_ — in the line under the section on the platform's page, on the row on a game's page. Where the link could
-not be placed once the old file was moved, the old file goes back to its place, and the reason ends _The old file is
-back where it was._; where something else lies there by then, or it cannot be moved back, it stays in the backup folder,
-and the reason ends _The old file stays in …_ with its path. Without a proven-right copy in your library the row stays
-red with its sentence and nothing is offered, and a file the emulator accepts, or that could not be checked, is never
+is the one the emulator expects, the row offers **Replace…**, on the platform's page and on a game's BIOS tab. Its
+confirmation names the exact path and where the old file goes: _The file at /home/deck/retrodeck/bios/scph5501.bin goes
+to /home/deck/.local/share/romm-tender/backups/bios, and Tender's copy is linked in its place._ Only once you confirm is
+the old file moved to Tender's backup folder — `backups/bios/` in [Tender's data folder](where-your-data-lives.md),
+under the date and time on your device's clock (`2026-10-22_14-18-11`), followed by the file's original path — never
+deleted, and the link placed. Afterwards the row says _Replaced. The old file is in …_ until you leave the page. Where
+it cannot be done, Tender says _Failed to replace the file: …_ in the line under the buttons. Where the link could not
+be placed once the old file was moved, the old file goes back to its place, and the reason ends _The old file is back
+where it was._; where something else lies there by then, or it cannot be moved back, it stays in the backup folder, and
+the reason ends _The old file stays in …_ with its path. Without a proven-right copy in your library the row stays red
+with its sentence and nothing is offered, and a file the emulator accepts, or that could not be checked, is never
 replaced.
 
 A file lying in the store folder that Tender has no record of — copied there by hand, say — is taken over without a
@@ -533,8 +499,9 @@ under the section says so: _A different scph5501.bin was already in Tender's fir
 
 ### Deleting BIOS Files
 
-You can remove BIOS files from a platform's pane in **Library › Platforms**, one at a time or all at once. Both only
-ever remove what Tender downloaded; because deletion is local, both work with your RomM server offline.
+You can remove BIOS files from a platform's pane in **Library › Platforms**, or from the **BIOS** tab of any of its
+games, one at a time or all at once. Both only ever remove what Tender downloaded; because deletion is local, both work
+with your RomM server offline.
 
 The **Delete downloads** button under **For all of _platform_** takes every BIOS file Tender downloaded for the
 platform, and its label shows how many (e.g. "Delete downloads (3)"). Its confirmation reads _Delete Tender's BIOS
@@ -547,7 +514,8 @@ saturn_bios.bin?_ — _Tender removes it from its firmware store and every link 
 file Saturn's Kronos and YabaSanshiro both want lies once in the store with a link at each emulator's place, and one
 **Delete** removes the file and both links.
 
-1. In **Library › Platforms**, pick the platform whose BIOS files you want to remove
+1. In **Library › Platforms**, pick the platform whose BIOS files you want to remove — or open the **BIOS** tab of one
+   of its games
 2. Tap **Delete downloads**, or the **Delete** on a single row
 3. Confirm the action in the dialog that appears — every one of them asks first
 
@@ -776,12 +744,11 @@ in the first. Where the emulator requires plain files beside the group, those ar
 regions after them — "1 / 1 required · 1 / 3 regions · USA only". A group nothing could check is not counted there at
 all, so it never reads like one with no image in place: "0 / 1 required · regions not checked".
 
-Each image of the group is its own row, and what it says of its need — under its name on the Library page, beside it on
-the game page — says which region it serves: _one of these · for Japan discs_. Whether it is there is said on the
-Library page's platform table by a red ✗ or a green ✓ in its On disk column, and on the game page by its dot. An image a
-core found by searching the BIOS folder is described _found in the BIOS folder_. A file the core also lists in its own
-description file under the same name is still one row, not two; an image the core found under another of the names it
-tries is a row of its own.
+Each image of the group is its own row, and what it says of its need, under its name, says which region it serves: _one
+of these · for Japan discs_. Whether it is there is said by a red ✗ or a green ✓ in its On disk column, on the Library
+page and on the game page alike. An image a core found by searching the BIOS folder is described _found in the BIOS
+folder_. A file the core also lists in its own description file under the same name is still one row, not two; an image
+the core found under another of the names it tries is a row of its own.
 
 **The game page answers for the game's own region.** RomM records which regions a game was released in, and Tender reads
 them as the console's disc regions: USA and Canada as USA, Japan as Japan, and Europe, the European countries and
@@ -806,10 +773,10 @@ states them whichever game you are looking at, with this game's region marked wh
 several regions is one line naming them all. For a European game: _Japan · scph5500.bin · missing_, _USA · scph5501.bin
 · in place_, _Europe · scph5502.bin · missing ← this game's region_ — each with a dot, red for this game's region where
 it is missing and grey for another region's. An image that serves every region is that one line alone under the same
-subheading: _every region · scph1001.bin · in place ← this game's region_. The emulator selector and the file list
-follow under the group, with no subheading of their own. A game whose region does not map — World, Asia, Korea, Brazil,
-or none recorded — gets the platform's answer, and no badge for a group that is only partly covered: the image that is
-there may be the one it needs.
+subheading: _every region · scph1001.bin · in place ← this game's region_. The emulator selector and the table follow
+under the group, with no subheading of their own. A game whose region does not map — World, Asia, Korea, Brazil, or none
+recorded — gets the platform's answer, and no badge for a group that is only partly covered: the image that is there may
+be the one it needs.
 
 On the platform page, **Download required for _emulator_** fetches the chosen emulator's images of the regions that have
 none yet, where your RomM library holds them, and nothing more once every region has its image. The number on the button
@@ -888,7 +855,8 @@ setup.
   replacement
 - With **gpSP**, `gba_bios.bin` is shown as _required_ — gpSP cannot run without it
 
-The active core name appears on the game detail page (the **Emulator** column) and on the platform's header line in
+The active core name appears on the game detail page's **BIOS** tab (see
+[BIOS Status on the Game Detail Page](#bios-status-on-the-game-detail-page)) and on the platform's header line in
 **Library › Platforms**. This tells you at a glance which core Tender is filtering for.
 
 **How the core is determined:**
@@ -938,10 +906,10 @@ cores may affect save compatibility" note is the first line of the menu.
 
 Names that start exactly the same thing are one entry, named by all of them in RetroDECK's order: RetroDECK lists the
 same RetroArch core for PlayStation 2 as LRPS2 and as PCSX2, so the menu offers **LRPS2 / PCSX2** once, and the header,
-a game's Emulator column and the line under the button while it switches name it the same way, as does the toast after a
-game's own switch. One emulator started in different ways stays one entry per way — RPCS3 by game serial is one, RPCS3
-from a folder or an ISO (one command under two names) another. Picking a joined entry stores its first name; a choice
-stored under either name before reads as that entry.
+and the line under the button while it switches name it the same way, as does the toast after a game's own switch. One
+emulator started in different ways stays one entry per way — RPCS3 by game serial is one, RPCS3 from a folder or an ISO
+(one command under two names) another. Picking a joined entry stores its first name; a choice stored under either name
+before reads as that entry.
 
 1. Open **Library** from the main QAM page and move to the **Platforms** tab
 2. Move to the platform you want to change
@@ -1049,11 +1017,6 @@ The CPU button changes color to indicate the active core status:
 
 - **Gray** — the default core is active (no overrides)
 - **Yellow** — a non-default core is active (per-game or per-platform override)
-
-The game detail info panel shows the emulator this game launches with in a dedicated "Emulator" column alongside the
-BIOS status, using a two-column layout. The column heading is its only label — the emulator's name stands under it on
-its own, the way the BIOS column's readiness line stands under "BIOS", and it reads the same whether what launches the
-game is a RetroArch core or a standalone emulator.
 
 ---
 
