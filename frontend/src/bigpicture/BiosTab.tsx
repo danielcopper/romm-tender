@@ -16,9 +16,8 @@
  * TOGETHER: on a core change the panel reads both in one `Promise.all` and folds
  * them into one update. What the page holds of its own — which emulator the
  * table shows, a press under way, the line it left and what it did to each row —
- * is {@link useBiosTab}'s, which the panel calls: Steam's tabbed page mounts a
- * tab's pane only while that tab is shown, and the pane would lose all of it on
- * every switch.
+ * is {@link useBiosTab}'s, which the panel calls, so that a tab switch keeps it
+ * (`docs/architecture/qam-panel.md`, "The game page's tabs").
  *
  * CSS classes prefixed with `romm-panel-` are injected separately by
  * styleInjector.

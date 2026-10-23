@@ -1,15 +1,10 @@
 /**
  * What passes between the game page's play row and its tabs, which are siblings
  * in Tender's section: L1 and R1 step the tabs from the play row as well, and B
- * on the tab row puts focus on the play row.
- *
- * Inside the tabs, L1 and R1 are Steam's: its tabbed page handles them on its
- * tab row and its content, and stops the event there (`steamui/sp.js`, the
- * tabbed page's bumper handler). The play row is outside that page, so a bumper
- * pressed on it bubbles past it — the play row's handler takes it here, and the
- * tabs register how they step while they are shown, as the BIOS tab's emulator
- * selector does for L2 and R2 (`emulatorStepping.tsx`). The play row registers
- * how it takes focus the same way.
+ * on the tab row puts focus on the play row. The tabs register how they step
+ * while they are shown, and the play row registers its element, the way the
+ * BIOS tab's emulator selector registers for L2 and R2 (`emulatorStepping.tsx`).
+ * Why: `docs/architecture/qam-panel.md`, "The game page's tabs".
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, type FC, type ReactNode } from "react";

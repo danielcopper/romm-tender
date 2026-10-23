@@ -23,14 +23,14 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
 - **Action buttons** — Download, Pause/Resume, Uninstall, Cancel, or Refresh Metadata depending on state
 
 Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on
-Steam's own tab row, the one a Steam game's page has. **ACHIEVEMENTS** and **SAVES** are there only when they have
-something to show. **L1** and **R1** step to the previous and the next tab from anywhere in Tender's part of the page,
-the play row included, going round from the last tab to the first and skipping a tab that is not there. Moving focus
-onto a tab shows it, and a tab you come back to puts focus where it stood in it. The tab area is one screen tall and a
-tab's content scrolls inside it: moving down from the play row into the tabs scrolls the page so the tab row stands at
-the top, and moving back up to the play row scrolls it back. **B** steps back the same way a Steam game's page does: in
-a tab's content it moves focus up to the tab row, on the tab row it moves focus to the play row and scrolls the page
-back to the top, and on the play row it leaves the game's page.
+Steam's own tab row, the one a Steam game's page has. **ACHIEVEMENTS** is there for a game RetroAchievements knows, and
+**SAVES** while save sync is on. **L1** and **R1** step to the previous and the next of the tabs shown from anywhere in
+Tender's part of the page, the play row included, going round from the last tab to the first. Moving focus onto a tab
+shows it, and a tab you come back to puts focus where it stood in it. The tab area is one screen tall and a tab's
+content scrolls inside it: moving down from the play row into the tabs scrolls the page so the tab row stands at the
+top, and moving back up to the play row scrolls it back. **B** steps back the same way a Steam game's page does: in a
+tab's content it moves focus up to the tab row, on the tab row it moves focus to the play row and scrolls the page back
+to the top, and on the play row it leaves the game's page.
 
 ![Game detail page showing the Tender panel for an installed game](../assets/screenshot-game-detail.jpg)
 

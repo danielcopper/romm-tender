@@ -50,34 +50,17 @@ export const quickAccessMenuClasses: typeof _quickAccessMenuClasses | undefined 
 
 /**
  * What the tabbed page accepts beyond the four props `@decky/ui` declares.
- * Upstream's `TabsProps` predates both; the component is typed `any` there, so
- * nothing would have caught a name being wrong either.
+ * Upstream's `TabsProps` predates all of them; the component is typed `any`
+ * there, so nothing would have caught a name being wrong either. What each does
+ * in Steam's code: `docs/architecture/qam-panel.md`, "Pages" for
+ * `cancelSkipTabHeader`, "The game page's tabs" for the other two.
  */
 export interface WideTabsProps extends TabsProps {
-  /**
-   * Steam's tabbed page renders the content pane as `onCancelButton:
-   * !cancelSkipTabHeader && <focus the tab row>` (`steamui/sp.js`, the
-   * `TabContents` `Focusable`), so passing it true leaves no cancel handler
-   * there and B travels on to whatever ancestor binds it. Steam passes it itself
-   * in the controller-configurator dialogs.
-   */
+  /** True leaves the content pane without its handler for B. */
   cancelSkipTabHeader?: boolean;
-  /**
-   * Bound as the tabbed page's own `onCancelButton` (`steamui/sp.js`), so B
-   * reaches it from wherever nothing inside the page takes B first — the tab
-   * row, since the content pane takes it to move focus up to the tab row. As
-   * with every Steam button handler, an answer of `false` lets B go on
-   * unhandled. Steam's own game page puts focus on its Play button with it.
-   */
+  /** The tabbed page's own handler for B, which B on the tab row reaches; `false` lets B go on. */
   onCancelFromTabHeader?: () => boolean | undefined;
-  /**
-   * The tabbed page has no height of its own — its tab row and its content are
-   * positioned absolutely (`steamui/css/sp.css`, `GamepadTabbedPage`). With
-   * `"on-outer-scroll"` Steam's stylesheet makes it one screen tall less
-   * Steam's header, and pins its tab row under that header once the page
-   * scrolling it has brought it there. Steam's own game page passes it
-   * (`steamui/sp.js`, the app details' tabbed page).
-   */
+  /** Gives the tabbed page its height: one screen less Steam's header. */
   canBeHeaderBackground?: "on-outer-scroll";
 }
 

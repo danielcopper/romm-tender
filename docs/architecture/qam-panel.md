@@ -488,14 +488,14 @@ action-button enum (`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`
 every value, and the wrong one draws the wrong glyph without failing.
 
 **A tabbed wide page has to get out of the way for that to work.** Steam's tabbed page renders its content pane as
-`onCancelButton: !cancelSkipTabHeader && <focus the tab row>` (`chunk~2dcc5aaf7.js`), so without the flag the first B
-inside a tab is spent moving focus to the tab row and never reaches the router. `WidePage` passes `cancelSkipTabHeader`
-— Steam's own prop, which it uses in its controller-configurator dialogs, and which upstream's `TabsProps` predates;
-`frontend/src/utils/deckyUiInternals.ts` types it. After a navigation the router scrolls the panel to the top, and
-gamepad focus is placed where the page opens — by the router for a narrow page, at the area the page declared or at its
-first stop where it declared none, and by the frame itself for a wide one, which says so on its root so the router
-leaves it alone (see "Building blocks → Tabs"). The module-level `currentPage` survives a QAM remount, so reopening the
-QAM lands on the page that was open, and a wide page re-expands on mount.
+`onCancelButton: !cancelSkipTabHeader && <focus the tab row>` (`steamui/sp.js`, the `TabContents` `Focusable`), so
+without the flag the first B inside a tab is spent moving focus to the tab row and never reaches the router. `WidePage`
+passes `cancelSkipTabHeader` — Steam's own prop, which it uses in its controller-configurator dialogs, and which
+upstream's `TabsProps` predates; `frontend/src/utils/deckyUiInternals.ts` types it. After a navigation the router
+scrolls the panel to the top, and gamepad focus is placed where the page opens — by the router for a narrow page, at the
+area the page declared or at its first stop where it declared none, and by the frame itself for a wide one, which says
+so on its root so the router leaves it alone (see "Building blocks → Tabs"). The module-level `currentPage` survives a
+QAM remount, so reopening the QAM lands on the page that was open, and a wide page re-expands on mount.
 
 **Entry focus is placed on a page swap and never when the panel appears.** Steam mounts the panel as soon as the Quick
 Access strip highlights Tender's Quick Access entry, so focus placed on that mount would take the reader off the strip
@@ -536,7 +536,7 @@ preference, entry lands where Steam decides, and the panel still takes no focus 
 
 ### Tabs
 
-Steam's tabbed page, switched with L1/R1, for two to four peer views of one page. Wide pages only: at 300 px the bumper
+Steam's tabbed page, switched with L1/R1, for a handful of peer views of one page. Wide pages only: at 300 px the bumper
 glyphs overlap the labels. In the panel only Library has tabs; outside it, Tender's section on a game page is the same
 component (§ The game page's tabs).
 
@@ -623,30 +623,28 @@ Tender's section on a RomM game's page ([frontend-bundles.md](frontend-bundles.m
 is not part of the panel, but its tabs are this same component: **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and
 **ARTWORK** are Steam's tabbed page (`bigpicture/GamePageTabs.tsx`), in that order (`buildPanelTabs`,
 `bigpicture/panelTabContent.tsx`). So L1 and R1, the wrap-around, the bumper glyphs, a tab switching as soon as focus
-lands on it, and each tab keeping where focus stood are Steam's. ACHIEVEMENTS and SAVES are handed to it only where
-their pane has something to show, so a tab that is not shown is not stepped onto either. Steam's own game page steps its
-own tabs with L1 and R1 the same way; on a RomM game Tender's section takes that panel's place, so nothing of Steam's is
-left handling the bumpers there (#2421 D2).
+lands on it, and each tab keeping where focus stood are Steam's. ACHIEVEMENTS is handed to it for a game
+RetroAchievements knows (an `ra_id`) and SAVES while save sync is on, so a tab that is not shown is not stepped onto
+either. Steam's own game page steps its own tabs with L1 and R1 the same way; on a RomM game Tender's section takes that
+panel's place, so nothing of Steam's is left handling the bumpers there (#2421 D2).
 
 **Height and scrolling are Steam's game page's.** The tabbed page has no height of its own — its tab row and its content
 are positioned absolutely (`steamui/css/sp.css`, `GamepadTabbedPage`) — and Steam's game page passes
 `canBeHeaderBackground: "on-outer-scroll"` (`steamui/sp.js`, the app details' tabbed page), which Steam's stylesheet
-turns into one screen less Steam's header; the tab row pins under that header once the page has scrolled it there.
-Tender passes the same, so a tab's pane scrolls inside that box rather than the page growing with it. Steam's own page
-also scrolls itself so its tabbed page stands at the top as focus enters it, and back to the top as focus returns to its
-play bar; Tender's does the same. Focus coming into the tabs from outside them scrolls the game page so they stand 40 px
-below its top — Steam's `headerPadding`, the value its own page takes off — and focus coming to the play row scrolls it
-back (`scrollToTop` on the row). That scroll is Tender's because Steam's lives in the overview panel Tender's section
-replaces, not in the tabbed page.
+turns into one screen less Steam's header; once the page has scrolled the tabbed page up under that header, it reaches
+up behind it and its tab row takes a blurred backdrop (`IsUnderHeader`). Tender passes the same, so a tab's pane scrolls
+inside that box rather than the page growing with it. Focus coming into the tabs from outside them scrolls the game page
+so they stand `STEAM_HEADER_PADDING_PX` (40 px, Steam's `headerPadding`) below its top, and focus coming to the play row
+scrolls it back (`scrollToTop` on the row) — as Steam's own page does around its tabbed page. That scroll is Tender's
+because Steam's lives in the overview panel Tender's section replaces, not in the tabbed page.
 
 **Once the tabs stand at the top, moving focus inside them scrolls only inside them.** Two things would otherwise move
 the game page:
 
 - **A pane's own focus scroll.** Tender's rows centre themselves in the nearest scroller that overflows
-  (`scrollFocusedToCenter`, `utils/scrollHelpers.ts`). A pane whose rows all fit leaves Steam's per-tab scroller with
-  nothing to scroll, so that walk went on to the game page and moved it under the tab row on every focus move — every
-  pane but a long ACHIEVEMENTS list, whose own scroller overflows. The tabs carry `SCROLL_BOUNDARY_CLASS`, past which
-  the walk does not go.
+  (`scrollFocusedToCenter`, `utils/scrollHelpers.ts`). Where a pane's rows all fit, Steam's per-tab scroller does not
+  overflow, and the nearest one that does is the game page around the tabs. The tabs carry `SCROLL_BOUNDARY_CLASS`, past
+  which that walk does not go, so such a row is not scrolled at all.
 - **Steam's scroll to a focus put back after a tab switch.** Steam slides the incoming pane in from the side
   (`translateX(±40%)`, `steamui/css/sp.css`) and puts focus back in it before it has arrived. Its own focus scroll hands
   that element to the browser's `scrollIntoView` (`steamui/sp.js`), which scrolls every scroller around it sideways to
@@ -658,14 +656,14 @@ the game page:
 
 **B steps back as on Steam's own game page** (#2421 D5): in a pane it puts focus on the tab row, on the tab row it puts
 focus on the play row, and only on the play row does it leave the page. The first step is Steam's tabbed page's own —
-its content pane takes B to focus the tab row unless `cancelSkipTabHeader` is passed, which the Library page passes and
-the game page does not. The second is `onCancelFromTabHeader`, which the tabbed page binds as its own cancel handler, so
-B reaches it from the tab row; Steam's game page puts focus on its Play button there, and Tender's puts it on the play
-row's first stop, its Play button, which the row registers with the scope (`bigpicture/tabStepping.tsx`). Focus landing
-on the play row scrolls the page back to the top, as moving there by the d-pad does. Where no play row is registered the
-handler answers `false`, and B goes on as it would from the play row. Nothing on the play row takes B, so there it
-reaches Steam's page. Entry focus is not placed in a pane (`autoFocusContents: false`, as Steam's game page passes), so
-the page still opens on the play row.
+the content pane's handler for B (§ Pages), which the Library page turns off with `cancelSkipTabHeader` and the game
+page leaves on. The second is `onCancelFromTabHeader`, which the tabbed page binds as its own cancel handler, so B
+reaches it from the tab row; Steam's game page puts focus on its Play button there, and Tender's puts it on the play
+row's first stop, its Play button — the row registers its element with the scope (`bigpicture/tabStepping.tsx`). Focus
+landing on the play row scrolls the page back to the top, as moving there by the d-pad does. Where no play row is
+registered the handler answers `false`, and B goes on as it would from the play row. Nothing on the play row takes B, so
+there it reaches Steam's page. Entry focus is not placed in a pane (`autoFocusContents: false`, as Steam's game page
+passes), so the page still opens on the play row.
 
 **L1 and R1 from the play row are Tender's own.** Steam handles the bumpers on its tab row and its content and stops
 them there; the play row is outside the tabbed page, and Steam's own play bar handles no bumper. So the play row carries

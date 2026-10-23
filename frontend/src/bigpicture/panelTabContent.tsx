@@ -1,8 +1,8 @@
 /**
  * The game detail panel's tabs, each with its pane.
  *
- * Every pane is an element here and is mounted only while its tab is shown —
- * Steam's tabbed page renders the active tab's content alone. That is
+ * Every pane is an element here, and only the shown tab's is mounted
+ * (`docs/architecture/qam-panel.md`, "The game page's tabs"). That is
  * load-bearing for SAVES and ARTWORK: both fetch on mount (ARTWORK asks
  * SteamGridDB for the game's name and hashes the slots' images), so mounting
  * them for a tab nobody opened would fire those requests on every game page.
@@ -29,10 +29,10 @@ interface TabContentContext {
 }
 
 /**
- * The tabs shown, in their fixed order. ACHIEVEMENTS and SAVES exist only where
- * their pane has something to show; BIOS is there for every game from the moment
- * the page opens, since its answer is read after the page stands and the tab
- * says so while it waits.
+ * The tabs shown, in their fixed order. ACHIEVEMENTS is there for a game
+ * RetroAchievements knows (an `ra_id`), SAVES while save sync is on; BIOS is
+ * there for every game from the moment the page opens, since its answer is read
+ * after the page stands and the tab says so while it waits.
  */
 export function buildPanelTabs(ctx: TabContentContext): Tab[] {
   const { state } = ctx;

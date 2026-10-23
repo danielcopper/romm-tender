@@ -550,7 +550,7 @@ describe("RomMPlaySection", () => {
       expect(step).toHaveBeenLastCalledWith(-1);
     });
 
-    it("is the play row B on the game page's tab row puts focus on", async () => {
+    it("is what B on the game page's tab row puts focus on", async () => {
       let focusPlayRow: (() => boolean) | null = null;
       const Tabs = () => {
         focusPlayRow = useFocusPlayRow();
