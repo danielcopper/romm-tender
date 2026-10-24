@@ -647,9 +647,9 @@ What an action moves is not the matrix's. Two building blocks in `services/saves
 handed to every save service that needs them, carry it out:
 
 - `SaveBackup` (`save_backup.py`) moves a local save file into the `.romm-backup` folder beside it before Tender itself
-  replaces or removes it — the sync's download, the slot steps, following a moved save directory, the adoption renamer
-  and the removed-game cleanup all go through it. Deleting a game's local saves, which the user asks for, removes them
-  outright.
+  replaces or removes it — every download over a local file (`SaveTransfer.download_save_file`, whichever flow calls
+  it), the slot steps, following a moved save directory, the adoption renamer and the removed-game cleanup all go
+  through it. Deleting local saves — a game's or a whole platform's — which the user asks for, removes them outright.
 - `SaveTransfer` (`save_transfer.py`) downloads a server save, uploads a local one, acknowledges a head adopted without
   a transfer, adopts an identical head, and fetches a server copy to compare or to place. A download or upload records
   the sync boundary through the aggregate's verbs in the same step, so no caller transfers without recording.

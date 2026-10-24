@@ -46,17 +46,16 @@ if TYPE_CHECKING:
 class SaveCopyServiceConfig:
     """Frozen wiring bundle handed to ``SaveCopyService.__init__``.
 
-    Mirrors :class:`VersionsServiceConfig` — the copy flow reuses the same
-    rollback-orchestration machinery (per-ROM lock, pre-flight sync, the
-    download/upload steps); every file write routes through
-    ``save_transfer``. Holds the live ``settings.json`` dict
-    (default-slot seeding), the Unit-of-Work factory (the transactional seam
-    over the SQLite repositories), the peer save sub-services consumed during
-    orchestration (sync_engine, whose ``live_device_id`` answers the device id,
-    and rom_info), the core resolver used to stamp the upload
-    emulator tag, the Protocol-typed RomM adapter and retry strategy, the
-    backend's event loop, the standard-library logger, the ``DebugLogger`` seam,
-    and the save transfer the copy downloads and uploads through.
+    Mirrors :class:`VersionsServiceConfig` field for field — the copy flow
+    reuses the same orchestration (per-ROM lock, pre-flight sync). Holds the
+    live ``settings.json`` dict (default-slot seeding), the Unit-of-Work
+    factory (the transactional seam over the SQLite repositories), the peer
+    save sub-services consumed during orchestration (sync_engine, whose
+    ``live_device_id`` answers the device id, and rom_info), the core resolver
+    used to stamp the upload emulator tag, the Protocol-typed RomM adapter and
+    retry strategy, the backend's event loop, the standard-library logger, the
+    ``DebugLogger`` seam, and the save transfer every file write of the copy
+    goes through.
     """
 
     settings: dict[str, Any]

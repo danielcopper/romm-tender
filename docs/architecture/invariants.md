@@ -995,9 +995,9 @@ Format: **invariant** — tier — enforced by.
   `rom_folders`, `bios_folder`, `saves_root` and `move_roots`, each a fresh reading of the emulator sources and a
   question to the resolver, which reads RetroDECK's settings file and ES-DE's, and a `realpath` of the answer — together
   with the services' own wrappers around them (`_rom_folder`, `_rom_folders`, `_resolve_target`, `_platform_dir`,
-  `_saves_root`), which are what the services call — the save backup — `SaveBackup.back_up_save_file` and
+  `_saves_root`), which are what the services call; the save backup's two moves, `SaveBackup.back_up_save_file` and
   `.back_up_claimed_save_file` (a listing of `.romm-backup`, a rename, and for the ordinary backup the removal of copies
-  past its retention), with `_back_up_save`, the adoption renamer's binding of the first — and every save-transfer step
+  past its retention), with `_back_up_save`, the adoption renamer's binding of the first; and every save-transfer step
   (`fetch_server_copy`, `hash_server_copy`, `download_save_file`, `upload_save_file`, `acknowledge_server_head`,
   `adopt_server_head`, `record_server_head`: a RomM request, a temporary file, or a measure of the local file). The
   firmware timing is the only entry a cost was measured for; every other one is listed from reading its implementation.
@@ -1831,18 +1831,18 @@ Format: **invariant** — tier — enforced by.
 - **An adopt of a head this device must confirm — one the core marks `acknowledge` in the sync, and Keep Local's adopt
   without an upload always — records its baseline only after `POST /api/saves/{id}/downloaded` succeeded; a failed
   acknowledgement records nothing, and the status read records no such adopt; Keep Local's adopt records the sync
-  boundary as the sync's does, without a core** — test + prompt-only — the core sets `acknowledge` on an adopt of a head
-  this device is not current on (romm-gavel `SPEC.md`, "Bookkeeping"). Without the acknowledgement RomM keeps the device
-  not current on that head, so a baseline recorded anyway would make the next local edit read as one under a head that
-  moved past it — a conflict no other device caused — while recording nothing leaves the next sync to decide the same
-  adopt again. One step holds the order: `SaveTransfer.adopt_server_head` (`services/saves/save_transfer.py`) confirms
-  through the retry strategy and records only once that succeeded. Two callers take it: `MatrixExecutor._dispatch_skip`
-  (`services/saves/sync_engine/matrix.py`), which lets a failure reach `_dispatch_sync_action` to be reported as that
-  file's error, and `RollbackOrchestrator._resolve_conflict_keep_local` (`sync_engine/rollback.py`), which lets a
-  failure end the resolution. `SaveTransfer.record_server_head` records without confirming, for an adopt the core does
-  not mark; `StatusService._partition_outcomes` (`services/saves/status/service.py`) records only such an adopt, because
-  showing a page never writes to RomM. Enforced by
-  `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
+  boundary as the sync's does, recording no core, so the last upload's stays** — test + prompt-only — the core sets
+  `acknowledge` on an adopt of a head this device is not current on (romm-gavel `SPEC.md`, "Bookkeeping"). Without the
+  acknowledgement RomM keeps the device not current on that head, so a baseline recorded anyway would make the next
+  local edit read as one under a head that moved past it — a conflict no other device caused — while recording nothing
+  leaves the next sync to decide the same adopt again. One step holds the order: `SaveTransfer.adopt_server_head`
+  (`services/saves/save_transfer.py`) confirms through the retry strategy and records only once that succeeded. Two
+  callers take it: `MatrixExecutor._dispatch_skip` (`services/saves/sync_engine/matrix.py`), which lets a failure reach
+  `_dispatch_sync_action` to be reported as that file's error, and `RollbackOrchestrator._resolve_conflict_keep_local`
+  (`sync_engine/rollback.py`), which lets a failure end the resolution. `SaveTransfer.record_server_head` records
+  without confirming, for an adopt the core does not mark; `StatusService._partition_outcomes`
+  (`services/saves/status/service.py`) records only such an adopt, because showing a page never writes to RomM. Enforced
+  by `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
   `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges`,
   `tests/services/saves/sync_engine/test_keep_local.py::TestKeepLocalAdoptsAsTheSyncDoes` and
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`

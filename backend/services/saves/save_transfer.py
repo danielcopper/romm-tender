@@ -98,9 +98,10 @@ class SaveTransfer:
         """Fetch *server_save* into a temporary file, hash it and remove the file — Keep Local's identity check.
 
         Returns the hash, or ``None`` for a save without an id or a fetch that
-        failed in a way no retry would mend. Raises a retryable failure that
-        outlasted the fetch's own retries, and a :class:`DeviceWriteError`, which
-        is this device's to report rather than a hash the server could not give.
+        failed in a way no retry would mend. Raises a failure the retry strategy
+        counts as retryable, so the retry around the call can try again, and a
+        :class:`DeviceWriteError`, which is this device's to report rather than a
+        hash the server could not give.
         """
         save_id = server_save.get("id")
         if not save_id:

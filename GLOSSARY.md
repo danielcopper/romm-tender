@@ -1045,9 +1045,9 @@ no-op dispatch for a ROM's sync run; what a dispatched action moves is the **sav
 ### Save backup
 
 A local save file Tender moves into the `.romm-backup` folder beside it before Tender itself replaces or removes it —
-`SaveBackup` (`services/saves/save_backup.py`), the one funnel every such path goes through. Deleting a game's local
-saves, which the user asks for, removes them outright. Which paths take a backup, how a backup is named and how many are
-kept:
+`SaveBackup` (`services/saves/save_backup.py`), the one funnel every such path goes through. Deleting local saves — a
+game's or a whole platform's — which the user asks for, removes them outright. Which paths take a backup, how a backup
+is named and how many are kept:
 [Inside `.romm-backup` — naming and retention](docs/architecture/save-file-sync-architecture.md#inside-romm-backup-naming-and-retention)
 and the save-sync page's Implementation section.
 

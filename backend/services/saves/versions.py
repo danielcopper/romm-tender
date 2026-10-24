@@ -236,12 +236,10 @@ class VersionsService:
            upserts our DeviceSaveSync row (``synced_at = updated_at``), so
            id=save_id is now newest in the slot and ``is_current`` already
            evaluates true for us.
-        3. :meth:`SaveTransfer.upload_save_file` acks the upload. The PUT
-           already upserted our sync row (RomM's PUT auto-upserts on every
-           supported version), so this ack is at most a redundant idempotent
-           re-write, not the required step it was once described as (#1458).
-        4. :meth:`SaveTransfer.upload_save_file` records the sync boundary to
-           match the post-PUT response.
+        3. :meth:`SaveTransfer.upload_save_file` records the sync boundary to
+           match the post-PUT response, then acks the upload — at most a
+           redundant idempotent re-write, since the PUT already upserted our
+           sync row (RomM's PUT auto-upserts on every supported version).
 
         After this, the next ``compute_sync_action`` run picks id=save_id
         (now newest), our ``is_current=true``, hash matches →

@@ -1,8 +1,8 @@
 """The save backup: a local save file moved into ``.romm-backup`` before Tender itself destroys it.
 
 The one funnel through which every path where Tender replaces or removes a save
-file takes its recoverable copy; deleting a game's local saves, which the user
-asks for, removes them outright. Which paths those are:
+file takes its recoverable copy; deleting local saves — a game's or a whole
+platform's — which the user asks for, removes them outright. Which paths those are:
 docs/architecture/save-file-sync-architecture.md, "Implementation". The names,
 their time stamp and which backups go are ``domain/save_backup.py``'s; the moves
 are this module's.
@@ -52,13 +52,11 @@ class SaveBackup:
         ``_<n>`` counter so a multi-file slot backed up within one second never
         overwrites an earlier backup, and the newest *keep* backups of the file
         are kept — older ones are removed to bound the recovery net's disk use.
-        The backup written by this call is never removed in its own call, so
-        under sustained same-second churn the folder may briefly hold one extra
-        copy (*keep* + 1) — destroying the just-saved file to honour the cap
-        would defeat the backup. Returns ``True`` when a file was moved,
-        ``False`` when there was nothing at *filename* to back up. Raises
-        ``ValueError`` when the backup folder is a link or lies outside
-        *saves_dir*, and the store's ``OSError`` when a move fails.
+        The backup written by this call is never removed in its own call.
+        Returns ``True`` when a file was moved, ``False`` when there was nothing
+        at *filename* to back up. Raises ``ValueError`` when the backup folder is
+        a link or lies outside *saves_dir*, and the store's ``OSError`` when a
+        move fails.
         """
         local_path = os.path.join(saves_dir, filename)
         if not self._save_file_store.is_file(local_path):

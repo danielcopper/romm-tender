@@ -158,8 +158,8 @@ class TestResolveSyncConflict:
 
         That sinks the adopt-without-upload short-circuit (which requires
         ``server_hash`` truthy and equal to ``local_hash``) and the POST with
-        overwrite runs unconditionally. Degraded behaviour, but no failure surfaced to
-        the user.
+        overwrite runs unconditionally. Degraded behaviour, but no failure
+        surfaced to the user.
         """
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)

@@ -994,12 +994,12 @@ class TestAnUploadsFileStatePersistence:
     """Regression for #409.
 
     The PUT branch with a slot already marked ``source='server'`` is a no-op
-    for slot promotion. Without the operation entry's unconditional persist after
-    ``upload_save_file``, the per-file ``last_sync_hash`` / ``tracked_save_id``
-    the upload records never reaches disk on that path —
-    so after a backend restart the next sync re-detects drift and re-uploads
-    the same content. This test asserts the upload outcome is persisted
-    regardless of which slot-promotion branch fired.
+    for slot promotion. Without the operation entry's unconditional persist
+    after ``upload_save_file``, the per-file ``last_sync_hash`` /
+    ``tracked_save_id`` the upload records never reaches disk on that path — so
+    after a backend restart the next sync re-detects drift and re-uploads the
+    same content. This test asserts the upload outcome is persisted regardless
+    of which slot-promotion branch fired.
     """
 
     def test_put_path_persists_file_sync_state_when_slot_already_server(self, tmp_path):
