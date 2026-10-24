@@ -9,6 +9,7 @@
  */
 
 import type { ArtworkSlotRow, ArtworkTabSlot } from "../api/backend";
+import { artworkThumbToken, heldArtworkSlots } from "./artworkSlotsStore";
 
 const LOOPBACK = "https://steamloopback.host";
 
@@ -47,6 +48,12 @@ export function coverUrls(appId: number, token = "", signature: string | null = 
     signature,
     true,
   );
+}
+
+/** The URLs of the cover Steam shows for shortcut *appId*, signed by the cover row of *romId*'s held ARTWORK read. */
+export function steamsCover(appId: number, romId: number | null): string[] {
+  const cover = heldArtworkSlots(appId, romId)?.slots?.slots.find((row) => row.slot === "cover");
+  return coverUrls(appId, artworkThumbToken(appId, "cover"), cover?.signature ?? null);
 }
 
 function thumbnailUrls(

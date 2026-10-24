@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import * as backend from "../api/backend";
 import type { ArtworkSlotRow } from "../api/backend";
-import { coverUrls, slotThumbnailUrls } from "./artworkThumbs";
-import { _resetArtworkSlotsForTests, artworkThumbToken, writeSlotArtwork } from "./artworkSlotsStore";
+import { coverUrls, slotThumbnailUrls, steamsCover } from "./artworkThumbs";
+import { _resetArtworkSlotsForTests, artworkThumbToken, loadArtworkSlots, writeSlotArtwork } from "./artworkSlotsStore";
 
 const row = (overrides: Partial<ArtworkSlotRow>): ArtworkSlotRow => ({
   slot: "hero",
@@ -161,5 +162,38 @@ describe("coverUrls", () => {
 
   it("keeps Steam's v= where no cover row is held to sign it", () => {
     expect(coverUrls(5000, "7")).toEqual(["https://steamloopback.host/customimages/5000p.png?v=9&t=7"]);
+  });
+});
+
+describe("steamsCover", () => {
+  beforeEach(() => {
+    _resetArtworkSlotsForTests();
+    vi.stubGlobal("appStore", {
+      GetAppOverviewByAppID: vi.fn(() => ({ appid: 5000 })),
+      GetCustomVerticalCapsuleURLs: vi.fn(() => ["/customimages/5000p.png?v=9"]),
+      allApps: [],
+    });
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue({
+      success: true,
+      has_api_key: true,
+      game: { sgdb_id: 7, source: "romm", name: "Mario Golf" },
+      slots: [row({ slot: "cover", source: "romm", signature: "c1" })],
+    });
+  });
+
+  it("signs the cover by the held read of the ROM asked about, with that slot's token", async () => {
+    await loadArtworkSlots(5000, 42);
+
+    expect(steamsCover(5000, 42)).toEqual([
+      `https://steamloopback.host/customimages/5000p.png?v=9&s=c1&t=${artworkThumbToken(5000, "cover")}`,
+    ]);
+  });
+
+  it("is not signed by a read held for another ROM", async () => {
+    await loadArtworkSlots(5000, 42);
+
+    expect(steamsCover(5000, 43)).toEqual([
+      `https://steamloopback.host/customimages/5000p.png?v=9&t=${artworkThumbToken(5000, "cover")}`,
+    ]);
   });
 });
