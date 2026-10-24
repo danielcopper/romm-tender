@@ -71,8 +71,8 @@ async def settle_stale_rows(
     established nothing — is in neither list: its shortcut stays, and being kept
     does not file it in its platform's collection; only the platform-groups
     setting can. Neither list holds a row whose game the run synced
-    (*synced_group_keys*) either, though RomM is asked about it where it would
-    be asked about any other row.
+    (*synced_group_keys*) on a platform the run did not read either, though
+    RomM is asked about it where it would be asked about any other row.
     """
     sort = sort_stale_rows(
         rows,

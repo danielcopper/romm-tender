@@ -642,9 +642,9 @@ Format: **invariant** — tier — enforced by.
   its playtime and collections; a rule read off the collection stamps alone removes a game gone from RomM at the second
   run after its collection dropped it; a platform RomM stopped listing loses every shortcut as if it had been turned
   off; a kept row left out of the platform's collection drops out of it, or keeps its game under a collection renamed to
-  the slug; a game hidden in RomM leaves it whenever the collection that lists it is skipped; and a mark a preview
-  wrote, or an answer that established nothing set or cleared, would offer the cleanup a game RomM still serves or hide
-  one it no longer does
+  the slug; a game hidden in RomM leaves its platform's collection whenever the collection that lists it is skipped; and
+  a mark a preview wrote, or an answer that established nothing set or cleared, would offer the cleanup a game RomM
+  still serves or hide one it no longer does
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

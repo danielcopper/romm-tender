@@ -1331,7 +1331,8 @@ class SyncOrchestrator:
         # run syncs is removed (``sort_stale_rows``); a version gone from RomM
         # stays bound and in its platform's Steam collection, and so does one a
         # collection skip rebuilt (``rebuilt_rows_filed_as_kept``), which no
-        # unit left stale. A stopped run keeps neither.
+        # unit left stale. A stopped run files neither in its platform's Steam
+        # collection.
         candidates: list[StaleRow] = []
         group_keys: dict[int, str] = {}
         if not cancelled:

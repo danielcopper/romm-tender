@@ -512,11 +512,12 @@ and with the platforms and collections you turned on or off. Existing shortcuts 
 
 When the version a shortcut is bound to is no longer available on RomM — deleted there, or hidden from your RomM user,
 which RomM answers the same way — the shortcut **stays bound to it**, installed or not, with its name, launch command,
-artwork and playtime, and in its platform's Steam collection — a Steam collection made from a RomM collection drops it,
-since RomM no longer lists it there. That holds when the game still has other versions on RomM and when every version of
-it is gone. The game's page says the version is no longer available and what that means for a downloaded copy; to play
-another version, choose it in the [version picker](managing-games.md#the-switch-version-control), and to remove the
-game, use [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm).
+artwork and playtime, and in its platform's Steam collection. A Steam collection made from a RomM collection keeps a
+hidden version, since RomM still lists it there, and drops a deleted one, which RomM no longer lists. That holds when
+the game still has other versions on RomM and when every version of it is gone. The game's page says the version is no
+longer available and what that means for a downloaded copy; to play another version, choose it in the
+[version picker](managing-games.md#the-switch-version-control), and to remove the game, use
+[Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm).
 
 A platform RomM no longer lists at all is gone from RomM rather than turned off, even while it is still on in Tender:
 its games keep their shortcuts and their place in its Steam collection, each game's page says the game is no longer
