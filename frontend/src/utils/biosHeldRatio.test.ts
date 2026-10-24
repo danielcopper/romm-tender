@@ -84,11 +84,9 @@ describe("biosHeldRatio", () => {
  * moves the lock with it rather than leaving a second copy of it here.
  *
  * **It sweeps the same set its twin does** (`test-utils/componentSources.ts`)
- * rather than naming the components, for the reason written there: both locks
- * once named two while three components rendered a BIOS state. Only the sentence
- * half actually drifted — the Platforms list has never written a ratio — so the
- * sweep holds this half before the fact rather than repairing it after, which is
- * the only thing a lock can do for a surface that has not gone wrong yet.
+ * rather than naming the components, for the reason written there. It holds the
+ * ratio before any surface writes it for itself rather than repairing it after,
+ * which is the only thing a lock can do for a surface that has not gone wrong yet.
  *
  * It reads the components as TEXT, so a comment quoting the ratio fails it too —
  * deliberately: the words belong to the module, and so does the reasoning about

@@ -703,12 +703,8 @@ describe("reading the payload", () => {
  * itself, so a wording change moves the lock with it rather than leaving a second
  * copy of the list here to drift.
  *
- * **The searched set is swept, never listed** (`test-utils/componentSources.ts`),
- * because a hand-kept list is what failed here: it named two components while
- * three rendered these states, and the third went on spelling an older wording
- * of them with the suite green. A surface missing from such a list cannot be
- * told from one that never drifted, so correcting the list's count would have
- * left the failure intact and merely moved it to the next surface added.
+ * **The searched set is swept, never listed** (`test-utils/componentSources.ts`,
+ * which says which set and why).
  *
  * **What this lock sees is a phrase standing in a component as text.** What it
  * does NOT see is a component inventing a NEW wording for one of these seven

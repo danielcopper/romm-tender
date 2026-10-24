@@ -1779,13 +1779,10 @@ it, for the focused platform:
   row the library holds. What stops a surface writing one of these sentences back into itself is
   `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and fails on any phrase the module
   builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and `biosGroup.test.ts` over the
-  region names and a file's place in a group. **All three SWEEP the set they search rather than naming it** — every
-  non-test `.tsx` under `frontend/src/bigpicture`, `frontend/src/desktop` or `frontend/src/shared`, via
-  `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two while three
-  surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted. Deriving the
-  set from who imports the module would be worse still, since a surface wording a state for itself is precisely one that
-  does not import it. **What the sweep cannot see is a NEW wording** invented for one of these states; no string search
-  can, so a green run is evidence about copied sentences alone.
+  region names and a file's place in a group. **All three SWEEP the set they search rather than naming it**
+  (`frontend/src/test-utils/componentSources.ts`, which says which set and why). **What the sweep cannot see is a NEW
+  wording** invented for one of these states; no string search can, so a green run is evidence about copied sentences
+  alone.
 
   **The Platforms list's row tooltip reads the same module too** (`PlatformsTab.tsx`'s `biosTooltip`) and takes the
   `sentence`, so hovering a row and opening its pane give one wording rather than two. It was the last one in, and while
