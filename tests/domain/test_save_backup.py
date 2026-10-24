@@ -120,3 +120,22 @@ class TestSelectBackupsToPrune:
     def test_empty_list_returns_empty(self) -> None:
         """No entries → nothing to prune."""
         assert select_backups_to_prune("game.srm", [], keep=10) == []
+
+
+# ---------------------------------------------------------------------------
+# backup_timestamp
+# ---------------------------------------------------------------------------
+
+
+class TestBackupTimestamp:
+    def test_a_name_stamped_with_it_is_recognised_as_a_backup_and_pruned_by_age(self) -> None:
+        from datetime import UTC, datetime
+
+        from domain.save_backup import backup_timestamp, is_backup_for
+
+        older = backup_name("game.srm", backup_timestamp(datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)), set())
+        newer = backup_name("game.srm", backup_timestamp(datetime(2026, 11, 2, 3, 4, 5, tzinfo=UTC)), set())
+
+        assert older == "game_20260102_030405.srm"
+        assert is_backup_for("game.srm", older)
+        assert select_backups_to_prune("game.srm", [newer, older], 1) == [older]

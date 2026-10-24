@@ -1,19 +1,32 @@
-"""Pure naming + retention rules for the local ``.romm-backup`` quarantine.
+"""Pure naming, time-stamp and retention rules for the local ``.romm-backup`` folder.
 
-The matrix executor owns the I/O; the collision-free name and the prune
-set are decided here so both rules are unit-testable without touching the
-filesystem.
+``services.saves.save_backup.SaveBackup`` owns the I/O; the collision-free
+name, the time stamp in it and the prune set are decided here so the rules
+are unit-testable without touching the filesystem.
 """
 
 from __future__ import annotations
 
 import os
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 BACKUP_DIR_NAME = ".romm-backup"
-"""Name of the per-saves-directory quarantine folder every removed save is moved into."""
+"""Name of the per-saves-directory backup folder every replaced or removed save is moved into."""
 
+BACKUP_RETENTION = 10
+"""How many backups of one save file a backup keeps when its caller bounds them (#974)."""
+
+_TS_FORMAT = "%Y%m%d_%H%M%S"
 _TS = r"\d{8}_\d{6}"
+
+
+def backup_timestamp(now: datetime) -> str:
+    """The time stamp a backup taken at *now* carries in its name — the form :data:`_TS` matches."""
+    return now.strftime(_TS_FORMAT)
 
 
 def backup_name(filename: str, ts: str, existing: set[str]) -> str:
@@ -52,8 +65,8 @@ def select_backups_to_prune(filename: str, existing: list[str], keep: int) -> li
     name (``<name>_<ts><ext>``) that was freed by an earlier prune and then
     reused for a *newer* backup sorts *oldest* (``.`` < ``_``), so a caller that
     prunes in the same call that creates a backup MUST exclude the just-created
-    name — otherwise the cap would delete the live save it just quarantined
-    (see :meth:`MatrixExecutor.quarantine_local_file`).
+    name — otherwise the cap would delete the live save it just backed up
+    (see :meth:`SaveBackup.back_up_save_file`).
     """
     if keep <= 0:
         return []
@@ -66,6 +79,6 @@ def select_backups_to_prune(filename: str, existing: list[str], keep: int) -> li
 
 
 def is_backup_for(filename: str, candidate: str) -> bool:
-    """Return whether *candidate* is a quarantine backup of *filename*."""
+    """Return whether *candidate* is a backup of *filename*."""
     name, ext = os.path.splitext(filename)
     return re.fullmatch(rf"{re.escape(name)}_{_TS}(?:_\d+)?{re.escape(ext)}", candidate) is not None
