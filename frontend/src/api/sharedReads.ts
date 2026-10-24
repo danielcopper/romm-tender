@@ -37,6 +37,13 @@
  * which is a different key here — it shares with the other lane's load for that
  * same new rom_id, and with nothing else.
  *
+ * `get_rom_metadata` has a third caller, the desktop client's game view
+ * (`utils/useRomMetadata.ts`), whose page holds the play row's store and no info
+ * panel. It reads once the page's ROM is known and again only for another
+ * rom_id, and never because the metadata changed, so the same argument admits
+ * it: all it can join is a load the store runs for that same rom_id, where
+ * the cached detail marks the metadata stale.
+ *
  * `get_bios_status` needs that argument made twice over, because a BIOS answer
  * is the one of the three that a user action moves within a single page's
  * lifetime: a firmware download or delete empties the firmware cache, and the
@@ -86,7 +93,8 @@ function shareInFlight<A, R>(read: (arg: A) => Promise<R>): (arg: A) => Promise<
   };
 }
 
-/** `get_rom_metadata` for one ROM, shared across the page's two load lanes. */
+/** `get_rom_metadata` for one ROM, shared across the page's load lanes and
+ *  `useRomMetadata`. */
 export const getRomMetadataShared = shareInFlight(getRomMetadata);
 
 /** `get_platform_core_info` for one ROM, shared across the page's two load

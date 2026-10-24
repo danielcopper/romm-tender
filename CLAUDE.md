@@ -1225,13 +1225,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   panel's modules `frontend/src/bigpicture/panelState.ts`, `frontend/src/bigpicture/panelEvents.ts` and
   `frontend/src/bigpicture/panelTabContent.tsx` via `RomBinding` (`bindRom`, `bindRomInState`); `useAchievements`
   (`frontend/src/utils/achievements.ts`) by tagging each answer with the rom it was read for (`forRom`) and showing it
-  only while that rom shows. Two answers for the SAME rom are ordered by a sequence taken at issue (`loadSeq`,
-  `saveStatusSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes (the store's `loadDetail`, the
-  panel's `loadData`) and the panel's lazy SAVES-tab slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter,
-  `slots` ticket); neither bound nor ordered: the store's `cached.bios_status` fold. The panel's `rereadBiosAnswer`,
-  which `handleBiosChange` and a press on the BIOS tab both read through, is bound and ordered (`bios` ticket). The play
-  button is NOT covered** — test + prompt-only — the panel's bound sites each carry a version-switch test
-  (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site are prompt-only
+  only while that rom shows, and `useRomMetadata` (`frontend/src/utils/useRomMetadata.ts`) the same way. Two answers for
+  the SAME rom are ordered by a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`). Ordered but
+  unbound: the two identity writes (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab
+  slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the
+  store's `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS
+  tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered** — test + prompt-only —
+  the panel's bound sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`), and
+  `useRomMetadata`'s binding is pinned by `frontend/src/utils/useRomMetadata.test.ts`; the store side and every new
+  write site are prompt-only
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own; text between two stops of
   the same card is reached through them and is no stop of its own (an emulator source card's folder and health lines,
