@@ -987,16 +987,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **No sentinel objects on the wire — explicit JSON-representable tagged values only** — prompt-only — nothing
   mechanical detects a new one
 - **Every destructive op has backup-or-confirm; never delete data that exists nowhere else** — test + prompt-only —
-  save-file removals route through the `.romm-backup` funnel (`MatrixExecutor.quarantine_local_file`; the removed-game
-  cleanup's claimed variant is `PruneSaveSupport.quarantine_prune_saves`); every other delete path carries the rule
-  unmechanized. Three deletes take the confirm leg: the removed-game cleanup's unselected installed ROM content
-  (per-candidate opt-in stated in the dialog; the row goes only after a fresh 404), the adopt dialog's **replace** exit
-  for the ROM (both sides shown, a content check offered, a second confirmation), and a choice in the ARTWORK tab over
-  an image set in Steam (a second question, Replace or Cancel, before Steam's copy is cleared; the icon's file stays and
-  is not asked about); an adoption's Overwrite of save and savestate files, and a collision while following a moved save
-  directory (`services/saves/save_directory.py`), take the backup leg through the same funnel. A BIOS file a "Replace…"
-  the user confirmed moves aside, and a file lying in the firmware store without a record of Tender's whose checksum
-  does not match, take the backup leg to `<data>/backups/bios/<date and time>/<original absolute path>`
+  save-file removals route through the `.romm-backup` funnel, the save backup (`SaveBackup.back_up_save_file`; the
+  removed-game cleanup's claimed variant is `SaveBackup.back_up_claimed_save_file`, reached through
+  `PruneSaveSupport.back_up_prune_saves`); every other delete path carries the rule unmechanized. Three deletes take the
+  confirm leg: the removed-game cleanup's unselected installed ROM content (per-candidate opt-in stated in the dialog;
+  the row goes only after a fresh 404), the adopt dialog's **replace** exit for the ROM (both sides shown, a content
+  check offered, a second confirmation), and a choice in the ARTWORK tab over an image set in Steam (a second question,
+  Replace or Cancel, before Steam's copy is cleared; the icon's file stays and is not asked about); an adoption's
+  Overwrite of save and savestate files, and a collision while following a moved save directory
+  (`services/saves/save_directory.py`), take the backup leg through the same funnel. A BIOS file a "Replace…" the user
+  confirmed moves aside, and a file lying in the firmware store without a record of Tender's whose checksum does not
+  match, take the backup leg to `<data>/backups/bios/<date and time>/<original absolute path>`
   (`FirmwareStore.do_back_up`, `tests/services/test_firmware_store.py`, `TestReplacingAWrongFile` and
   `TestAStoreFileWithoutARecord`). The installer's two rollbacks: one by hand takes the backup leg — the database files
   and `settings.json` it replaces are copied to `rollback-backup/` under the data root first, and a copy that cannot be
@@ -1035,11 +1036,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   place only because no placement names it — nothing pins that no placing or removal path reads that set
   ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D36, D37, D40, D42, D43)
 - **Every save operation sends RomM the device id `SyncEngine.live_device_id` answers — registered or healed a moment
-  before — and no other: `RommSaveApi.list_saves` and the sync logic (`do_sync_rom_saves`,
-  `MatrixExecutor.sync_rom_saves`, `do_download_save`, `do_upload_save`) take a `LiveDeviceId`, only that entry builds
-  one, and no save service but `SyncEngine` holds the `DeviceRegistry`** — check + test + prompt-only — basedpyright
-  refuses a stored id or `None` where a `LiveDeviceId` is taken, but not a value typed `Any` (a `dict[str, Any]` read
-  such as `ensure_device_registered()["device_id"]`) nor one an unannotated parameter carries (basic mode);
+  before — and no other: `RommSaveApi.list_saves`, the sync logic (`do_sync_rom_saves`, `MatrixExecutor.sync_rom_saves`)
+  and the save transfer's steps that name the device (`SaveTransfer.download_save_file`, `upload_save_file`,
+  `acknowledge_server_head`, `adopt_server_head`) take a `LiveDeviceId`, only that entry builds one, and no save service
+  but `SyncEngine` holds the `DeviceRegistry`** — check + test + prompt-only — basedpyright refuses a stored id or
+  `None` where a `LiveDeviceId` is taken, but not a value typed `Any` (a `dict[str, Any]` read such as
+  `ensure_device_registered()["device_id"]`) nor one an unannotated parameter carries (basic mode);
   `scripts/check_live_device_id.py` fails on a `LiveDeviceId(...)` or a `cast` to it outside the entry and on a renamed
   import; `tests/services/saves/test_device_registry_holder.py` fails on an annotation naming `DeviceRegistry` outside
   `SyncEngineConfig` and on a `DeviceRegistry(...)` kept on `self`. What the two miss is listed in their docstrings.
@@ -1113,9 +1115,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   without an upload always — records its baseline only after `POST /api/saves/{id}/downloaded` succeeded; a failed
   acknowledgement records nothing, and the status read records no such adopt** — test + prompt-only —
   `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
-  `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges` and
+  `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges`,
+  `tests/services/saves/sync_engine/test_keep_local.py::TestKeepLocalAdoptsAsTheSyncDoes` and
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`
-  reads `acknowledge` and confirms the head through the retry strategy before it records
+  adopts through `SaveTransfer.adopt_server_head` when it reads `acknowledge`, and records through
+  `SaveTransfer.record_server_head` only when it does not
 - **`applied_launch_options` is written only by the six recorded-state writer sites (sync ack-commit, download-complete,
   adopt-complete, uninstall, home-migration, version-switch), each recording the exact command the frontend wrote;
   excluded from the sync UPSERT; the only sanctioned reset is Force Full Sync's clear-to-NULL** — test + prompt-only —

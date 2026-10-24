@@ -1040,7 +1040,28 @@ remote vs **baseline** and decides from what changed on each side since the last
 direction. Where both sides changed to different content, or a local save of unknown provenance meets a different server
 save, or a local save looks emptied or cut short, it asks the user; modification times are compared only where nothing
 else orders the two sides. The "matrix" is the per-file evaluation table that drives the actual upload / download /
-no-op dispatch for a ROM's sync run.
+no-op dispatch for a ROM's sync run; what a dispatched action moves is the **save transfer**'s.
+
+### Save backup
+
+A local save file moved into the `.romm-backup` folder beside it before anything replaces or removes it — `SaveBackup`
+(`services/saves/save_backup.py`), the one funnel every such path goes through: a download over a local file, a slot
+switch, the slot-choice migration, following a moved save directory, an adoption's Overwrite and the removed-game
+cleanup. The name it lands under, the time stamp in that name and which older copies go are `domain/save_backup.py`'s;
+how many copies are kept is the caller's (the newest ten per file, or every one for the cleanup). A backup is never
+removed by the call that wrote it.
+
+_Avoid_: "quarantine" for this — the word is the playtime outbox's (a row dropped after its retry ceiling) and the
+corrupt-settings file's.
+
+### Save transfer
+
+One save file moved between this device and RomM, together with the record of what moved — `SaveTransfer`
+(`services/saves/save_transfer.py`): downloading a server save (backing the local file up first), uploading a local one,
+acknowledging a head adopted without a transfer, adopting a head the local file is identical to, and fetching a server
+copy to compare or to place. A download or an upload records the sync boundary on the ROM's state in the same step, so
+no caller transfers without recording; a fetched server copy records nothing and names no device. Which transfer a file
+needs is the **newest-wins matrix**'s decision, not the transfer's.
 
 ### SyncRun
 

@@ -5,7 +5,7 @@ that no longer sees an id retains everything it already has. Removing that local
 confirmed operation, and this page owns how it stays safe.
 
 The five prune invariants in the repo's `CLAUDE.md` register are one-clause statements of the rules below; this page is
-where their detail lives. Save-side path resolution and quarantine mechanics belong to
+where their detail lives. Save-side path resolution and backup mechanics belong to
 [save-file-sync-architecture.md](save-file-sync-architecture.md); shortcut identity and artwork belong to
 [steam-non-steam-shortcuts.md](steam-non-steam-shortcuts.md).
 
@@ -290,7 +290,7 @@ progress, surfaces a "result was lost" warning, and re-enables the entry point s
 Every prune source carries a claim before it is touched: the root's device, inode, mount id, mode, size, mtime and
 ctime, every descendant's identity, and every regular file's hash. Mutation is descriptor-relative and no-follow
 throughout, and a nested mount transition — including a same-device bind mount — fails closed. A path re-lookup alone
-never authorizes a delete or a quarantine.
+never authorizes a delete or a backup.
 
 The safe root a source is anchored to is matched **symlink-resolved**, so a root named through a link — `/home` is a
 link to `/var/home` on image-based distributions — still contains the paths recorded under its resolved spelling
@@ -358,7 +358,7 @@ the code did — those sources took a fully content-bound claim, and the phrase 
 claim (sealed here rather than decoded from a bundle), not its strength. An identity-only claim is weaker than what
 shipped and far stronger than that phrase suggests, so the table above states the strength outright. The saves side is
 unaffected: exclusive-save claims stay content-bound, and `validate_prune_absences` reads only their `exists` flag when
-it rechecks the quarantined set before the cascade.
+it rechecks the backed-up set before the cascade.
 
 An identity-only claim is also the only one allowed to adopt **interrupted staging**. Where the source is absent, the
 parent still holds a `.{basename}.romm-prune-*` entry, and the install record survives to prove the path was this ROM's,
@@ -394,10 +394,9 @@ A single-file source keeps the whole-hold form under either discipline — there
 - Selected sources consume claims decoded from the same held, digest-bound sealed bundle. Every other source seals its
   own claim at mutation time, content-bound while a bundle exists to bind it to and identity-only when none does — see
   [What the hashes are for](#what-the-hashes-are-for-and-where-they-stop).
-- Every exclusive save is expected absent after quarantine, and the whole set is rechecked collectively immediately
+- Every exclusive save is expected absent after the backup, and the whole set is rechecked collectively immediately
   before the aggregate cascade — a save an emulator recreated in between stops the deletion.
-- Quarantine publication is atomic no-replace, so a concurrently created `.romm-backup` destination is never
-  overwritten.
+- Backup publication is atomic no-replace, so a concurrently created `.romm-backup` destination is never overwritten.
 - Controller-claim branches revalidate and preserve a newer held-inode edit at a surfaced path.
 - Unsafe recovery-failure cleanup preserves the anchored staging path and reports it.
 
@@ -463,8 +462,8 @@ playtime, and the relevant controller-config value. No artwork base64 crosses fr
 
 Failure is never rewritten into success. Seal, rename and cleanup durability failures surface as exact or ambiguous
 partial mutations. A ROM's content removal that raised is reported as an ambiguous mutation rather than as nothing
-changed, because it cannot tell how far it got; its group is retained like that of any failed removal. A save quarantine
-that raised is reported the same way: the saves it had already moved are recorded as a change, and the quarantine as
+changed, because it cannot tell how far it got; its group is retained like that of any failed removal. A save backup
+that raised is reported the same way: the saves it had already moved are recorded as a change, and the backup as
 ambiguous even when it names none. If a bundle cannot be proven durable it is renamed aside rather than published; if
 that rename also fails, the reported message names what actually remains on disk rather than claiming a preservation
 that did not happen.
@@ -473,8 +472,8 @@ There is no automatic restore. A bundle is machine-readable and documented for f
 
 ### Saves
 
-Exclusive current saves leave the emulator directory only through the existing `.romm-backup` quarantine funnel. A save
-path shared with any remaining local version — installed **or not** — is copied into the bundle but never removed.
+Exclusive current saves leave the emulator directory only through the existing `.romm-backup` funnel, the save backup. A
+save path shared with any remaining local version — installed **or not** — is copied into the bundle but never removed.
 Unknown or unsafe-to-resolve save locations are recorded, left untouched, and do not block pruning the row; that warning
 is given only for a downloaded version, since a version with no downloaded files has no save files of its own for the
 cleanup to move.
