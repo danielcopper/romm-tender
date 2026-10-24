@@ -153,7 +153,7 @@ class TestResolveSyncConflict:
 
     @pytest.mark.asyncio
     async def test_resolve_keep_local_falls_back_when_server_hash_fetch_raises(self, tmp_path):
-        """When ``_get_server_save_hash`` raises out of retry (retries exhausted),
+        """When ``hash_server_copy`` raises out of retry (retries exhausted),
         the keep_local resolver swallows it and treats ``server_hash`` as ``None``.
 
         That sinks the adopt-without-upload short-circuit (which requires
@@ -172,11 +172,11 @@ class TestResolveSyncConflict:
         )
         fake.saves[100] = ss
         # No uploaded_files entry — wouldn't matter anyway, the download_save
-        # call inside _get_server_save_hash is going to raise before reading.
+        # call inside hash_server_copy is going to raise before reading.
 
-        # Make ``_get_server_save_hash`` re-raise: ``download_save`` raises
+        # Make ``hash_server_copy`` re-raise: ``download_save`` raises
         # and the retry mock reports the exception as retryable, so the
-        # inner ``except Exception`` in ``_get_server_save_hash`` re-raises
+        # inner ``except Exception`` in ``hash_server_copy`` re-raises
         # and the outer ``except Exception`` in
         # ``_resolve_conflict_keep_local`` catches it. We monkey-patch
         # ``download_save`` directly (rather than ``fail_on_next``, which
@@ -815,7 +815,7 @@ class TestResolveSyncConflictSeedsConfiguredDefaultSlot:
     "autosave", so asserting "autosave" alone could not distinguish a threaded
     setting from the fallback. Asserting a non-default configured value is what
     makes these non-vacuous — they fail if ``default_slot`` is not threaded
-    through ``do_download_save`` / ``do_upload_save``. A separate case pins the
+    through ``download_save_file`` / ``upload_save_file``. A separate case pins the
     unconfigured end-to-end default at "autosave".
     """
 
@@ -842,7 +842,7 @@ class TestResolveSyncConflictSeedsConfiguredDefaultSlot:
 
         assert result["success"] is True
         assert save_path.read_bytes() == b"server-truth"
-        # Regression: without threading, do_download_save seeded the fallback slot
+        # Regression: without threading, the download seeded the fallback slot
         # instead of the configured "main".
         assert _require_save_state(svc, 42).active_slot == "main"
 
@@ -869,7 +869,7 @@ class TestResolveSyncConflictSeedsConfiguredDefaultSlot:
         assert result["success"] is True
         upload_calls = [c for c in fake.call_log if c[0] == "upload_save"]
         assert len(upload_calls) == 1
-        # Regression: without threading, _resolve_upload_slot fell back to the
+        # Regression: without threading, the upload slot fell back to the
         # hard-coded literal instead of the configured "main".
         assert upload_calls[0][2]["slot"] == "main"
         assert _require_save_state(svc, 42).active_slot == "main"

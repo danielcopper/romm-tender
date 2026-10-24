@@ -160,7 +160,7 @@ async def test_confirm_legacy_migration_differing_local_needs_resolution(harness
 
 
 async def test_confirm_legacy_migration_use_server_resolves_conflict(harness):
-    """ "Use the server save" resolves a differing-local conflict: quarantine local, copy server in."""
+    """ "Use the server save" resolves a differing-local conflict: back up local, copy server in."""
     enable_save_sync(harness)
     seed_install(harness, 42, system="gba", file_name="game.gba")
     local_path = _write_local_save(harness, filename="game.srm", content=b"my-local-progress")

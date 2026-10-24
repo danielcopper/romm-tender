@@ -1,31 +1,28 @@
-"""Newest-wins matrix executor and per-file sync I/O dispatch.
+"""Newest-wins matrix executor: the per-file sync decision and its dispatch.
 
-The decision layer for "which side wins for this file" plus the I/O
-helpers that actually move bytes between the local saves directory and
-the RomM server. Read-only matrix consumption (status reporting) lives
-in StatusService; the loaded :class:`RomSaveSyncState` aggregate is threaded
-in by the operation entry, which owns the Unit-of-Work read/write
-bracketing this executor's in-memory mutations (ADR-0006). Rom-level
-lock coordination and public use-case orchestration live on
+The decision layer for "which side wins for this file", and the dispatch
+of each decision to the step that carries it out. Moving a file and
+recording what moved is :class:`services.saves.save_transfer.SaveTransfer`'s.
+Read-only matrix consumption (status reporting) lives in StatusService; the
+loaded :class:`RomSaveSyncState` aggregate is threaded in by the operation
+entry, which owns the Unit-of-Work read/write bracketing this executor's
+in-memory mutations (ADR-0006). Rom-level lock coordination and public
+use-case orchestration live on
 :class:`services.saves.sync_engine.engine.SyncEngine`.
 """
 
 from __future__ import annotations
 
-import contextlib
-import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from domain.emulator_tag import build_emulator_tag
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from domain.save_backup import BACKUP_DIR_NAME, backup_name, select_backups_to_prune
 from domain.save_slot import filter_saves_to_slot
 from domain.sync_action import Conflict, Download, Skip, SyncAction, Upload
-from lib.errors import DeviceWriteError, RommApiError, RommConflictError, classify_error
+from lib.errors import RommApiError, RommConflictError, classify_error
 from services.saves._helpers import local_save_target
 
 if TYPE_CHECKING:
@@ -45,9 +42,7 @@ if TYPE_CHECKING:
         SaveFileStore,
     )
     from services.saves.rom_info import RomInfoService
-
-
-_BACKUP_RETENTION = 10  # max .romm-backup copies kept per save file (#974)
+    from services.saves.save_transfer import SaveTransfer
 
 
 class TransferDirection(Enum):
@@ -139,15 +134,15 @@ class RomDispatchContext:
 
 
 class MatrixExecutor:
-    """Newest-wins matrix executor + per-file sync I/O dispatch.
+    """Newest-wins matrix executor: decides each save file and dispatches the decision.
 
-    Owns every code path that reads the server save list, runs
-    ``compute_sync_action`` against per-filename inputs, and dispatches
-    the resulting :class:`SyncAction` to disk / server I/O. The loaded
-    :class:`RomSaveSyncState` aggregate is threaded in by the public rom-level
-    orchestration use cases on :class:`SyncEngine`; this executor mutates
-    it in memory via the aggregate's verb methods and never persists —
-    the operation entry owns the single write Unit of Work.
+    Owns every code path that reads the server save list for a sync, runs
+    ``compute_sync_action`` against per-filename inputs, and hands the
+    resulting :class:`SyncAction` to the :class:`SaveTransfer` step that
+    carries it out. The loaded :class:`RomSaveSyncState` aggregate is threaded
+    in by the public rom-level orchestration use cases on :class:`SyncEngine`;
+    it is mutated in memory only — the operation entry owns the single write
+    Unit of Work.
     """
 
     def __init__(
@@ -162,6 +157,7 @@ class MatrixExecutor:
         clock: Clock,
         save_file_store: SaveFileStore,
         log_debug: DebugLogger,
+        transfer: SaveTransfer,
     ) -> None:
         self._rom_info = rom_info
         self._romm_api = romm_api
@@ -172,362 +168,7 @@ class MatrixExecutor:
         self._clock = clock
         self._save_file_store = save_file_store
         self._log_debug = log_debug
-
-    # ------------------------------------------------------------------
-    # Server Save Hash Helper
-    # ------------------------------------------------------------------
-
-    def get_server_save_hash(self, server_save: dict[str, Any]) -> str | None:
-        """Download a server save to temp and compute its RomM content hash.
-
-        Used for slow-path conflict detection when the listed save carries no
-        ``content_hash`` field. Hashes the downloaded copy with the zip-aware
-        :meth:`SaveFileStore.content_hash` (never the whole-archive MD5) so the
-        digest is comparable to a local ``content_hash`` for zip saves too —
-        otherwise the keep_local adopt-without-upload check could never match a
-        zip. Returns the hash string or None on non-retryable error. Raises on
-        retryable errors so the caller can retry, and on a
-        :class:`DeviceWriteError`, which is this device's to report rather than
-        a hash the server could not give.
-        """
-        save_id = server_save.get("id")
-        if not save_id:
-            return None
-        tmp_path: str | None = None
-        try:
-            tmp_path = self._save_file_store.make_temp_path(suffix=".tmp")
-            self._romm_api.download_save(save_id, tmp_path)
-            return self._save_file_store.content_hash(tmp_path)
-        except Exception as e:
-            self._log_debug(f"Failed to hash server save {save_id}: {e}")
-            if isinstance(e, DeviceWriteError) or self._retry.is_retryable(e):
-                raise
-            return None
-        finally:
-            if tmp_path:
-                with contextlib.suppress(OSError):
-                    self._save_file_store.remove_file(tmp_path)
-
-    def update_file_sync_state(
-        self,
-        save_state: RomSaveSyncState,
-        filename: str,
-        server_response: dict[str, Any],
-        local_path: str,
-        system: str,
-        *,
-        default_slot: str | None = None,
-        emulator_tag: str | None = None,
-        core_so: str | None = None,
-    ) -> None:
-        """Update per-file sync tracking on *save_state* after a successful sync op.
-
-        Mutates the passed aggregate in memory via its verb methods; the
-        operation entry owns the surrounding write Unit of Work. Seeds the ROM's
-        state through :meth:`RomSaveSyncState.reach_sync_boundary`, measures the
-        local file — its hash, size and content size from one open, and its
-        mtime — and hands the measure to
-        :meth:`RomSaveSyncState.record_transfer`, which composes the baseline; a
-        response or file with nothing to record is logged.
-        """
-        save_state.reach_sync_boundary(system, default_slot, emulator_tag=emulator_tag, core=core_so)
-        local_exists = self._save_file_store.is_file(local_path)
-        # RomM-parity content hash (zip-aware) so a zip save's baseline is on the
-        # same scheme the matrix compares against server.content_hash — never the
-        # whole-archive MD5, which no server content_hash could match (#1457).
-        measure = self._save_file_store.measure(local_path) if local_exists else None
-        mtime = self._save_file_store.get_mtime(local_path) if local_exists else None
-        if not save_state.record_transfer(
-            filename, server_response, measure, mtime, synced_at=self._clock.now().isoformat()
-        ):
-            # A sync response missing the id, or a save file that vanished before
-            # we could hash it, is genuinely untrackable — log and skip the
-            # baseline rather than abort the whole rom-level sync.
-            self._logger.warning(
-                "update_file_sync_state: skipping untrackable baseline for %s (id=%r, has_hash=%s)",
-                filename,
-                server_response.get("id"),
-                bool(measure and measure.content_hash),
-            )
-
-    def adopt_head_as_baseline(
-        self,
-        save_state: RomSaveSyncState,
-        filename: str,
-        head: dict[str, Any],
-        local_path: str,
-        local_hash: str,
-        *,
-        system: str,
-        default_slot: str | None = None,
-    ) -> bool:
-        """Record the local file, identical to *head*, as *filename*'s baseline for that head.
-
-        The adopt a ``Skip(adopt_baseline=True)`` asks for, with no transfer:
-        the baseline is :meth:`RomSaveSyncState.adopt_head`'s, and as the adopt
-        stands in for a download of the same bytes, *save_state* is seeded
-        through :meth:`RomSaveSyncState.reach_sync_boundary` as a download seeds
-        it, except that no core is recorded and the emulator tag stays the one
-        already recorded. *local_hash* is the hash
-        the decision was made on; when the file no longer hashes to it, nothing
-        is recorded and ``False`` is returned, so a file written since the
-        decision is never recorded as the head's bytes. Mutates *save_state* in
-        memory only.
-        """
-        measured = self._measure_unchanged(filename, local_path, local_hash)
-        if measured is None:
-            return False
-        self._record_adopt(save_state, filename, head, measured, system=system, default_slot=default_slot)
-        return True
-
-    def _measure_unchanged(
-        self, filename: str, local_path: str, local_hash: str
-    ) -> tuple[SaveFileMeasure, float] | None:
-        """Measure *local_path*, or ``None`` when it no longer hashes to *local_hash*, the decision's hash."""
-        measure = self._save_file_store.measure(local_path)
-        if measure.content_hash != local_hash:
-            self._log_debug(f"adopt {filename}: the file changed since the decision, nothing recorded")
-            return None
-        return measure, self._save_file_store.get_mtime(local_path)
-
-    def _record_adopt(
-        self,
-        save_state: RomSaveSyncState,
-        filename: str,
-        head: dict[str, Any],
-        measured: tuple[SaveFileMeasure, float],
-        *,
-        system: str,
-        default_slot: str | None,
-    ) -> None:
-        """Seed *save_state* at the boundary (no core; the recorded emulator tag) and record *head*.
-
-        *head* becomes *filename*'s baseline, composed from *measured*.
-        """
-        save_state.reach_sync_boundary(system, default_slot)
-        save_state.adopt_head(filename, head, *measured, synced_at=self._clock.now().isoformat())
-
-    # ------------------------------------------------------------------
-    # Sync Helpers
-    # ------------------------------------------------------------------
-
-    def do_download_save(
-        self,
-        server_save: dict[str, Any],
-        saves_dir: str,
-        filename: str,
-        save_state: RomSaveSyncState,
-        device_id: LiveDeviceId,
-        system: str,
-        default_slot: str | None = None,
-    ) -> None:
-        """Download a save file from server. Backs up existing local file first.
-
-        The content lands in ``<filename>.tmp`` and replaces the local file only
-        once complete; any failure up to that replacement tries to remove the
-        ``.tmp`` (a removal that fails is not reported) and raises the
-        download's own failure. Mutates *save_state* in memory (per-file baseline); the
-        operation entry owns the surrounding write Unit of Work.
-        """
-        local_path = os.path.join(saves_dir, filename)
-        self._save_file_store.make_dirs(saves_dir)
-        tmp_path = local_path + ".tmp"
-
-        try:
-            self._retry.with_retry(
-                lambda: self._romm_api.download_save_content(
-                    server_save["id"],
-                    tmp_path,
-                    device_id=device_id,
-                    optimistic=True,
-                ),
-            )
-
-            # Back up the existing local save before the download overwrites it.
-            self.quarantine_local_file(saves_dir, filename)
-
-            self._save_file_store.rename(tmp_path, local_path)
-        except Exception:
-            with contextlib.suppress(OSError):
-                self._save_file_store.remove_file(tmp_path)
-            raise
-        self.update_file_sync_state(save_state, filename, server_save, local_path, system, default_slot=default_slot)
-        self._log_debug(f"Downloaded save: {filename}")
-
-    def quarantine_local_file(self, saves_dir: str, filename: str) -> bool:
-        """Move a local save file aside into ``.romm-backup`` before it is destroyed.
-
-        The single source of truth for the save-file backup discipline: both the
-        download-overwrite path (:meth:`do_download_save`) and the slot-switch
-        removal path route through here, so no local save is ever destroyed
-        without a recoverable copy (#965). The backup lands at
-        ``<saves_dir>/.romm-backup/<name>_<ts>[_<n>]<ext>`` (``<ts>`` from the
-        injected clock). A same-second collision appends a ``_<n>`` counter so a
-        multi-file slot quarantined within one second never overwrites an earlier
-        backup, and the newest ``_BACKUP_RETENTION`` backups per save file are
-        kept — older ones are pruned to bound the recovery net's disk use (#974).
-        The backup written by this call is never pruned in its own call, so under
-        sustained same-second churn the folder may briefly hold one extra copy
-        (``_BACKUP_RETENTION + 1``) — destroying the just-saved file to honour the
-        cap would defeat the backup. Returns ``True`` when a file was moved,
-        ``False`` when there was nothing at *filename* to back up.
-        """
-        local_path = os.path.join(saves_dir, filename)
-        if not self._save_file_store.is_file(local_path):
-            return False
-        backup_dir = os.path.join(saves_dir, BACKUP_DIR_NAME)
-        if self._save_file_store.is_symlink(backup_dir) or not self._save_file_store.is_within(backup_dir, saves_dir):
-            raise ValueError(f"Unsafe save backup directory: {backup_dir}")
-        self._save_file_store.make_dirs(backup_dir)
-        ts = self._clock.now().strftime("%Y%m%d_%H%M%S")
-        existing = set(self._save_file_store.listdir(backup_dir))
-        backup = backup_name(filename, ts, existing)
-        self._save_file_store.rename(local_path, os.path.join(backup_dir, backup))
-        # Bound the recovery net: keep only the newest N backups per save file (#974).
-        existing.add(backup)
-        for stale in select_backups_to_prune(filename, list(existing), _BACKUP_RETENTION):
-            if stale == backup:
-                continue  # never prune the backup just created this call (#974 — would destroy the save)
-            self._save_file_store.remove_file(os.path.join(backup_dir, stale))
-        return True
-
-    @staticmethod
-    def _resolve_upload_slot(save_state: RomSaveSyncState, default_slot: str | None = None) -> str | None:
-        """The slot field to send with an upload; ``None`` only for an explicit-legacy save.
-
-        An upload always carries a live ``device_id`` (``do_upload_save`` takes
-        a :class:`LiveDeviceId`), so the slot resolves purely from the
-        aggregate's slot state. A named
-        ``active_slot`` uploads to that slot; an ``active_slot`` of ``None`` is
-        ambiguous and is disambiguated by the ``slots`` map (the same signal
-        :meth:`update_file_sync_state` uses to seed the active slot):
-
-        - **Explicit legacy** (``active_slot`` None but ``slots`` populated — the
-          state after switching to / confirming the legacy slot) → ``None`` so the
-          save is POSTed as ``slot:null``. Returning ``"default"`` here misfiled a
-          legacy save into the default slot (#1061).
-        - **Brand-new ROM** (``active_slot`` None and ``slots`` empty — never
-          configured) → the configured ``default_slot`` so its first sync lands in
-          the default slot, matching the active-slot seeding.
-        """
-        if save_state.active_slot is not None:
-            return save_state.active_slot
-        if save_state.slots:
-            return None
-        return default_slot or "autosave"
-
-    def _confirm_upload_sync(self, response: dict[str, Any], device_id: LiveDeviceId) -> None:
-        """Ack the uploaded save on the server's DeviceSaveSync row, unless redundant.
-
-        Skipped when *response* already shows this device ``is_current`` (#1458);
-        otherwise sent. When RomM's answers make the ack redundant and when it is
-        the only writer of the row: docs/architecture/save-file-sync-architecture.md,
-        "POST and PUT both upsert the calling device's sync row". Fail-open — any
-        non-current / missing / unexpected response confirms. Non-fatal: a failed
-        ack is debug-logged and swallowed.
-        """
-        upload_id = response.get("id")
-        if not upload_id:
-            return
-        if _upload_response_proves_current(response, device_id):
-            self._log_debug(f"confirm_download after upload skipped for save {upload_id} (already current)")
-            return
-        try:
-            self._romm_api.confirm_download(upload_id, device_id)
-        except Exception:
-            self._log_debug(f"confirm_download after upload failed for save {upload_id} (non-fatal)")
-
-    def do_upload_save(
-        self,
-        rom_id: int,
-        file_path: str,
-        filename: str,
-        save_state: RomSaveSyncState,
-        device_id: LiveDeviceId,
-        system: str,
-        core_so: str | None,
-        server_save: dict[str, Any] | None = None,
-        default_slot: str | None = None,
-        autocleanup_limit: int | None = None,
-        overwrite: bool = False,
-        planned_group: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
-        """Upload a local save file to server.
-
-        Mutates *save_state* in memory (per-file baseline, own-upload
-        attribution, local→server slot promotion); the operation entry owns
-        the surrounding write Unit of Work. *core_so* is the active core
-        resolved once by the caller so this worker stays free of installed-rom
-        reads. *autocleanup_limit* caps server-retained versions — the adapter
-        honors it on the POST (create) path only, so PUT callers leave it None.
-        *overwrite* forces RomM's ``add_save`` to skip its write-time currency
-        (409) gate — used only when the caller has already decided our content
-        must win (the ``keep_local`` conflict resolution); the automatic sync
-        dispatch leaves it ``False`` so the 409 backstop can catch a stale-current
-        race (ADR-0017).
-
-        *planned_group* is the automatic POST path's pre-upload ``list_saves``
-        snapshot for this file; every other caller passes ``None``, and the guard
-        is inert for it. When the POST response deduped to a pre-existing
-        non-head save (:func:`_dedup_returned_non_head`, #1482), this raises
-        ``RommConflictError`` BEFORE any baseline / own-upload / confirm write so
-        the same 409 backstop that catches a write-time stale-current race
-        surfaces the true state — no false "synced", no currency stamped on the
-        non-head response.
-        """
-        save_id = server_save.get("id") if server_save else None
-        emulator = build_emulator_tag(core_so)
-
-        slot = self._resolve_upload_slot(save_state, default_slot)
-
-        result = self._retry.with_retry(
-            lambda: self._romm_api.upload_save(
-                int(rom_id),
-                file_path,
-                emulator,
-                save_id,
-                device_id=device_id,
-                slot=slot,
-                overwrite=overwrite,
-                autocleanup_limit=autocleanup_limit,
-            )
-        )
-
-        if planned_group is not None and _dedup_returned_non_head(result, planned_group):
-            # Dedup to a non-head save: RomM created no new version and the
-            # foreign head still leads the slot, so recording this response as a
-            # synced baseline would falsely report the upload landed (#1482).
-            # Route it through the write-time 409 backstop — the raise reaches
-            # ``_dispatch_upload``'s ``except RommConflictError`` before any
-            # baseline / confirm / own-upload write runs, so nothing stamps
-            # currency on the non-head response.
-            raise RommConflictError(
-                "add_save deduped to a non-head save; the slot head is newer",
-                method="POST",
-            )
-
-        self.update_file_sync_state(
-            save_state,
-            filename,
-            result,
-            file_path,
-            system,
-            default_slot=default_slot,
-            emulator_tag=emulator,
-            core_so=core_so,
-        )
-
-        new_id = result.get("id")
-        if new_id is not None:
-            save_state.track_own_upload(new_id)
-
-        if slot:
-            save_state.promote_slot_to_server(slot)
-
-        self._confirm_upload_sync(result, device_id)
-
-        self._log_debug(f"Uploaded save: {filename} (emulator={emulator})")
-        return result
+        self._transfer = transfer
 
     def _handle_unexpected_error(
         self,
@@ -611,13 +252,13 @@ class MatrixExecutor:
     ) -> None:
         """Execute a ``Skip``: nothing, or an adopt of the head the local file is identical to.
 
-        The file is measured first: one that no longer hashes to what the
-        decision saw is neither acknowledged nor recorded. An adopt that must be
-        acknowledged then confirms the head to RomM, through the retry strategy,
-        and records the baseline from that measure only once that succeeded; a
-        failure propagates to :meth:`_dispatch_sync_action`, which reports it as
-        this file's error with nothing recorded, and the next sync decides
-        again. No transfer either way, so no synced count.
+        An adopt that must be acknowledged goes through
+        :meth:`SaveTransfer.adopt_server_head`, any other through
+        :meth:`SaveTransfer.record_server_head`; either records nothing for a
+        file that no longer hashes to what the decision saw. A failed
+        acknowledgement propagates to :meth:`_dispatch_sync_action`, which
+        reports it as this file's error with nothing recorded, and the next sync
+        decides again. No transfer either way, so no synced count.
         """
         head = action.server_save
         if not action.adopt_baseline or head is None or local_path is None or local_hash is None:
@@ -627,12 +268,21 @@ class MatrixExecutor:
             f"do_sync_rom_saves({ctx.rom_id}): skip + adopt {filename} as save {head.get('id')}"
             f" (acknowledge={action.acknowledge})"
         )
-        measured = self._measure_unchanged(filename, local_path, local_hash)
-        if measured is None:
-            return
         if action.acknowledge:
-            self._retry.with_retry(lambda: self._romm_api.confirm_download(int(head["id"]), ctx.device_id))
-        self._record_adopt(ctx.save_state, filename, head, measured, system=ctx.system, default_slot=default_slot)
+            self._transfer.adopt_server_head(
+                ctx.save_state,
+                filename,
+                head,
+                local_path,
+                local_hash,
+                device_id=ctx.device_id,
+                system=ctx.system,
+                default_slot=default_slot,
+            )
+        else:
+            self._transfer.record_server_head(
+                ctx.save_state, filename, head, local_path, local_hash, system=ctx.system, default_slot=default_slot
+            )
 
     def _dispatch_upload(
         self,
@@ -656,8 +306,8 @@ class MatrixExecutor:
         device may have moved the slot head past our last sync in between. Two
         signals route to the same backstop: RomM rejects the stale POST with a
         409, and RomM's content-dedup can early-return a pre-existing non-head
-        save (:func:`_dedup_returned_non_head`, #1482) that ``do_upload_save``
-        turns into a ``RommConflictError``. Either way :meth:`_handle_upload_409`
+        save (:func:`domain.upload_response.dedup_returned_non_head`, #1482) that
+        :meth:`SaveTransfer.upload_save_file` turns into a ``RommConflictError``. Either way :meth:`_handle_upload_409`
         re-fetches the slot and lets ``resolve_upload_conflict`` decide from
         hashes alone (download the fresh head when local is provably unchanged,
         else surface a conflict). Any other ``RommApiError`` propagates to the
@@ -676,7 +326,7 @@ class MatrixExecutor:
             # RomM stacks versions on create, so the limit is sent here alone.
             # ``planned_group`` lets the POST catch a dedup-to-non-head response
             # (#1482) and route it through the same 409 backstop below.
-            self.do_upload_save(
+            self._transfer.upload_save_file(
                 ctx.rom_id,
                 local_path,
                 filename,
@@ -748,7 +398,7 @@ class MatrixExecutor:
             self._resolve_upload_conflict(local_hash, last_sync_hash, fresh.get("content_hash"), last_sync_server_hash)
             == "download"
         ):
-            self.do_download_save(
+            self._transfer.download_save_file(
                 fresh, ctx.saves_dir, filename, ctx.save_state, ctx.device_id, ctx.system, options.default_slot
             )
             return TransferDirection.DOWNLOAD
@@ -806,7 +456,7 @@ class MatrixExecutor:
                     sink=sink,
                 )
             if isinstance(action, Download):
-                self.do_download_save(
+                self._transfer.download_save_file(
                     action.server_save,
                     ctx.saves_dir,
                     filename,
@@ -1104,49 +754,6 @@ class MatrixExecutor:
             f" uploaded={uploaded} downloaded={downloaded} errors={len(errors)}"
         )
         return uploaded, downloaded, errors, conflicts
-
-
-def _dedup_returned_non_head(response: dict[str, Any], planned_group: list[dict[str, Any]]) -> bool:
-    """Whether an ``add_save`` POST deduped to a pre-existing NON-head save (#1482).
-
-    RomM's ``add_save`` content-dedup can early-return an EXISTING save whose
-    content matches the upload instead of creating a new version. When that
-    returned save is not the slot head the run planned against — an older save
-    while a newer, different head still leads the slot — the upload intent (make
-    our content the slot head) went silently unfulfilled: no new version, the
-    foreign head stays authoritative, yet the response looks like a successful
-    upload. Recording it as a synced baseline would falsely report "synced".
-
-    Detected purely from ids against *planned_group* (the pre-upload
-    ``list_saves`` snapshot for this file, the same group ``compute_sync_action``
-    evaluated): the response is a member of that snapshot (an existing save, not
-    a freshly minted version whose id is absent from it) that is not the newest
-    save in it. Benign — today's baseline write stands — for an empty planned
-    slot (no head to bypass), a freshly created version, or the head coming back.
-    """
-    response_id = response.get("id")
-    if response_id is None or not planned_group:
-        return False
-    head = max(planned_group, key=lambda s: parse_iso_to_epoch(s.get("updated_at")) or 0.0)
-    group_ids = {s.get("id") for s in planned_group}
-    return response_id in group_ids and response_id != head.get("id")
-
-
-def _upload_response_proves_current(response: dict[str, Any], device_id: str) -> bool:
-    """Whether *response* proves *device_id* already holds the current save.
-
-    Reads the same ``device_syncs`` shape ``domain.sync_action`` reads. Fail-open:
-    only an entry for *device_id* whose ``is_current`` is exactly ``True`` counts;
-    any missing / non-list / otherwise-unexpected shape returns ``False`` so the
-    caller still confirms.
-    """
-    device_syncs = response.get("device_syncs")
-    if not isinstance(device_syncs, list):
-        return False
-    return any(
-        isinstance(ds, dict) and ds.get("device_id") == device_id and ds.get("is_current") is True
-        for ds in device_syncs
-    )
 
 
 def _file_state_to_dict(file_state: FileSyncState) -> dict[str, Any]:

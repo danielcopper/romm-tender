@@ -222,12 +222,12 @@ def _do_upload(svc, rom_id, file_path, filename, system, *, server_save=None, co
     """Run the upload worker the way the op-entry does and return the mutated state.
 
     Loads the ``RomSaveSyncState`` from the shared UoW and the stored device id, calls
-    ``do_upload_save`` (which mutates the aggregate in memory), persists it, and
+    ``SaveTransfer.upload_save_file`` (which mutates the aggregate in memory), persists it, and
     returns the in-memory state so the test can assert on the same object.
     """
     engine = svc._sync_engine
     save_state, device_id = read_save_state_or_new(engine._uow_factory, rom_id), _stored_device_id(svc)
-    engine.do_upload_save(
+    svc._save_transfer.upload_save_file(
         rom_id, file_path, filename, save_state, device_id, system, core_so, server_save, _default_slot(svc)
     )
     write_save_state(engine._uow_factory, rom_id, save_state)
@@ -238,7 +238,9 @@ def _do_download(svc, server_save, saves_dir, filename, rom_id, system):
     """Run the download worker the way the op-entry does and return the mutated state."""
     engine = svc._sync_engine
     save_state, device_id = read_save_state_or_new(engine._uow_factory, rom_id), _stored_device_id(svc)
-    engine.do_download_save(server_save, saves_dir, filename, save_state, device_id, system, _default_slot(svc))
+    svc._save_transfer.download_save_file(
+        server_save, saves_dir, filename, save_state, device_id, system, _default_slot(svc)
+    )
     write_save_state(engine._uow_factory, rom_id, save_state)
     return save_state
 

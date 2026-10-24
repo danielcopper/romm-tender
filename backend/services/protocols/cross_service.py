@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from domain.shortcut_data import EmulatorInvocation
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
-    from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
+    from models.prune import InstalledContentRemoval, PruneSaveBackup, SourceClaim
     from models.shortcut_artwork import SlotAnswer, WrittenIcon
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
@@ -482,18 +482,18 @@ class ActiveDownloadRomIdsFn(Protocol):
 
 
 class PruneSaveCoordinator(Protocol):
-    """Exact-path save inventory, locking, and quarantine consumed by prune.
+    """Exact-path save inventory, locking, and backup consumed by prune.
 
-    ``quarantine_prune_saves`` answers what the quarantine came to and never
+    ``back_up_prune_saves`` answers what the backup came to and never
     raises a refusal: one that raised is ambiguous, because it may have moved a
     save before it stopped.
     """
 
     def lock_prune_roms(self, rom_ids: list[int]) -> AbstractAsyncContextManager[None]: ...
     def inventory_prune_saves(self, purge_rom_ids: list[int]) -> dict[str, Any]: ...
-    def quarantine_prune_saves(
+    def back_up_prune_saves(
         self, files: list[dict[str, str]], claims: dict[str, SourceClaim] | None = None
-    ) -> SaveQuarantine: ...
+    ) -> PruneSaveBackup: ...
     def validate_prune_absences(self, claims: dict[str, SourceClaim]) -> bool: ...
 
 
@@ -630,25 +630,25 @@ class SessionMigrationReader(Protocol):
     def is_retrodeck_migration_pending(self) -> bool: ...
 
 
-class SaveQuarantineFn(Protocol):
+class SaveBackupFn(Protocol):
     """The sanctioned save-file backup funnel, consumed by AdoptionRenamer.
 
-    The composition root satisfies this with ``SaveService.quarantine_local_file``
-    over ``MatrixExecutor``'s — the single source of truth for the backup
-    discipline, so a save is never destroyed without a recoverable copy (#965).
+    The composition root satisfies this with ``SaveBackup.back_up_save_file`` —
+    the single source of truth for the backup discipline, so a save is never
+    destroyed without a recoverable copy (#965).
     An adoption's Overwrite answers for save and savestate files the user chose
     to lose, and those go through here rather than through a delete of their own:
     a second implementation of the discipline is how the first one stops being
     the discipline.
 
     ``saves_dir`` is the directory the file sits in and ``filename`` its name;
-    the backup lands in ``<saves_dir>/.romm-backup/``. Returns ``True`` when a
-    file was moved, ``False`` when there was nothing there. Raises when the
-    backup directory is unsafe or the move fails — the caller reports that rather
-    than proceeding.
+    the backup lands in ``<saves_dir>/.romm-backup/``, where the newest *keep*
+    backups of the file are kept. Returns ``True`` when a file was moved,
+    ``False`` when there was nothing there. Raises when the backup directory is
+    unsafe or the move fails — the caller reports that rather than proceeding.
     """
 
-    def __call__(self, saves_dir: str, filename: str) -> bool: ...
+    def __call__(self, saves_dir: str, filename: str, *, keep: int) -> bool: ...
 
 
 class MigrationPendingFn(Protocol):

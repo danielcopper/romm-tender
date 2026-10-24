@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.save_backup import BACKUP_RETENTION
 from domain.save_slot import save_in_slot
 from lib.errors import NamedRefused, NotInstalled, Refused
 from lib.partial_failure import PartialFailure
@@ -35,6 +36,8 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_backup import SaveBackup
+    from services.saves.save_transfer import SaveTransfer
     from services.saves.status import StatusService
     from services.saves.sync_engine import SyncEngine
 
@@ -78,6 +81,8 @@ class SlotSwitcher:
         clock: Clock,
         save_file_store: SaveFileStore,
         log_debug: DebugLogger,
+        save_backup: SaveBackup,
+        save_transfer: SaveTransfer,
     ) -> None:
         self._settings = settings
         self._uow_factory = uow_factory
@@ -90,13 +95,15 @@ class SlotSwitcher:
         self._clock = clock
         self._save_file_store = save_file_store
         self._log_debug = log_debug
+        self._save_backup = save_backup
+        self._save_transfer = save_transfer
 
     def _pending_local_changes(self, rom_id: int, save_state: RomSaveSyncState) -> list[str]:
         """The local saves changed since the last sync to the current slot; empty when there are none.
 
         A switch over such a file would keep its changes off the server's copy
         of the current slot. Files that were never synced do not count: the
-        switch quarantines them into ``.romm-backup`` (#965).
+        switch backs them up into ``.romm-backup`` (#965).
         """
         local_files = self._rom_info.find_save_files(rom_id)
         return list(changed_since_last_sync(local_files, save_state.files, self._save_file_store))
@@ -123,7 +130,7 @@ class SlotSwitcher:
 
         On success the local saves dir and per-file tracking are made coherent
         with the new slot: every local file the new slot does not provide is
-        quarantined into ``.romm-backup`` (never destroyed — #965) and untracked,
+        backed up into ``.romm-backup`` (never destroyed — #965) and untracked,
         the newest server save per canonical target is downloaded (#1058), and
         nothing is uploaded — saves are not carried between slots. A partial
         download failure still persists the flipped slot and answers a
@@ -240,7 +247,7 @@ class SlotSwitcher:
     ) -> list[str]:
         """Make the local saves dir + tracking match the new slot.
 
-        Quarantines every local save file the new slot does not provide (and
+        Backs up every local save file the new slot does not provide (and
         drops its tracking) so no stale file lingers to upload into the new slot
         (#1058) and no never-synced save is destroyed without a backup (#965),
         then downloads the newest server save per target. Mutates *save_state*
@@ -255,12 +262,12 @@ class SlotSwitcher:
             f"local_files={[lf['filename'] for lf in local_now]} tracked={list(save_state.files)}"
         )
 
-        # Quarantine + untrack every local file the new slot does not provide.
+        # Back up + untrack every local file the new slot does not provide.
         for lf in local_now:
             if lf["filename"] not in target_names:
-                moved = self._sync_engine.quarantine_local_file(saves_dir, lf["filename"])
+                moved = self._save_backup.back_up_save_file(saves_dir, lf["filename"], keep=BACKUP_RETENTION)
                 save_state.delete_file_tracking(lf["filename"])
-                self._log_debug(f"switch_slot: quarantine {lf['filename']} moved={moved}")
+                self._log_debug(f"switch_slot: back up {lf['filename']} moved={moved}")
 
         # Drop stale baseline entries that have no local file. Snapshot the
         # keys first — delete_file_tracking mutates save_state.files.
@@ -275,7 +282,7 @@ class SlotSwitcher:
                 f"slot={server_save.get('slot')!r}"
             )
             try:
-                self._sync_engine.do_download_save(
+                self._save_transfer.download_save_file(
                     server_save, saves_dir, target_name, save_state, device_id, system, default_slot
                 )
             except Exception as e:

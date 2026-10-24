@@ -2,7 +2,7 @@
 
 Coordinates the rollback flow (pre-flight sync, version pick, atomic
 switch) but does not perform the actual file or server writes — those
-go through SyncEngine / LocalSavesAdapter. Anything that lists,
+go through SaveTransfer. Anything that lists,
 fetches, or rolls back to an older save version lives here. Mutations
 of the active save record outside the rollback flow (conflict
 resolution, status reporting) belong in SyncEngine or StatusService.
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import DebugLogger, RetryStrategy, RommSaveApi, UnitOfWorkFactory
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine import SyncEngine
 
 
@@ -52,7 +53,8 @@ class VersionsServiceConfig:
     id, and rom_info), the core
     resolver used to stamp the upload emulator tag, the Protocol-typed
     RomM adapter and retry strategy, the backend's event loop, the
-    standard-library logger, and the ``DebugLogger`` seam.
+    standard-library logger, the ``DebugLogger`` seam, and the save transfer
+    the switch downloads and uploads through.
     """
 
     settings: dict[str, Any]
@@ -65,6 +67,7 @@ class VersionsServiceConfig:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     log_debug: DebugLogger
+    save_transfer: SaveTransfer
 
 
 class VersionsService:
@@ -87,6 +90,7 @@ class VersionsService:
         self._loop = config.loop
         self._logger = config.logger
         self._log_debug = config.log_debug
+        self._save_transfer = config.save_transfer
 
     def _local_component_filenames(self, rom_id: int) -> list[str]:
         """Distinct local save filenames on disk for the ROM (one per extension).
@@ -224,7 +228,7 @@ class VersionsService:
         This function is purely the destructive switch:
 
         1. Download id=save_id content → overwrite local file.
-           ``do_download_save`` updates ``tracked_save_id`` /
+           :meth:`SaveTransfer.download_save_file` updates ``tracked_save_id`` /
            ``last_sync_hash`` to point at the target version locally. Where
            this device cannot write it, the switch is ``write_failed``.
         2. PUT id=save_id with the same content. RomM bumps
@@ -232,12 +236,12 @@ class VersionsService:
            upserts our DeviceSaveSync row (``synced_at = updated_at``), so
            id=save_id is now newest in the slot and ``is_current`` already
            evaluates true for us.
-        3. ``do_upload_save`` acks via ``_confirm_upload_sync``. The PUT
+        3. :meth:`SaveTransfer.upload_save_file` acks the upload. The PUT
            already upserted our sync row (RomM's PUT auto-upserts on every
            supported version), so this ack is at most a redundant idempotent
            re-write, not the required step it was once described as (#1458).
-        4. ``do_upload_save`` refreshes local sync state via
-           ``update_file_sync_state`` to match the post-PUT response.
+        4. :meth:`SaveTransfer.upload_save_file` records the sync boundary to
+           match the post-PUT response.
 
         After this, the next ``compute_sync_action`` run picks id=save_id
         (now newest), our ``is_current=true``, hash matches →
@@ -261,7 +265,7 @@ class VersionsService:
         local_path = os.path.join(saves_dir, target_filename)
 
         try:
-            self._sync_engine.do_download_save(
+            self._save_transfer.download_save_file(
                 target_save, saves_dir, target_filename, save_state, device_id, system, default_slot
             )
         except OSError as e:
@@ -274,7 +278,7 @@ class VersionsService:
             return {"status": "write_failed", "message": with_system_text("it could not be written on this device", e)}
 
         try:
-            self._sync_engine.do_upload_save(
+            self._save_transfer.upload_save_file(
                 rom_id,
                 local_path,
                 target_filename,

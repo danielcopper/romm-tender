@@ -422,7 +422,7 @@ class AdoptionMoveStore(Protocol):
         What the save-backup funnel can act on: it moves a regular file aside and
         reports ``False`` for anything else. Asking first is what lets a colliding
         target that is a directory be refused **by name, before anything moves**,
-        rather than no-opping the quarantine and failing later at the link.
+        rather than no-opping the backup and failing later at the link.
         """
         ...
 

@@ -28,7 +28,7 @@ from domain.version_metadata import VersionMetadata
 from lib.background_tasks import BackgroundTasks
 from lib.errors import OperationAbortedError, Refused, RommConnectionError, RommNotFoundError
 from lib.prune_conflicts import PruneConflicts
-from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceClaims
+from models.prune import InstalledContentRemoval, PruneSaveBackup, SealedSourceClaims
 from services.prune import PruneService, PruneServiceConfig
 from services.prune._models import ActionOutcome, cancellation_state
 from services.prune.results import _COMPLETION_BUDGET_BYTES, GroupOutcome
@@ -175,7 +175,7 @@ class FakeSteamRecovery:
 class FakeSaveCoordinator:
     def __init__(self) -> None:
         self.locked: list[list[int]] = []
-        self.quarantined: list[list[dict[str, str]]] = []
+        self.backed_up: list[list[dict[str, str]]] = []
         self.inventory_failure_ids: set[int] = set()
         self.lock_id_sequence: list[list[int]] = []
         self.warnings: list[str] = []
@@ -200,12 +200,12 @@ class FakeSaveCoordinator:
             "source_claims": {},
         }
 
-    def quarantine_prune_saves(
+    def back_up_prune_saves(
         self, files: list[dict[str, str]], claims: dict[str, SourceClaim] | None = None
-    ) -> SaveQuarantine:
+    ) -> PruneSaveBackup:
         del claims
-        self.quarantined.append(files)
-        return SaveQuarantine(moved=[], ambiguous=False)
+        self.backed_up.append(files)
+        return PruneSaveBackup(moved=[], ambiguous=False)
 
     def validate_prune_absences(self, claims: dict[str, SourceClaim]) -> bool:
         del claims
@@ -772,7 +772,7 @@ async def test_cancel_during_the_backup_phase_abandons_it_without_mutating_anyth
     The backup phase runs before anything is committed, so a cancellation
     arriving inside it is told to stop at its next chunk rather than awaited to
     completion. Nothing here is recoverable-by-rollback, so "nothing happened"
-    is the only honest outcome: no quarantine, no Steam action, no row removed.
+    is the only honest outcome: no save backup, no Steam action, no row removed.
     """
     _seed(harness.uow, _rom(1, fetch="old"))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 5
@@ -791,7 +791,7 @@ async def test_cancel_during_the_backup_phase_abandons_it_without_mutating_anyth
     assert harness.recovery.sealed == [], "an abandoned backup publishes no bundle"
     # Zero mutation: the row, its files, its saves and its shortcut are untouched.
     assert harness.uow.roms.get(1) is not None
-    assert harness.saves.quarantined == []
+    assert harness.saves.backed_up == []
     assert harness.installed_remover.removed == []
     assert harness.artifacts.removed == []
     complete = [payload for name, payload in harness.events.events if name == "prune_complete"][-1]
@@ -1921,19 +1921,19 @@ async def test_server_switch_during_exact_404_never_authorizes_deletion(harness,
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("phase", ["quarantine", "artifacts", "database"])
+@pytest.mark.parametrize("phase", ["backup", "artifacts", "database"])
 async def test_shutdown_waits_for_each_executor_backed_finalization_phase(harness, monkeypatch, phase):
     entered = threading.Event()
     release = threading.Event()
-    if phase == "quarantine":
-        original = harness.saves.quarantine_prune_saves
+    if phase == "backup":
+        original = harness.saves.back_up_prune_saves
 
         def blocked(*args):
             entered.set()
             assert release.wait(timeout=5)
             return original(*args)
 
-        monkeypatch.setattr(harness.saves, "quarantine_prune_saves", blocked)
+        monkeypatch.setattr(harness.saves, "back_up_prune_saves", blocked)
     elif phase == "artifacts":
         original = harness.artifacts.remove
 
@@ -1980,9 +1980,9 @@ async def test_shutdown_preserves_cancellation_when_shielded_finalization_faults
     def blocked_failure(*_args):
         entered.set()
         assert release.wait(timeout=5)
-        raise OSError("quarantine failed after cancellation")
+        raise OSError("backup failed after cancellation")
 
-    monkeypatch.setattr(harness.saves, "quarantine_prune_saves", blocked_failure)
+    monkeypatch.setattr(harness.saves, "back_up_prune_saves", blocked_failure)
     _seed(harness.uow, _rom(1, fetch="old"), _rom(2, fetch="old"), stamp_count=2)
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
     harness.romm.outcomes[2] = [RommNotFoundError("gone")] * 3
@@ -2000,7 +2000,7 @@ async def test_shutdown_preserves_cancellation_when_shielded_finalization_faults
     complete = [payload for name, payload in harness.events.events if name == "prune_complete"][-1]
     assert complete["reason"] == "cancelled"
     assert complete["results"][0]["status"] == "failed"
-    assert "quarantine failed" in complete["results"][0]["message"]
+    assert "backup failed" in complete["results"][0]["message"]
     assert harness.uow.roms.get(1) is not None
     assert harness.uow.roms.get(2) is not None
     assert 2 not in harness.romm.calls
@@ -2231,12 +2231,12 @@ async def test_partial_adapter_outcomes_enter_actual_and_ambiguous_mutation_ledg
     if boundary == "save":
         monkeypatch.setattr(
             harness.saves,
-            "quarantine_prune_saves",
-            lambda *_args: SaveQuarantine(
+            "back_up_prune_saves",
+            lambda *_args: PruneSaveBackup(
                 moved=["/saves/game.srm"], ambiguous=True, failure="save parent fsync failed"
             ),
         )
-        category = "save_quarantine"
+        category = "save_backup"
     else:
         monkeypatch.setattr(
             harness.artifacts,

@@ -519,3 +519,21 @@ class TestAdoptHead:
         head = {k: v for k, v in _HEAD.items() if k != "updated_at"}
         state.adopt_head("game.srm", head, _MEASURE, 1.0, synced_at="2026-03-01T00:00:00Z")
         assert state.files["game.srm"].last_sync_server_updated_at == ""
+
+
+class TestUploadSlot:
+    def test_upload_slot_branches(self):
+        """``upload_slot`` maps each (active_slot, slots) case correctly.
+
+        Device presence is no branch here: ``SaveTransfer.upload_save_file`` takes a
+        ``LiveDeviceId``, so by the time this resolver runs a registered device is
+        guaranteed.
+        """
+        # Named active slot → that slot.
+        assert RomSaveSyncState(active_slot="desktop").upload_slot("default") == "desktop"
+        # Brand-new ROM (active None, no slots) → the configured default slot.
+        assert RomSaveSyncState().upload_slot("main") == "main"
+        # Explicit legacy (active None, slots populated) → None (slot:null), not default.
+        legacy = RomSaveSyncState()
+        legacy.switch_active_slot(None)  # active=None, adds the "" slots key
+        assert legacy.upload_slot("default") is None

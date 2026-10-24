@@ -11,7 +11,7 @@ import pytest
 from services.prune.save_locks import SaveLockCoordinator, SaveLockCoordinatorConfig
 
 if TYPE_CHECKING:
-    from models.prune import SaveQuarantine
+    from models.prune import PruneSaveBackup
 
 
 class _FakeSaveCoordinator:
@@ -39,7 +39,7 @@ class _FakeSaveCoordinator:
             self.released.append(list(rom_ids))
             self.held = None
 
-    def quarantine_prune_saves(self, files, claims=None) -> SaveQuarantine:  # pragma: no cover - unused here
+    def back_up_prune_saves(self, files, claims=None) -> PruneSaveBackup:  # pragma: no cover - unused here
         raise NotImplementedError
 
     def validate_prune_absences(self, claims) -> bool:  # pragma: no cover - unused here

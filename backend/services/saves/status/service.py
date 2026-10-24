@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine import MatrixOutcome, SyncEngine
 
 
@@ -52,8 +53,9 @@ class StatusServiceConfig:
     Protocol-typed RomM adapter and retry strategy, the backend's
     event loop, the standard-library logger, the ``DebugLogger`` seam, the
     per-ROM active-core resolver, the event emitter used to push background
-    status updates to the frontend, and the save-file store that hashes local
-    saves for the drift check.
+    status updates to the frontend, the save-file store that hashes local
+    saves for the drift check, and the save transfer that records an adopted
+    head.
     """
 
     settings: dict[str, Any]
@@ -68,6 +70,7 @@ class StatusServiceConfig:
     active_core: ActiveCoreReader
     emit: EventEmitter
     save_file_store: SaveFileStore
+    save_transfer: SaveTransfer
 
 
 class StatusService:
@@ -87,6 +90,7 @@ class StatusService:
         self._active_core = config.active_core
         self._emit = config.emit
         self._save_file_store = config.save_file_store
+        self._save_transfer = config.save_transfer
 
     def _status_entry_from_outcome(
         self,
@@ -174,7 +178,7 @@ class StatusService:
                 and action.server_save is not None
                 and outcome.local_path is not None
                 and outcome.local_hash
-                and self._sync_engine.adopt_head_as_baseline(
+                and self._save_transfer.record_server_head(
                     save_state,
                     outcome.filename,
                     action.server_save,

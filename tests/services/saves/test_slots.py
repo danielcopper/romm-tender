@@ -1107,8 +1107,8 @@ class TestConfirmSlotChoice:
         assert _get_save_state(svc, 42) is None
 
     @pytest.mark.asyncio
-    async def test_confirm_migration_use_server_quarantines_local(self, tmp_path):
-        """ "Use the server save": the differing local file is quarantined, then replaced."""
+    async def test_confirm_migration_use_server_backs_up_local(self, tmp_path):
+        """ "Use the server save": the differing local file is backed up, then replaced."""
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "dev-1")
@@ -1749,7 +1749,7 @@ class TestSwitchSlot:
 
     @pytest.mark.asyncio
     async def test_empty_slot_deletes_local_files(self, tmp_path):
-        """New slot is empty → local save files quarantined and file tracking cleared."""
+        """New slot is empty → local save files backed up and file tracking cleared."""
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _install_rom(svc, tmp_path)
@@ -1767,7 +1767,7 @@ class TestSwitchSlot:
         assert _require_save_state(svc, 42).active_slot == "brand-new-slot"
         # Local save file removed from its slot path
         assert not save_path.exists()
-        # ...but quarantined under .romm-backup — never destroyed (#965)
+        # ...but backed up under .romm-backup — never destroyed (#965)
         backup_dir = save_path.parent / ".romm-backup"
         backups = list(backup_dir.glob("pokemon_*.srm"))
         assert len(backups) == 1
@@ -1930,8 +1930,8 @@ class TestSwitchSlot:
         assert "default" not in slot_names
 
     @pytest.mark.asyncio
-    async def test_residual_local_file_quarantined(self, tmp_path):
-        """#1058: switching to an .srm-only slot quarantines the stale .rtc.
+    async def test_residual_local_file_backed_up(self, tmp_path):
+        """#1058: switching to an .srm-only slot backs up the stale .rtc.
 
         Both .srm and .rtc are present and synced under the current slot. The
         target slot provides only the .srm, so the .rtc the new slot does not
@@ -1981,7 +1981,7 @@ class TestSwitchSlot:
 
         # The stale .rtc is gone from its slot path...
         assert not rtc_path.exists()
-        # ...and quarantined under .romm-backup (#965).
+        # ...and backed up under .romm-backup (#965).
         backup_dir = rtc_path.parent / ".romm-backup"
         assert len(list(backup_dir.glob("pokemon_*.rtc"))) == 1
         # Its baseline is dropped from tracking (no residual upload candidate).
@@ -2080,10 +2080,10 @@ class TestSwitchSlot:
         """#1058: a failed download on a target the new slot provides leaves a coherent, self-healing state.
 
         The local file's extension IS provided by the new slot, so it is a
-        download target (never the non-target quarantine path). The download
-        fails — and because do_download_save writes to a temp file and only
+        download target (never the non-target backup path). The download
+        fails — and because the download writes to a temp file and only
         backs up + moves on success, the original local file is untouched (not
-        quarantined-then-lost) and its prior baseline stays intact, still
+        backed-up-then-lost) and its prior baseline stays intact, still
         matching the on-disk bytes. The active slot is flipped + persisted and
         the answer is a SlotSwitchIncomplete; the next sync re-resolves the target as a
         Download against the newer server save, so the state self-heals.
@@ -2108,7 +2108,7 @@ class TestSwitchSlot:
 
         state = _require_save_state(svc, 42)
         assert state.active_slot == "target"
-        # The original local file is untouched — not lost, not quarantined.
+        # The original local file is untouched — not lost, not backed up.
         assert save_path.read_bytes() == b"original local bytes"
         backup_dir = save_path.parent / ".romm-backup"
         assert not (backup_dir.exists() and list(backup_dir.glob("pokemon_*.srm")))
@@ -2117,8 +2117,8 @@ class TestSwitchSlot:
         assert state.files["pokemon.srm"].last_sync_hash == local_hash
 
     @pytest.mark.asyncio
-    async def test_empty_slot_quarantines_synced_and_unsynced(self, tmp_path):
-        """#965: switching to an empty slot quarantines every local save, lost none.
+    async def test_empty_slot_backs_up_synced_and_unsynced(self, tmp_path):
+        """#965: switching to an empty slot backs up every local save, lost none.
 
         The slot holds both a never-synced file (no baseline) and a synced file.
         Each is moved aside into .romm-backup (recoverable, never destroyed) and
@@ -2175,7 +2175,7 @@ class TestSwitchSlot:
         """#1061: a legacy (slot:null) save must NOT bleed into an empty named slot.
 
         The on-device carry-over: with a legacy save on the server, switching to
-        an empty named slot left the local file quarantined (correct) BUT the
+        an empty named slot left the local file backed up (correct) BUT the
         active slot's status pulled the legacy save in (the old
         filter_saves_to_slot matched null under any named slot) — so the
         saves tab showed, and the sync downloaded, the legacy save into the slot.
@@ -2210,7 +2210,7 @@ class TestSwitchSlot:
 
         assert isinstance(result, dict)
         assert result["success"] is True
-        # The local file was quarantined (no carry-over on disk).
+        # The local file was backed up (no carry-over on disk).
         assert not save_path.exists()
         # The legacy save was never downloaded into the test slot.
         download_ids = [c[1][0] for c in fake.call_log if c[0] == "download_save_content"]
@@ -2938,3 +2938,31 @@ class TestSlotMutationLocking:
         assert isinstance(result, dict)
         assert result["success"] is True
         assert "save_status" in result
+
+
+class TestASlotMigrationFetchThatBreaksOff:
+    """The migration's server copy goes through the save transfer's fetch, which removes what it wrote."""
+
+    @pytest.mark.asyncio
+    async def test_a_fetch_that_broke_off_partway_leaves_no_temporary_file(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path, content=b"L" * 100)
+        fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
+
+        def half_a_download(save_id, dest_path):
+            with open(dest_path, "wb") as f:
+                f.write(b"half")
+            raise RommConnectionError("offline")
+
+        fake.download_save = half_a_download
+
+        with pytest.raises(RommConnectionError):
+            await svc.confirm_slot_choice(42, "default", True, None)
+
+        saves_dir = tmp_path / "saves" / "gba"
+        assert sorted(p.name for p in saves_dir.iterdir()) == ["pokemon.srm"]
+        assert (saves_dir / "pokemon.srm").read_bytes() == b"L" * 100
+        assert _get_save_state(svc, 42) is None

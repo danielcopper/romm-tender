@@ -36,6 +36,8 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_backup import SaveBackup
+    from services.saves.save_transfer import SaveTransfer
     from services.saves.status import StatusService
     from services.saves.sync_engine import SyncEngine
 
@@ -54,7 +56,8 @@ class SlotsServiceConfig:
     resolver used to stamp the upload
     emulator tag, the Protocol-typed RomM adapter and retry strategy,
     runtime infrastructure (loop, logger, clock), the Protocol-typed
-    filesystem adapter, and the ``DebugLogger`` seam.
+    filesystem adapter, the ``DebugLogger`` seam, and the save backup and
+    save transfer the switch and the setup move files through.
     """
 
     settings: dict[str, Any]
@@ -70,6 +73,8 @@ class SlotsServiceConfig:
     clock: Clock
     save_file_store: SaveFileStore
     log_debug: DebugLogger
+    save_backup: SaveBackup
+    save_transfer: SaveTransfer
 
 
 class SlotsService:
@@ -99,6 +104,8 @@ class SlotsService:
             clock=config.clock,
             save_file_store=config.save_file_store,
             log_debug=config.log_debug,
+            save_backup=config.save_backup,
+            save_transfer=config.save_transfer,
         )
         self._setup = SetupWizard(
             settings=config.settings,
@@ -112,6 +119,8 @@ class SlotsService:
             save_file_store=config.save_file_store,
             log_debug=config.log_debug,
             sync_engine=config.sync_engine,
+            save_backup=config.save_backup,
+            save_transfer=config.save_transfer,
         )
         self._deleter = SlotDeleter(
             settings=config.settings,

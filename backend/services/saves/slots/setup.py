@@ -16,6 +16,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
+from domain.save_backup import BACKUP_RETENTION
 from domain.save_slot import save_in_slot
 from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, classify_error
 from services.saves._helpers import newest_server_saves_by_target
@@ -39,6 +40,8 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_backup import SaveBackup
+    from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine import SyncEngine
 
 
@@ -59,6 +62,8 @@ class SetupWizard:
         save_file_store: SaveFileStore,
         log_debug: DebugLogger,
         sync_engine: SyncEngine,
+        save_backup: SaveBackup,
+        save_transfer: SaveTransfer,
     ) -> None:
         self._settings = settings
         self._uow_factory = uow_factory
@@ -71,6 +76,8 @@ class SetupWizard:
         self._save_file_store = save_file_store
         self._log_debug = log_debug
         self._sync_engine = sync_engine
+        self._save_backup = save_backup
+        self._save_transfer = save_transfer
 
     def is_save_tracking_configured(self, rom_id: int) -> dict[str, Any]:
         """Check if save slot tracking is configured for a game.
@@ -286,7 +293,7 @@ class SetupWizard:
           confirmed and the call refuses with ``local_conflict``, carrying
           ``needs_conflict_resolution=True`` and a ``conflicts`` list (both
           sides' timestamp/size) so the wizard can ask.
-          With it, the differing local file is quarantined into ``.romm-backup``
+          With it, the differing local file is backed up into ``.romm-backup``
           (never deleted, #965) before the server content replaces it.
 
         The legacy source saves are never deleted — a migration copies their
@@ -432,11 +439,13 @@ class SetupWizard:
         Synchronous worker (run via ``run_in_executor``) — acquires no
         ``rom_lock``, so it is safe under the lock ``confirm_slot_choice`` holds.
         ``device_id`` and ``info`` are the caller's already-validated
-        preconditions. Content-based: for each canonical target it downloads the
-        newest legacy save's content to a sibling temp, classifies it against the
+        preconditions. Content-based: for each canonical target it fetches a
+        server copy of the newest legacy save into a sibling temp
+        (:meth:`SaveTransfer.fetch_server_copy`, which removes it again when the
+        fetch fails), classifies it against the
         local file (``no_local`` / ``identical`` / ``differs``), and either copies
         it into the slot — adopting the per-file baseline via
-        :meth:`SyncEngine.do_upload_save`, which uploads to the slot *save_state*
+        :meth:`SaveTransfer.upload_save_file`, which uploads to the slot *save_state*
         was just confirmed with — or, for a differing local file with
         ``use_server_on_conflict`` unset, records a conflict for the wizard. The
         legacy source saves are never deleted; they stay in the read-only legacy
@@ -487,10 +496,7 @@ class SetupWizard:
                 local_path = os.path.join(saves_dir, target)
                 tmp_path = local_path + ".tmp"
                 created_temps.append(tmp_path)
-                self._retry.with_retry(
-                    lambda sid=server_save["id"], tp=tmp_path: self._romm_api.download_save(sid, tp),
-                )
-                server_hash = self._save_file_store.content_hash(tmp_path)
+                server_hash = self._save_transfer.fetch_server_copy(server_save["id"], tmp_path)
                 if not self._save_file_store.is_file(local_path):
                     kind = "no_local"
                 elif self._save_file_store.content_hash(local_path) == server_hash:
@@ -544,9 +550,9 @@ class SetupWizard:
 
         ``identical`` keeps the local file (the temp is redundant); ``no_local``
         moves the downloaded content into place; ``differs`` — reached only with
-        ``use_server_on_conflict`` — quarantines the local file first (#965) then
+        ``use_server_on_conflict`` — backs the local file up first (#965) then
         replaces it. The final upload copies the local file into the confirmed
-        slot and adopts the per-file baseline (:meth:`SyncEngine.do_upload_save`).
+        slot and adopts the per-file baseline (:meth:`SaveTransfer.upload_save_file`).
         """
         target = plan["target"]
         local_path = plan["local_path"]
@@ -558,10 +564,10 @@ class SetupWizard:
                 self._save_file_store.remove_file(tmp_path)
         else:
             if kind == "differs":
-                self._sync_engine.quarantine_local_file(saves_dir, target)
+                self._save_backup.back_up_save_file(saves_dir, target, keep=BACKUP_RETENTION)
             self._save_file_store.rename(tmp_path, local_path)
 
-        self._sync_engine.do_upload_save(
+        self._save_transfer.upload_save_file(
             rom_id,
             local_path,
             target,

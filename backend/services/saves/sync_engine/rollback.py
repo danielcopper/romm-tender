@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 from domain.iso_time import parse_iso_to_epoch
 from domain.save_path import sanitize_save_filename
 from domain.save_slot import filter_saves_to_slot
-from lib.errors import NamedRefused, NotInstalled, Refused
+from lib.errors import DeviceWriteError, NamedRefused, NotInstalled, Refused
 from services.saves._helpers import local_save_target
 from services.saves._refusals import shape_refusal
 from services.saves._save_state import read_save_state_or_new, write_save_state
@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from domain.rom_save_sync_state import RomSaveSyncState
     from domain.save_answer import SaveAnswer
     from services.protocols import (
-        Clock,
         DebugLogger,
         RetryStrategy,
         RommSyncApi,
@@ -48,7 +47,7 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
-    from services.saves.sync_engine.matrix import MatrixExecutor
+    from services.saves.save_transfer import SaveTransfer
 
 
 class StaleConflict(NamedRefused):
@@ -65,8 +64,8 @@ class RollbackOrchestrator:
     responsibility (:class:`SyncEngine` holds the per-rom lock dict);
     everything else — filename validation, server-head freshness check,
     use_server/keep_local dispatch, post-write state sync — lives here.
-    Calls into :class:`MatrixExecutor` for the actual download/upload
-    I/O and server-hash probe.
+    Calls into :class:`SaveTransfer` for the download, the upload, the
+    server copy's hash and the adopt of an identical head.
     """
 
     def __init__(
@@ -76,9 +75,8 @@ class RollbackOrchestrator:
         rom_info: RomInfoService,
         live_device_id: Callable[[], Awaitable[LiveDeviceId]],
         romm_api: RommSyncApi,
-        matrix: MatrixExecutor,
+        transfer: SaveTransfer,
         retry: RetryStrategy,
-        clock: Clock,
         save_file_store: SaveFileStore,
         logger: logging.Logger,
         log_debug: DebugLogger,
@@ -89,9 +87,8 @@ class RollbackOrchestrator:
         self._rom_info = rom_info
         self._live_device_id = live_device_id
         self._romm_api = romm_api
-        self._matrix = matrix
+        self._transfer = transfer
         self._retry = retry
-        self._clock = clock
         self._save_file_store = save_file_store
         self._logger = logger
         self._log_debug = log_debug
@@ -248,13 +245,13 @@ class RollbackOrchestrator:
         """Download *server* into the canonical local save file and update *save_state*.
 
         The write path is always ``<rom_name>.<server.file_extension>`` — the
-        path RetroArch reads. Drives state-key consistency too:
-        ``update_file_sync_state`` receives the same target name the file
-        lands at. Mutates *save_state* in memory; ``resolve`` owns the write UoW.
+        path RetroArch reads. Drives state-key consistency too: the baseline
+        is recorded under the same target name the file lands at. Mutates
+        *save_state* in memory; ``resolve`` owns the write UoW.
         """
         target = local_save_target(server, rom_name, known_names=save_names)
         default_slot = resolve_default_slot(self._settings)
-        self._matrix.do_download_save(server, saves_dir, target, save_state, device_id, system, default_slot)
+        self._transfer.download_save_file(server, saves_dir, target, save_state, device_id, system, default_slot)
 
     def _resolve_conflict_keep_local(
         self,
@@ -282,45 +279,63 @@ class RollbackOrchestrator:
         :class:`FileNotFoundError` is raised — we never silently rename across
         extensions. Mutates *save_state* in memory; ``resolve`` owns the write UoW.
 
-        The adopt without an upload first confirms *server* to RomM as synced by
-        this device, through the retry strategy, and records the baseline only
-        once that succeeded: after the user resolved the conflict this device
-        must be current on the head. A failure propagates with nothing recorded.
+        The adopt without an upload is :meth:`SaveTransfer.adopt_server_head`,
+        the sync's own adopt: it confirms *server* to RomM as synced by this
+        device, through the retry strategy, and records the sync boundary and
+        the baseline only once that succeeded — after the user resolved the
+        conflict this device must be current on the head. A failure propagates
+        with nothing recorded. A file that no longer hashes as it did when it
+        was compared is uploaded instead, as a file that differs is.
+
+        The comparison fetches the server copy (:meth:`SaveTransfer.hash_server_copy`).
+        A device write error there is logged as a warning and any other failure
+        passed over: the comparison only spares an upload, so either way the
+        local file is uploaded, as the user asked.
         """
         target = local_save_target(server, rom_name, known_names=save_names)
         local_path = os.path.join(saves_dir, target)
         if not self._save_file_store.is_file(local_path):
             raise FileNotFoundError(f"Local save not found: {local_path}")
-        # Zip-aware RomM-parity hash on both sides — get_server_save_hash hashes
-        # the downloaded server copy the same way — so a zip save's adopt-without-
-        # upload check can actually match instead of always re-POSTing (#1457).
-        measure = self._save_file_store.measure(local_path)
-        local_hash = measure.content_hash
+        # Zip-aware RomM-parity hash on both sides — the server copy is hashed
+        # the same way — so a zip save's adopt-without-upload check can actually
+        # match instead of always re-POSTing (#1457).
+        local_hash = self._save_file_store.measure(local_path).content_hash
         try:
-            server_hash = self._retry.with_retry(lambda: self._matrix.get_server_save_hash(server))
+            server_hash = self._retry.with_retry(lambda: self._transfer.hash_server_copy(server))
+        except DeviceWriteError as e:
+            self._logger.warning(
+                "keep_local(rom=%d, filename=%s): the server copy could not be written on this device (%s); "
+                "uploading without comparing",
+                rom_id,
+                target,
+                e,
+            )
+            server_hash = None
         except Exception:
             server_hash = None
 
-        server_id = server.get("id")
-        if server_hash and local_hash == server_hash and server_id is not None:
-            # Hashes match — adopt server's id without re-uploading. Store the
-            # server's own ``content_hash`` (never our downloaded-and-recomputed
-            # ``server_hash``, which is parity-derived) as ``last_sync_server_hash``
-            # so a later identity check can take the provenance route; ``None``
-            # when the listed save carried no ``content_hash`` (the reason
-            # ``get_server_save_hash`` had to download to compare), falling back to
-            # parity (#1468).
-            self._log_debug(
-                f"keep_local: hash matches server, adopting without upload (rom={rom_id} filename={target})"
-            )
-            self._retry.with_retry(lambda: self._romm_api.confirm_download(int(server_id), device_id))
-            save_state.adopt_head(
+        default_slot = resolve_default_slot(self._settings)
+        if (
+            server_hash
+            and local_hash == server_hash
+            and server.get("id") is not None
+            and self._transfer.adopt_server_head(
+                save_state,
                 target,
                 server,
-                measure,
-                self._save_file_store.get_mtime(local_path),
-                synced_at=self._clock.now().isoformat(),
+                local_path,
+                local_hash,
+                device_id=device_id,
+                system=system,
+                default_slot=default_slot,
             )
+        ):
+            # The head's own ``content_hash`` (never the recomputed
+            # ``server_hash``, which is parity-derived) is what the adopt stores as
+            # ``last_sync_server_hash``, so a later identity check can take the
+            # provenance route; ``None`` when the listed save carried none,
+            # falling back to parity (#1468).
+            self._log_debug(f"keep_local: hash matches server, adopted without upload (rom={rom_id} filename={target})")
             return
 
         # POST the local content as a new save in the slot with overwrite=True:
@@ -328,7 +343,6 @@ class RollbackOrchestrator:
         # write-time currency (409) gate rather than 409-backstop into a conflict
         # loop (ADR-0017). The freshness of the server head was already validated
         # by the stale-conflict check in ``resolve`` before we got here.
-        default_slot = resolve_default_slot(self._settings)
-        self._matrix.do_upload_save(
+        self._transfer.upload_save_file(
             rom_id, local_path, target, save_state, device_id, system, core_so, None, default_slot, overwrite=True
         )
