@@ -268,6 +268,19 @@ describe("gameDetailStore", () => {
       });
     });
 
+    it("holds the platform's display name the cached detail carries, and none where it carries none", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ platform_name: "Super Nintendo" }));
+      subscribe(nextAppId);
+      await flush();
+      expect(getGameDetail(nextAppId)).toMatchObject({ platformSlug: "snes", platformName: "Super Nintendo" });
+
+      const other = ++appIdSeq;
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
+      subscribe(other);
+      await flush();
+      expect(getGameDetail(other)).toMatchObject({ platformSlug: "snes", platformName: "" });
+    });
+
     it("joins the info panel's open BIOS read rather than opening a second round trip", async () => {
       // The panel's load reaches this read off the same stale mark on the same
       // cached detail, microtasks away, on every page open. Standing in for it
