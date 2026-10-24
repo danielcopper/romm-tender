@@ -1302,6 +1302,49 @@ class TestTheSizeClaim:
         assert [component.size_fixed for component in answer.synced_files] == [None]
 
 
+class TestTheResolverStatesEachFileOnce:
+    """The resolver refuses a save answer that states one directory and file name twice.
+
+    Each component takes its own group's role and size claim, with nothing
+    merged across groups, because of this guarantee (#2565 D1, D2). A release
+    that loosens it fails here, at the bump.
+    """
+
+    @staticmethod
+    def _group(directory: str, name: str) -> FileGroup:
+        return FileGroup(dir=directory, files=(name,), granularity=GRANULARITY_PER_GAME_FILE, role=ROLE_BATTERY)
+
+    def test_a_name_repeated_in_the_answers_own_directory_is_refused(self):
+        with pytest.raises(ValueError):
+            _placement(
+                files=("Game Title.srm", "Game Title.srm"),
+                groups=(self._group(_SAVES, "Game Title.srm"), self._group(_SAVES, "Game Title.srm")),
+            )
+
+    def test_a_name_repeated_in_another_directory_is_refused(self):
+        # Groups outside the answer's own directory are not held to its file
+        # list, so only the one-entry rule can refuse this repeat.
+        with pytest.raises(ValueError):
+            _placement(
+                groups=(
+                    self._group(_SAVES, "Game Title.srm"),
+                    self._group("/elsewhere", "Game Title.ram"),
+                    self._group("/elsewhere", "Game Title.ram"),
+                ),
+            )
+
+    def test_one_name_in_two_directories_is_two_files(self, traces):
+        answer = _ask(
+            _placement(groups=(self._group(_SAVES, "Game Title.srm"), self._group("/elsewhere", "Game Title.srm"))),
+            traces,
+        )
+
+        assert [(c.directory, c.name) for c in answer.components] == [
+            (_SAVES, "Game Title.srm"),
+            ("/elsewhere", "Game Title.srm"),
+        ]
+
+
 class TestTheStandardRulesGroupsChangeNoSyncedFile:
     """RetroArch's standard rule answers one battery group per file it writes.
 
