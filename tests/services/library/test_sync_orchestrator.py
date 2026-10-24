@@ -7229,6 +7229,130 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
         assert platform_app_ids == {}
 
 
+class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
+    """The preview names each platform collection the way the apply files it (#2558 D1).
+
+    N64's slug, ``n64``, and its name, ``Nintendo 64``, differ. N64 holds Golf
+    (USA), 20, beside Golf (Europe), 22, and Golf (Japan), 23; Faves lists 20,
+    which the first run binds. Platform groups are on. Each case runs the
+    preview, then the apply it would start, and holds the preview's
+    platform-collection diff against the platform collections that apply sends
+    and the ones the run before it sent.
+    """
+
+    @staticmethod
+    def _golf(rom_id, region, **extra):
+        stem = f"Golf ({region})"
+        return {"id": rom_id, "name": stem, "fs_name": f"{stem}.zip", "fs_name_no_ext": stem, "igdb_id": 300, **extra}
+
+    @classmethod
+    async def _bind_20(cls, library, fake_romm_api, *, n64_synced):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=4,
+            name="Nintendo 64",
+            slug="n64",
+            roms=[
+                cls._golf(20, "USA", rom_user={"is_main_sibling": True}),
+                cls._golf(22, "Europe"),
+                cls._golf(23, "Japan"),
+            ],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
+        library.settings["enabled_platforms"] = {"4": n64_synced}
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        library.settings["collection_create_platform_groups"] = True
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
+        await library.sync._orchestrator._do_sync_per_unit()
+        with library.uow as uow:
+            assert uow.roms.get(20).shortcut_app_id == 6020
+
+    @staticmethod
+    async def _preview_then_apply(library, emit, monkeypatch):
+        """``(faves_skips, platform_collection_diff, the diff the apply made, platform_app_ids)``.
+
+        The diff the apply made compares the platform collections it sends with
+        the ones the run before it sent, by the rule the preview counts with.
+        """
+        fetcher = library.sync._collection_fetcher
+        fetch_collection_unit = fetcher.fetch_collection_unit
+        faves_skips: list[bool] = []
+
+        async def recording_fetch_collection_unit(*args, **kwargs):
+            answer = await fetch_collection_unit(*args, **kwargs)
+            faves_skips.append(answer[2])
+            return answer
+
+        monkeypatch.setattr(fetcher, "fetch_collection_unit", recording_fetch_collection_unit)
+        with library.uow as uow:
+            sent_before = set(uow.sync_runs.get_latest_completed().platforms_completed)
+        summary = (await library.sync.sync_preview())["summary"]
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        run_2_starts_at = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
+        (platform_app_ids,) = [
+            payload[0]["platform_app_ids"] for name, *payload in frames if name == "sync_collections"
+        ]
+        added, removed = len(platform_app_ids.keys() - sent_before), len(sent_before - platform_app_ids.keys())
+        applied = {"has_changes": bool(added or removed), "added_count": added, "removed_count": removed}
+        return faves_skips, summary["platform_collection_diff"], applied, platform_app_ids
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    async def test_a_member_a_collection_rebuilt_is_named_as_the_apply_names_it(
+        self, library, fake_romm_api, emit, monkeypatch, faves_skipped
+    ):
+        """N64 is synced and 20 hidden in RomM, so N64's fetch no longer returns it while Faves still lists it."""
+        await self._bind_20(library, fake_romm_api, n64_synced=True)
+        fake_romm_api.hidden_rom_ids = {20}
+        if not faves_skipped:
+            fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
+
+        faves_skips, platform_collection_diff, applied, platform_app_ids = await self._preview_then_apply(
+            library, emit, monkeypatch
+        )
+
+        assert faves_skips == [faves_skipped, faves_skipped]
+        assert platform_app_ids == {"Nintendo 64": [6020]}
+        assert platform_collection_diff == applied
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    @pytest.mark.parametrize("name_cached", [False, True], ids=["no-name-cached", "name-cached-then-renamed-in-romm"])
+    async def test_a_platform_only_collections_reach_is_named_as_the_apply_names_it(
+        self, library, fake_romm_api, emit, monkeypatch, faves_skipped, name_cached
+    ):
+        """N64's sync is off for the second run; to cache a name, the first run syncs N64, which RomM renames after."""
+        await self._bind_20(library, fake_romm_api, n64_synced=name_cached)
+        library.settings["enabled_platforms"] = {"4": False}
+        if name_cached:
+            for rom_id in (20, 22, 23):
+                fake_romm_api.roms[rom_id]["platform_name"] = "Nintendo 64 (N64)"
+        if not faves_skipped:
+            fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
+
+        faves_skips, platform_collection_diff, applied, platform_app_ids = await self._preview_then_apply(
+            library, emit, monkeypatch
+        )
+
+        assert faves_skips == [faves_skipped, faves_skipped]
+        assert list(platform_app_ids.values()) == [[6020]]
+        assert platform_collection_diff == applied
+
+
 class TestRegression738CacheCorruption:
     """Regression for #738 — delta sync must not erase populated metadata.
 

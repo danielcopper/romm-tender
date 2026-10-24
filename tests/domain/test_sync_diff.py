@@ -512,33 +512,37 @@ class TestPlatformCollectionName:
         assert platform_collection_name(30, "n64", None, {"n64": "Nintendo 64"}, False) == "Nintendo 64"
 
 
+_NAMES = {"gba": "Game Boy Advance", "n64": "Nintendo 64", "psx": "PlayStation"}
+
+
 class TestComputePlatformCollectionDiff:
     """compute_platform_collection_diff() — diff future platform groups vs last-synced."""
 
     def test_first_sync_adds_all_platforms(self):
         sd = [
-            _make_sd(1, platform_name="Game Boy Advance"),
-            _make_sd(2, platform_name="Nintendo 64"),
+            _make_sd(1, platform_slug="gba"),
+            _make_sd(2, platform_slug="n64"),
         ]
-        result = compute_platform_collection_diff(sd, {1, 2}, [], False)
+        result = compute_platform_collection_diff(sd, {1, 2}, [], False, _NAMES)
         assert result["has_changes"] is True
         assert result["added_count"] == 2
         assert result["removed_count"] == 0
 
     def test_no_changes_when_platforms_match_last_sync(self):
-        sd = [_make_sd(1, platform_name="Game Boy Advance")]
-        result = compute_platform_collection_diff(sd, {1}, ["Game Boy Advance"], False)
+        sd = [_make_sd(1, platform_slug="gba")]
+        result = compute_platform_collection_diff(sd, {1}, ["Game Boy Advance"], False, _NAMES)
         assert result["has_changes"] is False
         assert result["added_count"] == 0
         assert result["removed_count"] == 0
 
     def test_removed_platform_detected(self):
-        sd = [_make_sd(1, platform_name="Game Boy Advance")]
+        sd = [_make_sd(1, platform_slug="gba")]
         result = compute_platform_collection_diff(
             sd,
             {1},
             ["Game Boy Advance", "Nintendo 64"],
             False,
+            _NAMES,
         )
         assert result["has_changes"] is True
         assert result["added_count"] == 0
@@ -547,35 +551,27 @@ class TestComputePlatformCollectionDiff:
     def test_collection_only_rom_excluded_when_toggle_off(self):
         """ROM not in platform_rom_ids doesn't contribute its platform when toggle is OFF."""
         sd = [
-            _make_sd(1, platform_name="Game Boy Advance"),
-            _make_sd(2, platform_name="PlayStation"),  # collection-only
+            _make_sd(1, platform_slug="gba"),
+            _make_sd(2, platform_slug="psx"),  # collection-only
         ]
-        result = compute_platform_collection_diff(sd, {1}, [], False)
+        result = compute_platform_collection_diff(sd, {1}, [], False, _NAMES)
         # Only GBA gets added; PSX is filtered out
         assert result["added_count"] == 1
 
     def test_collection_only_rom_included_when_toggle_on(self):
         """create_platform_groups=True forces every ROM's platform into the diff."""
         sd = [
-            _make_sd(1, platform_name="Game Boy Advance"),
-            _make_sd(2, platform_name="PlayStation"),  # collection-only
+            _make_sd(1, platform_slug="gba"),
+            _make_sd(2, platform_slug="psx"),  # collection-only
         ]
-        result = compute_platform_collection_diff(sd, {1}, [], True)
+        result = compute_platform_collection_diff(sd, {1}, [], True, _NAMES)
         # Both platforms qualify
         assert result["added_count"] == 2
 
     def test_none_platform_rom_ids_treats_all_as_qualifying(self):
         """platform_rom_ids=None (legacy sync) includes every ROM regardless of toggle."""
-        sd = [_make_sd(1, platform_name="Game Boy Advance")]
-        result = compute_platform_collection_diff(sd, None, [], False)
-        assert result["added_count"] == 1
-
-    def test_empty_platform_name_is_skipped(self):
-        sd = [
-            _make_sd(1, platform_name=""),
-            _make_sd(2, platform_name="Nintendo 64"),
-        ]
-        result = compute_platform_collection_diff(sd, {1, 2}, [], False)
+        sd = [_make_sd(1, platform_slug="gba")]
+        result = compute_platform_collection_diff(sd, None, [], False, _NAMES)
         assert result["added_count"] == 1
 
     def test_pure_rebind_platform_not_counted_as_removed(self):
@@ -586,12 +582,13 @@ class TestComputePlatformCollectionDiff:
         is present. Keying membership on the entry's own rom_id would drop the
         platform out of ``future_platforms`` and mis-count it as removed.
         """
-        rebind = {**_make_sd(1, platform_name="Nintendo 64"), BIND_ROM_ID_KEY: 2}
+        rebind = {**_make_sd(1, platform_slug="n64"), BIND_ROM_ID_KEY: 2}
         result = compute_platform_collection_diff(
             [rebind],
             {2},
             ["Nintendo 64"],
             False,
+            _NAMES,
         )
         assert result["has_changes"] is False
         assert result["added_count"] == 0
@@ -599,12 +596,13 @@ class TestComputePlatformCollectionDiff:
 
     def test_rebind_plus_genuinely_removed_platform_counts_only_the_genuine(self):
         """A rebinding platform stays; only a truly-gone platform is removed (#1417)."""
-        rebind = {**_make_sd(1, platform_name="Nintendo 64"), BIND_ROM_ID_KEY: 2}
+        rebind = {**_make_sd(1, platform_slug="n64"), BIND_ROM_ID_KEY: 2}
         result = compute_platform_collection_diff(
             [rebind],
             {2},
             ["Nintendo 64", "Game Boy Advance"],
             False,
+            _NAMES,
         )
         assert result["has_changes"] is True
         assert result["added_count"] == 0
@@ -612,36 +610,56 @@ class TestComputePlatformCollectionDiff:
 
     def test_rebind_plus_added_platform(self):
         """A rebinding platform holds; a freshly-fetched new platform is added (#1417)."""
-        rebind = {**_make_sd(1, platform_name="Nintendo 64"), BIND_ROM_ID_KEY: 2}
-        added = _make_sd(3, platform_name="PlayStation")
+        rebind = {**_make_sd(1, platform_slug="n64"), BIND_ROM_ID_KEY: 2}
+        added = _make_sd(3, platform_slug="psx")
         result = compute_platform_collection_diff(
             [rebind, added],
             {2, 3},
             ["Nintendo 64"],
             False,
+            _NAMES,
         )
         assert result["has_changes"] is True
         assert result["added_count"] == 1
         assert result["removed_count"] == 0
 
     def test_a_change_of_case_alone_is_no_change(self):
-        sd = [_make_sd(1, platform_name="Nintendo 64")]
-        result = compute_platform_collection_diff(sd, {1}, ["NINTENDO 64"], False)
+        sd = [_make_sd(1, platform_slug="n64")]
+        result = compute_platform_collection_diff(sd, {1}, ["NINTENDO 64"], False, _NAMES)
         assert result["has_changes"] is False
         assert result["added_count"] == 0
         assert result["removed_count"] == 0
 
     def test_new_case_variants_count_as_one_added_platform(self):
-        sd = [_make_sd(1, platform_name="Nintendo 64"), _make_sd(2, platform_name="NINTENDO 64")]
-        result = compute_platform_collection_diff(sd, {1, 2}, [], False)
+        sd = [_make_sd(1, platform_slug="n64"), _make_sd(2, platform_slug="n64-upper")]
+        result = compute_platform_collection_diff(
+            sd, {1, 2}, [], False, {"n64": "Nintendo 64", "n64-upper": "NINTENDO 64"}
+        )
         assert result["added_count"] == 1
 
     def test_a_rename_beyond_case_still_counts(self):
-        sd = [_make_sd(1, platform_name="Nintendo 64 DD")]
-        result = compute_platform_collection_diff(sd, {1}, ["nintendo 64"], False)
+        sd = [_make_sd(1, platform_slug="n64dd")]
+        result = compute_platform_collection_diff(sd, {1}, ["nintendo 64"], False, {"n64dd": "Nintendo 64 DD"})
         assert result["has_changes"] is True
         assert result["added_count"] == 1
         assert result["removed_count"] == 1
+
+    def test_the_platform_name_an_entry_carries_is_not_read(self):
+        """A row a collection's skip rebuilt carries its slug as its name; the apply files it by the platform's name."""
+        sd = [_make_sd(1, platform_name="n64", platform_slug="n64")]
+        result = compute_platform_collection_diff(sd, set(), ["Nintendo 64"], True, {"n64": "Nintendo 64"})
+        assert result == {"has_changes": False, "added_count": 0, "removed_count": 0}
+
+    def test_a_platform_without_a_name_is_filed_under_its_slug(self):
+        sd = [_make_sd(1, platform_name="Nintendo 64", platform_slug="n64")]
+        result = compute_platform_collection_diff(sd, set(), ["n64"], True, {})
+        assert result == {"has_changes": False, "added_count": 0, "removed_count": 0}
+
+    def test_a_kept_row_s_platform_is_named_through_the_same_names(self):
+        result = compute_platform_collection_diff(
+            [], set(), ["Nintendo 64"], False, {"n64": "Nintendo 64"}, kept_platform_slugs={"n64"}
+        )
+        assert result == {"has_changes": False, "added_count": 0, "removed_count": 0}
 
 
 class TestSelectStaleRemovals:

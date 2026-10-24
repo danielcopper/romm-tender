@@ -94,7 +94,7 @@ class TestWithKeptPlatformNames:
     async def test_a_kept_row_outside_the_live_names_takes_its_cached_name(self):
         read = AsyncMock(return_value={"gba": "Game Boy Advance"})
 
-        names = await with_kept_platform_names([StaleRow(1, 1001, "gba")], {"n64": "Nintendo 64"}, read_kept_names=read)
+        names = await with_kept_platform_names({"gba"}, {"n64": "Nintendo 64"}, read_kept_names=read)
 
         assert names == {"gba": "Game Boy Advance", "n64": "Nintendo 64"}
         read.assert_awaited_once_with({"gba"})
@@ -103,7 +103,7 @@ class TestWithKeptPlatformNames:
     async def test_nothing_is_read_when_every_kept_row_has_a_live_name(self):
         read = AsyncMock(return_value={})
 
-        names = await with_kept_platform_names([StaleRow(1, 1001, "n64")], {"n64": "Nintendo 64"}, read_kept_names=read)
+        names = await with_kept_platform_names({"n64"}, {"n64": "Nintendo 64"}, read_kept_names=read)
 
         assert names == {"n64": "Nintendo 64"}
         read.assert_not_awaited()
