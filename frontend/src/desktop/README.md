@@ -14,9 +14,10 @@ page, and the rules every change to that page follows, are in
   `fiberInspector.ts` (read-only Fiber reads), `restorationLedger.ts` (recording every change so it can be undone),
   `stickyPlayBarController.ts` (the play bar's pinned and glass states).
 - `gameview/GameView.tsx` — what `index.ts` hands the watcher as the page's `gameView`: the page's cards in two columns.
-  The About card (`gameview/AboutDetails.tsx`) is the one card so far.
+  The About card (`gameview/AboutDetails.tsx`) is the one card so far; `gameview/MigrationBlockedCard.tsx` takes the
+  columns' place while a RetroDECK migration is pending.
 - `gameview/styles.ts` — the play bar's glass and pinned colours, which `stickyPlayBarController.ts` applies, and the
-  cards' style.
+  cards' styles.
 
 **Dev build only.** `rollup.config.js` builds the panel from `./src/index.tsx` — the module that mounts the bigpicture
 surface — and nothing there imports this directory, so `pnpm build`, `build:dev`, CI and the release tarball ship none

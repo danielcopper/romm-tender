@@ -30,3 +30,15 @@ export const CARD_STYLE: CSSProperties = {
   color: "#ffffff",
   fontFamily: '"Motiva Sans", Arial, Helvetica, sans-serif',
 };
+
+export const WARNING_COLOR = "#ffaa00";
+
+export const WARNING_CARD_STYLE: CSSProperties = {
+  ...CARD_STYLE,
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "16px",
+  border: "1px solid rgba(255, 170, 0, 0.35)",
+  borderLeft: `4px solid ${WARNING_COLOR}`,
+  background: `${STEAM_CARD_BG} padding-box border-box`,
+};

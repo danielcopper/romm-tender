@@ -9,6 +9,7 @@ import * as sharedReads from "../../api/sharedReads";
 import * as artwork from "../../utils/artwork";
 import * as autoArtwork from "../../utils/autoArtwork";
 import * as connectionHeartbeat from "../../utils/connectionHeartbeat";
+import { clearMigration, setMigrationStatus } from "../../utils/migrationStore";
 import type { RomMetadata } from "../../types";
 
 vi.mock("../../utils/gameDetailStore", async (importOriginal) => {
@@ -65,6 +66,8 @@ describe("GameView", () => {
     vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detail());
     vi.mocked(sharedReads.getRomMetadataShared).mockReturnValue(new Promise(() => {}));
     vi.mocked(connectionHeartbeat.registerConnectionHeartbeat).mockReturnValue(releaseHeartbeat);
+    clearMigration();
+    vi.mocked(backend.refreshMigrationState).mockReturnValue(new Promise(() => {}));
     vi.stubGlobal("appStore", {
       GetAppOverviewByAppID: vi.fn(() => ({ appid: APP_ID, display_name: "Mario Golf: Advance Tour" })),
       GetCustomVerticalCapsuleURLs: vi.fn(() => [`/customimages/${APP_ID}p.jpg?v=9`]),
@@ -151,5 +154,45 @@ describe("GameView", () => {
 
     unmount();
     expect(artwork.cancelArtworkApply).toHaveBeenCalledExactlyOnceWith(APP_ID);
+  });
+
+  describe("while a RetroDECK migration is pending", () => {
+    const CARD_TITLE = "RetroDECK Migration Required";
+
+    it("asks the backend on opening, and draws the migration card in place of the cards", async () => {
+      vi.mocked(backend.refreshMigrationState).mockResolvedValue({ retrodeck: { pending: true } });
+
+      render(<GameView appId={APP_ID} />);
+
+      expect(await screen.findByText(CARD_TITLE)).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Mario Golf: Advance Tour" })).not.toBeInTheDocument();
+      expect(backend.refreshMigrationState).toHaveBeenCalledTimes(1);
+    });
+
+    it("draws the cards again once the migration is no longer pending", async () => {
+      setMigrationStatus({ pending: true });
+      vi.mocked(backend.refreshMigrationState).mockResolvedValue({ retrodeck: { pending: false } });
+
+      render(<GameView appId={APP_ID} />);
+
+      expect(await screen.findByRole("heading", { name: "Mario Golf: Advance Tour" })).toBeInTheDocument();
+      expect(screen.queryByText(CARD_TITLE)).not.toBeInTheDocument();
+    });
+
+    it("keeps the connection heartbeat and the automatic artwork behind the card", () => {
+      setMigrationStatus({ pending: true });
+
+      const { unmount } = render(<GameView appId={APP_ID} />);
+
+      expect(screen.getByText(CARD_TITLE)).toBeInTheDocument();
+      expect(connectionHeartbeat.registerConnectionHeartbeat).toHaveBeenCalledTimes(1);
+      expect(releaseHeartbeat).not.toHaveBeenCalled();
+      expect(autoArtwork.useAutoArtwork).toHaveBeenCalledWith(APP_ID, 42, "Desktop auto-artwork error");
+      expect(artwork.cancelArtworkApply).not.toHaveBeenCalled();
+
+      unmount();
+      expect(releaseHeartbeat).toHaveBeenCalledTimes(1);
+      expect(artwork.cancelArtworkApply).toHaveBeenCalledExactlyOnceWith(APP_ID);
+    });
   });
 });

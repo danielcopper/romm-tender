@@ -12,7 +12,10 @@ import { useAutoArtwork } from "../../utils/autoArtwork";
 import { cancelArtworkApply } from "../../utils/artwork";
 import { detach } from "../../utils/detach";
 import { registerConnectionHeartbeat } from "../../utils/connectionHeartbeat";
+import { useMigrationStatus } from "../../utils/migrationStore";
+import { useMigrationRefresh } from "../../utils/migrationRefresh";
 import { AboutDetails } from "./AboutDetails";
+import { MigrationBlockedCard } from "./MigrationBlockedCard";
 import { CARD_STYLE } from "./styles";
 
 interface GameViewProps {
@@ -50,9 +53,19 @@ export const GameView: FC<GameViewProps> = ({ appId }) => {
   );
   useAutoArtwork(appId, detail.romId, "Desktop auto-artwork error");
   useArtworkSlotsChanges(appId);
+  const migration = useMigrationStatus();
+  useMigrationRefresh(appId);
 
   const metadata = useRomMetadata(detail.romId);
   const title = appStore.GetAppOverviewByAppID(appId)?.display_name || detail.romName;
+
+  if (migration.pending) {
+    return (
+      <div style={VIEW_STYLE}>
+        <MigrationBlockedCard />
+      </div>
+    );
+  }
 
   return (
     <div style={VIEW_STYLE}>

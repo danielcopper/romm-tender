@@ -2,17 +2,20 @@
  * Module-level migration state store.
  *
  * Updated by:
- *   - panel load init in index.tsx (getMigrationStatus endpoint)
- *   - refreshMigrationState return value in MainPage, useMigrationRefresh,
- *     launchInterceptor, sessionManager
+ *   - index.tsx: the getMigrationStatus answer at panel load and on a
+ *     `retrodeck_path_changed` event, which writes not pending where the event
+ *     says the migration was cleared
+ *   - refreshMigrationState return value in MainPage, useMigrationRefresh and
+ *     launchInterceptor
+ *   - sessionManager, from the session-finalize result's `migration.retrodeck`
  *   - clearMigration() from MigrationBlockedPage, on a successful migration and
  *     on a successful dismiss
  *
  * Read by:
- *   - MainPage.tsx, RomMGameInfoPanel.tsx and RomMPlaySection.tsx, all through
- *     {@link useMigrationStatus}
- *   - CustomPlayButton.tsx and launchInterceptor.ts, which read the current
- *     status through {@link getMigrationState} outside of any render
+ *   - MainPage.tsx, RomMGameInfoPanel.tsx, RomMPlaySection.tsx and the desktop
+ *     surface's GameView.tsx, all through {@link useMigrationStatus}
+ *   - launchGateOps.ts, which reads the current status through
+ *     {@link getMigrationState} outside of any render
  *
  * Every write installs a NEW status object and notifies. That is what lets
  * {@link getMigrationState} serve as a `useSyncExternalStore` snapshot — React
