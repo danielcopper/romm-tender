@@ -28,8 +28,6 @@ A [Decky Loader](https://decky.xyz/) plugin that syncs your self-hosted [RomM](h
 into Steam as non-steam shortcuts. Games appear directly in your Steam library, launch through
 [RetroDECK](https://retrodeck.net/), and can keep their saves in sync across devices through your RomM server.
 
-_Named after the railway car behind a steam locomotive, or the boat that shuttles out to a ship at anchor._
-
 > **Pre-1.0 (v0.x).** The feature set isn't complete yet. Save sync covers standard cartridge saves; the memory-card
 > systems — PlayStation, PS2, Dreamcast, GameCube, PSP, 3DS — don't sync their saves yet, and the
 > [support matrix](https://danielcopper.github.io/romm-tender/user-guide/save-sync-support-matrix/) has the per-system
