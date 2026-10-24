@@ -13,7 +13,10 @@ page, and the rules every change to that page follows, are in
 - `watcher/` — what the navigation watcher adapts Steam's page with: `elementSelectors.ts` (finding Steam's elements),
   `fiberInspector.ts` (read-only Fiber reads), `restorationLedger.ts` (recording every change so it can be undone),
   `stickyPlayBarController.ts` (the play bar's pinned and glass states).
-- `gameview/styles.ts` — the play bar's glass and pinned colours, which `stickyPlayBarController.ts` applies.
+- `gameview/GameView.tsx` — what `index.ts` hands the watcher as the page's `gameView`: the page's cards in two columns.
+  The About card (`gameview/AboutDetails.tsx`) is the one card so far.
+- `gameview/styles.ts` — the play bar's glass and pinned colours, which `stickyPlayBarController.ts` applies, and the
+  cards' style.
 
 **Dev build only.** `rollup.config.js` builds the panel from `./src/index.tsx` — the module that mounts the bigpicture
 surface — and nothing there imports this directory, so `pnpm build`, `build:dev`, CI and the release tarball ship none

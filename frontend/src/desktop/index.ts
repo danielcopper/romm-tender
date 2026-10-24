@@ -4,9 +4,10 @@
  */
 
 import { logError } from "../api/backend";
+import { GameView } from "./gameview/GameView";
 import { startDesktopNavigationWatcher, stopDesktopNavigationWatcher, type DesktopGamePage } from "./navigationWatcher";
 
-const GAME_PAGE: DesktopGamePage = {};
+const GAME_PAGE: DesktopGamePage = { gameView: GameView };
 
 /**
  * Start the navigation watcher. It runs inside the panel's start-up, so a throw

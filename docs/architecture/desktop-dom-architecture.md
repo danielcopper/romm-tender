@@ -12,6 +12,12 @@ handed — a `DesktopGamePage` with an optional `gameView` and `playButton` — 
 `gameView` the page's content sections, `playButton` Steam's Play button and the badges beside it. A part left out
 leaves Steam's own in place, and the play bar, the hero and the controls beside them are adapted either way.
 
+Today it hands the `gameView` alone: `GameView` (`frontend/src/desktop/gameview/GameView.tsx`), the page's cards in two
+columns. Its one card so far is About — the cover Steam shows (`steamsCover`, `frontend/src/utils/artworkThumbs.ts`),
+the title, the summary and the rows `metadataRows` answers, under the labels and in the order Big Picture's GAME INFO
+tab shows them. While it is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection
+heartbeat, and the automatic artwork, whose apply in flight it cancels on leaving.
+
 ## Two windows, two realms
 
 The panel runs in Steam's **SharedJSContext**, where the backend loads it

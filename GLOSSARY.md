@@ -1295,10 +1295,10 @@ direction.
 The word predates the directories and the older use is still current: `docs/architecture/qam-panel.md` and
 `frontend/src/utils/gameDetailStore.ts` call the components subscribed to one game page's **game-detail store** that
 page's **surfaces** — an open-ended set ("however many surfaces are mounted"), never a fixed number (see **Game-detail
-store**). Every one of them lives inside `bigpicture/`, so in the sense above they are viewers of one surface, and only
-the scope tells the readings apart: a surface of Tender is a directory, a surface of a game page is a component
-subscribed to that page's game-detail store. _Avoid_: platform, target; _frontend_ (the whole of `frontend/src/` — both
-surfaces and everything below them).
+store**). Every one of them lives inside one surface's directory — `bigpicture/` on Big Picture's game page, `desktop/`
+on the desktop client's — so in the sense above they are viewers of one surface, and only the scope tells the readings
+apart: a surface of Tender is a directory, a surface of a game page is a component subscribed to that page's game-detail
+store. _Avoid_: platform, target; _frontend_ (the whole of `frontend/src/` — both surfaces and everything below them).
 
 ### Desktop client
 

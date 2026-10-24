@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { startDesktopSurface, stopDesktopSurface } from "./index";
 import * as desktopWin from "./desktopWindow";
+import * as navigationWatcher from "./navigationWatcher";
+import { GameView } from "./gameview/GameView";
 import * as backend from "../api/backend";
 
 describe("the desktop surface", () => {
@@ -25,6 +27,14 @@ describe("the desktop surface", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("hands the watcher the game view, and no play button, so Steam's own stays", () => {
+    const start = vi.spyOn(navigationWatcher, "startDesktopNavigationWatcher").mockImplementation(() => () => {});
+
+    startDesktopSurface();
+
+    expect(start).toHaveBeenCalledExactlyOnceWith({ gameView: GameView });
   });
 
   it("logs a start that throws instead of throwing into the panel's start-up", () => {
