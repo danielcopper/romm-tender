@@ -2358,18 +2358,14 @@ _CLAIMS: dict[str, tuple[tuple[bool | None, ...], object]] = {
     "not-fixed": ((False,), False),
     "null": ((None,), _ABSENT),
     "no-group": ((), _ABSENT),
-    "two-groups-agree": ((True, True), True),
-    "two-groups-disagree": ((True, False), _ABSENT),
 }
 
 
 class TestTheSizeClaimReachesTheDecision:
-    """Each save file's ``size_fixed`` reaches the decision as the save answer states it (#2538 D3, D4).
+    """Each save file's ``size_fixed`` reaches the decision as the save answer states it (#2538 D3).
 
     The sync and the save status's preview walk the same matrix with the same
-    synced components, so both hand the decision the same claim. A file two
-    groups list is two components, and so two decisions; what is pinned here is
-    the claim each is handed, not how many there are.
+    synced components, so both hand the decision the same claim.
     """
 
     @staticmethod

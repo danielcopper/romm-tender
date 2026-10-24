@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Literal
 from domain.emulator_sources import EMUDECK, RETRODECK, SourceFinding
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
 
 # The seven states. Exactly one holds for any ROM.
 SAVE_STATE_PER_GAME_FILES = "per_game_files"
@@ -209,8 +209,8 @@ class SaveComponent:
     ``memory-card``, ``settings``, …), its own ``unknown`` for a file on the
     machine that no declaration describes, or ``None`` where no group claimed it
     at all. ``size_fixed`` is whether the emulator writes the file at a fixed
-    size, as :func:`agreed_size_fixed` reads it off the groups of its directory
-    that list its name; ``None`` is unknown, never "its size varies".
+    size, the claim of the one group that lists it; ``None`` is unknown, never
+    "its size varies".
     """
 
     name: str
@@ -623,19 +623,6 @@ def build_save_answer(
     )
 
 
-def agreed_size_fixed(claims: Iterable[bool | None]) -> bool | None:
-    """The one size claim that holds for a file several claims were stated for.
-
-    The resolver states ``size_fixed`` per group and none per file, so a file
-    two groups list carries two claims. Where they all agree, that is the
-    file's claim, and where they do not, nothing is established about its
-    size — the rule the resolver applies itself where several files share one
-    group's claim (``installations._one_claim``).
-    """
-    distinct = set(claims)
-    return distinct.pop() if len(distinct) == 1 else None
-
-
 def _components(
     directory: str,
     files: tuple[str, ...],
@@ -644,29 +631,25 @@ def _components(
     """The concrete files the answer names, each with what it is and where it sits.
 
     Built from the groups where there are any: they carry the role, their own
-    directory and the size claim. The resolver holds the names of the groups in
-    the first group's directory, repeats included, to the placement's own list
-    (``FileSet._check_group_agreement``), and leaves groups in other directories
+    directory and the size claim. The resolver states each directory and file
+    name in one group at most (``FileSet._check_one_entry_per_file``), so a
+    component's claims are its own group's. It holds the names of the groups in
+    the first group's directory to the placement's own list
+    (``FileSet._check_group_agreement``) and leaves groups in other directories
     unchecked, so those may add files, and components built from the groups
     alone keep every name the placement lists. A placement the resolver answered
     without groups still names files, and those take the placement's directory,
-    no role and no size claim. A file's size claim is looked up by its
-    directory and name across every group, so a file two groups list carries
-    the claim they agree on (:func:`agreed_size_fixed`).
+    no role and no size claim.
     """
     if not groups:
         return tuple(SaveComponent(name=name, directory=directory, role=None, granularity=None) for name in files)
-    claims: dict[tuple[str, str], list[bool | None]] = {}
-    for group in groups:
-        for name in group.files or ():
-            claims.setdefault((group.directory, name), []).append(group.size_fixed)
     return tuple(
         SaveComponent(
             name=name,
             directory=group.directory,
             role=group.role,
             granularity=group.granularity,
-            size_fixed=agreed_size_fixed(claims[(group.directory, name)]),
+            size_fixed=group.size_fixed,
         )
         for group in groups
         for name in (group.files or ())

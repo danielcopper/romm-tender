@@ -28,7 +28,6 @@ from domain.save_answer import (
     UNESTABLISHED_NOT_ASKED,
     UNESTABLISHED_NOTHING,
     SaveGroup,
-    agreed_size_fixed,
     build_save_answer,
     pick_download_name,
     save_finding_details,
@@ -230,7 +229,7 @@ class TestProgressAndConfiguration:
 
 
 class TestTheSizeClaim:
-    """Each file carries whether its emulator writes it at a fixed size, read off its groups (#2538 D2, D4)."""
+    """Each file carries whether its emulator writes it at a fixed size, read off its own group (#2538 D2, #2565 D1)."""
 
     @staticmethod
     def _group(name: str, size_fixed: bool | None, directory: str = _DIR) -> SaveGroup:
@@ -257,18 +256,6 @@ class TestTheSizeClaim:
 
         assert [component.size_fixed for component in answer.synced_files] == [None]
 
-    @pytest.mark.parametrize("claim", [True, False])
-    def test_two_groups_that_agree_give_the_file_their_claim(self, claim):
-        answer = _answer(groups=(self._group("Game.srm", claim), self._group("Game.srm", claim)))
-
-        assert {component.size_fixed for component in answer.components} == {claim}
-
-    @pytest.mark.parametrize("claims", [(True, False), (True, None), (False, None)])
-    def test_two_groups_that_disagree_establish_nothing(self, claims):
-        answer = _answer(groups=tuple(self._group("Game.srm", claim) for claim in claims))
-
-        assert {component.size_fixed for component in answer.components} == {None}
-
     def test_the_claim_is_looked_up_by_directory_as_well_as_name(self):
         # The same name in two directories is two files, and neither lends the
         # other its claim.
@@ -277,13 +264,6 @@ class TestTheSizeClaim:
         )
 
         assert [(c.directory, c.size_fixed) for c in answer.components] == [(_DIR, True), ("/elsewhere", False)]
-
-    @pytest.mark.parametrize(
-        ("claims", "agreed"),
-        [((), None), ((True,), True), ((None,), None), ((False, False), False), ((True, False), None)],
-    )
-    def test_the_agreed_claim(self, claims, agreed):
-        assert agreed_size_fixed(claims) is agreed
 
 
 class TestPickDownloadName:

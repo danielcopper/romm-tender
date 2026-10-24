@@ -523,9 +523,9 @@ covered by cases and vectors.
   whether the emulator writes the file at a fixed size (battery-backed SRAM, memory card images), taken from the save
   answer: the resolver states it per group of files, and each synced file carries its group's claim
   (`SaveComponent.size_fixed`). A file is probed in the answer's own directory and takes the claim of the synced file of
-  that name there. Where the resolver states none, no group in that directory lists the file, or two groups listing the
-  same directory and file name disagree, Tender leaves it out, which the core reads as unknown. The sync and the save
-  status's preview both read the name and the claim off the same synced files, so they decide a file alike.
+  that name there. Where the resolver states none, or no group in that directory lists the file, Tender leaves it out,
+  which the core reads as unknown. The sync and the save status's preview both read the name and the claim off the same
+  synced files, so they decide a file alike.
 - **`server_saves_in_slot`** — RomM save dicts already filtered to the active slot.
 - **`files_state`** — the per-filename baseline from the ROM's save state — the `FileSyncState` value object on the
   `RomSaveSyncState` aggregate (persisted in the `rom_save_files` table), may be empty for a never-synced file. Carries
