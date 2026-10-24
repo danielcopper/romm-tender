@@ -13,7 +13,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
-from models.prune import InstalledContentRemoval, SaveQuarantine
+from models.prune import InstalledContentRemoval, PruneSaveBackup
 from services.prune._models import RecoveryHandle
 from services.prune.finalize import GroupFinalizer, GroupFinalizerConfig
 from services.prune.planning import GroupPlan
@@ -43,7 +43,7 @@ class _FakeSaveCoordinator:
         # Per-request answers, keyed by the sorted ids asked about, so a test can
         # widen ownership for the delete set alone.
         self.by_request: dict[tuple[int, ...], dict[str, Any]] = {}
-        self.quarantine_result = SaveQuarantine(moved=[], ambiguous=False)
+        self.backup_result = PruneSaveBackup(moved=[], ambiguous=False)
         self.absences_valid = True
         self.calls: list[str] = []
 
@@ -54,9 +54,9 @@ class _FakeSaveCoordinator:
     async def lock_prune_roms(self, rom_ids: list[int]):
         yield
 
-    def quarantine_prune_saves(self, files, claims=None) -> SaveQuarantine:
-        self.calls.append("quarantine")
-        return self.quarantine_result
+    def back_up_prune_saves(self, files, claims=None) -> PruneSaveBackup:
+        self.calls.append("backup")
+        return self.backup_result
 
     def validate_prune_absences(self, claims) -> bool:
         self.calls.append("validate_absences")
@@ -209,7 +209,7 @@ class TestCascade:
 
         assert result["status"] == "removed"
         assert result["removed_rom_ids"] == [1]
-        assert fixture.order == ["quarantine", "installed_content", "artifacts", "validate_absences"]
+        assert fixture.order == ["backup", "installed_content", "artifacts", "validate_absences"]
         assert ledger.mutations == ["installed_rom_content", "cache_files", "database_rows"]
         with fixture.uow:
             row = fixture.uow.roms.get(1)
@@ -301,23 +301,23 @@ class TestGuardsRetainEverything:
 
 
 class TestCascadeStopsPartway:
-    async def test_a_failed_quarantine_never_reaches_the_content_removal(self):
+    async def test_a_failed_backup_never_reaches_the_content_removal(self):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
-        fixture.saves.quarantine_result = SaveQuarantine(moved=[], ambiguous=False, failure="a save reappeared")
+        fixture.saves.backup_result = PruneSaveBackup(moved=[], ambiguous=False, failure="a save reappeared")
 
         result = await _finish(fixture, rows)
 
         assert result["status"] == "failed"
-        assert result["reason"] == "save_quarantine_failed"
-        assert fixture.order == ["quarantine"]
+        assert result["reason"] == "save_backup_failed"
+        assert fixture.order == ["backup"]
         with fixture.uow:
             assert fixture.uow.roms.get(1) is not None
 
-    async def test_a_quarantine_that_moved_files_before_failing_is_partial(self):
+    async def test_a_backup_that_moved_files_before_failing_is_partial(self):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
-        fixture.saves.quarantine_result = SaveQuarantine(
+        fixture.saves.backup_result = PruneSaveBackup(
             moved=["/saves/gba/g.srm"], ambiguous=False, failure="stopped halfway"
         )
         ledger = MutationLedger(rows)
@@ -325,23 +325,23 @@ class TestCascadeStopsPartway:
         result = await _finish(fixture, rows, ledger=ledger)
 
         assert result["status"] == "partial"
-        assert ledger.mutations == ["save_quarantine"]
+        assert ledger.mutations == ["save_files"]
 
     @pytest.mark.parametrize("ambiguous", [True, False])
-    async def test_a_quarantine_that_moved_files_before_failing_carries_its_ambiguity(self, ambiguous):
+    async def test_a_backup_that_moved_files_before_failing_carries_its_ambiguity(self, ambiguous):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
-        fixture.saves.quarantine_result = SaveQuarantine(
+        fixture.saves.backup_result = PruneSaveBackup(
             moved=["/saves/gba/g.srm"], ambiguous=ambiguous, failure="parent fsync failed"
         )
         ledger = MutationLedger(rows)
 
         result = await _finish(fixture, rows, ledger=ledger)
 
-        assert result["reason"] == "save_quarantine_failed"
+        assert result["reason"] == "save_backup_failed"
         assert result["message"] == "parent fsync failed"
-        assert ledger.mutations == ["save_quarantine"]
-        assert ledger.ambiguous_mutations == (["save_quarantine"] if ambiguous else [])
+        assert ledger.mutations == ["save_files"]
+        assert ledger.ambiguous_mutations == (["save_files"] if ambiguous else [])
 
     async def test_a_failed_content_removal_stops_before_the_artifacts(self):
         rows = [_rom(1)]
@@ -351,7 +351,7 @@ class TestCascadeStopsPartway:
         result = await _finish(fixture, rows)
 
         assert result["reason"] == "rom_removal_failed"
-        assert fixture.order == ["quarantine", "installed_content"]
+        assert fixture.order == ["backup", "installed_content"]
 
     async def test_a_not_installed_rom_is_not_a_removal_failure(self):
         rows = [_rom(1)]
@@ -371,7 +371,7 @@ class TestCascadeStopsPartway:
         with fixture.uow:
             assert fixture.uow.roms.get(1) is not None
 
-    async def test_a_save_recreated_after_quarantine_retains_the_aggregate(self):
+    async def test_a_save_recreated_after_the_backup_retains_the_aggregate(self):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
         fixture.saves.absences_valid = False
@@ -402,7 +402,7 @@ class TestCascadeStopsPartway:
 
         assert (result["status"], result["reason"]) == ("partial", "rom_removal_failed")
         assert result["ambiguous_mutations"] == ["installed_rom_content"]
-        assert fixture.order == ["quarantine", "installed_content"]
+        assert fixture.order == ["backup", "installed_content"]
 
 
 @pytest.mark.parametrize("status", ["live", "uncertain"])

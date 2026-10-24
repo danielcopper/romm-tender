@@ -56,8 +56,8 @@ from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 from fakes.fake_romm_api import FakeRommApi
+from fakes.fake_save_backup import FakeSaveBackup
 from fakes.fake_save_location_reader import FakeSaveLocationReader
-from fakes.fake_save_quarantine import FakeSaveQuarantine
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
@@ -1987,7 +1987,7 @@ def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
             romm_api=world.romm_api,
             download_file_store=world.store,
             adoption_move=world.move,
-            quarantine_save=FakeSaveQuarantine(world.store),
+            back_up_save=FakeSaveBackup(world.store),
             platform_systems=platform_systems,
             retrodeck_folders=folders,
             install_recorder=recorder,

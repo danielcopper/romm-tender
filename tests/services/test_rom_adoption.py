@@ -33,8 +33,8 @@ from fakes.fake_download_file_store import FakeDownloadFileStore
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_romm_api import FakeRommApi
+from fakes.fake_save_backup import FakeSaveBackup
 from fakes.fake_save_location_reader import FakeSaveLocationReader
-from fakes.fake_save_quarantine import FakeSaveQuarantine
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
@@ -192,7 +192,7 @@ class Harness:
         )
         self.paths = FakeRetroDeckFolders(roms=_ROMS, saves=_SAVES)
         self.move = FakeAdoptionMoveStore(self.store)
-        self.quarantine = FakeSaveQuarantine(self.store)
+        self.backup = FakeSaveBackup(self.store)
         # What a stock RetroDECK install answers: savefiles content-sorted,
         # savestates not sorted at all. Tests that care seed their own answer.
         self.save_locations = FakeSaveLocationReader(saves_root=_SAVES, states_root=_STATES)
@@ -212,7 +212,7 @@ class Harness:
                 romm_api=self.romm_api,
                 download_file_store=self.store,
                 adoption_move=self.move,
-                quarantine_save=self.quarantine,
+                back_up_save=self.backup,
                 platform_systems=FakePlatformSystems(),
                 retrodeck_folders=self.paths,
                 install_recorder=self.recorder,
@@ -3228,7 +3228,7 @@ class TestAdoptCandidateCollisions:
 
         assert refused.value.reason == "rename_collisions"
         assert h.move.moves == []
-        assert h.quarantine.quarantined == []
+        assert h.backup.backed_up == []
 
     async def test_every_collision_is_listed_not_just_the_first(self, h):
         self._stage(h)
@@ -3251,7 +3251,7 @@ class TestAdoptCandidateCollisions:
         assert result["success"] is True
         # Replaced, not destroyed: both go through the sanctioned .romm-backup
         # funnel, so a save the user chose to lose is still recoverable.
-        assert h.quarantine.quarantined == ["/saves/snes/Game.srm", "/states/Game.state"]
+        assert h.backup.backed_up == ["/saves/snes/Game.srm", "/states/Game.state"]
         assert h.store.files["/saves/snes/.romm-backup/Game.srm"] == b"the other version's"
         assert h.store.files["/states/.romm-backup/Game.state"] == b"the other version's"
         assert sorted(h.move.moves) == sorted(
@@ -3268,7 +3268,7 @@ class TestAdoptCandidateCollisions:
         result = await h.service.adopt_existing_rom(_ROM_ID, _OLD, "keep")
 
         assert result["success"] is True
-        assert h.quarantine.quarantined == []
+        assert h.backup.backed_up == []
         assert h.move.moves == [(_OLD, _NEW)]
         assert h.store.files["/saves/snes/Game (U).srm"] == b"mine"
         assert h.store.files["/states/Game (U).state"] == b"mine"
@@ -3276,7 +3276,7 @@ class TestAdoptCandidateCollisions:
 
     async def test_a_replace_that_fails_moves_nothing_and_names_what_went(self, h):
         self._stage(h)
-        h.quarantine.failures = {"/states/Game.state"}
+        h.backup.failures = {"/states/Game.state"}
 
         result = await h.service.adopt_existing_rom(_ROM_ID, _OLD, "overwrite")
 
@@ -3285,7 +3285,7 @@ class TestAdoptCandidateCollisions:
         assert "Game.state" in result.message
         # The one that did go is named, so the user is not told nothing happened.
         assert "Game.srm" in result.message
-        assert "staged quarantine failure" not in result.message
+        assert "staged backup failure" not in result.message
         assert result.renamed == []
         assert result.still_under_old_name == []
         assert result.set_aside == ["Game.srm"]
@@ -3295,7 +3295,7 @@ class TestAdoptCandidateCollisions:
 
     async def test_a_replace_that_fails_before_setting_anything_aside_is_a_refusal(self, h):
         self._stage(h)
-        h.quarantine.failures = {"/saves/snes/Game.srm"}
+        h.backup.failures = {"/saves/snes/Game.srm"}
         adopting = h.service.adopt_existing_rom(_ROM_ID, _OLD, "overwrite")
 
         with pytest.raises(Refused) as refused:
@@ -3303,9 +3303,9 @@ class TestAdoptCandidateCollisions:
 
         assert refused.value.reason == "replace_failed"
         assert refused.value.message == (
-            "Could not replace Game.srm (staged quarantine failure for Game.srm). Nothing was moved."
+            "Could not replace Game.srm (staged backup failure for Game.srm). Nothing was moved."
         )
-        assert h.quarantine.quarantined == []
+        assert h.backup.backed_up == []
         assert h.move.moves == []
 
     async def test_an_unrecognised_answer_is_refused_rather_than_guessed(self, h):
@@ -3342,7 +3342,7 @@ class TestAdoptCandidateCollisions:
         assert result.renamed == []
         assert result.still_under_old_name == ["Game (U).sfc", "Game (U).srm", "Game (U).state"]
         assert result.set_aside == ["Game.srm", "Game.state"]
-        assert h.quarantine.quarantined == ["/saves/snes/Game.srm", "/states/Game.state"]
+        assert h.backup.backed_up == ["/saves/snes/Game.srm", "/states/Game.state"]
 
     async def test_a_move_that_fails_with_nothing_replaced_says_nothing_about_backups(self, h):
         h.seed_rom()
@@ -3374,8 +3374,8 @@ class TestAdoptCandidateCollisions:
 
         assert refused.value.reason == "replace_failed"
         assert "Game.state" in refused.value.message
-        # Refused up front: the savefile beside it was never quarantined either.
-        assert h.quarantine.quarantined == []
+        # Refused up front: the savefile beside it was never backed up either.
+        assert h.backup.backed_up == []
         assert h.move.moves == []
         assert h.store.files["/saves/snes/Game.srm"] == b"the other version's"
 
@@ -3388,7 +3388,7 @@ class TestAdoptCandidateCollisions:
         # would be a tautology about the fake (it returns False *before* it
         # appends), green whatever the renamer does with the return value.
         self._stage(h)
-        h.quarantine.missing = {"/states/Game.state"}
+        h.backup.missing = {"/states/Game.state"}
         h.move.outcome = {
             "moved": [],
             "stranded": [],

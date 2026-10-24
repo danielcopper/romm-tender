@@ -479,6 +479,48 @@ class TestIoSeamsViolations:
         assert "enumerate_discs" in findings[0]
 
 
+class TestTheSaveStepsInsideAUnitOfWork:
+    """Every step of the save backup and the save transfer fails the gate when called inside an open UoW."""
+
+    @pytest.mark.parametrize(
+        ("holder", "method"),
+        [
+            ("_save_backup", "back_up_save_file"),
+            ("_save_backup", "back_up_claimed_save_file"),
+            ("_save_transfer", "fetch_server_copy"),
+            ("_save_transfer", "hash_server_copy"),
+            ("_save_transfer", "download_save_file"),
+            ("_save_transfer", "upload_save_file"),
+            ("_save_transfer", "acknowledge_server_head"),
+            ("_save_transfer", "adopt_server_head"),
+            ("_save_transfer", "record_server_head"),
+        ],
+    )
+    def test_a_save_step_inside_uow_is_flagged(self, holder: str, method: str):
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self, rom_id):\n"
+            "        with self._uow_factory() as uow:\n"
+            f"            self.{holder}.{method}(rom_id)\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert method in findings[0]
+        assert "file-I/O seam" in findings[0]
+
+    def test_the_renamers_bound_backup_inside_uow_is_flagged(self):
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self, saves_dir, name):\n"
+            "        with self._uow_factory() as uow:\n"
+            "            self._back_up_save(saves_dir, name, keep=10)\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert "_back_up_save" in findings[0]
+        assert "file-I/O seam" in findings[0]
+
+
 class TestIoSeamsClean:
     def test_io_seam_after_uow_closes_is_clean(self):
         # The canonical #1779 fix: snapshot inside the UoW, walk the disk after.

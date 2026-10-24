@@ -356,7 +356,7 @@ class TestASlotSwitchLeavesAnUncarriedFileAlone:
     that keeps a configuration file off the sync path does not cover it, and
     switching a Saturn game to a slot holding a ``.smpc`` uploaded before the
     role rule existed wrote that file over the settings chosen on this device.
-    Recoverable — the download path quarantines first — but a restore the user
+    Recoverable — the download path backs up first — but a restore the user
     has to know to perform, over a file no emulator asked us to carry.
     """
 

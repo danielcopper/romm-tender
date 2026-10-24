@@ -1,4 +1,4 @@
-"""Tests for PruneSaveSupport — exact-path save ownership, locking, and quarantine."""
+"""Tests for PruneSaveSupport — exact-path save ownership, locking, and backup."""
 
 from pathlib import Path
 
@@ -7,7 +7,7 @@ from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 
 from domain.retrodeck_folders import finding_refusal, unanswered_refusal
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from models.prune import SaveQuarantine
+from models.prune import PruneSaveBackup
 from tests.services.saves._helpers import (
     _create_save,
     _install_rom,
@@ -90,7 +90,7 @@ class TestPruneSaveInventory:
         assert artifact_paths == {str(historical), str(matching_backup), *expected_current}
         assert {item["path"] for item in inventory["exclusive"]} == {str(historical), *expected_current}
 
-    def test_shared_save_expands_lock_owners_and_is_never_quarantined(self, tmp_path):
+    def test_shared_save_expands_lock_owners_and_is_never_backed_up(self, tmp_path):
         svc, _ = make_service(tmp_path)
         support = svc.prune_support
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="shared.gba")
@@ -108,7 +108,7 @@ class TestPruneSaveInventory:
 
         Both rows project onto the same save path, so the locked recovery
         contract copies the file into the bundle and leaves it where the
-        replacement will read it — quarantining it would strand the live
+        replacement will read it — backing it up would strand the live
         version's progress.
         """
         svc, _ = make_service(tmp_path)
@@ -125,16 +125,16 @@ class TestPruneSaveInventory:
         assert inventory["source_claims"] == {}
         assert inventory["lock_rom_ids"] == [4375, 25135]
 
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
-        assert result == SaveQuarantine(moved=[], ambiguous=False)
+        assert result == PruneSaveBackup(moved=[], ambiguous=False)
         assert shared.read_bytes() == b"live progress"
 
     def test_uninstalled_row_with_a_different_content_name_stays_exclusive(self, tmp_path):
         """No over-correction: an unrelated uninstalled row must not shield the save.
 
         It projects onto a different stem, so the purge row still owns its saves
-        alone and they leave through the ``.romm-backup`` quarantine funnel.
+        alone and they leave through the ``.romm-backup`` funnel, the save backup.
         """
         svc, _ = make_service(tmp_path)
         support = svc.prune_support
@@ -149,7 +149,7 @@ class TestPruneSaveInventory:
         assert inventory["shared"] == []
         assert inventory["lock_rom_ids"] == [4375]
 
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
         assert result.failure is None
         assert result.moved == [str(owned)]
@@ -173,13 +173,13 @@ class TestPruneSaveInventory:
 
         Path(expected).parent.mkdir(parents=True, exist_ok=True)
         Path(expected).write_bytes(b"created by emulator")
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
         assert result.failure is not None
         assert "appeared after sealing" in result.failure
         assert Path(expected).read_bytes() == b"created by emulator"
 
-    def test_expected_absence_is_rechecked_after_quarantine_before_cascade(self, tmp_path):
+    def test_expected_absence_is_rechecked_after_the_backup_before_cascade(self, tmp_path):
         svc, _ = make_service(tmp_path)
         support = svc.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="late.gba")
@@ -187,7 +187,7 @@ class TestPruneSaveInventory:
         expected.parent.mkdir(parents=True)
         inventory = support.inventory_prune_saves([42])
 
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
         assert result.failure is None
 
         expected.parent.mkdir(parents=True, exist_ok=True)
@@ -196,7 +196,7 @@ class TestPruneSaveInventory:
         assert support.validate_prune_absences(inventory["source_claims"]) is False
         assert expected.read_bytes() == b"created after absence was consumed"
 
-    def test_quarantined_present_save_is_rechecked_for_recreation_before_cascade(self, tmp_path):
+    def test_backed_up_present_save_is_rechecked_for_recreation_before_cascade(self, tmp_path):
         svc, _ = make_service(tmp_path)
         support = svc.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="present.gba")
@@ -204,7 +204,7 @@ class TestPruneSaveInventory:
         inventory = support.inventory_prune_saves([42])
         assert inventory["source_claims"][str(expected)]["source_identity"]["exists"] is True
 
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
         assert result.failure is None
         expected.write_bytes(b"emulator-recreated")
 
@@ -233,8 +233,8 @@ class TestPruneSaveInventory:
         assert inventory["exclusive"] == []
 
 
-class TestQuarantinePruneSaves:
-    def test_a_quarantine_that_raised_after_moving_a_save_is_ambiguous_and_names_it(self, tmp_path, monkeypatch):
+class TestBackUpPruneSaves:
+    def test_a_backup_that_raised_after_moving_a_save_is_ambiguous_and_names_it(self, tmp_path, monkeypatch):
         svc, _ = make_service(tmp_path)
         support = svc.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
@@ -251,19 +251,19 @@ class TestQuarantinePruneSaves:
 
         monkeypatch.setattr(store, "rename_claimed", rename_once)
 
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
-        assert result == SaveQuarantine(moved=[str(first)], ambiguous=True, failure="backup directory went away")
+        assert result == PruneSaveBackup(moved=[str(first)], ambiguous=True, failure="backup directory went away")
         assert second.read_bytes() == b"second"
 
-    def test_nothing_to_quarantine_asks_retrodeck_for_no_saves_root(self, tmp_path):
+    def test_nothing_to_back_up_asks_retrodeck_for_no_saves_root(self, tmp_path):
         svc, _ = make_service(tmp_path)
         support = svc.prune_support
         folders = _folders(support)
         folders.saves = ""
         folders.refusal = finding_refusal("marker-missing", {})
 
-        assert support.quarantine_prune_saves([], {}) == SaveQuarantine(moved=[], ambiguous=False)
+        assert support.back_up_prune_saves([], {}) == PruneSaveBackup(moved=[], ambiguous=False)
 
     def test_saves_without_a_saves_root_fail_without_moving_anything(self, tmp_path):
         svc, _ = make_service(tmp_path)
@@ -273,9 +273,9 @@ class TestQuarantinePruneSaves:
         inventory = support.inventory_prune_saves([42])
         _folders(support).saves = ""
 
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
-        assert result == SaveQuarantine(
+        assert result == PruneSaveBackup(
             moved=[], ambiguous=False, failure="RetroDECK names no saves folder, so no save was moved."
         )
         assert save.read_bytes() == b"mine"
@@ -289,9 +289,9 @@ class TestQuarantinePruneSaves:
         refusal = finding_refusal("marker-missing", {})
         _folders(support).refusal = refusal
 
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
-        assert result == SaveQuarantine(moved=[], ambiguous=False, failure=refusal.message)
+        assert result == PruneSaveBackup(moved=[], ambiguous=False, failure=refusal.message)
         assert save.read_bytes() == b"mine"
 
     def test_saves_where_the_saves_root_could_not_be_established_fail_without_moving_anything(self, tmp_path):
@@ -302,9 +302,9 @@ class TestQuarantinePruneSaves:
         inventory = support.inventory_prune_saves([42])
         _folders(support).refusal = unanswered_refusal()
 
-        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+        result = support.back_up_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
-        assert result == SaveQuarantine(moved=[], ambiguous=False, failure=_UNANSWERED)
+        assert result == PruneSaveBackup(moved=[], ambiguous=False, failure=_UNANSWERED)
         assert save.read_bytes() == b"mine"
 
 

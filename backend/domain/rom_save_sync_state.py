@@ -155,6 +155,28 @@ class RomSaveSyncState:
             self.switch_active_slot(default_slot or "autosave")
         self.record_synced_core(core, emulator_tag or self.emulator or "retroarch")
 
+    def upload_slot(self, default_slot: str | None) -> str | None:
+        """The slot field an upload sends; ``None`` only for an explicit-legacy save.
+
+        The slot resolves purely from the slot state. A named ``active_slot``
+        uploads to that slot; an ``active_slot`` of ``None`` is ambiguous and is
+        disambiguated by the ``slots`` map, the same signal
+        :meth:`reach_sync_boundary` seeds the active slot by:
+
+        - **Explicit legacy** (``active_slot`` None but ``slots`` populated — the
+          state after switching to / confirming the legacy slot) → ``None`` so the
+          save is POSTed as ``slot:null``. Answering ``"default"`` here misfiled a
+          legacy save into the default slot (#1061).
+        - **Brand-new ROM** (``active_slot`` None and ``slots`` empty — never
+          configured) → *default_slot*, else ``autosave``, so its first sync lands
+          in the slot the boundary seeds.
+        """
+        if self.active_slot is not None:
+            return self.active_slot
+        if self.slots:
+            return None
+        return default_slot or "autosave"
+
     def record_transfer(
         self,
         filename: str,

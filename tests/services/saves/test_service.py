@@ -1239,7 +1239,7 @@ class TestEmulatorTag:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
 
-        svc._sync_engine.do_upload_save(
+        svc._save_transfer.upload_save_file(
             42,
             str(tmp_path / "saves" / "gba" / "pokemon.srm"),
             "pokemon.srm",
@@ -1261,7 +1261,7 @@ class TestEmulatorTag:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
 
-        svc._sync_engine.do_upload_save(
+        svc._save_transfer.upload_save_file(
             42,
             str(tmp_path / "saves" / "gba" / "pokemon.srm"),
             "pokemon.srm",

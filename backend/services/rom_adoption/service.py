@@ -79,8 +79,8 @@ if TYPE_CHECKING:
         RetroDeckFolders,
         RomInstallRecorder,
         RommRomReader,
+        SaveBackupFn,
         SaveLocationReader,
-        SaveQuarantineFn,
         SiblingSupersedeProvider,
         SystemKnownFn,
         SystemM3uSupportFn,
@@ -140,7 +140,7 @@ class RomAdoptionServiceConfig:
     romm_api: RommRomReader
     download_file_store: DownloadFileStore
     adoption_move: AdoptionMoveStore
-    quarantine_save: SaveQuarantineFn
+    back_up_save: SaveBackupFn
     platform_systems: PlatformSystems
     retrodeck_folders: RetroDeckFolders
     install_recorder: RomInstallRecorder
@@ -180,7 +180,7 @@ class RomAdoptionService:
         self._renamer = AdoptionRenamer(
             config=AdoptionRenamerConfig(
                 adoption_move=config.adoption_move,
-                quarantine_save=config.quarantine_save,
+                back_up_save=config.back_up_save,
                 download_file_store=config.download_file_store,
                 m3u_support=config.m3u_support,
                 save_locations=config.save_locations,
@@ -480,7 +480,7 @@ class RomAdoptionService:
         if existing is None:
             return None
         rom_id = int(rom_detail.get("id") or 0)
-        stopped, carried, quarantined = self._renamer.move_planned(
+        stopped, carried, backed_up = self._renamer.move_planned(
             self._renamer.discarded_save_pairs(
                 rom_id, target, source_path, may_unpack=DIR in served_shapes(rom_detail)
             ),
@@ -494,7 +494,7 @@ class RomAdoptionService:
             if not carried:
                 raise
             renamed = [os.path.basename(pair.target) for pair in carried]
-            set_aside = [os.path.basename(path) for path in quarantined]
+            set_aside = [os.path.basename(path) for path in backed_up]
             kept = (
                 f" These were moved to .romm-backup to make room and are still there: {', '.join(set_aside)}."
                 if set_aside

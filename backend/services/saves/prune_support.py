@@ -2,7 +2,7 @@
 
 Everything the prune bounded context needs from the saves context and nothing
 else: which local save paths a purge set owns, the locks that hold them still,
-the sanctioned quarantine of the ones it exclusively owns, and the absence proof
+the sanctioned backup of the ones it exclusively owns, and the absence proof
 finalization requires before it cascades.
 """
 
@@ -14,16 +14,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.retrodeck_folders import FolderRefused
-from domain.save_backup import BACKUP_DIR_NAME, backup_name, is_backup_for
-from models.prune import SaveQuarantine
+from domain.save_backup import BACKUP_DIR_NAME, is_backup_for
+from models.prune import PruneSaveBackup
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from domain.rom_install import RomInstall
     from models.prune import MutationOutcome, SourceClaim
-    from services.protocols import Clock, RetroDeckFolders, SaveFileStore, UnitOfWorkFactory
+    from services.protocols import RetroDeckFolders, SaveFileStore, UnitOfWorkFactory
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_backup import SaveBackup
     from services.saves.sync_engine import SyncEngine
 
 
@@ -61,9 +62,9 @@ class PruneSaveSupportConfig:
     uow_factory: UnitOfWorkFactory
     save_file_store: SaveFileStore
     retrodeck_folders: RetroDeckFolders
-    clock: Clock
     rom_info: RomInfoService
     sync_engine: SyncEngine
+    save_backup: SaveBackup
 
 
 class PruneSaveSupport:
@@ -73,9 +74,9 @@ class PruneSaveSupport:
         self._uow_factory = config.uow_factory
         self._save_file_store = config.save_file_store
         self._retrodeck_folders = config.retrodeck_folders
-        self._clock = config.clock
         self._rom_info = config.rom_info
         self._sync_engine = config.sync_engine
+        self._save_backup = config.save_backup
 
     @contextlib.asynccontextmanager
     async def lock_prune_roms(self, rom_ids: list[int]) -> AsyncIterator[None]:
@@ -90,7 +91,7 @@ class PruneSaveSupport:
 
         Ownership spans every local ``roms`` row that lands on a path, not only
         the installed ones: a vanished row's live replacement is routinely
-        uninstalled, and treating its shared save as exclusive would quarantine
+        uninstalled, and treating its shared save as exclusive would back up
         a file the replacement still reads.
         """
         purge_ids = {int(value) for value in purge_rom_ids}
@@ -176,7 +177,7 @@ class PruneSaveSupport:
         ownership: dict[str, set[int]],
         expected_by_id: dict[int, list[dict[str, str]]],
     ) -> dict[str, Any]:
-        """Classify every purge-set save path into the recovery/quarantine buckets."""
+        """Classify every purge-set save path into the recovery/backup buckets."""
         saves_root = self._saves_root()
         artifacts: list[dict[str, object]] = []
         exclusive: list[dict[str, str]] = []
@@ -232,9 +233,9 @@ class PruneSaveSupport:
                 )
         return found
 
-    def quarantine_prune_saves(
+    def back_up_prune_saves(
         self, files: list[dict[str, str]], claims: dict[str, SourceClaim] | None = None
-    ) -> SaveQuarantine:
+    ) -> PruneSaveBackup:
         """Move exclusive current saves through the sanctioned backup funnel.
 
         Nothing to move asks RetroDECK for nothing, so a game without saves is
@@ -243,45 +244,47 @@ class PruneSaveSupport:
         failure is a definite one rather than ambiguous.
         """
         if not files:
-            return SaveQuarantine(moved=[], ambiguous=False)
+            return PruneSaveBackup(moved=[], ambiguous=False)
         try:
             saves_root = self._saves_root()
         except FolderRefused as refused:
-            return SaveQuarantine(moved=[], ambiguous=False, failure=refused.message)
+            return PruneSaveBackup(moved=[], ambiguous=False, failure=refused.message)
         if saves_root is None:
-            return SaveQuarantine(
+            return PruneSaveBackup(
                 moved=[], ambiguous=False, failure="RetroDECK names no saves folder, so no save was moved."
             )
         moved: list[str] = []
         try:
             for item in files:
-                outcome = self._quarantine_one(item, claims, saves_root)
+                outcome = self._back_up_one(item, claims, saves_root)
                 if outcome["changed"]:
                     moved += [item["path"]]
                 if not outcome["success"]:
-                    return SaveQuarantine(moved=moved, ambiguous=outcome["ambiguous"], failure=outcome["message"])
+                    return PruneSaveBackup(moved=moved, ambiguous=outcome["ambiguous"], failure=outcome["message"])
         except Exception as exc:
-            return SaveQuarantine(moved=moved, ambiguous=True, failure=str(exc))
-        return SaveQuarantine(moved=moved, ambiguous=False)
+            return PruneSaveBackup(moved=moved, ambiguous=True, failure=str(exc))
+        return PruneSaveBackup(moved=moved, ambiguous=False)
 
-    def _quarantine_one(
+    def _back_up_one(
         self, item: dict[str, str], claims: dict[str, SourceClaim] | None, saves_root: str
     ) -> MutationOutcome:
-        """Quarantine one projected save under *saves_root*, through its claim when one was sealed."""
+        """Back one projected save up under *saves_root*, through its claim when one was sealed."""
         backup_dir = os.path.join(item["saves_dir"], BACKUP_DIR_NAME)
         if (
             not self._save_file_store.is_within(item["path"], saves_root)
             or not self._save_file_store.is_within(backup_dir, saves_root)
             or self._save_file_store.is_symlink(backup_dir)
         ):
-            raise ValueError(f"Unsafe save quarantine destination: {backup_dir}")
+            raise ValueError(f"Unsafe save backup destination: {backup_dir}")
         claim = claims.get(item["path"]) if claims is not None else None
         if claim is None:
             claim = self._save_file_store.claim_source(item["path"], saves_root)
-        return self._quarantine_claimed_file(item["saves_dir"], item["filename"], claim=claim, safe_root=saves_root)
+        return self._save_backup.back_up_claimed_save_file(
+            item["saves_dir"], item["filename"], claim=claim, safe_root=saves_root
+        )
 
     def validate_prune_absences(self, claims: dict[str, SourceClaim]) -> bool:
-        """Require every quarantined purge-owned path to remain absent before cascade."""
+        """Require every backed-up purge-owned path to remain absent before cascade."""
         if not claims:
             return True
         try:
@@ -295,27 +298,6 @@ class PruneSaveSupport:
         except Exception:
             return False
         return True
-
-    def _quarantine_claimed_file(
-        self,
-        saves_dir: str,
-        filename: str,
-        *,
-        claim: SourceClaim,
-        safe_root: str,
-    ) -> MutationOutcome:
-        """Durably quarantine one exact claimed save through anchored directories."""
-        local_path = os.path.join(saves_dir, filename)
-        backup_dir = os.path.join(saves_dir, BACKUP_DIR_NAME)
-        self._save_file_store.ensure_directory(backup_dir, safe_root)
-        ts = self._clock.now().strftime("%Y%m%d_%H%M%S")
-        backup = backup_name(filename, ts, set(self._save_file_store.listdir(backup_dir)))
-        return self._save_file_store.rename_claimed(
-            local_path,
-            os.path.join(backup_dir, backup),
-            safe_root,
-            claim,
-        )
 
 
 __all__ = ["PruneSaveSupport", "PruneSaveSupportConfig"]

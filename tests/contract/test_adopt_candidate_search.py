@@ -435,8 +435,8 @@ async def test_overwrite_replaces_the_taken_name_and_completes_the_adoption(harn
 
 
 async def test_overwrite_backs_the_replaced_save_up_rather_than_destroying_it(harness):
-    # Through the real MatrixExecutor funnel: a save the user chose to lose is
-    # still recoverable from .romm-backup. ADR-0028 declined to quarantine a ROM
+    # Through the real save backup: a save the user chose to lose is
+    # still recoverable from .romm-backup. ADR-0028 declined to back up a ROM
     # because ROMs are gigabytes and re-fetchable; a save is neither, and a
     # savestate is synced nowhere at all.
     candidate, _mine, theirs = _stage_collision(harness)

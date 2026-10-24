@@ -78,17 +78,18 @@ seams are closed the cheap way instead: every consumer in ``services/`` binds
 each to one attribute, and that attribute name is what the list carries. A
 leading underscore marks an attribute a service binds rather than a method a
 Protocol names, and the list carries two kinds of them. The call-shaped seams
-are seven today: ``_sandbox_launcher``, ``_system_extensions``,
+are eight today: ``_sandbox_launcher``, ``_system_extensions``,
 ``_system_known``, ``_platform_firmware_resolver``, ``_firmware_resolver``,
-``_resolve_path`` and ``_renderer_above_ceiling``. Two of those seven are
-listed a second time under their implementation's own method name, for a peer
-that holds the object rather than the bound method:
+``_resolve_path``, ``_renderer_above_ceiling`` and ``_back_up_save``. Three of
+those eight are listed a second time under their implementation's own method
+name, for a peer that holds the object rather than the bound method:
 ``EsFindRulesAdapter.resolve_sandbox_launcher`` beside ``_sandbox_launcher``,
-and ``LibraryService.renderer_above_ceiling`` beside
-``_renderer_above_ceiling``. The first name is plainly not the attribute minus
-its underscore, which is the point: a twin exists when the implementation has a
-method name a peer could write, and it has to be read off the implementation
-rather than derived from the attribute. The other five seams have no such twin.
+``LibraryService.renderer_above_ceiling`` beside ``_renderer_above_ceiling``,
+and ``SaveBackup.back_up_save_file`` beside ``_back_up_save``. The first and
+the last name are plainly not the attribute minus its underscore, which is the
+point: a twin exists when the implementation has a method name a peer could
+write, and it has to be read off the implementation rather than derived from
+the attribute. The other five seams have no such twin.
 That is a convention, not a guarantee — a
 consumer binding one under a different attribute slips past, and it only works
 while the attribute name means one thing. Doing the same for rule 1 means a
@@ -339,6 +340,28 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # the method a peer holding the library service would write.
         "_renderer_above_ceiling",
         "renderer_above_ceiling",
+        # SaveBackup (services/saves/save_backup.py) — moves a save file into the
+        # ``.romm-backup`` folder beside it: a listing of that folder, a rename,
+        # and for the ordinary backup the removal of the copies past its
+        # retention. Its consumers in services/saves/ hold the object, so the
+        # method names are what they write; the adoption renamer holds the
+        # ordinary backup as a call-shaped SaveBackupFn bound to
+        # ``_back_up_save``, listed beside it.
+        "back_up_save_file",
+        "back_up_claimed_save_file",
+        "_back_up_save",
+        # SaveTransfer (services/saves/save_transfer.py) — every step moves a save
+        # file between this device and RomM or measures one: a download or an
+        # upload with RomM, a server copy fetched into a temporary file, the
+        # local file hashed for the baseline, and an adopt's acknowledgement to
+        # RomM. Object-shaped, so the method names are the whole entry.
+        "fetch_server_copy",
+        "hash_server_copy",
+        "download_save_file",
+        "upload_save_file",
+        "acknowledge_server_head",
+        "adopt_server_head",
+        "record_server_head",
     }
 )
 

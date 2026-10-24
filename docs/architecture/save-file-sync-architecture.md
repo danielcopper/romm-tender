@@ -149,13 +149,16 @@ detection-handoff of [ADR-0016](../adr/0016-save-sync-hands-detection-to-romm-ne
 1. Load the ROM's `RomSaveSyncState`.
 2. Fetch the slot's server saves with `list_saves`.
 3. Run `compute_sync_action` per file (the decision matrix below).
-4. Dispatch each outcome through `_dispatch_sync_action` — POST / GET plus the `.romm-backup` quarantine, the #1062
-   shrink guard, and the per-file baseline writes (`update_file_sync_state`).
+4. Dispatch each outcome through `_dispatch_sync_action` to the save transfer (`SaveTransfer`,
+   `services/saves/save_transfer.py`) — POST / GET plus the `.romm-backup` backup, and the per-file baseline it records
+   in the same step. The #1062 shrink guard is part of the decision.
 
-A download (`MatrixExecutor.do_download_save`, the one used here and by a restore, a copy to another slot, a conflict
-resolution and a slot switch) lands in `<save>.tmp` and replaces the local file only once complete. On any failure up to
-that replacement it tries to remove the `.tmp` — a removal that fails is not reported — and raises the download's own
-failure.
+A download (`SaveTransfer.download_save_file`, the one used here and by a restore, a copy to another slot, a conflict
+resolution and a slot switch) lands in `<save>.tmp` and replaces the local file only once complete, after the save
+backup has moved the old one aside. On any failure up to that replacement it tries to remove the `.tmp` — a removal that
+fails is not reported — and raises the download's own failure. A server copy fetched only to compare or to place
+(`SaveTransfer.fetch_server_copy`: Keep Local's identity check, the slot-choice migration) names no device to RomM,
+records no baseline, and removes its file the same way when the fetch fails.
 
 There is **no** op→action fork any more: the client's kernel is the sole authority, and `StatusService` (the read-only
 SAVES-tab path) runs the identical kernel, so the sync run and the game-detail status can never disagree. The wizard
@@ -199,13 +202,13 @@ below. The old in-place PUT is no longer on the automatic path.
 On the automatic path there is no PUT-in-place to bump, so the #748 "drop the PUT-bump" work is **moot** for it.
 `add_save` (POST) already upserts this device's `device_save_sync` row (`last_synced_at = updated_at`) and serializes it
 into the response's `device_syncs`, so `is_current` is true for us the moment the POST returns — the follow-up
-`confirm_download` ack is redundant and is **skipped** when the response proves us current (`_confirm_upload_sync`,
-\#1458). When `add_save` answers with a save its content matched instead of a new version, what that answer reports and
-when the ack is still sent are under
+`confirm_download` ack is redundant and is **skipped** when the response proves us current (the upload's own
+acknowledgement inside `SaveTransfer.upload_save_file`, #1458). When `add_save` answers with a save its content matched
+instead of a new version, what that answer reports and when the ack is still sent are under
 [POST and PUT both upsert the calling device's sync row](#post-and-put-both-upsert-the-calling-devices-sync-row). The
-version-switch flow (`versions.py`) routes through the same `_confirm_upload_sync` after its PUT — the PUT upserts too,
-so the ack is at most an idempotent re-ack (and is skipped if the PUT response already proves us current) — and is out
-of scope here — see [Version Switch Flow](#version-switch-flow-rollback).
+version-switch flow (`versions.py`) PUTs through the same `SaveTransfer.upload_save_file`, so the same acknowledgement
+follows its PUT — the PUT upserts too, so the ack is at most an idempotent re-ack (and is skipped if the PUT response
+already proves us current) — and is out of scope here — see [Version Switch Flow](#version-switch-flow-rollback).
 
 ## Save Slots
 
@@ -244,19 +247,19 @@ a failure answer, `pending_uploads` names the changed files in `files`, and a Ro
 `classify_error`'s reason rather than a refusal):
 
 1. The active slot is flipped in memory.
-2. Every local save file the target slot does **not** provide is quarantined into `.romm-backup` (never deleted
-   outright) and dropped from tracking — so no stale extension (e.g. a `.rtc` left behind when the new slot holds only
-   `.srm`) lingers to upload into the new slot, and a never-synced local save is always recoverable (#965, #1058).
+2. Every local save file the target slot does **not** provide is backed up into `.romm-backup` (never deleted outright)
+   and dropped from tracking — so no stale extension (e.g. a `.rtc` left behind when the new slot holds only `.srm`)
+   lingers to upload into the new slot, and a never-synced local save is always recoverable (#965, #1058).
 3. For each canonical local target the new slot **does** provide, the **newest** server save by `updated_at` is
    downloaded. Two server saves mapping to one target collapse to the newest, so the on-disk result and
    `tracked_save_id` are deterministic, not server-list-order dependent (#1058). The download backs up the file it
-   overwrites through the same `.romm-backup` quarantine.
+   overwrites through the same save backup.
 4. The flipped slot + tracking are persisted once, **regardless of partial download failure**: a failed leg still
    persists this coherent state and answers the partial failure `SlotSwitchIncomplete` (`reason="switch_incomplete"`) so
    the caller can retry — the completed targets are already correct, and a failed target re-resolves as `Download` on
-   the next sync. Saves are never carried between slots; the switch only downloads or quarantines, never uploads.
+   the next sync. Saves are never carried between slots; the switch only downloads or backs up, never uploads.
 
-A **named** target slot with no server saves is just the case where step 3 is a no-op: every local file is quarantined,
+A **named** target slot with no server saves is just the case where step 3 is a no-op: every local file is backed up,
 tracking is cleared, and the slot starts fresh — with every prior save recoverable under `.romm-backup`. (An empty /
 whitespace / `None` slot **name** is a different thing entirely: it is rejected up front with
 `reason="invalid_slot_name"` — the slot-less legacy bucket is no longer a switch target, see below.)
@@ -270,14 +273,16 @@ the sentence the tab shows.
 #### Inside `.romm-backup` — naming and retention
 
 Backups live in `<saves_dir>/.romm-backup` and are named `<name>_<ts>[_<n>]<ext>`, where `<ts>` is the `YYYYMMDD_HHMMSS`
-quarantine time. When several files of one slot are backed up within the same second (so the base `<name>_<ts><ext>`
-name would collide), a `_<n>` counter (`_1`, `_2`, …) is appended so an earlier backup is never overwritten by a later
-one. The folder is capped at the **newest 10** backups per save file: each quarantine prunes the older copies of that
-same file beyond the cap, bounding disk use on the Deck while keeping a deep-enough recovery net. The cap is per save
-file — backups of a different save file in the same folder are never pruned by another file's quarantine. One deliberate
-exception: the backup a quarantine just wrote is never pruned in that same call, so under sustained same-second churn
-the folder may briefly hold one extra copy (11) — honouring the cap by deleting the just-saved file would defeat the
-backup.
+backup time. The save backup (`SaveBackup`, `services/saves/save_backup.py`) is the one place a backup is taken; the
+name, its time stamp and which copies go are `domain/save_backup.py`'s. When several files of one slot are backed up
+within the same second (so the base `<name>_<ts><ext>` name would collide), a `_<n>` counter (`_1`, `_2`, …) is appended
+so an earlier backup is never overwritten by a later one. The folder is capped at the **newest 10** backups per save
+file (`BACKUP_RETENTION`, which every `back_up_save_file` caller passes as `keep`; the cleanup's
+`back_up_claimed_save_file` prunes nothing): each backup prunes the older copies of that same file beyond the cap,
+bounding disk use on the Deck while keeping a deep-enough recovery net. The cap is per save file — backups of a
+different save file in the same folder are never pruned by another file's backup. One deliberate exception: the backup a
+call just wrote is never pruned in that same call, so under sustained same-second churn the folder may briefly hold one
+extra copy (11) — honouring the cap by deleting the just-saved file would defeat the backup.
 
 #### Removed-game cleanup and save recovery
 
@@ -288,22 +293,23 @@ canonicalizes those paths for the purge set and every remaining local ROM row, i
 that projects onto the same save path is a co-owner. That matters because a vanished row's live replacement is routinely
 uninstalled. A current save with any owner outside the purge set is copied into an enabled recovery bundle but left in
 the emulator directory. An exclusively owned current save is copied and checksum-verified when recovery is enabled, then
-moved through `PruneSaveSupport.quarantine_prune_saves` → `_quarantine_claimed_file` → `rename_claimed`. This operation
-deliberately keeps all existing `.romm-backup` history instead of enforcing the normal newest-ten cap. Cleanup always
-takes a final no-follow source claim and creates the backup directory through anchored parents before a
-directory-durable rename, including recovery-off runs. A post-rename fsync failure is returned as an actual but
-durability-ambiguous move rather than disappearing from the group ledger. After quarantine, every exclusively owned
-current-save path is expected absent, including one that existed during inventory and was moved successfully. Cleanup
-collectively rechecks the whole set after later filesystem cleanup and immediately before deleting the owning aggregate.
-Any newly created or emulator-recreated save retains the aggregate, with or without a recovery bundle.
+moved through `PruneSaveSupport.back_up_prune_saves` → `SaveBackup.back_up_claimed_save_file` → `rename_claimed`, named
+and time-stamped by the same rule as every other backup. This operation deliberately keeps all existing `.romm-backup`
+history instead of enforcing the normal newest-ten cap. Cleanup always takes a final no-follow source claim and creates
+the backup directory through anchored parents before a directory-durable rename, including recovery-off runs. A
+post-rename fsync failure is returned as an actual but durability-ambiguous move rather than disappearing from the group
+ledger. After the backup, every exclusively owned current-save path is expected absent, including one that existed
+during inventory and was moved successfully. Cleanup collectively rechecks the whole set after later filesystem cleanup
+and immediately before deleting the owning aggregate. Any newly created or emulator-recreated save retains the
+aggregate, with or without a recovery bundle.
 
 Recovery also copies matching `.romm-backup` files while leaving the originals untouched. If an uninstalled ROM or an
 unsupported layout has no resolvable exact path, the manifest preserves known save-sync filenames/state and records a
 warning, but physical files are not guessed or removed. Save states are outside this workflow. Save locks are acquired
 in ascending ROM-id order, including remaining owners of shared paths, and retried if ownership expands. A symlinked or
-out-of-root `.romm-backup` is rejected both during inventory and immediately before quarantine. No UoW is open while
+out-of-root `.romm-backup` is rejected both during inventory and immediately before the backup. No UoW is open while
 lock acquisition waits. Short read UoWs close before filesystem work, network/frontend waits run outside the locks, and
-the final stable lock set remains held through quarantine and the aggregate cascade so a newer save baseline cannot be
+the final stable lock set remains held through the backup and the aggregate cascade so a newer save baseline cannot be
 deleted after the lock is released.
 
 ### The `none` slot (legacy) — a migration source, no longer a target
@@ -360,12 +366,12 @@ target** (`<rom_name>.<ext>`, the same mapping `switch_slot` uses) the migration
      is **not** confirmed (a `local_conflict` refusal carrying `needs_conflict_resolution` + a `conflicts` list), and
      the wizard shows both sides' size + timestamp — the comparison that stops a newer local save being buried
      unnoticed. The dialog offers exactly two ways out: _Replace local save_ (the second call, with
-     `use_server_on_conflict`), which quarantines the local file into `.romm-backup` (never deleted, #965) before
-     writing the server content, or _Cancel_, which makes no second call at all — nothing changes, the slot stays
-     unconfirmed, and the wizard's start-fresh route (`Use slot '<default>'`) is still open. There is deliberately
-     **no** "keep my local save" action: it would produce exactly the same end state as that start-fresh button while
-     re-opening a decision the user already made by clicking Track.
-3. Copies the content into the slot through the normal upload path (`do_upload_save`, `overwrite=false`,
+     `use_server_on_conflict`), which backs the local file up into `.romm-backup` (never deleted, #965) before writing
+     the server content, or _Cancel_, which makes no second call at all — nothing changes, the slot stays unconfirmed,
+     and the wizard's start-fresh route (`Use slot '<default>'`) is still open. There is deliberately **no** "keep my
+     local save" action: it would produce exactly the same end state as that start-fresh button while re-opening a
+     decision the user already made by clicking Track.
+3. Copies the content into the slot through the normal upload path (`SaveTransfer.upload_save_file`, `overwrite=false`,
    409-backstopped), adopting the per-file baseline — so the migrated slot is immediately in sync.
 
 The legacy source saves are **never deleted** — a migration copies their content into the slot and leaves the sources in
@@ -419,7 +425,7 @@ listing, and a brand-new named slot is genuinely empty. The legacy saves stay re
 named slot (fixed by #1061); routing the switch fetch through the shared `save_in_slot` funnel closes the last
 hand-rolled site.
 
-The **upload** side honours the same equivalence (`MatrixExecutor._resolve_upload_slot`): a sync on the legacy slot
+The **upload** side honours the same equivalence (`RomSaveSyncState.upload_slot`): a sync on the legacy slot
 (`active_slot=None` with a populated `slots` map) uploads with the `slot` param **omitted**, so the server stores a
 `slot: null` save. Only a brand-new ROM (no `slots` yet) seeds the configured default slot for its first sync. Since
 \#1276 retired legacy as a confirmable target, this `active_slot=None`-confirmed state is no longer newly created — it
@@ -604,13 +610,16 @@ must acknowledge it to RomM (`acknowledge`), which the core sets exactly when th
 `updated_at`, and the local file's size, content size and mtime (`RomSaveSyncState.adopt_head`) — and, as it stands in
 for a download of the same bytes, seeds the ROM's state as a download does: the system, a first active slot from the
 default slot, and the emulator tag already recorded, else `retroarch` (`RomSaveSyncState.reach_sync_boundary`). The
-aggregate's verbs decide what is recorded; `MatrixExecutor` measures the file and runs the steps in this order. An adopt
-is recorded only if the file still hashes to what the decision saw; one that no longer does is neither acknowledged nor
-recorded. An adopt that must be acknowledged then sends `POST /api/saves/{id}/downloaded` with the device id, through
-the retry strategy every RomM request in the sync uses, and records the baseline from that measure only after that
-succeeded: without it RomM keeps this device not current on the head, and the next local edit would read as one under a
-head that moved past it — a conflict nobody caused. Where the acknowledgement still fails, nothing is recorded, the file
-is reported as an error of that sync with its reason — not a conflict — and the next sync decides the same way again.
+aggregate's verbs decide what is recorded; the save transfer (`SaveTransfer.adopt_server_head`, or `record_server_head`
+for an adopt that needs no acknowledgement) measures the file and runs the steps in this order — for the sync and for
+Keep Local alike. No core is recorded: an adopt transfers nothing, so which core wrote the bytes is unknown, and the one
+the last upload recorded stays for the core-change warning to compare against. An adopt is recorded only if the file
+still hashes to what the decision saw; one that no longer does is neither acknowledged nor recorded. An adopt that must
+be acknowledged then sends `POST /api/saves/{id}/downloaded` with the device id, through the retry strategy every RomM
+request in the sync uses, and records the baseline from that measure only after that succeeded: without it RomM keeps
+this device not current on the head, and the next local edit would read as one under a head that moved past it — a
+conflict nobody caused. Where the acknowledgement still fails, nothing is recorded, the file is reported as an error of
+that sync with its reason — not a conflict — and the next sync decides the same way again.
 
 The mutating sync path (`SyncEngine.do_sync_rom_saves`) records every adopt. The read-only status path
 (`StatusService._get_save_status_io`) records only one that needs no acknowledgement, and leaves the other to the next
@@ -628,11 +637,22 @@ marshalling and the no-fallback posture). It answers in the `SyncAction` datacla
 `SaveService` aggregate (`backend/services/saves/`) calls the seam from two sub-services:
 
 - `SyncEngine.do_sync_rom_saves` (`services/saves/sync_engine/`) iterates local files and server-only-in-slot groups,
-  dispatching each action via the matrix executor's `_dispatch_sync_action` (POST/GET + state update; the in-place PUT
-  is retired on this path, #1276).
+  dispatching each action via the matrix executor's `_dispatch_sync_action` (the in-place PUT is retired on this path,
+  #1276).
 - `StatusService._get_save_status_io` (`services/saves/status/`) runs the same decisions read-only and folds them into
   the `SaveStatus.files[*].status` strings the frontend renders. The only allowed mutation is recording an adopt that
   needs no acknowledgement — pure state hygiene with no network traffic.
+
+What an action moves is not the matrix's. Two building blocks in `services/saves/`, built once by `SaveService` and
+handed to every save service that needs them, carry it out:
+
+- `SaveBackup` (`save_backup.py`) moves a local save file into the `.romm-backup` folder beside it before Tender itself
+  replaces or removes it — every download over a local file (`SaveTransfer.download_save_file`, whichever flow calls
+  it), the slot steps, following a moved save directory, the adoption renamer and the removed-game cleanup all go
+  through it. Deleting local saves — a game's or a whole platform's — which the user asks for, removes them outright.
+- `SaveTransfer` (`save_transfer.py`) downloads a server save, uploads a local one, acknowledges a head adopted without
+  a transfer, adopts an identical head, and fetches a server copy to compare or to place. A download or upload records
+  the sync boundary through the aggregate's verbs in the same step, so no caller transfers without recording.
 
 Server-only saves (no matching local file) are grouped by their target local filename (`rom_name.<ext>`) before being
 passed to `compute_sync_action`. The algorithm picks the newest in the group, so older stacked versions in the same slot
@@ -800,7 +820,7 @@ with a valid-but-wrong content hash, so it reads as a "diverged" edit and would 
 corrupt file would make it the newest save in the slot, so newest-wins would then propagate the garbage to every other
 device — and once `autocleanup_limit` prunes the older versions, the good copy could age out of recovery. This is the
 upload mirror of the [#965](https://github.com/danielcopper/romm-tender/issues/965) backup-or-confirm invariant: the
-download-overwrite path already quarantines the local file into `.romm-backup` first, but a blind upload of a
+download-overwrite path already backs the local file up into `.romm-backup` first, but a blind upload of a
 corrupt-looking local had no equivalent guard.
 
 The plausibility check is part of the decision (fed the local file's size and [content size](#the-content-size), and the
@@ -815,7 +835,7 @@ threshold says. A file shorter only by a trailing run of fill does not trip it, 
 that run out. Where the baseline carries no content size ([The content size](#the-content-size)), the fixed rule holds
 the file to the recorded raw size instead, so a shorter fixed-size file is a conflict once. When the guard fires, the
 decision is `Conflict(picked)` instead of `Upload`, routing through the existing `SyncConflictModal` so the user
-decides: **Use Server** downloads the good server copy (quarantining the bad local first), **Keep Local** re-uploads the
+decides: **Use Server** downloads the good server copy (backing the bad local up first), **Keep Local** re-uploads the
 corrupt file only after an explicit choice. A plausible-size divergent edit (or a save that grew) is unaffected and
 still uploads (row 9).
 
@@ -834,7 +854,7 @@ The content hash breaks the tie:
   (`Skip(adopt_baseline=true)` with `acknowledge`, [Outcomes](#outcomes)). This is the copied-card / restored-backup /
   fresh-install case landing on the foreign timeline.
 - **11b — the content differs.** We genuinely hold different local bytes than the server head, with no baseline to say
-  which is newer. The earlier design silently `Download`ed here, quarantining the local bytes into `.romm-backup` on the
+  which is newer. The earlier design silently `Download`ed here, backing the local bytes up into `.romm-backup` on the
   bet that another device's work mattered more — a silent overwrite of possibly-newer local progress. Under
   [#1276](https://github.com/danielcopper/romm-tender/issues/1276) this is a **`Conflict`** instead: the user decides
   via Keep Local / Use Server, the same exit rows 6a, 6c, 8b and 12b take. When the server save carries no
@@ -888,10 +908,10 @@ that returned save may not be the slot head. Because the automatic path only POS
 head, a dedup on that path resolves to an **older** save while a newer, different head still leads the slot: no new
 version, the foreign head stays authoritative, yet the response looks like a successful upload. Recording it as a synced
 baseline would falsely report "synced" while the upload intent (make our content the head) went silently unfulfilled
-cross-device. `do_upload_save` compares the POST response against the pre-upload `list_saves` snapshot
-(`_dedup_returned_non_head`: the response is a pre-existing snapshot member that is not the newest) and raises
-`RommConflictError` **before** any baseline / confirm / own-upload write, so the same backstop below surfaces the true
-state and nothing stamps currency on the non-head save
+cross-device. `SaveTransfer.upload_save_file` compares the POST response against the pre-upload `list_saves` snapshot
+(`domain/upload_response.py`'s `dedup_returned_non_head`: the response is a pre-existing snapshot member that is not the
+newest) and raises `RommConflictError` **before** any baseline / confirm / own-upload write, so the same backstop below
+surfaces the true state and nothing stamps currency on the non-head save
 ([#1482](https://github.com/danielcopper/romm-tender/issues/1482)). An **empty** planned slot has no head to bypass. A
 save another device puts there before our POST lands is never what the POST dedups to: RomM's
 [409-gate](#the-add_save-post-409-gate) runs first and refuses the POST, since this device holds no sync row on that
@@ -913,10 +933,10 @@ holds. A missing or empty `local_hash` proves neither, so it resolves to a confl
 evidence about the local bytes we cannot claim there is no un-synced work to protect, and a download overwrites them.
 That asymmetry is why every unknown-input row of the vendored ladder vectors lands on `"conflict"`.
 
-A `"download"` result downgrades the upload to a `do_download_save` (the server save was newer and our local had no
-un-synced edits); a `"conflict"` result appends a `SyncConflict` and returns without writing, so the user resolves it
-via Keep Local / Use Server exactly as a matrix-row conflict. This is the upload mirror of the matrix's download-side
-safety: an automatic upload never blindly overwrites a save the device isn't current on.
+A `"download"` result downgrades the upload to a `SaveTransfer.download_save_file` (the server save was newer and our
+local had no un-synced edits); a `"conflict"` result appends a `SyncConflict` and returns without writing, so the user
+resolves it via Keep Local / Use Server exactly as a matrix-row conflict. This is the upload mirror of the matrix's
+download-side safety: an automatic upload never blindly overwrites a save the device isn't current on.
 
 A `SyncConflict` names the server save by its `server_save_id`, which the resolution round-trips, so the id is required:
 a re-fetched head without an `id` is a RomM contract violation, and it is reported as that file's sync error rather than
@@ -1105,11 +1125,11 @@ moves nothing. This holds for as long as the content-directory gate does.
 refuses, everything in the old directory named `<stem>.*` — never in the content file's own directory, where that
 pattern is the game itself. Where there is something to carry, a missing directory is created first. A name in **both**
 directories is a collision and nothing is overwritten or removed: the older copy goes through
-`MatrixExecutor.quarantine_local_file` into the `.romm-backup` folder of the directory it sits in, and a tie keeps the
-copy where the emulator looks. Something other than a file under the save's name at the target stops that file and keeps
-the old record. The record moves on only once every file arrived, so a move that fails part-way is tried again the next
-time one of the paths above touches that game's saves. Two spellings of one directory move nothing. No Unit of Work is
-open across a file operation or a resolver reading.
+`SaveBackup.back_up_save_file` into the `.romm-backup` folder of the directory it sits in, and a tie keeps the copy
+where the emulator looks. Something other than a file under the save's name at the target stops that file and keeps the
+old record. The record moves on only once every file arrived, so a move that fails part-way is tried again the next time
+one of the paths above touches that game's saves. Two spellings of one directory move nothing. No Unit of Work is open
+across a file operation or a resolver reading.
 
 **Filling the record in.** A one-time background task on the first start with the record
 (`SaveService.record_save_directories_once`, started by `Application.run_startup_repairs`, cancelled by
@@ -1269,12 +1289,18 @@ endpoint calls. The façade delegates to `SyncEngine.resolve_sync_conflict`, who
    silently POSTing local content over the third device's work with `overwrite=true` would be a write-loss. The frontend
    surfaces an error and the user cancels + retries; the next sync re-evaluates the matrix with the fresh head.
 4. Dispatches:
-   - `keep_local` → `_resolve_conflict_keep_local` reads the server save's content hash. If it matches local (rare, but
-     possible — both devices ended up at the same content via different paths), the head is first confirmed to RomM
-     (`POST /api/saves/{id}/downloaded`, through the retry strategy) and then adopted into state without re-uploading:
-     after the user resolved the conflict this device must be current on the head. Otherwise the local file is POSTed as
-     a new version with `overwrite=true` — the user's deliberate overwrite bypasses the 409 gate (#1276). The POST's own
-     `device_save_sync` upsert leaves us `is_current=true`, so the redundant `confirm_download` ack is skipped (#1458).
+   - `keep_local` → `_resolve_conflict_keep_local` fetches a server copy and hashes it
+     (`SaveTransfer.hash_server_copy`). If it matches local (rare, but possible — both devices ended up at the same
+     content via different paths), the head is adopted through the sync's own adopt step
+     (`SaveTransfer.adopt_server_head`, [Outcomes](#outcomes)): confirmed to RomM (`POST /api/saves/{id}/downloaded`,
+     through the retry strategy), then recorded with the sync boundary and without re-uploading — after the user
+     resolved the conflict this device must be current on the head. A file that no longer hashes as it did by the time
+     the adopt measures it again is uploaded instead, as one that differs is; recording nothing would bring the resolved
+     conflict back. Otherwise the local file is POSTed as a new version with `overwrite=true` — the user's deliberate
+     overwrite bypasses the 409 gate (#1276). The POST's own `device_save_sync` upsert leaves us `is_current=true`, so
+     the redundant `confirm_download` ack is skipped (#1458). The comparison only spares an upload: a server copy this
+     device cannot write (a full disk) is logged as a warning and any other failure to fetch it passed over, and either
+     way the local file is uploaded.
    - `use_server` → `_resolve_conflict_use_server` downloads the picked save and writes it to the local path.
 
 The modal only accepts `keep_local` or `use_server`; `cancel` never reaches the backend. A wrong action string is
@@ -1432,21 +1458,22 @@ captured (or the user is forced to resolve a real conflict) before the local fil
 ### The four-step destructive switch
 
 After the pre-flight clears, `VersionsService._rollback_to_version_io` (`services/saves/versions.py`) runs the switch —
-the actual file/server writes go through `SyncEngine`:
+the actual file/server writes go through `SaveTransfer`:
 
-1. **Download target**: GET the chosen older save's content and overwrite local. `_do_download_save` updates
+1. **Download target**: GET the chosen older save's content and overwrite local. `download_save_file` updates
    `tracked_save_id` and `last_sync_hash` to the target version, so even if step 2 fails the local view is consistent
    with the target.
-2. **PUT to bump `updated_at`**: re-upload local content via `_do_upload_save(server_save=target_save)`. This issues a
+2. **PUT to bump `updated_at`**: re-upload local content via `upload_save_file(server_save=target_save)`. This issues a
    PUT against the target save id with byte-identical content. RomM fires the SQLAlchemy `onupdate=utc_now` hook on
    every PUT regardless of whether the content changed, so `save.updated_at` becomes NOW; the same request also upserts
    our `device_save_sync` row (`last_synced_at = updated_at`). The target save is now newest in the slot and
    `is_current` is already `true` for us.
-3. **Confirm download (redundant)**: `_do_upload_save` still runs `_confirm_upload_sync`. On every supported RomM
-   version the PUT already upserted our sync row (step 2), so this ack is at most a redundant idempotent re-write of
-   `last_synced_at = save.updated_at`, not the load-bearing step it once was (#1458).
-4. **Update local state**: `_do_upload_save` records `tracked_save_id`, `last_sync_hash`, `last_sync_server_updated_at`,
-   and friends from the post-PUT response, leaving local state consistent with the now-newest server save.
+3. **Confirm download (redundant)**: `upload_save_file` still runs the upload's own acknowledgement. On every supported
+   RomM version the PUT already upserted our sync row (step 2), so this ack is at most a redundant idempotent re-write
+   of `last_synced_at = save.updated_at`, not the load-bearing step it once was (#1458).
+4. **Update local state**: `upload_save_file` records `tracked_save_id`, `last_sync_hash`,
+   `last_sync_server_updated_at`, and friends from the post-PUT response, leaving local state consistent with the
+   now-newest server save.
 
 After this, the next `compute_sync_action` for our device picks `target_save` (now newest), our `is_current=true`, hash
 matches the baseline → `Skip(synced)`. Other devices on their next sync see `target_save` as newest with their own
@@ -1492,9 +1519,9 @@ Two things define the semantics:
 - **It is a copy, never a move.** The source save is never deleted (the user removes it in the RomM web app if they want
   to). A ROM has many slots; this does not "move the ROM onto one slot".
 - **The target slot becomes the ROM's active/confirmed slot,** with the copied save as its current save. This is
-  mechanically forced: `do_upload_save` resolves its upload slot purely from `save_state.active_slot`
-  (`_resolve_upload_slot`) — there is no per-call slot override — so `active_slot` is set to the target (`confirm_slot`)
-  _before_ the upload.
+  mechanically forced: `SaveTransfer.upload_save_file` resolves its upload slot purely from `save_state.active_slot`
+  (`RomSaveSyncState.upload_slot`) — there is no per-call slot override — so `active_slot` is set to the target
+  (`confirm_slot`) _before_ the upload.
 
 The flow is a composition of the rollback orchestration shell and the wizard-migration's make-current step (it extends
 neither in place):
@@ -1517,25 +1544,26 @@ neither in place):
    make-current, so nothing churns (the frontend toasts "already in slot … as `#<id>`" and does not refresh). It fires
    only when `content_hash` is populated (RomM 5.0.0+); an absent hash falls through to the copy and RomM's own
    server-side dedup. This is what stops a repeat-copy of already-present content from re-pointing the tracked save.
-7. `SaveCopyService._copy_save_to_slot_io` then: `do_download_save` (the chosen content onto the canonical local file,
-   quarantining the current local file first, #965; a local file this device cannot write is `copy_failed`, and a RomM
-   error is not caught here — either way the active slot stays as it was) → `confirm_slot(target)` (creates the slot if
-   new, switches active + confirms) → `do_upload_save(server_save=None, overwrite=False)` — a POST into the now-active
-   target slot. A **409** is `target_slot_busy` (the target has newer changes from another device — sync it first, then
-   retry); any other upload error is `upload_failed`: as with a restore's `put_failed`, the copy is complete on this
-   device and its state is persisted, and the target slot stays active. The download recorded the source save as the
-   file's baseline, which the copy matches, so where this device is current on the target slot's newest save, the next
-   sync would find nothing changed (row 7) and never upload it. `upload_failed` therefore records the target slot's
-   newest save for that file — its id, its `content_hash` and its size — as the baseline, and the next sync reads the
-   copy as a local change: row 9 uploads it as a new version superseding that save, where this device is current on it.
-   Row 9b still applies — a copy under half that save's size, or for a file the save answer states fixed-size, any copy
-   shorter than it, is a conflict, not an upload — and so is a save there this device is not current on: row 12b,
-   whether it never synced that save or another device moved it on since. That baseline is recorded from the save's size
-   alone and carries no [content size](#the-content-size), so row 9b judges the copy by raw size. A new slot has no save
-   to record, and the next sync uploads the copy as its first save (row 2). Where the newest save carries no
-   `content_hash` or no id, there is no baseline to record from it, and the file's tracking is dropped instead: with no
-   baseline beside a head it cannot prove the copy identical to, the next sync answers a conflict — row 8b where this
-   device is current on that save, row 11b where it is not.
+7. `SaveCopyService._copy_save_to_slot_io` then: `SaveTransfer.download_save_file` (the chosen content onto the
+   canonical local file, backing the current local file up first, #965; a local file this device cannot write is
+   `copy_failed`, and a RomM error is not caught here — either way the active slot stays as it was) →
+   `confirm_slot(target)` (creates the slot if new, switches active + confirms) →
+   `upload_save_file(server_save=None, overwrite=False)` — a POST into the now-active target slot. A **409** is
+   `target_slot_busy` (the target has newer changes from another device — sync it first, then retry); any other upload
+   error is `upload_failed`: as with a restore's `put_failed`, the copy is complete on this device and its state is
+   persisted, and the target slot stays active. The download recorded the source save as the file's baseline, which the
+   copy matches, so where this device is current on the target slot's newest save, the next sync would find nothing
+   changed (row 7) and never upload it. `upload_failed` therefore records the target slot's newest save for that file —
+   its id, its `content_hash` and its size — as the baseline, and the next sync reads the copy as a local change: row 9
+   uploads it as a new version superseding that save, where this device is current on it. Row 9b still applies — a copy
+   under half that save's size, or for a file the save answer states fixed-size, any copy shorter than it, is a
+   conflict, not an upload — and so is a save there this device is not current on: row 12b, whether it never synced that
+   save or another device moved it on since. That baseline is recorded from the save's size alone and carries no
+   [content size](#the-content-size), so row 9b judges the copy by raw size. A new slot has no save to record, and the
+   next sync uploads the copy as its first save (row 2). Where the newest save carries no `content_hash` or no id, there
+   is no baseline to record from it, and the file's tracking is dropped instead: with no baseline beside a head it
+   cannot prove the copy identical to, the next sync answers a conflict — row 8b where this device is current on that
+   save, row 11b where it is not.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?, message?} |
@@ -1614,9 +1642,9 @@ upsert, so the body's `device_syncs` shows us `is_current = true` (equality coun
 logic is fail-open regardless: a response that proves us current skips the ack, anything else (including a bare body)
 still sends the idempotent ack.
 
-This makes the dedicated `POST /api/saves/{id}/downloaded` ack **redundant on the normal upload path** — the sync engine
-skips it when the upload response already shows this device `is_current` (`_confirm_upload_sync`, #1458), saving one
-round-trip per uploaded file.
+This makes the dedicated `POST /api/saves/{id}/downloaded` ack **redundant on the normal upload path** — the upload
+skips it when the upload response already shows this device `is_current` (`SaveTransfer.upload_save_file`, #1458),
+saving one round-trip per uploaded file.
 
 **`add_save`'s content-dedup early-return.** A named-slot `overwrite=false` POST whose content hash matches an existing
 save in the same slot returns that pre-existing save **before** the `device_save_sync` upsert. For a request that names
@@ -1909,12 +1937,14 @@ Each save operation that reaches RomM calls it once, before its first request, a
 (pre-launch, post-exit, one ROM, all), the copy into another slot and the restore of an older version (both before their
 pre-flight sync), the conflict resolution, the slot switch, listing and deleting a slot's saves, the setup info and the
 slot-choice migration, the version list, and the save status. The slot summary (`get_save_slots`) sends no device id and
-stays outside. `RommSaveApi.list_saves` and the sync logic (`do_sync_rom_saves`, `MatrixExecutor.sync_rom_saves`,
-`do_download_save`, `do_upload_save`) take a `LiveDeviceId`, so the type checker refuses a caller that passes a stored
-id or `None`. The entry pays one `PUT /api/devices/{id}` per operation, reads included: a cheaper path for reads would
-be the divergence the entry exists to remove. Concurrent callers wait on one lock, taken innermost — nothing is taken
-under it, so a holder of `rom_lock` or the device gate may call the entry — and two of them never register twice. What
-keeps the rule and what those checks miss: the invariant register in `CLAUDE.md` and [invariants.md](invariants.md).
+stays outside. `RommSaveApi.list_saves`, the sync logic (`do_sync_rom_saves`, `MatrixExecutor.sync_rom_saves`) and the
+save transfer's steps that name the device (`SaveTransfer.download_save_file`, `upload_save_file`,
+`acknowledge_server_head`, `adopt_server_head`) take a `LiveDeviceId`, so the type checker refuses a caller that passes
+a stored id or `None`. The entry pays one `PUT /api/devices/{id}` per operation, reads included: a cheaper path for
+reads would be the divergence the entry exists to remove. Concurrent callers wait on one lock, taken innermost — nothing
+is taken under it, so a holder of `rom_lock` or the device gate may call the entry — and two of them never register
+twice. What keeps the rule and what those checks miss: the invariant register in `CLAUDE.md` and
+[invariants.md](invariants.md).
 
 The cached id outside that entry is read by the play-session upload (`SaveService.get_device_id`, the
 `DeviceIdProvider`), and by the device list, which marks this device's row. Registration happens whether save sync is on

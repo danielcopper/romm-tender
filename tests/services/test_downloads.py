@@ -213,7 +213,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             retrodeck_folders=retrodeck_folders,
             install_recorder=install_recorder,
             adoption_move=AdoptionMoveAdapter(),
-            quarantine_save=lambda saves_dir, filename: False,
+            back_up_save=lambda saves_dir, filename, *, keep: False,
             m3u_support=lambda system_name: harness.m3u_supported,
             system_extensions=lambda system_name, reading=None: frozenset(),
             # ``None`` is "es_systems.xml could not answer", which the search

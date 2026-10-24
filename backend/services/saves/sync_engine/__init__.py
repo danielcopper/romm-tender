@@ -1,11 +1,5 @@
-"""Newest-wins matrix executor and the I/O orchestrators that perform
-sync transfers.
-
-Anything that decides "which side wins for this file" or actually
-moves bytes between local saves_dir and the RomM server lives here.
-Read-only matrix consumption (status reporting) belongs in
-StatusService; persistence is owned by the public use case's narrow
-Unit of Work (ADR-0006).
+"""The save sync's engine: the newest-wins matrix that decides each file and
+dispatches the decision, and the rom-level orchestration around it.
 """
 
 from services.saves.sync_engine._gate import SaveSyncGate, SaveSyncTimeoutError

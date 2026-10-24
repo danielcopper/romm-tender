@@ -1,7 +1,8 @@
 """Save-sync aggregate root and facade for the save endpoints.
 
 Composes the save-sync sub-services (sync_engine, status, versions, slots,
-rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate
+rom_info, prune_support, and the save backup and save transfer it builds once
+and hands to those that need them) over the SQLite ``rom_save_sync_states`` aggregate
 (reached through the injected Unit-of-Work factory) and exposes the use cases
 the endpoints call. The five save-sync feature toggles live in
 ``settings.json`` and are read/written here directly; the device label beside
@@ -30,6 +31,8 @@ from services.saves._settings import (
 from services.saves.copies import SaveCopyService, SaveCopyServiceConfig
 from services.saves.prune_support import PruneSaveSupport, PruneSaveSupportConfig
 from services.saves.rom_info import RomInfoService, RomInfoServiceConfig
+from services.saves.save_backup import SaveBackup, SaveBackupConfig
+from services.saves.save_transfer import SaveTransfer, SaveTransferConfig
 from services.saves.slots import SlotsService, SlotsServiceConfig
 from services.saves.status import StatusService, StatusServiceConfig
 from services.saves.sync_engine import SaveSweepIncomplete, SyncEngine, SyncEngineConfig
@@ -115,6 +118,23 @@ class SaveService:
             ),
         )
 
+        # Built once and handed to every service that backs a save file up or
+        # moves one, so each holds the step it uses rather than the whole engine.
+        self._save_backup = SaveBackup(
+            config=SaveBackupConfig(save_file_store=config.save_file_store, clock=config.clock),
+        )
+        self._save_transfer = SaveTransfer(
+            config=SaveTransferConfig(
+                romm_api=config.romm_api,
+                retry=config.retry,
+                save_file_store=config.save_file_store,
+                clock=config.clock,
+                backup=self._save_backup,
+                logger=config.logger,
+                log_debug=config.log_debug,
+            ),
+        )
+
         self._sync_engine = SyncEngine(
             config=SyncEngineConfig(
                 settings=config.settings,
@@ -136,6 +156,8 @@ class SaveService:
                 is_update_in_progress=config.is_update_in_progress,
                 is_retrodeck_migration_pending=config.is_retrodeck_migration_pending,
                 build_inventory=self.build_save_inventory,
+                save_backup=self._save_backup,
+                save_transfer=self._save_transfer,
             ),
         )
 
@@ -153,6 +175,7 @@ class SaveService:
                 active_core=config.active_core,
                 emit=config.emit,
                 save_file_store=config.save_file_store,
+                save_transfer=self._save_transfer,
             ),
         )
 
@@ -168,6 +191,7 @@ class SaveService:
                 loop=config.loop,
                 logger=config.logger,
                 log_debug=config.log_debug,
+                save_transfer=self._save_transfer,
             ),
         )
 
@@ -183,6 +207,7 @@ class SaveService:
                 loop=config.loop,
                 logger=config.logger,
                 log_debug=config.log_debug,
+                save_transfer=self._save_transfer,
             ),
         )
 
@@ -201,6 +226,8 @@ class SaveService:
                 clock=config.clock,
                 save_file_store=config.save_file_store,
                 log_debug=config.log_debug,
+                save_backup=self._save_backup,
+                save_transfer=self._save_transfer,
             ),
         )
 
@@ -209,9 +236,9 @@ class SaveService:
                 uow_factory=config.uow_factory,
                 save_file_store=config.save_file_store,
                 retrodeck_folders=config.retrodeck_folders,
-                clock=config.clock,
                 rom_info=self._rom_info,
                 sync_engine=self._sync_engine,
+                save_backup=self._save_backup,
             ),
         )
 
@@ -219,6 +246,11 @@ class SaveService:
     def prune_support(self) -> PruneSaveSupport:
         """The save-side collaborator the composition root wires as ``PruneSaveCoordinator``."""
         return self._prune_support
+
+    @property
+    def save_backup(self) -> SaveBackup:
+        """The save backup the composition root hands the adoption renamer as its ``SaveBackupFn``."""
+        return self._save_backup
 
     # ------------------------------------------------------------------
     # Device registration (delegated to SyncEngine)
@@ -272,16 +304,6 @@ class SaveService:
         ``SaveDriftProbeFn`` seam.
         """
         return await self._status.check_local_drift(rom_id)
-
-    def quarantine_local_file(self, saves_dir: str, filename: str) -> bool:
-        """Move a local save aside into ``.romm-backup`` before something destroys it.
-
-        Delegates to the shared ``MatrixExecutor.quarantine_local_file`` — the
-        single source of truth for the backup discipline — so a consumer that has
-        to destroy a save reaches the same funnel the sync's own overwrite and
-        slot-switch paths do (#965). Satisfies the ``SaveQuarantineFn`` seam.
-        """
-        return self._sync_engine.quarantine_local_file(saves_dir, filename)
 
     # ------------------------------------------------------------------
     # Sync orchestration (delegated to SyncEngine)

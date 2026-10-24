@@ -83,11 +83,11 @@ class InstalledContentRemoval:
 
 
 @dataclass(frozen=True)
-class SaveQuarantine:
+class PruneSaveBackup:
     """What moving a purge set's exclusive saves into ``.romm-backup`` came to.
 
-    ``moved`` holds the save paths that left their place before the quarantine
-    finished or stopped. ``failure`` is ``None`` for a quarantine that finished
+    ``moved`` holds the save paths that left their place before the backup
+    finished or stopped. ``failure`` is ``None`` for a backup that finished
     and says why it stopped otherwise. ``ambiguous`` means ``moved`` cannot be
     trusted: a save it does not name may have moved, or one it names may not
     have moved for good.

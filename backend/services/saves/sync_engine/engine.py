@@ -12,9 +12,10 @@ Each public use case owns a narrow Unit of Work (ADR-0006): it reads the
 server/file I/O outside any transaction, and writes the mutated
 aggregate back in a short write UoW at the end. The device id every save
 operation sends to RomM comes from :meth:`SyncEngine.live_device_id`, the one
-entry that registers or heals the device first. The implementation of
-the actual file/server transfers lives in
-:mod:`services.saves.sync_engine.matrix`; device registration lives in
+entry that registers or heals the device first. The per-file sync
+decision and its dispatch live in :mod:`services.saves.sync_engine.matrix`,
+and the file and server transfers it dispatches to in
+:class:`services.saves.save_transfer.SaveTransfer`; device registration lives in
 :mod:`services.saves.sync_engine.devices`; conflict-resolution rollback
 lives in :mod:`services.saves.sync_engine.rollback`. SyncEngine wires
 those sub-modules together and exposes the surface peer save services
@@ -106,6 +107,8 @@ if TYPE_CHECKING:
         UpdateInProgressFn,
     )
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_backup import SaveBackup
+    from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine.devices import DeviceRegistry
 
 
@@ -181,8 +184,9 @@ class SyncEngineConfig:
     ``resolve_upload_conflict``), runtime infrastructure (loop, logger,
     clock), the Protocol-typed filesystem adapter, the ``DebugLogger`` seam,
     the per-ROM active-core resolver, the hostname and machine-id providers
-    passed through to device registration, and the update-in-progress and
-    migration-pending callbacks its sync backstops and follow ask.
+    passed through to device registration, the update-in-progress and
+    migration-pending callbacks its sync backstops and follow ask, and the
+    save backup and save transfer the save service built for every peer.
     """
 
     settings: dict[str, Any]
@@ -204,6 +208,8 @@ class SyncEngineConfig:
     is_update_in_progress: UpdateInProgressFn
     is_retrodeck_migration_pending: MigrationPendingFn
     build_inventory: SaveInventoryBuilderFn
+    save_backup: SaveBackup
+    save_transfer: SaveTransfer
 
 
 class SyncEngine:
@@ -242,15 +248,15 @@ class SyncEngine:
             clock=config.clock,
             save_file_store=config.save_file_store,
             log_debug=config.log_debug,
+            transfer=config.save_transfer,
         )
         self._rollback = RollbackOrchestrator(
             uow_factory=config.uow_factory,
             rom_info=config.rom_info,
             live_device_id=self.live_device_id,
             romm_api=config.romm_api,
-            matrix=self._matrix,
+            transfer=config.save_transfer,
             retry=config.retry,
-            clock=config.clock,
             save_file_store=config.save_file_store,
             logger=config.logger,
             log_debug=config.log_debug,
@@ -261,7 +267,7 @@ class SyncEngine:
             uow_factory=config.uow_factory,
             rom_info=config.rom_info,
             save_file_store=config.save_file_store,
-            quarantine=self._matrix.quarantine_local_file,
+            save_backup=config.save_backup,
             logger=config.logger,
             log_debug=config.log_debug,
         )
@@ -357,52 +363,6 @@ class SyncEngine:
             rom_id, save_state, device_id, core_so, default_slot, autocleanup_limit, save_answer=save_answer
         )
 
-    def do_download_save(
-        self,
-        server_save: dict[str, Any],
-        saves_dir: str,
-        filename: str,
-        save_state: RomSaveSyncState,
-        device_id: LiveDeviceId,
-        system: str,
-        default_slot: str | None = None,
-    ) -> None:
-        """Download a save file from server (delegate to :class:`MatrixExecutor`)."""
-        self._matrix.do_download_save(server_save, saves_dir, filename, save_state, device_id, system, default_slot)
-
-    def quarantine_local_file(self, saves_dir: str, filename: str) -> bool:
-        """Back up a local save into ``.romm-backup`` (delegate to :class:`MatrixExecutor`)."""
-        return self._matrix.quarantine_local_file(saves_dir, filename)
-
-    def do_upload_save(
-        self,
-        rom_id: int,
-        file_path: str,
-        filename: str,
-        save_state: RomSaveSyncState,
-        device_id: LiveDeviceId,
-        system: str,
-        core_so: str | None,
-        server_save: dict[str, Any] | None = None,
-        default_slot: str | None = None,
-        autocleanup_limit: int | None = None,
-        overwrite: bool = False,
-    ) -> dict[str, Any]:
-        """Upload a local save file to server (delegate to :class:`MatrixExecutor`)."""
-        return self._matrix.do_upload_save(
-            rom_id,
-            file_path,
-            filename,
-            save_state,
-            device_id,
-            system,
-            core_so,
-            server_save,
-            default_slot,
-            autocleanup_limit=autocleanup_limit,
-            overwrite=overwrite,
-        )
-
     def iter_matrix_outcomes(
         self,
         server_in_slot: list[dict[str, Any]],
@@ -421,22 +381,6 @@ class SyncEngine:
             info=info,
             synced_files=synced_files,
             saves_dir=saves_dir,
-        )
-
-    def adopt_head_as_baseline(
-        self,
-        save_state: RomSaveSyncState,
-        filename: str,
-        head: dict[str, Any],
-        local_path: str,
-        local_hash: str,
-        *,
-        system: str,
-        default_slot: str | None = None,
-    ) -> bool:
-        """Record the local file as *filename*'s baseline for the identical *head* (delegate)."""
-        return self._matrix.adopt_head_as_baseline(
-            save_state, filename, head, local_path, local_hash, system=system, default_slot=default_slot
         )
 
     def build_sync_conflict_entry(

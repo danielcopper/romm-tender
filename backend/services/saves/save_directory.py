@@ -23,14 +23,15 @@ from typing import TYPE_CHECKING
 
 from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.save_answer import ROOT_CONTENT_DIRECTORY, SAVE_STATE_PLACE_NOT_READ, SORTED_DIR_MISSING
+from domain.save_backup import BACKUP_RETENTION
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable
 
     from domain.save_answer import SaveAnswer
     from services.protocols import DebugLogger, SaveFileStore, UnitOfWorkFactory
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_backup import SaveBackup
 
 
 class SaveDirectoryFollower:
@@ -48,14 +49,14 @@ class SaveDirectoryFollower:
         uow_factory: UnitOfWorkFactory,
         rom_info: RomInfoService,
         save_file_store: SaveFileStore,
-        quarantine: Callable[[str, str], bool],
+        save_backup: SaveBackup,
         logger: logging.Logger,
         log_debug: DebugLogger,
     ) -> None:
         self._uow_factory = uow_factory
         self._rom_info = rom_info
         self._save_file_store = save_file_store
-        self._quarantine = quarantine
+        self._save_backup = save_backup
         self._logger = logger
         self._log_debug = log_debug
 
@@ -173,10 +174,10 @@ class SaveDirectoryFollower:
                 # to the backup folder of the directory it sits in. A tie keeps
                 # the copy already where the emulator looks.
                 if self._save_file_store.get_mtime(target) >= self._save_file_store.get_mtime(source):
-                    self._quarantine(recorded, name)
+                    self._save_backup.back_up_save_file(recorded, name, keep=BACKUP_RETENTION)
                     self._logger.info("Kept newer %s; backed up the older %s", target, source)
                     return True
-                self._quarantine(answered, name)
+                self._save_backup.back_up_save_file(answered, name, keep=BACKUP_RETENTION)
                 self._logger.info("Backed up the older %s before carrying %s", target, source)
             self._save_file_store.move(source, target)
         except (OSError, ValueError) as e:

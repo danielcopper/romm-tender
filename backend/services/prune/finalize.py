@@ -4,7 +4,7 @@ Everything a group does that cannot be undone happens here, and it may only
 happen while every proof still holds: fresh liveness, no new download, unchanged
 local rows, a sealed recovery bundle that still matches, and save ownership no
 wider than the locks being held. The cascade's order is itself the contract —
-saves are quarantined before content is removed, artifacts before Steam state,
+saves are backed up before content is removed, artifacts before Steam state,
 and the database rows only once the filesystem is clean and their absence has
 been re-proven.
 """
@@ -259,7 +259,7 @@ class GroupFinalizer:
     ) -> dict[str, Any]:
         """Run the cascade in its contracted order, stopping at the first refusal.
 
-        Saves are quarantined before content is removed, artifacts before Steam
+        Saves are backed up before content is removed, artifacts before Steam
         state, and the rows only once the filesystem is clean and their absence
         has been re-proven. Each step reports the reason it stopped; the ledger
         it has been updating is what keeps the resulting verdict truthful.
@@ -282,7 +282,7 @@ class GroupFinalizer:
             )
 
         claims = handle.source_claims if handle is not None else None
-        failure = await self._quarantine_saves(delete_inventory, claims, ledger)
+        failure = await self._back_up_saves(delete_inventory, claims, ledger)
         if failure is not None:
             return retained(failure)
         failure = await self._remove_installed_content(plan.delete_ids, claims, ledger)
@@ -318,26 +318,26 @@ class GroupFinalizer:
             ),
         )
 
-    async def _quarantine_saves(
+    async def _back_up_saves(
         self,
         delete_inventory: dict[str, Any],
         claims: dict[str, SourceClaim] | None,
         ledger: MutationLedger,
     ) -> tuple[str, object] | None:
         """Move the exclusively-owned saves aside, recording what actually moved."""
-        quarantine = await self._loop.run_in_executor(
+        backup = await self._loop.run_in_executor(
             None,
-            self._save_coordinator.quarantine_prune_saves,
+            self._save_coordinator.back_up_prune_saves,
             delete_inventory["exclusive"],
             claims if claims is not None else delete_inventory.get("source_claims"),
         )
-        if quarantine.moved:
-            ledger.mutations.append("save_quarantine")
-        if quarantine.ambiguous and "save_quarantine" not in ledger.ambiguous_mutations:
-            ledger.ambiguous_mutations.append("save_quarantine")
-        if quarantine.failure is None:
+        if backup.moved:
+            ledger.mutations.append("save_files")
+        if backup.ambiguous and "save_files" not in ledger.ambiguous_mutations:
+            ledger.ambiguous_mutations.append("save_files")
+        if backup.failure is None:
             return None
-        return "save_quarantine_failed", quarantine.failure
+        return "save_backup_failed", backup.failure
 
     async def _remove_installed_content(
         self,
@@ -398,7 +398,7 @@ class GroupFinalizer:
             ledger.ambiguous_mutations.append(label)
 
     async def _confirm_absences(self, delete_inventory: dict[str, Any]) -> tuple[str, object] | None:
-        """Require every quarantined save to still be absent before the rows go."""
+        """Require every backed-up save to still be absent before the rows go."""
         absence_claims = delete_inventory.get("source_claims")
         if isinstance(absence_claims, dict) and await self._loop.run_in_executor(
             None, self._save_coordinator.validate_prune_absences, absence_claims

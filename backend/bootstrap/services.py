@@ -514,7 +514,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             romm_api=cfg.adapters.romm_api,
             download_file_store=cfg.adapters.download_file_store,
             adoption_move=cfg.adapters.adoption_move,
-            quarantine_save=save_sync_service.quarantine_local_file,
+            back_up_save=save_sync_service.save_backup.back_up_save_file,
             platform_systems=platform_systems,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
             install_recorder=rom_install_recorder,

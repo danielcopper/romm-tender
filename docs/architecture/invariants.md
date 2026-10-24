@@ -1001,21 +1001,25 @@ Format: **invariant** — tier — enforced by.
   `rom_folders`, `bios_folder`, `saves_root` and `move_roots`, each a fresh reading of the emulator sources and a
   question to the resolver, which reads RetroDECK's settings file and ES-DE's, and a `realpath` of the answer — together
   with the services' own wrappers around them (`_rom_folder`, `_rom_folders`, `_resolve_target`, `_platform_dir`,
-  `_saves_root`), which are what the services call. The firmware timing is the only entry a cost was measured for; every
-  other one is listed from reading its implementation. One other real I/O seam was weighed and kept out — the reason is
-  in the script's docstring, and it is not an exemption; nor is it an inventory of what else touches the disk. **"It's
-  only a read" is the reasoning this rule exists to refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so
-  even a read-only UoW takes the write lock. The database is in WAL, so readers are unaffected — but every other
-  **writer** waits on the lock for up to `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and
-  `FakeUnitOfWork` shares no connection, so no unit test notices. Six call sites had drifted across the rule before
-  anything looked (#1779), for the reason the check exists: nothing at a call site reveals that an injected seam touches
-  the disk. **The rule and the gate come from reading code — no measurement of how long any of those transactions
-  actually held the lock exists, and nothing here should be read as one.** What the check sees is the deadlock rule's
-  matcher unchanged — an **attribute** call naming a listed seam, lexically inside a `with <...>uow_factory()` block in
-  the same function scope — so it inherits every blind spot of that half: a seam behind a helper one level down, an
-  alias to a local, a factory attribute whose name does not end in `uow_factory`, a nested `def`/`lambda` (which resets
-  the scope by design), a seam **passed as a bound method**
-  (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
+  `_saves_root`), which are what the services call; the save backup's two moves, `SaveBackup.back_up_save_file` and
+  `.back_up_claimed_save_file` (a listing of `.romm-backup`, a rename, and for the ordinary backup the removal of copies
+  past its retention), with `_back_up_save`, the adoption renamer's binding of the first; and every save-transfer step
+  (`fetch_server_copy`, `hash_server_copy`, `download_save_file`, `upload_save_file`, `acknowledge_server_head`,
+  `adopt_server_head`, `record_server_head`: a RomM request, a temporary file, or a measure of the local file). The
+  firmware timing is the only entry a cost was measured for; every other one is listed from reading its implementation.
+  One other real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is not an
+  exemption; nor is it an inventory of what else touches the disk. **"It's only a read" is the reasoning this rule
+  exists to refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write
+  lock. The database is in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to
+  `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection,
+  so no unit test notices. Six call sites had drifted across the rule before anything looked (#1779), for the reason the
+  check exists: nothing at a call site reveals that an injected seam touches the disk. **The rule and the gate come from
+  reading code — no measurement of how long any of those transactions actually held the lock exists, and nothing here
+  should be read as one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a
+  listed seam, lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every
+  blind spot of that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name
+  does not end in `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound
+  method** (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
   `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam
   whose implementation _grows_ a file read later. Matching only attribute calls is deliberate: the pure
@@ -1536,28 +1540,29 @@ Format: **invariant** — tier — enforced by.
   survives on the wire today (`NO_MIGRATION` retired with #1004, legacy `slot:null` confirmation with #1276), so the
   rule now guards reintroduction; nothing mechanical detects a new one
 - **Every destructive op has backup-or-confirm; never delete data that exists nowhere else** — test + prompt-only —
-  save-file removals route through the `.romm-backup` funnel (`MatrixExecutor.quarantine_local_file`; the removed-game
-  cleanup's claimed variant is `PruneSaveSupport.quarantine_prune_saves`); every other delete path carries the rule
-  unmechanized. Removed-game cleanup takes the **confirm** leg for one case deliberately: installed ROM content the user
-  did not select for the recovery bundle is deleted with its row. The ROM is re-downloadable from RomM where a save is
-  not, the per-candidate opt-in and its consequence are stated in the confirmation dialog and the user guide, and the
-  row cannot be removed at all without a fresh 404 — so this is a disclosed choice, not an exception that drifted in.
-  The adopt dialog's **replace** exit is the second such case, and it does **not** rest on that justification: the
-  premise is that the content is the user's own — a different rip, a patch, a romhack — which is exactly what the server
-  cannot hand back. What carries it instead is that the user is shown both sides, offered a content check, and chooses
-  between two named outcomes behind a second confirmation ([ADR-0028](../adr/0028-adopted-install-is-an-install.md)). A
-  choice in the game page's ARTWORK tab over an image set in Steam is the third: Steam's copy of the image the user set
-  is cleared before Tender's goes in, and that copy may exist nowhere else, so the picker asks once more — Replace or
-  Cancel — and Cancel changes nothing ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D13;
+  save-file removals route through the `.romm-backup` funnel, the save backup (`SaveBackup.back_up_save_file`; the
+  removed-game cleanup's claimed variant is `SaveBackup.back_up_claimed_save_file`, reached through
+  `PruneSaveSupport.back_up_prune_saves`); every other delete path carries the rule unmechanized. Removed-game cleanup
+  takes the **confirm** leg for one case deliberately: installed ROM content the user did not select for the recovery
+  bundle is deleted with its row. The ROM is re-downloadable from RomM where a save is not, the per-candidate opt-in and
+  its consequence are stated in the confirmation dialog and the user guide, and the row cannot be removed at all without
+  a fresh 404 — so this is a disclosed choice, not an exception that drifted in. The adopt dialog's **replace** exit is
+  the second such case, and it does **not** rest on that justification: the premise is that the content is the user's
+  own — a different rip, a patch, a romhack — which is exactly what the server cannot hand back. What carries it instead
+  is that the user is shown both sides, offered a content check, and chooses between two named outcomes behind a second
+  confirmation ([ADR-0028](../adr/0028-adopted-install-is-an-install.md)). A choice in the game page's ARTWORK tab over
+  an image set in Steam is the third: Steam's copy of the image the user set is cleared before Tender's goes in, and
+  that copy may exist nowhere else, so the picker asks once more — Replace or Cancel — and Cancel changes nothing
+  ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D13;
   `frontend/src/bigpicture/ArtworkPickerModal.test.tsx`, "asks once more before it replaces an image set in Steam, and
   answers to replace it" and "Cancel on the second question replaces nothing"). The icon is not asked about: Tender
   repoints the shortcut and the file the user set stays where it was. That reasoning about the adopt dialog covers the
   **ROM** only: an adoption's Overwrite also replaces save and savestate files, and those take the **backup** leg
-  through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not quarantining a ROM
-  (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is synced nowhere at
-  all. It is the first caller to hand that funnel a directory outside the saves root: it takes the directory it is
-  given, so a savestate's backup lands in `<states>/.romm-backup/`. A BIOS file at an emulator's place is changed only
-  by a "Replace…" the user confirmed on its row. It takes the **backup** leg too, by a path of its own rather than that
+  through the same `SaveBackup.back_up_save_file` — every argument ADR-0028 gives for not backing up a ROM (gigabytes,
+  no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is synced nowhere at all. It is the
+  first caller to hand that funnel a directory outside the saves root: it takes the directory it is given, so a
+  savestate's backup lands in `<states>/.romm-backup/`. A BIOS file at an emulator's place is changed only by a
+  "Replace…" the user confirmed on its row. It takes the **backup** leg too, by a path of its own rather than that
   funnel: once Tender's copy has passed RomM's checksum, the file moves to
   `<data>/backups/bios/<date and time>/<its original absolute path>`, where it stays until the user deletes it. Where
   the link then cannot be placed, it moves back only while its place is still free, never over anything that lies there
@@ -1667,32 +1672,33 @@ Format: **invariant** — tier — enforced by.
   one the test places it in; an emulator in `unread_emulators` wants no place only because no placement names it —
   nothing pins that no placing or removal path reads that set
 - **Every save operation sends RomM the device id `SyncEngine.live_device_id` answers — registered or healed a moment
-  before — and no other: `RommSaveApi.list_saves` and the sync logic (`do_sync_rom_saves`,
-  `MatrixExecutor.sync_rom_saves`, `do_download_save`, `do_upload_save`) take a `LiveDeviceId`, only that entry builds
-  one, and no save service but `SyncEngine` holds the `DeviceRegistry`** — check + test + prompt-only — RomM answers a
-  listing without a device id with no sync row for this device on any save, so the decision reads every save as one this
-  device never touched (the never-touched rows of the decision table, among them a conflict on a save this device is
-  current on); and a stored id the server has since lost (a RomM database wiped or restored) is answered with a 404. An
-  operation that sent the stored id instead would send no id while the device is unregistered, and a dead one after such
-  a wipe. The entry registers or heals the device on every call (one `PUT /api/devices/{id}`), under a lock no caller
-  takes anything beneath, and refuses `server_unreachable` when the registration could not reach RomM, or
-  `device_not_registered` when it failed any other way — RomM, or a proxy in front of it, answered without registering
-  the device (the id-less answer included), or the stored token could not be sent
-  (`docs/architecture/save-file-sync-architecture.md`, "`DeviceRegistry` owns device identity"). Three things keep the
-  rule. basedpyright, in the gate, refuses a stored id or `None` where a `LiveDeviceId` is taken; in basic mode it does
-  not refuse a value typed `Any` — a `dict[str, Any]` read such as `ensure_device_registered()["device_id"]` — nor one
-  an unannotated parameter carries. `scripts/check_live_device_id.py` (AST) fails on a `LiveDeviceId(...)` call or a
-  `typing.cast` naming it anywhere under `backend/` but `SyncEngine.live_device_id`, and on `LiveDeviceId` imported
-  under another name; it does not see the name bound to a variable and called through it, a call reached through
-  `getattr`, a function that builds one and is defined inside the entry itself, a `# type: ignore` or
-  `# pyright: ignore` that hands a plain `str` to a parameter typed `LiveDeviceId`, or `tests/`, where building one is
-  how a test hands an id over. `tests/services/saves/test_device_registry_holder.py` reads every module under
-  `services/saves/` and fails on an annotation naming `DeviceRegistry` anywhere but `SyncEngineConfig` and on a
-  `DeviceRegistry(...)` assigned to an attribute of `self`; an unannotated parameter or attribute holding one, and a
-  registry reached through another object, pass it. Prompt-only: each save operation calls the entry once, before its
-  first request to RomM, and hands the id down; and a new request that names the device takes the id from there —
-  `upload_save`, `download_save_content`, `negotiate_sync` and `confirm_download` take a plain `str`, and are reached
-  today only through code that holds a `LiveDeviceId`
+  before — and no other: `RommSaveApi.list_saves`, the sync logic (`do_sync_rom_saves`, `MatrixExecutor.sync_rom_saves`)
+  and the save transfer's steps that name the device (`SaveTransfer.download_save_file`, `upload_save_file`,
+  `acknowledge_server_head`, `adopt_server_head`) take a `LiveDeviceId`, only that entry builds one, and no save service
+  but `SyncEngine` holds the `DeviceRegistry`** — check + test + prompt-only — RomM answers a listing without a device
+  id with no sync row for this device on any save, so the decision reads every save as one this device never touched
+  (the never-touched rows of the decision table, among them a conflict on a save this device is current on); and a
+  stored id the server has since lost (a RomM database wiped or restored) is answered with a 404. An operation that sent
+  the stored id instead would send no id while the device is unregistered, and a dead one after such a wipe. The entry
+  registers or heals the device on every call (one `PUT /api/devices/{id}`), under a lock no caller takes anything
+  beneath, and refuses `server_unreachable` when the registration could not reach RomM, or `device_not_registered` when
+  it failed any other way — RomM, or a proxy in front of it, answered without registering the device (the id-less answer
+  included), or the stored token could not be sent (`docs/architecture/save-file-sync-architecture.md`,
+  "`DeviceRegistry` owns device identity"). Three things keep the rule. basedpyright, in the gate, refuses a stored id
+  or `None` where a `LiveDeviceId` is taken; in basic mode it does not refuse a value typed `Any` — a `dict[str, Any]`
+  read such as `ensure_device_registered()["device_id"]` — nor one an unannotated parameter carries.
+  `scripts/check_live_device_id.py` (AST) fails on a `LiveDeviceId(...)` call or a `typing.cast` naming it anywhere
+  under `backend/` but `SyncEngine.live_device_id`, and on `LiveDeviceId` imported under another name; it does not see
+  the name bound to a variable and called through it, a call reached through `getattr`, a function that builds one and
+  is defined inside the entry itself, a `# type: ignore` or `# pyright: ignore` that hands a plain `str` to a parameter
+  typed `LiveDeviceId`, or `tests/`, where building one is how a test hands an id over.
+  `tests/services/saves/test_device_registry_holder.py` reads every module under `services/saves/` and fails on an
+  annotation naming `DeviceRegistry` anywhere but `SyncEngineConfig` and on a `DeviceRegistry(...)` assigned to an
+  attribute of `self`; an unannotated parameter or attribute holding one, and a registry reached through another object,
+  pass it. Prompt-only: each save operation calls the entry once, before its first request to RomM, and hands the id
+  down; and a new request that names the device takes the id from there — `upload_save`, `download_save_content`,
+  `negotiate_sync` and `confirm_download` take a plain `str`, and are reached today only through code that holds a
+  `LiveDeviceId`
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes
@@ -1830,21 +1836,25 @@ Format: **invariant** — tier — enforced by.
   binary's header is read and written at the wrong offsets, and only a vector that exercises the moved field notices
 - **An adopt of a head this device must confirm — one the core marks `acknowledge` in the sync, and Keep Local's adopt
   without an upload always — records its baseline only after `POST /api/saves/{id}/downloaded` succeeded; a failed
-  acknowledgement records nothing, and the status read records no such adopt** — test + prompt-only — the core sets
+  acknowledgement records nothing, and the status read records no such adopt; Keep Local's adopt records the sync
+  boundary as the sync's does, recording no core, so the last upload's stays** — test + prompt-only — the core sets
   `acknowledge` on an adopt of a head this device is not current on (romm-gavel `SPEC.md`, "Bookkeeping"). Without the
   acknowledgement RomM keeps the device not current on that head, so a baseline recorded anyway would make the next
   local edit read as one under a head that moved past it — a conflict no other device caused — while recording nothing
-  leaves the next sync to decide the same adopt again. The rule spans three modules: `MatrixExecutor._dispatch_skip`
-  (`services/saves/sync_engine/matrix.py`) confirms through the retry strategy and lets a failure reach
-  `_dispatch_sync_action`, which reports it as that file's error; `RollbackOrchestrator._resolve_conflict_keep_local`
-  (`sync_engine/rollback.py`) confirms before its adopt and lets a failure end the resolution;
-  `StatusService._partition_outcomes` (`services/saves/status/service.py`) records only an adopt without it, because
-  showing a page never writes to RomM. Enforced by
-  `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
-  `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges` and
+  leaves the next sync to decide the same adopt again. One step holds the order: `SaveTransfer.adopt_server_head`
+  (`services/saves/save_transfer.py`) confirms through the retry strategy and records only once that succeeded. Two
+  callers take it: `MatrixExecutor._dispatch_skip` (`services/saves/sync_engine/matrix.py`), which lets a failure reach
+  `_dispatch_sync_action` to be reported as that file's error, and `RollbackOrchestrator._resolve_conflict_keep_local`
+  (`sync_engine/rollback.py`), which lets a failure end the resolution. `SaveTransfer.record_server_head` records
+  without confirming, for an adopt the core does not mark; `StatusService._partition_outcomes`
+  (`services/saves/status/service.py`) records only such an adopt, because showing a page never writes to RomM. Enforced
+  by `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
+  `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges`,
+  `tests/services/saves/sync_engine/test_keep_local.py::TestKeepLocalAdoptsAsTheSyncDoes` and
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`
-  reads `acknowledge` and confirms the head through the retry strategy before it records. Detail:
-  `docs/architecture/save-file-sync-architecture.md`, "Outcomes"
+  adopts through `SaveTransfer.adopt_server_head` when it reads `acknowledge`, and records through
+  `SaveTransfer.record_server_head` only when it does not. Detail: `docs/architecture/save-file-sync-architecture.md`,
+  "Outcomes"
 - **`applied_launch_options` is written only by the six recorded-state writer sites (sync ack-commit, download-complete,
   adopt-complete, uninstall, home-migration, version-switch), each recording the exact command the frontend wrote;
   excluded from the sync UPSERT; the only sanctioned reset is Force Full Sync's clear-to-NULL (a wrong recorded value is

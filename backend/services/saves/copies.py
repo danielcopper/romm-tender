@@ -4,7 +4,7 @@ Owns the per-save "Copy to slot…" flow: it takes one server save (from a
 named slot or the read-only legacy no-slot bucket) and copies its content
 into a target slot, which becomes the ROM's active/confirmed slot with the
 copied save as its current save. The source save is never deleted — this is
-a copy, not a move. The actual file/server writes go through SyncEngine;
+a copy, not a move. The actual file/server writes go through SaveTransfer;
 this class owns only the orchestration (pre-flight sync, make-current,
 POST into the target). Persistence is the operation's own narrow Unit of
 Work (ADR-0006).
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import DebugLogger, RetryStrategy, RommSaveApi, UnitOfWorkFactory
     from services.saves.rom_info import RomInfoService
+    from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine import SyncEngine
 
 
@@ -45,16 +46,16 @@ if TYPE_CHECKING:
 class SaveCopyServiceConfig:
     """Frozen wiring bundle handed to ``SaveCopyService.__init__``.
 
-    Mirrors :class:`VersionsServiceConfig` — the copy flow reuses the same
-    rollback-orchestration machinery (per-ROM lock, pre-flight sync, the
-    download/upload workers) — minus ``save_file_store``: every file write
-    routes through ``sync_engine``. Holds the live ``settings.json`` dict
-    (default-slot seeding), the Unit-of-Work factory (the transactional seam
-    over the SQLite repositories), the peer save sub-services consumed during
-    orchestration (sync_engine, whose ``live_device_id`` answers the device id,
-    and rom_info), the core resolver used to stamp the upload
-    emulator tag, the Protocol-typed RomM adapter and retry strategy, the
-    backend's event loop, the standard-library logger, and the ``DebugLogger`` seam.
+    Mirrors :class:`VersionsServiceConfig` field for field — the copy flow
+    reuses the same orchestration (per-ROM lock, pre-flight sync). Holds the
+    live ``settings.json`` dict (default-slot seeding), the Unit-of-Work
+    factory (the transactional seam over the SQLite repositories), the peer
+    save sub-services consumed during orchestration (sync_engine, whose
+    ``live_device_id`` answers the device id, and rom_info), the core resolver
+    used to stamp the upload emulator tag, the Protocol-typed RomM adapter and
+    retry strategy, the backend's event loop, the standard-library logger, the
+    ``DebugLogger`` seam, and the save transfer every file write of the copy
+    goes through.
     """
 
     settings: dict[str, Any]
@@ -67,6 +68,7 @@ class SaveCopyServiceConfig:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     log_debug: DebugLogger
+    save_transfer: SaveTransfer
 
 
 class SaveCopyService:
@@ -89,6 +91,7 @@ class SaveCopyService:
         self._loop = config.loop
         self._logger = config.logger
         self._log_debug = config.log_debug
+        self._save_transfer = config.save_transfer
 
     def _local_component_filenames(self, rom_id: int) -> list[str]:
         """Distinct local save filenames on disk for the ROM (one per extension).
@@ -205,11 +208,11 @@ class SaveCopyService:
         1. Locate the chosen save in the (unfiltered) server list; a missing id
            is ``version_deleted``.
         2. Download the chosen save's content onto the canonical local file
-           (quarantines the current local file first, #965). Where this device
+           (backs the current local file up first, #965). Where this device
            cannot write it, the copy is ``copy_failed``; a RomM error raises on.
         3. Make the target the ROM's active/confirmed slot
            (:meth:`RomSaveSyncState.confirm_slot`) — the upload resolves its slot
-           purely from ``active_slot`` (``_resolve_upload_slot``), so this must
+           purely from ``active_slot`` (:meth:`RomSaveSyncState.upload_slot`), so this must
            precede the POST for the copy to land in the target.
         4. POST that content into the now-active target slot
            (``server_save=None`` → a new save, ``overwrite=false`` → the 409
@@ -235,10 +238,10 @@ class SaveCopyService:
         local_path = os.path.join(saves_dir, canonical)
 
         # Bring the chosen save's content down onto the canonical local file. The
-        # existing local file (the current slot's save) is quarantined into
+        # existing local file (the current slot's save) is backed up into
         # ``.romm-backup`` first, so nothing that lives only on disk is lost.
         try:
-            self._sync_engine.do_download_save(
+            self._save_transfer.download_save_file(
                 target_save, saves_dir, canonical, save_state, device_id, system, default_slot
             )
         except OSError as e:
@@ -255,7 +258,7 @@ class SaveCopyService:
         save_state.confirm_slot(target_slot)
 
         try:
-            self._sync_engine.do_upload_save(
+            self._save_transfer.upload_save_file(
                 rom_id,
                 local_path,
                 canonical,
@@ -438,7 +441,7 @@ class SaveCopyService:
 
             # Dedup pre-check: if the chosen save's content is already present in
             # the target slot, a copy would make RomM dedup server-side and
-            # do_upload_save would adopt the pre-existing save as current —
+            # the upload would adopt the pre-existing save as current —
             # churning the tracked save for no gain (which surfaced the current
             # save in its own version history). Detect it up front via the
             # content_hash RomM populates on each save and refuse without touching
