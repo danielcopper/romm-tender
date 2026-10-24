@@ -1780,7 +1780,7 @@ it, for the focused platform:
   `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and fails on any phrase the module
   builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and `biosGroup.test.ts` over the
   region names and a file's place in a group. **All three SWEEP the set they search rather than naming it** — every
-  non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
+  non-test `.tsx` under `frontend/src/bigpicture`, `frontend/src/desktop` or `frontend/src/shared`, via
   `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two while three
   surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted. Deriving the
   set from who imports the module would be worse still, since a surface wording a state for itself is precisely one that

@@ -1191,8 +1191,9 @@ describe("no surface words a summary itself", () => {
     );
   });
 
-  it("searches shared/ as well as bigpicture/", () => {
+  it("searches desktop/ and shared/ as well as bigpicture/", () => {
     const paths = componentSources().map((entry) => entry.path);
+    expect(paths.filter((path) => path.startsWith("desktop/"))).not.toEqual([]);
     expect(paths.filter((path) => path.startsWith("shared/"))).not.toEqual([]);
   });
 });

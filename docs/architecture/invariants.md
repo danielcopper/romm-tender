@@ -1459,12 +1459,12 @@ Format: **invariant** — tier — enforced by.
   say a game will not start on a guess about its disc. Every surface words the states through
   `frontend/src/utils/biosSummary.ts`, sole holder of their order. **The module's own drift lock is a test that reads
   components as SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers from, with the
-  ratio's twin in `biosHeldRatio.test.ts`), sweeping every non-test `.tsx` under `frontend/src/bigpicture` or
-  `frontend/src/shared` (`frontend/src/test-utils/componentSources.ts`) rather than naming them. **What neither lock can
-  catch is a component inventing a NEW wording for one of these states**: only a copied phrase is searchable. Two limits
-  of the sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts` beside its component is
-  unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose today), and
-  `frontend/src/utils` is out of scope because that is where the phrases legitimately live
+  ratio's twin in `biosHeldRatio.test.ts`), sweeping every non-test `.tsx` under `frontend/src/bigpicture`,
+  `frontend/src/desktop` or `frontend/src/shared` (`frontend/src/test-utils/componentSources.ts`) rather than naming
+  them. **What neither lock can catch is a component inventing a NEW wording for one of these states**: only a copied
+  phrase is searchable. Two limits of the sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into
+  a `.ts` beside its component is unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS
+  prose today), and `frontend/src/utils` is out of scope because that is where the phrases legitimately live
 - **A one-of group is ONE requirement, judged by the regions its options serve — and an option never makes its row
   required** — test + prompt-only — `tests/domain/test_firmware_groups.py` pins the verdict (every state, a region
   nobody checked keeping a covered group off `met`, a stated uncovered region staying missing beside an unchecked one,
