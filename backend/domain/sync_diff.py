@@ -92,11 +92,11 @@ def classify_roms(
     ``platform_name`` is deliberately excluded from the changed comparison:
     it is a derived display field, never persisted on the ``roms`` row. The
     registry side resolves it from the enabled-platforms-only slug→name map
-    (falling back to the bare slug for a disabled platform), while the fetch
-    side gets RomM's full display name, so a divergence between the two can
-    never be healed by an apply (the upsert writes only
-    platform_slug/name/fs_name) — comparing it produced a permanent phantom
-    "changed" delta (#1292). Platform display renames are diffed separately by
+    (falling back to the bare slug for a disabled platform), while an entry
+    carries RomM's display name, so a divergence between the two can never be
+    healed by an apply (the upsert writes only platform_slug/name/fs_name) —
+    comparing it produced a permanent phantom "changed" delta (#1292). Platform
+    display renames are diffed separately by
     ``compute_platform_collection_diff``. ``platform_name`` is still read here
     for the disabled-platform stale count, which intentionally keys on the
     live-resolved display name.
@@ -753,14 +753,16 @@ def compute_platform_collection_diff(
     platform_rom_ids: set[int] | None,
     last_synced_platforms: list[str],
     create_platform_groups: bool,
+    platform_names: Mapping[str, str],
     *,
-    kept_platform_names: Collection[str] = (),
+    kept_platform_slugs: Collection[str] = (),
 ) -> dict[str, Any]:
     """Diff future platform-group collections against last-synced platforms.
 
     Returns ``{"has_changes": bool, "added_count": int, "removed_count": int}``.
-    Uses ``should_include_in_platform_collection`` to decide which ROMs
-    qualify under the current ``create_platform_groups`` setting. Platform
+    Each entry is filed by :func:`platform_collection_name` over
+    *platform_names* and its ``platform_slug``, by the rule the apply files its
+    bound rows by. The ``platform_name`` an entry carries is not read. Platform
     names are compared case-insensitively, for the reason
     :func:`compute_collection_diff` gives.
 
@@ -771,19 +773,25 @@ def compute_platform_collection_diff(
     ``bind_rom_id`` target, a fetched id present in ``platform_rom_ids``. Keying
     the predicate on the entry's own ``rom_id`` would drop a fully-rebinding
     platform out of ``future_platforms`` and mis-count it as removed (#1417); the
-    apply path, which reads the post-commit bound rows, never had this bug.
+    apply path, which reads the post-commit bound rows, never had this bug. Its
+    name, unlike its membership, comes from its own ``platform_slug``, the bound
+    version's; the two slugs differ only where RomM renamed a platform's slug
+    under the same platform id, since a sibling group is scoped by platform id,
+    and naming it by the target's would need each entry's pre-collapse slug
+    passed in for that case alone.
 
-    *kept_platform_names* name the platform collections the stale removal's
-    kept rows stay in — a version gone from RomM, fetched by nothing — which the
-    apply keeps whatever the setting.
+    *kept_platform_slugs* are the platforms of the stale removal's kept rows — a
+    version gone from RomM, fetched by nothing — whose collections the apply
+    keeps whatever the setting, named through the same *platform_names*.
     """
-    future_platforms: set[str] = set(kept_platform_names)
+    future_platforms = {platform_names.get(slug, slug) for slug in kept_platform_slugs}
     for sd in shortcuts_data:
         rid = sd.get(BIND_ROM_ID_KEY, sd["rom_id"])
-        if should_include_in_platform_collection(rid, platform_rom_ids, create_platform_groups):
-            pname = sd.get("platform_name", "")
-            if pname:
-                future_platforms.add(pname)
+        name = platform_collection_name(
+            rid, sd["platform_slug"], platform_rom_ids, platform_names, create_platform_groups
+        )
+        if name is not None:
+            future_platforms.add(name)
 
     future = _spelling_by_fold(future_platforms).keys()
     previous = _spelling_by_fold(last_synced_platforms).keys()

@@ -691,14 +691,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/domain/test_sync_diff.py::TestGoneFromRommMarks` and `tests/contract/test_gone_from_romm_mark.py` for the mark;
   `tests/domain/test_sync_diff.py::TestRebuiltRowsFiledAsKept` and
   `tests/services/library/test_sync_orchestrator.py::TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedOrFetched`
-  for a rebuilt row's platform collection. Prompt-only: the collection records are read before the run's first unit
-  (`do_read_collection_listed_rom_ids`), the platform listing is the run's own
-  (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk dispatcher names the unit's kind
-  on every commit, the preview and the apply both sort through `services/library/_stale_rows.py::settle_stale_rows` with
-  the group keys `domain/sync_diff.py::group_keys_of` reads for the run's synced ROMs, and the preview names a kept
-  row's platform collection through `services/library/_stale_rows.py::with_kept_platform_names`, which must agree with
-  `SyncReporter._names_with_bound_platforms_kept`, and the preview and the apply both pick the rebuilt rows they file as
-  kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`
+  for a rebuilt row's platform collection, and
+  `tests/services/library/test_sync_orchestrator.py::TestThePreviewNamesAPlatformCollectionAsTheApplyDoes` for the name
+  the preview counts a platform collection under, a rebuilt row's and a platform only collections reach alike.
+  Prompt-only: the collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the
+  platform listing is the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk
+  dispatcher names the unit's kind on every commit, the preview and the apply both sort through
+  `services/library/_stale_rows.py::settle_stale_rows` with the group keys `domain/sync_diff.py::group_keys_of` reads
+  for the run's synced ROMs, and the preview names every platform collection its diff counts by the name the names
+  `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
+  entry's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same lookup in
+  `compute_platform_collection_diff` — which must agree with `SyncReporter._names_with_bound_platforms_kept`, and the
+  preview and the apply both pick the rebuilt rows they file as kept through
+  `domain/sync_diff.py::rebuilt_rows_filed_as_kept`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown` (which pins

@@ -942,11 +942,15 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   stopped run's included, rewrites that cache and carries forward the name of each platform outside the live work queue
   a bound row is still on (`SyncReporter._names_with_bound_platforms_kept`), so a cancelled or paused run in between
   does not rename the collection to the slug. The preview reads the same name (`do_read_kept_platform_names`, through
-  `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. Force Full Sync leaves
-  the routes in place. The preview asks the same question for the same rows, through the same
-  `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. Both
-  judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
-  apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes
+  `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. Its
+  platform-collection diff names every platform it counts as the apply does, by the live name, or, for a platform
+  outside the live names that a kept row or an emitted entry is on, that cached name, else the slug — an emitted entry
+  through `domain/sync_diff.py::platform_collection_name`, a kept row by the same lookup — never by the `platform_name`
+  an entry carries, which a collection's skip fills with the slug and a collection's fetch with RomM's display name
+  (#2558 D1). Force Full Sync leaves the routes in place. The preview asks the same question for the same rows, through
+  the same `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes.
+  Both judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`):
+  the apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes
   nothing, lays the keys its fetch stamped over the same read. **Only the apply records what it established**
   (`StaleSort.gone_from_romm_marks`, written in the finalize's write UoW by `SyncReporter.finalize_per_unit_run`): an
   asked row RomM answered with a proven 404 is marked `roms.gone_from_romm = 'not_found'`, one RomM returned has its
