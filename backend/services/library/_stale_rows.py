@@ -95,11 +95,11 @@ async def settle_stale_rows(
 async def with_kept_platform_names(
     platform_slugs: Iterable[str], live: dict[str, str], *, read_kept_names: ReadKeptNamesFn
 ) -> dict[str, str]:
-    """*live*, plus the cached name of each of *platform_slugs* outside it, for the preview.
+    """*live*, plus the cached name of each of *platform_slugs* outside it the cache holds one for, for the preview.
 
-    The preview passes the platforms of its emitted entries and of the stale
-    removal's kept rows: every platform its platform-collection diff names.
-    Must answer, for each, the name the apply's finalize carries forward
+    *platform_slugs* must cover every platform the preview's
+    platform-collection diff names. Must answer, for each, the name the apply's
+    finalize carries forward
     (``SyncReporter._names_with_bound_platforms_kept``). *read_kept_names* is
     asked only when such a platform exists.
     """

@@ -357,10 +357,10 @@ removal), so foreign keys are deliberately sparse:
 - **`platform_slug` → no FK.** Carried on `roms` / `rom_installs` / `downloaded_bios` / `firmware_cache` as a plain
   denormalized RomM platform slug. There is no `platforms` table to reference —
   [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md)
-  dropped the `Platform` aggregate — so it is just a string. The platform _display name_ is not stored on the row: it
-  resolves live from RomM during each sync and is cached for offline reads in a single `kv_config`
-  `platform_slug → display_name` blob (refreshed every sync), degrading to the bare slug only when RomM is unreachable
-  and the cache is empty.
+  dropped the `Platform` aggregate — so it is just a string. The platform _display name_ is not stored on the row: a
+  sync takes it from RomM's platform listing for each platform in its work queue and caches it in a single `kv_config`
+  `platform_slug → display_name` blob (refreshed every sync). The Steam collection of a platform outside the work queue,
+  the game page and a platform removal's answer take the cached name, and the bare slug where the cache holds none.
 
 The split moved the FK policy from the epic's "one FK only" (written for the mega-table world) to "CASCADE for the
 per-ROM ownership relationships the split introduced; no FK for cross-aggregate references" — same intent, applied to

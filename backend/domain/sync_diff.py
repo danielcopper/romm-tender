@@ -93,12 +93,11 @@ def classify_roms(
     it is a derived display field, never persisted on the ``roms`` row. The
     registry side resolves it from the enabled-platforms-only slug→name map
     (falling back to the bare slug for a disabled platform), while an entry
-    carries RomM's display name — or the slug, where a collection's skip
-    rebuilt it — so a divergence between the two can never be healed by an
-    apply (the upsert writes only platform_slug/name/fs_name) — comparing it
-    produced a permanent phantom "changed" delta (#1292). Platform display
-    renames are diffed separately by ``compute_platform_collection_diff``, which
-    names a platform by its slug. ``platform_name`` is still read here
+    carries RomM's display name, so a divergence between the two can never be
+    healed by an apply (the upsert writes only platform_slug/name/fs_name) —
+    comparing it produced a permanent phantom "changed" delta (#1292). Platform
+    display renames are diffed separately by
+    ``compute_platform_collection_diff``. ``platform_name`` is still read here
     for the disabled-platform stale count, which intentionally keys on the
     live-resolved display name.
 
@@ -762,11 +761,9 @@ def compute_platform_collection_diff(
 
     Returns ``{"has_changes": bool, "added_count": int, "removed_count": int}``.
     Each entry is filed by :func:`platform_collection_name` over
-    *platform_names*, as the apply files its bound rows, so the name comes from
-    the entry's ``platform_slug``. The ``platform_name`` an entry carries is not
-    read: a row a collection skip rebuilt carries its slug there, and a row a
-    collection fetched carries RomM's display name, neither of which the apply
-    files by. Platform names are compared case-insensitively, for the reason
+    *platform_names* and its ``platform_slug``, by the rule the apply files its
+    bound rows by. The ``platform_name`` an entry carries is not read. Platform
+    names are compared case-insensitively, for the reason
     :func:`compute_collection_diff` gives.
 
     A rebind entry (see :func:`_rebind_entry`) is keyed to the vanished bound
@@ -776,7 +773,12 @@ def compute_platform_collection_diff(
     ``bind_rom_id`` target, a fetched id present in ``platform_rom_ids``. Keying
     the predicate on the entry's own ``rom_id`` would drop a fully-rebinding
     platform out of ``future_platforms`` and mis-count it as removed (#1417); the
-    apply path, which reads the post-commit bound rows, never had this bug.
+    apply path, which reads the post-commit bound rows, never had this bug. Its
+    name, unlike its membership, comes from its own ``platform_slug``, the bound
+    version's; the two slugs differ only where RomM renamed a platform's slug
+    under the same platform id, since a sibling group is scoped by platform id,
+    and naming it by the target's would need each entry's pre-collapse slug
+    passed in for that case alone.
 
     *kept_platform_slugs* are the platforms of the stale removal's kept rows — a
     version gone from RomM, fetched by nothing — whose collections the apply
