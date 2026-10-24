@@ -3,7 +3,7 @@
  *
  * Updated by:
  *   - panel load init in index.tsx (getMigrationStatus endpoint)
- *   - refreshMigrationState return value in MainPage, RomMGameInfoPanel,
+ *   - refreshMigrationState return value in MainPage, useMigrationRefresh,
  *     launchInterceptor, sessionManager
  *   - clearMigration() from MigrationBlockedPage, on a successful migration and
  *     on a successful dismiss

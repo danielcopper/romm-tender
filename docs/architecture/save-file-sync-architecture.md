@@ -1194,13 +1194,13 @@ frontend ones through the `refresh_migration_state` endpoint, the post-exit one 
 directly, and backend start by calling it as a start-up step. Running on every trigger is cheap: it has an early-return
 guard that exits when the home has not changed since the last call.
 
-| When             | Where (code location)                                                  | Why                                                                                    |
-| ---------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Backend start    | `Application.run_startup_repairs` in `bootstrap/application.py`        | Catches changes that occurred while the backend was not running                        |
-| QAM open         | `MainPage.tsx` mount `useEffect`                                       | User navigating via QAM sees current state when Settings is one tap away               |
-| Game-detail open | `RomMGameInfoPanel.tsx` `useEffect([appId])`                           | Per-game navigation refreshes state when the user browses without launching            |
-| Pre-game-launch  | `launchInterceptor.ts`                                                 | Catches a home moved since the prior session, before the launch it would affect        |
-| Post-game-exit   | `SessionLifecycleService.finalize` (backend, after the post-exit sync) | Refreshes the pending state after every session; the payload rides the finalize result |
+| When             | Where (code location)                                                          | Why                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Backend start    | `Application.run_startup_repairs` in `bootstrap/application.py`                | Catches changes that occurred while the backend was not running                        |
+| QAM open         | `MainPage.tsx` mount `useEffect`                                               | User navigating via QAM sees current state when Settings is one tap away               |
+| Game-detail open | `useMigrationRefresh` in `frontend/src/utils/migrationRefresh.ts`, per `appId` | Per-game navigation refreshes state when the user browses without launching            |
+| Pre-game-launch  | `launchInterceptor.ts`                                                         | Catches a home moved since the prior session, before the launch it would affect        |
+| Post-game-exit   | `SessionLifecycleService.finalize` (backend, after the post-exit sync)         | Refreshes the pending state after every session; the payload rides the finalize result |
 
 ## Slot Deletion
 

@@ -18,7 +18,6 @@
  */
 
 import { useState, useEffect, useRef, useCallback, FC } from "react";
-import { refreshMigrationState, logError } from "../api/backend";
 import { useAchievements } from "../utils/achievements";
 import { useBiosTab } from "./BiosTab";
 import { GamePageTabs } from "./GamePageTabs";
@@ -26,7 +25,8 @@ import { bindRomInState, loadData, openingTab, type PanelReadSeqs, type PanelSta
 import { announceOwnBiosChange, rereadBiosAnswer, wirePanelEvents, type PanelEventContext } from "./panelEvents";
 import { useSaveSlotsLoad } from "./panelSlotsLoad";
 import { buildPanelTabs } from "./panelTabContent";
-import { setMigrationStatus, useMigrationStatus } from "../utils/migrationStore";
+import { useMigrationStatus } from "../utils/migrationStore";
+import { useMigrationRefresh } from "../utils/migrationRefresh";
 import { useSettingsResetState } from "../utils/settingsResetStore";
 import { VersionErrorCard } from "./VersionErrorCard";
 import { useVersionError } from "../utils/connectionState";
@@ -106,13 +106,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   const settingsReset = useSettingsResetState();
   const stranded = useStrandedAnswer() !== null;
 
-  useEffect(() => {
-    refreshMigrationState()
-      .then(({ retrodeck }) => {
-        setMigrationStatus(retrodeck);
-      })
-      .catch((e) => logError(`Failed to refresh migration state: ${e}`));
-  }, [appId]);
+  useMigrationRefresh(appId);
 
   useEffect(() => {
     let cancelled = false;
