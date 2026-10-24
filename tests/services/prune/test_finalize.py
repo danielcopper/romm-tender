@@ -325,7 +325,7 @@ class TestCascadeStopsPartway:
         result = await _finish(fixture, rows, ledger=ledger)
 
         assert result["status"] == "partial"
-        assert ledger.mutations == ["save_backup"]
+        assert ledger.mutations == ["save_files"]
 
     @pytest.mark.parametrize("ambiguous", [True, False])
     async def test_a_backup_that_moved_files_before_failing_carries_its_ambiguity(self, ambiguous):
@@ -340,8 +340,8 @@ class TestCascadeStopsPartway:
 
         assert result["reason"] == "save_backup_failed"
         assert result["message"] == "parent fsync failed"
-        assert ledger.mutations == ["save_backup"]
-        assert ledger.ambiguous_mutations == (["save_backup"] if ambiguous else [])
+        assert ledger.mutations == ["save_files"]
+        assert ledger.ambiguous_mutations == (["save_files"] if ambiguous else [])
 
     async def test_a_failed_content_removal_stops_before_the_artifacts(self):
         rows = [_rom(1)]

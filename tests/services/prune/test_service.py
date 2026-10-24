@@ -2236,7 +2236,7 @@ async def test_partial_adapter_outcomes_enter_actual_and_ambiguous_mutation_ledg
                 moved=["/saves/game.srm"], ambiguous=True, failure="save parent fsync failed"
             ),
         )
-        category = "save_backup"
+        category = "save_files"
     else:
         monkeypatch.setattr(
             harness.artifacts,

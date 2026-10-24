@@ -332,9 +332,9 @@ class GroupFinalizer:
             claims if claims is not None else delete_inventory.get("source_claims"),
         )
         if backup.moved:
-            ledger.mutations.append("save_backup")
-        if backup.ambiguous and "save_backup" not in ledger.ambiguous_mutations:
-            ledger.ambiguous_mutations.append("save_backup")
+            ledger.mutations.append("save_files")
+        if backup.ambiguous and "save_files" not in ledger.ambiguous_mutations:
+            ledger.ambiguous_mutations.append("save_files")
         if backup.failure is None:
             return None
         return "save_backup_failed", backup.failure
