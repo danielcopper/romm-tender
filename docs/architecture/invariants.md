@@ -628,15 +628,19 @@ Format: **invariant** — tier — enforced by.
   is where the sort would put it had the collection been fetched instead;
   `tests/domain/test_sync_diff.py::TestRebuiltRowsFiledAsKept` pins the rule and
   `tests/services/library/test_sync_orchestrator.py::TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedOrFetched`
-  the preview and the apply agreeing, skipped or fetched, a platform the run did not read, and a stopped run. The rule
-  spans the domain sort, the reader, the reporter's commit, the chunk dispatcher, the fetcher's exact-id question
+  the preview and the apply agreeing, skipped or fetched, a platform the run did not read, and a stopped run, and
+  `tests/services/library/test_sync_orchestrator.py::TestThePreviewNamesAPlatformCollectionAsTheApplyDoes` the two
+  naming a platform collection alike where a platform's slug and name differ. The rule spans the domain sort, the
+  reader, the reporter's commit, the chunk dispatcher, the fetcher's exact-id question
   (`LibraryFetcher.ask_romm_for_roms`) and the orchestrator, and the preview and the apply each read it — through
   `services/library/_stale_rows.py::settle_stale_rows` with the same group keys, which is prompt-only, as is that the
   chunk dispatcher names the unit's kind on every commit, that the listing comes off the run state, and that the preview
-  names a kept row's platform collection through `services/library/_stale_rows.py::with_kept_platform_names`, which must
-  agree with `SyncReporter._names_with_bound_platforms_kept`, and that both pick the rebuilt rows they file as kept
-  through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`. **What breaks without it:** a kept row the preview counts
-  as a removal offers Apply on every preview; a game only a collection delivers loses its shortcut on every sync after a
+  names every platform collection its diff counts, a kept row's and an emitted entry's alike, through
+  `domain/sync_diff.py::platform_collection_name` over the names
+  `services/library/_stale_rows.py::with_kept_platform_names` answers, which must agree with
+  `SyncReporter._names_with_bound_platforms_kept`, and that both pick the rebuilt rows they file as kept through
+  `domain/sync_diff.py::rebuilt_rows_filed_as_kept`. **What breaks without it:** a kept row the preview counts as a
+  removal offers Apply on every preview; a game only a collection delivers loses its shortcut on every sync after a
   switch to a version the collection does not list; a kept version never asked about keeps a mark RomM disproved, or
   never gets the one the cleanup needs; a removal on a platform read whole takes a game gone from RomM out of Steam with
   its playtime and collections; a rule read off the collection stamps alone removes a game gone from RomM at the second

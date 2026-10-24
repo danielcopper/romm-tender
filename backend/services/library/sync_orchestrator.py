@@ -406,14 +406,13 @@ class SyncOrchestrator:
             stale = [rid for rid in stale if rid in removed_ids]
             rebuilt = {rom["id"]: rom["platform_slug"] for rom in all_roms if rom["id"] in classify_skipped}
             kept += stale_rows_of(rebuilt_rows_filed_as_kept(rebuilt, set(slug_to_name), platform_rom_ids), registry)
-            kept_names = await with_kept_platform_names(
-                kept,
+            platform_names = await with_kept_platform_names(
+                {row.platform_slug for row in kept} | {sd["platform_slug"] for sd in emitted},
                 slug_to_name,
                 read_kept_names=lambda slugs: self._loop.run_in_executor(
                     None, self._local_library_reader.do_read_kept_platform_names, slugs
                 ),
             )
-            kept_platform_names = {kept_names.get(row.platform_slug, row.platform_slug) for row in kept}
             disabled_count = count_disabled_platform_removals(stale, registry, platform_name_set)
             # Cover-only work (#1386): count the bound fetched ROMs whose server
             # cover fingerprint changed and whose cover is not set in Steam, by
@@ -496,7 +495,8 @@ class SyncOrchestrator:
                         platform_rom_ids,
                         last_synced_platforms,
                         self._settings.get("collection_create_platform_groups", False),
-                        kept_platform_names=kept_platform_names,
+                        platform_names,
+                        kept_platform_slugs={row.platform_slug for row in kept},
                     ),
                 },
                 "new_names": [s["name"] for s in new[:10]],
