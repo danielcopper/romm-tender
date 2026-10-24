@@ -136,12 +136,13 @@ class RuleReading:
     that named a directory without saying where the name came from would be
     the silent kind of claim this project refuses.
 
-    ``cwd`` is the working folder the launch will use where the asker named
-    one — like ``content_path``, a value the caller states rather than a
-    read — and ``None`` where it was not named. The MAME rule with its own
-    paths anchors a relative tree there instead of leaving it unresolvable;
-    PUAE's member check resolves against the same directory and does not
-    take it yet (``_puae_class_of``, #597).
+    ``cwd`` is the working directory the launch's process runs in where the
+    asker named one — the folder the caller states, read inside RetroDECK's
+    sandbox the way the save folders read it (#647 D2, #660) — and ``None``
+    where it was not named. The MAME rule with its own paths anchors a
+    relative tree there instead of leaving it unresolvable, and says so in
+    ``ModeChoice.reads_cwd``; PUAE's member check resolves against the same
+    directory and does not take it yet (``_puae_class_of``, #597).
     """
 
     option_values: Mapping[str, str | None]
@@ -185,6 +186,10 @@ class ModeChoice:
     archived member. A mode whose groups carry such a token and a choice that
     fills none of it is a build mistake and fails at apply time, exactly the
     way a mode name the card does not state does.
+
+    ``reads_cwd`` says the decision rests on ``RuleReading.cwd``: a place it
+    states was joined to the working directory, so the answer carries what
+    the resolver established about that directory (#660).
     """
 
     mode: str | None
@@ -192,6 +197,7 @@ class ModeChoice:
     caveats: tuple[Caveat, ...] = ()
     readings: tuple[OptionReading, ...] = ()
     fills: Mapping[str, tuple[str, ...]] = _NO_FILLS
+    reads_cwd: bool = False
 
 
 def _value_unestablished(core: str, option_key: str) -> Caveat:
@@ -958,13 +964,15 @@ def _mame_unresolvable(
 
 
 def _mame_at_cwd(target: str, cwd: str | None) -> str | None:
-    """A relative tree resolved against the working folder the caller named — or ``None``.
+    """A relative tree resolved against the working directory the process runs in — or ``None``.
 
     The frontend process opens a relative tree from its own working
-    directory, so a named *cwd* (a host path) completes it, normalised the
-    way MAME's other working-directory joins are. A tree carrying ``$VAR``
-    is expanded from the process's environment first (options.cpp:531-569),
-    which no working folder settles, so it stays unresolved.
+    directory, so *cwd* (a host path: the folder the caller named, or the
+    one RetroDECK's sandbox starts the process in instead) completes it,
+    normalised the way MAME's other working-directory joins are. A tree
+    carrying ``$VAR`` is expanded from the process's environment first
+    (options.cpp:531-569), which no working folder settles, so it stays
+    unresolved.
     """
     if cwd is None or "$" in target:
         return None
@@ -982,7 +990,7 @@ def _mame_redirected(key: str, path: str, options_file: str | None) -> Caveat:
 
 
 def _mame_redirected_at_cwd(key: str, tree: str, path: str, options_file: str | None) -> Caveat:
-    """The redirect a relative tree makes once the caller names the working folder.
+    """The redirect a relative tree makes once the working directory is known.
 
     The same statement as an absolute tree's (:func:`_mame_redirected`), code
     and data alike, because it is the same fact: the emulator writes at
@@ -992,9 +1000,9 @@ def _mame_redirected_at_cwd(key: str, tree: str, path: str, options_file: str | 
     return Caveat(
         CAVEAT_SAVE_ROOT_REDIRECTED,
         f"MAME's own paths leave its {key} relative ({tree!r}), which the frontend process "
-        f"opens from its working directory — the folder this question names — so it lands at "
-        f"{path!r}; the standard answer below is where the frontend would look, not where this "
-        "emulator writes",
+        "opens from its working directory — the one it runs in for the folder this question names "
+        f"— so it lands at {path!r}; the standard answer below is where the frontend would look, "
+        "not where this emulator writes",
         {"core": "mame", "key": key, "path": path, "options_file": options_file or ""},
     )
 
@@ -1076,22 +1084,38 @@ def _mame_ini_readings(
     return values, sources
 
 
+def _mame_targets(values: dict[str, str]) -> tuple[tuple[str, str], ...]:
+    """Each tree with the place a write opens: its effective value's first element, or the default.
+
+    A directory option is a MAME multipath; a write opens its first element.
+    A value carrying ``$VAR`` is expanded from the process's environment
+    (options.cpp:531-569) — process state, like the cwd.
+    """
+    return tuple(
+        (key, values.get(key, default).split(";")[0].strip()) for key, default in _MAME_DEFAULT_TREES
+    )
+
+
+def _mame_reads_cwd(values: dict[str, str], cwd: str | None) -> bool:
+    """Whether a tree is joined to the working directory: the answer then rests on where it runs (#660)."""
+    return any(
+        not target.startswith("/") and _mame_at_cwd(target, cwd) is not None
+        for _, target in _mame_targets(values)
+    )
+
+
 def _mame_tree_caveats(
     values: dict[str, str], sources: dict[str, "str | None"], cwd: str | None
 ) -> tuple[Caveat, ...]:
     """What the effective values say per tree: a redirect each, or the unresolvable rest.
 
-    A relative tree the caller's working folder resolves (:func:`_mame_at_cwd`)
-    is a redirect like an absolute one.
+    A relative tree the working directory resolves (:func:`_mame_at_cwd`) is
+    a redirect like an absolute one.
     """
     caveats: list[Caveat] = []
     unresolved: list[tuple[str, str]] = []
     unresolved_file: str | None = None
-    for key, default in _MAME_DEFAULT_TREES:
-        # A directory option is a MAME multipath; a write opens its first
-        # element. A value carrying `$VAR` is expanded from the process's
-        # environment (options.cpp:531-569) — process state, like the cwd.
-        target = values.get(key, default).split(";")[0].strip()
+    for key, target in _mame_targets(values):
         at_cwd = _mame_at_cwd(target, cwd)
         if target.startswith("/"):
             caveats.append(_mame_redirected(key, target, sources.get(key)))
@@ -1136,6 +1160,7 @@ def _mame_own_ini(reading: RuleReading) -> ModeChoice:
             *_mame_main_ini_missing(main, values),
             *_mame_tree_caveats(values, sources, reading.cwd),
         ),
+        reads_cwd=_mame_reads_cwd(values, reading.cwd),
     )
 
 
@@ -1181,7 +1206,11 @@ def _mame(reading: RuleReading) -> ModeChoice:
         # No ini is read, so the compiled-in defaults are the effective
         # values — and none carries a variable, so the named folder settles
         # every one of them.
-        return ModeChoice(None, caveats=_mame_tree_caveats({}, {}, reading.cwd))
+        return ModeChoice(
+            None,
+            caveats=_mame_tree_caveats({}, {}, reading.cwd),
+            reads_cwd=_mame_reads_cwd({}, reading.cwd),
+        )
     if read_config == "disabled":
         return ModeChoice(
             None,

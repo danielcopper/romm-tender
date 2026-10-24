@@ -584,9 +584,17 @@ class CoreCard:
     provenance: str
     rule_options: tuple[str, ...] | None = None
     retired_options: tuple[RetiredOption, ...] = ()
+    sizes: Mapping[str, SizeFact] = MappingProxyType({})
+    """Whether each file the core writes itself keeps its size, keyed by its template.
+
+    One claim per file for the whole card, whichever modes write it; a file no
+    entry names has not been read for one. Files RetroArch writes are not here
+    — their claim is the group's ``written_by_frontend`` block.
+    """
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "modes", MappingProxyType(dict(self.modes)))
+        object.__setattr__(self, "sizes", MappingProxyType(dict(self.sizes)))
 
     @property
     def so_name(self) -> str:
@@ -871,21 +879,67 @@ def _frontend_file(value: object, names: tuple[str, ...] | None, where: str) -> 
             f"{where}: a group RetroArch writes through {memory} holds exactly "
             f"{TEMPLATE_ROM_STEM}{extension}, got {names!r}"
         )
-    size = value["size"]
+    return FrontendFile(memory=memory, size=_size_fact(value["size"], f"{where}: written_by_frontend.size"))
+
+
+def _size_fact(size: object, where: str) -> SizeFact:
+    """One file's size claim — ``fixed`` and its ``citation``, with an optional ``fill``."""
     if not isinstance(size, dict) or not {"fixed", "citation"} <= set(size) <= {"fixed", "citation", "fill"}:
         raise ValueError(
-            f"{where}: written_by_frontend.size expects {{'fixed': …, 'citation': …}} with an "
-            f"optional 'fill', got {size!r}"
+            f"{where} expects {{'fixed': …, 'citation': …}} with an optional 'fill', got {size!r}"
         )
     try:
-        fact = SizeFact(
+        return SizeFact(
             fixed=size["fixed"],
-            citation=_expect_str(size["citation"], f"{where}: written_by_frontend.size.citation"),
+            citation=_expect_str(size["citation"], f"{where}.citation"),
             fill=size.get("fill"),
         )
     except ValueError as error:
-        raise ValueError(f"{where}: written_by_frontend.size: {error}") from None
-    return FrontendFile(memory=memory, size=fact)
+        raise ValueError(f"{where}: {error}") from None
+
+
+def _card_sizes(value: object, where: str, modes: Mapping[str, SaveMode]) -> Mapping[str, SizeFact]:
+    """A card's ``sizes`` block: whether each file the core writes itself keeps its size.
+
+    Keyed by the file's template as the card's groups spell it, once per card,
+    because the same file recurs in every mode that writes it — Genesis Plus
+    GX's ``scd_E.brm`` sits in thirteen of them. A key must be a name some group
+    declares or watches for, so a claim cannot outlive the file it was written
+    for; and it must not be a file a group says RetroArch writes, whose size is
+    that group's ``written_by_frontend`` claim and not the core's.
+
+    A ``fill`` is refused for now: no route states the trailing-fill caveat for
+    a file the core writes, so the exception would reach a caller without the
+    caveat that says it.
+    """
+    if value is None:
+        return MappingProxyType({})
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{where} must be a non-empty object of file template -> size, got {value!r}")
+    groups = [group for mode in modes.values() for group in mode.groups]
+    declared = {name for group in groups for name in (*(group.files or ()), *(group.observe or ()))}
+    frontend = {name for group in groups if group.frontend is not None for name in group.files or ()}
+    sizes: dict[str, SizeFact] = {}
+    for name, size in value.items():
+        at = f"{where}[{name!r}]"
+        if name not in declared:
+            raise ValueError(
+                f"{at}: no group of this card declares or watches for this file — a claim for "
+                "nothing outlives the name it was written for"
+            )
+        if name in frontend:
+            raise ValueError(
+                f"{at}: RetroArch writes this file, so its size is the group's written_by_frontend "
+                "claim, not the core's"
+            )
+        fact = _size_fact(size, at)
+        if fact.fill is not None:
+            raise ValueError(
+                f"{at}: no route states size-fixed-except-trailing-fill for a file the core "
+                "writes yet, so a fill here would reach a caller without its caveat"
+            )
+        sizes[name] = fact
+    return MappingProxyType(sizes)
 
 
 def _save_group(mode: Any, where: str) -> SaveGroup:
@@ -1205,6 +1259,7 @@ def load_oddities(text: str | None = None) -> tuple[CoreCard, ...]:
                 provenance=provenance.get("source", "unstated"),
                 rule_options=rule_options,
                 retired_options=retired_options,
+                sizes=_card_sizes(saves.get("sizes"), f"{where}: saves.sizes", modes),
             )
         )
     return tuple(cards)

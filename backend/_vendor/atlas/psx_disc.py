@@ -63,7 +63,9 @@ What is read, and from where:
 
 An ``.m3u`` is not read here: each emulator resolves its own playlist, by its
 own rules, before it opens the disc the playlist names — :mod:`atlas.psx_region`
-reads the playlist as text and hands this module the entry.
+reads the playlist as text and hands this module the entry. Nor is a CHD's
+container: :mod:`atlas.psx_chd` reads its hunks and hands :func:`identity_of`
+track 1's raw sectors, which are then read exactly as a bin file's are.
 """
 
 from __future__ import annotations
@@ -71,7 +73,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from typing import BinaryIO, Callable
+from typing import BinaryIO, Callable, Iterator
 
 RAW_SECTOR_SIZE = 2352
 USER_DATA_SIZE = 2048
@@ -95,6 +97,19 @@ _DIRECTORY_SECTOR = "a directory sector"
 # Beetle's "arbitrary sanity check" on the root directory's length
 # (libretro.cpp:1450-1455): at this size or more it reads no SYSTEM.CNF.
 BEETLE_ROOT_LIMIT = 1024 * 1024 * 10
+# atlas's own bounds on what the disc's own records make it read, each far past
+# a real disc, a read past one answering Unreadable: a file of a megabyte (a
+# SYSTEM.CNF fits one sector; it is read whole, so its stated length is checked
+# before the read), the first 16 MiB of a directory (past Beetle's own 10 MiB
+# for the root; a walk stops at its match first, so only one that reads on past
+# the bound is refused), and 2^17 sector reads in one identity — a path of a
+# directory that names itself, walked once per component, ends there.
+MAX_FILE_BYTES = 1 << 20
+MAX_DIRECTORY_BYTES = 16 << 20
+MAX_SECTOR_READS = 1 << 17
+# The most of a cue sheet read, as much as a playlist may hold
+# (atlas.psx_region): a sheet of 99 tracks fits a few KiB.
+MAX_CUE_BYTES = 4 << 20
 SYSTEM_CNF = b"SYSTEM.CNF"
 SYSTEM_CNF_RECORD = b"SYSTEM.CNF;1"
 FALLBACK_EXECUTABLE = b"PSX.EXE"
@@ -167,6 +182,14 @@ class FormatNotRead(Exception):
     """A disc this module does not read: a suffix it has no reader for, or a layout the three emulators read apart."""
 
 
+class CodecUnavailable(Exception):
+    """The image is stored with a codec atlas reads, and this runtime lacks the module that decodes it."""
+
+
+class Unreadable(Exception):
+    """The image's bytes did not come back as a whole: a block that does not decode, or a bound atlas reads within."""
+
+
 @dataclass(frozen=True, slots=True)
 class DiscIdentity:
     """What the three emulators read off one disc before they decide its region.
@@ -202,6 +225,10 @@ class DiscIdentity:
 
 
 Opener = Callable[[str], BinaryIO]
+# Track 1's raw 2352-byte sector at an index from its start, or ``None`` past
+# its end — what a bin file holds at ``index * 2352``, and what a CHD's frame
+# holds before its subcode.
+RawSectors = Callable[[int], bytes | None]
 
 
 # ── The cue sheet ──────────────────────────────────────────────────────────
@@ -400,7 +427,10 @@ def _beside(path: str, name: bytes) -> str:
 def _track1_of_cue(path: str, opener: Opener) -> str:
     """The file holding track 1 of the cue sheet at *path*, once every file the sheet names has opened."""
     with opener(path) as handle:
-        tracks = parse_cue(handle.read())
+        data = handle.read(MAX_CUE_BYTES + 1)
+    if len(data) > MAX_CUE_BYTES:
+        raise Unreadable(f"a cue sheet of more than atlas's bound of {MAX_CUE_BYTES} bytes")
+    tracks = parse_cue(data)
     for full in dict.fromkeys(_beside(path, track.file) for track in tracks):
         opener(full).close()
     track = next(t for t in tracks if t.number == 1)
@@ -419,9 +449,10 @@ def _track1_of_cue(path: str, opener: Opener) -> str:
 class _Sectors:
     """Track 1's sectors, each read once, the mode checked and Beetle's checksum noted."""
 
-    def __init__(self, handle: BinaryIO) -> None:
-        self._handle = handle
+    def __init__(self, raw: RawSectors) -> None:
+        self._raw = raw
         self._read: dict[int, bytes | None] = {}
+        self._reads = 0
         self.failing: set[int] = set()
 
     def user(self, lba: int, *, keep: bool = True) -> bytes | None:
@@ -433,9 +464,11 @@ class _Sectors:
         """
         if lba in self._read:
             return self._read[lba]
-        self._handle.seek(lba * RAW_SECTOR_SIZE)
-        raw = self._handle.read(RAW_SECTOR_SIZE)
-        data = None if len(raw) != RAW_SECTOR_SIZE else self._data(lba, raw)
+        self._reads += 1
+        if self._reads > MAX_SECTOR_READS:
+            raise Unreadable(f"an identity read past atlas's bound of {MAX_SECTOR_READS} sector reads")
+        raw = self._raw(lba)
+        data = None if raw is None or len(raw) != RAW_SECTOR_SIZE else self._data(lba, raw)
         if keep:
             self._read[lba] = data
         return data
@@ -484,6 +517,13 @@ def _sector_count(length: int) -> int:
     return (length + USER_DATA_SIZE - 1) // USER_DATA_SIZE
 
 
+def _bounded_sectors(length: int, limit: int, what: str) -> int:
+    """The sectors a record's *length* spans, or :class:`Unreadable` where the length is past atlas's *limit*."""
+    if length > limit:
+        raise Unreadable(f"{what} of {length} bytes, past atlas's bound of {limit}")
+    return _sector_count(length)
+
+
 def _duckstation_name(name: bytes) -> bytes:
     """``GetDirectoryEntryFileName`` (iso_reader.cpp:99-126): up to ``;`` or NUL, the two dot names spelled out."""
     if name == b"\x00":
@@ -512,19 +552,31 @@ class _Filesystem:
         self.sectors = sectors
         self.root = root
 
-    def _duckstation_records(self, directory: _Record) -> list[_Record]:
-        """``LocateFile``'s walk (iso_reader.cpp:161-203): every sector of the directory, records until a short one."""
-        records: list[_Record] = []
+    def _directory_sectors(self, directory: _Record) -> Iterator[bytes]:
+        """The directory's sectors one at a time, as a walk reaches them.
+
+        A walk that reads on past :data:`MAX_DIRECTORY_BYTES` is
+        :class:`Unreadable` only where it gets there: one that stops at its
+        match before then answers as the emulator does.
+        """
         for index in range(_sector_count(directory.length)):
-            sector = self.sectors.required(directory.location + index, _DIRECTORY_SECTOR, keep=False)
+            if index * USER_DATA_SIZE >= MAX_DIRECTORY_BYTES:
+                raise Unreadable(
+                    f"a directory of {directory.length} bytes, walked past atlas's bound of {MAX_DIRECTORY_BYTES}"
+                )
+            yield self.sectors.required(directory.location + index, _DIRECTORY_SECTOR, keep=False)
+
+    def _duckstation_records(self, directory: _Record) -> Iterator[_Record]:
+        """``LocateFile``'s walk (iso_reader.cpp:161-203): sector by sector, records until a short one, read only as
+        far as the caller asks — DuckStation stops at the first match."""
+        for sector in self._directory_sectors(directory):
             offset = 0
             while offset + _RECORD_HEADER_SIZE < USER_DATA_SIZE:
                 length, record = _record(sector, offset)
                 if length < _RECORD_HEADER_SIZE:
                     break
                 offset += length
-                records.append(record)
-        return records
+                yield record
 
     def duckstation_locate(self, path: bytes) -> _Record | None:
         """``IsoReader::LocateFile`` (iso_reader.cpp:85-207): the path split on ``/`` and ``\\``, each component
@@ -549,8 +601,7 @@ class _Filesystem:
 
     def swanstation_root_file(self, component: bytes) -> _Record | None:
         """SwanStation's root lookup of a file (iso_reader.cpp:73-170 at 4d309c0), the record bounds checked as read."""
-        for index in range(_sector_count(self.root.length)):
-            sector = self.sectors.required(self.root.location + index, _DIRECTORY_SECTOR, keep=False)
+        for sector in self._directory_sectors(self.root):
             offset = 0
             while offset + _RECORD_HEADER_SIZE < USER_DATA_SIZE:
                 length, record = _record(sector, offset)
@@ -574,18 +625,23 @@ class _Filesystem:
         """
         if self.root.length >= BEETLE_ROOT_LIMIT:
             return None, set()
-        sectors = [
-            self.sectors.required(self.root.location + index, _DIRECTORY_SECTOR, keep=False)
-            for index in range(_sector_count(self.root.length))
-        ]
-        stream = b"".join(sectors)
+        sectors = self._directory_sectors(self.root)
+        stream = bytearray()
+
+        def reach(end: int) -> None:
+            # Beetle's stream reads only as far as a record reaches (:1462-1471).
+            while len(stream) < end:
+                stream.extend(next(sectors, b"\x00" * USER_DATA_SIZE))
+
         position = 0
         while position < self.root.length:
+            reach(position + 1)
             length = stream[position]
             if length == 0:
                 # The zero byte that stopped the scan was read too.
                 return None, _span(self.root.location, position + 1)
-            _, record = _record((stream[position : position + length] + bytes(256))[:256], 0)
+            reach(position + length)
+            _, record = _record((bytes(stream[position : position + length]) + bytes(256))[:256], 0)
             position += length
             if record.name == SYSTEM_CNF_RECORD:
                 return record, _span(self.root.location, position)
@@ -593,9 +649,8 @@ class _Filesystem:
 
     def file_bytes(self, record: _Record) -> bytes:
         """``IsoReader::ReadFile`` (iso_reader.cpp:353-376): every sector of the file, cut to its length."""
-        data = b"".join(
-            self.sectors.required(record.location + index, "a file sector") for index in range(_sector_count(record.length))
-        )
+        count = _bounded_sectors(record.length, MAX_FILE_BYTES, "a file")
+        data = b"".join(self.sectors.required(record.location + index, "a file sector") for index in range(count))
         return data[: record.length]
 
 
@@ -667,32 +722,54 @@ def _system_cnf(filesystem: _Filesystem) -> tuple[_Record | None, set[int]]:
     return beetle, touched
 
 
+def _file_sectors(handle: BinaryIO) -> RawSectors:
+    """A bin file as raw sectors: one 2352-byte sector after another from its first byte."""
+
+    def raw(lba: int) -> bytes:
+        handle.seek(lba * RAW_SECTOR_SIZE)
+        return handle.read(RAW_SECTOR_SIZE)
+
+    return raw
+
+
+def identity_of(raw: RawSectors) -> DiscIdentity:
+    """The identity read off track 1's raw sectors, whatever image holds them.
+
+    Raises :class:`FormatNotRead` where the three emulators would read the
+    track apart, and :class:`Unreadable` where the disc's own records would
+    make the read pass one of atlas's bounds (:data:`MAX_FILE_BYTES`,
+    :data:`MAX_DIRECTORY_BYTES`, :data:`MAX_SECTOR_READS`); whatever *raw*
+    raises passes through.
+    """
+    sectors = _Sectors(raw)
+    license_data = sectors.required(LICENSE_SECTOR, "the licence")
+    pvd = sectors.required(PVD_SECTOR, "the Primary Volume Descriptor")
+    if pvd[1:6] != b"CD001" or pvd[0] != 1:
+        raise FormatNotRead(
+            "sector 16 holds no Primary Volume Descriptor, and the three emulators search on for one by three "
+            "different rules"
+        )
+    _, root = _record(pvd, _PVD_ROOT_RECORD)
+    filesystem = _Filesystem(sectors, root)
+    record, beetle_read = _system_cnf(filesystem)
+    system_cnf = None if record is None else filesystem.file_bytes(record)
+    first = None if record is None else sectors.required(record.location, "SYSTEM.CNF's first block")
+    if record is not None:
+        beetle_read.add(record.location)
+    executable = filesystem.duckstation_locate(duckstation_executable(system_cnf))
+    beetle_read |= {LICENSE_SECTOR, PVD_SECTOR}
+    return DiscIdentity(
+        license=license_data[:LICENSE_LENGTH],
+        system_cnf=system_cnf,
+        system_cnf_sector=first,
+        boot_found=executable is not None and not executable.directory,
+        edc_valid=not (sectors.failing & beetle_read),
+    )
+
+
 def _identity_of(track1: str, opener: Opener) -> DiscIdentity:
     with opener(track1) as handle:
-        sectors = _Sectors(handle)
-        license_data = sectors.required(LICENSE_SECTOR, "the licence")
-        pvd = sectors.required(PVD_SECTOR, "the Primary Volume Descriptor")
-        if pvd[1:6] != b"CD001" or pvd[0] != 1:
-            raise FormatNotRead(
-                "sector 16 holds no Primary Volume Descriptor, and the three emulators search on for one by three "
-                "different rules"
-            )
-        _, root = _record(pvd, _PVD_ROOT_RECORD)
-        filesystem = _Filesystem(sectors, root)
-        record, beetle_read = _system_cnf(filesystem)
-        system_cnf = None if record is None else filesystem.file_bytes(record)
-        first = None if record is None else sectors.required(record.location, "SYSTEM.CNF's first block")
-        if record is not None:
-            beetle_read.add(record.location)
-        executable = filesystem.duckstation_locate(duckstation_executable(system_cnf))
-        beetle_read |= {LICENSE_SECTOR, PVD_SECTOR}
-        return DiscIdentity(
-            license=license_data[:LICENSE_LENGTH],
-            system_cnf=system_cnf,
-            system_cnf_sector=first,
-            boot_found=executable is not None and not executable.directory,
-            edc_valid=not (sectors.failing & beetle_read),
-        )
+        return identity_of(_file_sectors(handle))
 
 
 def read_identity(path: str, opener: Opener) -> DiscIdentity:
@@ -700,8 +777,10 @@ def read_identity(path: str, opener: Opener) -> DiscIdentity:
 
     *opener* opens a path for binary reading, and its ``OSError`` propagates
     untouched, so the caller keeps the plain read's difference between a file
-    that is not there and one that will not open. Raises :class:`NotADisc` and
-    :class:`FormatNotRead` as documented on them. The suffix decides the reader
+    that is not there and one that will not open. Raises :class:`NotADisc`,
+    :class:`FormatNotRead` and :class:`Unreadable` as documented on them and on
+    :func:`identity_of` — :class:`Unreadable` too for a cue sheet longer than
+    :data:`MAX_CUE_BYTES`. The suffix decides the reader
     the way both emulators that open these formats decide it, without regard to
     case (cd_image.cpp:81-89).
     """

@@ -27,7 +27,8 @@ answers instead of a silently chosen winner.
 Two things here are the host's to grant rather than atlas's to require, and
 both follow the same shape: atlas discovers what it can, states plainly when it
 found nothing, and takes what a host hands over ahead of anything it found. The
-zstd codec that opens an AppImage is one — :func:`atlas.register_zstd_provider`
+zstd codec that opens an AppImage, and a CHD disc image stored with ``cdzs``, is
+one — :func:`atlas.register_zstd_provider`
 hands over the module a host already has, which is what a host that vendors it
 under its own root needs, and :func:`atlas.zstd_provider` says which provider a
 zstd image would go through here (:class:`atlas.ZstdProvider`). The interpreter
@@ -64,7 +65,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.26.0"  # x-release-please-version
+__version__ = "0.28.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -496,6 +497,7 @@ from .installations import (
 )
 from .psx_region import (
     DISC_UNREAD_BOOT_LINE_ABSENT,
+    DISC_UNREAD_CODEC_UNAVAILABLE,
     DISC_UNREAD_MISSING,
     DISC_UNREAD_NOT_A_DISC,
     DISC_UNREAD_SECTOR_INVALID,
@@ -557,6 +559,7 @@ from .placement import (
     CAVEAT_FILENAMES_UNVERIFIED,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
     CAVEAT_FILE_SET_ACROSS_SYSTEMS,
+    CAVEAT_FILE_SET_CLAIMS_MERGED,
     CAVEAT_FILE_SET_DIRECTORIES_UNREAD,
     CAVEAT_FILE_SET_SPANS_ROOTS,
     CAVEAT_FIRMWARE_SEARCH_CANDIDATES,
@@ -1119,6 +1122,7 @@ __all__ = [
     "REGION_SOURCE_SETTING",
     "DISC_UNREAD_STATUSES",
     "DISC_UNREAD_BOOT_LINE_ABSENT",
+    "DISC_UNREAD_CODEC_UNAVAILABLE",
     "DISC_UNREAD_MISSING",
     "DISC_UNREAD_NOT_A_DISC",
     "DISC_UNREAD_SECTOR_INVALID",
@@ -1305,6 +1309,7 @@ __all__ = [
     "CAVEAT_FILENAMES_UNVERIFIED",
     "CAVEAT_FILE_NAMES_UNESTABLISHED",
     "CAVEAT_FILE_SET_ACROSS_SYSTEMS",
+    "CAVEAT_FILE_SET_CLAIMS_MERGED",
     "CAVEAT_FILE_SET_DIRECTORIES_UNREAD",
     "CAVEAT_FILE_SET_SPANS_ROOTS",
     "CAVEAT_EMULATOR_CONFIG_UNREADABLE",

@@ -139,13 +139,33 @@
               {
                 "subdir": null,
                 "files": [
-                  "<rom_stem>.srm",
+                  "<rom_stem>.srm"
+                ],
+                "granularity": "per-game-file",
+                "role": "battery",
+                "written_by_frontend": {
+                  "memory": "save_ram",
+                  "size": {
+                    "fixed": true,
+                    "citation": "[V] libretro/libretro.cpp:1082-1086 and src/cartridge.cpp:290-316 at libretro/bsnes-jg 6400024 — SAVE_RAM answers the cartridge RAM the game's board declares, a size fixed per game."
+                  }
+                }
+              },
+              {
+                "subdir": null,
+                "files": [
                   "<rom_stem>.rtc"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "battery"
               }
             ]
+          }
+        },
+        "sizes": {
+          "<rom_stem>.rtc": {
+            "fixed": true,
+            "citation": "[V] src/cartridge.cpp:1295-1318 and libretro/libretro.cpp:528-544 at libretro/bsnes-jg 6400024 — both clock chips save 16 bytes, and the port writes them into a file opened for writing anew."
           }
         },
         "anchors": {
@@ -1093,6 +1113,60 @@
             ]
           }
         },
+        "sizes": {
+          "vmu_save_A1.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "vmu_save_A2.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "<save_id>.A1.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "vmu_save_B1.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "vmu_save_B2.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "<save_id>.B1.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "vmu_save_C1.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "vmu_save_C2.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "<save_id>.C1.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "vmu_save_D1.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "vmu_save_D2.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "<save_id>.D1.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/maple/maple_devs.cpp:342, :374-387, :403-447 and :660-683 at flycast 1dac369 — a VMU is a 128 KiB image, opened rb+ (created wb+ where missing) and written whole or one block in place, a block write past the image refused, so the file keeps its 128 KiB."
+          },
+          "dc_nvmem.bin": {
+            "fixed": true,
+            "citation": "[V] core/hw/flashrom/flashrom.cpp:43-54 and core/hw/flashrom/nvmem.cpp:300-310 at flycast 1dac369 — the console's flash is written whole 'wb', 128 KiB for the Dreamcast (core/emulator.cpp:444)."
+          }
+        },
         "anchors": {
           "reicast_per_content_vmus": {
             "literal": "reicast_per_content_vmus"
@@ -1315,6 +1389,40 @@
                 "files_citation": "ctrl/src/stv.c:3075 (write) and :3052 (read) at FCare/Kronos 6709c1d — '%s/%s.nv' joined from the eeprom directory and the romset name"
               }
             ]
+          }
+        },
+        "sizes": {
+          "<rom_stem>.ram": {
+            "fixed": true,
+            "citation": "[V] yabause/src/sys/memory/src/memory.c:1282-1338 and sys/memory/include/memory.h:298-354 at Kronos 6709c1d — the backup RAM takes the size of the file it finds, the standard 0x8000 or the extended 8 MiB, the libretro port asking for standard only for a file that is not there yet (libretro/libretro.c:1587), and every flush writes exactly that many bytes 'wb+' — so the file keeps its own size, which is not always 32 KiB."
+          },
+          "<rom_stem>.bkr": {
+            "fixed": true,
+            "citation": "[V] yabause/src/sys/memory/src/memory.c:1282-1338 and sys/memory/include/memory.h:298-354 at Kronos 6709c1d — the backup RAM takes the size of the file it finds, the standard 0x8000 or the extended 8 MiB, the libretro port asking for standard only for a file that is not there yet (libretro/libretro.c:1587), and every flush writes exactly that many bytes 'wb+' — so the file keeps its own size, which is not always 32 KiB."
+          },
+          "<rom_stem>-ext512K.ram": {
+            "fixed": true,
+            "citation": "[V] yabause/src/sys/memory/src/cs0.c:1648-1695 and :1699-1761 at Kronos 6709c1d — a backup RAM cartridge is written as exactly its type's size (sys/memory/include/cs0.h:46-49) 'wb+', and the file is named after that type (libretro/libretro.c:1299-1317), the Beetle spelling always the 4 Mbit cartridge, so each name always holds one size."
+          },
+          "<rom_stem>-ext1M.ram": {
+            "fixed": true,
+            "citation": "[V] yabause/src/sys/memory/src/cs0.c:1648-1695 and :1699-1761 at Kronos 6709c1d — a backup RAM cartridge is written as exactly its type's size (sys/memory/include/cs0.h:46-49) 'wb+', and the file is named after that type (libretro/libretro.c:1299-1317), the Beetle spelling always the 4 Mbit cartridge, so each name always holds one size."
+          },
+          "<rom_stem>-ext2M.ram": {
+            "fixed": true,
+            "citation": "[V] yabause/src/sys/memory/src/cs0.c:1648-1695 and :1699-1761 at Kronos 6709c1d — a backup RAM cartridge is written as exactly its type's size (sys/memory/include/cs0.h:46-49) 'wb+', and the file is named after that type (libretro/libretro.c:1299-1317), the Beetle spelling always the 4 Mbit cartridge, so each name always holds one size."
+          },
+          "<rom_stem>-ext4M.ram": {
+            "fixed": true,
+            "citation": "[V] yabause/src/sys/memory/src/cs0.c:1648-1695 and :1699-1761 at Kronos 6709c1d — a backup RAM cartridge is written as exactly its type's size (sys/memory/include/cs0.h:46-49) 'wb+', and the file is named after that type (libretro/libretro.c:1299-1317), the Beetle spelling always the 4 Mbit cartridge, so each name always holds one size."
+          },
+          "<rom_stem>.bcr": {
+            "fixed": true,
+            "citation": "[V] yabause/src/sys/memory/src/cs0.c:1648-1695 and :1699-1761 at Kronos 6709c1d — a backup RAM cartridge is written as exactly its type's size (sys/memory/include/cs0.h:46-49) 'wb+', and the file is named after that type (libretro/libretro.c:1299-1317), the Beetle spelling always the 4 Mbit cartridge, so each name always holds one size."
+          },
+          "<rom_stem>.nv": {
+            "fixed": true,
+            "citation": "[V] yabause/src/sys/memory/src/eeprom.c:130-137 at Kronos 6709c1d — the ST-V board's EEPROM is read and written as exactly 0x80 bytes, the write 'wb+' (sys/memory/include/memory.h:298-354)."
           }
         },
         "anchors": {
@@ -2383,6 +2491,88 @@
             ]
           }
         },
+        "sizes": {
+          "<rom_stem>.0.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.1.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.2.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.3.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.4.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.5.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.6.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.7.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.8.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "<rom_stem>.9.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.0.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.1.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.2.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.3.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.4.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.5.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.6.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.7.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.8.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          },
+          "nvram.9.srm": {
+            "fixed": true,
+            "citation": "[V] opera_lr_nvram.c:21-46 and :356-377 at opera-libretro 67a29e6 — the NVRAM is written whole, NVRAM_SIZE, 32 KiB (libopera/opera_mem.h:36), into a temporary file renamed over the save."
+          }
+        },
         "anchors": {
           "opera_nvram_storage": {
             "literal": "opera_nvram_storage"
@@ -2525,6 +2715,20 @@
                 "role": "memory-card"
               }
             ]
+          }
+        },
+        "sizes": {
+          "Mcd001.ps2": {
+            "fixed": true,
+            "citation": "[V] pcsx2/MemoryCardFile.cpp:303-310, :382-401, :330-334 and :441-484 at libretro/ps2 14d19f8 — a missing card is created at 8 times MC2_MBSIZE (:35) of 0xFF, the card is opened r+b with its size taken from the file, and every save writes in place at the addressed offset, so a card keeps the size it was created at."
+          },
+          "Mcd002.ps2": {
+            "fixed": true,
+            "citation": "[V] pcsx2/MemoryCardFile.cpp:303-310, :382-401, :330-334 and :441-484 at libretro/ps2 14d19f8 — a missing card is created at 8 times MC2_MBSIZE (:35) of 0xFF, the card is opened r+b with its size taken from the file, and every save writes in place at the addressed offset, so a card keeps the size it was created at."
+          },
+          "<rom_stem>.ps2": {
+            "fixed": true,
+            "citation": "[V] pcsx2/MemoryCardFile.cpp:303-310, :382-401, :330-334 and :441-484 at libretro/ps2 14d19f8 — a missing card is created at 8 times MC2_MBSIZE (:35) of 0xFF, the card is opened r+b with its size taken from the file, and every save writes in place at the addressed offset, so a card keeps the size it was created at."
           }
         },
         "anchors": {
@@ -3276,6 +3480,32 @@
             ]
           }
         },
+        "sizes": {
+          "<rom_stem>.bkr": {
+            "fixed": true,
+            "citation": "[V] mednafen/ss/ss.cpp:98 and :1037-1044 at beetle-saturn-libretro ccba526 — the internal backup RAM is written as the whole 32 KiB array into a file opened for writing anew (mednafen/FileStream.cpp:30)."
+          },
+          "mednafen_saturn_libretro_shared.bkr": {
+            "fixed": true,
+            "citation": "[V] mednafen/ss/ss.cpp:98 and :1037-1044 at beetle-saturn-libretro ccba526 — the internal backup RAM is written as the whole 32 KiB array into a file opened for writing anew (mednafen/FileStream.cpp:30)."
+          },
+          "<rom_stem>.bcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/ss/ss.cpp:1113-1138 and mednafen/ss/cart/backup.cpp:25, :60-66 at beetle-saturn-libretro ccba526 — the backup cartridge is written as its whole 512 KiB array into a file opened for writing anew (mednafen/FileStream.cpp:30)."
+          },
+          "mednafen_saturn_libretro_shared.bcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/ss/ss.cpp:1113-1138 and mednafen/ss/cart/backup.cpp:25, :60-66 at beetle-saturn-libretro ccba526 — the backup cartridge is written as its whole 512 KiB array into a file opened for writing anew (mednafen/FileStream.cpp:30)."
+          },
+          "<rom_stem>.smpc": {
+            "fixed": true,
+            "citation": "[V] mednafen/ss/ss.cpp:1140-1147 and mednafen/ss/smpc.cpp:364-369 at beetle-saturn-libretro ccba526 — the SMPC file is the RTC's valid flag, its 7 raw bytes and the 4 bytes of SMPC memory (smpc.cpp:102, :115), 12 bytes written into a file opened for writing anew."
+          },
+          "mednafen_saturn_libretro_shared.smpc": {
+            "fixed": true,
+            "citation": "[V] mednafen/ss/ss.cpp:1140-1147 and mednafen/ss/smpc.cpp:364-369 at beetle-saturn-libretro ccba526 — the SMPC file is the RTC's valid flag, its 7 raw bytes and the 4 bytes of SMPC memory (smpc.cpp:102, :115), 12 bytes written into a file opened for writing anew."
+          }
+        },
         "anchors": {
           "beetle_saturn_shared_int": {
             "literal": "beetle_saturn_shared_int"
@@ -3792,6 +4022,32 @@
             ]
           }
         },
+        "sizes": {
+          "duckstation_shared_card_1.mcd": {
+            "fixed": true,
+            "citation": "[V] src/core/memory_card_image.h:12 and src/core/memory_card_image.cpp:36-66 at libretro/swanstation 4d309c0 — a card is DATA_SIZE, 128 KiB; a file of any other size is refused when loaded, and a save truncates the file and writes the whole card."
+          },
+          "duckstation_shared_card_2.mcd": {
+            "fixed": true,
+            "citation": "[V] src/core/memory_card_image.h:12 and src/core/memory_card_image.cpp:36-66 at libretro/swanstation 4d309c0 — a card is DATA_SIZE, 128 KiB; a file of any other size is refused when loaded, and a save truncates the file and writes the whole card."
+          },
+          "<save_id>_1.mcd": {
+            "fixed": true,
+            "citation": "[V] src/core/memory_card_image.h:12 and src/core/memory_card_image.cpp:36-66 at libretro/swanstation 4d309c0 — a card is DATA_SIZE, 128 KiB; a file of any other size is refused when loaded, and a save truncates the file and writes the whole card."
+          },
+          "<save_id>_2.mcd": {
+            "fixed": true,
+            "citation": "[V] src/core/memory_card_image.h:12 and src/core/memory_card_image.cpp:36-66 at libretro/swanstation 4d309c0 — a card is DATA_SIZE, 128 KiB; a file of any other size is refused when loaded, and a save truncates the file and writes the whole card."
+          },
+          "<rom_stem>_1.mcd": {
+            "fixed": true,
+            "citation": "[V] src/core/memory_card_image.h:12 and src/core/memory_card_image.cpp:36-66 at libretro/swanstation 4d309c0 — a card is DATA_SIZE, 128 KiB; a file of any other size is refused when loaded, and a save truncates the file and writes the whole card."
+          },
+          "<rom_stem>_2.mcd": {
+            "fixed": true,
+            "citation": "[V] src/core/memory_card_image.h:12 and src/core/memory_card_image.cpp:36-66 at libretro/swanstation 4d309c0 — a card is DATA_SIZE, 128 KiB; a file of any other size is refused when loaded, and a save truncates the file and writes the whole card."
+          }
+        },
         "anchors": {
           "swanstation_MemoryCards_Card1Type": {
             "literal": "swanstation_MemoryCards_Card1Type"
@@ -4004,6 +4260,24 @@
             ]
           }
         },
+        "sizes": {
+          "<rom_stem>.0.mcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/psx/frontio.cpp:991-1011 at beetle-psx-libretro d6383bf — a card the core writes itself is saved as exactly 1 << 17 bytes into a file opened for writing anew, and loaded as the same 128 KiB (:950-978)."
+          },
+          "<rom_stem>.1.mcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/psx/frontio.cpp:991-1011 at beetle-psx-libretro d6383bf — a card the core writes itself is saved as exactly 1 << 17 bytes into a file opened for writing anew, and loaded as the same 128 KiB (:950-978)."
+          },
+          "mednafen_psx_libretro_shared.0.mcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/psx/frontio.cpp:991-1011 at beetle-psx-libretro d6383bf — a card the core writes itself is saved as exactly 1 << 17 bytes into a file opened for writing anew, and loaded as the same 128 KiB (:950-978)."
+          },
+          "mednafen_psx_libretro_shared.1.mcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/psx/frontio.cpp:991-1011 at beetle-psx-libretro d6383bf — a card the core writes itself is saved as exactly 1 << 17 bytes into a file opened for writing anew, and loaded as the same 128 KiB (:950-978)."
+          }
+        },
         "anchors": {
           "beetle_psx_use_mednafen_memcard0_method": {
             "literal": "beetle_psx_use_mednafen_memcard0_method"
@@ -4187,6 +4461,24 @@
                 "role": "memory-card"
               }
             ]
+          }
+        },
+        "sizes": {
+          "<rom_stem>.0.mcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/psx/frontio.cpp:991-1011 at beetle-psx-libretro d6383bf — a card the core writes itself is saved as exactly 1 << 17 bytes into a file opened for writing anew, and loaded as the same 128 KiB (:950-978)."
+          },
+          "<rom_stem>.1.mcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/psx/frontio.cpp:991-1011 at beetle-psx-libretro d6383bf — a card the core writes itself is saved as exactly 1 << 17 bytes into a file opened for writing anew, and loaded as the same 128 KiB (:950-978)."
+          },
+          "mednafen_psx_libretro_shared.0.mcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/psx/frontio.cpp:991-1011 at beetle-psx-libretro d6383bf — a card the core writes itself is saved as exactly 1 << 17 bytes into a file opened for writing anew, and loaded as the same 128 KiB (:950-978)."
+          },
+          "mednafen_psx_libretro_shared.1.mcr": {
+            "fixed": true,
+            "citation": "[V] mednafen/psx/frontio.cpp:991-1011 at beetle-psx-libretro d6383bf — a card the core writes itself is saved as exactly 1 << 17 bytes into a file opened for writing anew, and loaded as the same 128 KiB (:950-978)."
           }
         },
         "anchors": {
@@ -4800,6 +5092,72 @@
             ]
           }
         },
+        "sizes": {
+          "scd_E.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1140-1175 at Genesis-Plus-GX 46a5521 — the internal backup RAM is written as exactly 0x2000 bytes into a file opened for writing anew, and read back as the same 8 KiB (:1043-1092)."
+          },
+          "scd_U.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1140-1175 at Genesis-Plus-GX 46a5521 — the internal backup RAM is written as exactly 0x2000 bytes into a file opened for writing anew, and read back as the same 8 KiB (:1043-1092)."
+          },
+          "scd_J.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1140-1175 at Genesis-Plus-GX 46a5521 — the internal backup RAM is written as exactly 0x2000 bytes into a file opened for writing anew, and read back as the same 8 KiB (:1043-1092)."
+          },
+          "<rom_stem>.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1140-1175 at Genesis-Plus-GX 46a5521 — the internal backup RAM is written as exactly 0x2000 bytes into a file opened for writing anew, and read back as the same 8 KiB (:1043-1092)."
+          },
+          "128Kbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "<rom_stem>_128Kbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "256Kbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "<rom_stem>_256Kbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "512Kbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "<rom_stem>_512Kbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "1Mbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "<rom_stem>_1Mbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "2Mbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "<rom_stem>_2Mbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "4Mbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          },
+          "<rom_stem>_4Mbit_cart.brm": {
+            "fixed": true,
+            "citation": "[V] libretro/libretro.c:1177-1208 and core/cd_hw/cd_cart.c:205 at Genesis-Plus-GX 46a5521 — the backup RAM cartridge is written as exactly mask + 1 bytes, the mask set by the cartridge size, and the file is named after that size (libretro.c:1435-1500), so each name always holds one size."
+          }
+        },
         "anchors": {
           "genesis_plus_gx_system_bram": {
             "literal": "genesis_plus_gx_system_bram"
@@ -4960,6 +5318,12 @@
             ]
           }
         },
+        "sizes": {
+          "pcsx-card2.mcd": {
+            "fixed": true,
+            "citation": "[V] libpcsxcore/sio.c:451-607 and :414-449 at libretro/pcsx_rearmed 228c14e — the second card is created at MCD_SIZE, 128 KiB (sio.h:34), then opened r+b and written in place at the addressed offset, so its length never changes."
+          }
+        },
         "anchors": {
           "pcsx_rearmed_memcard2": {
             "literal": "pcsx_rearmed_memcard2"
@@ -5016,15 +5380,23 @@
               {
                 "subdir": null,
                 "files": [
-                  "<rom_stem>_save.adf",
-                  "<rom_stem>_save.adf.gz"
+                  "<rom_stem>_save.adf"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "disk-diff",
                 "complete": false,
                 "files_established_for": "single-disk-image",
                 "files_established_note": "The class here is content loaded as a single disk image: the write file is named after the opened image's own stem, so a playlist's members and an archive's extracted members each bring their own name rather than the question's. The two names are then one save under the two spellings it takes. With 'puae_floppy_write_redirect' on, diskfile_iswriteprotect demands a write file for every floppy whatever its format (sources/src/disk.c:1300-1306 at 0043cf9); floppy_open_redirect creates <save dir>/<stem>_save.adf through disk_setwriteprotect (libretro/libretro-core.c:564-610, disk.c:3256-3259) and reinserts the disk, the emulation's tracks land in that file (:2947-2950), and the original image is chmod'd read-only so it is never written (:3276-3282). At close — retro_unload_game, a disk-control eject, or the option being switched off — floppy_close_redirect gzips the write file to <stem>_save.adf.gz and removes the plain one (libretro-core.c:612-658, :4143, :4876, :8729), so the .gz is the form at rest and the plain .adf the form while the core holds the disk or after a crash. A write file nothing ever wrote to is unlinked instead of kept (disk.c:3261-3267).",
                 "files_citation": "sources/src/disk.c:1300-1306, :3229-3285 and libretro/libretro-core.c:564-658 at libretro/libretro-uae 0043cf9"
+              },
+              {
+                "subdir": null,
+                "files": [
+                  "<rom_stem>_save.adf.gz"
+                ],
+                "granularity": "per-game-file",
+                "role": "disk-diff",
+                "complete": false
               }
             ]
           },
@@ -5079,7 +5451,15 @@
               {
                 "subdir": null,
                 "files": [
-                  "<archive_member_stem>_save.adf",
+                  "<archive_member_stem>_save.adf"
+                ],
+                "granularity": "per-game-files",
+                "role": "disk-diff",
+                "complete": false
+              },
+              {
+                "subdir": null,
+                "files": [
                   "<archive_member_stem>_save.adf.gz"
                 ],
                 "granularity": "per-game-files",
@@ -5127,6 +5507,24 @@
           "whdload-disabled": {
             "root": "savefile_directory",
             "writes_discarded": "with 'puae_use_whdload' disabled the whole WHDLoad block is skipped (libretro/libretro-core.c:6543 at 0043cf9): no WHDLoad helper volume is unpacked, no WHDSaves volume or image is created, and nothing points a SavePath anywhere. The content is still mounted — an .lha read-only (:5706-5708), a drawer read-write (:5709-5711) — but no WHDLoad is there to run it, so no save of this content's reaches the save root. What the setting is for is booting a hard-disk image that carries its own Startup-Sequence, which is the hd-writeback story and not this one. The one writable store a launch can still have here is the boot hard drive 'puae_use_boot_hd' mounts (:5390-5493, reached at :6494-6495); nothing launches the content into it, so this card claims no save there"
+          }
+        },
+        "sizes": {
+          "<rom_stem>_save.adf": {
+            "fixed": true,
+            "citation": "[V] sources/src/disk.c:3229-3285, :3061-3177 and :2836-2881 at libretro-uae 0043cf9 — the write file is created once as a UAE-1ADF image whose tracks each get their space at creation, and every track is written in place into that space, cut to it where longer, so the file keeps the size it was created at."
+          },
+          "<archive_member_stem>_save.adf": {
+            "fixed": true,
+            "citation": "[V] sources/src/disk.c:3229-3285, :3061-3177 and :2836-2881 at libretro-uae 0043cf9 — the write file is created once as a UAE-1ADF image whose tracks each get their space at creation, and every track is written in place into that space, cut to it where longer, so the file keeps the size it was created at."
+          },
+          "<rom_stem>_save.adf.gz": {
+            "fixed": false,
+            "citation": "[V] libretro/libretro-core.c:612-658 at libretro-uae 0043cf9 — at close the write file is gzip-compressed into this file and removed, so its length follows the content."
+          },
+          "<archive_member_stem>_save.adf.gz": {
+            "fixed": false,
+            "citation": "[V] libretro/libretro-core.c:612-658 at libretro-uae 0043cf9 — at close the write file is gzip-compressed into this file and removed, so its length follows the content."
           }
         },
         "anchors": {
@@ -5237,15 +5635,23 @@
               {
                 "subdir": null,
                 "files": [
-                  "<rom_stem>_save.adf",
-                  "<rom_stem>_save.adf.gz"
+                  "<rom_stem>_save.adf"
                 ],
-                "granularity": "per-game-files",
+                "granularity": "per-game-file",
                 "role": "disk-diff",
                 "complete": false,
                 "files_established_for": "single-disk-image",
                 "files_established_note": "The class here is content loaded as a single disk image: the write file is named after the opened image's own stem, so a playlist's members and an archive's extracted members each bring their own name rather than the question's. The two names are then one save under the two spellings it takes. With 'puae_floppy_write_redirect' on, diskfile_iswriteprotect demands a write file for every floppy whatever its format (sources/src/disk.c:1053-1059 at 58527ce); floppy_open_redirect creates <save dir>/<stem>_save.adf through disk_setwriteprotect (libretro/libretro-core.c:565-611, disk.c:2624-2627) and reinserts the disk, the emulation's tracks land in that file (:2322-2325), and the original image is chmod'd read-only so it is never written (:2644-2650). At close — retro_unload_game, a disk-control eject, or the option being switched off — floppy_close_redirect gzips the write file to <stem>_save.adf.gz and removes the plain one (libretro-core.c:613-659, :4094, :4815, :8647), so the .gz is the form at rest and the plain .adf the form while the core holds the disk or after a crash. A write file nothing ever wrote to is unlinked instead of kept (disk.c:2629-2635).",
                 "files_citation": "sources/src/disk.c:1053-1059, :2599-2653 and libretro/libretro-core.c:565-659 at libretro/libretro-uae 58527ce"
+              },
+              {
+                "subdir": null,
+                "files": [
+                  "<rom_stem>_save.adf.gz"
+                ],
+                "granularity": "per-game-file",
+                "role": "disk-diff",
+                "complete": false
               }
             ]
           },
@@ -5300,7 +5706,15 @@
               {
                 "subdir": null,
                 "files": [
-                  "<archive_member_stem>_save.adf",
+                  "<archive_member_stem>_save.adf"
+                ],
+                "granularity": "per-game-files",
+                "role": "disk-diff",
+                "complete": false
+              },
+              {
+                "subdir": null,
+                "files": [
                   "<archive_member_stem>_save.adf.gz"
                 ],
                 "granularity": "per-game-files",
@@ -5348,6 +5762,24 @@
           "whdload-disabled": {
             "root": "savefile_directory",
             "writes_discarded": "with 'puae_use_whdload' disabled the whole WHDLoad block is skipped (libretro/libretro-core.c:6467 at 58527ce): no WHDLoad helper volume is unpacked, no WHDSaves volume or image is created, and nothing points a SavePath anywhere. The content is still mounted — an .lha read-only (:5630-5632), a drawer read-write (:5633-5635) — but no WHDLoad is there to run it, so no save of this content's reaches the save root. What the setting is for is booting a hard-disk image that carries its own Startup-Sequence, which is the hd-writeback story and not this one. The one writable store a launch can still have here is the boot hard drive 'puae_use_boot_hd' mounts (:5314-5417, reached at :6418-6419); nothing launches the content into it, so this card claims no save there"
+          }
+        },
+        "sizes": {
+          "<rom_stem>_save.adf": {
+            "fixed": true,
+            "citation": "[V] sources/src/disk.c:2599-2653, :2427-2543 and :2216-2256 at libretro-uae 58527ce — the write file is created once as a UAE-1ADF image whose tracks each get their space at creation, and every track is written in place into that space, cut to it where longer, so the file keeps the size it was created at."
+          },
+          "<archive_member_stem>_save.adf": {
+            "fixed": true,
+            "citation": "[V] sources/src/disk.c:2599-2653, :2427-2543 and :2216-2256 at libretro-uae 58527ce — the write file is created once as a UAE-1ADF image whose tracks each get their space at creation, and every track is written in place into that space, cut to it where longer, so the file keeps the size it was created at."
+          },
+          "<rom_stem>_save.adf.gz": {
+            "fixed": false,
+            "citation": "[V] libretro/libretro-core.c:613-659 at libretro-uae 58527ce — at close the write file is gzip-compressed into this file and removed, so its length follows the content."
+          },
+          "<archive_member_stem>_save.adf.gz": {
+            "fixed": false,
+            "citation": "[V] libretro/libretro-core.c:613-659 at libretro-uae 58527ce — at close the write file is gzip-compressed into this file and removed, so its length follows the content."
           }
         },
         "anchors": {

@@ -317,7 +317,9 @@ GRANULARITY_NONE = "none"
 # a console's settings file over the other device's. Absence is what misled it,
 # so the answer says *there is nothing to say about this file* in a word a
 # caller has to branch on. A card may never declare it (the card loader refuses
-# the spelling): it is the resolver's word for what no declaration named.
+# the spelling): it is the resolver's word for what no declaration named, and
+# for a file two declarations name with different roles
+# (``file-set-claims-merged``), where picking one would be the guess.
 #
 # :data:`ROLE_HIGH_SCORE` is the arcade family's, and it is a separate value
 # rather than a battery because the *merge* differs, which is the one thing a
@@ -477,6 +479,24 @@ CAVEAT_SAVE_ID_CANDIDATES = "save-id-candidates"
 # nothing atlas reads is `file-names-unestablished` as well as this — the two
 # say different things about the same place.
 CAVEAT_FILE_SET_DIRECTORIES_UNREAD = "file-set-directories-unread"
+# One file that more than one part of the answer named, with claims that
+# disagree. A save answer states every file once — `FileSet` refuses a
+# directory and name in two groups — but the readings it is built from can
+# meet one file twice: Dolphin with slot A's raw card and slot B's cartridge
+# save on one path (a memory card beside a battery), xemu with its disk image
+# and its EEPROM on one path, MAME asked about content named `default` (its
+# per-game `<rom_stem>.cfg` is then the shared `default.cfg`). The answer
+# states one group for the file, keeping each field only where every claim
+# stated the same value — `unknown` for a role, `null` for `size_fixed`, and
+# `shared-file` where the granularities differ, because a file that is not one
+# game's alone is never synced as one game's — and names the collision here
+# rather than settling it silently. `data` carries `dir` and `file`, and
+# `roles`, `granularities` and `size_fixed`: each the values the claims
+# stated, once each, in the order the claims came in, `size_fixed` spelled
+# `true`, `false` or `null`. A list with one value is a field the claims agreed
+# on. Claims that agree in every field — two slots of one emulator on one card
+# file — are one group and no caveat: nothing was lost.
+CAVEAT_FILE_SET_CLAIMS_MERGED = "file-set-claims-merged"
 # The caller named no system, and the answer holds anyway because every system
 # the core's record covers writes the same files. The claim is scoped to those
 # systems — `data["systems"]` lists them — because a core run for a system its
@@ -560,8 +580,10 @@ CAVEAT_APPENDED_CONFIG_VISIBILITY_UNESTABLISHED = "appended-config-visibility-un
 # path under ``/run/user``), so the folder is read as the host's own path: the
 # host's directory test decides it, and a spelling only the sandbox has, such
 # as one under ``/run/user``, passes untested beside
-# ``sandbox-path-untranslated``. The same holds for the working directory a
-# relative folder of any layer is joined to (#647 D2): a ``cwd``, or the
+# ``sandbox-path-untranslated``. The same holds for RetroArch's working
+# directory wherever an answer reads it (#647 D2, #660): the directory a
+# relative save folder of any layer, a MAME tree, or the relative file a core
+# writes (the ``working_directory`` root) is opened from. A ``cwd``, or the
 # sandbox ``HOME`` RetroArch falls back to, that the model cannot tell is
 # taken as shown, read as the host's. One note per
 # answer, ``data`` naming the sandbox's ``app_id``. Only where atlas models the
@@ -574,9 +596,11 @@ CAVEAT_SAVE_DIRECTORY_VISIBILITY_UNESTABLISHED = "save-directory-visibility-unes
 # ``--cwd`` (``common/flatpak-run.c:3634-3635`` at flatpak 1.16.6), and
 # bubblewrap changes into the old working directory only where the sandbox maps
 # it, otherwise into ``$HOME``, otherwise ``/`` (``bubblewrap.c:3407-3426`` at
-# v0.12.0). The sandbox shows nothing at ``cwd``, so a relative save folder is
-# opened from the directory it fell back to. ``data``: ``app_id``, the ``cwd``
-# the caller named, and the ``working_directory`` the process runs in instead.
+# v0.12.0). The sandbox shows nothing at ``cwd``, so what RetroArch opens
+# relative to its working directory — a relative save folder, the
+# ``working_directory`` root, a MAME tree joined to it (#660) — is opened from
+# the directory it fell back to. ``data``: ``app_id``, the ``cwd`` the caller
+# named, and the ``working_directory`` the process runs in instead.
 CAVEAT_CWD_HIDDEN_IN_SANDBOX = "cwd-hidden-in-sandbox"
 # The entry runs a standalone emulator, which never reads RetroArch's
 # configuration, so the appended files the question was asked with change
@@ -788,10 +812,16 @@ REASON_DATA_ROOT_DECIDED_BY_LAUNCH = "data-root-decided-by-launch"
 # ``region-decided-by-disc`` on that group and keep its ``regions``,
 # ``unstated``, ``dir`` and ``core_so`` / ``token``, adding ``content_path``,
 # the path the question named. ``disc-format-unread`` is an image of a format
-# atlas does not read (``disc`` names the image — the path itself, or the first
-# entry of its playlist — and ``extension`` its suffix); ``disc-unread`` is an
-# image atlas reads that did not yield a region (``disc``, and ``status`` from
-# :data:`atlas.psx_region.DISC_UNREAD_STATUSES`); ``content-unopenable`` is
+# atlas does not read (``disc`` names the image — the path itself, the first
+# entry of its playlist, the archive entry RetroArch extracts, spelled
+# ``<archive>#<entry>``, or the ``.toc`` Beetle PSX loads beside the content
+# — and ``extension`` its suffix); ``disc-unread`` is an image no region came
+# from (``disc``, and ``status`` from
+# :data:`atlas.psx_region.DISC_UNREAD_STATUSES`): one atlas read that did not
+# yield a region, or an entry extracted into a ``cache_directory`` atlas
+# cannot locate, left unread because what the core looks for beside it — a
+# cue sheet's or a playlist's files, and under Beetle PSX the ``.toc`` —
+# cannot be found; ``content-unopenable`` is
 # content the emulator itself does not open (``extension``), a fact about the
 # emulator rather than about atlas's read; ``region-property-unread`` is
 # DuckStation's ``custom_properties.ini`` there and not read, which may name a
@@ -1443,7 +1473,7 @@ class FileGroup:
     role: str
     """What kind of data this group holds — one of :data:`ROLES`, the word a syncing
     client decides by, and :data:`ROLE_UNKNOWN` where nothing atlas read says what the
-    file is.
+    file is, or where the claims that met on the file disagree.
     """
     size_fixed: bool | None = None
     """Whether each file of this group keeps its size from one session to the next.
@@ -1452,8 +1482,9 @@ class FileGroup:
     legitimately loses content — a file that may still grow or shrink by a
     trailing run of fill carries ``size-fixed-except-trailing-fill`` beside it.
     ``false`` where the size follows the content: a folder save, whose files the
-    game writes at whatever length it likes, and every file RetroArch writes
-    while ``save-files-compressed`` says it compresses them. ``null`` where it
+    game writes at whatever length it likes, a file its emulator compresses
+    (PUAE's ``_save.adf.gz``), and every file RetroArch writes while
+    ``save-files-compressed`` says it compresses them. ``null`` where it
     was not established — never a claim that the size varies.
     """
 
@@ -1510,6 +1541,16 @@ class FileSet:
     ``groups`` decomposes a set whose parts differ in kind or owner — see
     :class:`FileGroup`. An *unknown* set has none, because it has no files;
     empty means *not decomposed*, never *no files*.
+
+    **Each file is in one entry of ``groups``**, and that is enforced: a
+    directory and name stated twice — in two groups, or twice in one — is
+    refused, whichever directory it lies in, and so is a directory whose names
+    are not established stated twice with the same fields. The readings an answer is built
+    from can meet one file twice (two emulator slots configured onto one path,
+    a per-game name that equals a shared one), and where they do, the answer
+    states one group for it: a field stands where every claim stated the same
+    value, and where they differ the collision is named by
+    :data:`CAVEAT_FILE_SET_CLAIMS_MERGED` rather than settled silently.
 
     **A savefile answer's observed set is decomposed too, and every file it
     found is in one of its groups** — with the role the declaration knows for
@@ -1594,7 +1635,38 @@ class FileSet:
         if self.groups and self.state == FILE_SET_UNKNOWN:
             raise ValueError("FileSet: an unknown set has no files to decompose into groups")
         if self.groups:
+            self._check_one_entry_per_file()
             self._check_group_agreement()
+
+    def _check_one_entry_per_file(self) -> None:
+        """Refuse a file named twice in groups, or a nameless directory stated twice alike.
+
+        A file is one place, so it has one entry: two entries for one directory
+        and name are two claims about one file, and a client keying its files
+        by that pair would have to pick one. Every group is held, not only the
+        ones in the answer's own directory. A group whose names are not
+        established names no file a second one could repeat, but two such
+        groups stating one directory with the same fields are one claim made
+        twice, and are refused too.
+        """
+        unnamed: set[tuple[str, str, str, bool | None]] = set()
+        seen: set[tuple[str, str]] = set()
+        for group in self.groups:
+            if group.files is None:
+                claim = (group.dir, group.granularity, group.role, group.size_fixed)
+                if claim in unnamed:
+                    raise ValueError(
+                        f"FileSet: {group.dir!r} is stated twice alike in groups — a directory "
+                        "whose names are not established is one entry"
+                    )
+                unnamed.add(claim)
+            for name in group.files or ():
+                if (group.dir, name) in seen:
+                    raise ValueError(
+                        f"FileSet: {name!r} in {group.dir!r} is in more than one entry of groups — "
+                        "a file is stated once, with the claims that met on it merged"
+                    )
+                seen.add((group.dir, name))
 
     def _check_group_agreement(self) -> None:
         """Hold ``files`` to the groups stating names in the answer's own directory.
@@ -2092,6 +2164,10 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         (CAVEAT_APPENDED_CONFIG_OVERRIDDEN, "layer"): CFG_LAYER_OVERRIDE_KINDS,
         (CAVEAT_SAVE_FILES_COMPRESSED, "layer"): CFG_LAYER_KINDS,
         (CAVEAT_SIZE_FIXED_EXCEPT_TRAILING_FILL, "fill"): SIZE_FILLS,
+        # List-valued pairs: the values the colliding claims stated, each a
+        # word of the vocabulary a group's own field is held to.
+        (CAVEAT_FILE_SET_CLAIMS_MERGED, "roles"): ROLES,
+        (CAVEAT_FILE_SET_CLAIMS_MERGED, "granularities"): GRANULARITIES,
         # Which reading of a launch command made it more than plain words.
         (CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX, "construct"): SHELL_CONSTRUCTS,
         # Which bound atlas puts on taking one command apart was reached.

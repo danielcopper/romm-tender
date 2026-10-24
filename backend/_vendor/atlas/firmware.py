@@ -130,6 +130,7 @@ from .machine import (
     SYMLINK_HOPS,
     Machine,
     PathKind,
+    claimed_extensions,
     Ps2BiosHeaderResult,
     ReadStatus,
 )
@@ -173,7 +174,7 @@ from .placement import (
     DataValue,
 )
 from . import psx_region
-from .content_path import split_content_path
+from .content_path import is_compressed_file, split_content_path
 from .psx_region import REGION_SOURCES, DiscRegionReading, RegionSource
 from .retroarch_cfg import cfg_uint
 from .system_firmware import (
@@ -3480,6 +3481,14 @@ class FirmwareContext:
     # configured path from its own working directory (xemu). ``None`` leaves
     # that path a launch-dependent statement.
     cwd: str | None = None
+    # Where RetroArch writes the entry it extracts from an archive before a
+    # libretro core opens it: ``cache_directory`` as the global cfg states it,
+    # on this host (task_content.c:729-733 @ a79435a). ``None`` where it is
+    # empty or unset, and the entry then lands beside the archive
+    # (archive_file.c:111-116); ``cache_directory_read`` is false where it is
+    # set and does not read as a path on this host, so that place is unknown.
+    cache_directory: str | None = None
+    cache_directory_read: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -9187,8 +9196,48 @@ def _undecided_disc_caveat(
     )
 
 
+def _archive_hands(
+    machine: Machine, context: FirmwareContext, core: CoreDeclarations, content: _GameContent
+) -> tuple[psx_region.ArchiveHands | None, list[Caveat]]:
+    """How RetroArch hands this core the entry of an archive the question named, and what probing it cost.
+
+    Only an archive asks: which entry RetroArch extracts is the core's
+    ``valid_extensions`` (D2 of #691), which lives only in the binary, so the
+    core is probed the way :func:`_locating_library_name` probes it — in the
+    directory the enumeration was limited to. A core that cannot be probed
+    leaves the claims unknown, stated as ``core-unqueryable``; one in no
+    known directory leaves them unknown with the context's own statement of
+    why.
+    """
+    if not is_compressed_file(content.path):
+        return None, []
+    chain = context.core_options
+    info = None
+    caveats: list[Caveat] = []
+    if chain is not None and chain.core_dir is not None:
+        reading = machine.read_core(os.path.join(chain.core_dir, core.core_so))
+        info = reading.info
+        if info is None:
+            caveats.append(
+                Caveat(
+                    CAVEAT_CORE_UNQUERYABLE,
+                    f"core {core.core_so!r} could not be queried — the extensions it claims are unknown, so which "
+                    f"entry RetroArch extracts from {content.path} for it is not established",
+                    {"core_so": core.core_so, "reason": reading.status},
+                )
+            )
+    hands = psx_region.ArchiveHands(
+        claims=claimed_extensions(info),
+        block_extract=bool(info is not None and info.block_extract),
+        cache_directory=context.cache_directory,
+        cache_directory_read=context.cache_directory_read,
+    )
+    return hands, caveats
+
+
 def _region_group_for_content(
     machine: Machine,
+    context: FirmwareContext,
     core: CoreDeclarations,
     group: "FirmwareAlternatives",
     every: tuple[str, ...],
@@ -9209,11 +9258,13 @@ def _region_group_for_content(
     emulator = psx_region.CORE_EMULATORS.get(core.core_so.removesuffix(SO_SUFFIX))
     if emulator is None:
         return group, [_undecided_region_caveat(core, group, every, directory)]
-    reading = psx_region.read_disc_region(machine, emulator, content.path)
+    hands, probed = _archive_hands(machine, context, core, content)
+    reading = psx_region.read_disc_region(machine, emulator, content.path, hands)
     decided = _decided_group(group, reading)
     if reading.region is not None:
-        return decided, []
+        return decided, probed
     return decided, [
+        *probed,
         _undecided_disc_caveat(
             core.core_so,
             group,
@@ -9638,6 +9689,7 @@ def _spelled_firmware(
     if isinstance(entry, FirmwareAlternatives):
         entry, region_caveats = _region_group_for_content(
             machine,
+            context,
             core,
             entry,
             tuple(row.region for row in route.regions),
@@ -9812,7 +9864,7 @@ def _two_door_firmware(
     entry = _locating_entry(_region_options(answers), pinned=pinned)
     if isinstance(entry, FirmwareAlternatives):
         entry, region_caveats = _region_group_for_content(
-            machine, core, entry, regions, directory=directory, content=content
+            machine, context, core, entry, regions, directory=directory, content=content
         )
         caveats.extend(region_caveats)
     return _LocatedFirmware(

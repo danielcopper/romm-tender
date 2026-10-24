@@ -77,6 +77,38 @@ def archive_delimiter(path: str) -> int:
     return -1
 
 
+def is_compressed_extension(extension: str) -> bool:
+    """Whether RetroArch's loader treats this extension as a compressed container.
+
+    ``path_is_compressed_file`` replicated exactly (file_path.c:294-320 @
+    a79435a): ``zip``, ``zst`` and ``apk`` case-folded per character — and
+    ``7z`` folding only its first position, so a ``.7Z`` is *not* compressed
+    to this loader. The quirk is upstream's, and smoothing it over would
+    state a behaviour the shipped binary does not have. *extension* may carry
+    its leading dot.
+    """
+    rest = extension[1:] if extension.startswith(".") else extension
+    if len(rest) == 2 and rest[0] == "7":
+        return rest[1] == "z"
+    return _ascii_lower(rest) in ("zip", "zst", "apk")
+
+
+def path_extension(path: str) -> str:
+    """``path_get_extension`` (file_path.c:231-239 @ a79435a): after the last dot of the last component, else empty.
+
+    A name ending in its dot has none, and a name that is nothing but a dot
+    and letters — ``.zip`` — has the letters, as ``strrchr`` finds them.
+    """
+    name = path[path.rfind("/") + 1 :]
+    dot = name.rfind(".")
+    return name[dot + 1 :] if dot >= 0 else ""
+
+
+def is_compressed_file(path: str) -> bool:
+    """``path_is_compressed_file`` over a path: does RetroArch's loader open it as an archive?"""
+    return is_compressed_extension(path_extension(path))
+
+
 def _basename_after_delimiter(path: str) -> str:
     """``path_basename`` (``file_path.c:692-700``) — after the delimiter, else the last slash."""
     cut = archive_delimiter(path)

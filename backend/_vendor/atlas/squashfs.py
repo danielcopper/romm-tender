@@ -188,14 +188,25 @@ def zstd_provider() -> ZstdProvider | None:
     return None if resolved is None else resolved[0]
 
 
+def zstd_codec() -> Any | None:
+    """The codec object zstd data goes through here — ``None`` where no provider answers.
+
+    The one resolution every zstd reader in atlas shares: the squashfs image
+    here, and a CHD's ``cdzs`` hunks (:mod:`atlas.psx_chd`). The object is used
+    only through its ``decompress(bytes) -> bytes``.
+    """
+    resolved = _resolved_zstd()
+    return None if resolved is None else resolved[1]
+
+
 def _decompressor(compressor: int) -> Callable[[bytes], bytes]:
     if compressor == _COMPRESSOR_GZIP:
         return zlib.decompress
     if compressor == _COMPRESSOR_ZSTD:
-        resolved = _resolved_zstd()
-        if resolved is None:
+        codec = zstd_codec()
+        if codec is None:
             raise CodecUnavailable(_NO_ZSTD_PROVIDER)
-        return resolved[1].decompress
+        return codec.decompress
     raise CodecUnavailable(f"unsupported squashfs compressor id {compressor}")
 
 

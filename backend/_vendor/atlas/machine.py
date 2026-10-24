@@ -89,12 +89,45 @@ import re
 import stat as _stat
 import subprocess
 import sys
+import struct
 import zipfile
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Callable, Iterable, Literal, Mapping, NamedTuple, Protocol, runtime_checkable
+from typing import BinaryIO, Callable, Iterable, Literal, Mapping, NamedTuple, Protocol, cast, runtime_checkable
 
-from . import lha, ps2_bios, psx_disc, squashfs, whdload
+from . import lha, ps2_bios, psx_chd, psx_disc, psx_pbp, squashfs, whdload
+from .content_path import archive_delimiter
+
+try:
+    import zlib
+except ImportError:  # a frozen runtime can ship without zlib
+    zlib = None
+# Everything zipfile raises over bytes it will not take, at the interpreters
+# atlas supports, and so the one boundary every read of a zip passes: a file
+# that is no zip or a structure it refuses (BadZipFile, LargeZipFile); a
+# version needed to extract, a flag or a method it does not implement
+# (NotImplementedError); an encrypted entry or a codec module the runtime
+# lacks (RuntimeError, NotImplementedError's base); a name flagged UTF-8 that
+# is not (UnicodeDecodeError); sizes and offsets a crafted directory states
+# past the file or past what a field holds (EOFError, struct.error,
+# ValueError, OverflowError); and a deflate stream that does not decode
+# (zlib.error). A listing that meets one answers "unreadable" — "not-archive"
+# only where the file holds no end record at all (_bad_zip_status) — and a
+# read of an entry ``Unreadable``: a zip RetroArch may well read, that zipfile
+# would not. An entry atlas will not read by its own header — encrypted,
+# patched, another method — and a deflated one without zlib are classified
+# before zipfile is asked (:func:`_open_entry`), so neither ends in these words.
+_ZIP_FAILURES: tuple[type[Exception], ...] = (
+    zipfile.BadZipFile,
+    zipfile.LargeZipFile,
+    RuntimeError,
+    UnicodeDecodeError,
+    EOFError,
+    struct.error,
+    ValueError,
+    OverflowError,
+    *(() if zlib is None else (zlib.error,)),
+)
 
 _CORE_PROBE_TIMEOUT_SECONDS = 15
 SYMLINK_HOPS = 40
@@ -189,13 +222,24 @@ PS2_BIOS_NOT_A_BIOS: Ps2BiosHeaderStatus = "not-a-bios"
 # sheet the parser refuses, or one whose first track is audio. "missing" and
 # "unreadable" keep the plain read's meaning, and they speak for every file the
 # read needs — a cue sheet's data file that is not there is a disc that is
-# missing, whatever the sheet itself is.
-DiscIdentityStatus = Literal["ok", "missing", "unreadable", "format-not-read", "not-a-disc"]
+# missing, whatever the sheet itself is; "unreadable" also answers a read that
+# would pass a bound atlas reads within: a length the image states, a chain of
+# copies or of metadata entries, a parent's folder too large to search, or the
+# work one read may spend. A CHD adds two: "codec-unavailable" is a CHD atlas reads whose hunk
+# needs a codec this runtime lacks — or a PBP whose blocks need zlib — and
+# "parent-not-found" one that names a parent DuckStation's search of its folder
+# does not find (atlas.psx_chd) — not a file that is missing, since no path
+# names the parent.
+DiscIdentityStatus = Literal[
+    "ok", "missing", "unreadable", "format-not-read", "not-a-disc", "codec-unavailable", "parent-not-found"
+]
 DISC_OK: DiscIdentityStatus = "ok"
 DISC_MISSING: DiscIdentityStatus = "missing"
 DISC_UNREADABLE: DiscIdentityStatus = "unreadable"
 DISC_FORMAT_NOT_READ: DiscIdentityStatus = "format-not-read"
 DISC_NOT_A_DISC: DiscIdentityStatus = "not-a-disc"
+DISC_CODEC_UNAVAILABLE: DiscIdentityStatus = "codec-unavailable"
+DISC_PARENT_NOT_FOUND: DiscIdentityStatus = "parent-not-found"
 
 # Listing an archive has one way to fail beyond a plain file read:
 # "not-archive" is a file that was opened and is not an archive of a kind
@@ -384,17 +428,41 @@ class DiscIdentityResult:
 
     The statuses are documented on :data:`DiscIdentityStatus`; the identity is
     :class:`atlas.psx_disc.DiscIdentity`, the bytes the emulators decide a
-    region from.
+    region from. ``chd`` is set for a CHD whose header was read, whatever the
+    read found after it: an emulator's own open decides on those facts before
+    any hunk is read, so they stand where the identity does not. ``pbp`` is the
+    same for a PBP whose emulators' opens were followed
+    (:class:`atlas.psx_pbp.PbpFacts`): the identity is then the disc as the
+    readers that reach it read it.
     """
 
     status: DiscIdentityStatus
     identity: psx_disc.DiscIdentity | None = None
+    chd: psx_chd.ChdFacts | None = None
+    pbp: psx_pbp.PbpFacts | None = None
 
     def __post_init__(self) -> None:
         if (self.identity is None) == (self.status == DISC_OK):
             raise ValueError(
                 f"DiscIdentityResult: identity must be set exactly when status is 'ok' (got {self.status!r})"
             )
+        if self.status == DISC_PARENT_NOT_FOUND and (self.chd is None or not self.chd.requires_parent):
+            raise ValueError("DiscIdentityResult: a parent goes unfound only for a CHD whose header names one")
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractedEntry:
+    """One entry of an archive, written where RetroArch extracts it before the core opens it.
+
+    ``archive`` is the archive's path and ``entry`` the entry's name as
+    :meth:`Machine.list_disc_archive` lists it. A disc read handed one reads
+    the path it is asked about as that entry's bytes, and every other file the
+    image names — a cue sheet's data files — off the disk, as the core then
+    finds them.
+    """
+
+    archive: str
+    entry: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -543,6 +611,19 @@ class CoreInfo:
     def __post_init__(self) -> None:
         if self.options is not None:
             object.__setattr__(self, "options", MappingProxyType(dict(self.options)))
+
+
+def claimed_extensions(info: CoreInfo | None) -> frozenset[str] | None:
+    """The core's ``valid_extensions``, split and folded the way RetroArch matches them.
+
+    Lowercase because every comparison RetroArch makes against this list is
+    case-insensitive (``string_list_find_elem``'s ``|32`` folding and the
+    archive filter's ``tolower``, string_list.c:342-390 @ a79435a). ``None``
+    is a core nobody read, never an empty claim.
+    """
+    if info is None or info.valid_extensions is None:
+        return None
+    return frozenset(token.lower() for token in info.valid_extensions.split("|") if token)
 
 
 @dataclass(frozen=True, slots=True)
@@ -826,14 +907,61 @@ def _original_name(container: str, member: str) -> str:
     return next((raw for raw in _raw_names(container, suffix) if _normalise(raw) == member), member)
 
 
+# The end record's signature and fixed length, and the longest comment it can
+# carry: where a record can sit is within this many bytes of the file's end.
+_END_RECORD = b"PK\x05\x06"
+_END_RECORD_SIZE = 22
+_END_RECORD_REACH = _END_RECORD_SIZE + 0xFFFF
+
+
+def _has_end_record(path: str) -> bool:
+    """Does the file hold a zip's end-of-central-directory record where RetroArch's zip backend finds one?
+
+    ``zip_parse_file_init`` scans from the end for the signature whose
+    record, with the comment length it states, ends exactly at the file's
+    end (archive_file_zlib.c:587-616 @ a79435a); a comment is at most 65535
+    bytes, so only the last :data:`_END_RECORD_REACH` bytes can hold it. A
+    file that has none is no zip to RetroArch either — the one case a listing
+    answers ``not-archive``.
+    """
+    with open(path, "rb") as handle:
+        size = handle.seek(0, os.SEEK_END)
+        start = max(size - _END_RECORD_REACH, 0)
+        handle.seek(start)
+        tail = handle.read()
+    at = tail.rfind(_END_RECORD)
+    while at >= 0:
+        if at + _END_RECORD_SIZE <= len(tail):
+            comment = int.from_bytes(tail[at + 20 : at + 22], "little")
+            if start + at + _END_RECORD_SIZE + comment == size:
+                return True
+        at = tail.rfind(_END_RECORD, 0, at)
+    return False
+
+
+def _bad_zip_status(path: str) -> ArchiveStatus:
+    """What a listing answers where zipfile raises ``BadZipFile``: ``not-archive`` only with no end record.
+
+    zipfile raises the same error for bytes that hold no zip and for a zip
+    whose central directory it refuses — a malformed extra field, a zip64
+    record it cannot follow — which RetroArch skips by length and reads
+    (archive_file_zlib.c:667-719 @ a79435a). Only the first is a finding
+    about the bytes; the second is a zip atlas did not read.
+    """
+    try:
+        return ARCHIVE_UNREADABLE if _has_end_record(path) else ARCHIVE_NOT_ARCHIVE
+    except OSError:
+        return ARCHIVE_UNREADABLE
+
+
 def _zip_names(path: str) -> tuple[str, ...]:
     _stat_regular_file(path)
     try:
         with zipfile.ZipFile(path) as archive:
             return tuple(archive.namelist())
     except zipfile.BadZipFile:
-        raise _ArchiveOutcome(ARCHIVE_NOT_ARCHIVE) from None
-    except OSError:
+        raise _ArchiveOutcome(_bad_zip_status(path)) from None
+    except (OSError, *_ZIP_FAILURES):
         raise _ArchiveOutcome(ARCHIVE_UNREADABLE) from None
 
 
@@ -1012,6 +1140,10 @@ class Machine(Protocol):
     ``read_appimage_stamp`` searches one AppImage entry's bytes for a build
     stamp: the pattern's first group where the pattern matches exactly once,
     ``no-stamp`` or ``ambiguous`` where it matches nowhere or more than once.
+    ``list_disc_archive`` lists a zip's entries the way RetroArch's zip backend
+    walks them, and ``read_archive_text`` reads one entry as text of at most
+    *limit* bytes — ``None`` where it holds more — the two reads a launch of an
+    archive under a libretro core makes before the core sees a file.
     ``file_size`` and ``file_digest`` answer for regular files only and return
     ``None`` whenever the answer cannot be determined (missing, unreadable, not
     a regular file, or an algorithm outside :data:`DIGEST_ALGORITHMS`).
@@ -1031,9 +1163,13 @@ class Machine(Protocol):
 
     def read_ps2_bios_header(self, path: str) -> Ps2BiosHeaderResult: ...
 
-    def read_disc_identity(self, path: str) -> DiscIdentityResult: ...
+    def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult: ...
 
     def list_archive(self, path: str) -> ArchiveListResult: ...
+
+    def list_disc_archive(self, path: str) -> ArchiveListResult: ...
+
+    def read_archive_text(self, archive: str, entry: str, limit: int) -> ReadResult | None: ...
 
     def read_whdload_slave(self, path: str) -> WhdloadSlaveResult: ...
 
@@ -1087,6 +1223,224 @@ def _stamp_in(data: bytes, pattern: re.Pattern[bytes]) -> AppImageStampResult:
         return AppImageStampResult(APPIMAGE_STAMP_OK, matches[0].decode("ascii"))
     except UnicodeDecodeError:
         return AppImageStampResult(APPIMAGE_NO_STAMP)
+
+
+
+def _open_binary(path: str) -> BinaryIO:
+    return open(path, "rb")
+
+
+def _disc_identity(path: str, opener: psx_disc.Opener) -> DiscIdentityResult:
+    """The disc read by the reader *path*'s suffix picks, every refusal mapped to its status.
+
+    The header facts of a CHD or a PBP are read first and ride on whatever the
+    identity read after them comes to.
+    """
+    suffix = os.path.splitext(path)[1].lower()
+    chd: psx_chd.ChdFacts | None = None
+    pbp: psx_pbp.PbpFacts | None = None
+
+    def result(status: DiscIdentityStatus, identity: psx_disc.DiscIdentity | None = None) -> DiscIdentityResult:
+        return DiscIdentityResult(status, identity, chd=chd, pbp=pbp)
+
+    try:
+        if suffix == psx_chd.CHD_SUFFIX:
+            chd = psx_chd.read_facts(path, opener)
+            identity = psx_chd.read_identity(path, opener, _regular_files)
+        elif suffix == psx_pbp.PBP_SUFFIX:
+            # One read, so a crafted file costs its bounds once.
+            read = psx_pbp.read(path, opener)
+            pbp = read.facts
+            if read.refusal is not None:
+                raise read.refusal
+            assert read.identity is not None
+            identity = read.identity
+        else:
+            identity = psx_disc.read_identity(path, opener)
+    except psx_chd.ParentNotFound:
+        return result(DISC_PARENT_NOT_FOUND)
+    except (FileNotFoundError, NotADirectoryError):
+        return result(DISC_MISSING)
+    except psx_disc.FormatNotRead:
+        return result(DISC_FORMAT_NOT_READ)
+    except psx_disc.NotADisc:
+        return result(DISC_NOT_A_DISC)
+    except psx_disc.CodecUnavailable:
+        return result(DISC_CODEC_UNAVAILABLE)
+    except (OSError, EOFError, zipfile.BadZipFile, psx_disc.Unreadable):
+        return result(DISC_UNREADABLE)
+    return result(DISC_OK, identity)
+
+
+# The most of one deflated archive entry a disc read may decompress, every
+# byte counted each time it is decompressed: a seek back restarts the stream
+# at the entry's start (``zipfile.ZipExtFile.seek``), so a read that jumps
+# back and forth through a large entry pays for every pass. Far past the
+# whole of a CD read once.
+_MAX_ENTRY_INFLATE = 2 << 30
+# The two ways RetroArch's zip backend stores an entry that the standard
+# library decodes too (archive_file_zlib.c:69-71, :187-260 @ a79435a).
+_READ_ENTRY_METHODS = (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
+
+
+def _entry_name(info: zipfile.ZipInfo) -> str:
+    """An entry's name as RetroArch reads it out of the central directory — the bytes, unconverted.
+
+    RetroArch copies the name's bytes as they stand (archive_file_zlib.c:700-708
+    @ a79435a); ``zipfile`` decodes them as UTF-8 or CP437 by the entry's flag,
+    so they are encoded back and held as UTF-8 with ``surrogateescape``, the
+    spelling a Linux path of those bytes has.
+    """
+    raw = info.orig_filename.encode("utf-8" if info.flag_bits & 0x800 else "cp437")
+    return raw.decode("utf-8", "surrogateescape")
+
+
+def _entry_info(archive: zipfile.ZipFile, entry: str) -> zipfile.ZipInfo:
+    """The first entry, in the central directory's order, of exactly that name — ``FileNotFoundError`` where none."""
+    found = next((info for info in archive.infolist() if _entry_name(info) == entry), None)
+    if found is None:
+        raise FileNotFoundError(entry)
+    return found
+
+
+class _ArchivedFile:
+    """One archive entry read like a file: a seek only moves the position, a read decompresses up to it.
+
+    A stored entry seeks for free; a deflated one decompresses every byte it
+    passes, and a seek back starts over, so each such byte is charged against
+    :data:`_MAX_ENTRY_INFLATE` before it is decompressed — a read of any
+    size, an unsized one too, goes in chunks of :data:`_ENTRY_CHUNK`, each
+    charged first. The end is the entry's stated size, never a read to it.
+    Whatever zipfile raises reading it (:data:`_ZIP_FAILURES`) is
+    :class:`~atlas.psx_disc.Unreadable`.
+    """
+
+    def __init__(self, archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> None:
+        self._archive = archive
+        self._stream = archive.open(info)
+        self._size = info.file_size
+        self._deflated = info.compress_type == zipfile.ZIP_DEFLATED
+        self._position = 0
+        self._spent = 0
+
+    def __enter__(self) -> "_ArchivedFile":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self._stream.close()
+        self._archive.close()
+
+    def seek(self, offset: int, whence: int = os.SEEK_SET) -> int:
+        base = {os.SEEK_SET: 0, os.SEEK_CUR: self._position, os.SEEK_END: self._size}[whence]
+        self._position = max(base + offset, 0)
+        return self._position
+
+    def tell(self) -> int:
+        return self._position
+
+    def read(self, size: int = -1) -> bytes:
+        wanted = max(self._size - self._position, 0) if size < 0 else size
+        chunks: list[bytes] = []
+        try:
+            current = self._stream.tell()
+            if current != self._position:
+                self._charge(self._position - current if self._position > current else self._position)
+                self._stream.seek(self._position)
+            while wanted > 0:
+                step = min(wanted, _ENTRY_CHUNK)
+                self._charge(step)
+                chunk = self._stream.read(step)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                wanted -= len(chunk)
+                self._position += len(chunk)
+        except _ZIP_FAILURES as error:
+            raise psx_disc.Unreadable("an archive entry whose bytes zipfile does not give back") from error
+        return b"".join(chunks)
+
+    def _charge(self, decompressed: int) -> None:
+        if not self._deflated:
+            return
+        self._spent += decompressed
+        if self._spent > _MAX_ENTRY_INFLATE:
+            raise psx_disc.Unreadable(
+                f"a read decompressing more than atlas's bound of {_MAX_ENTRY_INFLATE} bytes of one archive entry"
+            )
+
+
+# A deflated entry is read 1 MiB at a time, each charged before it is decompressed.
+_ENTRY_CHUNK = 1 << 20
+# The flags an entry atlas does not read is marked with: encrypted (bit 0),
+# patched data (bit 5) and strong encryption (bit 6).
+_UNREAD_ENTRY_FLAGS = 0x61
+
+
+def _open_entry(archive_path: str, entry: str) -> BinaryIO:
+    """*entry* of the zip at *archive_path*, opened for reading.
+
+    ``FileNotFoundError`` where the archive names no such entry;
+    :class:`~atlas.psx_disc.FormatNotRead` where its header marks it
+    encrypted or patched, or names a method other than the two read here;
+    :class:`~atlas.psx_disc.CodecUnavailable` where a deflated entry meets a
+    runtime without ``zlib``. All three are decided from the central
+    directory before zipfile opens the entry, and whatever zipfile raises
+    then (:data:`_ZIP_FAILURES`) is :class:`~atlas.psx_disc.Unreadable`.
+    """
+    try:
+        archive = zipfile.ZipFile(archive_path)
+    except _ZIP_FAILURES as error:
+        raise psx_disc.Unreadable(f"{archive_path!r} is a zip zipfile will not open") from error
+    try:
+        info = _entry_info(archive, entry)
+        if info.compress_type not in _READ_ENTRY_METHODS or info.flag_bits & _UNREAD_ENTRY_FLAGS:
+            raise psx_disc.FormatNotRead(
+                f"archive entry {entry!r} is encrypted, patched or stored by method {info.compress_type}, which atlas "
+                "does not read"
+            )
+        if info.compress_type == zipfile.ZIP_DEFLATED and zlib is None:
+            raise psx_disc.CodecUnavailable(f"archive entry {entry!r} needs the zlib module")
+        try:
+            return cast(BinaryIO, _ArchivedFile(archive, info))
+        except _ZIP_FAILURES as error:
+            raise psx_disc.Unreadable(f"archive entry {entry!r} is one zipfile will not open") from error
+    except BaseException:
+        archive.close()
+        raise
+
+
+def _extracted_opener(path: str, extracted: ExtractedEntry) -> psx_disc.Opener:
+    """An opener that answers *path* with the extracted entry's bytes and every other path off the disk.
+
+    That is what the core opens once RetroArch has written the entry to
+    *path* (archive_file.c:111-123 @ a79435a): the entry where it was
+    extracted, and anything it names beside it as the disk holds it.
+    """
+
+    def opener(name: str) -> BinaryIO:
+        return _open_entry(extracted.archive, extracted.entry) if name == path else _open_binary(name)
+
+    return opener
+
+
+def _regular_files(directory: str) -> list[str]:
+    """The regular files of *directory* in directory order, a symlink followed — the files a CHD's parent is
+    looked for among.
+
+    DuckStation's listing (``FindFiles``, file_system.cpp:2247-2376 at
+    RetroDECK/Duckstation@1f6de046b) also lists a FIFO, a socket or a device
+    and then opens it; such a file is left out here, because opening a FIFO
+    waits for a writer that may never come. A folder that does not list
+    answers no files, as ``opendir`` failing does there.
+    """
+    try:
+        with os.scandir(directory) as entries:
+            return [entry.path for entry in entries if entry.is_file()]
+    except OSError:
+        return []
 
 
 class RealMachine:
@@ -1228,36 +1582,35 @@ class RealMachine:
             return Ps2BiosHeaderResult(PS2_BIOS_UNREADABLE)
         return Ps2BiosHeaderResult(PS2_BIOS_OK, header)
 
-    def read_disc_identity(self, path: str) -> DiscIdentityResult:
+    def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult:
         """The bytes a PlayStation disc's emulators decide its region from — a status, and the identity where read.
 
-        *path* is the image itself — a ``.cue`` or a bare image, never a
-        playlist, which each emulator resolves by its own rules above this seam.
-        It must be a regular file, checked before anything is opened; every
-        file the read then opens — a cue sheet's data files — keeps the plain
-        read's two words, so a sheet whose data file is gone answers
-        ``missing``. The reader is :mod:`atlas.psx_disc`, and its two refusals
-        map to ``format-not-read`` and ``not-a-disc``.
+        *path* is the image itself — a ``.cue``, a bare image, a ``.chd`` or a
+        ``.pbp``, never a playlist, which each emulator resolves by its own
+        rules above this seam. It must be a regular file, checked before
+        anything is opened; every file the read then opens — a cue sheet's
+        data files — keeps the plain read's two words, so a sheet whose data
+        file is gone answers ``missing``. With *extracted*, *path* is where
+        RetroArch writes that archive entry, and its bytes are the entry's:
+        the archive is the file checked, and the entry is read straight out of
+        it (:func:`_extracted_opener`). The readers are :mod:`atlas.psx_disc`,
+        :mod:`atlas.psx_chd` for a CHD and :mod:`atlas.psx_pbp` for a PBP;
+        their refusals map to ``format-not-read``, ``not-a-disc``,
+        ``codec-unavailable``, ``unreadable`` and ``parent-not-found``. A
+        CHD's parent is looked for among the regular files of its folder
+        (:func:`_regular_files`).
         """
+        checked = path if extracted is None else extracted.archive
         try:
-            st = os.stat(path)
+            st = os.stat(checked)
         except (FileNotFoundError, NotADirectoryError):
             return DiscIdentityResult(DISC_MISSING)
         except OSError:
             return DiscIdentityResult(DISC_UNREADABLE)
         if not _stat.S_ISREG(st.st_mode):
             return DiscIdentityResult(DISC_UNREADABLE)
-        try:
-            identity = psx_disc.read_identity(path, lambda name: open(name, "rb"))
-        except (FileNotFoundError, NotADirectoryError):
-            return DiscIdentityResult(DISC_MISSING)
-        except psx_disc.FormatNotRead:
-            return DiscIdentityResult(DISC_FORMAT_NOT_READ)
-        except psx_disc.NotADisc:
-            return DiscIdentityResult(DISC_NOT_A_DISC)
-        except OSError:
-            return DiscIdentityResult(DISC_UNREADABLE)
-        return DiscIdentityResult(DISC_OK, identity)
+        opener = _open_binary if extracted is None else _extracted_opener(path, extracted)
+        return _disc_identity(path, opener)
 
     def list_archive(self, path: str) -> ArchiveListResult:
         """What one container holds — the read PUAE's own walk over a mounted volume makes.
@@ -1285,6 +1638,59 @@ class RealMachine:
         except _ArchiveOutcome as outcome:
             return ArchiveListResult(outcome.status)
         return ArchiveListResult(ARCHIVE_NOT_ARCHIVE)
+
+    def list_disc_archive(self, path: str) -> ArchiveListResult:
+        """A zip's entries as RetroArch's zip backend walks them, whatever the file is called.
+
+        The central directory's order and every entry in it, a directory's
+        too, each name as :func:`_entry_name` holds its bytes
+        (archive_file_zlib.c:667-748 @ a79435a) — which of them the core is
+        handed is the launch's rule (:func:`atlas.psx_region.extracted_entry`).
+        Regular files only, checked before opening; bytes that hold no end
+        record where RetroArch looks for one answer ``not-archive``
+        (:func:`_has_end_record`), and anything else ``zipfile`` will not take
+        (:data:`_ZIP_FAILURES`) ``unreadable``.
+        """
+        try:
+            _stat_regular_file(path)
+            # RetroArch's own test first: zipfile also takes a record whose
+            # comment does not reach the file's end, which RetroArch does not.
+            if not _has_end_record(path):
+                return ArchiveListResult(ARCHIVE_NOT_ARCHIVE)
+            with zipfile.ZipFile(path) as archive:
+                return ArchiveListResult(ARCHIVE_OK, tuple(_entry_name(info) for info in archive.infolist()))
+        except _ArchiveOutcome as outcome:
+            return ArchiveListResult(outcome.status)
+        except zipfile.BadZipFile:
+            return ArchiveListResult(_bad_zip_status(path))
+        except (OSError, *_ZIP_FAILURES):
+            return ArchiveListResult(ARCHIVE_UNREADABLE)
+
+    def read_archive_text(self, archive: str, entry: str, limit: int) -> ReadResult | None:
+        """One zip entry as text of at most *limit* bytes, decoded as UTF-8 without newline translation.
+
+        ``None`` where the entry is longer, ``missing`` where the archive or
+        the entry is not there, ``unreadable`` where the bytes do not come
+        back — an archive that is no zip, an entry stored by a method atlas
+        does not read among them.
+        """
+        try:
+            _stat_regular_file(archive)
+            with _open_entry(archive, entry) as handle:
+                held = handle.read(limit + 1)
+        except _ArchiveOutcome as outcome:
+            return ReadResult(READ_MISSING if outcome.status == ARCHIVE_MISSING else READ_UNREADABLE)
+        except FileNotFoundError:
+            return ReadResult(READ_MISSING)
+        except (OSError, EOFError, zipfile.BadZipFile, psx_disc.FormatNotRead, psx_disc.CodecUnavailable,
+                psx_disc.Unreadable):
+            return ReadResult(READ_UNREADABLE)
+        if len(held) > limit:
+            return None
+        try:
+            return ReadResult(READ_OK, held.decode("utf-8"))
+        except UnicodeDecodeError:
+            return ReadResult(READ_INVALID_TEXT)
 
     def read_whdload_slave(self, path: str) -> WhdloadSlaveResult:
         """The slave the core would launch for this content, and what it states.
@@ -2182,54 +2588,180 @@ def _fixture_ps2_bios_header(path: str, spec: Mapping[str, object]) -> ps2_bios.
     return ps2_bios.Ps2BiosHeader.from_strings(strings["romver"], strings["serial"])
 
 
-# The states a fixture disc identity may declare short of the identity: what
-# RealMachine can report about an image it opened. "missing" is among them
+# The states a fixture disc identity of a cue sheet or a bare image may declare
+# short of the identity: what RealMachine can report about an image it opened. "missing" is among them
 # because the read opens more than the declared file — a cue sheet's data file
 # that is not there answers it. "format-not-read" is not: whether a reader
 # opens a suffix is decided by the suffix, which the fixture answers from the
 # path itself, as the real reader does.
 _FIXTURE_DISC_STATES = ("missing", "unreadable", "not-a-disc")
 _FIXTURE_DISC_FIELDS = ("license", "system_cnf", "boot_found", "edc_valid")
-_FIXTURE_DISC_SUFFIXES = (psx_disc.CUE_SUFFIX, *psx_disc.BARE_IMAGE_SUFFIXES)
+_FIXTURE_DISC_SUFFIXES = (psx_disc.CUE_SUFFIX, *psx_disc.BARE_IMAGE_SUFFIXES, psx_chd.CHD_SUFFIX, psx_pbp.PBP_SUFFIX)
+# A CHD answers in one of two shapes. Where its header was not read, a state
+# alone — and "format-not-read" is among them, for a header of a version before
+# 5. Where it was, the facts an emulator's open decides on beside what the read
+# found after them: an identity, or one of the states a read past the header
+# can end in. A CHD names no file but its parent, so "missing" is in neither
+# list: a parent the search does not find is "parent-not-found", which only a
+# header that names a parent can answer.
+_FIXTURE_CHD_HEADER_STATES = ("unreadable", "not-a-disc", "format-not-read")
+_FIXTURE_CHD_FIELDS = ("codecs", "requires_parent", "identity")
+_FIXTURE_CHD_READ_STATES = ("unreadable", "not-a-disc", "format-not-read", "codec-unavailable", "parent-not-found")
+# A PBP answers with the facts both readers' opens decide on beside what the
+# read of the disc came to, or "unreadable" alone where its bytes did not come
+# back for either open. Its disc is in the one file, so it is never "missing".
+_FIXTURE_PBP_FIELDS = ("duckstation_refuses", "encrypted", "identity")
+_FIXTURE_PBP_READ_STATES = ("unreadable", "not-a-disc", "format-not-read", "codec-unavailable")
 
 
 def disc_suffix_read(path: str) -> bool:
-    """Does :mod:`atlas.psx_disc` open an image by this path's suffix — the rule both machines and the validator share."""
+    """Does :mod:`atlas.psx_disc`, :mod:`atlas.psx_chd` or :mod:`atlas.psx_pbp` open an image by this path's suffix —
+    the rule both machines and the validator share."""
     return os.path.splitext(path)[1].lower() in _FIXTURE_DISC_SUFFIXES
+
+
+def archive_entry_key(key: str) -> tuple[str, str] | None:
+    """``(archive, entry)`` where a fixture key names an archive entry in RetroArch's ``<archive>#<entry>`` spelling.
+
+    The split is RetroArch's own (:func:`atlas.content_path.archive_delimiter`):
+    the first ``#`` behind a ``.zip``, ``.zst``, ``.apk`` or ``.7z``.
+    ``None`` for a key that names a file.
+    """
+    cut = archive_delimiter(key)
+    return None if cut == -1 else (key[:cut], key[cut + 1 :])
+
+
+def _listed_entry(key: str, archives: Mapping[str, tuple[str, ...] | str], what: str) -> None:
+    """Refuse an ``<archive>#<entry>`` declaration whose archive does not list that entry."""
+    split = archive_entry_key(key)
+    assert split is not None
+    archive, entry = split
+    listed = archives.get(archive)
+    if not isinstance(listed, tuple) or entry not in listed:
+        raise ValueError(
+            f"{what} {key!r}: an archive entry's bytes are declared only for an entry `archives` lists in that archive"
+        )
 
 
 def _validate_fixture_disc_identities(
     identities: Mapping[str, Mapping[str, object] | str],
     files: Mapping[str, tuple[ReadStatus, str | None]],
-) -> dict[str, psx_disc.DiscIdentity | str]:
-    """The declared disc identities, built once into the reader's own type.
+    archives: Mapping[str, tuple[str, ...] | str],
+) -> dict[str, DiscIdentityResult]:
+    """The declared disc identities, built once into the answer the seam returns.
 
     An identity describes an image's bytes, so its path must be a declared
-    file whose bytes can be read, and one whose suffix the reader opens — a
+    file whose bytes can be read — or an archive entry `archives` lists,
+    spelled ``<archive>#<entry>`` — and one whose suffix the reader opens: a
     declaration beside a suffix the reader refuses would assert a read the
-    machine it models never makes.
+    machine it models never makes. A ``.chd`` takes the shapes
+    :func:`_fixture_chd_result` reads, a ``.pbp`` those
+    :func:`_fixture_pbp_result` reads.
     """
-    validated: dict[str, psx_disc.DiscIdentity | str] = {}
+    validated: dict[str, DiscIdentityResult] = {}
     for path, spec in identities.items():
-        if path not in files:
-            raise ValueError(f"disc identity {path!r}: an identity describes a file's bytes, and no file is declared there")
-        if files[path][0] == READ_UNREADABLE:
-            raise ValueError(
-                f"disc identity {path!r}: an unreadable file states no identity — its bytes are what cannot be "
-                "read, so a real one answers 'unreadable' first"
-            )
+        _refuse_undescribed_disc(path, files, archives)
         if not disc_suffix_read(path):
             raise ValueError(
                 f"disc identity {path!r}: no reader opens this suffix, so the path answers 'format-not-read' "
                 "whatever is declared"
             )
-        if isinstance(spec, str):
-            if spec not in _FIXTURE_DISC_STATES:
-                raise ValueError(f"disc identity {path!r}: a state must be one of {_FIXTURE_DISC_STATES}, got {spec!r}")
-            validated[path] = spec
-            continue
-        validated[path] = _fixture_disc_identity(path, spec)
+        suffix = os.path.splitext(path)[1].lower()
+        if suffix == psx_chd.CHD_SUFFIX:
+            validated[path] = _fixture_chd_result(path, spec)
+        elif suffix == psx_pbp.PBP_SUFFIX:
+            validated[path] = _fixture_pbp_result(path, spec)
+        elif isinstance(spec, str):
+            validated[path] = DiscIdentityResult(_fixture_state(path, spec, _FIXTURE_DISC_STATES))
+        else:
+            validated[path] = DiscIdentityResult(DISC_OK, _fixture_disc_identity(path, spec))
     return validated
+
+
+def _refuse_undescribed_disc(
+    path: str, files: Mapping[str, tuple[ReadStatus, str | None]], archives: Mapping[str, tuple[str, ...] | str]
+) -> None:
+    """Refuse an identity of bytes the fixture does not hold: no declared file, an unreadable one, or no listed entry."""
+    if archive_entry_key(path) is not None:
+        _listed_entry(path, archives, "disc identity")
+        return
+    if path not in files:
+        raise ValueError(f"disc identity {path!r}: an identity describes a file's bytes, and no file is declared there")
+    if files[path][0] == READ_UNREADABLE:
+        raise ValueError(
+            f"disc identity {path!r}: an unreadable file states no identity — its bytes are what cannot be "
+            "read, so a real one answers 'unreadable' first"
+        )
+
+
+def _fixture_state(path: str, spec: object, allowed: tuple[str, ...]) -> DiscIdentityStatus:
+    if not isinstance(spec, str) or spec not in allowed:
+        raise ValueError(f"disc identity {path!r}: a state must be one of {allowed}, got {spec!r}")
+    return spec  # type: ignore[return-value]  # one of the allowed literals, checked above
+
+
+def _fixture_chd_result(path: str, spec: Mapping[str, object] | str) -> DiscIdentityResult:
+    """A CHD's declaration: a state where its header was not read, else its facts and what the read found.
+
+    ``{"codecs": [...], "requires_parent": ..., "identity": ...}`` — the tags
+    of the header's codec slots, at most four of four characters each; whether
+    the header names a parent; and the four facts or a state of
+    :data:`_FIXTURE_CHD_READ_STATES`, ``parent-not-found`` only beside a
+    parent named.
+    """
+    if isinstance(spec, str):
+        return DiscIdentityResult(_fixture_state(path, spec, _FIXTURE_CHD_HEADER_STATES))
+    if set(spec) != set(_FIXTURE_CHD_FIELDS):
+        raise ValueError(f"disc identity {path!r}: a CHD is a state or an object with exactly {_FIXTURE_CHD_FIELDS}")
+    codecs, requires_parent, identity = spec["codecs"], spec["requires_parent"], spec["identity"]
+    if (
+        not isinstance(codecs, list)
+        or len(codecs) > 4
+        or not all(isinstance(tag, str) and len(tag) == 4 and max(map(ord, tag)) <= 0xFF for tag in codecs)
+    ):
+        raise ValueError(f"disc identity {path!r}: codecs are at most four tags of four one-byte characters")
+    if not isinstance(requires_parent, bool):
+        raise ValueError(f"disc identity {path!r}: requires_parent must be a boolean, got {requires_parent!r}")
+    facts = psx_chd.ChdFacts(tuple(codecs), requires_parent)
+    if isinstance(identity, Mapping):
+        return DiscIdentityResult(DISC_OK, _fixture_disc_identity(path, identity), chd=facts)
+    status = _fixture_state(path, identity, _FIXTURE_CHD_READ_STATES)
+    if status == DISC_PARENT_NOT_FOUND and not requires_parent:
+        raise ValueError(f"disc identity {path!r}: only a CHD that names a parent can fail to find one")
+    return DiscIdentityResult(status, chd=facts)
+
+
+def _fixture_pbp_result(path: str, spec: Mapping[str, object] | str) -> DiscIdentityResult:
+    """A PBP's declaration: ``"unreadable"`` alone, else both opens' facts and what the read of the disc found.
+
+    ``{"duckstation_refuses": ..., "encrypted": ..., "identity": ...}`` — the
+    two facts of :class:`atlas.psx_pbp.PbpFacts`, and the four facts or a state
+    of :data:`_FIXTURE_PBP_READ_STATES`.
+    """
+    if isinstance(spec, str):
+        return DiscIdentityResult(_fixture_state(path, spec, ("unreadable",)))
+    if set(spec) != set(_FIXTURE_PBP_FIELDS):
+        raise ValueError(f"disc identity {path!r}: a PBP is 'unreadable' or an object with exactly {_FIXTURE_PBP_FIELDS}")
+    refuses, encrypted, identity = spec["duckstation_refuses"], spec["encrypted"], spec["identity"]
+    if not isinstance(refuses, bool) or not isinstance(encrypted, bool):
+        raise ValueError(f"disc identity {path!r}: duckstation_refuses and encrypted must be booleans")
+    facts = psx_pbp.PbpFacts(refuses, encrypted)
+    if isinstance(identity, Mapping):
+        return DiscIdentityResult(DISC_OK, _fixture_disc_identity(path, identity), pbp=facts)
+    return DiscIdentityResult(_fixture_state(path, identity, _FIXTURE_PBP_READ_STATES), pbp=facts)
+
+
+def _validate_fixture_archive_texts(
+    texts: Mapping[str, object], archives: Mapping[str, tuple[str, ...] | str]
+) -> dict[str, str]:
+    """The declared text of archive entries, keyed ``<archive>#<entry>``: entries `archives` lists, and text."""
+    for key, text in texts.items():
+        if archive_entry_key(key) is None:
+            raise ValueError(f"archive text {key!r}: the key names no archive entry (<archive>#<entry>)")
+        _listed_entry(key, archives, "archive text")
+        if not isinstance(text, str):
+            raise ValueError(f"archive text {key!r}: the entry's text must be a string, got {text!r}")
+    return {key: str(text) for key, text in texts.items()}
 
 
 def _fixture_disc_identity(path: str, spec: Mapping[str, object]) -> psx_disc.DiscIdentity:
@@ -2509,6 +3041,7 @@ class FixtureMachine:
         disc_identities: Mapping[str, Mapping[str, object] | str] | None = None,
         archives: Mapping[str, object] | None = None,
         whdload_slaves: Mapping[str, object] | None = None,
+        archive_texts: Mapping[str, object] | None = None,
     ) -> None:
         self._files, self._blobs = _index_fixture_files(files)
         self._symlinks = dict(symlinks or {})
@@ -2516,7 +3049,6 @@ class FixtureMachine:
         self._appimages = _validate_fixture_appimages(appimages or {})
         self._appimage_stamps = _validate_fixture_appimage_stamps(appimage_stamps or {}, self._appimages)
         self._ps2_bios_headers = _validate_fixture_ps2_bios_headers(ps2_bios_headers or {}, self._files)
-        self._disc_identities = _validate_fixture_disc_identities(disc_identities or {}, self._files)
         self._inaccessible = set(inaccessible or ())
         self._unlistable = set(unlistable or ())
         _refuse_both_unreadable_lists(self._inaccessible, self._unlistable)
@@ -2537,6 +3069,8 @@ class FixtureMachine:
         # Last, because a container may be a directory and a directory's own
         # listing is derived from everything above rather than declared.
         self._archives = _validate_fixture_archives(archives or {}, self._files)
+        self._disc_identities = _validate_fixture_disc_identities(disc_identities or {}, self._files, self._archives)
+        self._archive_texts = _validate_fixture_archive_texts(archive_texts or {}, self._archives)
         self._whdload_slaves = _validate_fixture_whdload_slaves(
             whdload_slaves or {}, self._archives, self._dirs, self._directory_members
         )
@@ -2694,7 +3228,7 @@ class FixtureMachine:
             return Ps2BiosHeaderResult(PS2_BIOS_UNREADABLE)
         return Ps2BiosHeaderResult(PS2_BIOS_MISSING)
 
-    def read_disc_identity(self, path: str) -> DiscIdentityResult:
+    def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult:
         """The modeled disc identity read — the four facts in, the same outcomes RealMachine reports.
 
         Modeled beside ``files`` for the reason ``ps2_bios_headers`` is: what
@@ -2703,11 +3237,16 @@ class FixtureMachine:
         answers ``unreadable``, one that is not there ``missing``, a directory
         or an unreadable file ``unreadable``, and then the suffix decides
         whether any reader opens it (``format-not-read`` where none does). A
-        path declared in ``disc_identities`` answers its identity or its state;
+        path declared in ``disc_identities`` answers its identity or its state,
+        and a CHD the facts of its header beside them;
         a declared file with no entry answers ``missing`` — answering
         ``not-a-disc`` instead would let a vector that forgot the key prove a
-        region nobody modeled.
+        region nobody modeled. An *extracted* entry is judged by its archive
+        the way the real read checks the archive, then answers what
+        ``disc_identities`` declares under ``<archive>#<entry>``.
         """
+        if extracted is not None:
+            return self._extracted_identity(path, extracted)
         if self._is_inaccessible(path):
             return DiscIdentityResult(DISC_UNREADABLE)
         resolved = self._resolve(path).path
@@ -2717,13 +3256,64 @@ class FixtureMachine:
             return DiscIdentityResult(DISC_UNREADABLE)
         if not disc_suffix_read(resolved):
             return DiscIdentityResult(DISC_FORMAT_NOT_READ)
-        spec = self._disc_identities.get(resolved)
+        declared = self._disc_identities.get(resolved)
+        return DiscIdentityResult(DISC_MISSING) if declared is None else declared
+
+    def _extracted_identity(self, path: str, extracted: ExtractedEntry) -> DiscIdentityResult:
+        listed = self.list_disc_archive(extracted.archive)
+        if listed.status == ARCHIVE_MISSING:
+            return DiscIdentityResult(DISC_MISSING)
+        if listed.status != ARCHIVE_OK:
+            return DiscIdentityResult(DISC_UNREADABLE)
+        if extracted.entry not in listed.members:
+            return DiscIdentityResult(DISC_MISSING)
+        if not disc_suffix_read(path):
+            return DiscIdentityResult(DISC_FORMAT_NOT_READ)
+        declared = self._disc_identities.get(self._entry_key(extracted.archive, extracted.entry))
+        return DiscIdentityResult(DISC_MISSING) if declared is None else declared
+
+    def _entry_key(self, archive: str, entry: str) -> str:
+        return f"{self._resolve(archive).path or archive}#{entry}"
+
+    def list_disc_archive(self, path: str) -> ArchiveListResult:
+        """The modeled zip listing: the member list ``archives`` declares, as RetroArch's walk would read it.
+
+        Judged in RealMachine's order — a path that cannot be looked at or is
+        no regular file answers ``unreadable``, one that is not there
+        ``missing`` — and a declared file with no listing is not an archive.
+        """
+        if self._is_inaccessible(path):
+            return ArchiveListResult(ARCHIVE_UNREADABLE)
+        resolved = self._resolve(path).path
+        if resolved is None:
+            return ArchiveListResult(ARCHIVE_MISSING)
+        if resolved in self._dirs:
+            return ArchiveListResult(ARCHIVE_UNREADABLE)
+        spec = self._archives.get(resolved)
         if isinstance(spec, str):
-            status: DiscIdentityStatus = spec  # type: ignore[assignment]  # validated at construction
-            return DiscIdentityResult(status)
+            status: ArchiveStatus = spec  # type: ignore[assignment]  # validated at construction
+            return ArchiveListResult(status)
         if spec is not None:
-            return DiscIdentityResult(DISC_OK, spec)
-        return DiscIdentityResult(DISC_MISSING)
+            return ArchiveListResult(ARCHIVE_OK, spec)
+        return self._unlisted_container(resolved)
+
+    def read_archive_text(self, archive: str, entry: str, limit: int) -> ReadResult | None:
+        """The modeled text of one archive entry — ``archive_texts`` under ``<archive>#<entry>``.
+
+        An entry the archive lists with no text declared answers ``missing``,
+        for the reason a disc identity left undeclared does.
+        """
+        listed = self.list_disc_archive(archive)
+        if listed.status == ARCHIVE_MISSING:
+            return ReadResult(READ_MISSING)
+        if listed.status != ARCHIVE_OK:
+            return ReadResult(READ_UNREADABLE)
+        text = self._archive_texts.get(self._entry_key(archive, entry)) if entry in listed.members else None
+        if text is None:
+            return ReadResult(READ_MISSING)
+        if len(text.encode("utf-8")) > limit:
+            return None
+        return ReadResult(READ_OK, text)
 
     def list_archive(self, path: str) -> ArchiveListResult:
         """The modeled container listing — the same one rule, over data instead of bytes.
