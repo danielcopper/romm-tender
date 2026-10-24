@@ -3,12 +3,9 @@
  * — what a drift lock searches.
  *
  * A drift lock holds a wording in one module by failing when a component spells
- * it out for itself. Both of the BIOS locks used to name the components they
- * searched, and that is what failed: the list held two while three surfaces
- * rendered the states, the third went on spelling an older wording of them, and
- * nothing said so. **A surface missing from a hand-kept list is indistinguishable
- * from one that never drifted**, so correcting such a list's count leaves the
- * failure exactly where it was and only moves it to the next surface added.
+ * it out for itself. Naming the components it searches would be wrong: **a
+ * surface missing from a hand-kept list is indistinguishable from one that never
+ * drifted**, so such a list fails silently at the next surface added.
  *
  * So the set is swept rather than listed: every `.tsx` under `bigpicture/`,
  * `desktop/` or `shared/` that is not itself a test. A component added tomorrow
