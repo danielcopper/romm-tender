@@ -48,8 +48,8 @@ class SaveCopyServiceConfig:
 
     Mirrors :class:`VersionsServiceConfig` — the copy flow reuses the same
     rollback-orchestration machinery (per-ROM lock, pre-flight sync, the
-    download/upload steps) — minus ``save_file_store``: every file write
-    routes through ``save_transfer``. Holds the live ``settings.json`` dict
+    download/upload steps); every file write routes through
+    ``save_transfer``. Holds the live ``settings.json`` dict
     (default-slot seeding), the Unit-of-Work factory (the transactional seam
     over the SQLite repositories), the peer save sub-services consumed during
     orchestration (sync_engine, whose ``live_device_id`` answers the device id,

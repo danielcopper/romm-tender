@@ -95,13 +95,12 @@ class SaveTransfer:
             raise
 
     def hash_server_copy(self, server_save: dict[str, Any]) -> str | None:
-        """Fetch *server_save* into a temporary file, hash it and remove the file.
+        """Fetch *server_save* into a temporary file, hash it and remove the file — Keep Local's identity check.
 
-        For a listed save that carries no ``content_hash`` to compare. Returns
-        the hash, or ``None`` for a save without an id or a fetch that failed in
-        a way no retry would mend. Raises a retryable failure so a caller may
-        retry, and a :class:`DeviceWriteError`, which is this device's to report
-        rather than a hash the server could not give.
+        Returns the hash, or ``None`` for a save without an id or a fetch that
+        failed in a way no retry would mend. Raises a retryable failure that
+        outlasted the fetch's own retries, and a :class:`DeviceWriteError`, which
+        is this device's to report rather than a hash the server could not give.
         """
         save_id = server_save.get("id")
         if not save_id:
@@ -199,11 +198,8 @@ class SaveTransfer:
         this raises ``RommConflictError`` BEFORE any baseline / own-upload /
         acknowledgement write so the same 409 backstop that catches a write-time
         stale-current race surfaces the true state — no false "synced", no
-        currency stamped on the non-head response.
-
-        The upload's own acknowledgement follows the record: skipped where the
-        response already shows this device current, otherwise sent once, and a
-        failure is logged rather than raised (:meth:`_acknowledge_upload`).
+        currency stamped on the non-head response. The upload's own
+        acknowledgement follows the record (:meth:`_acknowledge_upload`).
         """
         save_id = server_save.get("id") if server_save else None
         emulator = build_emulator_tag(core_so)
@@ -335,10 +331,10 @@ class SaveTransfer:
         download of the same bytes, *save_state* is seeded through
         :meth:`RomSaveSyncState.reach_sync_boundary` as a download seeds it: no
         core is recorded — an adopt transfers nothing, so which core wrote the
-        bytes is unknown — and the emulator tag stays the one already recorded.
-        When the file no longer hashes to *local_hash*, nothing is recorded and
-        ``False`` is returned, so a file written since the decision is never
-        recorded as the head's bytes. Mutates *save_state* in memory only.
+        bytes is unknown — and the emulator tag is the one already recorded, else
+        ``retroarch``. When the file no longer hashes to *local_hash*, nothing is
+        recorded and ``False`` is returned, so a file written since the decision
+        is never recorded as the head's bytes. Mutates *save_state* in memory only.
         """
         measured = self._measure_unchanged(filename, local_path, local_hash)
         if measured is None:

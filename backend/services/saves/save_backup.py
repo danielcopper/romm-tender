@@ -1,10 +1,11 @@
-"""The save backup: a local save file moved into ``.romm-backup`` before anything destroys it.
+"""The save backup: a local save file moved into ``.romm-backup`` before Tender itself destroys it.
 
-The one funnel through which every path that replaces or removes a save file
-takes its recoverable copy — the sync's download, the slot steps, following a
-moved save directory, the adoption renamer and the removed-game cleanup. The
-names, their time stamp and which backups go are ``domain/save_backup.py``'s;
-the moves are this module's.
+The one funnel through which every path where Tender replaces or removes a save
+file takes its recoverable copy; deleting a game's local saves, which the user
+asks for, removes them outright. Which paths those are:
+docs/architecture/save-file-sync-architecture.md, "Implementation". The names,
+their time stamp and which backups go are ``domain/save_backup.py``'s; the moves
+are this module's.
 """
 
 from __future__ import annotations

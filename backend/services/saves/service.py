@@ -1,8 +1,8 @@
 """Save-sync aggregate root and facade for the save endpoints.
 
 Composes the save-sync sub-services (sync_engine, status, versions, slots,
-rom_info, prune_support, and the save backup and save transfer every one of
-them moves files through) over the SQLite ``rom_save_sync_states`` aggregate
+rom_info, prune_support, and the save backup and save transfer the others
+move files through) over the SQLite ``rom_save_sync_states`` aggregate
 (reached through the injected Unit-of-Work factory) and exposes the use cases
 the endpoints call. The five save-sync feature toggles live in
 ``settings.json`` and are read/written here directly; the device label beside

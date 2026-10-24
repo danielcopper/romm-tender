@@ -206,9 +206,9 @@ into the response's `device_syncs`, so `is_current` is true for us the moment th
 acknowledgement inside `SaveTransfer.upload_save_file`, #1458). When `add_save` answers with a save its content matched
 instead of a new version, what that answer reports and when the ack is still sent are under
 [POST and PUT both upsert the calling device's sync row](#post-and-put-both-upsert-the-calling-devices-sync-row). The
-version-switch flow (`versions.py`) routes through the same upload step after its PUT — the PUT upserts too, so the ack
-is at most an idempotent re-ack (and is skipped if the PUT response already proves us current) — and is out of scope
-here — see [Version Switch Flow](#version-switch-flow-rollback).
+version-switch flow (`versions.py`) PUTs through the same `SaveTransfer.upload_save_file`, so the same acknowledgement
+follows its PUT — the PUT upserts too, so the ack is at most an idempotent re-ack (and is skipped if the PUT response
+already proves us current) — and is out of scope here — see [Version Switch Flow](#version-switch-flow-rollback).
 
 ## Save Slots
 
@@ -277,12 +277,12 @@ backup time. The save backup (`SaveBackup`, `services/saves/save_backup.py`) is 
 name, its time stamp and which copies go are `domain/save_backup.py`'s. When several files of one slot are backed up
 within the same second (so the base `<name>_<ts><ext>` name would collide), a `_<n>` counter (`_1`, `_2`, …) is appended
 so an earlier backup is never overwritten by a later one. The folder is capped at the **newest 10** backups per save
-file (`BACKUP_RETENTION`, which every caller but the removed-game cleanup passes as the call's `keep`): each backup
-prunes the older copies of that same file beyond the cap, bounding disk use on the Deck while keeping a deep-enough
-recovery net. The cap is per save file — backups of a different save file in the same folder are never pruned by another
-file's backup. One deliberate exception: the backup a call just wrote is never pruned in that same call, so under
-sustained same-second churn the folder may briefly hold one extra copy (11) — honouring the cap by deleting the
-just-saved file would defeat the backup.
+file (`BACKUP_RETENTION`, which every `back_up_save_file` caller passes as `keep`; the cleanup's
+`back_up_claimed_save_file` prunes nothing): each backup prunes the older copies of that same file beyond the cap,
+bounding disk use on the Deck while keeping a deep-enough recovery net. The cap is per save file — backups of a
+different save file in the same folder are never pruned by another file's backup. One deliberate exception: the backup a
+call just wrote is never pruned in that same call, so under sustained same-second churn the folder may briefly hold one
+extra copy (11) — honouring the cap by deleting the just-saved file would defeat the backup.
 
 #### Removed-game cleanup and save recovery
 
@@ -646,9 +646,10 @@ marshalling and the no-fallback posture). It answers in the `SyncAction` datacla
 What an action moves is not the matrix's. Two building blocks in `services/saves/`, built once by `SaveService` and
 handed to every save service that needs them, carry it out:
 
-- `SaveBackup` (`save_backup.py`) moves a local save file into the `.romm-backup` folder beside it before anything
+- `SaveBackup` (`save_backup.py`) moves a local save file into the `.romm-backup` folder beside it before Tender itself
   replaces or removes it — the sync's download, the slot steps, following a moved save directory, the adoption renamer
-  and the removed-game cleanup all go through it.
+  and the removed-game cleanup all go through it. Deleting a game's local saves, which the user asks for, removes them
+  outright.
 - `SaveTransfer` (`save_transfer.py`) downloads a server save, uploads a local one, acknowledges a head adopted without
   a transfer, adopts an identical head, and fetches a server copy to compare or to place. A download or upload records
   the sync boundary through the aggregate's verbs in the same step, so no caller transfers without recording.
@@ -1641,7 +1642,7 @@ upsert, so the body's `device_syncs` shows us `is_current = true` (equality coun
 logic is fail-open regardless: a response that proves us current skips the ack, anything else (including a bare body)
 still sends the idempotent ack.
 
-This makes the dedicated `POST /api/saves/{id}/downloaded` ack **redundant on the normal upload path** — the sync engine
+This makes the dedicated `POST /api/saves/{id}/downloaded` ack **redundant on the normal upload path** — the upload
 skips it when the upload response already shows this device `is_current` (`SaveTransfer.upload_save_file`, #1458),
 saving one round-trip per uploaded file.
 

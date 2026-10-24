@@ -2,7 +2,7 @@
 dispatch. Anything that decides "which side wins for this file" and hands the
 decision to the step that carries it out lives in
 backend/services/saves/sync_engine/matrix.py and is exercised here; the steps
-that move bytes between local saves_dir and the RomM server are tested in
+that move bytes between local saves_dir and the RomM server are mostly tested in
 tests/services/saves/test_save_transfer.py and test_save_backup.py. Public
 use-case orchestration (lock acquisition, guards) lives in test_engine.py;
 device registration in test_devices.py; conflict rollback in test_rollback.py.
@@ -990,13 +990,13 @@ class TestPromoteLocalSlotPersistsState:
         assert reloaded["count"] == 1
 
 
-class TestDoUploadSaveFileStatePersistence:
+class TestAnUploadsFileStatePersistence:
     """Regression for #409.
 
     The PUT branch with a slot already marked ``source='server'`` is a no-op
-    for slot promotion. Without an unconditional persist at the end of
+    for slot promotion. Without the operation entry's unconditional persist after
     ``upload_save_file``, the per-file ``last_sync_hash`` / ``tracked_save_id``
-    written with the transfer's record never reaches disk on that path —
+    the upload records never reaches disk on that path —
     so after a backend restart the next sync re-detects drift and re-uploads
     the same content. This test asserts the upload outcome is persisted
     regardless of which slot-promotion branch fired.
@@ -1014,7 +1014,7 @@ class TestDoUploadSaveFileStatePersistence:
         fake.saves[100] = _server_save(save_id=100, rom_id=42, slot="default")
         server_save = fake.saves[100]
 
-        # Slot already known-server: _promote_local_slot_to_server is a no-op
+        # Slot already known-server: RomSaveSyncState.promote_slot_to_server is a no-op
         # on this branch, so the file-state writes have no incidental persist
         # to ride on. File state holds a stale baseline hash to make the
         # regression visible — after the upload, the on-disk hash must be the

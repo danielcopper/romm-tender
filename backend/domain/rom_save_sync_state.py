@@ -158,8 +158,7 @@ class RomSaveSyncState:
     def upload_slot(self, default_slot: str | None) -> str | None:
         """The slot field an upload sends; ``None`` only for an explicit-legacy save.
 
-        An upload always carries a live device id, so the slot resolves purely
-        from the slot state. A named ``active_slot`` uploads to that slot; an
+        The slot resolves purely from the slot state. A named ``active_slot`` uploads to that slot; an
         ``active_slot`` of ``None`` is ambiguous and is disambiguated by the
         ``slots`` map, the same signal :meth:`reach_sync_boundary` seeds the
         active slot by:

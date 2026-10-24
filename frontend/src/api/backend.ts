@@ -1400,7 +1400,7 @@ export const getSaveSetupInfo = endpoint<[number], SaveSetupInfo>("get_save_setu
 // A content-based migration (#1498) that finds a differing local save refuses
 // with `local_conflict`, `needs_conflict_resolution: true` and `conflicts`, and
 // confirms nothing — the wizard asks; `use_server_on_conflict: true` resolves in
-// the server's favour (quarantine local, replace with the server content). On
+// the server's favour (back the local file up, replace with the server content). On
 // success the response carries `migrated`/`failed` counts for the completion copy.
 export const confirmSlotChoice = endpoint<
   [number, string, boolean, string | null, boolean],

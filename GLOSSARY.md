@@ -1044,24 +1044,24 @@ no-op dispatch for a ROM's sync run; what a dispatched action moves is the **sav
 
 ### Save backup
 
-A local save file moved into the `.romm-backup` folder beside it before anything replaces or removes it — `SaveBackup`
-(`services/saves/save_backup.py`), the one funnel every such path goes through: a download over a local file, a slot
-switch, the slot-choice migration, following a moved save directory, an adoption's Overwrite and the removed-game
-cleanup. The name it lands under, the time stamp in that name and which older copies go are `domain/save_backup.py`'s;
-how many copies are kept is the caller's (the newest ten per file, or every one for the cleanup). A backup is never
-removed by the call that wrote it.
+A local save file Tender moves into the `.romm-backup` folder beside it before Tender itself replaces or removes it —
+`SaveBackup` (`services/saves/save_backup.py`), the one funnel every such path goes through. Deleting a game's local
+saves, which the user asks for, removes them outright. Which paths take a backup, how a backup is named and how many are
+kept:
+[Inside `.romm-backup` — naming and retention](docs/architecture/save-file-sync-architecture.md#inside-romm-backup-naming-and-retention)
+and the save-sync page's Implementation section.
 
 _Avoid_: "quarantine" for this — the word is the playtime outbox's (a row dropped after its retry ceiling) and the
 corrupt-settings file's.
 
 ### Save transfer
 
-One save file moved between this device and RomM, together with the record of what moved — `SaveTransfer`
-(`services/saves/save_transfer.py`): downloading a server save (backing the local file up first), uploading a local one,
-acknowledging a head adopted without a transfer, adopting a head the local file is identical to, and fetching a server
-copy to compare or to place. A download or an upload records the sync boundary on the ROM's state in the same step, so
-no caller transfers without recording; a fetched server copy records nothing and names no device. Which transfer a file
-needs is the **newest-wins matrix**'s decision, not the transfer's.
+The steps that move one save file between this device and RomM, or tell RomM what this device already holds, together
+with the record of what moved — `SaveTransfer` (`services/saves/save_transfer.py`): downloading a server save (backing
+the local file up first), uploading a local one, acknowledging a head adopted without a transfer, adopting a head the
+local file is identical to, and fetching a server copy to compare or to place. A download or an upload records the sync
+boundary on the ROM's state in the same step, so no caller transfers without recording; a fetched server copy records
+nothing and names no device. Which transfer a file needs is the **newest-wins matrix**'s decision, not the transfer's.
 
 ### SyncRun
 

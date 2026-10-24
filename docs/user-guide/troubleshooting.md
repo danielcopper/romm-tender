@@ -819,8 +819,8 @@ and again before local finalization, the backend verifies the seal, manifest/che
 source root/descendant identities, mount IDs and bytes, expected absence of currently missing saves, database state,
 save ownership, and captured Steam/controller state. Filesystem mutation then holds kernel writer-exclusion leases
 through descriptor-relative removal; replacing a path, keeping a writable file descriptor open, crossing a nested mount,
-or creating a previously absent save after sealing does not authorize deletion. The save backup publishes with atomic
-no-replace semantics, so a backup created concurrently is preserved rather than overwritten. Recovery destination
+or creating a previously absent save after sealing does not authorize deletion. Saves are moved into `.romm-backup` with
+atomic no-replace semantics, so a backup created concurrently is preserved rather than overwritten. Recovery destination
 directories and files stay attached to held descriptors through metadata updates, hashing, sealing, and validation, so a
 swapped symlink is not re-authorized. A failed attempt may report `recovery_failed`; it leaves the local game unchanged.
 Incomplete staging is removed only when descriptor-relative, mount-aware cleanup proves the tree safe. Otherwise the

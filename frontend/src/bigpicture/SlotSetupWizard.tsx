@@ -116,8 +116,8 @@ function formatSize(bytes: number | null): string {
 /** Informed confirmation for a legacy migration whose target already has a
  *  differing local save (#1498). Both sides are shown with size + timestamp —
  *  that comparison is what stops a newer local save being buried unnoticed — and
- *  the dialog offers exactly two ways out: confirm (proceed, quarantining the
- *  local file) or Cancel, which changes nothing and leaves the slot unconfirmed
+ *  the dialog offers exactly two ways out: confirm (proceed, backing the local
+ *  file up into `.romm-backup`) or Cancel, which changes nothing and leaves the slot unconfirmed
  *  so the user can take the wizard's start-fresh route instead. There is no
  *  "keep my local save" action: it would produce the same end state as the
  *  wizard's own "Use slot" button. */

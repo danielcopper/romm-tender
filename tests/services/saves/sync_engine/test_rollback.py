@@ -157,8 +157,8 @@ class TestResolveSyncConflict:
         the keep_local resolver swallows it and treats ``server_hash`` as ``None``.
 
         That sinks the adopt-without-upload short-circuit (which requires
-        ``server_hash`` truthy and equal to ``local_hash``) and the PUT path
-        runs unconditionally. Degraded behaviour, but no failure surfaced to
+        ``server_hash`` truthy and equal to ``local_hash``) and the POST with
+        overwrite runs unconditionally. Degraded behaviour, but no failure surfaced to
         the user.
         """
         svc, fake = make_service(tmp_path)

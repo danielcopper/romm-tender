@@ -1113,7 +1113,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `adapters/gavel_native.py` are pinned to one upstream release tag and bumped together
 - **An adopt of a head this device must confirm — one the core marks `acknowledge` in the sync, and Keep Local's adopt
   without an upload always — records its baseline only after `POST /api/saves/{id}/downloaded` succeeded; a failed
-  acknowledgement records nothing, and the status read records no such adopt** — test + prompt-only —
+  acknowledgement records nothing, and the status read records no such adopt; Keep Local's adopt records the sync
+  boundary as the sync's does, without a core** — test + prompt-only —
   `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
   `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges`,
   `tests/services/saves/sync_engine/test_keep_local.py::TestKeepLocalAdoptsAsTheSyncDoes` and
