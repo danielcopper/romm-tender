@@ -60,8 +60,8 @@ if TYPE_CHECKING:
 
 
 # kv_config key for the offline ``platform_slug → display_name`` cache,
-# refreshed on every sync from the live work-queue, plus the name already kept
-# for each platform outside it that a bound game is still on. Read for the
+# refreshed on every sync from the run's platform listing, plus the name already
+# kept for each platform outside it that a bound game is still on. Read for the
 # game-detail page's platform name, for the name a platform removal answers
 # with, which the frontend uses to find that platform's Steam collection, and
 # by the next sync to name the collection of a platform RomM no longer lists.
@@ -309,8 +309,8 @@ class SyncReporter:
         the row per ADR-0007 — never delete), revoke the skip of the
         platforms :meth:`finalize_per_unit_run` says to and delete the stamp of
         every collection whose member set holds an unbound ROM, (2) refresh the offline
-        ``platform_slug → display_name`` cache — the live work-queue's names
-        plus each bound platform's kept name
+        ``platform_slug → display_name`` cache — the run's listed names plus
+        each bound platform's kept name
         (:meth:`_names_with_bound_platforms_kept`) — and
         (3) build the cross-unit collection mappings. Before (2) it writes
         *gone_marks* onto their rows: a mark where one is given, a clear for
@@ -366,9 +366,9 @@ class SyncReporter:
         """*platform_names*, plus the cached name of every platform outside it that a bound row is still on.
 
         A platform RomM no longer lists keeps its games, and its Steam collection
-        is found by this name: written over with the live map alone, the next
-        run would key that collection by the slug, and the frontend would remove
-        the old one. This runs on every finalize, a stopped run's included,
+        is found by this name: written over with the listed names alone, the
+        next run would key that collection by the slug, and the frontend would
+        remove the old one. This runs on every finalize, a stopped run's included,
         since each of them rewrites the cache.
         """
         kept = decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
@@ -397,8 +397,9 @@ class SyncReporter:
         unbind nothing) have their Steam-shortcut binding cleared in the
         ``roms`` table (the row survives) before collections are built,
         keeping the backend registry in sync with the frontend removals.
-        ``platform_names`` is the live ``platform_slug → display_name``
-        map from the work-queue, cached for the offline ``roms``-derived queries.
+        ``platform_names`` is the ``platform_slug → display_name`` map of every
+        platform the run's listing named, synced or not, cached for the offline
+        ``roms``-derived queries.
 
         ``processed_platform_slugs`` names the platform units this run
         processed, skipped and fetched alike. A stale unbind on any other

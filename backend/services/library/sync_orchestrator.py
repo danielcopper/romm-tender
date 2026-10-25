@@ -407,8 +407,8 @@ class SyncOrchestrator:
             rebuilt = {rom["id"]: rom["platform_slug"] for rom in all_roms if rom["id"] in classify_skipped}
             kept += stale_rows_of(rebuilt_rows_filed_as_kept(rebuilt, set(slug_to_name), platform_rom_ids), registry)
             platform_names = await with_kept_platform_names(
-                {row.platform_slug for row in kept} | {sd["platform_slug"] for sd in emitted},
-                slug_to_name,
+                {row.platform_slug for row in [*kept, *removals]} | {sd["platform_slug"] for sd in emitted},
+                box.run_listed_platform_names,
                 read_kept_names=lambda slugs: self._loop.run_in_executor(
                     None, self._local_library_reader.do_read_kept_platform_names, slugs
                 ),
@@ -488,8 +488,10 @@ class SyncOrchestrator:
                     # Per-platform rows behind the library-wide counts above,
                     # regrouped from the same three buckets and the same
                     # registry — no further read, so the preview stays
-                    # side-effect-free.
-                    "platform_breakdown": platform_breakdown(new, changed, stale, registry, slug_to_name),
+                    # side-effect-free — and named as the diff below files.
+                    "platform_breakdown": platform_breakdown(
+                        new, changed, stale, registry, slug_to_name, platform_names
+                    ),
                     "platform_collection_diff": compute_platform_collection_diff(
                         emitted,
                         platform_rom_ids,
@@ -811,10 +813,6 @@ class SyncOrchestrator:
             # below stays the raw planned total for backward compatibility.
             total_estimated_items = sum(u.estimated_items() for u in work_queue)
             platforms_planned = sum(1 for u in work_queue if u.type == "platform")
-            # Live ``platform_slug → display_name`` map from the work-queue;
-            # threaded into finalize so collections key on display names and
-            # the offline name cache stays current as of this sync.
-            platform_names = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
             processed_platform_slugs = frozenset(u.slug for u in work_queue if u.type == "platform" and u.slug)
             # The run's denominator for the paused banner's "X of Y games done" — the
             # same planned total the ``sync_plan`` event carries (#1383).
@@ -904,7 +902,6 @@ class SyncOrchestrator:
                 synced_rom_ids=synced_rom_ids,
                 collection_memberships=collection_memberships,
                 platform_rom_ids=platform_rom_ids,
-                platform_names=platform_names,
                 processed_platform_slugs=processed_platform_slugs,
                 collection_listed_rom_ids=collection_listed,
                 cancelled=cancelled,
@@ -1305,7 +1302,6 @@ class SyncOrchestrator:
         synced_rom_ids: set[int],
         collection_memberships: dict[tuple[str, str], CollectionMembership],
         platform_rom_ids: set[int],
-        platform_names: dict[str, str],
         processed_platform_slugs: frozenset[str],
         cancelled: bool,
         collection_listed_rom_ids: frozenset[int] = frozenset(),
@@ -1394,7 +1390,7 @@ class SyncOrchestrator:
         platform_app_ids, romm_collection_app_ids = await self._reporter.get().finalize_per_unit_run(
             pending_collection_memberships=collection_memberships,
             pending_platform_rom_ids=platform_rom_ids,
-            platform_names=platform_names,
+            platform_names=dict(self._sync_state.run_listed_platform_names),
             processed_platform_slugs=processed_platform_slugs,
             stale_rom_ids=[row.rom_id for row in stale],
             gone_marks=gone_marks,

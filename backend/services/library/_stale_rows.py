@@ -4,7 +4,8 @@ Shared by :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s
 preview and its apply's finalize, so the removals a preview promises are the
 ones its apply makes. The preview also builds its stale rows and synced group
 keys here (:func:`stale_rows_of`, :func:`preview_group_keys`) and reads
-the names its platform-collection diff files by (:func:`with_kept_platform_names`).
+the names its platform-collection diff files by and its per-platform table
+labels with (:func:`with_kept_platform_names`).
 """
 
 from __future__ import annotations
@@ -93,17 +94,19 @@ async def settle_stale_rows(
 
 
 async def with_kept_platform_names(
-    platform_slugs: Iterable[str], live: dict[str, str], *, read_kept_names: ReadKeptNamesFn
+    platform_slugs: Iterable[str], listed: dict[str, str], *, read_kept_names: ReadKeptNamesFn
 ) -> dict[str, str]:
-    """*live*, plus the cached name of each of *platform_slugs* outside it the cache holds one for, for the preview.
+    """*listed*, plus the cached name of each of *platform_slugs* outside it the cache holds one for, for the preview.
+
+    *listed* is every listed platform's name, from the run's own listing.
 
     *platform_slugs* must cover every platform the preview's
-    platform-collection diff names. Must answer, for each, the name the apply's
+    platform-collection diff and per-platform table name. Must answer, for each, the name the apply's
     finalize carries forward
     (``SyncReporter._names_with_bound_platforms_kept``). *read_kept_names* is
     asked only when such a platform exists.
     """
-    outside = set(platform_slugs) - live.keys()
+    outside = set(platform_slugs) - listed.keys()
     if not outside:
-        return live
-    return {**await read_kept_names(outside), **live}
+        return listed
+    return {**await read_kept_names(outside), **listed}

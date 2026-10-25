@@ -7349,8 +7349,92 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         )
 
         assert faves_skips == [faves_skipped, faves_skipped]
-        assert list(platform_app_ids.values()) == [[6020]]
+        assert platform_app_ids == {"Nintendo 64": [6020]}
         assert platform_collection_diff == applied
+
+
+class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
+    """The preview's per-platform table labels a platform with the name the apply files it under (#2564).
+
+    N64's slug, ``n64``, and its listed name, ``Nintendo 64``, differ, and its
+    ROMs carry ``N64 Custom``, the custom name set on it in RomM. The first run
+    binds Golf, 20, through Faves and Pong, 30, through Old, syncing N64 too
+    where a name is to be cached. The second run syncs neither N64 nor Old, so
+    30 is removed: N64's row in the table carries that removal, and the apply
+    still files 20 under N64 through Faves.
+    """
+
+    @staticmethod
+    async def _bind_20_and_30(library, fake_romm_api, *, n64_synced):
+        _use_fake_romm(library, fake_romm_api)
+        golf = TestThePreviewNamesAPlatformCollectionAsTheApplyDoes._golf
+        _seed_platform(
+            fake_romm_api,
+            platform_id=4,
+            name="Nintendo 64",
+            slug="n64",
+            roms=[
+                golf(20, "USA", rom_user={"is_main_sibling": True}),
+                golf(22, "Europe"),
+                {"id": 30, "name": "Pong", "fs_name": "Pong.zip", "fs_name_no_ext": "Pong", "igdb_id": 301},
+            ],
+        )
+        for rom in fake_romm_api.roms.values():
+            rom["platform_name"] = "N64 Custom"
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
+        _seed_collection(fake_romm_api, collection_id=8, name="Old", rom_ids=[30])
+        for collection in fake_romm_api.collections:
+            collection["updated_at"] = "2025-01-01T00:00:00"
+        library.settings["enabled_platforms"] = {"4": n64_synced}
+        library.settings["enabled_collections"] = {"standard": {"7": True, "8": True}}
+        library.settings["collection_create_platform_groups"] = True
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
+        await library.sync._orchestrator._do_sync_per_unit()
+        with library.uow as uow:
+            assert (uow.roms.get(20).shortcut_app_id, uow.roms.get(30).shortcut_app_id) == (6020, 6030)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    @pytest.mark.parametrize("name_cached", [False, True], ids=["no-name-cached", "name-cached"])
+    async def test_a_platform_not_synced_is_labelled_as_the_apply_names_it(
+        self, library, fake_romm_api, emit, faves_skipped, name_cached
+    ):
+        await self._bind_20_and_30(library, fake_romm_api, n64_synced=name_cached)
+        library.settings["enabled_platforms"] = {"4": False}
+        library.settings["enabled_collections"] = {"standard": {"7": True, "8": False}}
+        if not faves_skipped:
+            fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
+
+        summary = (await library.sync.sync_preview())["summary"]
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        run_2_starts_at = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
+        (platform_app_ids,) = [
+            payload[0]["platform_app_ids"] for name, *payload in frames if name == "sync_collections"
+        ]
+
+        assert platform_app_ids == {"Nintendo 64": [6020]}
+        assert summary["platform_breakdown"] == [
+            {
+                "slug": "n64",
+                "name": "Nintendo 64",
+                "synced": False,
+                "new_count": 0,
+                "changed_count": 0,
+                "remove_count": 1,
+            }
+        ]
 
 
 class TestRegression738CacheCorruption:
@@ -7922,7 +8006,6 @@ class TestSessionBudgetGate:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
-            platform_names={},
             processed_platform_slugs=frozenset(),
             cancelled=False,
         )
@@ -7943,7 +8026,6 @@ class TestSessionBudgetGate:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
-            platform_names={},
             processed_platform_slugs=frozenset(),
             cancelled=False,
         )
@@ -7970,7 +8052,6 @@ class TestSessionBudgetGate:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
-            platform_names={},
             processed_platform_slugs=frozenset(),
             cancelled=True,  # a stopped (paused) run
         )
