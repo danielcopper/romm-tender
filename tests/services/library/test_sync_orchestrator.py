@@ -25,6 +25,7 @@ migration.
 """
 
 import asyncio
+import json
 import logging
 import os
 from typing import Any
@@ -7359,9 +7360,9 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
     N64's slug, ``n64``, and its listed name, ``Nintendo 64``, differ, and its
     ROMs carry ``N64 Custom``, the custom name set on it in RomM. The first run
     binds Golf, 20, through Faves and Pong, 30, through Old, syncing N64 too
-    where a name is to be cached. The second run syncs neither N64 nor Old, so
-    30 is removed: N64's row in the table carries that removal, and the apply
-    still files 20 under N64 through Faves.
+    where the case says so, and caches N64's listed name either way. The second
+    run syncs neither N64 nor Old, so 30 is removed: N64's row in the table
+    carries that removal, and the apply still files 20 under N64 through Faves.
     """
 
     @staticmethod
@@ -7403,11 +7404,11 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
-    @pytest.mark.parametrize("name_cached", [False, True], ids=["no-name-cached", "name-cached"])
+    @pytest.mark.parametrize("n64_synced_first", [False, True], ids=["n64-off-in-run-1", "n64-synced-in-run-1"])
     async def test_a_platform_not_synced_is_labelled_as_the_apply_names_it(
-        self, library, fake_romm_api, emit, faves_skipped, name_cached
+        self, library, fake_romm_api, emit, faves_skipped, n64_synced_first
     ):
-        await self._bind_20_and_30(library, fake_romm_api, n64_synced=name_cached)
+        await self._bind_20_and_30(library, fake_romm_api, n64_synced=n64_synced_first)
         library.settings["enabled_platforms"] = {"4": False}
         library.settings["enabled_collections"] = {"standard": {"7": True, "8": False}}
         if not faves_skipped:
@@ -7433,6 +7434,28 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
                 "new_count": 0,
                 "changed_count": 0,
                 "remove_count": 1,
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_platform_romm_no_longer_lists_is_labelled_with_its_cached_name(self, library, fake_romm_api):
+        """RomM stops listing N64 and both collections are off: its answer removes 20 and 30, and nothing names N64."""
+        await self._bind_20_and_30(library, fake_romm_api, n64_synced=False)
+        with library.uow as uow:
+            assert json.loads(uow.kv_config.get("platform_names")) == {"n64": "Nintendo 64"}
+        fake_romm_api.platforms = []
+        library.settings["enabled_collections"] = {"standard": {"7": False, "8": False}}
+
+        summary = (await library.sync.sync_preview())["summary"]
+
+        assert summary["platform_breakdown"] == [
+            {
+                "slug": "n64",
+                "name": "Nintendo 64",
+                "synced": False,
+                "new_count": 0,
+                "changed_count": 0,
+                "remove_count": 2,
             }
         ]
 
