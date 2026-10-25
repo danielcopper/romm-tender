@@ -1305,9 +1305,9 @@ class TestTheSizeClaim:
 class TestTheResolverStatesEachFileOnce:
     """The resolver refuses a save answer that states one directory and file name twice.
 
-    Each component takes its own group's role and size claim, with nothing
-    merged across groups, because of this guarantee (#2565 D1, D2). A release
-    that loosens it fails here, at the bump.
+    Each component takes its own group's size claim, with nothing merged
+    across groups, because of this guarantee (#2565 D1, D2). A release that
+    loosens it fails here, at the bump.
     """
 
     @staticmethod
@@ -1315,7 +1315,7 @@ class TestTheResolverStatesEachFileOnce:
         return FileGroup(dir=directory, files=(name,), granularity=GRANULARITY_PER_GAME_FILE, role=ROLE_BATTERY)
 
     def test_a_name_repeated_in_the_answers_own_directory_is_refused(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="more than one entry of groups"):
             _placement(
                 files=("Game Title.srm", "Game Title.srm"),
                 groups=(self._group(_SAVES, "Game Title.srm"), self._group(_SAVES, "Game Title.srm")),
@@ -1324,7 +1324,7 @@ class TestTheResolverStatesEachFileOnce:
     def test_a_name_repeated_in_another_directory_is_refused(self):
         # Groups outside the answer's own directory are not held to its file
         # list, so only the one-entry rule can refuse this repeat.
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="more than one entry of groups"):
             _placement(
                 groups=(
                     self._group(_SAVES, "Game Title.srm"),

@@ -2349,9 +2349,9 @@ class TestTheContentSizeAtTheBoundaries:
         assert _require_save_state(svc, 42).files["pokemon.srm"].last_sync_content_size is None
 
 
-# Each shape a save answer can state ``pokemon.srm``'s size in — one group per
-# claim, listing that file — and the ``size_fixed`` the decision is handed for
-# it; ``_ABSENT`` is the key left out.
+# Each shape a save answer can state ``pokemon.srm``'s size in — the one group
+# listing that file, or none (``no-group``) — and the ``size_fixed`` the
+# decision is handed for it; ``_ABSENT`` is the key left out.
 _ABSENT = object()
 _CLAIMS: dict[str, tuple[tuple[bool | None, ...], object]] = {
     "fixed": ((True,), True),
@@ -2375,7 +2375,7 @@ class TestTheSizeClaimReachesTheDecision:
         *,
         elsewhere: tuple[tuple[str, bool | None], ...] = (),
     ):
-        """An answer whose groups list ``pokemon.srm`` once per claim in *claims*.
+        """An answer whose one group listing ``pokemon.srm`` states the claim in *claims*, or none (``no-group``).
 
         *elsewhere* adds one group per ``(name, claim)`` in another directory.
         """

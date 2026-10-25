@@ -31,10 +31,10 @@ Sync uses a **newest-wins** model with a hash-divergence guard:
   device that Tender never synced meets a different save in RomM, or if your local save looks emptied or cut short —
   Tender won't silently overwrite either version. A save is measured by its content, not counting the empty padding some
   emulators write at its end, so one that is smaller only because its emulator writes less padding is not taken for a
-  cut-short one. Where the emulator writes a save at a fixed size, such as a cartridge's battery save, a save that is
-  now smaller than what it held at the last sync (padding not counted) counts as cut short, however little it lost. (A
-  save last synced by an older version of Tender and changed since is judged once by its full size; if that raises a
-  prompt, resolving it settles it.)
+  cut-short one. Where the emulator writes a save at a fixed size, such as a cartridge's battery save, a memory card
+  image or a console's backup RAM, a save that is now smaller than what it held at the last sync (padding not counted)
+  counts as cut short, however little it lost. (A save last synced by an older version of Tender and changed since is
+  judged once by its full size; if that raises a prompt, resolving it settles it.)
 
 This is the same model used by the official RomM clients (Argosy and Grout). It keeps cross-device save sync simple: one
 timeline per slot, newest wins.

@@ -82,8 +82,9 @@ UnestablishedShape = Literal["nothing_established", "directory_known", "not_aske
 #
 # **Stated as the roles to EXCLUDE, and that is the decision rather than the
 # shape it happens to have.** The resolver's vocabulary has a value for a file
-# no declaration described (``unknown``) and a component carries ``None`` where
-# no group claimed it — two ways of saying nobody said what this file is — and
+# no declaration described, or one whose declarations named different roles
+# (``unknown``), and a component carries ``None`` where no group claimed it —
+# two ways of saying nobody said what this file is — and
 # both must be carried, because dropping a file that turns out to be progress
 # loses a player's game and carrying one that turns out to be configuration
 # costs a settings file the user can set again. An allow-list of the roles to
@@ -207,10 +208,11 @@ class SaveComponent:
 
     ``role`` is the resolver's word for what the file holds (``battery``,
     ``memory-card``, ``settings``, …), its own ``unknown`` for a file on the
-    machine that no declaration describes, or ``None`` where no group claimed it
-    at all. ``size_fixed`` is whether the emulator writes the file at a fixed
-    size, the claim of the one group that lists it; ``None`` is unknown, never
-    "its size varies".
+    machine that no declaration describes or whose declarations named different
+    roles, or ``None`` where no group claimed it at all. ``size_fixed`` is
+    whether the emulator writes the file at a fixed size, the claim of the one
+    group that lists it, and none where no group does; ``None`` is unknown,
+    never "its size varies".
     """
 
     name: str
@@ -632,14 +634,15 @@ def _components(
 
     Built from the groups where there are any: they carry the role, their own
     directory and the size claim. The resolver states each directory and file
-    name in one group at most (``FileSet._check_one_entry_per_file``), so a
-    component's claims are its own group's. It holds the names of the groups in
-    the first group's directory to the placement's own list
-    (``FileSet._check_group_agreement``) and leaves groups in other directories
-    unchecked, so those may add files, and components built from the groups
-    alone keep every name the placement lists. A placement the resolver answered
-    without groups still names files, and those take the placement's directory,
-    no role and no size claim.
+    name in one group at most (``FileSet._check_one_entry_per_file``), so each
+    component takes its group's size claim as it stands, with nothing to
+    reconcile. The resolver also holds the names of the groups in the first
+    group's directory to the placement's own list
+    (``FileSet._check_group_agreement``) and does not hold groups in other
+    directories to that list, so those may add files, and components built
+    from the groups alone keep every name the placement lists. A placement the
+    resolver answered without groups still names files, and those take the
+    placement's directory, no role and no size claim.
     """
     if not groups:
         return tuple(SaveComponent(name=name, directory=directory, role=None, granularity=None) for name in files)

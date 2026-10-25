@@ -256,7 +256,7 @@ class TestTheSizeClaim:
 
         assert [component.size_fixed for component in answer.synced_files] == [None]
 
-    def test_the_claim_is_looked_up_by_directory_as_well_as_name(self):
+    def test_one_name_in_two_directories_carries_each_groups_own_claim(self):
         # The same name in two directories is two files, and neither lends the
         # other its claim.
         answer = _answer(
