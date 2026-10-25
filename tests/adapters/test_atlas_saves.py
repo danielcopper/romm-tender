@@ -1315,23 +1315,23 @@ class TestTheResolverStatesEachFileOnce:
         return FileGroup(dir=directory, files=(name,), granularity=GRANULARITY_PER_GAME_FILE, role=ROLE_BATTERY)
 
     def test_a_name_repeated_in_the_answers_own_directory_is_refused(self):
+        files = ("Game Title.srm", "Game Title.srm")
+        groups = (self._group(_SAVES, "Game Title.srm"), self._group(_SAVES, "Game Title.srm"))
+
         with pytest.raises(ValueError, match="more than one entry of groups"):
-            _placement(
-                files=("Game Title.srm", "Game Title.srm"),
-                groups=(self._group(_SAVES, "Game Title.srm"), self._group(_SAVES, "Game Title.srm")),
-            )
+            _placement(files=files, groups=groups)
 
     def test_a_name_repeated_in_another_directory_is_refused(self):
         # Groups outside the answer's own directory are not held to its file
         # list, so only the one-entry rule can refuse this repeat.
+        groups = (
+            self._group(_SAVES, "Game Title.srm"),
+            self._group("/elsewhere", "Game Title.ram"),
+            self._group("/elsewhere", "Game Title.ram"),
+        )
+
         with pytest.raises(ValueError, match="more than one entry of groups"):
-            _placement(
-                groups=(
-                    self._group(_SAVES, "Game Title.srm"),
-                    self._group("/elsewhere", "Game Title.ram"),
-                    self._group("/elsewhere", "Game Title.ram"),
-                ),
-            )
+            _placement(groups=groups)
 
     def test_one_name_in_two_directories_is_two_files(self, traces):
         answer = _ask(
