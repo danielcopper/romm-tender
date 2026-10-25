@@ -7,7 +7,7 @@ each acked ROM into the ``roms`` aggregate, stamping its cached
 ``rom_metadata`` in the same write UoW (Rom row first, then metadata —
 FK-safe). The terminal
 ``finalize_per_unit_run`` step builds the cross-unit collection
-mappings, refreshes the ``platform_slug → display_name`` cache, and
+mappings, refreshes the ``platform_slug → name`` cache, and
 emits the ``sync_complete`` event. Also owns the registry- and
 run-history-derived query methods (``get_registry_platforms``,
 ``get_sync_stats``, ``get_sync_runs``) and the ``clear_sync_cache``
@@ -59,12 +59,10 @@ if TYPE_CHECKING:
     EmitProgressFn = Callable[..., Awaitable[None]]
 
 
-# kv_config key for the offline ``platform_slug → display_name`` cache,
-# refreshed on every sync from the run's platform listing, plus the name already
-# kept for each platform outside it that a bound game is still on. Read for the
-# game-detail page's platform name, for the name a platform removal answers
-# with, which the frontend uses to find that platform's Steam collection, and
-# by the next sync to name the collection of a platform RomM no longer lists.
+# kv_config key for the offline ``platform_slug → name`` cache, refreshed on
+# every sync from the run's platform listing, plus the name already kept for each
+# platform outside it that a bound game is still on. Its readers are listed in
+# ``domain/platform_names.py``'s module docstring.
 _PLATFORM_NAMES_KEY = "platform_names"
 
 # How many of the newest sync runs ``get_sync_runs`` answers with — the run
@@ -309,7 +307,7 @@ class SyncReporter:
         the row per ADR-0007 — never delete), revoke the skip of the
         platforms :meth:`finalize_per_unit_run` says to and delete the stamp of
         every collection whose member set holds an unbound ROM, (2) refresh the offline
-        ``platform_slug → display_name`` cache — the run's listed names plus
+        ``platform_slug → name`` cache — the run's listed names plus
         each bound platform's kept name
         (:meth:`_names_with_bound_platforms_kept`) — and
         (3) build the cross-unit collection mappings. Before (2) it writes
@@ -397,7 +395,7 @@ class SyncReporter:
         unbind nothing) have their Steam-shortcut binding cleared in the
         ``roms`` table (the row survives) before collections are built,
         keeping the backend registry in sync with the frontend removals.
-        ``platform_names`` is the ``platform_slug → display_name`` map of every
+        ``platform_names`` is the ``platform_slug → name`` map of every
         platform the run's listing named, synced or not, cached for the offline
         ``roms``-derived queries.
 
@@ -904,7 +902,7 @@ class SyncReporter:
     # ── ``roms``-derived queries ─────────────────────────────────
 
     def _read_platform_name_cache(self, uow) -> dict[str, str]:
-        """Decode the ``platform_slug → display_name`` cache, ``{}`` when absent/corrupt."""
+        """Decode the ``platform_slug → name`` cache, ``{}`` when absent/corrupt."""
         return decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
 
     def get_registry_platforms(self):

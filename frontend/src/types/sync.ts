@@ -302,12 +302,9 @@ export interface SyncAddItem {
  * carry removals for the ROMs the run no longer fetches and new or changed
  * counts for the ROMs a collection still reaches.
  *
- * `name` is the run's display name where there is one, else a real name carried
- * on one of the platform's fetched new/changed entries, else what the backend
- * recorded for the platform. A reconstructed collection member carries the slug
- * in that field and does not count as a name. It is the bare slug where no tier
- * answers — outside the run, no fetched entry with a real name, and the
- * registry knows only the slug or holds no row for it.
+ * `name` is the name the apply gives the platform's Steam collection: RomM's
+ * listed name for every platform the run's listing names, synced or not, else
+ * the name the last sync cached for it, else the bare slug.
  *
  * Collections are NOT a row here — `collection_diff` on the same summary already
  * carries the added and removed collection names.

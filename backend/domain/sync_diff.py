@@ -161,10 +161,10 @@ def platform_breakdown(
 
     Returns one row per platform holding at least one of the three counts —
     ``{"slug", "name", "synced", "new_count", "changed_count", "remove_count"}``
-    — ordered by display name (case-insensitively, the slug breaking a tie).
-    The name is the one *platform_names* holds for the slug, else the slug:
-    the names the preview's platform-collection diff files by, so a row reads
-    as the Steam collection the apply files the platform under, synced or not.
+    — ordered by name (case-insensitively, the slug breaking a tie). The name
+    is the one *platform_names* holds for the slug, else the slug: the names
+    the preview's platform-collection diff files by, so a row carries the name
+    the apply gives the platform's Steam collection, synced or not.
     The ``platform_name`` an entry or the registry carries is not read.
 
     ``synced`` is False for a platform outside the run's platform list. Its

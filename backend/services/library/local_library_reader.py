@@ -69,7 +69,7 @@ if TYPE_CHECKING:
     from domain.work_unit import WorkUnit
     from services.protocols import UnitOfWorkFactory
 
-# kv_config key for the offline ``platform_slug → display_name`` cache the
+# kv_config key for the offline ``platform_slug → name`` cache the
 # library sync refreshes every run. Read here so the preview names a delisted
 # platform's Steam collection as the apply does. Mirrors
 # ``library.reporter._PLATFORM_NAMES_KEY``.
@@ -234,7 +234,7 @@ class LocalLibraryReader:
             )
 
     def do_read_kept_platform_names(self, platform_slugs: Collection[str]) -> dict[str, str]:
-        """The display name the names cache holds for each of *platform_slugs* that has one.
+        """The name the names cache holds for each of *platform_slugs* that has one.
 
         Every sync's finalize writes the cache, a stopped run's included.
 

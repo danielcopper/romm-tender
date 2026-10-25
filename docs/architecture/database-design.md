@@ -25,7 +25,7 @@ Each vertical landed in turn:
 
 - **library/roms** — the live sync path writes `roms` (the synced-ROM registry), `sync_runs` (the
   start→complete/cancel/error lifecycle that replaced the JSON `last_sync`/`sync_stats` scalars), and the `kv_config`
-  `platform_slug → display_name` cache row, all through Repository Protocols + the Unit of Work.
+  `platform_slug → name` cache row, all through Repository Protocols + the Unit of Work.
 - **metadata** — `rom_metadata` is written by the reporter's per-unit commit, the same write Unit of Work as the `roms`
   upsert (Rom row first, then metadata, so the `rom_id` FK is satisfied at commit and a ROM and its cached metadata land
   atomically); `MetadataService`/`GameDetailService` read it back from SQLite.
@@ -287,9 +287,9 @@ maps 1:1 onto these tables.
 
 `SyncRun` carries its own invariants, so per GLOSSARY.md it gets a typed table rather than untyped `kv_config` rows. The
 full live `kv_config` key set is `device_id` (the server-issued device identity), `platform_names` (the JSON-encoded
-`platform_slug → display_name` cache), `platform_ids` (each RomM platform's IGDB, libretro, ScreenScraper and TheGamesDB
-ids and its display name, keyed by slug: replaced with every listed platform's at the start of every sync, and read from
-RomM once for a platform none are kept for — what a platform's system is asked with, see
+`platform_slug → name` cache), `platform_ids` (each RomM platform's IGDB, libretro, ScreenScraper and TheGamesDB ids and
+its display name, keyed by slug: replaced with every listed platform's at the start of every sync, and read from RomM
+once for a platform none are kept for — what a platform's system is asked with, see
 [core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)), `retrodeck_home_path` (+ its
 pending-migration `_previous`, and — when the home is changed _again_ before the migration runs — a `_hops` JSON array
 of the additional pending homes, oldest→newest, so files under an intermediate home are never stranded,
@@ -303,10 +303,11 @@ the token the playtime read needs, cleared by a later read that succeeds or a fr
 toast already raised — `update_available_toasted_version` (the release told about), `update_failure_toasted_at` (the
 installer's record of a failed update) and `update_stopped_toasted_at` (an installer found stopped) — the truly
 miscellaneous singleton scalars. The `platform_names` cache is a single JSON blob the library sync refreshes every run
-so three reads need no RomM: the game-detail platform name, a platform removal's answer, whose name the frontend finds
-that platform's Steam collection by, and the next sync's name, in its preview as in its apply, for the Steam collection
-of a platform RomM no longer lists, whose kept games stay in it. Each refresh writes the name of every platform the
-run's own platform listing names, its sync on in Tender or not — RomM's `name`, never a custom name set in RomM
+so four reads need no RomM: the game-detail platform name, a platform removal's answer, whose name the frontend finds
+that platform's Steam collection by, the next sync's name, in its preview as in its apply, for the Steam collection of a
+platform RomM no longer lists, whose kept games stay in it, and a BIOS row a link of Tender's into another platform's
+store folder serves. Each refresh writes the name of every platform the run's own platform listing names, its sync on in
+Tender or not — RomM's `name`, never a custom name set in RomM
 ([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1, D2) — and keeps the cached name of every other
 platform a bound game is still on, a stopped run's refresh included. The schema version is **not** a `kv_config` key —
 it is tracked in `PRAGMA user_version` by the [migration runner](#the-migration-framework)
@@ -358,11 +359,9 @@ removal), so foreign keys are deliberately sparse:
 - **`platform_slug` → no FK.** Carried on `roms` / `rom_installs` / `downloaded_bios` / `firmware_cache` as a plain
   denormalized RomM platform slug. There is no `platforms` table to reference —
   [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md)
-  dropped the `Platform` aggregate — so it is just a string. The platform _display name_ is not stored on the row: a
-  sync takes it from RomM's platform listing for every listed platform, synced or not, and caches it in a single
-  `kv_config` `platform_slug → display_name` blob (refreshed every sync). The Steam collection of a platform RomM no
-  longer lists, the game page and a platform removal's answer take the cached name, and the bare slug where the cache
-  holds none.
+  dropped the `Platform` aggregate — so it is just a string. The platform's name is not stored on the row: it lives in
+  the `kv_config` `platform_names` cache ([One table per aggregate](#one-table-per-aggregate) says what writes and reads
+  it), and a reader with no name cached for a slug takes the bare slug.
 
 The split moved the FK policy from the epic's "one FK only" (written for the mega-table world) to "CASCADE for the
 per-ROM ownership relationships the split introduced; no FK for cross-aggregate references" — same intent, applied to

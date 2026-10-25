@@ -348,8 +348,8 @@ key.
 
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
 (`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
-(platform_slug → display_name cache), `platform_ids` (each RomM platform's ids the resolver is asked with, beside its
-display name — see [Platform system](#platform-system)), `save_directories_recorded`, the marker that the one-time pass
+(platform_slug → name cache), `platform_ids` (each RomM platform's ids the resolver is asked with, beside its display
+name — see [Platform system](#platform-system)), `save_directories_recorded`, the marker that the one-time pass
 recording the installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected
 emulator installation with no ROM failing, `update_check_last_seen`, what the release checks last established (see
 _Available release_ below), `update_available_toasted_version`, the release the user has been told about,
@@ -357,6 +357,9 @@ _Available release_ below), `update_available_toasted_version`, the release the 
 the previous start ran as (see _Rolled-back update_ below), and `update_failure_toasted_at` and
 `update_stopped_toasted_at`, the failed update and the stopped attempt whose toasts were raised (see _Failed-update
 toast_ below). The schema version is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
+
+A platform's name in `platform_names` is the `name` RomM's platform listing gives it, never its `custom_name` nor RomM's
+`display_name`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.

@@ -37,18 +37,18 @@ happening, from the row that appears under the main page's status lines. The mai
 row and **Cancel Sync**; every button that starts, resumes or applies a sync is on the Sync page, along with the change
 list, the switches and the list of past runs.
 
-**The change table.** One row per platform with something to change, named as that platform's Steam collection is, with
-**New**, **Updated** and **Removed** counts, a row for your collections naming which were added and removed, a row
-counting the per-platform Steam collections when that set changes, and a total. The two collection rows say what changed
-on a second line and show a dash in the game columns, because they count collections rather than games — so the counts
-above the total are all games and still add up to it. That means the total can read `0 0 0` when the only thing that
-changed is which games are in a collection, so a line under it says what the columns cannot: "plus 1 collection added",
-"plus 2 platform collections changed". A long platform name is shortened with an ellipsis rather than running into the
-counts beside it, and with a mouse, hovering the row shows the whole name. A platform that is no longer synced but still
-has shortcuts to clear up is marked rather than hidden, so a removal never appears without saying where it comes from.
-Under the table you get what the run covers, how long it should take, and the note about progress being saved. If your
-server is too old to send the per-platform split, the page says so and shows the totals on their own rather than
-inventing a breakdown.
+**The change table.** One row per platform with something to change — named by the platform's name in RomM, as its Steam
+collection is — with **New**, **Updated** and **Removed** counts, a row for your collections naming which were added and
+removed, a row counting the per-platform Steam collections when that set changes, and a total. The two collection rows
+say what changed on a second line and show a dash in the game columns, because they count collections rather than games
+— so the counts above the total are all games and still add up to it. That means the total can read `0 0 0` when the
+only thing that changed is which games are in a collection, so a line under it says what the columns cannot: "plus 1
+collection added", "plus 2 platform collections changed". A long platform name is shortened with an ellipsis rather than
+running into the counts beside it, and with a mouse, hovering the row shows the whole name. A platform that is no longer
+synced but still has shortcuts to clear up is marked rather than hidden, so a removal never appears without saying where
+it comes from. Under the table you get what the run covers, how long it should take, and the note about progress being
+saved. If your server is too old to send the per-platform split, the page says so and shows the totals on their own
+rather than inventing a breakdown.
 
 **Three buttons end a preview**, and they sit above the table. **Apply Sync** starts the run. **Refresh** throws the
 preview away and works out a fresh one against whatever your server holds now. **Cancel** throws it away and leaves it
@@ -407,9 +407,9 @@ is different: it is missing from a list RomM did give, so the sync removes its S
 brought in, as usual.
 
 The **Show collection games in platform groups** setting — whether games pulled in via a collection also get added to
-their platform's Steam group, named the same way whether or not you sync that platform — lives on the **Settings** page
-under **Steam Library**, alongside the preferred-region preference. It applies to every sync, so it sits with the other
-set-and-forget preferences rather than on this tab.
+their platform's Steam collection, which carries the platform's name in RomM even when you don't sync that platform —
+lives on the **Settings** page under **Steam Library**, alongside the preferred-region preference. It applies to every
+sync, so it sits with the other set-and-forget preferences rather than on this tab.
 
 #### Other users' collections
 

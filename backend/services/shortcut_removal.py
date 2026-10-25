@@ -12,7 +12,7 @@ the next sync's incremental-skip gate can't skip a platform/collection whose
 shortcuts were removed locally and leave the removal never recreated. Why the
 platform stamp is kept is in docs/architecture/backend-architecture.md,
 "Incremental skip". Reads the synced-shortcut binding from ``uow.roms``; the offline
-``platform_slug → display_name`` label comes from the ``kv_config`` cache the
+``platform_slug → name`` label comes from the ``kv_config`` cache the
 library sync refreshes each run.
 """
 
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
 
-# kv_config key for the offline ``platform_slug → display_name`` cache the
+# kv_config key for the offline ``platform_slug → name`` cache the
 # library sync refreshes every run. Read here so a platform's removal can find
 # the platform's Steam collection by the name the sync gave it. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
 _PLATFORM_NAMES_KEY = "platform_names"
@@ -171,7 +171,7 @@ class ShortcutRemovalService:
         return {"success": True, "app_ids": app_ids, "rom_ids": rom_ids, "platform_name": platform_name}
 
     def _read_platform_name_cache(self, uow) -> dict[str, str]:
-        """Decode the ``platform_slug → display_name`` cache, ``{}`` when absent/corrupt."""
+        """Decode the ``platform_slug → name`` cache, ``{}`` when absent/corrupt."""
         return decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
 
     # ── Removal results ────────────────────────────────────────────────────

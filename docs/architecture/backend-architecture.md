@@ -480,8 +480,8 @@ ROMs still bound to a shortcut in `roms`, i.e. `shortcut_app_id` not NULL), not 
 `shortcut_registry` / `last_sync` / `sync_stats` are gone from this path; all writes go through the `roms` / `sync_runs`
 Repository Protocols behind a narrow Unit of Work (per
 [ADR-0006](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0006-narrow-unit-of-work-scope.md) the UoW
-spans only the DB write, never the up-to-60s frontend ack). The platform `slug → display_name` map resolves live from
-RomM each sync and is cached in a `kv_config` row for offline reads. Removing a shortcut **unbinds** the ROM
+spans only the DB write, never the up-to-60s frontend ack). The platform `slug → name` map resolves live from RomM each
+sync and is cached in a `kv_config` row for offline reads. Removing a shortcut **unbinds** the ROM
 (`Rom.unbind_shortcut()` NULLs `shortcut_app_id`, keeping the row and its per-ROM children) rather than deleting it, per
 [ADR-0007](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0007-rom-retention-identity-anchor.md). The
 full schema and aggregate model are in [Database Design](database-design.md).
@@ -937,11 +937,9 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   the run, so a run that reaches the stale removal always has its own. Which platforms are on in Tender is keyed by
   RomM's platform id, which an unlisted platform no longer has, so the route is what says the platform was on: a row
   last delivered through its platform had it on. A kept row stays in its platform's Steam collection; for a platform
-  RomM no longer lists, that collection keeps the display name the `platform_names` cache holds. **Every platform the
-  run's listing names is named by it**, its sync on in Tender or not: the fetcher records each listed platform's `name`
-  beside its slug (`LibrarySyncStateBox.run_listed_platform_names`, through
-  `domain/platform_names.py::listed_platform_names`), never the custom name a user set in RomM (#2564 D1, D2). Every
-  finalize, a stopped run's included, rewrites the cache with those names and carries forward the name of each platform
+  RomM no longer lists, that collection keeps the name the `platform_names` cache holds; which name names every other
+  platform is under [Collection management](steam-non-steam-shortcuts.md#collection-management). Every finalize, a
+  stopped run's included, rewrites the cache with the run's listed names and carries forward the name of each platform
   outside them a bound row is still on (`SyncReporter._names_with_bound_platforms_kept`), so a cancelled or paused run
   in between does not rename the collection to the slug. The preview reads the same name (`do_read_kept_platform_names`,
   through `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. Its
@@ -949,9 +947,8 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   listing does not name that a kept row or an emitted entry is on, that cached name, else the slug — an emitted entry
   through `domain/sync_diff.py::platform_collection_name`, a kept row by the same lookup — never by the `platform_name`
   an entry carries, which a collection's skip fills with the slug and a collection's fetch with RomM's display name
-  (#2558 D1). Its per-platform table (`domain/sync_diff.py::platform_breakdown`) labels each row by the same names, a
-  removed row's platform included, so a row reads as the Steam collection the apply files that platform under (#2564).
-  Force Full Sync leaves the routes in place. The preview asks the same question for the same rows, through the same
+  (#2558 D1). Its per-platform table is named by the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync
+  leaves the routes in place. The preview asks the same question for the same rows, through the same
   `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. Both
   judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
   apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes

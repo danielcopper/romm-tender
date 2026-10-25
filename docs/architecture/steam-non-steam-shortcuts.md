@@ -458,6 +458,14 @@ field. Tender owns machine-scoped collections named `RomM: <platform> (<hostname
 it receives and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for this machine whose
 platform/collection name is absent from those maps.
 
+`<platform>` is the `name` RomM's platform listing gives the platform, never the `custom_name` a user set in RomM, for
+every platform the run's listing names, its sync on in Tender or not: the fetcher records each listed platform's name
+beside its slug (`LibrarySyncStateBox.run_listed_platform_names`, through
+`domain/platform_names.py::listed_platform_names`) ([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1,
+D2). A platform RomM no longer lists keeps the name the `platform_names` cache holds for it, else its slug
+([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "The stale removal keeps
+a game gone from RomM").
+
 The cleanup is **gated on a completed (non-cancelled) sync** (`!data.cancelled`). On a cancelled run the maps are
 **partial** — they list only the platforms the run reached before the cancel (empty if the cancel fired before the first
 unit), because the backend builds `platform_app_ids` from the cross-unit accumulator of reached platforms. Treating a

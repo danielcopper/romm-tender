@@ -235,11 +235,11 @@ class LibrarySyncStateBox:
     # than the kept ids under ``platform_ids``, which a game page's read can
     # widen mid-run (``PlatformSystemService``). Reset by ``try_begin_run``.
     run_listed_platform_slugs: frozenset[str] | None = None
-    # Every listed platform's name from that same listing, by slug, on in Tender
-    # or not (``domain.platform_names.listed_platform_names``): what the run
-    # names a platform by, in the apply's Steam collections, the name cache it
-    # writes and the preview's per-platform table. Empty until the run has
-    # listed. Reset by ``try_begin_run``.
+    # Every listed platform's name from that same listing, by slug
+    # (``domain.platform_names.listed_platform_names``): what the run names a
+    # platform by — in its Steam collections, the name cache and the preview —
+    # whether its sync is on or not. Empty until the run has listed. Reset by
+    # ``try_begin_run``.
     run_listed_platform_names: dict[str, str] = field(default_factory=dict)
     # Every bound row a skipped unit of the apply rebuilt from its stored row,
     # by ``rom_id`` to its platform slug, for the finalize's
