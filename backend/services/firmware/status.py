@@ -76,7 +76,7 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
 
-# kv_config key for the ``platform_slug → display_name`` cache the library sync
+# kv_config key for the ``platform_slug → name`` cache the library sync
 # refreshes every run. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
 _PLATFORM_NAMES_KEY = "platform_names"
 

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from domain.collection_listing import collection_entry
 from domain.collection_owner import listing_is_own
 from domain.fetch_generation import backfill_needed, count_rows_for_skip
+from domain.platform_names import listed_platform_names
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
@@ -310,10 +311,12 @@ class LibraryFetcher:
         """Fetch and filter platforms by enabled_platforms setting, keeping every listed platform's ids.
 
         Answers ``(enabled, unwalked_ids)``: the platforms this run syncs, and
-        the id of every listed platform it does not.
+        the id of every listed platform it does not. Every listed platform's
+        slug and name are held on the run's box.
         """
         listed = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
         self._sync_state.run_listed_platform_slugs = frozenset(platform_ids_by_slug(listed))
+        self._sync_state.run_listed_platform_names = listed_platform_names(listed)
         await self._loop.run_in_executor(None, keep_platform_ids, self._uow_factory, self._logger, listed)
 
         # Empty map = "all platforms enabled" (the safety floor for a user who

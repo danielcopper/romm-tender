@@ -56,6 +56,14 @@ class TestTryBeginRun:
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         assert box.run_skip_rebuilt_rows == {}
 
+    def test_drops_the_previous_run_s_listed_platform_names(self):
+        box = LibrarySyncStateBox()
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
+        box.run_listed_platform_names = {"n64": "Nintendo 64"}
+        box.finish_run("run-1")
+        assert box.try_begin_run("run-2", kind=SyncRunKind.PREVIEW) is True
+        assert box.run_listed_platform_names == {}
+
 
 class TestRunKind:
     """The kind is claimed with the slot and cleared with it.

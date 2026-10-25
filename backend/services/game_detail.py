@@ -43,7 +43,7 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
 
-# kv_config key for the offline ``platform_slug → display_name`` cache the library
+# kv_config key for the offline ``platform_slug → name`` cache the library
 # sync refreshes every run. Read here so the game-detail panel shows "Super
 # Nintendo" rather than the bare "snes" slug. Mirrors
 # ``library.reporter._PLATFORM_NAMES_KEY``.
