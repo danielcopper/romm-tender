@@ -2,7 +2,8 @@
 
 The package's public API is the :class:`LibraryService` façade — it
 composes the library sync sub-services (:class:`LibraryFetcher`,
-:class:`CollectionFetcher`, :class:`SyncOrchestrator`, :class:`SyncReporter`,
+:class:`CollectionFetcher`, :class:`SyncOrchestrator`, :class:`UnitApplier`,
+:class:`SyncPreview`, :class:`SyncProgress`, :class:`SyncReporter`,
 :class:`SessionBudgetMonitor`, :class:`ShortcutLaunchResolver`,
 :class:`ChunkDispatcher`, :class:`CoverPreparer`, :class:`SyncRunRecorder`,
 :class:`LocalLibraryReader`)

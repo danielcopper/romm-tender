@@ -431,14 +431,14 @@ Format: **invariant** — tier — enforced by.
   repository name not in its list all pass green. What it does catch is the plain `uow.roms.save(...)` dropped into a
   read module because a UoW was already open there. The declaration earns its keep by making the boundary checkable
   rather than descriptive: these reads open their own short UoW and are offloaded to an executor at points chosen for
-  cheapness, so a write among them would land at a moment nobody picked. The platform stamp's DELETE stayed in
-  `sync_orchestrator.py` on those grounds — it is a write, so a read-only module cannot hold it, and it is cohesive with
-  the half of the apply pipeline that performs it: the DELETE stayed with `_sync_one_unit`, which builds a unit's delta,
-  while the re-stamp went to `ChunkDispatcher._build_final_platform_stamp` with the final chunk whose commit UoW it
-  rides, so the stamp's two ends now sit in two modules and each names the other. **Why the DELETE sits exactly where it
-  sits in that pipeline is a property of its call site, not of its module** — after the fetch, after the artwork, after
-  the cancel guard, before the first chunk (ADR-0023 / #1025) — and that argument lives in full at the call site's own
-  comment, which is the only place a move could not have carried it away from
+  cheapness, so a write among them would land at a moment nobody picked. The platform stamp's DELETE sits in
+  `unit_apply.py` on those grounds — it is a write, so a read-only module cannot hold it, and it is cohesive with the
+  half of the apply pipeline that performs it: the DELETE sits with `UnitApplier.apply_unit`, which builds a unit's
+  delta, while the re-stamp went to `ChunkDispatcher._build_final_platform_stamp` with the final chunk whose commit UoW
+  it rides, so the stamp's two ends now sit in two modules and each names the other. **Why the DELETE sits exactly where
+  it sits in that pipeline is a property of its call site, not of its module** — after the fetch, after the artwork,
+  after the cancel guard, before the first chunk (ADR-0023 / #1025) — and that argument lives in full at the call site's
+  own comment, which is the only place a move could not have carried it away from
 - **An emitted `sync_progress` frame stops a run (`running: False`) only with a terminal stage, and a terminal stage is
   only ever emitted with the run stopped** — test — `tests/services/library/test_terminal_frame_contract.py`
   (structural, AST call sites and dict literals across all of `backend/services` — it covers the error paths a
@@ -461,20 +461,20 @@ Format: **invariant** — tier — enforced by.
   `tests/services/library/test_state.py::TestRunKind` (claimed with the run slot, cleared with it); the frontend half by
   `frontend/src/utils/syncRunView.test.ts` and the slot's three labels in `frontend/src/bigpicture/MainPage.test.tsx`.
   **Nothing joins the thirteen sites it passes through**, counted one per site at the granularity this list names them:
-  `LibrarySyncStateBox` holds it with the slot, three separate backend frame builders carry it (`emit_progress`,
-  `_finish_sync`'s CANCELLED terminal, and the per-unit ERROR dict literal in `sync_orchestrator.py`), three frontend
-  start paths stamp it themselves on the optimistic frame they show before the first real one arrives (`useSyncPage`'s
-  `computePreview` as `preview`, its `applyPreview` and `startRunDirectly` as `apply`), `SyncProgress.runKind` and
-  `useSyncRunView` pass it through, `MainPage` both seeds it from the `get_sync_status` snapshot onto the store at mount
-  and maps it to the slot's label, and two readers announce an apply run's failure off it — the `sync_progress`
-  listener's toast in `index.tsx` and `useSyncPage`'s status line. **Nothing mechanical stands behind the seam between
-  them**: a fourth frame builder that omits the key, a fourth start path that stamps the kind it is not, or a reader
-  that spends the absent case on one of the two answers — a `runKind ?? "preview"`, a `=== "preview"` where the neutral
-  branch was — goes green, because each test above pins one half and none of them pins the join. The failure is silent
-  and worst exactly where the frontend cannot help itself: after a JS-context rebuild mid-run the store starts empty,
-  the snapshot is the only thing that can say what the run is doing, and Main then tells the reader a real apply run is
-  merely checking for changes. Why the kind cannot be derived at all is stated at `domain/sync_run_kind.py` and in
-  `docs/architecture/qam-panel.md`'s Main section; do not restate it here
+  `LibrarySyncStateBox` holds it with the slot, three separate backend frame builders carry it (`emit_progress`, the
+  CANCELLED terminal `emit_cancelled` and the ERROR terminal `write_error_frame`, all three in `sync_progress.py`),
+  three frontend start paths stamp it themselves on the optimistic frame they show before the first real one arrives
+  (`useSyncPage`'s `computePreview` as `preview`, its `applyPreview` and `startRunDirectly` as `apply`),
+  `SyncProgress.runKind` and `useSyncRunView` pass it through, `MainPage` both seeds it from the `get_sync_status`
+  snapshot onto the store at mount and maps it to the slot's label, and two readers announce an apply run's failure off
+  it — the `sync_progress` listener's toast in `index.tsx` and `useSyncPage`'s status line. **Nothing mechanical stands
+  behind the seam between them**: a fourth frame builder that omits the key, a fourth start path that stamps the kind it
+  is not, or a reader that spends the absent case on one of the two answers — a `runKind ?? "preview"`, a
+  `=== "preview"` where the neutral branch was — goes green, because each test above pins one half and none of them pins
+  the join. The failure is silent and worst exactly where the frontend cannot help itself: after a JS-context rebuild
+  mid-run the store starts empty, the snapshot is the only thing that can say what the run is doing, and Main then tells
+  the reader a real apply run is merely checking for changes. Why the kind cannot be derived at all is stated at
+  `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s Main section; do not restate it here
 - **A press that starts a run clears the previous run's per-unit rows — unless that press is a RESUME, the one start
   they are still true for** — test + prompt-only — `frontend/src/bigpicture/SyncPage.test.tsx`'s "a previous run's rows
   at the next press" pins all three start paths in both directions, and `frontend/src/utils/runUnitsStore.test.ts` pins
@@ -523,7 +523,7 @@ Format: **invariant** — tier — enforced by.
 - **A platform's completion stamp records what the skip compares RomM's answer with, and the gate and the preview's
   re-stamp count read it through one comparison: the checksum is over exactly the ids of the unit's full fetch
   (`ChunkDispatcher._build_final_platform_stamp`, over every chunk's ROMs), `fetch_started_at` is Tender's clock read
-  before the skip request (`SyncOrchestrator`), the ten-minute margin is applied when the stamp is read and never stored
+  before the skip request (`UnitApplier`), the ten-minute margin is applied when the stamp is read and never stored
   (`domain/platform_skip.py::skip_reference`), and the gate's `probe_verdict` and the count's `restamp_due` both decide
   through `domain/platform_skip.py::_compare`** — test + prompt-only — the checksum by
   `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshStampRestoresTheSkip::test_a_hidden_rom_with_a_shortcut_is_fetched_in_full_once_then_skipped`,
@@ -535,25 +535,25 @@ Format: **invariant** — tier — enforced by.
   `tests/services/library/test_chunk_dispatcher.py::TestApplyChunking::test_the_final_chunk_s_stamp_checksums_every_chunk_s_ids`;
   the margin by `tests/domain/test_platform_skip.py::TestSkipReference` and, through the gate,
   `tests/services/library/test_fetcher.py::TestIncrementalSkipFromPlatformStamp::test_the_reference_is_the_fetch_start_less_the_margin`.
-  The rule spans three modules, each holding one part: the dispatcher writes the checksum at the final chunk, the
-  orchestrator reads the clock and hands it down, and `domain/platform_skip.py` holds the margin and the comparison. Why
-  the stamp records a fetch start and a checksum rather than a completion time and a count, and what the margin covers,
-  are in [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental
-  skip"; do not restate them here. **Each wrong turn is silent.** A checksum over anything but the full fetch's ids —
-  the final chunk's ROMs, or the bound rows the skip rebuilds from — never equals RomM's id index again, so the platform
-  is fetched in full and offered the re-stamp Apply on every sync. A clock read later than the walk's start records a
-  start after ROMs the walk has already read; once that gap is longer than the margin, an edit RomM makes to such a ROM
-  inside it is older than the next stamp's reference, and the next skip misses it. A margin stored in the stamp is fixed
-  into every row: a later change to it leaves the stamps already written at the old one, and a reader that subtracts it
-  as well applies it twice. Two deciders that stop sharing one comparison disagree about a stamp: the preview offers an
+  The rule spans three modules, each holding one part: the dispatcher writes the checksum at the final chunk, the unit
+  applier reads the clock and hands it down, and `domain/platform_skip.py` holds the margin and the comparison. Why the
+  stamp records a fetch start and a checksum rather than a completion time and a count, and what the margin covers, are
+  in [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip";
+  do not restate them here. **Each wrong turn is silent.** A checksum over anything but the full fetch's ids — the final
+  chunk's ROMs, or the bound rows the skip rebuilds from — never equals RomM's id index again, so the platform is
+  fetched in full and offered the re-stamp Apply on every sync. A clock read later than the walk's start records a start
+  after ROMs the walk has already read; once that gap is longer than the margin, an edit RomM makes to such a ROM inside
+  it is older than the next stamp's reference, and the next skip misses it. A margin stored in the stamp is fixed into
+  every row: a later change to it leaves the stamps already written at the old one, and a reader that subtracts it as
+  well applies it twice. Two deciders that stop sharing one comparison disagree about a stamp: the preview offers an
   Apply that leaves the next sync fetching in full, or offers none to a platform the gate will keep refusing. **What
   nothing checks**: the test clock does not move across the skip request, so a clock read after it passes every test
   above; and `TestProbeVerdict` and `TestRestampDue` pin each decider alone, so nothing holds them to one comparison
 - **A collection's completion stamp records what the collection skip compares RomM's answers with, and the preview's
   re-stamp count is that skip's own refusal: the checksum is over exactly the `rom_ids` the collection listing carried
   (`WorkUnit.member_rom_ids`, in `ChunkDispatcher._build_final_collection_stamp`), never the stamp's `member_rom_ids`;
-  `fetch_started_at` is Tender's clock read before the unit's skip check (`SyncOrchestrator`), for a collection unit as
-  for a platform one; the margin is the platform skip's, applied when the stamp is read
+  `fetch_started_at` is Tender's clock read before the unit's skip check (`UnitApplier`), for a collection unit as for a
+  platform one; the margin is the platform skip's, applied when the stamp is read
   (`domain/platform_skip.py::skip_reference`); no `rom_count` is compared; and a collection is counted in
   `restamp_collection_count` exactly when the preview's gate refused it for a reason a fresh stamp settles
   (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for a probe that raised or could not be read) and
@@ -576,10 +576,10 @@ Format: **invariant** — tier — enforced by.
   `tests/domain/test_collection_skip.py::TestWhetherAFreshStampSettlesTheRefusal`; and that a stamp the apply writes
   matches the listing it was written from by
   `TestFinalChunkCollectionStamp::test_the_stamp_it_writes_matches_the_listing_it_was_written_from`, and that the writer
-  refuses what `apply_stamps` refuses by `::test_a_collection_handed_no_members_is_not_stamped`. The rule spans five
-  modules: the orchestrator reads the clock and counts, the dispatcher writes the stamp, the collection fetcher judges,
-  and `domain/collection_skip.py` with `domain/platform_skip.py` hold the comparisons and the margin. Why the checksum
-  covers the listing rather than the visible id set the platform's covers is in
+  refuses what `apply_stamps` refuses by `::test_a_collection_handed_no_members_is_not_stamped`. The rule spans six
+  modules: the unit applier reads the clock, the preview counts, the dispatcher writes the stamp, the collection fetcher
+  judges, and `domain/collection_skip.py` with `domain/platform_skip.py` hold the comparisons and the margin. Why the
+  checksum covers the listing rather than the visible id set the platform's covers is in
   [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"; do
   not restate it here. **Each wrong turn is silent.** A checksum over the stamp's `member_rom_ids` holds the ids a walk
   answered beyond the listing, so an own smart collection whose walk answers more never matches and is fetched in full,
@@ -683,10 +683,10 @@ Format: **invariant** — tier — enforced by.
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewNamesAPlatformCollectionAsTheApplyDoes` the two
   naming a platform collection alike where a platform's slug and name differ. The rule spans the domain sort, the
   reader, the reporter's commit, the chunk dispatcher, the fetcher's exact-id question
-  (`LibraryFetcher.ask_romm_for_roms`) and the orchestrator, and the preview and the apply each read it — through
-  `services/library/_stale_rows.py::settle_stale_rows` with the same group keys, which is prompt-only, as is that the
-  chunk dispatcher names the unit's kind on every commit, that the listing comes off the run state, and that the preview
-  names every platform collection its diff counts by the name the names
+  (`LibraryFetcher.ask_romm_for_roms`), the orchestrator and the preview, and the preview and the apply each read it —
+  through `services/library/_stale_rows.py::settle_stale_rows` with the same group keys, which is prompt-only, as is
+  that the chunk dispatcher names the unit's kind on every commit, that the listing comes off the run state, and that
+  the preview names every platform collection its diff counts by the name the names
   `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
   entry's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same lookup in
   `compute_platform_collection_diff` — which must agree with `SyncReporter._names_with_bound_platforms_kept`, and that

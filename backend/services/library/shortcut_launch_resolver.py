@@ -6,8 +6,9 @@ the installed file (``{rom_id: bake_path}``) and the emulator that should run it
 (``{rom_id: EmulatorInvocation}``). Both preview and the per-unit apply resolve
 their maps here and hand them straight to the bake. Anything that is not a
 launch fact of a single ROM belongs elsewhere: the shortcut's *shape* is the
-domain builder's, and what the run does with the built shortcuts is
-:class:`~services.library.sync_orchestrator.SyncOrchestrator`'s.
+domain builder's, and what is done with the built shortcuts is
+:class:`~services.library.sync_preview.SyncPreview`'s and
+:class:`~services.library.unit_apply.UnitApplier`'s.
 
 The install-path readers own their own read Unit of Work; the core resolution
 opens none, because the injected ``active_core`` seam opens one per ROM.

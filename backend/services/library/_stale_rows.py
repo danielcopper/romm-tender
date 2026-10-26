@@ -1,9 +1,9 @@
 """The end-of-run stale removal's verdict on each bound row no unit of the run returned.
 
-Shared by :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s
-preview and its apply's finalize, so the removals a preview promises are the
-ones its apply makes. The preview also builds its stale rows and synced group
-keys here (:func:`stale_rows_of`, :func:`preview_group_keys`) and reads
+Shared by :class:`~services.library.sync_preview.SyncPreview` and
+:class:`~services.library.sync_orchestrator.SyncOrchestrator`'s finalize, so
+the removals a preview promises are the ones its apply makes. The preview also
+builds its stale rows and synced group keys here (:func:`stale_rows_of`, :func:`preview_group_keys`) and reads
 the names its platform-collection diff files by and its per-platform table
 labels with (:func:`with_kept_platform_names`).
 """

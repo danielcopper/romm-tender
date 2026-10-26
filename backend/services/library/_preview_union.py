@@ -1,6 +1,6 @@
 """The preview's collapse of the whole library, brought to what the apply's units each collapse.
 
-:class:`~services.library.sync_orchestrator.SyncOrchestrator`'s preview reads
+:class:`~services.library.sync_preview.SyncPreview` reads
 every unit into one union and collapses it once; the apply collapses one unit
 at a time, and a later unit sees what an earlier one committed. Where the two
 would differ for a reason the union cannot see, the correction belongs here.

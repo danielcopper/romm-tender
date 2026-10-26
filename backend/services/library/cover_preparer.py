@@ -54,7 +54,7 @@ class CoverPreparerConfig:
 
     Holds the ``ArtworkManager`` peer every cover operation is delegated to, the
     shared :class:`LibrarySyncStateBox` the cancel signal is read from, and the
-    orchestrator-supplied ``emit_progress`` callback the cover phases narrate
+    ``SyncProgress.emit_progress`` callback the cover phases narrate
     through.
 
     What is absent is the contract: no Unit-of-Work factory, no event loop, no

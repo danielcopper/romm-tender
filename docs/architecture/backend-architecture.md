@@ -437,7 +437,8 @@ groups.
 
 #### LibraryService decomposition (`services/library/`)
 
-The library sync subsystem is a façade over ten sub-services that coordinate through a shared `LibrarySyncStateBox`:
+The library sync subsystem is a façade over thirteen sub-services that coordinate through a shared
+`LibrarySyncStateBox`:
 
 | Module                        | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -445,8 +446,11 @@ The library sync subsystem is a façade over ten sub-services that coordinate th
 | `fetcher.py`                  | `LibraryFetcher` — read-only RomM roundtrips: list platforms/collections, per-unit work-queue construction (a collection unit carries its listed `rom_ids`), a platform unit's incremental/full pagination loop. The outward half of the read pair below                                                                                                                                                                                                                            |
 | `collection_fetcher.py`       | `CollectionFetcher` — one collection unit's ROMs, for all three kinds: the collection incremental skip against its `CollectionSyncState` stamp, the registry rebuild of a skipped collection's members, and otherwise the walk narrowed to the platforms the sync leaves off (a foreign smart collection walked whole); see "Incremental skip" below                                                                                                                                |
 | `local_library_reader.py`     | `LocalLibraryReader` — the inward pair of `fetcher.py`: what THIS DEVICE recorded about the library, read back out of SQLite (the `Rom` rows and their bindings, the completion stamps, the persisted sibling keys, the last finished run), shaped into the projections a run decides against and the reachable set the collections listing counts against. Declared read-only (`scripts/check_read_only_module.py`)                                                                |
-| `sync_orchestrator.py`        | `SyncOrchestrator` — preview (read-only), the per-unit apply pipeline (fetch → collapse → delta, then hand the delta to the dispatcher), cancel, the heartbeat clock, progress emission, and which terminal status a stopped run earns. Holds no `ArtworkManager` at all — the run's artwork seam is `cover_preparer.py`'s and `reporter.py`'s                                                                                                                                      |
-| `chunk_dispatcher.py`         | `ChunkDispatcher` — one unit's apply as durable chunk round-trips: emit `sync_apply_unit`, wait out the heartbeat clock for the ack, commit the chunk through the reporter, and stash or discard a chunk whose ack never came. It opens no transaction, and the run's `try_begin_run` / `finish_run` stay with the orchestrator                                                                                                                                                     |
+| `sync_orchestrator.py`        | `SyncOrchestrator` — the run's lifecycle and control (start, apply a staged preview, cancel, the heartbeat route, shutdown), the run loop that hands each unit to the unit applier, the finalize (the stale removal and the Steam collections), and which terminal status a stopped run earns. The one part of the sync that starts a task                                                                                                                                          |
+| `unit_apply.py`               | `UnitApplier` — one unit's apply: its fetch, the component keys, the shortcut build, the sibling-group collapse and the delta, the covers through the cover preparer, the platform stamp's DELETE at apply start, and the hand-off to the dispatcher. It reads the clock for the unit's `fetch_started_at`                                                                                                                                                                          |
+| `sync_preview.py`             | `SyncPreview` — the read-only preview (every unit fetched into one union, collapsed and classified as the apply's units would), the snapshot it stages for the apply, the read that hands it back to a remounted panel, and its cancel. It claims and releases its own run slot through the box's verbs. Holds no `ArtworkManager` — like the orchestrator and the unit applier, it reaches covers only through `cover_preparer.py`                                                 |
+| `sync_progress.py`            | `SyncProgress` — the `sync_progress` frames: `emit_progress`, handed to every part that narrates a run, the CANCELLED and ERROR terminals, and the `get_sync_status` read a remounted panel re-seeds from                                                                                                                                                                                                                                                                           |
+| `chunk_dispatcher.py`         | `ChunkDispatcher` — one unit's apply as durable chunk round-trips: emit `sync_apply_unit`, wait out the heartbeat clock for the ack, commit the chunk through the reporter, and stash or discard a chunk whose ack never came. It opens no transaction, and the run's `try_begin_run` / `finish_run` stay with the orchestrator and, for a preview, with the preview                                                                                                                |
 | `cover_preparer.py`           | `CoverPreparer` — one unit's covers, readied before its shortcuts are emitted: the `refresh_changed_covers` invalidation pass, the download for the ROMs getting a shortcut, and each emitted entry's `cover_path`. Delegated to `ArtworkService` through the `ArtworkManager` seam, with the run's progress and cancel signals bound in                                                                                                                                            |
 | `sync_run_recorder.py`        | `SyncRunRecorder` — the run's own `SyncRun` row: the `running` row opened with the planned counts, and the single terminal transition (`completed` / `cancelled` / `interrupted` / `paused` / `errored`) that closes it, each in its own short write UoW. It writes the outcome; **which** terminal a stopped run earns stays the orchestrator's, and admitting or releasing the in-flight run stays `_state.py`'s                                                                  |
 | `reporter.py`                 | `SyncReporter` — post-apply finalisation (artwork filenames, the per-unit `roms` upsert, the stale unbind and the Steam-collection map) and the `roms`-derived queries, plus the `sync_runs` history reads behind the last-sync line and the run list                                                                                                                                                                                                                               |
@@ -488,8 +492,8 @@ full schema and aggregate model are in [Database Design](database-design.md).
 
 **Delta-restricted apply: emit only new + changed
 ([ADR-0025](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0025-delta-restricted-apply-with-recorded-applied-state.md)).**
-Between the sibling-group collapse and chunking, `_sync_one_unit` runs `domain/sync_diff.py::classify_roms` over the
-unit's collapsed entries against the bound-shortcut registry and emits only the **delta** — new + changed, a rebind
+Between the sibling-group collapse and chunking, `UnitApplier.apply_unit` runs `domain/sync_diff.py::classify_roms` over
+the unit's collapsed entries against the bound-shortcut registry and emits only the **delta** — new + changed, a rebind
 entry counting as changed because it moves its binding (outside a unit the run skipped, whose apply moves none).
 "Changed" is content, not identity-only: on top of the identity triple (name / `fs_name` / `platform_slug`) the
 classifier compares each item's freshly built target `launch_options` against the `applied_launch_options` recorded on
@@ -533,9 +537,9 @@ and a path change). Two compare layers run per unit, both in `ArtworkService`:
   over a hand-set one, as a version switch does (D8). An automatic cover that is Tender's SteamGridDB pick, given while
   RomM had none, is left out of the download as well: only the invalidation pass replaces it, so it is never seeded from
   the grid file (D24, D27).
-- **The invalidation pass** (`refresh_changed_covers`, reached through `CoverPreparer` from `_sync_one_unit` before the
-  cover download): for every BOUND fetched ROM whose stored fingerprint differs — delta-skipped ROMs included — it
-  re-downloads the cache file (atomic tmp+rename), republishes the grid `{app_id}p.png` copy, persists the new
+- **The invalidation pass** (`refresh_changed_covers`, reached through `CoverPreparer` from `UnitApplier.apply_unit`
+  before the cover download): for every BOUND fetched ROM whose stored fingerprint differs — delta-skipped ROMs included
+  — it re-downloads the cache file (atomic tmp+rename), republishes the grid `{app_id}p.png` copy, persists the new
   fingerprint in a small write UoW (an observed server fact, deliberately NOT ack-coupled like
   `applied_launch_options`), and collects `{rom_id, app_id}`. An automatic cover that is Tender's SteamGridDB pick
   counts as changed whenever the fetch carries a RomM cover, whatever its fingerprint; it is downloaded whole, and its
@@ -887,8 +891,8 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   verbatim and a live shortcut is never renamed. The appId is minted from the canonical name by the frontend
   `AddShortcut`; the DB binding lands on the representative `rom_id`; the reporter is agnostic to the name↔rom mismatch
   (it binds on `rom_id` + the acked appId, and persists each sibling's own RomM name from `pending_all_roms`).
-  `preferred_region` is read from settings by `sync_orchestrator` and threaded into every collapse call site (preview +
-  apply) as the same value within a run.
+  `preferred_region` is read from settings by `sync_preview` and `unit_apply` and threaded into every collapse call site
+  (preview + apply) as the same value within a run.
 - **A version gone from RomM stays bound; only the same dump takes its binding**
   ([ADR-0021](../adr/0021-sibling-group-one-shortcut-binding-active-version.md) §2's amendment). A bound sibling that
   vanished from the server emits nothing and keeps its binding, its shortcut, name and launch command, installed or not;
@@ -1129,7 +1133,7 @@ neither a local removal nor a stale removal on a run that did not process the pl
 since**, so a stale stamp can never skip a half-mirrored platform. Because unbinding keeps the `roms` row (ADR-0007), a
 platform's persisted rows survive a partial re-apply or a local removal while RomM's id set stays what the stamp
 recorded, so a stamp still able to skip would otherwise let the skip drop the un-recreated games (the #1025 silent gap).
-Two rules keep the contract true. The orchestrator **deletes the stamp at a platform unit's apply start** (once the
+Two rules keep the contract true. The unit applier **deletes the stamp at a platform unit's apply start** (once the
 fetch succeeded and the apply is about to emit its first chunk) and only the final chunk re-writes it, so an apply
 interrupted by a crash / cancel / heartbeat-timeout before the final chunk leaves none. The local removals and the stale
 removal on an unprocessed platform **revoke the stamp's skip** (`PlatformSyncStateRepository.revoke_skip`, the

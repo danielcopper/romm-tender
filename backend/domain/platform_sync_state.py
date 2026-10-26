@@ -16,7 +16,7 @@ verb-named mutators. The contract is *a stamp may authorise a skip ⟺ the
 platform's most recent apply attempt ran to completion, and neither a local
 removal nor a stale removal on a run that did not process the platform has
 unbound one of its rows since*: it is deleted at a platform unit's apply start
-(``sync_orchestrator``) so an interrupted re-apply leaves none and the final
+(``unit_apply``) so an interrupted re-apply leaves none and the final
 chunk re-writes it, and cleared wholesale by Force Full Sync (the repository's
 ``clear``) — the stamps are the fetcher's sole skip authority, so clearing them
 arms the full re-fetch; the ``SyncRun`` history is preserved (it feeds no skip

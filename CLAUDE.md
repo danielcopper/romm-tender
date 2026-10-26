@@ -649,7 +649,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **A platform's completion stamp records what the skip compares RomM's answer with, and the gate and the preview's
   re-stamp count read it through one comparison: the checksum is over exactly the ids of the unit's full fetch
   (`ChunkDispatcher._build_final_platform_stamp`, over every chunk's ROMs), `fetch_started_at` is Tender's clock read
-  before the skip request (`SyncOrchestrator`), the ten-minute margin is applied when the stamp is read and never stored
+  before the skip request (`UnitApplier`), the ten-minute margin is applied when the stamp is read and never stored
   (`domain/platform_skip.py::skip_reference`), and the gate's `probe_verdict` and the count's `restamp_due` both decide
   through `domain/platform_skip.py::_compare`** — test + prompt-only —
   `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshStampRestoresTheSkip`
@@ -667,8 +667,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **A collection's completion stamp records what the collection skip compares RomM's answers with, and the preview's
   re-stamp count is that skip's own refusal: the checksum is over exactly the `rom_ids` the collection listing carried
   (`WorkUnit.member_rom_ids`, in `ChunkDispatcher._build_final_collection_stamp`), never the stamp's `member_rom_ids`;
-  `fetch_started_at` is Tender's clock read before the unit's skip check (`SyncOrchestrator`), for a collection unit as
-  for a platform one; the margin is the platform skip's, applied when the stamp is read
+  `fetch_started_at` is Tender's clock read before the unit's skip check (`UnitApplier`), for a collection unit as for a
+  platform one; the margin is the platform skip's, applied when the stamp is read
   (`domain/platform_skip.py::skip_reference`); no `rom_count` is compared; and a collection is counted in
   `restamp_collection_count` exactly when the preview's gate refused it for a reason a fresh stamp settles
   (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for a probe that raised or could not be read) and

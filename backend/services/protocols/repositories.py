@@ -549,7 +549,7 @@ class PlatformSyncStateRepository(Protocol):
         """Drop *platform_slug*'s stamp so that one platform full-fetches next run.
 
         A no-op when no stamp exists. Called at a platform unit's apply start
-        (library/sync_orchestrator.py) so an interrupted re-apply leaves no stale
+        (library/unit_apply.py) so an interrupted re-apply leaves no stale
         stamp (ADR-0023).
         """
         ...

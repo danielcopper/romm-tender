@@ -15,6 +15,8 @@ finished — shaped here
 into the projections a run's decisions are made against, and into the reachable
 set the collections listing counts against. The decisions themselves live in
 ``domain/`` and the moves in
+:class:`~services.library.sync_preview.SyncPreview`,
+:class:`~services.library.unit_apply.UnitApplier` and
 :class:`~services.library.sync_orchestrator.SyncOrchestrator`; the reads are all
 this module does. It has no phase of its own — the baseline reads open a
 preview, the stale scan closes a run, and the reachable set rides the collections
@@ -27,14 +29,16 @@ not a read. Its reach stops at what this file itself calls, and at calls rather
 than bound-method references, and it reads a method's *name* rather than what it
 does — so a write named like a read (``get_or_create``) would pass. The
 declaration is worth having anyway: every method here opens its own short Unit
-of Work and is offloaded through its caller's executor — the orchestrator's,
-or the fetcher's for the reachable set — at points chosen for cheapness, so a
-write among them would land at a moment nobody picked.
+of Work and is offloaded through its caller's executor — the preview's, the
+unit applier's or the orchestrator's, or the fetcher's for the reachable set —
+at points chosen for cheapness, so a write among them would land at a moment
+nobody picked.
 
-Two neighbours belong to the orchestrator instead, deliberately, though both
-touch the same tables through the same repositories:
+Two neighbours live elsewhere instead, deliberately, though both touch the
+same tables through the same repositories:
 
-* ``_clear_platform_stamp_io`` **writes**. That alone rules it out of a
+* :class:`~services.library.unit_apply.UnitApplier`'s
+  ``_clear_platform_stamp_io`` **writes**. That alone rules it out of a
   read-only module, and it belongs with the apply pipeline that performs it
   rather than with the projections a run reasons about.
   :meth:`LocalLibraryReader.do_count_platforms_to_restamp` reads the same table and
@@ -43,8 +47,9 @@ touch the same tables through the same repositories:
   guard, before the first chunk, so a crash in between leaves no stamp
   (ADR-0023 / #1025) — is a property of its call site, and the argument for that
   ordering lives there in full.
-* ``_stamp_component_group_keys`` does no I/O at all — it calls a pure domain
-  function and writes the result back onto the caller's own list.
+* ``services/library/_unit_roms.py::stamp_component_group_keys`` does no I/O at
+  all — it calls a pure domain function and writes the result back onto the
+  caller's own list.
 
 The projections' *shapes* are a contract with :mod:`domain.sync_diff`: an entry
 here is what ``classify_roms`` / ``collapse_sibling_groups`` read, and

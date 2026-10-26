@@ -83,7 +83,7 @@ class SyncReporterConfig:
     repositories), the shared ``LibrarySyncStateBox`` (the reporter reads
     the pending-sync dicts staged by :class:`ChunkDispatcher`; the run-lifecycle
     reset is owned by the orchestrator's terminal ``finally``, not here), an
-    orchestrator-supplied ``emit_progress`` callback for the terminal "done"
+    ``SyncProgress.emit_progress`` callback for the terminal "done"
     event, the ``ArtworkManager`` peer used for cover-path finalisation, and
     the ``ConflictRules`` the ``sync_complete`` event's lease is taken through.
     """
