@@ -177,8 +177,8 @@ export const SavesTab: FC<SavesTabProps> = ({
               return;
             }
             if (outcome.partial) {
-              // As in a slot panel: the reload a partial answer starts would
-              // leave an inline error beside a tab that has moved on.
+              // Toasted as a slot panel toasts it, so both surfaces show a
+              // partial answer the same way.
               showToast(outcome.message);
               return;
             }

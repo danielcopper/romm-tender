@@ -199,7 +199,7 @@ export function switchSlotFailureMessage(
     return "Can't switch — this game's saves are written beside the game file";
   }
   if (reason === "backup_failed") {
-    return "Can't switch — a save couldn't be moved to .romm-backup. Nothing was moved.";
+    return "Can't switch — a save couldn't be moved to .romm-backup, nothing was moved";
   }
   if (reason === "save_shape_unsupported" && message) {
     return message;
@@ -220,7 +220,7 @@ export function createSlotFailureMessage(reason: WireReason): string {
     return "Can't create a slot — download the game first";
   }
   if (reason === "backup_failed") {
-    return "Can't create a slot — a save couldn't be moved to .romm-backup. Nothing was moved.";
+    return "Can't create a slot — a save couldn't be moved to .romm-backup, nothing was moved";
   }
   return "Failed to create slot";
 }
@@ -231,7 +231,7 @@ export function createSlotFailureMessage(reason: WireReason): string {
  * it, `switch_stopped` kept the previous slot after moving `setAside` into
  * `.romm-backup`.
  */
-export function partialSlotSwitchMessage(reason: WireReason, setAside: readonly string[] = []): string | null {
+export function partialSlotSwitchMessage(reason: WireReason, setAside: readonly string[]): string | null {
   if (reason === "switch_incomplete") {
     return "Switched slots, but not every save of the new slot downloaded. Sync this game to download the rest.";
   }

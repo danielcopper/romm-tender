@@ -457,10 +457,10 @@ describe("rollbackFeedback for a restore that RomM or this device refused", () =
 describe("a slot switch whose backup failed", () => {
   it("says nothing was moved where the first backup failed", () => {
     expect(switchSlotFailureMessage("backup_failed", "Could not move a.srm (denied). Nothing was moved.")).toBe(
-      "Can't switch — a save couldn't be moved to .romm-backup. Nothing was moved.",
+      "Can't switch — a save couldn't be moved to .romm-backup, nothing was moved",
     );
     expect(createSlotFailureMessage("backup_failed")).toBe(
-      "Can't create a slot — a save couldn't be moved to .romm-backup. Nothing was moved.",
+      "Can't create a slot — a save couldn't be moved to .romm-backup, nothing was moved",
     );
   });
 
@@ -472,7 +472,7 @@ describe("a slot switch whose backup failed", () => {
   });
 
   it("says a switch that downloaded only part of the new slot switched", () => {
-    expect(partialSlotSwitchMessage("switch_incomplete")).toBe(
+    expect(partialSlotSwitchMessage("switch_incomplete", [])).toBe(
       "Switched slots, but not every save of the new slot downloaded. Sync this game to download the rest.",
     );
   });
@@ -480,7 +480,7 @@ describe("a slot switch whose backup failed", () => {
   it("has no partial sentence for any other answer", () => {
     const reasons: WireReason[] = ["backup_failed", "pending_uploads", "server_unreachable", "not_found"];
     for (const reason of reasons) {
-      expect(partialSlotSwitchMessage(reason)).toBeNull();
+      expect(partialSlotSwitchMessage(reason, [])).toBeNull();
     }
   });
 });

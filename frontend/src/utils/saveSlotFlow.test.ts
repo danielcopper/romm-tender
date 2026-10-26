@@ -473,7 +473,7 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
       await expect(executeSlotSwitch(7, "main", "activate")).resolves.toEqual({
         ok: false,
         reason: "backup_failed",
-        message: "Can't switch — a save couldn't be moved to .romm-backup. Nothing was moved.",
+        message: "Can't switch — a save couldn't be moved to .romm-backup, nothing was moved",
       });
     } finally {
       events.stop();
