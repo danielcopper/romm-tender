@@ -280,7 +280,8 @@ class TestTheVocabulary:
     def test_the_codes_are_the_four_families_by_their_constants_name(self):
         codes = check.resolver_codes()
 
-        assert {name.split("_")[0] for name in codes} == {"CAVEAT", "HEALTH", "UNRESOLVED", "REASON"}
+        families = {name.split("_")[0] for name in codes}
+        assert families == {"CAVEAT", "HEALTH", "UNRESOLVED", "REASON"}
         assert codes["CAVEAT_FIRMWARE_IMAGE_IDENTIFIED"] == "firmware-image-identified"
         assert codes["HEALTH_ISSUE_MARKER_MISSING"] == "marker-missing"
         # The other closed vocabularies are watched by value, not as codes.
