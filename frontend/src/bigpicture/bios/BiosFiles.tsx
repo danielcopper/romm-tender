@@ -284,13 +284,15 @@ function declaredFolder(file: BiosTableRow): string | null {
 /**
  * What the marks in `On disk` mean, under the tables that use them.
  *
- * One entry per line, which is what makes a two-mark cell readable and is what
- * keeps the filter doing real work: only the entries the tables actually
- * contain, because a line for a state no row is in explains nothing and costs
- * a row, the scarce thing on this pane. Mark 2 is inside that filter as well —
- * a platform whose library holds every file shows no line for it — and gets one
- * line rather than one per pairing, since it means the same beside every
- * verdict. The order is the order a reader cares about: what is wrong first,
+ * On the platform pane one entry per line, which is what makes a two-mark cell
+ * readable and is what keeps the filter doing real work; on a game's BIOS tab
+ * (`inline`) the entries stand side by side under the left column's buttons,
+ * wrapping where the column runs out. Either way it shows only the entries the
+ * tables actually contain, because a line for a state no row is in explains
+ * nothing and costs a row, the scarce thing on this pane. Mark 2 is inside
+ * that filter as well — a platform whose library holds every file shows no line
+ * for it — and gets one line rather than one per pairing, since it means the
+ * same beside every verdict. The order is the order a reader cares about: what is wrong first,
  * then the second channel — and each of a group option's two states sits beside
  * the ordinary mark it shares a colour with, since a reader meeting two red `✗`
  * lines is being told what separates them.
@@ -926,7 +928,7 @@ export const BiosLibraryTable: FC<{ part: BiosPart }> = ({ part }) => {
   );
 };
 
-/** What the marks mean, over both tables' rows; `inline` sets its lines side by side. */
+/** What the marks mean, over both tables' rows. */
 export const BiosPartLegend: FC<{ part: BiosPart; inline?: boolean }> = ({ part, inline = false }) =>
   part.shownRows.length + part.libraryRows.length > 0 ? (
     <BiosLegend files={[...part.shownRows, ...part.libraryRows]} inline={inline} />
