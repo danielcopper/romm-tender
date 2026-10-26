@@ -2,10 +2,11 @@
 
 An entry is what the frontend is shown about one ROM's download, from its start
 until it is cleared; a ``download_progress`` frame is how it hears that an entry
-changed. The entries themselves live in the package's state box
-(``_state.py``), because an admitted download registers its entry there with
-its task, its reservation and its control token; every later change to an
-entry, and when and how often a frame reports it, is decided here. What a frame
+changed. The queue holds the entries and changes them: an admitted download's
+entry joins it (:meth:`DownloadQueue.enqueue`) in the same step as the
+download's registrations in the state box, and every later change to an entry,
+and when and how often a frame reports it, is decided here. Others read the
+entries (:attr:`DownloadQueue.entries`) and never change them. What a frame
 carries is ``domain/download_frames.py``'s.
 """
 
@@ -20,8 +21,8 @@ from lib.background_tasks import BackgroundTasks
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Mapping
 
-    from services.downloads._state import DownloadsStateBox
     from services.protocols import Clock, EventEmitter
 
 _DOWNLOAD_QUEUE_MAX_TERMINAL = 50
@@ -42,12 +43,10 @@ _ProgressPhase = Literal["downloading", "extracting"]
 class DownloadQueueConfig:
     """Frozen wiring bundle handed to ``DownloadQueue.__init__``.
 
-    ``state`` is the package's shared state box, whose ``entries`` this queue
-    reports; ``loop`` is the one a worker thread marshals each progress tick
-    onto; ``clock`` throttles the ticks.
+    ``loop`` is the one a worker thread marshals each progress tick onto;
+    ``clock`` throttles the ticks.
     """
 
-    state: DownloadsStateBox
     loop: asyncio.AbstractEventLoop
     emit: EventEmitter
     clock: Clock
@@ -62,12 +61,21 @@ class DownloadQueue:
     """
 
     def __init__(self, *, config: DownloadQueueConfig) -> None:
-        self._state = config.state
+        self._entries: dict[int, dict[str, Any]] = {}
         self._loop = config.loop
         self._emit = config.emit
         self._clock = config.clock
         self._logger = config.logger
         self._tasks = BackgroundTasks(logger=config.logger)
+
+    @property
+    def entries(self) -> Mapping[int, dict[str, Any]]:
+        """The entries by rom id, to read; only the queue changes them."""
+        return self._entries
+
+    def enqueue(self, rom_id: int, entry: dict[str, Any]) -> None:
+        """Add an admitted download's *entry*, replacing an earlier one for *rom_id*."""
+        self._entries[rom_id] = entry
 
     async def shutdown(self) -> None:
         """Cancel the progress frames still being sent, and wait until they have ended."""
@@ -89,10 +97,10 @@ class DownloadQueue:
         # Dict preserves insertion order (Python 3.7+), so the first
         # entries in terminal_ids are the oldest.
         for rid in terminal_ids[:excess]:
-            del self._state.entries[rid]
+            del self._entries[rid]
 
     def _terminal_rom_ids(self) -> list[int]:
-        return [rid for rid, item in self._state.entries.items() if item.get("status") in _TERMINAL_DOWNLOAD_STATUSES]
+        return [rid for rid, item in self._entries.items() if item.get("status") in _TERMINAL_DOWNLOAD_STATUSES]
 
     def make_progress_callback(
         self, rom_id, rom_name, platform_name, file_name, control=None, *, phase: _ProgressPhase = "downloading"
@@ -159,7 +167,7 @@ class DownloadQueue:
         # callback queued before the end can run after the terminal frame, because from
         # 3.13 asyncio settles an executor future that finished before the loop chained
         # it without yielding (``asyncio.futures._chain_future``).
-        entry = self._state.entries.get(rom_id)
+        entry = self._entries.get(rom_id)
         return None if entry is None or entry.get("status") in _TERMINAL_DOWNLOAD_STATUSES else entry
 
     def _apply_progress(self, phase: _ProgressPhase, rom_id, rom_name, platform_name, file_name, progress, done, total):
@@ -240,7 +248,7 @@ class DownloadQueue:
 
     async def report_queued(self, rom_id, rom_name, platform_name, file_name, *, total_bytes) -> None:
         """Mark *rom_id*'s entry queued and report it: its download waits for a transfer slot."""
-        entry = self._state.entries[rom_id]
+        entry = self._entries[rom_id]
         entry["status"] = "queued"
         await self._emit(
             "download_progress",
@@ -259,7 +267,7 @@ class DownloadQueue:
 
     def mark_downloading(self, rom_id: int) -> None:
         """Mark *rom_id*'s entry downloading: its download holds a transfer slot."""
-        self._state.entries[rom_id]["status"] = "downloading"
+        self._entries[rom_id]["status"] = "downloading"
 
     async def report_paused(self, rom_id, rom_name, platform_name, file_name, target_path) -> None:
         """Mark *rom_id*'s entry paused and report it.
@@ -269,7 +277,7 @@ class DownloadQueue:
         frontend) so a later cancel of this task-less download can delete the
         partial without fetching the ROM's detail again.
         """
-        entry = self._state.entries[rom_id]
+        entry = self._entries[rom_id]
         entry["status"] = "paused"
         entry["_target_path"] = target_path
         frame = self._frame_from_entry(rom_id, rom_name, platform_name, file_name, status="paused")
@@ -277,7 +285,7 @@ class DownloadQueue:
 
     def mark_cancelled(self, rom_id: int) -> None:
         """Mark *rom_id*'s entry cancelled, the status its terminal frame carries (:meth:`report_cancelled`)."""
-        self._state.entries[rom_id]["status"] = "cancelled"
+        self._entries[rom_id]["status"] = "cancelled"
 
     async def report_cancelled(self, rom_id, rom_name, platform_name, file_name) -> None:
         """Send *rom_id*'s terminal ``cancelled`` frame, then evict its entry.
@@ -298,19 +306,19 @@ class DownloadQueue:
 
     def mark_failed(self, rom_id: int, error: str) -> None:
         """Mark *rom_id*'s entry failed with *error*."""
-        entry = self._state.entries[rom_id]
+        entry = self._entries[rom_id]
         entry["status"] = "failed"
         entry["error"] = error
 
     def mark_completed(self, rom_id: int) -> dict[str, Any]:
         """Mark *rom_id*'s entry completed and answer it."""
-        entry = self._state.entries[rom_id]
+        entry = self._entries[rom_id]
         entry["status"] = "completed"
         entry["progress"] = 1.0
         return entry
 
     def _frame_from_entry(self, rom_id, rom_name, platform_name, file_name, *, status: str) -> dict[str, Any]:
-        entry = self._state.entries[rom_id]
+        entry = self._entries[rom_id]
         return progress_frame(
             rom_id,
             rom_name,
@@ -325,7 +333,7 @@ class DownloadQueue:
 
     def get_download_queue(self) -> dict[str, Any]:
         """The queue's answer: every entry, as the frontend's ``DownloadItem`` shape."""
-        return queue_answer(self._state.entries)
+        return queue_answer(self._entries)
 
     def clear_completed_downloads(self) -> dict[str, Any]:
         """Evict every terminal (completed/failed/cancelled) entry from the queue.
@@ -343,7 +351,7 @@ class DownloadQueue:
         """
         terminal_ids = self._terminal_rom_ids()
         for rid in terminal_ids:
-            del self._state.entries[rid]
+            del self._entries[rid]
         return {"success": True, "cleared": len(terminal_ids)}
 
     def evict_if_paused(self, rom_id: int) -> None:
@@ -354,14 +362,14 @@ class DownloadQueue:
         resumed into a second installed version. Only a paused row is evicted; a
         live or terminal row for the sibling is left to its own lifecycle.
         """
-        entry = self._state.entries.get(rom_id)
+        entry = self._entries.get(rom_id)
         if entry is not None and entry.get("status") == "paused":
             self.evict(rom_id)
 
     def evict(self, rom_id: int) -> None:
         """Remove the queue entry for *rom_id* if present. Idempotent."""
-        self._state.entries.pop(int(rom_id), None)
+        self._entries.pop(int(rom_id), None)
 
     def clear(self) -> None:
         """Remove all entries from the download queue."""
-        self._state.entries.clear()
+        self._entries.clear()

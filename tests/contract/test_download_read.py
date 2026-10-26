@@ -107,18 +107,21 @@ async def test_cancel_paused_download_evicts_and_get_queue_omits_it(harness):
     The pre-fix bug: ``cancel_download`` required a live task, so a paused
     download's cancel silently no-op'd and its row lingered.
     """
-    queue = harness.app.services.download_service._state.entries
-    queue[7] = {
-        "rom_id": 7,
-        "rom_name": "Paused",
-        "platform_name": "N64",
-        "file_name": "game.z64",
-        "status": "paused",
-        "progress": 0.5,
-        "bytes_downloaded": 500,
-        "total_bytes": 1000,
-        "resumable": True,
-    }
+    queue = harness.app.services.download_service._queue
+    queue.enqueue(
+        7,
+        {
+            "rom_id": 7,
+            "rom_name": "Paused",
+            "platform_name": "N64",
+            "file_name": "game.z64",
+            "status": "paused",
+            "progress": 0.5,
+            "bytes_downloaded": 500,
+            "total_bytes": 1000,
+            "resumable": True,
+        },
+    )
 
     result = harness.endpoints.cancel_download(7)
     await asyncio.sleep(0)  # let the scheduled cancelled-frame emit run + drain
@@ -149,11 +152,11 @@ async def test_clear_completed_downloads_evicts_terminal_and_get_queue_omits_the
     from the queue — not merely hidden client-side. Active/queued/paused/
     extracting entries survive.
     """
-    queue = harness.app.services.download_service._state.entries
-    queue[1] = {"rom_id": 1, "rom_name": "Done", "status": "completed"}
-    queue[2] = {"rom_id": 2, "rom_name": "Broke", "status": "failed", "error": "boom"}
-    queue[3] = {"rom_id": 3, "rom_name": "Stopped", "status": "cancelled"}
-    queue[4] = {"rom_id": 4, "rom_name": "Live", "status": "downloading"}
+    queue = harness.app.services.download_service._queue
+    queue.enqueue(1, {"rom_id": 1, "rom_name": "Done", "status": "completed"})
+    queue.enqueue(2, {"rom_id": 2, "rom_name": "Broke", "status": "failed", "error": "boom"})
+    queue.enqueue(3, {"rom_id": 3, "rom_name": "Stopped", "status": "cancelled"})
+    queue.enqueue(4, {"rom_id": 4, "rom_name": "Live", "status": "downloading"})
 
     result = harness.endpoints.clear_completed_downloads()
     assert result == {"success": True, "cleared": 3}

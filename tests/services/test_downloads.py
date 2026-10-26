@@ -154,7 +154,7 @@ def _hops_answering(answer: Any) -> AsyncMock:
 
 
 def _admitted(downloads, rom_id: int) -> DownloadControl:
-    """Admit the entry a test seeded for *rom_id*, as a start would, and answer the control its transfer runs with.
+    """Register the download whose entry a test seeded for *rom_id*, as a start would; answer the control it runs with.
 
     Only a start admits a download in production; a test that runs the
     transfer directly admits it here, so the release at the transfer's end
@@ -163,7 +163,6 @@ def _admitted(downloads, rom_id: int) -> DownloadControl:
     control = DownloadControl()
     downloads.state.admit(
         rom_id,
-        entry=downloads.state.entries[rom_id],
         task=MagicMock(),
         reserved=downloads.state.reserved_bytes.get(rom_id, 0),
         control=control,
@@ -323,7 +322,6 @@ async def make_downloads(emit, logger) -> MakeDownloads:
         state = DownloadsStateBox()
         queue = DownloadQueue(
             config=DownloadQueueConfig(
-                state=state,
                 loop=download_loop,
                 emit=download_emit,
                 clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)) if clock is None else clock,
@@ -451,10 +449,10 @@ class TestStartDownload:
         result = await downloads.service.start_download(42)
 
         assert result["success"] is True
-        assert 42 in downloads.state.entries
+        assert 42 in downloads.queue.entries
         # The initial status is "queued" (#1053) — the task flips it to
         # "downloading" only once it acquires the concurrency semaphore.
-        assert downloads.state.entries[42]["status"] == "queued"
+        assert downloads.queue.entries[42]["status"] == "queued"
         assert len(_spawn_calls) == 1
         # The download's required bytes are reserved so a sibling's pre-flight
         # accounts for the outstanding claim.
@@ -500,7 +498,7 @@ class TestStartDownload:
 
         assert refused.value.reason == "no_file_on_romm"
         assert refused.value.message.startswith("No file on RomM")
-        assert 42 not in downloads.state.entries
+        assert 42 not in downloads.queue.entries
         assert 42 not in downloads.state.in_progress
         downloads.service._tasks.spawn.assert_not_called()
 
@@ -547,7 +545,7 @@ class TestCancelDownload:
         fut.cancel()
 
         downloads.state.tasks[42] = fut
-        downloads.state.entries[42] = {"status": "downloading"}
+        downloads.queue.enqueue(42, {"status": "downloading"})
 
         result = downloads.service.cancel_download(42)
         assert result["success"] is True
@@ -571,24 +569,27 @@ class TestCancelDownload:
         with open(tmp_file, "wb") as f:
             f.write(b"\x00" * 256)  # the partial the pause kept for resume
 
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "rom_name": "Zelda",
-            "platform_name": "Nintendo 64",
-            "file_name": "zelda.z64",
-            "status": "paused",
-            "progress": 0.3,
-            "bytes_downloaded": 300,
-            "total_bytes": 1000,
-            "resumable": True,
-            "_target_path": target_path,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "rom_name": "Zelda",
+                "platform_name": "Nintendo 64",
+                "file_name": "zelda.z64",
+                "status": "paused",
+                "progress": 0.3,
+                "bytes_downloaded": 300,
+                "total_bytes": 1000,
+                "resumable": True,
+                "_target_path": target_path,
+            },
+        )
 
         result = downloads.service.cancel_download(42)
         await asyncio.sleep(0)  # let the scheduled cancelled-frame emit run + drain
 
         assert result == {"success": True, "message": "Download cancelled"}
-        assert 42 not in downloads.state.entries  # evicted, no residue
+        assert 42 not in downloads.queue.entries  # evicted, no residue
         assert not os.path.exists(tmp_file)  # partial deleted (no resume)
         cancelled = [
             c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("status") == "cancelled"
@@ -602,32 +603,35 @@ class TestCancelDownload:
         tmp removal attempted, entry evicted, success returned. The startup sweep
         reaps any orphaned .tmp."""
 
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "rom_name": "Zelda",
-            "platform_name": "Nintendo 64",
-            "file_name": "zelda.z64",
-            "status": "paused",
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "rom_name": "Zelda",
+                "platform_name": "Nintendo 64",
+                "file_name": "zelda.z64",
+                "status": "paused",
+            },
+        )
 
         result = downloads.service.cancel_download(42)
         await asyncio.sleep(0)
 
         assert result == {"success": True, "message": "Download cancelled"}
-        assert 42 not in downloads.state.entries
+        assert 42 not in downloads.queue.entries
 
     @pytest.mark.asyncio
     async def test_cancel_no_task_and_not_paused_is_refused(self, downloads):
         """No live task AND the entry isn't paused → ``no_active_download``, and
         the non-paused entry is left untouched (not evicted)."""
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading"}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading"})
         with pytest.raises(Refused) as refused:
             downloads.service.cancel_download(42)
         assert (refused.value.reason, refused.value.message) == (
             "no_active_download",
             "No active download for this ROM",
         )
-        assert 42 in downloads.state.entries
+        assert 42 in downloads.queue.entries
 
 
 class TestGetDownloadQueue:
@@ -638,12 +642,15 @@ class TestGetDownloadQueue:
 
     @pytest.mark.asyncio
     async def test_returns_active_downloads(self, downloads):
-        downloads.state.entries[1] = {
-            "rom_id": 1,
-            "rom_name": "Game A",
-            "status": "downloading",
-            "progress": 0.5,
-        }
+        downloads.queue.enqueue(
+            1,
+            {
+                "rom_id": 1,
+                "rom_name": "Game A",
+                "status": "downloading",
+                "progress": 0.5,
+            },
+        )
         result = downloads.service.get_download_queue()
         assert len(result["downloads"]) == 1
         assert result["downloads"][0]["status"] == "downloading"
@@ -651,18 +658,24 @@ class TestGetDownloadQueue:
 
     @pytest.mark.asyncio
     async def test_returns_completed_downloads(self, downloads):
-        downloads.state.entries[1] = {
-            "rom_id": 1,
-            "rom_name": "Game A",
-            "status": "downloading",
-            "progress": 0.5,
-        }
-        downloads.state.entries[2] = {
-            "rom_id": 2,
-            "rom_name": "Game B",
-            "status": "completed",
-            "progress": 1.0,
-        }
+        downloads.queue.enqueue(
+            1,
+            {
+                "rom_id": 1,
+                "rom_name": "Game A",
+                "status": "downloading",
+                "progress": 0.5,
+            },
+        )
+        downloads.queue.enqueue(
+            2,
+            {
+                "rom_id": 2,
+                "rom_name": "Game B",
+                "status": "completed",
+                "progress": 1.0,
+            },
+        )
         result = downloads.service.get_download_queue()
         assert len(result["downloads"]) == 2
         statuses = {d["status"] for d in result["downloads"]}
@@ -672,12 +685,15 @@ class TestGetDownloadQueue:
     async def test_strips_internal_underscore_keys_from_wire_shape(self, downloads):
         """Internal ``_``-prefixed keys (e.g. ``_target_path`` on a paused entry,
         kept only for the paused-cancel cleanup) never cross the wire."""
-        downloads.state.entries[1] = {
-            "rom_id": 1,
-            "rom_name": "Game A",
-            "status": "paused",
-            "_target_path": "/games/n64/game.z64",
-        }
+        downloads.queue.enqueue(
+            1,
+            {
+                "rom_id": 1,
+                "rom_name": "Game A",
+                "status": "paused",
+                "_target_path": "/games/n64/game.z64",
+            },
+        )
         result = downloads.service.get_download_queue()
         assert len(result["downloads"]) == 1
         assert "_target_path" not in result["downloads"][0]
@@ -689,14 +705,14 @@ class TestClearCompletedDownloads:
     async def test_evicts_terminal_keeps_active_and_returns_count(self, downloads):
         # One entry per status: the three terminal ones evict, the four
         # non-terminal ones (active/queued/paused/extracting) stay.
-        queue = downloads.state.entries
-        queue[1] = {"rom_id": 1, "status": "completed"}
-        queue[2] = {"rom_id": 2, "status": "failed", "error": "boom"}
-        queue[3] = {"rom_id": 3, "status": "cancelled"}
-        queue[4] = {"rom_id": 4, "status": "downloading"}
-        queue[5] = {"rom_id": 5, "status": "queued"}
-        queue[6] = {"rom_id": 6, "status": "paused"}
-        queue[7] = {"rom_id": 7, "status": "extracting"}
+        queue = downloads.queue.entries
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "completed"})
+        downloads.queue.enqueue(2, {"rom_id": 2, "status": "failed", "error": "boom"})
+        downloads.queue.enqueue(3, {"rom_id": 3, "status": "cancelled"})
+        downloads.queue.enqueue(4, {"rom_id": 4, "status": "downloading"})
+        downloads.queue.enqueue(5, {"rom_id": 5, "status": "queued"})
+        downloads.queue.enqueue(6, {"rom_id": 6, "status": "paused"})
+        downloads.queue.enqueue(7, {"rom_id": 7, "status": "extracting"})
 
         result = downloads.service.clear_completed_downloads()
 
@@ -708,13 +724,13 @@ class TestClearCompletedDownloads:
     async def test_idempotent_on_empty_queue(self, downloads):
         result = downloads.service.clear_completed_downloads()
         assert result == {"success": True, "cleared": 0}
-        assert downloads.state.entries == {}
+        assert downloads.queue.entries == {}
 
     @pytest.mark.asyncio
     async def test_no_terminal_entries_clears_nothing(self, downloads):
-        queue = downloads.state.entries
-        queue[1] = {"rom_id": 1, "status": "downloading"}
-        queue[2] = {"rom_id": 2, "status": "paused"}
+        queue = downloads.queue.entries
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "downloading"})
+        downloads.queue.enqueue(2, {"rom_id": 2, "status": "paused"})
 
         result = downloads.service.clear_completed_downloads()
 
@@ -859,7 +875,7 @@ class TestOccupiedTargetPreFlight:
             await starting
 
         assert made_dirs == []
-        assert downloads.state.entries == {}
+        assert downloads.queue.entries == {}
         assert downloads.service.active_download_rom_ids() == set()
         downloads.service._tasks.spawn.assert_not_called()
 
@@ -1049,7 +1065,7 @@ class TestResumingAReplaceDownload:
         assert (await downloads.service.start_download(1, True))["success"] is True
         # The file the user chose to replace is still there — os.replace swaps it
         # at the end — so a resume that forgot the answer would be refused by it.
-        downloads.state.entries[1]["status"] = "paused"
+        downloads.queue.entries[1]["status"] = "paused"
 
         result = await downloads.service.resume_download(1)
 
@@ -1061,7 +1077,7 @@ class TestResumingAReplaceDownload:
         # not a blanket exemption for the path.
         target = os.path.join(self._roms(downloads, "n64"), "game1.z64")
         self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
-        downloads.state.entries[1] = {"rom_id": 1, "status": "paused"}
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "paused"})
 
         resuming = downloads.service.resume_download(1)
 
@@ -1079,8 +1095,8 @@ class TestResumingAReplaceDownload:
         extract_dir = os.path.join(self._roms(downloads, "psx"), "Game 1")
         store = self._stage(downloads, _MULTI_DETAIL, occupied_path=extract_dir)
         assert (await downloads.service.start_download(1, True))["success"] is True
-        assert downloads.state.entries[1]["_replace_existing"] is False
-        downloads.state.entries[1]["status"] = "paused"
+        assert downloads.queue.entries[1]["_replace_existing"] is False
+        downloads.queue.entries[1]["status"] = "paused"
         removed: list[str] = []
         store.remove_tree = removed.append
 
@@ -1126,13 +1142,13 @@ class TestRemoveRom:
             file_path=str(rom_file),
             rom_dir=None,
         )
-        downloads.state.entries[42] = {"status": "completed"}
+        downloads.queue.enqueue(42, {"status": "completed"})
 
         result = await downloads.removal.remove_rom(42)
         assert result["success"] is True
         assert not rom_file.exists()
         assert downloads.uow.rom_installs.get(42) is None
-        assert 42 not in downloads.state.entries
+        assert 42 not in downloads.queue.entries
 
     @pytest.mark.asyncio
     async def test_refuses_not_installed(self, downloads):
@@ -1741,7 +1757,7 @@ class TestDoDownloadSingleFile:
                 f.write(b"\x00" * 512)
 
         _seed_rom(downloads.uow, 42)
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
@@ -1771,7 +1787,7 @@ class TestDoDownloadSingleFile:
         # launch_options carries the full RetroDECK launch command for the resolved path.
         assert payload["launch_options"] == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
         # download_queue status is completed
-        assert downloads.state.entries[42]["status"] == "completed"
+        assert downloads.queue.entries[42]["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_download_complete_app_id_null_when_unbound(self, make_downloads, tmp_path, emit):
@@ -1819,7 +1835,7 @@ class TestDoDownloadSingleFile:
                     last_synced_at="2025-01-01T00:00:00",
                 )
             )
-        downloads.state.entries[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(7, rom_detail, target_path, "n64", "metroid.z64", _admitted(downloads, 7))
@@ -1852,7 +1868,7 @@ class TestDoDownloadSingleFile:
                 f.write(b"\x00" * 512)
 
         _seed_rom(downloads.uow, 42)  # bound (app_id 1042)
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
@@ -1903,7 +1919,7 @@ class TestDoDownloadSingleFile:
                     last_synced_at="2025-01-01T00:00:00",
                 )
             )
-        downloads.state.entries[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(7, rom_detail, target_path, "n64", "metroid.z64", _admitted(downloads, 7))
@@ -1951,7 +1967,7 @@ class TestASystemFolderLinkedToAnotherDrive:
                 f.write(b"\x00" * 512)
 
         _seed_rom(downloads.uow, 42)
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
 
@@ -1993,7 +2009,7 @@ class TestASystemFolderLinkedToAnotherDrive:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 55, platform_slug="psx")
-        downloads.state.entries[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(55, {"rom_id": 55, "status": "downloading", "progress": 0})
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
 
@@ -2048,7 +2064,7 @@ class TestDoDownloadOverrideRebake:
         if override is not None:
             with downloads.uow:
                 downloads.uow.roms.set_emulator_override(rom_id, override)
-        downloads.state.entries[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(rom_id, {"rom_id": rom_id, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
@@ -2152,7 +2168,7 @@ class TestDoDownloadMultiFile:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 55, platform_slug="psx")
-        downloads.state.entries[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(55, {"rom_id": 55, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
@@ -2185,7 +2201,7 @@ class TestDoDownloadMultiFile:
             == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{installed.file_path}'"
         )
         # Status is completed
-        assert downloads.state.entries[55]["status"] == "completed"
+        assert downloads.queue.entries[55]["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_nested_multi_file_takes_extract_path(self, make_downloads, tmp_path, emit):
@@ -2242,7 +2258,7 @@ class TestDoDownloadMultiFile:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 99, platform_slug="switch")
-        downloads.state.entries[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(99, {"rom_id": 99, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(99, rom_detail, target_path, "switch", "Zelda.nsp", _admitted(downloads, 99))
@@ -2270,7 +2286,7 @@ class TestDoDownloadMultiFile:
         assert installed is not None
         assert installed.rom_dir == str(extract_dir)
         assert installed.file_path == str(extract_dir / "Zelda.nsp")
-        assert downloads.state.entries[99]["status"] == "completed"
+        assert downloads.queue.entries[99]["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_nested_multi_file_cleanup_removes_extract_dir(self, make_downloads, tmp_path, emit):
@@ -2319,14 +2335,14 @@ class TestDoDownloadMultiFile:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-download")
 
-        downloads.state.entries[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(99, {"rom_id": 99, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(99, rom_detail, target_path, "switch", "Zelda.nsp", _admitted(downloads, 99))
 
         # Failure path keyed on the multi-file gate → extract dir torn down.
         assert not extract_dir.exists()
-        assert downloads.state.entries[99]["status"] == "failed"
+        assert downloads.queue.entries[99]["status"] == "failed"
 
     @pytest.mark.asyncio
     async def test_nested_multi_file_names_dir_from_identity_not_files_zero(self, make_downloads, tmp_path, emit):
@@ -2388,7 +2404,7 @@ class TestDoDownloadMultiFile:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 4778, platform_slug="ps3")
-        downloads.state.entries[4778] = {"rom_id": 4778, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(4778, {"rom_id": 4778, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
@@ -2407,7 +2423,7 @@ class TestDoDownloadMultiFile:
         assert installed is not None
         assert installed.rom_dir == str(extract_dir)
         assert installed.file_path == str(extract_dir / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
-        assert downloads.state.entries[4778]["status"] == "completed"
+        assert downloads.queue.entries[4778]["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_nested_multi_file_cleanup_targets_identity_dir_not_files_zero(self, make_downloads, tmp_path, emit):
@@ -2457,7 +2473,7 @@ class TestDoDownloadMultiFile:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-download")
 
-        downloads.state.entries[4778] = {"rom_id": 4778, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(4778, {"rom_id": 4778, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
@@ -2467,7 +2483,7 @@ class TestDoDownloadMultiFile:
         # The identity-named dir is torn down; the files[0]-derived name was never
         # the target, so nothing orphans.
         assert not extract_dir.exists()
-        assert downloads.state.entries[4778]["status"] == "failed"
+        assert downloads.queue.entries[4778]["status"] == "failed"
 
     @pytest.mark.asyncio
     async def test_multi_file_emits_extracting_progress(self, make_downloads, tmp_path, emit, monkeypatch):
@@ -2539,17 +2555,20 @@ class TestDoDownloadMultiFile:
             fake.files[dest] = b"ZIPDATA"
 
         _seed_rom(downloads.uow, 55, platform_slug="psx")
-        downloads.state.entries[55] = {
-            "rom_id": 55,
-            "rom_name": "Final Fantasy VII",
-            "platform_name": "PlayStation",
-            "file_name": "FF7.zip",
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-            "resumable": False,
-        }
+        downloads.queue.enqueue(
+            55,
+            {
+                "rom_id": 55,
+                "rom_name": "Final Fantasy VII",
+                "platform_name": "PlayStation",
+                "file_name": "FF7.zip",
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+                "resumable": False,
+            },
+        )
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
@@ -2575,7 +2594,7 @@ class TestDoDownloadMultiFile:
         # download_complete still fires after extraction.
         complete = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(complete) == 1
-        assert downloads.state.entries[55]["status"] == "completed"
+        assert downloads.queue.entries[55]["status"] == "completed"
 
 
 class TestADownloadUnderWay:
@@ -2607,21 +2626,24 @@ class TestADownloadUnderWay:
             fake.files[dest] = b"ZIPDATA"
 
         _seed_rom(downloads.uow, 55, platform_slug="psx")
-        downloads.state.entries[55] = {
-            "rom_id": 55,
-            "rom_name": "Final Fantasy VII",
-            "platform_name": "PlayStation",
-            "file_name": "FF7.zip",
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-            "resumable": False,
-        }
+        downloads.queue.enqueue(
+            55,
+            {
+                "rom_id": 55,
+                "rom_name": "Final Fantasy VII",
+                "platform_name": "PlayStation",
+                "file_name": "FF7.zip",
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+                "resumable": False,
+            },
+        )
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
         await asyncio.sleep(0)
-        return downloads.state.entries[55]["status"]
+        return downloads.queue.entries[55]["status"]
 
     @pytest.mark.asyncio
     async def test_retrodeck_switched_off_after_the_start_still_lets_it_finish(self, make_downloads, tmp_path):
@@ -2695,7 +2717,7 @@ class TestDoDownloadBundledM3uPlatformGate:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 111, platform_slug="switch")
-        downloads.state.entries[111] = {"rom_id": 111, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(111, {"rom_id": 111, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(111, rom_detail, target_path, "switch", "Zelda.nsp", _admitted(downloads, 111))
@@ -2711,7 +2733,7 @@ class TestDoDownloadBundledM3uPlatformGate:
         assert installed.rom_dir == str(nsp_dir)
         assert installed.file_path == str(nsp_dir / "Zelda.nsp")
         assert (nsp_dir / "Zelda.m3u").exists()
-        assert downloads.state.entries[111]["status"] == "completed"
+        assert downloads.queue.entries[111]["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_disc_platform_still_generates_and_uses_m3u(self, make_downloads, tmp_path, emit):
@@ -2759,7 +2781,7 @@ class TestDoDownloadBundledM3uPlatformGate:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 112, platform_slug="psx")
-        downloads.state.entries[112] = {"rom_id": 112, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(112, {"rom_id": 112, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(112, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 112))
@@ -2770,7 +2792,7 @@ class TestDoDownloadBundledM3uPlatformGate:
         assert installed is not None
         assert installed.rom_dir == str(m3u_dir)
         assert installed.file_path == str(m3u_dir / "FF7.m3u")
-        assert downloads.state.entries[112]["status"] == "completed"
+        assert downloads.queue.entries[112]["status"] == "completed"
 
 
 class TestEsDeCollapseRename:
@@ -2807,7 +2829,7 @@ class TestEsDeCollapseRename:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, rom_id, platform_slug=platform)
-        downloads.state.entries[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(rom_id, {"rom_id": rom_id, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
@@ -2981,7 +3003,7 @@ class TestEsDeCollapseRename:
                 f.write(b"\x00" * 100)
 
         _seed_rom(downloads.uow, 73, platform_slug="gba")
-        downloads.state.entries[73] = {"rom_id": 73, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(73, {"rom_id": 73, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(73, rom_detail, target_path, "gba", "Game.gba", _admitted(downloads, 73))
@@ -3032,7 +3054,7 @@ class TestEsDeCollapseRename:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 74, platform_slug="psx")
-        downloads.state.entries[74] = {"rom_id": 74, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(74, {"rom_id": 74, "status": "downloading", "progress": 0})
 
         with (
             caplog.at_level(logging.WARNING),
@@ -3051,7 +3073,7 @@ class TestEsDeCollapseRename:
         assert installed is not None
         assert installed.rom_dir == str(staging_dir)
         assert installed.file_path == str(staging_dir / "FF8.m3u")
-        assert downloads.state.entries[74]["status"] == "completed"
+        assert downloads.queue.entries[74]["status"] == "completed"
         # Observable side effect of the collision guard: a warning was logged.
         assert any(
             "ES-DE collapse rename skipped" in rec.message and "already exists" in rec.message for rec in caplog.records
@@ -3097,7 +3119,7 @@ class TestDoDownloadNestedSingleFile:
                 f.write(b"\x00" * 64)
 
         _seed_rom(downloads.uow, 1, platform_slug="gba")
-        downloads.state.entries[1] = {"rom_id": 1, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(1, rom_detail, target_path, "gba", "Game.gba", _admitted(downloads, 1))
@@ -3143,7 +3165,7 @@ class TestDoDownloadNestedSingleFile:
                 f.write(b"\x00" * 128)
 
         _seed_rom(downloads.uow, 7, platform_slug="dc")
-        downloads.state.entries[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(7, rom_detail, target_path, "dc", "My Game.chd", _admitted(downloads, 7))
@@ -3199,7 +3221,7 @@ class TestDoDownloadNestedSingleFile:
         result = await downloads.service.start_download(7)
 
         assert result["success"] is True
-        assert downloads.state.entries[7]["file_name"] == "Resident Evil.chd"
+        assert downloads.queue.entries[7]["file_name"] == "Resident Evil.chd"
 
     @pytest.mark.asyncio
     async def test_nested_single_file_empty_files_falls_back(self, make_downloads, tmp_path, caplog, logger):
@@ -3241,7 +3263,7 @@ class TestDoDownloadNestedSingleFile:
             result = await downloads.service.start_download(8)
 
         assert result["success"] is True
-        assert downloads.state.entries[8]["file_name"] == "My Game"
+        assert downloads.queue.entries[8]["file_name"] == "My Game"
         assert any("has_nested_single_file" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
@@ -3284,7 +3306,7 @@ class TestDoDownloadNestedSingleFile:
             result = await downloads.service.start_download(9)
 
         assert result["success"] is True
-        assert downloads.state.entries[9]["file_name"] == "My Game"
+        assert downloads.queue.entries[9]["file_name"] == "My Game"
         assert any("has_nested_single_file" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
@@ -3326,7 +3348,7 @@ class TestDoDownloadNestedSingleFile:
         result = await downloads.service.start_download(13)
 
         assert result["success"] is True
-        queue_entry = downloads.state.entries[13]
+        queue_entry = downloads.queue.entries[13]
         assert queue_entry["file_name"] == "evil.chd"
         assert ".." not in queue_entry["file_name"]
 
@@ -3439,7 +3461,7 @@ class TestPathTraversalFsName:
 
         assert result["success"] is True
         # The target path should use sanitized basename only
-        queue_entry = downloads.state.entries[77]
+        queue_entry = downloads.queue.entries[77]
         assert queue_entry["file_name"] == "passwd"
         # The coroutine was created — just verify the queue entry is safe
         assert ".." not in queue_entry["file_name"]
@@ -3482,7 +3504,7 @@ class TestPathTraversalFsName:
         result = await downloads.service.start_download(77)
 
         assert result["success"] is True
-        queue_entry = downloads.state.entries[77]
+        queue_entry = downloads.queue.entries[77]
         assert queue_entry["file_name"] == "rom_77"
 
 
@@ -3566,7 +3588,7 @@ class TestAPlatformWithNoSystemDownloadsNothing:
         assert refused.value.reason == reason
         assert refused.value.details == {"source": "retrodeck", "platform": "Xbox 360", "system": system}
         assert made_dirs == []
-        assert 78 not in downloads.state.entries
+        assert 78 not in downloads.queue.entries
         assert 78 not in downloads.state.in_progress
 
     @pytest.mark.asyncio
@@ -3731,7 +3753,7 @@ class TestDoDownloadCancelled:
         def fake_download_cancel(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise asyncio.CancelledError()
 
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with (
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download_cancel),
@@ -3741,7 +3763,7 @@ class TestDoDownloadCancelled:
 
         # A cancel is an explicit discard: the entry is evicted, not left as a
         # lingering "cancelled" row (#149 downloads-round).
-        assert 42 not in downloads.state.entries
+        assert 42 not in downloads.queue.entries
         assert not os.path.exists(target_path)
         assert downloads.uow.rom_installs.get(42) is None
 
@@ -3781,12 +3803,12 @@ class TestDoDownloadZipFailure:
             with open(dest, "wb") as f:
                 f.write(b"not a zip file")
 
-        downloads.state.entries[66] = {"rom_id": 66, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(66, {"rom_id": 66, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(66, rom_detail, target_path, "psx", "game.zip", _admitted(downloads, 66))
 
-        assert downloads.state.entries[66]["status"] == "failed"
+        assert downloads.queue.entries[66]["status"] == "failed"
         # .zip.tmp should be cleaned up
         assert not os.path.exists(target_path + ".zip.tmp")
 
@@ -3838,7 +3860,7 @@ class TestDoDownloadPostDecodeTraversal:
         }
 
         _seed_rom(downloads.uow, 88, platform_slug="psx")
-        downloads.state.entries[88] = {"rom_id": 88, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(88, {"rom_id": 88, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(88, rom_detail, target_path, "psx", "Evil.zip", _admitted(downloads, 88))
@@ -3855,7 +3877,7 @@ class TestDoDownloadPostDecodeTraversal:
         # Nothing persisted.
         assert downloads.uow.rom_installs.get(88) is None
         # Queue marked failed.
-        assert downloads.state.entries[88]["status"] == "failed"
+        assert downloads.queue.entries[88]["status"] == "failed"
         # download_failed fired (UI doesn't hang); offending name surfaced.
         failed = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
         assert len(failed) == 1
@@ -3906,14 +3928,14 @@ class TestDoDownloadPostDecodeTraversal:
         }
 
         _seed_rom(downloads.uow, 91, platform_slug="switch")
-        downloads.state.entries[91] = {"rom_id": 91, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(91, {"rom_id": 91, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(91, rom_detail, target_path, "switch", "Game.nsp", _admitted(downloads, 91))
 
         # The encoded names decoded correctly (per-basename) and the install
         # succeeded — the legit nested ROM is intact.
-        assert downloads.state.entries[91]["status"] == "completed"
+        assert downloads.queue.entries[91]["status"] == "completed"
         install = downloads.uow.rom_installs.get(91)
         assert install is not None
         rom_dir = install.rom_dir
@@ -3956,7 +3978,7 @@ class TestDoDownloadFailureEmit:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("simulated network drop")
 
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
@@ -3972,8 +3994,8 @@ class TestDoDownloadFailureEmit:
         # No download_complete in the failure path
         assert not [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         # Queue status reflects the failure
-        assert downloads.state.entries[42]["status"] == "failed"
-        assert downloads.state.entries[42]["error"] == "simulated network drop"
+        assert downloads.queue.entries[42]["status"] == "failed"
+        assert downloads.queue.entries[42]["error"] == "simulated network drop"
 
 
 class TestDoDownloadInvariantFailure:
@@ -4013,14 +4035,14 @@ class TestDoDownloadInvariantFailure:
                 f.write(b"\x00" * 64)
 
         # rom_id=0 violates RomInstall's invariant (rom_id must be positive).
-        downloads.state.entries[0] = {"rom_id": 0, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(0, {"rom_id": 0, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(0, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 0))
 
         # Download reported as failed via the canonical failure path.
-        assert downloads.state.entries[0]["status"] == "failed"
-        assert "Invalid install metadata" in downloads.state.entries[0]["error"]
+        assert downloads.queue.entries[0]["status"] == "failed"
+        assert "Invalid install metadata" in downloads.queue.entries[0]["error"]
         # The just-renamed file was cleaned up — nothing left dangling.
         assert not os.path.exists(target_path)
         # No RomInstall record persisted.
@@ -4066,13 +4088,13 @@ class TestDoDownloadInvariantFailure:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        downloads.state.entries[0] = {"rom_id": 0, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(0, {"rom_id": 0, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(0, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 0))
 
-        assert downloads.state.entries[0]["status"] == "failed"
-        assert "Invalid install metadata" in downloads.state.entries[0]["error"]
+        assert downloads.queue.entries[0]["status"] == "failed"
+        assert "Invalid install metadata" in downloads.queue.entries[0]["error"]
         # Single-disc cue auto-generates FF7.m3u, so the launch file is the M3U
         # and the dir was renamed to FF7.m3u/ before the invariant failure; the
         # cleanup must tear down that *renamed* dir. Asserting FF7/ alone would
@@ -4119,14 +4141,14 @@ class TestStartDownloadReDownload:
         downloads.service._tasks.spawn = _close_coro_task
 
         # Set status to completed (previous download)
-        downloads.state.entries[42] = {"status": "completed"}
+        downloads.queue.enqueue(42, {"status": "completed"})
 
         downloads.download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
         result = await downloads.service.start_download(42)
 
         assert result["success"] is True
         # Re-download re-enters the queue as "queued" (#1053).
-        assert downloads.state.entries[42]["status"] == "queued"
+        assert downloads.queue.entries[42]["status"] == "queued"
 
 
 class TestMaybeGenerateM3uMixedFormats:
@@ -4288,7 +4310,7 @@ class TestUrlEncodedFilenameRename:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 99, platform_slug="psx")
-        downloads.state.entries[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(99, {"rom_id": 99, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
@@ -4346,7 +4368,7 @@ class TestUrlEncodedFilenameRename:
                 f.write(zip_bytes)
 
         _seed_rom(downloads.uow, 55, platform_slug="psx")
-        downloads.state.entries[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(55, {"rom_id": 55, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
@@ -4364,70 +4386,70 @@ class TestPruneDownloadQueue:
     def test_keeps_active_downloads(self, downloads):
         """Active (downloading) items are never pruned."""
         for i in range(60):
-            downloads.state.entries[i] = {"rom_id": i, "status": "downloading"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "downloading"})
         downloads.queue.prune()
-        assert len(downloads.state.entries) == 60
+        assert len(downloads.queue.entries) == 60
 
     def test_removes_oldest_terminal_when_over_limit(self, downloads):
         """When there are more than 50 terminal items, remove the oldest."""
         # Insert 60 completed items (rom_id 0..59)
         for i in range(60):
-            downloads.state.entries[i] = {"rom_id": i, "status": "completed"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "completed"})
         downloads.queue.prune()
         # Should keep the 50 most recent (10..59)
-        assert len(downloads.state.entries) == 50
+        assert len(downloads.queue.entries) == 50
         for i in range(10):
-            assert i not in downloads.state.entries
+            assert i not in downloads.queue.entries
         for i in range(10, 60):
-            assert i in downloads.state.entries
+            assert i in downloads.queue.entries
 
     def test_does_nothing_when_under_limit(self, downloads):
         """No pruning if terminal count is at or below the limit."""
         for i in range(30):
-            downloads.state.entries[i] = {"rom_id": i, "status": "completed"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "completed"})
         downloads.queue.prune()
-        assert len(downloads.state.entries) == 30
+        assert len(downloads.queue.entries) == 30
 
     def test_does_nothing_at_exactly_limit(self, downloads):
         """No pruning when terminal count is exactly 50."""
         for i in range(50):
-            downloads.state.entries[i] = {"rom_id": i, "status": "failed"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "failed"})
         downloads.queue.prune()
-        assert len(downloads.state.entries) == 50
+        assert len(downloads.queue.entries) == 50
 
     def test_mixed_active_and_terminal(self, downloads):
         """Active items are kept; only terminal items count toward the limit."""
         # 5 active + 55 completed = 55 terminal -> prune 5 oldest terminal
         for i in range(5):
-            downloads.state.entries[1000 + i] = {"rom_id": 1000 + i, "status": "downloading"}
+            downloads.queue.enqueue(1000 + i, {"rom_id": 1000 + i, "status": "downloading"})
         for i in range(55):
-            downloads.state.entries[i] = {"rom_id": i, "status": "completed"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "completed"})
         downloads.queue.prune()
         # 5 active + 50 terminal = 55 total
-        assert len(downloads.state.entries) == 55
+        assert len(downloads.queue.entries) == 55
         # All active still present
         for i in range(5):
-            assert 1000 + i in downloads.state.entries
+            assert 1000 + i in downloads.queue.entries
         # Oldest 5 terminal removed (0..4)
         for i in range(5):
-            assert i not in downloads.state.entries
+            assert i not in downloads.queue.entries
         # Remaining terminal still present (5..54)
         for i in range(5, 55):
-            assert i in downloads.state.entries
+            assert i in downloads.queue.entries
 
     def test_handles_all_terminal_statuses(self, downloads):
         """Completed, failed, and cancelled items are all treated as terminal."""
         for i in range(20):
-            downloads.state.entries[i] = {"rom_id": i, "status": "completed"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "completed"})
         for i in range(20, 40):
-            downloads.state.entries[i] = {"rom_id": i, "status": "failed"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "failed"})
         for i in range(40, 60):
-            downloads.state.entries[i] = {"rom_id": i, "status": "cancelled"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "cancelled"})
         downloads.queue.prune()
-        assert len(downloads.state.entries) == 50
+        assert len(downloads.queue.entries) == 50
         # Oldest 10 (all completed, 0..9) should be removed
         for i in range(10):
-            assert i not in downloads.state.entries
+            assert i not in downloads.queue.entries
 
 
 class TestStartDownloadSpawnFailure:
@@ -4504,16 +4526,19 @@ class TestTheProgressFramesAreHeld:
 
     @staticmethod
     def _live_entry(downloads) -> None:
-        downloads.state.entries[7] = {
-            "rom_id": 7,
-            "rom_name": "Mario",
-            "platform_name": "N64",
-            "file_name": "mario.z64",
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            7,
+            {
+                "rom_id": 7,
+                "rom_name": "Mario",
+                "platform_name": "N64",
+                "file_name": "mario.z64",
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
 
     @pytest.mark.asyncio
     async def test_a_progress_tick_starts_its_frame_through_the_helper(self, downloads, monkeypatch, emit):
@@ -4541,13 +4566,16 @@ class TestTheProgressFramesAreHeld:
     @pytest.mark.asyncio
     async def test_cancelling_a_paused_download_starts_its_frame_through_the_helper(self, downloads, monkeypatch):
         spawned = record_spawns(monkeypatch)
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "rom_name": "Zelda",
-            "platform_name": "Nintendo 64",
-            "file_name": "zelda.z64",
-            "status": "paused",
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "rom_name": "Zelda",
+                "platform_name": "Nintendo 64",
+                "file_name": "zelda.z64",
+                "status": "paused",
+            },
+        )
 
         downloads.service.cancel_download(42)
         await asyncio.sleep(0)
@@ -4614,16 +4642,19 @@ class TestMakeProgressCallback:
             return _noop()
 
         downloads = make_downloads(clock=fake_clock, loop=MagicMock(), emit=_record_emit)
-        downloads.state.entries[7] = {
-            "rom_id": 7,
-            "rom_name": "Mario",
-            "platform_name": "N64",
-            "file_name": "mario.z64",
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            7,
+            {
+                "rom_id": 7,
+                "rom_name": "Mario",
+                "platform_name": "N64",
+                "file_name": "mario.z64",
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
 
         # Replace the event loop with a MagicMock so call_soon_threadsafe
         # is observable without actually scheduling on the real loop.
@@ -4648,7 +4679,7 @@ class TestMakeProgressCallback:
         cb(512, 1024)
 
         # Queue entry must have been updated in place.
-        entry = downloads.state.entries[7]
+        entry = downloads.queue.entries[7]
         assert entry["progress"] == 0.5
         assert entry["bytes_downloaded"] == 512
         assert entry["total_bytes"] == 1024
@@ -4675,13 +4706,16 @@ class TestMakeProgressCallback:
             return _noop()
 
         downloads = make_downloads(clock=fake_clock, loop=MagicMock(), emit=_record_emit)
-        downloads.state.entries[8] = {
-            "rom_id": 8,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            8,
+            {
+                "rom_id": 8,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
         # The queue mutation happens inside the function marshaled onto the
         # loop thread via call_soon_threadsafe, so run it eagerly to
         # observe the in-place update; spawn just consumes the coroutine.
@@ -4702,27 +4736,30 @@ class TestMakeProgressCallback:
         # downloaded < total so the throttle check (now - last_emit <
         # 0.5 AND downloaded < total) returns early. No update.
         cb(100, 1000)
-        assert downloads.state.entries[8]["bytes_downloaded"] == 0
+        assert downloads.queue.entries[8]["bytes_downloaded"] == 0
         assert call_soon_count[0] == 0
 
         # Final call: downloaded == total bypasses the throttle even
         # when no time elapsed — the closure always emits the final
         # completion frame.
         cb(1000, 1000)
-        assert downloads.state.entries[8]["bytes_downloaded"] == 1000
+        assert downloads.queue.entries[8]["bytes_downloaded"] == 1000
         assert call_soon_count[0] == 1
 
     def test_progress_callback_handles_zero_total(self, make_downloads):
         """total == 0 must not divide-by-zero — pct/progress fall back to 0."""
         fake_clock = FakeClock()
         downloads = make_downloads(clock=fake_clock, loop=MagicMock(), emit=MagicMock(return_value=None))
-        downloads.state.entries[9] = {
-            "rom_id": 9,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            9,
+            {
+                "rom_id": 9,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
 
         cb = downloads.queue.make_progress_callback(9, "Game", "Plat", "game.bin")
         # Advance past both throttles so the log + emit branches both
@@ -4730,7 +4767,7 @@ class TestMakeProgressCallback:
         fake_clock.advance(60)
         cb(0, 0)
 
-        entry = downloads.state.entries[9]
+        entry = downloads.queue.entries[9]
         assert entry["progress"] == 0
         assert entry["total_bytes"] == 0
         # Emit was still scheduled — final-frame path triggers when
@@ -4764,14 +4801,17 @@ class TestProgressPhase:
         return downloads, emit_calls
 
     def _seed_entry(self, downloads, rom_id, *, status):
-        downloads.state.entries[rom_id] = {
-            "rom_id": rom_id,
-            "status": status,
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-            "resumable": True,
-        }
+        downloads.queue.enqueue(
+            rom_id,
+            {
+                "rom_id": rom_id,
+                "status": status,
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+                "resumable": True,
+            },
+        )
 
     def test_extracting_flips_the_entry_and_is_never_resumable(self, make_downloads):
         downloads, emit_calls = self._eager_loop(make_downloads)
@@ -4780,7 +4820,7 @@ class TestProgressPhase:
         cb = downloads.queue.make_progress_callback(7, "Mario", "N64", "mario.zip", phase="extracting")
         cb(512, 1024)
 
-        entry = downloads.state.entries[7]
+        entry = downloads.queue.entries[7]
         assert entry["status"] == "extracting"
         assert entry["bytes_downloaded"] == 512
         assert emit_calls == [
@@ -4807,7 +4847,7 @@ class TestProgressPhase:
         cb = downloads.queue.make_progress_callback(7, "Mario", "N64", "mario.z64")
         cb(512, 1024)
 
-        entry = downloads.state.entries[7]
+        entry = downloads.queue.entries[7]
         assert entry["status"] == "paused"
         assert emit_calls == [
             (
@@ -5090,7 +5130,7 @@ class TestProgressCallbackEvictionSafe:
         cb(256, 512)  # must NOT raise
 
         # The entry is not resurrected and no emit was scheduled for it.
-        assert 99 not in downloads.state.entries
+        assert 99 not in downloads.queue.entries
         assert emit_calls == []
 
     def test_present_entry_still_updates(self, make_downloads):
@@ -5099,18 +5139,21 @@ class TestProgressCallbackEvictionSafe:
         fake_clock = FakeClock()
         downloads, emit_calls = self._eager_loop(make_downloads, fake_clock)
         fake_clock.advance(60)
-        downloads.state.entries[7] = {
-            "rom_id": 7,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            7,
+            {
+                "rom_id": 7,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
 
         cb = downloads.queue.make_progress_callback(7, "Mario", "N64", "mario.z64")
         cb(512, 1024)
 
-        entry = downloads.state.entries[7]
+        entry = downloads.queue.entries[7]
         assert entry["bytes_downloaded"] == 512
         assert entry["total_bytes"] == 1024
         assert len(emit_calls) == 1
@@ -5216,7 +5259,7 @@ class TestAProgressTickAfterTheDownloadEnded:
             progress_callback(len(zip_bytes), len(zip_bytes))
 
         _seed_rom(downloads.uow, 75, platform_slug="psx")
-        downloads.state.entries[75] = {"rom_id": 75, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(75, {"rom_id": 75, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(75, rom_detail, target_path, "psx", "FF9.zip", _admitted(downloads, 75))
@@ -5224,7 +5267,7 @@ class TestAProgressTickAfterTheDownloadEnded:
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_complete"]
-        entry = downloads.state.entries[75]
+        entry = downloads.queue.entries[75]
         assert entry["status"] == "completed"
         assert entry["progress"] == 1.0
 
@@ -5249,7 +5292,7 @@ class TestAProgressTickAfterTheDownloadEnded:
             progress_callback(1024, 1024)
             raise OSError("simulated network drop")
 
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
@@ -5257,7 +5300,7 @@ class TestAProgressTickAfterTheDownloadEnded:
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_failed"]
-        entry = downloads.state.entries[42]
+        entry = downloads.queue.entries[42]
         assert entry["status"] == "failed"
         assert entry["progress"] == 0
 
@@ -5285,12 +5328,15 @@ class TestAProgressTickAfterTheDownloadEnded:
                 f.write(b"\x00" * 100)
 
         _seed_rom(downloads.uow, 73, platform_slug="gba")
-        downloads.state.entries[73] = {
-            "rom_id": 73,
-            "status": "downloading",
-            "progress": 0,
-            "resumable": False,
-        }
+        downloads.queue.enqueue(
+            73,
+            {
+                "rom_id": 73,
+                "status": "downloading",
+                "progress": 0,
+                "resumable": False,
+            },
+        )
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(73, rom_detail, target_path, "gba", "Game.gba", _admitted(downloads, 73))
@@ -5298,7 +5344,7 @@ class TestAProgressTickAfterTheDownloadEnded:
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_complete"]
-        entry = downloads.state.entries[73]
+        entry = downloads.queue.entries[73]
         assert entry["status"] == "completed"
         assert entry["resumable"] is False
 
@@ -5307,13 +5353,13 @@ class TestAProgressTickAfterTheDownloadEnded:
     @pytest.mark.asyncio
     async def test_an_ended_entry_is_left_alone(self, downloads, emit, status, phase):
         entry = {"rom_id": 7, "status": status, "progress": 0.25, "bytes_downloaded": 256, "total_bytes": 1024}
-        downloads.state.entries[7] = entry
+        downloads.queue.enqueue(7, entry)
         before = dict(entry)
 
         downloads.queue._apply_progress(phase, 7, "Mario", "N64", "mario.z64", 0.5, 512, 1024)
         await self._drain()
 
-        assert downloads.state.entries[7] == before
+        assert downloads.queue.entries[7] == before
         emit.assert_not_called()
 
 
@@ -5350,7 +5396,7 @@ class TestDoDownloadRedownloadPreservesExisting:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-redownload")
 
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
@@ -5359,7 +5405,7 @@ class TestDoDownloadRedownloadPreservesExisting:
         assert os.path.exists(target_path)
         with open(target_path, "rb") as f:
             assert f.read() == b"REAL INSTALLED ROM DATA"
-        assert downloads.state.entries[42]["status"] == "failed"
+        assert downloads.queue.entries[42]["status"] == "failed"
 
 
 class TestDoDownloadCancelReconcile:
@@ -5400,13 +5446,16 @@ class TestDoDownloadCancelReconcile:
         }
 
         _seed_rom(downloads.uow, 42)
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
 
         def fake_transfer(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             with open(dest, "wb") as f:
@@ -5440,7 +5489,7 @@ class TestDoDownloadCancelReconcile:
                 await task
 
         # Committed before the cancel landed → surfaced COMPLETED, file kept, row saved.
-        assert downloads.state.entries[42]["status"] == "completed"
+        assert downloads.queue.entries[42]["status"] == "completed"
         assert os.path.exists(target_path)
         installed = downloads.uow.rom_installs.get(42)
         assert installed is not None
@@ -5480,13 +5529,16 @@ class TestDoDownloadCancelReconcile:
         }
 
         _seed_rom(downloads.uow, 77, platform_slug="psx")
-        downloads.state.entries[77] = {
-            "rom_id": 77,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            77,
+            {
+                "rom_id": 77,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
 
         def fake_transfer(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             with open(dest, "wb") as f:
@@ -5537,7 +5589,7 @@ class TestDoDownloadCancelReconcile:
         assert os.path.isdir(committed_dir)
         assert os.path.exists(os.path.join(committed_dir, "game.m3u"))
         # Surfaced as completed, install row present, download_complete emitted.
-        assert downloads.state.entries[77]["status"] == "completed"
+        assert downloads.queue.entries[77]["status"] == "completed"
         assert downloads.uow.rom_installs.get(77) is not None
         assert [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
@@ -5572,13 +5624,16 @@ class TestDoDownloadCancelEmitsEvent:
         def fake_download_cancel(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise asyncio.CancelledError()
 
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "downloading",
-            "progress": 0.3,
-            "bytes_downloaded": 300,
-            "total_bytes": 1000,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "downloading",
+                "progress": 0.3,
+                "bytes_downloaded": 300,
+                "total_bytes": 1000,
+            },
+        )
 
         with (
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download_cancel),
@@ -5598,7 +5653,7 @@ class TestDoDownloadCancelEmitsEvent:
         assert payload["total_bytes"] == 1000
         # The terminal frame carries the final progress values from the entry,
         # which is then evicted (#149 downloads-round) — the emit happens first.
-        assert 42 not in downloads.state.entries
+        assert 42 not in downloads.queue.entries
 
 
 class TestConcurrencyReservation:
@@ -5685,12 +5740,12 @@ class TestConcurrencyReservation:
 
         _seed_rom(downloads.uow, 42)
         downloads.state.reserved_bytes[42] = 999
-        downloads.state.entries[42] = {"rom_id": 42, "status": "queued", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "queued", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
 
-        assert downloads.state.entries[42]["status"] == "completed"
+        assert downloads.queue.entries[42]["status"] == "completed"
         # The reservation is released in the finally.
         assert 42 not in downloads.state.reserved_bytes
 
@@ -5731,7 +5786,7 @@ class TestConcurrencyReservation:
                 f.write(b"\x00" * 64)
 
         _seed_rom(downloads.uow, 3)
-        downloads.state.entries[3] = {"rom_id": 3, "status": "queued", "progress": 0}
+        downloads.queue.enqueue(3, {"rom_id": 3, "status": "queued", "progress": 0})
 
         # Run the third download as a task — it must emit "queued" then block on
         # the semaphore (which we hold).
@@ -5749,14 +5804,14 @@ class TestConcurrencyReservation:
             ]
             assert len(queued) == 1
             assert queued[0][0][1]["rom_id"] == 3
-            assert downloads.state.entries[3]["status"] == "queued"
+            assert downloads.queue.entries[3]["status"] == "queued"
 
             # Release the semaphore so the third can proceed and finish.
             sem.release()
             sem.release()
             await task
 
-        assert downloads.state.entries[3]["status"] == "completed"
+        assert downloads.queue.entries[3]["status"] == "completed"
 
 
 class TestCooperativeCancel:
@@ -5779,13 +5834,16 @@ class TestCooperativeCancel:
             return _noop()
 
         downloads = make_downloads(clock=fake_clock, loop=MagicMock(), emit=_record_emit)
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
         downloads.loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
         downloads.queue._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
 
@@ -5794,7 +5852,7 @@ class TestCooperativeCancel:
         # Unset token: a normal tick proceeds (no raise). Advance so the
         # final-frame throttle bypass fires and the queue entry updates.
         cb(1024, 1024)
-        assert downloads.state.entries[42]["bytes_downloaded"] == 1024
+        assert downloads.queue.entries[42]["bytes_downloaded"] == 1024
 
         # Flip the token; the very next tick aborts the transfer thread.
         token.cancelled = True
@@ -5846,7 +5904,7 @@ class TestCooperativeCancel:
                 # the loop never runs to completion — the transfer aborts.
                 progress_callback(i, 500)
 
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with (
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_transfer),
@@ -5859,7 +5917,7 @@ class TestCooperativeCancel:
         assert len(captured) <= 5
         # Cancel evicts its entry rather than leaving a "cancelled" row (#149
         # downloads-round).
-        assert 42 not in downloads.state.entries
+        assert 42 not in downloads.queue.entries
 
     @pytest.mark.asyncio
     async def test_cancel_download_sets_token_and_cancels_task(self, downloads):
@@ -5902,13 +5960,16 @@ class TestCooperativeCancel:
             return _noop()
 
         downloads = make_downloads(clock=fake_clock, loop=MagicMock(), emit=_record_emit)
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+            },
+        )
         downloads.loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
         downloads.queue._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
 
@@ -5923,7 +5984,7 @@ class TestCooperativeCancel:
         with pytest.raises(asyncio.CancelledError):
             cb_old(512, 1024)
         cb_new(1024, 1024)  # no raise
-        assert downloads.state.entries[42]["bytes_downloaded"] == 1024
+        assert downloads.queue.entries[42]["bytes_downloaded"] == 1024
 
 
 class TestPauseResume:
@@ -5965,14 +6026,17 @@ class TestPauseResume:
             control.paused = True
             raise asyncio.CancelledError()
 
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "downloading",
-            "progress": 0.25,
-            "bytes_downloaded": 256,
-            "total_bytes": 1024,
-            "resumable": True,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "downloading",
+                "progress": 0.25,
+                "bytes_downloaded": 256,
+                "total_bytes": 1024,
+                "resumable": True,
+            },
+        )
 
         with (
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_pause),
@@ -5981,7 +6045,7 @@ class TestPauseResume:
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", control)
 
         # Status flips to "paused" and the partial .tmp is KEPT for resume.
-        assert downloads.state.entries[42]["status"] == "paused"
+        assert downloads.queue.entries[42]["status"] == "paused"
         assert os.path.exists(target_path + TMP_EXT)
         # A terminal "paused" frame reached the frontend, carrying resumable.
         paused_frames = [
@@ -6018,7 +6082,7 @@ class TestPauseResume:
             control.cancelled = True
             raise asyncio.CancelledError()
 
-        downloads.state.entries[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with (
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_cancel),
@@ -6028,7 +6092,7 @@ class TestPauseResume:
 
         # Cancel evicts its entry (#149 downloads-round) and deletes the partial
         # .tmp — the contrast with pause, which keeps both for resume.
-        assert 42 not in downloads.state.entries
+        assert 42 not in downloads.queue.entries
         assert not os.path.exists(target_path + TMP_EXT)
 
     @pytest.mark.asyncio
@@ -6058,20 +6122,23 @@ class TestPauseResume:
                 f.write(b"\x00" * 256)
 
         _seed_rom(downloads.uow, 42)
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-            "resumable": False,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+                "resumable": False,
+            },
+        )
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
 
         # on_meta flipped the queue entry's resumable flag...
-        assert downloads.state.entries[42]["resumable"] is True
+        assert downloads.queue.entries[42]["resumable"] is True
         # ...and emitted a download_progress frame carrying resumable: True.
         meta_frames = [
             c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("resumable") is True
@@ -6105,19 +6172,22 @@ class TestPauseResume:
                 f.write(b"\x00" * 256)
 
         _seed_rom(downloads.uow, 42)
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "downloading",
-            "progress": 0,
-            "bytes_downloaded": 0,
-            "total_bytes": 0,
-            "resumable": False,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "downloading",
+                "progress": 0,
+                "bytes_downloaded": 0,
+                "total_bytes": 0,
+                "resumable": False,
+            },
+        )
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
 
-        assert downloads.state.entries[42]["resumable"] is False
+        assert downloads.queue.entries[42]["resumable"] is False
 
     @pytest.mark.asyncio
     async def test_resume_rebegins_with_resume_true(self, make_downloads, tmp_path):
@@ -6141,14 +6211,17 @@ class TestPauseResume:
         }
 
         # The entry exists in "paused" state (what a prior pause left behind).
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "paused",
-            "progress": 0.25,
-            "bytes_downloaded": 256,
-            "total_bytes": 1024,
-            "resumable": True,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "paused",
+                "progress": 0.25,
+                "bytes_downloaded": 256,
+                "total_bytes": 1024,
+                "resumable": True,
+            },
+        )
 
         downloads.loop.run_in_executor = _hops_answering(rom_detail)
         captured_coros = []
@@ -6167,7 +6240,7 @@ class TestPauseResume:
         # A fresh task was scheduled (the resumed download).
         assert len(captured_coros) == 1
         # The re-begun download carried resumable across (verdict re-confirmed live).
-        assert downloads.state.entries[42]["resumable"] is True
+        assert downloads.queue.entries[42]["resumable"] is True
 
     @pytest.mark.asyncio
     async def test_resume_threads_resume_true_into_the_transfer(self, make_downloads, tmp_path, emit):
@@ -6192,14 +6265,17 @@ class TestPauseResume:
         }
 
         _seed_rom(downloads.uow, 42)
-        downloads.state.entries[42] = {
-            "rom_id": 42,
-            "status": "paused",
-            "progress": 0.25,
-            "bytes_downloaded": 256,
-            "total_bytes": 1024,
-            "resumable": True,
-        }
+        downloads.queue.enqueue(
+            42,
+            {
+                "rom_id": 42,
+                "status": "paused",
+                "progress": 0.25,
+                "bytes_downloaded": 256,
+                "total_bytes": 1024,
+                "resumable": True,
+            },
+        )
 
         # get_rom is fetched via run_in_executor; the real loop runs it.
         captured_resume: list[bool] = []
@@ -6221,7 +6297,7 @@ class TestPauseResume:
             await task
 
         assert captured_resume == [True]
-        assert downloads.state.entries[42]["status"] == "completed"
+        assert downloads.queue.entries[42]["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_resume_non_paused_is_refused_with_not_paused(self, downloads):
@@ -6232,7 +6308,7 @@ class TestPauseResume:
         assert (refused.value.reason, refused.value.message) == ("not_paused", "No paused download for this ROM")
 
         # A downloading (not paused) entry is also rejected.
-        downloads.state.entries[7] = {"rom_id": 7, "status": "downloading"}
+        downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading"})
         downloading = downloads.service.resume_download(7)
         with pytest.raises(Refused) as refused:
             await downloading
@@ -6275,12 +6351,12 @@ class TestPauseResume:
     @pytest.mark.asyncio
     async def test_paused_entry_not_pruned(self, downloads):
         """A 'paused' entry survives queue pruning (only terminal states are pruned)."""
-        downloads.state.entries[1] = {"rom_id": 1, "status": "paused"}
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "paused"})
         for i in range(2, 60):
-            downloads.state.entries[i] = {"rom_id": i, "status": "completed"}
+            downloads.queue.enqueue(i, {"rom_id": i, "status": "completed"})
         downloads.queue.prune()
-        assert 1 in downloads.state.entries
-        assert downloads.state.entries[1]["status"] == "paused"
+        assert 1 in downloads.queue.entries
+        assert downloads.queue.entries[1]["status"] == "paused"
 
 
 _SUPERSEDE_GROUP = "igdb:100:99"
@@ -6517,10 +6593,10 @@ class TestSiblingSupersedeRemoval:
         downloads = make_downloads(rom_remover=lambda: AsyncMock(return_value={"success": True, "message": "removed"}))
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        downloads.state.entries[2] = {"rom_id": 2, "status": "paused"}
+        downloads.queue.enqueue(2, {"rom_id": 2, "status": "paused"})
 
         await downloads.service.supersede_sibling_installs(1)
-        assert 2 not in downloads.state.entries
+        assert 2 not in downloads.queue.entries
 
     @pytest.mark.asyncio
     async def test_supersede_keeps_non_paused_sibling_queue_entry(self, make_downloads):
@@ -6530,10 +6606,10 @@ class TestSiblingSupersedeRemoval:
         downloads = make_downloads(rom_remover=lambda: AsyncMock(return_value={"success": True, "message": "removed"}))
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        downloads.state.entries[2] = {"rom_id": 2, "status": "completed"}
+        downloads.queue.enqueue(2, {"rom_id": 2, "status": "completed"})
 
         await downloads.service.supersede_sibling_installs(1)
-        assert 2 in downloads.state.entries
+        assert 2 in downloads.queue.entries
 
     @pytest.mark.asyncio
     async def test_supersede_logs_both_rom_ids_on_success(self, make_downloads, caplog):
@@ -6617,11 +6693,11 @@ class TestSiblingSupersedeHandOver:
     async def test_a_handed_over_sibling_s_paused_download_is_evicted(self, downloads):
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        downloads.state.entries[2] = {"rom_id": 2, "status": "paused"}
+        downloads.queue.enqueue(2, {"rom_id": 2, "status": "paused"})
 
         await downloads.service.supersede_sibling_installs(1, adopted_path="/roms/n64/game_2.z64")
 
-        assert 2 not in downloads.state.entries
+        assert 2 not in downloads.queue.entries
 
     @pytest.mark.asyncio
     async def test_the_hand_over_is_logged_with_both_rom_ids_and_the_path(self, downloads, caplog):
@@ -6647,7 +6723,7 @@ class TestResumeSupersede:
 
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=42, installed=True)
         _seed_group_member(downloads.uow, 3, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
-        downloads.state.entries[3] = {"rom_id": 3, "status": "paused"}
+        downloads.queue.enqueue(3, {"rom_id": 3, "status": "paused"})
         downloads.service._begin_download = AsyncMock()
 
         coro = downloads.service.resume_download(3)
@@ -6656,7 +6732,7 @@ class TestResumeSupersede:
         assert refused.value.reason == "superseded"
         assert len(refused.value.message) <= 45
         assert refused.value.details == {}
-        assert 3 not in downloads.state.entries
+        assert 3 not in downloads.queue.entries
         assert 3 not in downloads.state.in_progress
         downloads.service._begin_download.assert_not_awaited()
 
@@ -6669,7 +6745,7 @@ class TestResumeSupersede:
         downloads = make_downloads(rom_remover=lambda: remover, loop=MagicMock())
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)  # resume target
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)  # to strip
-        downloads.state.entries[1] = {"rom_id": 1, "status": "paused", "resumable": True}
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "paused", "resumable": True})
         remover = AsyncMock(return_value={"success": True, "message": "removed"})
         started = _stage_download_prologue(downloads)
 
@@ -6684,7 +6760,7 @@ class TestResumeSupersede:
         from unittest.mock import AsyncMock
 
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        downloads.state.entries[2] = {"rom_id": 2, "status": "paused", "resumable": True}
+        downloads.queue.enqueue(2, {"rom_id": 2, "status": "paused", "resumable": True})
         downloads.service._begin_download = AsyncMock(return_value={"success": True, "message": "Download started"})
 
         result = await downloads.service.resume_download(2)
@@ -6703,7 +6779,7 @@ class TestResumeSupersede:
         downloads = make_downloads(rom_remover=lambda: AsyncMock(side_effect=boom), loop=MagicMock())
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        downloads.state.entries[1] = {"rom_id": 1, "status": "paused"}
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "paused"})
         boom = Refused("uninstall_failed", "boom")
         started = _stage_download_prologue(downloads)
 
@@ -6730,7 +6806,7 @@ class TestResumeSupersede:
             raise Refused("adoption_candidates", "already on this device")
 
         downloads = make_downloads(target_gate=gate, loop=MagicMock())
-        downloads.state.entries[1] = {"rom_id": 1, "status": "paused", "resumable": True}
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "paused", "resumable": True})
         started = _stage_download_prologue(downloads)
 
         result = await downloads.service.resume_download(1)
@@ -6765,7 +6841,7 @@ class TestResumeSupersede:
 
         provider = MagicMock(side_effect=AssertionError("supersede must not run for a non-paused resume"))
         downloads = make_downloads(rom_remover=provider)
-        downloads.state.entries[7] = {"rom_id": 7, "status": "downloading"}
+        downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading"})
 
         coro = downloads.service.resume_download(7)
         with pytest.raises(Refused) as refused:
@@ -6819,7 +6895,7 @@ class TestAStartedDownloadHoldsAnOperation:
 
     async def test_a_resumed_download_holds_its_operation_until_its_task_ends(self, downloads, monkeypatch):
         service = downloads.service
-        downloads.state.entries[42] = {"rom_id": 42, "status": "paused"}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "paused"})
         release = asyncio.Event()
         monkeypatch.setattr(service, "_begin_download", _begin_leaving_a_task(downloads.state, release))
 
@@ -6851,7 +6927,7 @@ class TestAStartedDownloadHoldsAnOperation:
     ):
         downloads = make_downloads(migration_pending=migration_pending)
         service = downloads.service
-        downloads.state.entries[42] = {"rom_id": 42, "status": "paused"}
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "paused"})
         begun: list[int] = []
 
         async def begin(rom_id, **_kwargs):
@@ -6878,7 +6954,7 @@ class TestTheDownloadCompleteLease:
 
     @staticmethod
     async def _finish(downloads, rom_id: int) -> None:
-        downloads.state.entries[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(rom_id, {"rom_id": rom_id, "status": "downloading", "progress": 0})
         detail = {"id": rom_id, "name": "Zelda", "fs_name": "zelda.z64", "platform_slug": "n64"}
         await downloads.transfer._finalize_download_complete(rom_id, detail, "/roms/n64/zelda.z64", "Zelda", "N64")
 
@@ -6997,7 +7073,7 @@ class TestASingleZipHoldingADisc:
         platform_dir.mkdir(parents=True, exist_ok=True)
         target = str(platform_dir / "Game.zip")
         _seed_rom(downloads.uow, rom_id, platform_slug=system)
-        downloads.state.entries[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(rom_id, {"rom_id": rom_id, "status": "downloading", "progress": 0})
 
         def transfer(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             with open(dest, "wb") as f:
@@ -7079,7 +7155,7 @@ class TestASingleZipHoldingADisc:
         target = str(platform_dir / "Game.zip")
         detail = _single_zip_detail(b"not a zip at all")
         _seed_rom(downloads.uow, 77, platform_slug="saturn")
-        downloads.state.entries[77] = {"rom_id": 77, "status": "downloading", "progress": 0}
+        downloads.queue.enqueue(77, {"rom_id": 77, "status": "downloading", "progress": 0})
 
         def transfer(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             with open(dest, "wb") as f:
@@ -7247,7 +7323,7 @@ class TestTooLittleSpaceToUnpack:
     async def _run(self, downloads, detail, target, payload, emit):
         from unittest.mock import patch
 
-        downloads.state.entries[detail["id"]] = {"rom_id": detail["id"], "status": "downloading"}
+        downloads.queue.enqueue(detail["id"], {"rom_id": detail["id"], "status": "downloading"})
 
         def transfer(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             with open(dest, "wb") as f:
@@ -7311,7 +7387,7 @@ class TestTooLittleSpaceToUnpack:
         # Another download claimed 10 GiB and has transferred all of it, which
         # the free space already lacks.
         downloads.state.reserved_bytes[99] = 10 * 1024**3
-        downloads.state.entries[99] = {"rom_id": 99, "status": "downloading"}
+        downloads.queue.enqueue(99, {"rom_id": 99, "status": "downloading"})
         downloads.queue._apply_progress("downloading", 99, "Other", "", "other.zip", 100, 10 * 1024**3, 10 * 1024**3)
 
         _fetched, failures = await self._run(downloads, detail, target, payload, emit)
@@ -7328,7 +7404,7 @@ class TestTooLittleSpaceToUnpack:
         # Claimed 10 GiB, transferred 5 GiB and unpacked 1 GiB of it so far: 4 GiB
         # of the claim are still to come, which leaves 200 MiB for this unpack.
         downloads.state.reserved_bytes[99] = 10 * 1024**3
-        downloads.state.entries[99] = {"rom_id": 99, "status": "downloading"}
+        downloads.queue.enqueue(99, {"rom_id": 99, "status": "downloading"})
         downloads.queue._apply_progress("downloading", 99, "Other", "", "other.zip", 100, 5 * 1024**3, 5 * 1024**3)
         downloads.queue._apply_progress("extracting", 99, "Other", "", "other.zip", 20, 1024**3, 5 * 1024**3)
 
@@ -7346,11 +7422,14 @@ class TestTooLittleSpaceToUnpack:
         # Resumed with 5 GiB already on disk, which its claim of 5 GiB left out;
         # its transfer reports that 5 GiB again before a new byte arrives.
         downloads.state.reserved_bytes[99] = 5 * 1024**3
-        downloads.state.entries[99] = {
-            "rom_id": 99,
-            "status": "downloading",
-            "_on_disk_at_start": 5 * 1024**3,
-        }
+        downloads.queue.enqueue(
+            99,
+            {
+                "rom_id": 99,
+                "status": "downloading",
+                "_on_disk_at_start": 5 * 1024**3,
+            },
+        )
         downloads.queue._apply_progress("downloading", 99, "Other", "", "other.zip", 50, 5 * 1024**3, 10 * 1024**3)
 
         _fetched, failures = await self._run(downloads, detail, target, payload, emit)
@@ -7415,7 +7494,7 @@ class TestTooLittleSpaceToUnpack:
         target = str(roms / "saturn" / "Game.zip")
         (roms / "saturn" / "Game.zip.tmp").write_bytes(payload)
         _seed_rom(downloads.uow, 77, platform_slug="saturn")
-        downloads.state.entries[77] = {"rom_id": 77, "status": "downloading"}
+        downloads.queue.enqueue(77, {"rom_id": 77, "status": "downloading"})
 
         with patch.object(downloads.romm_api, "download_rom_content") as fetched:
             await downloads.transfer.run(
@@ -7513,7 +7592,7 @@ class TestTheSpaceCheckBeforeTheDownload:
         # 500 MiB free after another download wrote 400 MiB of its 410 MiB claim:
         # 10 MiB of it are still to come, which leaves room for this 300 MiB zip.
         downloads.state.reserved_bytes[99] = 410 * 1024 * 1024
-        downloads.state.entries[99] = {"rom_id": 99, "status": "downloading"}
+        downloads.queue.enqueue(99, {"rom_id": 99, "status": "downloading"})
         downloads.queue._apply_progress(
             "downloading", 99, "Other", "", "other.zip", 97, 400 * 1024 * 1024, 410 * 1024 * 1024
         )
@@ -7550,7 +7629,7 @@ class TestABadChecksumFailsTheUnpack:
             detail = {**detail, "has_multiple_files": True}
         target = str(roms / "saturn" / "Game.zip")
         _seed_rom(downloads.uow, 77, platform_slug="saturn")
-        downloads.state.entries[77] = {"rom_id": 77, "status": "downloading"}
+        downloads.queue.enqueue(77, {"rom_id": 77, "status": "downloading"})
 
         def transfer(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             with open(dest, "wb") as f:
@@ -7617,7 +7696,7 @@ class TestAnEarlierUnpackedCopyIsTheSameGame:
         (folder / "Game.cue").write_text("FILE")
         started = await downloads.service.start_download(77, True, None, None, False, [str(folder)])
         assert started["success"] is True
-        downloads.state.entries[77]["status"] = "paused"
+        downloads.queue.entries[77]["status"] = "paused"
         (platform_dir / "Game.zip").write_bytes(b"appeared while paused")
 
         with pytest.raises(TargetOccupied) as refused:
@@ -7633,7 +7712,7 @@ class TestAnEarlierUnpackedCopyIsTheSameGame:
         (platform_dir / "Game.zip").write_bytes(b"the user's zip")
         zip_path = str(platform_dir / "Game.zip")
         assert (await downloads.service.start_download(77, True, None, None, False, [zip_path]))["success"] is True
-        downloads.state.entries[77]["status"] = "paused"
+        downloads.queue.entries[77]["status"] = "paused"
 
         resumed = await downloads.service.resume_download(77)
 

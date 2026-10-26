@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 class DownloadTransferConfig:
     """Frozen wiring bundle handed to ``DownloadTransfer.__init__``.
 
-    ``state`` is the package's shared state box, ``queue`` reports the
+    ``state`` is the state box the façade shares, ``queue`` holds and reports the
     download's entry and ``unpacker`` turns the finished transfer into an
     install. ``install_recorder`` resolves the launch command a completed
     download's ``download_complete`` carries and records it as applied;
@@ -231,7 +231,7 @@ class DownloadTransfer:
                         file_name,
                         system,
                         extract_dir_name,
-                        self._state.bytes_reserved_by_others(rom_id),
+                        self._state.bytes_reserved_by_others(rom_id, self._queue.entries),
                     )
                     # Shield the commit await: a cancel here must propagate to this
                     # coroutine WITHOUT cancelling the underlying future, so
@@ -251,7 +251,7 @@ class DownloadTransfer:
                         target_path,
                         system,
                         extract_dir_name,
-                        self._state.bytes_reserved_by_others(rom_id),
+                        self._state.bytes_reserved_by_others(rom_id, self._queue.entries),
                     )
                     # Shielded so a racing cancel leaves the future intact for
                     # ``_reconcile_post_io`` to re-await (see the multi-file branch).

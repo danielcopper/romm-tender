@@ -547,7 +547,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     downloads_state = DownloadsStateBox()
     download_queue = DownloadQueue(
         config=DownloadQueueConfig(
-            state=downloads_state,
             loop=cfg.runtime.loop,
             emit=cfg.runtime.emit,
             clock=cfg.runtime.clock,

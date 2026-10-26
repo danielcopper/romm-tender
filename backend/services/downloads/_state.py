@@ -1,27 +1,29 @@
-"""Shared mutable state of the download package.
+"""What the façade and the transfer share about each download besides its queue entry.
 
-Built once by the composition root and handed to the façade, the queue and the
-transfer, which coordinate through it instead of through each other's fields.
-A start takes the ROM's in-progress claim (:meth:`DownloadsStateBox.claim`) and
-drops it again if it ends without a download (:meth:`DownloadsStateBox.drop_claim`).
-Once its pre-flights pass, the start registers four things here — the queue
-entry, the task, the byte reservation and the control token
-(:meth:`DownloadsStateBox.admit`). The task gives back the claim and every
-registration but the entry, which outlives it (:meth:`DownloadsStateBox.release`),
-so the rule that only the attempt which registered a download releases it lives
-in one place; the shutdown forgets the tasks it has ended
-(:meth:`DownloadsStateBox.forget_tasks`). The claim, the tasks, the
-reservations and the tokens change only through these verbs; the entries are
-the queue's to change once admitted.
+Built once by the composition root and handed to the façade and the transfer,
+which coordinate through it instead of through each other's fields. A start
+takes the ROM's in-progress claim (:meth:`DownloadsStateBox.claim`) and drops it
+again if it ends without a download (:meth:`DownloadsStateBox.drop_claim`).
+Once its pre-flights pass, the start registers the download's task, byte
+reservation and control token here (:meth:`DownloadsStateBox.admit`), in the
+same step as its queue entry, which the queue holds. The task gives back the
+claim and those three (:meth:`DownloadsStateBox.release`), so the rule that only
+the attempt which registered a download releases it lives in one place; the
+shutdown forgets the tasks it has ended (:meth:`DownloadsStateBox.forget_tasks`).
+The claims, the tasks, the reservations and the tokens change only through
+these verbs.
 """
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from domain.disk_space import bytes_reserved_by_others
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 class DownloadControl:
@@ -54,16 +56,14 @@ def _download_slots() -> asyncio.Semaphore:
 
 @dataclass
 class DownloadsStateBox:
-    """The downloads this process knows about, and what each has claimed.
+    """What each download under way has claimed: its claim, its task, its reservation and its control token.
 
-    ``entries`` is the queue the frontend is shown, by rom id. ``in_progress``
-    holds every rom id whose download has started and not ended — a paused one
-    is not in it. ``entries``, ``tasks``, ``reserved_bytes`` and
-    ``control_tokens`` hold the registrations of an admitted download;
-    ``semaphore`` bounds how many transfer at once.
+    ``in_progress`` holds every rom id whose download has started and not
+    ended — a paused one is not in it. ``tasks``, ``reserved_bytes`` and ``control_tokens`` hold
+    the registrations of an admitted download; ``semaphore`` bounds how many
+    transfer at once.
     """
 
-    entries: dict[int, dict[str, Any]] = field(default_factory=dict)
     in_progress: set[int] = field(default_factory=set)
     tasks: dict[int, asyncio.Task[None]] = field(default_factory=dict)
     reserved_bytes: dict[int, int] = field(default_factory=dict)
@@ -82,13 +82,11 @@ class DownloadsStateBox:
         self,
         rom_id: int,
         *,
-        entry: dict[str, Any],
         task: asyncio.Task[None],
         reserved: int,
         control: DownloadControl,
     ) -> None:
-        """Register an admitted download: its queue entry, its task, its byte reservation and its control token."""
-        self.entries[rom_id] = entry
+        """Register an admitted download: its task, its byte reservation and its control token."""
         self.tasks[rom_id] = task
         self.reserved_bytes[rom_id] = reserved
         self.control_tokens[rom_id] = control
@@ -99,7 +97,7 @@ class DownloadsStateBox:
         A re-download or a resume can register a fresh attempt before an older,
         superseded task ends; gating every release on the token's identity keeps
         that task from releasing the newer attempt's task, claim, reservation or
-        token. The queue entry is not released here: it outlives its task.
+        token. The download's queue entry is the queue's, and outlives its task.
         """
         if self.control_tokens.get(rom_id) is control:
             self.tasks.pop(rom_id, None)
@@ -111,6 +109,9 @@ class DownloadsStateBox:
         """Forget every download's task: the shutdown has cancelled them and waited until each ended."""
         self.tasks.clear()
 
-    def bytes_reserved_by_others(self, rom_id: int) -> int:
-        """What other downloads have claimed and not yet written. Read on the loop, where both change."""
-        return bytes_reserved_by_others(self.reserved_bytes, self.entries, rom_id)
+    def bytes_reserved_by_others(self, rom_id: int, entries: Mapping[int, Mapping[str, Any]]) -> int:
+        """What other downloads have claimed and not yet written, by the queue's *entries*.
+
+        Read on the loop, where both change.
+        """
+        return bytes_reserved_by_others(self.reserved_bytes, entries, rom_id)

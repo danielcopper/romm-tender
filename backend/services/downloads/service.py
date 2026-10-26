@@ -59,8 +59,8 @@ class DownloadServiceConfig:
     """Frozen wiring bundle handed to ``DownloadService.__init__``.
 
     ``state``, ``queue``, ``transfer`` and ``unpacker`` are the package's
-    parts, built by the composition root over one shared state box: an admitted
-    download's task is ``transfer.run``, and the unpacker answers whether a
+    parts, built by the composition root: an admitted download's task is
+    ``transfer.run``, and the unpacker answers whether a
     whole download already sits on disk and removes a paused one's partial.
     ``target_gate`` is the pre-flight that refuses to write over content Tender
     did not put there (ADR-0028). ``conflict_rules`` are what a start or resume
@@ -229,8 +229,8 @@ class DownloadService:
         *answer* passes the adopt dialog's answers, and what the game page reported, through to the gate unread.
         Fetches ROM detail and refuses one RomM holds no file for (``no_file_on_romm``), resolves the platform path,
         then runs the three pre-flights **in this order**: the occupancy gate, the #1298 sibling supersede, the
-        disk-space check. Only then is the download admitted into the state box — its queue entry, task, byte
-        reservation and control token. On ``resume=True`` the disk pre-flight discounts the bytes already on the
+        disk-space check. Only then is the download admitted — its entry into the queue, and its task, byte reservation
+        and control token into the state box. On ``resume=True`` the disk pre-flight discounts the bytes already on the
         existing ``.tmp`` and the transfer appends rather than restarts. The ``already_downloading`` guard stays with
         ``start_download``; ``resume_download`` validates the paused entry before calling here.
 
@@ -331,7 +331,7 @@ class DownloadService:
             verdict = disk_space_verdict(
                 file_size=file_size,
                 free_space=self._download_file_store.disk_free(roms_dir),
-                reserved_bytes=self._state.bytes_reserved_by_others(rom_id),
+                reserved_bytes=self._state.bytes_reserved_by_others(rom_id, self._queue.entries),
                 multi_file=is_multi_file_download(rom_detail),
                 already_on_disk=already_on_disk,
                 unpacked_size=listed_unpacked_bytes(rom_detail),
@@ -349,7 +349,7 @@ class DownloadService:
         platform_name = rom_detail.get("platform_name", platform_slug)
         # Carry the prior resumability verdict across a resume so the UI keeps
         # showing Pause before the resumed transfer's headers re-confirm it.
-        resumable = bool(self._state.entries.get(rom_id, {}).get("resumable", False))
+        resumable = bool(self._queue.entries.get(rom_id, {}).get("resumable", False))
 
         # Create the control token BEFORE the task so the closure captured inside
         # the transfer's progress callback polls this exact object. A later
@@ -393,9 +393,12 @@ class DownloadService:
             # reservation already left out (``bytes_reserved_by_others``).
             "_on_disk_at_start": already_on_disk,
         }
-        # The reservation lets another download's pre-flight see the
-        # outstanding claim; the transfer releases it when the task ends.
-        self._state.admit(rom_id, entry=entry, task=task, reserved=verdict.needed_bytes, control=control)
+        # The entry and the registrations go in one synchronous step, the entry
+        # first, so nothing sees one without the other. The reservation lets
+        # another download's pre-flight see the outstanding claim; the transfer
+        # releases it when the task ends.
+        self._queue.enqueue(rom_id, entry)
+        self._state.admit(rom_id, task=task, reserved=verdict.needed_bytes, control=control)
         return {"success": True, "message": "Download started"}
 
     def task_for_rom(self, rom_id: int) -> asyncio.Task[None] | None:
@@ -439,7 +442,7 @@ class DownloadService:
                 token.cancelled = True  # stop the executor transfer thread, not just the asyncio wrapper (#144)
             task.cancel()
             return {"success": True, "message": "Download cancelled"}
-        entry = self._state.entries.get(rom_id)
+        entry = self._queue.entries.get(rom_id)
         if entry is not None and entry.get("status") == "paused":
             self._cancel_paused_download(rom_id, entry)
             return {"success": True, "message": "Download cancelled"}
@@ -507,7 +510,7 @@ class DownloadService:
         """
         async with self._rules.hold("resume_download", update=True, migration=True, prune=True):
             rom_id = int(rom_id)
-            entry = self._state.entries.get(rom_id)
+            entry = self._queue.entries.get(rom_id)
             if entry is None or entry.get("status") != "paused":
                 raise Refused("not_paused", "No paused download for this ROM")
             if self._resume_target_superseded(rom_id):

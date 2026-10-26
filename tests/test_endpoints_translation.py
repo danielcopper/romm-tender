@@ -2019,9 +2019,7 @@ def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
     download_emit = FakeEventSink().emit
     download_rules = _make_conflict_rules()
     state = DownloadsStateBox()
-    queue = DownloadQueue(
-        config=DownloadQueueConfig(state=state, loop=loop, emit=download_emit, clock=FakeClock(), logger=LOGGER)
-    )
+    queue = DownloadQueue(config=DownloadQueueConfig(loop=loop, emit=download_emit, clock=FakeClock(), logger=LOGGER))
     unpacker = DownloadUnpacker(
         config=DownloadUnpackerConfig(
             download_file_store=world.store,
