@@ -29,7 +29,6 @@ const MESSAGE_STYLE: CSSProperties = {
   lineHeight: 1.5,
 };
 
-/** What the game view draws in place of its cards while a RetroDECK migration is pending. */
 export const MigrationBlockedCard: FC = () => (
   <div style={WARNING_CARD_STYLE}>
     <FaExclamationTriangle style={ICON_STYLE} aria-hidden="true" />

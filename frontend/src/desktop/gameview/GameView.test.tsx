@@ -165,6 +165,8 @@ describe("GameView", () => {
       render(<GameView appId={APP_ID} />);
 
       expect(await screen.findByText(CARD_TITLE)).toBeInTheDocument();
+      expect(releaseHeartbeat).not.toHaveBeenCalled();
+      expect(artwork.cancelArtworkApply).not.toHaveBeenCalled();
       expect(screen.queryByRole("heading", { name: "Mario Golf: Advance Tour" })).not.toBeInTheDocument();
       expect(backend.refreshMigrationState).toHaveBeenCalledTimes(1);
     });
@@ -174,6 +176,7 @@ describe("GameView", () => {
       vi.mocked(backend.refreshMigrationState).mockResolvedValue({ retrodeck: { pending: false } });
 
       render(<GameView appId={APP_ID} />);
+      expect(screen.getByText(CARD_TITLE)).toBeInTheDocument();
 
       expect(await screen.findByRole("heading", { name: "Mario Golf: Advance Tour" })).toBeInTheDocument();
       expect(screen.queryByText(CARD_TITLE)).not.toBeInTheDocument();

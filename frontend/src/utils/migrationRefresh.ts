@@ -1,5 +1,3 @@
-/** A game page asking the backend for the RetroDECK migration state again. */
-
 import { useEffect } from "react";
 import { refreshMigrationState, logError } from "../api/backend";
 import { setMigrationStatus } from "./migrationStore";

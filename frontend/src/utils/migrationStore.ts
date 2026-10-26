@@ -2,9 +2,9 @@
  * Module-level migration state store.
  *
  * Updated by:
- *   - index.tsx: the getMigrationStatus answer at panel load and on a
- *     `retrodeck_path_changed` event, which writes not pending where the event
- *     says the migration was cleared
+ *   - index.tsx: a pending getMigrationStatus answer at panel load; on a
+ *     `retrodeck_path_changed` event, not pending where the event says the
+ *     migration was cleared, otherwise a fresh getMigrationStatus answer
  *   - refreshMigrationState return value in MainPage, useMigrationRefresh and
  *     launchInterceptor
  *   - sessionManager, from the session-finalize result's `migration.retrodeck`
