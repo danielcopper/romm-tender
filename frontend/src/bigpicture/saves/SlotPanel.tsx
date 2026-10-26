@@ -191,7 +191,8 @@ export const SlotPanel: FC<SlotPanelProps> = ({
       }
       if (outcome.partial) {
         // A partial answer reloads the SAVES tab. On switch_incomplete this slot
-        // becomes active and its panel remounts, taking an inline error with it.
+        // becomes active and its panel remounts, taking an inline error with it;
+        // on switch_stopped it is toasted all the same, as on the SAVES tab.
         showToast(outcome.message);
         return;
       }

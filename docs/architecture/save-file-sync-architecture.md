@@ -252,8 +252,8 @@ a failure answer, `pending_uploads` names the changed files in `files`, and a Ro
    switch's first move — a backup in this step, or a download in step 3 that backs up the local file it overwrites — the
    save backup checks that the folder can take backups (`SaveBackup.prepare_save_backup_folder`: not a link, inside the
    saves directory, created if missing, listable); a switch that will move nothing neither checks nor creates it. A file
-   loses its tracking only once it was moved; once every backup went through, a tracked file with no local file left
-   loses its tracking too. The local files are those of the save answer the switch took at its start, as for the
+   loses its tracking only once it was moved; once every backup went through, every tracked name the new slot does not
+   provide loses its tracking too. The local files are those of the save answer the switch took at its start, as for the
    pending-changes check: one switch never reads two save answers.
 2. Only then is the active slot flipped in memory — a file the backup could not move would otherwise sit under the new
    slot, and the next sync would upload the previous slot's save into it.
@@ -263,9 +263,10 @@ a failure answer, `pending_uploads` names the changed files in `files`, and a Ro
    overwrites through the same save backup.
 4. The flipped slot + tracking are persisted once, **regardless of partial download failure**: a failed leg still
    persists this coherent state and answers the partial failure `SlotSwitchIncomplete` (`reason="switch_incomplete"`) so
-   the caller can retry — the completed targets are already correct. A failed target with a baseline, or with no local
-   file, re-resolves as `Download` on the next sync; a never-synced local file at a target's name has no baseline, so
-   the next sync answers a conflict (row 11b), or adopts the head when the file is byte-identical to it (row 11a) —
+   the caller can retry — the completed targets are already correct. On the next sync a failed target with a baseline
+   re-resolves as `Download` (row 10b), or adopts the head when the local file is byte-identical to it (row 10a); one
+   with no local file re-resolves as `Download`; a never-synced local file at a target's name has no baseline, so the
+   next sync answers a conflict (row 11b), or adopts the head when the file is byte-identical to it (row 11a) —
    [row 11](#why-row-11-splits-into-adopt-11a-vs-conflict-11b) gives why. Saves are never carried between slots; the
    switch only downloads or backs up, never uploads.
 

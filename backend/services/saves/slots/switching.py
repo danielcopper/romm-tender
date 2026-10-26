@@ -176,18 +176,19 @@ class SlotSwitcher:
 
         On success the local saves dir and per-file tracking are made coherent
         with the new slot: every local file the new slot does not provide is
-        backed up into ``.romm-backup`` (never destroyed — #965) and untracked,
-        the newest server save per canonical target is downloaded (#1058), and
-        nothing is uploaded — saves are not carried between slots. A partial
+        backed up into ``.romm-backup`` (never destroyed) and untracked, the
+        newest server save per canonical target is downloaded, and nothing is
+        uploaded — saves are not carried between slots. A partial
         download failure still persists the flipped slot and answers a
         :class:`SlotSwitchIncomplete` so the caller can retry.
 
         The slot changes only once every one of those backups went through. A
         backup folder that cannot take backups raises
         :class:`SlotSwitchBackupFolderUnusable`, and a backup that fails before
-        anything was moved raises :class:`SlotSwitchBackupFailed`; one that fails after some files were
-        moved persists the previous slot with those files untracked, downloads
-        nothing, and answers a :class:`SlotSwitchStopped` naming them.
+        anything was moved raises :class:`SlotSwitchBackupFailed`; one that
+        fails after some files were moved persists the previous slot with those
+        files untracked, downloads nothing, and answers a
+        :class:`SlotSwitchStopped` naming them.
         """
         rom_id = int(rom_id)
 
@@ -313,13 +314,12 @@ class SlotSwitcher:
         before the switch's first move — a backup here, or a download that
         will back up the local file it overwrites — and this raises
         :class:`SlotSwitchBackupFolderUnusable` when the folder cannot take
-        backups;
-        where nothing will be moved, the folder is neither checked nor
-        created. The first backup that fails stops the loop, and only the
+        backups; where nothing will be moved, the folder is neither checked
+        nor created. The first backup that fails stops the loop, and only the
         files moved before it are untracked; when every backup went through,
-        tracked files with no local file left are untracked too. Mutates
-        *save_state* in memory; the caller owns the write Unit of Work. Runs
-        synchronously — call via ``run_in_executor``.
+        every tracked name the new slot does not provide is untracked too.
+        Mutates *save_state* in memory; the caller owns the write Unit of
+        Work. Runs synchronously — call via ``run_in_executor``.
         """
         local_now = self._rom_info.find_save_files(rom_id, save_answer=save_answer)
         to_move = [lf["filename"] for lf in local_now if lf["filename"] not in target_names]
@@ -360,8 +360,7 @@ class SlotSwitcher:
 
         Raises :class:`SlotSwitchBackupFailed`, naming the error, where nothing
         was moved yet. Once files are in ``.romm-backup`` the answer's message
-        names them, the file that failed and its error;
-        ``SaveService.switch_slot`` logs the answer as a warning.
+        names them, the file that failed and its error.
         """
         self._log_debug(
             f"switch_slot: stopped after backing up {len(set_aside.moved)} file(s): "

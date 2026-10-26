@@ -341,14 +341,14 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "_renderer_above_ceiling",
         "renderer_above_ceiling",
         # SaveBackup (services/saves/save_backup.py) — moves a save file into the
-        # ``.romm-backup`` folder beside it: the folder's creation and a listing
-        # of it, a rename, and for the ordinary backup the removal of the copies
-        # past its retention. Its consumers in services/saves/ hold the object, so the
-        # method names are what they write; the adoption renamer holds the
-        # ordinary backup as a call-shaped SaveBackupFn bound to
+        # ``.romm-backup`` folder beside it: a creation and a listing of that
+        # folder, a rename, and for the ordinary backup the removal of the
+        # copies past its retention. Its consumers in services/saves/ hold the
+        # object, so the method names are what they write; the adoption renamer
+        # holds the ordinary backup as a call-shaped SaveBackupFn bound to
         # ``_back_up_save``, listed beside it. ``prepare_save_backup_folder``
-        # makes that folder ready without moving anything: the link and
-        # containment checks, the folder's creation and its listing.
+        # makes that folder ready without moving anything: a creation and a
+        # listing of that folder.
         "back_up_save_file",
         "back_up_claimed_save_file",
         "_back_up_save",

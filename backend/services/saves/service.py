@@ -414,7 +414,7 @@ class SaveService:
     ) -> dict[str, Any] | SlotSwitchIncomplete | SlotSwitchStopped:
         """Switch the active save slot with immediate state sync.
 
-        A switch whose backups refused or stopped is logged as a warning; its
+        A switch refused or stopped by its backups is logged as a warning; its
         refusal is raised and its answer returned unchanged.
         """
         async with self._rules.hold("switch_slot", update=True, migration=True, prune=True):
