@@ -154,11 +154,12 @@ def _hops_answering(answer: Any) -> AsyncMock:
 
 
 def _admitted(downloads, rom_id: int) -> DownloadControl:
-    """Register the download whose entry a test seeded for *rom_id*, as a start would; answer the control it runs with.
+    """Register the download whose entry a test seeded for *rom_id*; answer the control it runs with.
 
     Only a start admits a download in production; a test that runs the
-    transfer directly admits it here, so the release at the transfer's end
-    gives back what an admission registered.
+    transfer directly admits it here — without the claim a start takes — so
+    the release at the transfer's end gives back what an admission
+    registered.
     """
     control = DownloadControl()
     downloads.state.admit(

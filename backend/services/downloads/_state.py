@@ -59,9 +59,9 @@ class DownloadsStateBox:
     """What each download under way has claimed: its claim, its task, its reservation and its control token.
 
     ``in_progress`` holds every rom id whose download has started and not
-    ended — a paused one is not in it. ``tasks``, ``reserved_bytes`` and ``control_tokens`` hold
-    the registrations of an admitted download; ``semaphore`` bounds how many
-    transfer at once.
+    ended — a paused one is not in it. ``tasks``, ``reserved_bytes`` and
+    ``control_tokens`` hold the registrations of an admitted download;
+    ``semaphore`` bounds how many transfer at once.
     """
 
     in_progress: set[int] = field(default_factory=set)
