@@ -4,6 +4,7 @@ import { createElement, type ComponentProps, type ReactElement } from "react";
 import { SavesTab } from "./SavesTab";
 import * as backend from "../api/backend";
 import { showModal } from "@decky/ui";
+import { toaster } from "../api/host";
 import * as connectionState from "../utils/connectionState";
 import { setRommConnectionState } from "../utils/connectionState";
 import type { SaveStatus, SaveSlotSummary, SaveFileStatus, LastKnownSlots } from "../types";
@@ -888,6 +889,38 @@ describe("SavesTab", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe("new-slot submit — a switch that stopped partway", () => {
+    it("toasts the switch_stopped sentence instead of the inline error and reloads the SAVES tab", async () => {
+      vi.mocked(backend.switchSlot).mockResolvedValue({
+        success: false,
+        reason: "switch_stopped",
+        message: "Could not move pokemon.rtc into .romm-backup.",
+        set_aside: ["pokemon.srm"],
+      });
+      const shown =
+        "The slot wasn't switched: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.";
+      const details: unknown[] = [];
+      const listener = (e: Event) => details.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        const onSlotSwitched = vi.fn();
+        const { container, getByText } = render(<SavesTab {...defaultProps({ onSlotSwitched })} />);
+        fireEvent.click(getByText("+ New Slot"));
+        await act(async () => {
+          await newSlotModalSubmit()?.("named");
+        });
+
+        expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: shown }));
+        expect(container.textContent).not.toContain(shown);
+        expect(container.textContent).not.toContain("Failed to create slot");
+        expect(onSlotSwitched).not.toHaveBeenCalled();
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+      expect(details).toEqual([{ type: "save_sync", rom_id: 1 }]);
     });
   });
 

@@ -661,6 +661,51 @@ describe("SlotPanel", () => {
     });
   });
 
+  describe("a switch that stopped partway", () => {
+    it.each([
+      {
+        answer: {
+          success: false as const,
+          reason: "switch_stopped" as const,
+          message: "Could not move pokemon.rtc into .romm-backup.",
+          set_aside: ["pokemon.srm"],
+        },
+        shown: "The slot wasn't switched: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.",
+      },
+      {
+        answer: {
+          success: false as const,
+          reason: "switch_incomplete" as const,
+          message: "Switched to slot but 1 save(s) failed to download — retry",
+        },
+        shown: "Switched slots, but not every save of the new slot downloaded. Sync this game to download the rest.",
+      },
+    ])("toasts its own sentence for $answer.reason and reloads the SAVES tab", async ({ answer, shown }) => {
+      vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+      vi.mocked(backend.switchSlot).mockResolvedValue(answer);
+      const details: unknown[] = [];
+      const listener = (e: Event) => details.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        const onSlotSwitched = vi.fn();
+        const { container, getByText } = render(<SlotPanel {...defaultProps({ onSlotSwitched })} />);
+        fireEvent.click(container.querySelector("button")!);
+        await flushAsync();
+        fireEvent.click(getByText("Activate Slot"));
+        await flushAsync();
+        await flushAsync();
+
+        expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: shown }));
+        expect(container.textContent).not.toContain(shown);
+        expect(container.textContent).not.toContain("Failed to switch slot");
+        expect(onSlotSwitched).not.toHaveBeenCalled();
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+      expect(details).toEqual([{ type: "save_sync", rom_id: defaultProps().romId }]);
+    });
+  });
+
   describe("handleDelete", () => {
     it("toasts the failure reason and skips the confirm modal when getSlotDeleteInfo returns !success", async () => {
       vi.mocked(backend.getSlotSaves).mockResolvedValue({

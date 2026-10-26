@@ -400,3 +400,84 @@ describe("executeSlotDelete", () => {
     );
   });
 });
+
+describe("executeSlotSwitch on a switch that stopped partway", () => {
+  function listenForDataChanges(): { details: unknown[]; stop: () => void } {
+    const details: unknown[] = [];
+    const listener = (e: Event) => details.push((e as CustomEvent).detail);
+    globalThis.addEventListener("romm_data_changed", listener);
+    return { details, stop: () => globalThis.removeEventListener("romm_data_changed", listener) };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(["activate", "create"] as const)(
+    "words a switch_stopped answer with the saves set aside and reloads the SAVES tab ($0)",
+    async (purpose) => {
+      vi.mocked(backend.switchSlot).mockResolvedValueOnce({
+        success: false,
+        reason: "switch_stopped",
+        message: "Could not move pokemon.rtc into .romm-backup.",
+        set_aside: ["pokemon.srm"],
+      });
+      const events = listenForDataChanges();
+      try {
+        await expect(executeSlotSwitch(7, "main", purpose)).resolves.toEqual({
+          ok: false,
+          reason: "switch_stopped",
+          message:
+            "The slot wasn't switched: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.",
+          partial: true,
+        });
+      } finally {
+        events.stop();
+      }
+      expect(events.details).toEqual([{ type: "save_sync", rom_id: 7 }]);
+    },
+  );
+
+  it.each(["activate", "create"] as const)(
+    "words a switch_incomplete answer as a switch and reloads the SAVES tab ($0)",
+    async (purpose) => {
+      vi.mocked(backend.switchSlot).mockResolvedValueOnce({
+        success: false,
+        reason: "switch_incomplete",
+        message: "Switched to slot but 1 save(s) failed to download — retry",
+      });
+      const events = listenForDataChanges();
+      try {
+        await expect(executeSlotSwitch(7, "main", purpose)).resolves.toEqual({
+          ok: false,
+          reason: "switch_incomplete",
+          message:
+            "Switched slots, but not every save of the new slot downloaded. Sync this game to download the rest.",
+          partial: true,
+        });
+      } finally {
+        events.stop();
+      }
+      expect(events.details).toEqual([{ type: "save_sync", rom_id: 7 }]);
+    },
+  );
+
+  it("reloads nothing for a switch that refused with nothing moved", async () => {
+    vi.mocked(backend.switchSlot).mockResolvedValueOnce({
+      success: false,
+      reason: "backup_failed",
+      message: "Could not move pokemon.srm into .romm-backup (denied). Nothing was moved.",
+    });
+    const events = listenForDataChanges();
+    try {
+      await expect(executeSlotSwitch(7, "main", "activate")).resolves.toEqual({
+        ok: false,
+        reason: "backup_failed",
+        message: "Can't switch — a save couldn't be moved to .romm-backup. Nothing was moved.",
+      });
+    } finally {
+      events.stop();
+    }
+    expect(events.details).toEqual([]);
+  });
+});

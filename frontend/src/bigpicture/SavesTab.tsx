@@ -20,6 +20,7 @@ import { ConnectingIndicator } from "./saves/ConnectingIndicator";
 import { renderSaveFileRow } from "./saves/SaveFileRow";
 import { useCopyToSlot } from "./saves/useCopyToSlot";
 import { detach } from "../utils/detach";
+import { showToast } from "../utils/toast";
 import { announceSaveSync } from "../utils/saveSyncEvents";
 import { strandedVersionNotice } from "../utils/saveSlotWording";
 import { executeSlotSwitch, findStrandedVersion, type StrandedVersion } from "../utils/saveSlotFlow";
@@ -173,6 +174,12 @@ export const SavesTab: FC<SavesTabProps> = ({
             const outcome = await executeSlotSwitch(romId, name, "create");
             if (outcome.ok) {
               onSlotSwitched(name, outcome.saveStatus);
+              return;
+            }
+            if (outcome.partial) {
+              // As in a slot panel: the reload a partial answer starts would
+              // leave an inline error beside a tab that has moved on.
+              showToast(outcome.message);
               return;
             }
             if (outcome.reason !== null) {

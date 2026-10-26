@@ -17,6 +17,7 @@ import {
 import { reportServerReachable } from "./connectionState";
 import { detach } from "./detach";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
+import { announceSaveSync } from "./saveSyncEvents";
 import { showToast } from "./toast";
 import { withTimeout } from "./withTimeout";
 import {
@@ -25,6 +26,7 @@ import {
   SLOT_DELETE_INFO_ERROR_MESSAGE,
   SWITCH_SLOT_ERROR_MESSAGE,
   createSlotFailureMessage,
+  partialSlotSwitchMessage,
   slotDeletedMessage,
   switchSlotFailureMessage,
 } from "./saveSlotWording";
@@ -71,14 +73,19 @@ export async function findStrandedVersion(appId: number, isCancelled: () => bool
 /** Whether the switch activates an existing slot or creates a new one; it picks the failure sentences. */
 type SlotSwitchPurpose = "activate" | "create";
 
-/** `reason` is the failure answer's, and `null` when the call threw. */
+/**
+ * `reason` is the failure answer's, and `null` when the call threw. `partial`
+ * marks a switch that stopped partway after changing what the SAVES tab shows.
+ */
 type SlotSwitchOutcome =
-  { ok: true; saveStatus: SaveStatus } | { ok: false; reason: WireReason | null; message: string };
+  { ok: true; saveStatus: SaveStatus } | { ok: false; reason: WireReason | null; message: string; partial?: true };
 
 /**
  * Switch `romId` into `slot`, telling the connection store what the answer
- * showed about RomM's reachability. Never throws: a throw is logged and comes
- * back as `{ ok: false, reason: null }`.
+ * showed about RomM's reachability. A switch that stopped partway also
+ * announces the ROM's save sync, so the SAVES tab reads back the slot and the
+ * files the backend saved. Never throws: a throw is logged and comes back as
+ * `{ ok: false, reason: null }`.
  */
 export async function executeSlotSwitch(
   romId: number,
@@ -93,6 +100,11 @@ export async function executeSlotSwitch(
     }
     if (result.reason === "server_unreachable") {
       reportServerReachable(false);
+    }
+    const partial = partialSlotSwitchMessage(result.reason, result.set_aside);
+    if (partial !== null) {
+      announceSaveSync(romId);
+      return { ok: false, reason: result.reason, message: partial, partial: true };
     }
     const message =
       purpose === "create"
