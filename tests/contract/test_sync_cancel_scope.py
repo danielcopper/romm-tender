@@ -21,6 +21,10 @@ def _orchestrator(harness):
     return harness.app.services.sync_service._orchestrator
 
 
+def _preview(harness):
+    return harness.app.services.sync_service._preview
+
+
 def _dispatcher(harness):
     return harness.app.services.sync_service._chunk_dispatcher
 
@@ -181,9 +185,9 @@ async def test_preview_cancel_after_unit_loop_returns_cancelled(harness):
     }
     harness.settings["enabled_platforms"] = {"1": True}
 
-    orch = _orchestrator(harness)
+    preview = _preview(harness)
     box = harness.app.services.sync_service._box
-    orig_fetch = orch._fetch_preview_unit
+    orig_fetch = preview._fetch_preview_unit
 
     async def fetch_then_cancel(unit, all_roms, platform_rom_ids, synced_rom_ids, collection_memberships, **kwargs):
         await orig_fetch(unit, all_roms, platform_rom_ids, synced_rom_ids, collection_memberships, **kwargs)
@@ -191,7 +195,7 @@ async def test_preview_cancel_after_unit_loop_returns_cancelled(harness):
         # checkpoint already passed — only the post-loop re-check can catch it.
         box.request_cancel()
 
-    orch._fetch_preview_unit = fetch_then_cancel
+    preview._fetch_preview_unit = fetch_then_cancel
 
     result = await harness.endpoints.sync_preview()
     assert result == {"success": False, "reason": "cancelled", "message": "Sync cancelled"}

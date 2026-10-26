@@ -5,7 +5,7 @@ acknowledgement against the heartbeat clock, commit it through the reporter,
 and decide what becomes of a chunk whose acknowledgement never comes. That loop
 is the whole module: *what* to apply is settled before it — the fetch, the
 group collapse and the delta are
-:class:`~services.library.sync_orchestrator.SyncOrchestrator`'s — and what the
+:class:`~services.library.unit_apply.UnitApplier`'s — and what the
 run makes of the outcome is settled after it.
 
 Nothing here opens a transaction or touches the outside world on its own:
@@ -18,12 +18,12 @@ started doing something other than dispatching.
 **The run's lifecycle stays with the orchestrator.** A chunk is a step inside a
 run, never its beginning or its end: this module may *request* a cancel (a
 heartbeat timeout does, so the loop above it stops), but ``try_begin_run`` and
-``finish_run`` are the orchestrator's alone.
+``finish_run`` are the orchestrator's, and the preview's for its own run, alone.
 
 The per-platform completion stamp is built here, on a platform unit's final
 chunk, so "platform fully synced" ⟺ "stamp exists" is atomic on a crash. Its
 other half — the DELETE that invalidates the stamp the moment a fresh apply
-starts — is taken by ``SyncOrchestrator._sync_one_unit``
+starts — is taken by ``UnitApplier.apply_unit``
 (``_clear_platform_stamp_io``); *where in the pipeline* that write falls is a
 property of its call site, and the argument for the ordering lives there in
 full.
@@ -48,7 +48,6 @@ if TYPE_CHECKING:
 
     from domain.rom import DeliveryRoute
     from domain.work_unit import WorkUnit
-    from lib.late_binding import LateBinding
     from services.library._state import LibrarySyncStateBox
     from services.library.reporter import SyncReporter
     from services.library.session_budget import SessionBudgetMonitor
@@ -82,10 +81,7 @@ class ChunkDispatcherConfig:
     :class:`LibrarySyncStateBox` carrying the per-chunk coordination state, the
     :class:`SessionBudgetMonitor` the loop asks its two budget questions of at
     each chunk boundary, the reporter every commit runs through, and the
-    placeholder icon each frame names for the shortcuts it mints. The
-    ``reporter`` field is a :class:`LateBinding` because :class:`LibraryService`
-    constructs this dispatcher before the reporter exists; the façade plugs it in
-    via ``set()`` once the reporter is built.
+    placeholder icon each frame names for the shortcuts it mints.
 
     What is absent is the contract: no Unit-of-Work factory (the dispatcher
     opens no transaction), no event loop (it offloads nothing itself; the
@@ -99,7 +95,7 @@ class ChunkDispatcherConfig:
     clock: Clock
     sleeper: Sleeper
     sync_state_box: LibrarySyncStateBox
-    reporter: LateBinding[SyncReporter]
+    reporter: SyncReporter
     session_budget: SessionBudgetMonitor
     icon_placeholder_path: IconPlaceholderPathFn
 
@@ -309,7 +305,7 @@ class ChunkDispatcher:
             # source of ``metadatum`` — so each committed chunk is a crash-safe
             # checkpoint. The final-chunk ``platform_stamp`` / ``collection_stamp``
             # (whichever the unit type produces) rides the same UoW.
-            await self._reporter.get().commit_unit_results(
+            await self._reporter.commit_unit_results(
                 applied,
                 chunk_rows,
                 platform_stamp=platform_stamp,

@@ -6,8 +6,11 @@ collection metadata, sync preview/apply/cancel, reporting, the
 threads through every sub-service. Implementation lives in the
 sub-service modules: :class:`LibraryFetcher` for the listings, the work
 queue and a platform unit's ROMs, :class:`CollectionFetcher` for a collection
-unit's ROMs, :class:`SyncOrchestrator` for the preview/apply
-lifecycle and safety heartbeat, :class:`SyncReporter` for post-apply
+unit's ROMs, :class:`SyncOrchestrator` for a run's lifecycle, control
+and safety heartbeat, its unit loop and its finalize, :class:`UnitApplier` for
+one unit's apply, :class:`SyncPreview` for the preview and its staged snapshot,
+:class:`SyncProgress` for the ``sync_progress`` frames and the status read,
+:class:`SyncReporter` for post-apply
 finalisation and the ``roms``-derived queries,
 :class:`SessionBudgetMonitor` for Steam's renderer-heap budget,
 :class:`ShortcutLaunchResolver` for each ROM's launch facts,
@@ -24,7 +27,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from lib.late_binding import LateBinding
 from services.library._state import CollectionMembership, LibrarySyncStateBox
 from services.library.chunk_dispatcher import ChunkDispatcher, ChunkDispatcherConfig
 from services.library.collection_fetcher import CollectionFetcher, CollectionFetcherConfig
@@ -35,7 +37,10 @@ from services.library.reporter import SyncReporter, SyncReporterConfig
 from services.library.session_budget import SessionBudgetMonitor, SessionBudgetMonitorConfig
 from services.library.shortcut_launch_resolver import ShortcutLaunchResolver, ShortcutLaunchResolverConfig
 from services.library.sync_orchestrator import SyncOrchestrator, SyncOrchestratorConfig
+from services.library.sync_preview import SyncPreview, SyncPreviewConfig
+from services.library.sync_progress import SyncProgress, SyncProgressConfig
 from services.library.sync_run_recorder import SyncRunRecorder, SyncRunRecorderConfig
+from services.library.unit_apply import UnitApplier, UnitApplierConfig
 
 if TYPE_CHECKING:
     import asyncio
@@ -84,7 +89,8 @@ class LibraryServiceConfig:
     exhausted. ``conflict_rules`` are what a library use case checks at
     its entry, under its endpoint's name, and what the ``sync_stale`` /
     ``sync_complete`` events take their leases through. The ``artwork_job`` is handed
-    to the orchestrator and, as its placeholder path, to the chunk dispatcher.
+    to the orchestrator and the preview and, as its placeholder path, to the
+    chunk dispatcher.
     """
 
     romm_api: RommLibraryApi
@@ -115,8 +121,12 @@ class LibraryService:
 
     Composes :class:`LibraryFetcher` (platform/collection roundtrips +
     metadata-cache stamping), :class:`CollectionFetcher` (a collection unit's
-    ROMs), :class:`SyncOrchestrator` (preview/apply lifecycle
-    + safety heartbeat), :class:`SyncReporter` (post-apply finalisation + the
+    ROMs), :class:`SyncOrchestrator` (a run's lifecycle and control + safety
+    heartbeat, its unit loop and its finalize), :class:`UnitApplier` (one unit's
+    apply, from its fetch to its last chunk), :class:`SyncPreview` (the
+    read-only preview, its staged snapshot and its cancel), :class:`SyncProgress`
+    (the ``sync_progress`` frames and the status read), :class:`SyncReporter`
+    (post-apply finalisation + the
     ``roms``-derived queries), :class:`SessionBudgetMonitor` (Steam's
     renderer-heap budget), :class:`ShortcutLaunchResolver` (each ROM's installed
     path + active emulator), :class:`ChunkDispatcher` (one unit's apply, emitted
@@ -142,15 +152,20 @@ class LibraryService:
         # Sub-service: LocalLibraryReader — the fetcher's inward pair, reading
         # the local database where the fetcher reads RomM. Constructed first:
         # the fetcher holds it for the collections listing's reachable set, and
-        # the orchestrator holds it and offloads every other read through its
-        # own executor.
+        # the preview, the unit applier and the orchestrator hold it and offload
+        # every other read through their own executors.
         self._local_library_reader = LocalLibraryReader(config=LocalLibraryReaderConfig(uow_factory=config.uow_factory))
 
-        # Sub-service: fetcher. Constructed before the orchestrator, which
-        # holds a reference to it for the per-unit fetch pipeline. The
-        # progress-emit proxy late-binds to ``self._orchestrator`` so it
-        # can be threaded into the fetcher's config before the
-        # orchestrator exists.
+        # Sub-service: progress — the run's ``sync_progress`` frames. Constructed
+        # before every part that narrates a run, each of which is handed its
+        # ``emit_progress``.
+        self._progress = SyncProgress(
+            config=SyncProgressConfig(emit=config.emit, logger=config.logger, sync_state_box=self._box)
+        )
+
+        # Sub-service: fetcher — the listings, the work queue and a platform
+        # unit's ROMs. Constructed before the preview, the unit applier and the
+        # orchestrator, which hold it.
         self._fetcher = LibraryFetcher(
             config=LibraryFetcherConfig(
                 romm_api=config.romm_api,
@@ -161,14 +176,14 @@ class LibraryService:
                 log_debug=config.log_debug,
                 uow_factory=config.uow_factory,
                 sync_state_box=self._box,
-                emit_progress=self._emit_progress_proxy,
+                emit_progress=self._progress.emit_progress,
                 local_library_reader=self._local_library_reader,
             )
         )
 
         # Sub-service: CollectionFetcher — a collection unit's skip, members and
         # walk. Built beside the fetcher, which queues the collection units it
-        # fetches, and held by the orchestrator.
+        # fetches, and held by the preview and the unit applier.
         self._collection_fetcher = CollectionFetcher(
             config=CollectionFetcherConfig(
                 romm_api=config.romm_api,
@@ -176,14 +191,15 @@ class LibraryService:
                 logger=config.logger,
                 uow_factory=config.uow_factory,
                 sync_state_box=self._box,
-                emit_progress=self._emit_progress_proxy,
+                emit_progress=self._progress.emit_progress,
             )
         )
 
         # Sub-service: ShortcutLaunchResolver — resolves, per ROM, which file
         # is launched and which program runs it. Constructed before the
-        # orchestrator, which holds it and resolves every bake's launch facts
-        # through it.
+        # preview and the unit applier, which resolve every bake's launch facts
+        # through it, and the orchestrator, which takes a run's one reading of
+        # the emulator sources from it.
         self._shortcut_launch_resolver = ShortcutLaunchResolver(
             config=ShortcutLaunchResolverConfig(
                 uow_factory=config.uow_factory,
@@ -193,10 +209,10 @@ class LibraryService:
             )
         )
 
-        # Sub-service: session-budget monitor. Constructed before both holders:
-        # the chunk dispatcher asks it at every chunk boundary, the orchestrator
-        # for the preview prognosis, the run-start baseline and the terminal
-        # memory delta.
+        # Sub-service: session-budget monitor. Constructed before its holders:
+        # the chunk dispatcher asks it at every chunk boundary, the preview for
+        # its prognosis, the orchestrator for the run-start baseline and the
+        # terminal memory delta.
         self._session_budget = SessionBudgetMonitor(
             config=SessionBudgetMonitorConfig(
                 loop=config.loop,
@@ -207,17 +223,29 @@ class LibraryService:
             )
         )
 
-        # The orchestrator dispatches the per-unit pipeline's finalize
-        # step (sync_collections + sync_complete) through the reporter, and
-        # the chunk dispatcher commits every chunk through it, but the
-        # reporter doesn't exist yet at this point in __init__. Thread the
-        # forward reference through a LateBinding rather than writing to a
-        # sub-service private after the fact.
-        reporter_binding: LateBinding[SyncReporter] = LateBinding("reporter")
+        # Sub-service: reporter — post-apply finalisation and the
+        # ``roms``-derived queries. Constructed before the chunk dispatcher,
+        # which commits every chunk through it, and the orchestrator, which
+        # finalises the run's collections and emits ``sync_complete`` through it.
+        self._reporter = SyncReporter(
+            config=SyncReporterConfig(
+                steam_config=config.steam_config,
+                settings=config.settings,
+                loop=config.loop,
+                logger=config.logger,
+                emit=config.emit,
+                clock=config.clock,
+                uow_factory=config.uow_factory,
+                sync_state_box=self._box,
+                emit_progress=self._progress.emit_progress,
+                artwork=config.artwork,
+                conflict_rules=config.conflict_rules,
+            )
+        )
 
         # Sub-service: chunk dispatcher — one work unit's apply, emitted to the
-        # frontend and committed a chunk at a time. Constructed before the
-        # orchestrator, which holds it and hands it each unit's built delta.
+        # frontend and committed a chunk at a time. Constructed before the unit
+        # applier, which holds it and hands it each unit's built delta.
         self._chunk_dispatcher = ChunkDispatcher(
             config=ChunkDispatcherConfig(
                 logger=config.logger,
@@ -225,23 +253,24 @@ class LibraryService:
                 clock=config.clock,
                 sleeper=config.sleeper,
                 sync_state_box=self._box,
-                reporter=reporter_binding,
+                reporter=self._reporter,
                 session_budget=self._session_budget,
                 icon_placeholder_path=config.artwork_job.placeholder_path,
             )
         )
 
         # Sub-service: cover preparer — the apply path's covers, bound to this
-        # run's progress and cancel signals. Constructed before the orchestrator,
-        # which asks it for each unit's covers before the delta is handed to the
-        # dispatcher. It is one of the two modules the ``artwork`` seam is
-        # confined to; the reporter below is the other, for commit-time
+        # run's progress and cancel signals. Constructed before the unit
+        # applier, which asks it for each unit's covers before the delta is
+        # handed to the dispatcher, and the preview, which counts the cover-only
+        # work through it. It is one of the two modules the ``artwork`` seam is
+        # confined to; the reporter above is the other, for commit-time
         # cover-path finalisation.
         self._cover_preparer = CoverPreparer(
             config=CoverPreparerConfig(
                 artwork=config.artwork,
                 sync_state_box=self._box,
-                emit_progress=self._emit_progress_proxy,
+                emit_progress=self._progress.emit_progress,
             )
         )
 
@@ -255,56 +284,70 @@ class LibraryService:
             )
         )
 
-        self._orchestrator = SyncOrchestrator(
-            config=SyncOrchestratorConfig(
+        # Sub-service: unit applier — one work unit's apply, from its fetch to
+        # its last chunk. Constructed before the orchestrator, which hands it
+        # each unit of a run.
+        self._unit_applier = UnitApplier(
+            config=UnitApplierConfig(
                 settings=config.settings,
                 loop=config.loop,
                 logger=config.logger,
                 launcher_exe=config.launcher_exe,
-                emit=config.emit,
                 clock=config.clock,
-                uuid_gen=config.uuid_gen,
                 uow_factory=config.uow_factory,
                 sync_state_box=self._box,
                 fetcher=self._fetcher,
                 collection_fetcher=self._collection_fetcher,
-                reporter=reporter_binding,
+                shortcut_launch_resolver=self._shortcut_launch_resolver,
+                local_library_reader=self._local_library_reader,
+                cover_preparer=self._cover_preparer,
+                chunk_dispatcher=self._chunk_dispatcher,
+                emit_progress=self._progress.emit_progress,
+            )
+        )
+
+        # Sub-service: preview — the read-only preview, its staged snapshot and
+        # its cancel.
+        self._preview = SyncPreview(
+            config=SyncPreviewConfig(
+                settings=config.settings,
+                loop=config.loop,
+                logger=config.logger,
+                launcher_exe=config.launcher_exe,
+                clock=config.clock,
+                uuid_gen=config.uuid_gen,
+                sync_state_box=self._box,
+                fetcher=self._fetcher,
+                collection_fetcher=self._collection_fetcher,
                 shortcut_launch_resolver=self._shortcut_launch_resolver,
                 local_library_reader=self._local_library_reader,
                 session_budget=self._session_budget,
-                chunk_dispatcher=self._chunk_dispatcher,
                 cover_preparer=self._cover_preparer,
-                sync_run_recorder=self._sync_run_recorder,
-                conflict_rules=config.conflict_rules,
+                progress=self._progress,
                 artwork_job=config.artwork_job,
             )
         )
 
-        self._reporter = SyncReporter(
-            config=SyncReporterConfig(
-                steam_config=config.steam_config,
-                settings=config.settings,
+        self._orchestrator = SyncOrchestrator(
+            config=SyncOrchestratorConfig(
                 loop=config.loop,
                 logger=config.logger,
                 emit=config.emit,
                 clock=config.clock,
-                uow_factory=config.uow_factory,
+                uuid_gen=config.uuid_gen,
                 sync_state_box=self._box,
-                emit_progress=self._emit_progress_proxy,
-                artwork=config.artwork,
+                fetcher=self._fetcher,
+                unit_applier=self._unit_applier,
+                reporter=self._reporter,
+                shortcut_launch_resolver=self._shortcut_launch_resolver,
+                local_library_reader=self._local_library_reader,
+                session_budget=self._session_budget,
+                sync_run_recorder=self._sync_run_recorder,
                 conflict_rules=config.conflict_rules,
+                artwork_job=config.artwork_job,
+                progress=self._progress,
             )
         )
-        reporter_binding.set(lambda: self._reporter)
-
-    async def _emit_progress_proxy(self, stage, **kwargs):
-        """Late-bound proxy to the orchestrator's emit_progress.
-
-        Threaded into both fetchers' configs at ctor time before
-        ``self._orchestrator`` exists — calls resolve at invocation
-        time, by which point both sub-services are wired.
-        """
-        await self._orchestrator.emit_progress(stage, **kwargs)
 
     # ── Public properties ────────────────────────────────────────
 
@@ -438,20 +481,20 @@ class LibraryService:
     # Preview / apply
     async def sync_preview(self):
         async with self._rules.hold("sync_preview", update=True, migration=True, prune=True):
-            return await self._orchestrator.sync_preview()
+            return await self._preview.sync_preview()
 
     async def sync_apply_delta(self, preview_id):
         async with self._rules.hold("sync_apply_delta", update=True, migration=True, prune=True):
             return await self._orchestrator.sync_apply_delta(preview_id)
 
     def sync_cancel_preview(self):
-        return self._orchestrator.sync_cancel_preview()
+        return self._preview.sync_cancel_preview()
 
     def get_pending_preview(self):
-        return self._orchestrator.get_pending_preview()
+        return self._preview.get_pending_preview()
 
     def get_sync_status(self):
-        return self._orchestrator.get_sync_status()
+        return self._progress.get_sync_status()
 
     async def get_session_budget_status(self):
         return await self._session_budget.get_session_budget_status()

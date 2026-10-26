@@ -2,11 +2,11 @@
 
 The dispatcher is reached through the library façade
 (``library.sync._chunk_dispatcher``) so every test drives the same
-instance the orchestrator holds, over the shared state box the chunk
+instance the unit applier holds, over the shared state box the chunk
 coordination lands on.
 
 Two levels are covered here. The chunk **loop** is driven end-to-end through
-``SyncOrchestrator._sync_one_unit`` against the seeded ``FakeRommApi`` — the
+``UnitApplier.apply_unit`` against the seeded ``FakeRommApi`` — the
 loop's inputs are a whole unit's fetch, collapse and delta, so entering below
 that would mean hand-building them and asserting against a shape rather than
 against what the pipeline produces. What each test then observes is the
@@ -35,7 +35,7 @@ class TestApplyChunking:
     """A unit's apply is split into durable commit chunks (#1025).
 
     Each chunk is emitted → acked → committed on its own, so a mid-unit CEF
-    crash forfeits only the in-flight chunk. These tests drive ``_sync_one_unit``
+    crash forfeits only the in-flight chunk. These tests drive ``apply_unit``
     directly with a shrunk ``_APPLY_CHUNK_SIZE`` so a handful of singleton ROMs
     exercises the multi-chunk loop; the exact partition maths is pinned in
     ``tests/domain/test_sync_chunking.py``.
@@ -74,7 +74,7 @@ class TestApplyChunking:
         library.sync._box.current_sync_id = "run-chunk"
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -125,7 +125,7 @@ class TestApplyChunking:
         library.sync._box.current_sync_id = "run-chunk"
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -162,7 +162,7 @@ class TestApplyChunking:
         library.sync._box.current_sync_id = "run-single"
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -221,7 +221,7 @@ class TestApplyChunking:
         box.current_sync_id = "run-cancel-chunk"
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -281,7 +281,7 @@ class TestApplyChunking:
         box.current_sync_id = "run-inter-chunk"
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -338,7 +338,7 @@ class TestApplyChunking:
         box.current_sync_id = "run-timeout-chunk"
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -465,7 +465,7 @@ class TestWholeUnitStaging:
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -922,7 +922,7 @@ class TestThePlaceholderIcon:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-placeholder"
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,

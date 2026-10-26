@@ -19,17 +19,21 @@ from services.library.fetcher import _SUPPORTED_VIRTUAL_TYPES
 def rebind_loop(library_service, loop):
     """Rebind the event loop on every LibraryService sub-service.
 
-    Five of the façade's sub-services (fetcher, collection fetcher, orchestrator,
-    reporter, session-budget monitor) hold their own ctor-bound ``_loop``. Tests
-    that swap in a mock loop must propagate it to all five so async calls land
-    on the override. ``ShortcutLaunchResolver``, ``LocalLibraryReader``,
-    ``SyncRunRecorder``, ``ChunkDispatcher`` and ``CoverPreparer`` hold none —
-    the first three are synchronous workers their holders offload through
-    *their* loops (the orchestrator's, and for the reader also the fetcher's for
-    the reachable set), and the other two offload nothing themselves.
+    Seven of the façade's sub-services (fetcher, collection fetcher, unit
+    applier, preview, orchestrator, reporter, session-budget monitor) hold their
+    own ctor-bound ``_loop``. Tests that swap in a mock loop must propagate it to
+    all seven so async calls land on the override. ``ShortcutLaunchResolver``,
+    ``LocalLibraryReader``, ``SyncRunRecorder``, ``ChunkDispatcher``,
+    ``CoverPreparer`` and ``SyncProgress`` hold none — the first three are
+    synchronous workers their holders offload through *their* loops (the unit
+    applier's, the preview's and the orchestrator's, and for the reader also the
+    fetcher's for the reachable set), and the other three offload nothing
+    themselves.
     """
     library_service._fetcher._loop = loop
     library_service._collection_fetcher._loop = loop
+    library_service._unit_applier._loop = loop
+    library_service._preview._loop = loop
     library_service._orchestrator._loop = loop
     library_service._reporter._loop = loop
     library_service._session_budget._loop = loop

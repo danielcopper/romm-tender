@@ -1,100 +1,68 @@
-"""Preview / apply / per-unit sync lifecycle and progress emission.
+"""The sync run's lifecycle and control, its loop over the work units, and its finalize.
 
-Owns every async path the user triggers from the QAM that mutates in-flight
-sync state: starting and cancelling syncs, computing a preview (read-only),
-and dispatching the per-unit sync pipeline on apply. Of the heartbeat clock
-this module holds only two of the three stamps — the one taken when a run is
-admitted, and the frontend's ``sync_heartbeat`` route. The stamp that opens a
+Owns every path that starts or stops a run — starting a sync, applying a staged
+preview, cancelling, the heartbeat route, shutdown — and the run itself: the
+plan, the loop that hands each unit to :class:`UnitApplier`, the stale removal
+and the Steam collections at its end, and its terminal status. It is the one
+part of the sync that starts a task. Of the heartbeat clock this module holds
+the stamp taken when a run is admitted (as :class:`SyncPreview` does for a
+preview) and the frontend's ``sync_heartbeat`` route. The stamp that opens a
 chunk's 60-second window, and the wait that measures against it, belong to
 :class:`ChunkDispatcher`, so the window a timeout is judged by starts at a
-chunk's emit rather than at run admission. Progress emission lives here —
-sub-services that need to surface progress receive the orchestrator's
-``emit_progress`` callback through their config. Anything that fetches ROMs
-belongs in :class:`LibraryFetcher`, or in :class:`CollectionFetcher` for a
-collection unit; anything that finalises shortcuts after the apply
-completes belongs in :class:`SyncReporter`; Steam's renderer memory belongs
-in :class:`SessionBudgetMonitor`; a single ROM's launch facts — where its
-file is and what runs it — belong in :class:`ShortcutLaunchResolver`; driving
-one unit's built delta to the frontend and back — emit a chunk, wait for its
-ack, commit it — belongs in :class:`ChunkDispatcher`; a unit's covers — the
-invalidation pass, the download, and the ``cover_path`` stamped onto each
-emitted entry — belong in :class:`CoverPreparer`; the run's own ``SyncRun`` row
-— opened at the plan, closed once by the status that ended the run — belongs in
-:class:`SyncRunRecorder`; reading
-the registry and the completion stamps into the projections these decisions
-are made against belongs in :class:`LocalLibraryReader`. Two of that last group
-are this module's deliberately: the platform stamp's DELETE — a write, and a step
-of the apply pipeline rather than a question a run weighs; its ordering is argued
-at its call site — and the pure component-key stamp, which does no I/O at all.
-**Which** terminal status a stopped run is recorded with belongs here: the priority
-a pause, a heartbeat timeout and the user's Cancel are read in follows from what
-this pipeline observed while it ran. The recorder writes that answer, never picks it. Cached
-``rom_metadata`` is written by the reporter's per-unit commit (the same write
-UoW as the ``roms`` upsert), so preview never persists metadata and an
-interrupted apply leaves only already-committed units' metadata.
+chunk's emit rather than at run admission. One unit's apply belongs to
+:class:`UnitApplier`; the preview, its staged snapshot and its cancel to
+:class:`SyncPreview`; the ``sync_progress`` frames and the status read to
+:class:`SyncProgress`. Anything that fetches ROMs belongs in
+:class:`LibraryFetcher`; anything that finalises shortcuts after the apply
+completes belongs in :class:`SyncReporter`; Steam's renderer memory belongs in
+:class:`SessionBudgetMonitor`; the run's own ``SyncRun`` row — opened at the
+plan, closed once by the status that ended the run — belongs in
+:class:`SyncRunRecorder`; reading the registry and the completion stamps into
+the projections these decisions are made against belongs in
+:class:`LocalLibraryReader`. **Which** terminal status a stopped run is
+recorded with belongs here: the priority a pause, a heartbeat timeout and the
+user's Cancel are read in follows from what this pipeline observed while it
+ran. The recorder writes that answer, never picks it.
 """
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from domain.collection_label import steam_collection_key
-from domain.collection_skip import apply_stamps
 from domain.session_budget import post_run_advisory, session_memory_delta
-from domain.shortcut_data import build_shortcuts_data
-from domain.sibling_group import compute_component_group_keys
-from domain.sibling_resolution import AUTO_REGION
-from domain.sync_diff import (
-    BIND_ROM_ID_KEY,
-    StaleRow,
-    classify_roms,
-    collapse_sibling_groups,
-    compute_collection_diff,
-    compute_platform_collection_diff,
-    count_disabled_platform_removals,
-    group_keys_of,
-    platform_breakdown,
-    rebuilt_rows_filed_as_kept,
-)
+from domain.sync_diff import StaleRow, group_keys_of, rebuilt_rows_filed_as_kept
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
-from services.library._preview_union import collapse_counting_platform_rebinds
-from services.library._stale_rows import preview_group_keys, settle_stale_rows, stale_rows_of, with_kept_platform_names
-from services.library._state import CollectionMembership
+from services.library._stale_rows import settle_stale_rows
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
 if TYPE_CHECKING:
     import logging
 
-    from domain.emulator_sources import SourcesReading
-    from domain.work_unit import WorkUnit
-    from lib.late_binding import LateBinding
-    from services.library._state import LibrarySyncStateBox
-    from services.library.chunk_dispatcher import ChunkDispatcher
-    from services.library.collection_fetcher import CollectionFetcher
-    from services.library.cover_preparer import CoverPreparer
+    from services.library._state import CollectionMembership, LibrarySyncStateBox
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
     from services.library.reporter import SyncReporter
     from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
+    from services.library.sync_progress import SyncProgress
     from services.library.sync_run_recorder import SyncRunRecorder
+    from services.library.unit_apply import UnitApplier
     from services.protocols import (
         Clock,
         ConflictRules,
         EventEmitter,
         ShortcutArtworkJob,
-        UnitOfWorkFactory,
         UuidGen,
     )
 
 
-_SYNC_CANCELLED = "Sync cancelled"
-_SYNC_IN_PROGRESS = "Sync already in progress"
+SYNC_CANCELLED = "Sync cancelled"
+SYNC_IN_PROGRESS = "Sync already in progress"
 # Terminal reason when the run died externally (heartbeat timeout — the
 # frontend crashed or reloaded) rather than by the user's Cancel. Stored in
 # ``sync_runs.error`` via ``mark_interrupted``; the status split lets the UI
@@ -102,81 +70,47 @@ _SYNC_IN_PROGRESS = "Sync already in progress"
 _SYNC_INTERRUPTED = "Sync interrupted (Steam UI stopped responding)"
 
 
-def _collection_membership_key(unit: WorkUnit) -> tuple[str, str]:
-    """The collision-free accumulator key for a collection unit.
-
-    ``(collection_kind, collection_id)`` — the same per-collection identity the
-    #742 ``CollectionSyncState`` stamp keys off — so two collections that share a
-    display NAME never collide in the finalize accumulator. The single builder
-    keeps the real-sync and preview write paths (and the stamp read-back) on one
-    key so they cannot drift (#1503).
-    """
-    return (str(unit.collection_kind), str(unit.id))
-
-
 @dataclass(frozen=True)
 class SyncOrchestratorConfig:
     """Frozen wiring bundle handed to ``SyncOrchestrator.__init__``.
 
-    Holds runtime infrastructure (loop, logger), event emitter, the
-    Clock/UuidGen test seams, the SQLite Unit-of-Work factory
-    (which opens exactly one transaction from this module: the platform
-    stamp's DELETE at a unit's apply start), the launcher path every built
-    shortcut's ``exe`` names, the shared
-    :class:`LibrarySyncStateBox`, the :class:`LibraryFetcher` peer the
-    orchestrator takes the work queue and each platform unit's fetch from, and
-    the :class:`CollectionFetcher` peer it takes each collection unit's from. The ``reporter``
-    field is a :class:`LateBinding` because :class:`LibraryService`
-    constructs the orchestrator before the reporter exists; the façade
-    plugs the reader in via ``set()`` once the reporter is built. The
-    ``shortcut_launch_resolver`` peer answers the two per-ROM questions each
-    shortcut bake needs — the disc-resolved installed path and the active
-    emulator — which preview and the per-unit apply both hand straight to
-    :func:`build_shortcuts_data`. The ``local_library_reader`` peer answers
-    every question the orchestrator asks of this device's own record of the
-    library — the classify baseline, the per-unit bound-row projection, the
-    unstamped-platform count, the resident sibling-group keys, the members the
-    collections listed at their last completed apply, the cached names of the
-    preview's kept platforms, and the stale-row scan — each in its own short
-    read Unit of Work, where the fetcher asks the same kinds of question of
-    RomM. The ``chunk_dispatcher`` peer takes the unit's built delta the rest of
-    the way: it emits each chunk to the frontend, waits out the heartbeat clock
-    for the ack, and commits the chunk through the reporter. The
-    ``session_budget`` seam owns every renderer-heap reading and verdict, which
-    the dispatcher asks at each chunk boundary — whether applying the chunk
-    would exhaust Steam's per-session heap budget, and how much headroom is left
-    for the chunk's additive cover work (#1383); the terminal memory delta this
-    module reports is drawn from the same seam. The ``cover_preparer`` peer
-    holds the apply path's covers, and the reporter holds the same ``artwork``
-    seam for commit-time cover-path finalisation — between them, no
-    ``ArtworkManager`` is owed here. The ``sync_run_recorder`` peer writes the
-    run's ``SyncRun`` row: this module decides which terminal status a stopped
-    run earns, and hands that decision over as a method call. The
-    ``conflict_rules`` are what a ``sync_stale`` event that removes shortcuts
-    takes its lease through. The ``artwork_job`` is asked for a run at every
-    run's end: it stops while a run is in flight.
+    Holds runtime infrastructure (loop, logger), the event emitter the
+    ``sync_plan`` and ``sync_stale`` events go out through, the Clock/UuidGen
+    test seams, the shared :class:`LibrarySyncStateBox`, the
+    :class:`LibraryFetcher` peer the orchestrator takes the work queue from and
+    asks RomM about a stale row through, and the :class:`UnitApplier` each unit
+    is applied by. The ``reporter`` finalises the run's collections and emits
+    ``sync_complete``. The ``shortcut_launch_resolver`` peer is asked for the one
+    reading of the emulator sources a run takes. The ``local_library_reader``
+    peer answers what the run asks of this device's own record of the library —
+    the members the collections listed at their last completed apply, the
+    resident sibling-group keys and the stale-row scan — each in its own short
+    read Unit of Work. The ``session_budget`` seam stamps the run-start baseline
+    and takes the terminal reading the memory delta is drawn from. The
+    ``sync_run_recorder`` peer writes the run's ``SyncRun`` row: this module
+    decides which terminal status a stopped run earns, and hands that decision
+    over as a method call. The ``conflict_rules`` are what a ``sync_stale``
+    event that removes shortcuts takes its lease through. The ``artwork_job`` is
+    asked for a run at every run's end: it stops while a run is in flight. The
+    ``progress`` part emits the run's ``sync_progress`` frames.
     """
 
-    settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    launcher_exe: str
     emit: EventEmitter
     clock: Clock
     uuid_gen: UuidGen
-    uow_factory: UnitOfWorkFactory
     sync_state_box: LibrarySyncStateBox
     fetcher: LibraryFetcher
-    collection_fetcher: CollectionFetcher
-    reporter: LateBinding[SyncReporter]
+    unit_applier: UnitApplier
+    reporter: SyncReporter
     shortcut_launch_resolver: ShortcutLaunchResolver
     local_library_reader: LocalLibraryReader
     session_budget: SessionBudgetMonitor
-    chunk_dispatcher: ChunkDispatcher
-    cover_preparer: CoverPreparer
     sync_run_recorder: SyncRunRecorder
     conflict_rules: ConflictRules
     artwork_job: ShortcutArtworkJob
+    progress: SyncProgress
 
 
 @dataclass(frozen=True)
@@ -198,29 +132,25 @@ class FinalizeOutcome:
 
 
 class SyncOrchestrator:
-    """Preview/apply/full-sync lifecycle with cancellation + heartbeat safety."""
+    """The sync run's lifecycle and control, its unit loop and its finalize, with cancellation + heartbeat safety."""
 
     def __init__(self, *, config: SyncOrchestratorConfig) -> None:
-        self._settings = config.settings
         self._loop = config.loop
         self._logger = config.logger
-        self._launcher_exe = config.launcher_exe
         self._emit = config.emit
         self._clock = config.clock
         self._uuid_gen = config.uuid_gen
-        self._uow_factory = config.uow_factory
         self._sync_state = config.sync_state_box
         self._fetcher = config.fetcher
-        self._collection_fetcher = config.collection_fetcher
+        self._unit_applier = config.unit_applier
         self._reporter = config.reporter
         self._shortcut_launch_resolver = config.shortcut_launch_resolver
         self._local_library_reader = config.local_library_reader
         self._session_budget = config.session_budget
-        self._chunk_dispatcher = config.chunk_dispatcher
-        self._cover_preparer = config.cover_preparer
         self._sync_run_recorder = config.sync_run_recorder
         self._rules = config.conflict_rules
         self._artwork_job = config.artwork_job
+        self._progress = config.progress
         self._tasks = BackgroundTasks(logger=config.logger)
 
     # ── Sync control ─────────────────────────────────────────────
@@ -229,7 +159,7 @@ class SyncOrchestrator:
         box = self._sync_state
         run_id = self._uuid_gen.uuid4()
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
-            raise Refused("sync_in_progress", _SYNC_IN_PROGRESS)
+            raise Refused("sync_in_progress", SYNC_IN_PROGRESS)
         box.sync_last_heartbeat = self._clock.monotonic()
         self._tasks.spawn(self._do_sync_per_unit(), "library sync run")
         return {"success": True, "message": "Sync started"}
@@ -267,335 +197,7 @@ class SyncOrchestrator:
         self._sync_state.request_cancel()
         await self._tasks.shutdown()
 
-    # ── Preview / Apply ──────────────────────────────────────────
-
-    async def sync_preview(self):
-        """Read-only preview: paginate every unit, classify, return the summary.
-
-        Does NOT persist ``rom_metadata`` — the metadata stamp happens in
-        the reporter's per-unit commit, after the frontend acknowledges
-        shortcuts for that unit. Stamping during preview would persist the
-        registry-reconstructed thin ROMs from the per-unit incremental-skip
-        path, which carry no ``metadatum`` (#738).
-
-        Refuses with ``sync_in_progress`` while another run holds the slot, and
-        with ``cancelled`` when the user cancels. Any other failure drops any
-        staged preview, so none stays appliable, ends the progress with an error
-        frame, and reaches the caller.
-        """
-        box = self._sync_state
-        run_id = self._uuid_gen.uuid4()
-        if not box.try_begin_run(run_id, kind=SyncRunKind.PREVIEW):
-            raise Refused("sync_in_progress", _SYNC_IN_PROGRESS)
-        box.sync_last_heartbeat = self._clock.monotonic()
-        try:
-            await self.emit_progress(SyncStage.DISCOVERING, message="Fetching platforms...")
-            work_queue = await self._fetcher.build_work_queue()
-
-            all_roms: list[dict[str, Any]] = []
-            platform_rom_ids: set[int] = set()
-            collection_memberships: dict[tuple[str, str], CollectionMembership] = {}
-            synced_rom_ids: set[int] = set()
-            skipped_rom_ids: set[int] = set()
-            full_fetched_platforms: dict[str, list[dict[str, Any]]] = {}
-            restamp_collections: set[tuple[str, str]] = set()
-
-            total_units = len(work_queue)
-            for unit_index, unit in enumerate(work_queue, 1):
-                if box.is_cancelling():
-                    raise SyncCancelled(_SYNC_CANCELLED)
-                await self.emit_progress(
-                    SyncStage.FETCHING,
-                    current=len(all_roms),
-                    message=f"Fetching {unit.name}... ({unit_index}/{total_units})",
-                    step=unit_index,
-                    total_steps=total_units,
-                )
-                await self._fetch_preview_unit(
-                    unit,
-                    all_roms,
-                    platform_rom_ids,
-                    synced_rom_ids,
-                    collection_memberships,
-                    skipped_rom_ids=skipped_rom_ids,
-                    full_fetched_platforms=full_fetched_platforms,
-                    restamp_collections=restamp_collections,
-                    progress_step=unit_index,
-                    progress_total_steps=total_units,
-                )
-
-            sources = await self._loop.run_in_executor(None, self._shortcut_launch_resolver.do_read_sources)
-            installed_paths = await self._loop.run_in_executor(
-                None, self._shortcut_launch_resolver.do_scan_installed_paths, sources
-            )
-            core_overrides = await self._loop.run_in_executor(
-                None, self._shortcut_launch_resolver.do_build_core_overrides, all_roms, sources
-            )
-            # Stamp each fresh ROM's component sibling-group key before the build so
-            # the collapse below groups games, not dumps. The preview union is a
-            # complete view of every enabled platform's groups; the DB's persisted
-            # keys seed a member edging into a resident sibling on a skipped platform.
-            resident_keys = await self._loop.run_in_executor(
-                None, self._local_library_reader.do_read_resident_group_keys
-            )
-            self._stamp_component_group_keys(all_roms, resident_keys)
-            shortcuts_data = build_shortcuts_data(all_roms, self._launcher_exe, installed_paths, core_overrides)
-            platform_name_set = {u.name for u in work_queue if u.type == "platform"}
-            slug_to_name = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
-            registry, last_synced_platforms, last_synced_collections = await self._loop.run_in_executor(
-                None, self._local_library_reader.do_read_preview_baseline, slug_to_name
-            )
-            # Enabled platforms whose skip only a fresh stamp can restore: no
-            # stamp (#1416 — a late-ack-recovered platform is complete but
-            # unstamped), or a full fetch here whose answer the stamp does not
-            # match (#743). Without an apply the gate full-fetches them forever.
-            # Counted here (side-effect-free read) so the preview can still offer
-            # Apply on an otherwise-empty delta — the apply's 0-delta empty final
-            # chunk re-writes the stamp and records a fresh SyncRun.
-            restamp_platform_count = await self._loop.run_in_executor(
-                None,
-                self._local_library_reader.do_count_platforms_to_restamp,
-                set(slug_to_name),
-                full_fetched_platforms,
-            )
-            # Collapse to one entry per sibling group (ADR-0021) so the preview
-            # counts games, not individual dumps: a multi-version game becomes one
-            # shortcut and its unbound siblings stop reading as perpetual "new".
-            # The view is chosen per group as the apply's units have it, so the
-            # rebinds the view decides are counted as the apply makes them (the
-            # #1292 bug class). A group is per-platform: one a platform unit
-            # delivers a member of is complete, the view that unit collapses with
-            # (a unit skipped as unchanged collapses nothing, and its groups stay
-            # complete here), and one only collections reach is the partial view a
-            # collection unit has (#2536). A row a collection skip rebuilt in a
-            # group a platform unit delivers is collapsed as that unit has it.
-            whole_groups = {sd.get("sibling_group_key") for sd in shortcuts_data if sd["rom_id"] in platform_rom_ids}
-            emitted, classify_skipped = collapse_counting_platform_rebinds(
-                shortcuts_data,
-                lambda entries: collapse_sibling_groups(
-                    entries,
-                    registry,
-                    set(installed_paths),
-                    complete_group_view=whole_groups,
-                    preferred_region=self._settings.get("preferred_region", AUTO_REGION),
-                ),
-                skipped_rom_ids=skipped_rom_ids,
-                platform_rom_ids=platform_rom_ids,
-            )
-            new, changed, unchanged_ids, stale, _disabled_count = classify_roms(
-                emitted,
-                registry,
-                platform_name_set,
-                skipped_rom_ids=classify_skipped,
-            )
-            collection_listed = await self._loop.run_in_executor(
-                None, self._local_library_reader.do_read_collection_listed_rom_ids
-            )
-            # The marks are discarded: docs/architecture/backend-architecture.md,
-            # "The stale removal keeps a game gone from RomM".
-            removals, kept, _marks = await settle_stale_rows(
-                stale_rows_of(stale, registry),
-                ask_romm=self._fetcher.ask_romm_for_roms,
-                logger=self._logger,
-                read_platform_slugs=set(slug_to_name),
-                listed_platform_slugs=box.run_listed_platform_slugs,
-                collection_listed_rom_ids=collection_listed,
-                synced_group_keys=preview_group_keys(synced_rom_ids, resident_keys, all_roms),
-            )
-            removed_ids = {row.rom_id for row in removals}
-            stale = [rid for rid in stale if rid in removed_ids]
-            rebuilt = {rom["id"]: rom["platform_slug"] for rom in all_roms if rom["id"] in classify_skipped}
-            kept += stale_rows_of(rebuilt_rows_filed_as_kept(rebuilt, set(slug_to_name), platform_rom_ids), registry)
-            platform_names = await with_kept_platform_names(
-                {row.platform_slug for row in [*kept, *removals]} | {sd["platform_slug"] for sd in emitted},
-                box.run_listed_platform_names,
-                read_kept_names=lambda slugs: self._loop.run_in_executor(
-                    None, self._local_library_reader.do_read_kept_platform_names, slugs
-                ),
-            )
-            disabled_count = count_disabled_platform_removals(stale, registry, platform_name_set)
-            # Cover-only work (#1386): count the bound fetched ROMs whose server
-            # cover fingerprint changed and whose cover is not set in Steam, by
-            # the SAME rule the apply-path invalidation pass refreshes by (what
-            # it reads: ArtworkService.count_cover_refreshes). Runs over the
-            # raw union (platform + collection units alike), not the collapsed
-            # delta: covers are per-ROM, cover-blind classify_roms (ADR-0025)
-            # stays untouched, and without this an empty shortcut delta would
-            # short-circuit the apply and strand a changed cover forever.
-            cover_refresh_count = await self._cover_preparer.count_cover_refreshes(all_roms, registry)
-
-            # Post-preview session-budget prognosis (#1383): warn up front when the
-            # planned work would walk the renderer heap past the budget ceiling. The
-            # gate is fail-open, so an unreadable renderer simply yields no warning.
-            #
-            # Taken here rather than after the DONE frame so that nothing awaits
-            # between the cancel checkpoint below and the staging that follows it.
-            pause_likely = await self._session_budget.predict_pause_likely(
-                new_items=len(new), changed_items=len(changed)
-            )
-
-            # Final cancel checkpoint: a cancel can land after the unit loop's
-            # last per-unit check but before the preview is staged. Re-check
-            # here so a late cancel routes into the SyncCancelled branch (which
-            # leaves ``pending_delta`` None) instead of staging a delta the
-            # user already cancelled (#1202).
-            if box.is_cancelling():
-                raise SyncCancelled(_SYNC_CANCELLED)
-
-            preview_id = self._uuid_gen.uuid4()
-            created_at = self._clock.time()
-            platforms_count = sum(1 for u in work_queue if u.type == "platform")
-            collections_count = sum(1 for u in work_queue if u.type == "collection")
-            naming_mode = self._settings.get("collection_naming_mode", "merge")
-
-            answer = {
-                "success": True,
-                "pause_likely": pause_likely,
-                "summary": {
-                    "new_count": len(new),
-                    "changed_count": len(changed),
-                    "unchanged_count": len(unchanged_ids),
-                    "remove_count": len(stale),
-                    "disabled_platform_remove_count": disabled_count,
-                    # Bound ROMs whose server-side cover changed (#1386) — work the
-                    # apply run performs even when the shortcut delta is empty, so
-                    # the frontend must offer Apply on a cover-only preview instead
-                    # of short-circuiting on "no changes". Additive: old consumers
-                    # ignore it.
-                    "cover_refresh_count": cover_refresh_count,
-                    # Enabled platforms whose skip only a fresh stamp can restore
-                    # (#1416, #743), and the collections the gate refused for a
-                    # reason a fresh stamp settles whose apply will stamp them
-                    # (#2477 D3). Each one's apply is a 0-delta empty final chunk
-                    # that re-writes the stamp and records a fresh SyncRun, so a
-                    # restamp-only preview must still offer Apply instead of
-                    # short-circuiting on "no changes". Additive: old consumers
-                    # ignore them.
-                    "restamp_platform_count": restamp_platform_count,
-                    "restamp_collection_count": len(restamp_collections),
-                    # Scope of the run (#29): how many platforms / collections this
-                    # sync spans, shown as an always-on informational line
-                    # independent of the change diffs.
-                    "sync_platform_count": platforms_count,
-                    "sync_collection_count": collections_count,
-                    "collection_diff": compute_collection_diff(
-                        {
-                            steam_collection_key(m.name, m.kind, m.virtual_type, naming_mode)
-                            for m in collection_memberships.values()
-                        },
-                        last_synced_collections,
-                    ),
-                    # Per-platform rows behind the library-wide counts above,
-                    # regrouped from the same three buckets and the same
-                    # registry — no further read, so the preview stays
-                    # side-effect-free — and named as the diff below files.
-                    "platform_breakdown": platform_breakdown(
-                        new, changed, stale, registry, slug_to_name, platform_names
-                    ),
-                    "platform_collection_diff": compute_platform_collection_diff(
-                        emitted,
-                        platform_rom_ids,
-                        last_synced_platforms,
-                        self._settings.get("collection_create_platform_groups", False),
-                        platform_names,
-                        kept_platform_slugs={row.platform_slug for row in kept},
-                    ),
-                },
-                "new_names": [s["name"] for s in new[:10]],
-                "changed_names": [s["name"] for s in changed[:10]],
-                "preview_id": preview_id,
-                # Absolute wall-clock deadline (epoch seconds) the backend stops
-                # accepting this snapshot at. Absolute rather than a remaining-
-                # seconds count because the panel runs on the same machine and the
-                # same clock, and a deadline survives the Deck suspending where a
-                # locally counted-down number does not.
-                "expires_at": box.preview_deadline(created_at),
-            }
-            box.stage_preview(
-                preview_id=preview_id,
-                created_at=created_at,
-                answer=answer,
-            )
-
-            await self.emit_progress(SyncStage.DONE, message="Preview ready", running=False)
-
-            return answer
-        except SyncCancelled as e:
-            # A user's cancel is the use case's own outcome, so it leaves as the
-            # ``cancelled`` refusal: ``SyncCancelled`` itself would reach the
-            # panel as a transport error. The clause order is what routes it
-            # here — SyncCancelled is an Exception, so it must stay above the
-            # generic ``except Exception`` below.
-            box.discard_preview()
-            await self._finish_sync(_SYNC_CANCELLED)
-            raise Refused("cancelled", _SYNC_CANCELLED) from e
-        except Exception as e:
-            box.discard_preview()
-            _, message = classify_error(e)
-            await self.emit_progress(SyncStage.ERROR, message=message, running=False)
-            raise
-        finally:
-            box.finish_run(run_id)
-            self._artwork_job.request_run()
-
-    async def _fetch_preview_unit(
-        self,
-        unit: WorkUnit,
-        all_roms: list[dict[str, Any]],
-        platform_rom_ids: set[int],
-        synced_rom_ids: set[int],
-        collection_memberships: dict[tuple[str, str], CollectionMembership],
-        *,
-        skipped_rom_ids: set[int],
-        full_fetched_platforms: dict[str, list[dict[str, Any]]],
-        restamp_collections: set[tuple[str, str]],
-        progress_step: int = 0,
-        progress_total_steps: int = 0,
-    ) -> None:
-        """Fetch one work unit's ROMs and fold them into the preview accumulators.
-
-        Platform units add every ROM to ``platform_rom_ids`` and
-        ``synced_rom_ids``; collection units record their full membership
-        under a collision-free ``(collection_kind, collection_id)`` key (with the
-        name in the value), so same-named collections never overwrite each other
-        (#1503). ``all_roms`` is extended in both cases, and ``skipped_rom_ids``
-        too with the ROMs of a unit the fetcher reports as skipped, platform or
-        collection alike — the units the apply will skip. A platform unit the
-        fetcher did not skip lands in ``full_fetched_platforms`` under its slug,
-        so the restamp count can judge its stamp against what the fetch returned.
-        A collection unit lands in ``restamp_collections`` under its membership
-        key when the fetcher reports its skip refused for a reason a fresh stamp
-        settles and the apply will stamp it (``domain/collection_skip.apply_stamps``,
-        #2477 D3). Mutates the passed-in accumulators in place. ``progress_step`` /
-        ``progress_total_steps`` thread the unit's coarse position into the
-        fetcher's per-page ``fetching`` frames (on top of the per-unit frame
-        the preview loop already emits).
-        """
-        if unit.type == "platform":
-            unit_roms, skipped = await self._fetcher.fetch_platform_unit(
-                unit, progress_step=progress_step, progress_total_steps=progress_total_steps
-            )
-            for rom in unit_roms:
-                platform_rom_ids.add(rom["id"])
-                synced_rom_ids.add(rom["id"])
-            if not skipped and unit.slug:
-                full_fetched_platforms[unit.slug] = unit_roms
-        else:
-            unit_roms, all_collection_rom_ids, skipped, settles = await self._collection_fetcher.fetch_collection_unit(
-                unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
-            )
-            if all_collection_rom_ids:
-                collection_memberships[_collection_membership_key(unit)] = CollectionMembership(
-                    name=unit.name,
-                    rom_ids=all_collection_rom_ids,
-                    kind=str(unit.collection_kind),
-                    virtual_type=unit.virtual_type,
-                )
-            if settles and apply_stamps(unit.collection_kind, unit.collection_updated_at, all_collection_rom_ids):
-                restamp_collections.add(_collection_membership_key(unit))
-        all_roms.extend(unit_roms)
-        if skipped:
-            skipped_rom_ids.update(rom["id"] for rom in unit_roms)
+    # ── Apply ────────────────────────────────────────────────────
 
     async def sync_apply_delta(self, preview_id):
         box = self._sync_state
@@ -611,121 +213,13 @@ class SyncOrchestrator:
         # apply (#1202). Claim the run slot BEFORE discarding the preview.
         run_id = self._uuid_gen.uuid4()
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
-            raise Refused("sync_in_progress", _SYNC_IN_PROGRESS)
+            raise Refused("sync_in_progress", SYNC_IN_PROGRESS)
         box.discard_preview()
         box.sync_last_heartbeat = self._clock.monotonic()
 
         self._tasks.spawn(self._do_sync_per_unit(), "library sync run")
 
         return {"success": True, "message": "Applying changes"}
-
-    def sync_cancel_preview(self):
-        self._sync_state.discard_preview()
-        return {"success": True}
-
-    def get_pending_preview(self):
-        """Hand back the staged preview answer, so a remounted panel can show its card again.
-
-        ``preview: None`` — nothing staged, a snapshot the read aged out, or a
-        run in flight (which withholds it rather than discarding it) — is a
-        normal answer, never the failure shape. Starts and cancels no run.
-        """
-        delta = self._sync_state.read_restorable_preview(self._clock.time())
-        return {"success": True, "preview": dict(delta.answer) if delta else None}
-
-    # ── Progress & safety ────────────────────────────────────────
-
-    async def emit_progress(
-        self, stage, current=0, total=0, message="", running=True, step=0, total_steps=0, sub_stage=""
-    ):
-        """Persist the progress snapshot and emit the sync_progress event.
-
-        ``stage`` is a :class:`SyncStage` (or its string value); ``step``
-        / ``total_steps`` are the coarse unit index / total units that
-        drive the determinate main bar — stages without a unit index yet
-        (discovering, fetching) pass ``0`` / ``0``, which the frontend
-        treats as indeterminate. ``current`` / ``total`` are the fine
-        within-unit counters. ``sub_stage`` discriminates the ``fetching``
-        stage's phases — ``"fetch"`` (paginated ROM listing) vs ``"covers"``
-        (cover download/refresh) — so the frontend can fill each phase's own
-        monotonic sub-slice of the running unit's width (#1407); it is empty
-        for every other frame. It rides the payload as the camelCase
-        ``subStage`` key, matching the other multi-word snapshot keys
-        (``totalSteps`` / ``runId``); the Python parameter stays snake_case.
-        ``runKind`` rides the same way and takes no parameter at all: it is
-        claimed with the run slot and read off the box here, so every frame of a
-        run carries it without a call site being able to forget one. The
-        snapshot is written to the box first so :meth:`get_sync_status` always
-        returns the latest state even if the event never reaches a freshly
-        remounted QAM — both keys therefore ride the event AND the remount
-        re-seed, which is what lets a QAM reloaded mid-run learn the kind of the
-        run it is watching rather than waiting for the next event.
-        """
-        self._sync_state.sync_progress = {
-            "running": running,
-            "stage": SyncStage(stage).value,
-            "current": current,
-            "total": total,
-            "message": message,
-            "step": step,
-            "totalSteps": total_steps,
-            "subStage": sub_stage,
-            "runId": str(self._sync_state.current_sync_id or ""),
-            "runKind": self._sync_state.run_kind_value(),
-        }
-        await self._emit("sync_progress", self._sync_state.sync_progress)
-
-    def get_sync_status(self) -> dict[str, Any]:
-        """Return the latest progress frame plus whether a run is actually in flight.
-
-        Idle returns the default ``running: False`` snapshot; a live run
-        returns the latest snapshot written by :meth:`emit_progress`.
-
-        ``inFlight`` is the run-lifecycle state itself, not a re-reading of the
-        frame, and it rides only this answer — never an emitted ``sync_progress``
-        event. The two can disagree, legitimately: during a cancel drain the
-        CANCELLED frame already says ``running: False`` while the slot is still
-        owned, and between ``try_begin_run`` and the run's first frame the
-        opposite holds. It exists because the frontend cannot tell "the backend
-        has no run" from "the backend has not said anything about this run yet"
-        by looking at a frame — and the difference decides whether a panel may
-        retract a run it believes is live. See
-        ``frontend/src/bigpicture/MainPage.tsx``.
-        """
-        box = self._sync_state
-        return {**box.sync_progress, "inFlight": box.is_in_flight()}
-
-    # ── Sync termination ─────────────────────────────────────────
-
-    async def _finish_sync(self, message):
-        """Emit the terminal CANCELLED progress snapshot for the in-flight run.
-
-        Emission only — the IDLE/None reset of the run-lifecycle pair is owned
-        by the caller's ``finally: box.finish_run(run_id)`` so every run has a
-        single, run-scoped termination point (#1202). Three neighbouring names
-        end a run and none of them can stand in for another: this one tells the
-        panel, ``LibrarySyncStateBox.finish_run`` releases the slot the next
-        Sync press needs, and
-        :meth:`SyncRunRecorder.do_mark_cancelled` writes the row the QAM's
-        last-attempt line reads (``get_latest_terminal``). Note which row that
-        is: the preview's baseline comes from ``get_latest_completed``, which a
-        cancelled row is not and never becomes — the zero-unit carve-out below
-        exists because a **completed** row resets that baseline.
-        """
-        box = self._sync_state
-        box.sync_progress = {
-            "running": False,
-            "stage": SyncStage.CANCELLED.value,
-            "current": box.sync_progress.get("current", 0),
-            "total": box.sync_progress.get("total", 0),
-            "message": message,
-            "step": box.sync_progress.get("step", 0),
-            "totalSteps": box.sync_progress.get("totalSteps", 0),
-            "runId": str(box.current_sync_id or ""),
-            "runKind": box.run_kind_value(),
-        }
-        await self._emit("sync_progress", box.sync_progress)
-        self._logger.info(message)
 
     # ── Per-unit pipeline ────────────────────────────────────────
 
@@ -796,12 +290,12 @@ class SyncOrchestrator:
             try:
                 work_queue = await self._fetcher.build_work_queue()
             except asyncio.CancelledError:
-                await self._finish_sync(_SYNC_CANCELLED)
+                await self._progress.emit_cancelled(SYNC_CANCELLED)
                 raise
             except Exception as e:
                 self._logger.error(f"Failed to build work queue: {e}")
                 _code, _msg = classify_error(e)
-                await self.emit_progress(SyncStage.ERROR, message=_msg, running=False)
+                await self._progress.emit_progress(SyncStage.ERROR, message=_msg, running=False)
                 return
 
             total_units = len(work_queue)
@@ -835,7 +329,7 @@ class SyncOrchestrator:
                 # and reset the preview baseline (every platform would then
                 # report as 'added') and the ``last_sync`` timestamp. Leaving
                 # the prior completed run as the baseline matches the JSON era.
-                await self.emit_progress(SyncStage.DONE, message="Nothing to sync", running=False)
+                await self._progress.emit_progress(SyncStage.DONE, message="Nothing to sync", running=False)
                 return
 
             # SyncRun.start — short write UoW for the planned counts.
@@ -859,7 +353,7 @@ class SyncOrchestrator:
                         cancelled = True
                         break
 
-                    applied = await self._sync_one_unit(
+                    applied = await self._unit_applier.apply_unit(
                         unit,
                         sources=sources,
                         unit_index=unit_index,
@@ -875,7 +369,7 @@ class SyncOrchestrator:
                         break
             except SyncCancelled:
                 # A cooperative cancel delivered mid-fetch (fetcher._check_cancelling
-                # raised SyncCancelled inside _sync_one_unit) bypasses the
+                # raised SyncCancelled inside UnitApplier.apply_unit) bypasses the
                 # is_cancelling() checkpoints. Route it into the same graceful
                 # finalize the checkpoint break uses, so the SyncRun is marked
                 # cancelled and sync_state is restored to IDLE instead of wedging
@@ -892,7 +386,7 @@ class SyncOrchestrator:
             # commits collections. Cancelled runs skip it — their next emit
             # is the terminal cancelled snapshot from the reporter.
             if not cancelled:
-                await self.emit_progress(
+                await self._progress.emit_progress(
                     SyncStage.FINALIZING,
                     message="Finalizing…",
                     step=total_units,
@@ -907,39 +401,14 @@ class SyncOrchestrator:
                 cancelled=cancelled,
             )
 
-            # SyncRun terminal status — short write UoW. Clean runs complete;
-            # a stopped run records WHY, in priority order: a deliberate
-            # session-budget ``paused`` (#1383) wins, then a heartbeat-timeout
-            # ``interrupted`` (an external death — frontend crash/reload), else the
-            # user's own ``cancelled``. The split keeps the UI from blaming a
-            # self-imposed pause or a crash on the Cancel button.
-            if cancelled:
-                if box.run_paused:
-                    await self._loop.run_in_executor(
-                        None, self._sync_run_recorder.do_mark_paused, run_id, box.interrupt_reason or SYNC_PAUSED_BUDGET
-                    )
-                elif box.run_interrupted:
-                    reason = box.interrupt_reason or _SYNC_INTERRUPTED
-                    await self._loop.run_in_executor(None, self._sync_run_recorder.do_mark_interrupted, run_id, reason)
-                else:
-                    await self._loop.run_in_executor(
-                        None, self._sync_run_recorder.do_mark_cancelled, run_id, _SYNC_CANCELLED
-                    )
-            else:
-                await self._loop.run_in_executor(
-                    None,
-                    self._sync_run_recorder.do_complete_run,
-                    run_id,
-                    list(outcome.platform_app_ids.keys()),
-                    list(outcome.romm_collection_app_ids.keys()),
-                )
+            await self._record_terminal_status(run_id, cancelled=cancelled, outcome=outcome)
 
             # Emit the terminal signals LAST — only now that the terminal SyncRun
             # status is persisted, so a frontend stats refetch triggered by
             # ``sync_complete`` / the terminal progress frame reads the fresh run
             # status instead of racing the DB write (#39). The error path below never
             # reaches here, so it never double-emits sync_complete.
-            await self._reporter.get().emit_sync_complete(
+            await self._reporter.emit_sync_complete(
                 platform_app_ids=outcome.platform_app_ids,
                 romm_collection_app_ids=outcome.romm_collection_app_ids,
                 total_games=total_games_applied,
@@ -952,18 +421,7 @@ class SyncOrchestrator:
 
             self._logger.error(f"Per-unit sync failed: {e}\n{traceback.format_exc()}")
             _code, _msg = classify_error(e)
-            box.sync_progress = {
-                "running": False,
-                "stage": SyncStage.ERROR.value,
-                "current": 0,
-                "total": 0,
-                "message": f"Sync failed — {_msg}",
-                "step": 0,
-                "totalSteps": 0,
-                "runId": str(box.current_sync_id or ""),
-                "runKind": box.run_kind_value(),
-            }
-            self._tasks.spawn(self._emit("sync_progress", box.sync_progress), "sync_progress error frame")
+            self._tasks.spawn(self._progress.write_error_frame(f"Sync failed — {_msg}"), "sync_progress error frame")
             # The captured ``run_id``, for the reason given where it is taken.
             # This path is reached by every failure inside the run, including
             # the ones before ``do_open_run`` ever wrote a row; those carry a
@@ -979,322 +437,35 @@ class SyncOrchestrator:
             # little after it, and the artwork job's worklist is read from there.
             self._artwork_job.request_run(settle=True)
 
-    def _stamp_component_group_keys(self, roms: list[dict[str, Any]], resident_keys: dict[int, str]) -> None:
-        """Stamp each fresh ROM's component sibling-group key onto its raw dict.
-
-        Delegates the whole decision to :func:`compute_component_group_keys` (the
-        pure kernel: union-find over ``sibling_roms`` edges + canonical-source
-        agreement) and writes the result back so the downstream
-        :func:`build_shortcuts_data` / group collapse read the component key rather
-        than a per-ROM coalesce-first key. A resident dict (one that already carries
-        a key — an incremental-reconstructed row) is left untouched: the kernel
-        returns no key for it. Mutates *roms* in place, matching the other in-place
-        decorations (``platform_name``, popped ``files``) the fetch already applied.
-        """
-        keys = compute_component_group_keys(roms, resident_keys)
-        for rom in roms:
-            key = keys.get(int(rom["id"]))
-            if key is not None:
-                rom["sibling_group_key"] = key
-
-    def _clear_platform_stamp_io(self, platform_slug: str) -> None:
-        """Delete *platform_slug*'s completion stamp in one short write UoW.
-
-        Called at a platform unit's apply start (ADR-0023 / #1025): the stamp
-        asserts "this platform's last apply completed", so a fresh apply must
-        drop it up front and let the final chunk re-write it only on a clean
-        finish. A no-op when no stamp exists.
-        """
-        with self._uow_factory() as uow:
-            uow.platform_sync_state.delete(platform_slug)
-
-    async def _sync_one_unit(
-        self,
-        unit: WorkUnit,
-        *,
-        sources: SourcesReading,
-        unit_index: int,
-        total_units: int,
-        synced_rom_ids: set[int],
-        collection_memberships: dict[tuple[str, str], CollectionMembership],
-        platform_rom_ids: set[int],
-    ) -> int:
-        """Process one work unit start-to-finish; return its processed-ROM count.
-
-        The ROMs for the unit come from a live per-unit fetch. After the
-        frontend acks the unit's shortcuts (via ``report_unit_results``),
-        the reporter commits the unit: it upserts each acked ROM into the
-        ``roms`` aggregate and stamps the ROM's cached ``rom_metadata`` in
-        the same write UoW (Rom row first, metadata second — FK-safe), so
-        a ROM and its metadata land atomically.
-
-        When the fetcher reports ``skipped=True`` (registry already
-        matches the server-side platform state), the entire apply +
-        commit branch is short-circuited: no frontend roundtrip, no
-        registry write. The unit's ROMs still count toward the
-        ``total_games_applied`` total returned to the user. Delta-skipped
-        entries (content-unchanged ROMs the delta-restricted apply never
-        re-emits) count the same way: the return value is the unit's
-        processed ROMs — skips plus acked applies — not just the
-        shortcuts written.
-        """
+    async def _record_terminal_status(self, run_id: str | None, *, cancelled: bool, outcome: FinalizeOutcome) -> None:
+        """Write the run's terminal ``SyncRun`` status: the one a stopped run earns, or completed."""
         box = self._sync_state
-        # Coarse anchor for the unit: FETCHING (not APPLYING) so the whole
-        # per-unit prep phase — the paginated fetch + cover download below —
-        # reads as "Fetching library". The label flips to "Applying shortcuts"
-        # exactly once, when the chunk loop starts (frontend-driven), instead of
-        # showing a frozen "Applying shortcuts" bar for the minutes-long fetch.
-        await self.emit_progress(
-            SyncStage.FETCHING,
-            message=f"Fetching {unit.name}",
-            step=unit_index + 1,
-            total_steps=total_units,
-        )
-
-        # Fetch this unit's ROMs; either kind may incremental-skip. The unit's
-        # coarse step/total is threaded so the fetcher's per-page ``fetching``
-        # frames keep the bar's position.
-        # The unit's fetch start, read before the skip check so it is never
-        # later than the walk's first page; the final chunk's stamp records it
-        # as the next skip's reference (#743 D1, #2477 D2).
-        fetch_started_at = self._clock.now().isoformat()
-        if unit.type == "platform":
-            unit_roms, skipped = await self._sync_platform_unit(
-                unit,
-                synced_rom_ids=synced_rom_ids,
-                platform_rom_ids=platform_rom_ids,
-                progress_step=unit_index + 1,
-                progress_total_steps=total_units,
-            )
+        # SyncRun terminal status — short write UoW. Clean runs complete;
+        # a stopped run records WHY, in priority order: a deliberate
+        # session-budget ``paused`` (#1383) wins, then a heartbeat-timeout
+        # ``interrupted`` (an external death — frontend crash/reload), else the
+        # user's own ``cancelled``. The split keeps the UI from blaming a
+        # self-imposed pause or a crash on the Cancel button.
+        if cancelled:
+            if box.run_paused:
+                await self._loop.run_in_executor(
+                    None, self._sync_run_recorder.do_mark_paused, run_id, box.interrupt_reason or SYNC_PAUSED_BUDGET
+                )
+            elif box.run_interrupted:
+                reason = box.interrupt_reason or _SYNC_INTERRUPTED
+                await self._loop.run_in_executor(None, self._sync_run_recorder.do_mark_interrupted, run_id, reason)
+            else:
+                await self._loop.run_in_executor(
+                    None, self._sync_run_recorder.do_mark_cancelled, run_id, SYNC_CANCELLED
+                )
         else:
-            unit_roms, skipped = await self._sync_collection_unit(
-                unit,
-                synced_rom_ids=synced_rom_ids,
-                collection_memberships=collection_memberships,
-                progress_step=unit_index + 1,
-                progress_total_steps=total_units,
+            await self._loop.run_in_executor(
+                None,
+                self._sync_run_recorder.do_complete_run,
+                run_id,
+                list(outcome.platform_app_ids.keys()),
+                list(outcome.romm_collection_app_ids.keys()),
             )
-
-        if box.is_cancelling():
-            return 0
-
-        # Per-unit incremental skip: registry already matches the
-        # server-side state for this platform, so neither apply nor
-        # commit have any work. Skip the frontend roundtrip and the
-        # no-op two-phase commit. Force Full Sync clears ``last_sync``
-        # upstream, so ``skipped`` is always False on forced runs.
-        if skipped:
-            self._logger.info(f"Per-unit apply skipped: {unit.name} ({len(unit_roms)} ROMs unchanged)")
-            # A wholesale-skipped unit's ROMs are already correct in Steam, so they
-            # count toward the run's done total — the resume of a paused run skips
-            # every platform it finished before the pause, and those games ARE done
-            # (#1383).
-            box.run_done_items += len(unit_roms)
-            box.run_skip_rebuilt_rows.update((rom["id"], rom["platform_slug"]) for rom in unit_roms)
-            return len(unit_roms)
-
-        # Build shortcut data for every fetched ROM. Installed ROMs carry the
-        # full launch command; uninstalled ROMs get an empty placeholder until
-        # they are downloaded.
-        installed_paths = await self._loop.run_in_executor(
-            None, self._shortcut_launch_resolver.do_read_installed_paths, {rom["id"] for rom in unit_roms}, sources
-        )
-        core_overrides = await self._loop.run_in_executor(
-            None, self._shortcut_launch_resolver.do_build_core_overrides, unit_roms, sources
-        )
-
-        # Read the bound-row registry once, before the build: its persisted keys
-        # seed the component keying (a fresh member edging into a DB-resident
-        # sibling adopts its canonical summary) AND drive the group collapse below.
-        registry = await self._loop.run_in_executor(None, self._local_library_reader.do_read_apply_registry, unit)
-        resident_keys = {
-            int(rom_id): entry["sibling_group_key"]
-            for rom_id, entry in registry.items()
-            if entry["sibling_group_key"] is not None
-        }
-        self._stamp_component_group_keys(unit_roms, resident_keys)
-        shortcuts_data = build_shortcuts_data(unit_roms, self._launcher_exe, installed_paths, core_overrides)
-
-        # Collapse to one Steam shortcut per sibling group (ADR-0021): only the
-        # representative (plus any grandfathered bound siblings) is emitted; a
-        # rebinding group's entry is keyed to its vanished sibling so the
-        # frontend reuses that shortcut. A PLATFORM unit fetches a group's whole
-        # membership (a group is per-platform), so it is a complete view and may
-        # rebind; a COLLECTION unit is a partial view (it fetches only its
-        # members, not a group's bound sibling on another/skipped platform) — the
-        # collapse then only grandfathers, never rebinds a live binding onto an
-        # uninstalled sibling (#1296).
-        emitted = collapse_sibling_groups(
-            shortcuts_data,
-            registry,
-            set(installed_paths),
-            complete_group_view=(unit.type == "platform"),
-            preferred_region=self._settings.get("preferred_region", AUTO_REGION),
-        )
-
-        # Delta-restricted apply (#1383 / #1382-M3): split the collapsed entries
-        # against the recorded applied state and emit ONLY new + changed. An
-        # unchanged entry — identity matches AND its built target launch_options
-        # matches the recorded ``applied_launch_options`` — is already correct on
-        # the shortcut, so it never reaches the frontend (no Set* walk, no confirm
-        # poll). Its ``roms`` row still commits: chunking routes the skipped
-        # groups' rows to chunk 0's leftover (sync_chunking), so DB work is never
-        # dropped and the platform stamp still rides the final chunk. A rebind
-        # entry is never unchanged — classify counts it as changed, because it
-        # must move its binding onto the same dump. ``new_ids`` prices each
-        # chunk create-vs-update for the budget gate. Covers ride only the delta
-        # (covers are creates-only, #1391).
-        new, changed, unchanged_ids, _stale, _disabled = classify_roms(emitted, registry, set())
-        rebind_ids = {e["rom_id"] for e in emitted if BIND_ROM_ID_KEY in e}
-        skip_ids = set(unchanged_ids)
-        new_ids = {e["rom_id"] for e in new}
-        apply_emitted = [e for e in emitted if e["rom_id"] not in skip_ids]
-        self._logger.info(
-            f"Delta apply: {unit.name} — {len(new)} new + {len(changed)} changed "
-            f"({len(rebind_ids)} of them rebinds) of {len(emitted)} collapsed ({len(skip_ids)} unchanged skipped)"
-        )
-        # A skipped entry is already correct on its Steam shortcut — no Set* walk is
-        # owed — so it counts as done the moment the delta is computed (#1383). It is
-        # just as processed as a wholesale-skipped unit's ROMs, so every return below
-        # also adds ``len(skip_ids)`` to the unit's processed count — keeping the
-        # terminal frame's "N of M games processed" numerator (``total_games``)
-        # consistent with this counter on a resumed run.
-        box.run_done_items += len(skip_ids)
-
-        # Cover-cache invalidation pass (#1386): before any cover is reused, refresh
-        # the cache + grid copy of every BOUND fetched ROM whose server cover source
-        # changed (delta-skipped ROMs included — covers otherwise ride only the
-        # delta) and persist the fresh fingerprint. Runs BEFORE the cover download
-        # below so a changed apply-emitted ROM downloads once here and the apply
-        # path then reuses the refreshed cache. The returned {rom_id, app_id} list
-        # rides the unit's first apply chunk so the frontend re-applies each cover
-        # to the EXISTING shortcut via SetCustomArtworkForApp — without that push
-        # the Steam tile stays stale in-session until a client restart.
-        cover_refreshes = await self._cover_preparer.refresh_changed_covers(
-            unit_roms, registry, progress_step=unit_index + 1, progress_total_steps=total_units, label=unit.name
-        )
-
-        if box.is_cancelling():
-            return len(skip_ids)
-
-        # Download artwork for the shortcuts about to be applied and stamp each
-        # delta entry's cover path in place (a no-op when the delta is empty).
-        # Returns the confirmed cover fingerprints (rom_id → fresh source) the
-        # per-unit commit persists onto the upserted rows (#1386).
-        confirmed_cover_sources = await self._cover_preparer.attach_unit_cover_paths(
-            unit, unit_roms, apply_emitted, unit_index=unit_index, total_units=total_units
-        )
-
-        if box.is_cancelling():
-            return len(skip_ids)
-
-        # Clear this platform's completion stamp now that its apply is actually
-        # beginning — the fetch succeeded, artwork is done, and the cancel guard
-        # above has passed, so the next line starts emitting chunks. The stamp's
-        # contract is "this platform's last apply ran to completion", which a
-        # fresh apply invalidates the instant it starts: a crash / cancel /
-        # heartbeat-timeout before the final chunk must leave NO stamp, so the
-        # skip gate can't honour a stale one over a half-applied platform (the
-        # #1025 silent-gap regression). The final chunk re-writes the stamp on a
-        # clean finish; the other half of the pair is
-        # ``ChunkDispatcher._build_final_platform_stamp``, which rides the final
-        # chunk's commit UoW. A fetch that failed raised before here (fetch failure ≠
-        # apply started) and a cancel during fetch/artwork returned at a guard
-        # above with the old stamp intact, so an unstarted apply keeps it. A
-        # skipped platform returned before this point and keeps its stamp. A
-        # collection's stamp is not cleared here: its final chunk replaces it,
-        # and the flows that unbind or delete one of its members delete it
-        # (docs/architecture/backend-architecture.md, "Incremental skip").
-        # A dedicated short write UoW (not folded into the first chunk's commit)
-        # so the clear is unconditional at apply start — even a first-chunk
-        # heartbeat-timeout, whose late ack commits without the stamp, leaves no
-        # stale stamp behind (ADR-0023 / #1025). A delete, not ``revoke_skip``:
-        # the chunks re-mark rows with this run's generation, and a kept stamp
-        # naming the old one would make removed-game discovery read every
-        # re-marked row as gone from RomM.
-        if unit.type == "platform" and unit.slug:
-            await self._loop.run_in_executor(None, self._clear_platform_stamp_io, unit.slug)
-
-        # A collection unit's final chunk stamps a CollectionSyncState over its
-        # full membership (the accumulator just populated by the fetch, #742); a
-        # platform unit passes None. The full set — not just the applied new_roms —
-        # is what a future skip replays to rebuild membership. Read back by the
-        # collision-free ``(collection_kind, collection_id)`` key, not the name, so
-        # a same-named sibling collection can't shadow this unit's members (#1503).
-        collection_member_ids = None
-        if unit.type == "collection":
-            membership = collection_memberships.get(_collection_membership_key(unit))
-            collection_member_ids = membership.rom_ids if membership is not None else None
-
-        applied_count = await self._chunk_dispatcher.apply_unit_in_chunks(
-            unit,
-            unit_index=unit_index,
-            total_units=total_units,
-            emitted=apply_emitted,
-            shortcuts_data=shortcuts_data,
-            unit_roms=unit_roms,
-            new_ids=new_ids,
-            confirmed_cover_sources=confirmed_cover_sources,
-            cover_refreshes=cover_refreshes,
-            collection_member_ids=collection_member_ids,
-            fetch_started_at=fetch_started_at,
-        )
-        return len(skip_ids) + applied_count
-
-    async def _sync_platform_unit(
-        self,
-        unit: WorkUnit,
-        *,
-        synced_rom_ids: set[int],
-        platform_rom_ids: set[int],
-        progress_step: int = 0,
-        progress_total_steps: int = 0,
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """Resolve ROMs for a platform unit and update cross-unit accumulators.
-
-        Returns ``(unit_roms, skipped)`` for the caller's downstream
-        shortcut + artwork + apply phases. ROMs come from a live per-unit
-        fetch (no preview cache); the fetcher's incremental-skip path
-        handles the "unchanged platform" optimisation internally.
-        ``progress_step`` / ``progress_total_steps`` thread the unit's coarse
-        position into the fetcher's per-page ``fetching`` frames.
-        """
-        unit_roms, skipped = await self._fetcher.fetch_platform_unit(
-            unit, progress_step=progress_step, progress_total_steps=progress_total_steps
-        )
-        platform_rom_ids.update(r["id"] for r in unit_roms)
-        synced_rom_ids.update(r["id"] for r in unit_roms)
-        return unit_roms, skipped
-
-    async def _sync_collection_unit(
-        self,
-        unit: WorkUnit,
-        *,
-        synced_rom_ids: set[int],
-        collection_memberships: dict[tuple[str, str], CollectionMembership],
-        progress_step: int = 0,
-        progress_total_steps: int = 0,
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """Resolve ROMs for a collection unit and record its membership.
-
-        Returns ``(unit_roms, skipped)`` — ``skipped`` is True when the
-        incremental-skip gate (#742) reconstructed the collection from its
-        completion stamp instead of paginating. ROMs come from a live per-unit
-        fetch (or, on a skip, the registry) that already dedups against
-        ``synced_rom_ids``. ``progress_step`` / ``progress_total_steps`` thread
-        the unit's coarse position into the fetcher's per-page ``fetching`` frames.
-        """
-        unit_roms, all_collection_rom_ids, skipped, _ = await self._collection_fetcher.fetch_collection_unit(
-            unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
-        )
-        if all_collection_rom_ids:
-            collection_memberships[_collection_membership_key(unit)] = CollectionMembership(
-                name=unit.name,
-                rom_ids=all_collection_rom_ids,
-                kind=str(unit.collection_kind),
-                virtual_type=unit.virtual_type,
-            )
-        return unit_roms, skipped
 
     async def _finalize_per_unit(
         self,
@@ -1387,7 +558,7 @@ class SyncOrchestrator:
             self._logger.debug(f"Session-budget terminal advisory/delta skipped: {e}")
         self._sync_state.last_run_delta_kb = memory_delta_kb
 
-        platform_app_ids, romm_collection_app_ids = await self._reporter.get().finalize_per_unit_run(
+        platform_app_ids, romm_collection_app_ids = await self._reporter.finalize_per_unit_run(
             pending_collection_memberships=collection_memberships,
             pending_platform_rom_ids=platform_rom_ids,
             platform_names=dict(self._sync_state.run_listed_platform_names),

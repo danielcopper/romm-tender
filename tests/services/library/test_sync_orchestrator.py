@@ -46,6 +46,7 @@ from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
 from lib.errors import Refused, RommConnectionError, RommNotFoundError, classify_error
 from lib.romm_paging import LIST_PAGE_SIZE
+from services.library._unit_roms import stamp_component_group_keys
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from tests.services.library._helpers import (
     _fake_wait_set_event,
@@ -1262,15 +1263,15 @@ class TestGetPendingPreview:
         """A cancel landing after the unit loop stages no delta (#1202), so the
         read has nothing to restore — the panel comes back to an idle page."""
         self._preview_setup(library, fake_romm_api)
-        orch = library.sync._orchestrator
+        preview = library.sync._preview
         box = library.sync._box
-        orig_fetch = orch._fetch_preview_unit
+        orig_fetch = preview._fetch_preview_unit
 
         async def fetch_then_cancel(unit, *args, **kwargs):
             await orig_fetch(unit, *args, **kwargs)
             box.request_cancel()
 
-        orch._fetch_preview_unit = fetch_then_cancel
+        preview._fetch_preview_unit = fetch_then_cancel
         call = library.sync.sync_preview()
 
         with pytest.raises(Refused) as excinfo:
@@ -1366,9 +1367,9 @@ class TestSyncControl:
 
 
 class TestFinishSync:
-    """Tests for _finish_sync().
+    """Tests for SyncProgress.emit_cancelled().
 
-    ``_finish_sync`` emits the terminal CANCELLED progress snapshot only; the
+    ``emit_cancelled`` emits the terminal CANCELLED progress snapshot only; the
     IDLE/None reset of the run-lifecycle pair is owned by the caller's
     ``finally: box.finish_run(run_id)`` (#1202), so this method leaves
     ``sync_state`` / ``current_sync_id`` untouched.
@@ -1379,7 +1380,7 @@ class TestFinishSync:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._sync_progress = {"running": True, "current": 5, "total": 10}
 
-        await library.sync._orchestrator._finish_sync("Sync cancelled")
+        await library.sync._progress.emit_cancelled("Sync cancelled")
 
         assert library.sync._sync_progress["running"] is False
         assert library.sync._sync_progress["stage"] == "cancelled"
@@ -1387,7 +1388,7 @@ class TestFinishSync:
 
     @pytest.mark.asyncio
     async def test_does_not_reset_run_lifecycle(self, library):
-        """_finish_sync only emits — the terminal ``finally`` owns the reset.
+        """emit_cancelled only emits — the terminal ``finally`` owns the reset.
 
         Leaving ``current_sync_id`` set here is what lets the run-scoped
         ``finish_run(run_id)`` later decide whether this run still owns the slot.
@@ -1396,7 +1397,7 @@ class TestFinishSync:
         library.sync._sync_progress = {"running": True}
         library.sync._box.current_sync_id = "sync-abc"
 
-        await library.sync._orchestrator._finish_sync("Sync cancelled")
+        await library.sync._progress.emit_cancelled("Sync cancelled")
 
         assert library.sync._sync_state == SyncState.RUNNING
         assert library.sync._current_sync_id == "sync-abc"
@@ -1437,7 +1438,7 @@ class TestGetSyncStatus:
     def test_in_flight_is_the_lifecycle_not_a_reading_of_the_frame(self, library):
         """The two answer different questions and are allowed to disagree.
 
-        A cancel drain is the standing example: ``_finish_sync`` writes the
+        A cancel drain is the standing example: ``emit_cancelled`` writes the
         CANCELLED frame — ``running: False`` — while the run still owns the slot,
         so a frontend inferring "no run" from the frame would retract a run that
         is still winding down. It reads ``inFlight`` instead.
@@ -1480,7 +1481,7 @@ class TestGetSyncStatus:
         ``sync_progress`` event and the persisted snapshot that
         ``get_sync_status`` re-seeds a remounted QAM from (#1407)."""
 
-        await library.sync._orchestrator.emit_progress(
+        await library.sync._progress.emit_progress(
             SyncStage.FETCHING,
             current=2,
             total=7,
@@ -1501,9 +1502,7 @@ class TestGetSyncStatus:
         """A frame that names no phase carries an empty ``subStage`` — the bar
         reads it as "rest at the unit floor", never a stale phase (#1407)."""
 
-        await library.sync._orchestrator.emit_progress(
-            SyncStage.FETCHING, message="Fetching GBA", step=3, total_steps=8
-        )
+        await library.sync._progress.emit_progress(SyncStage.FETCHING, message="Fetching GBA", step=3, total_steps=8)
 
         assert library.sync.get_sync_status()["subStage"] == ""
 
@@ -1593,9 +1592,7 @@ class TestRunKindOnTheWire:
         it is watching is doing is the snapshot ``get_sync_status`` hands back.
         """
         assert library.sync._box.try_begin_run("run-live", kind=SyncRunKind.PREVIEW) is True
-        await library.sync._orchestrator.emit_progress(
-            SyncStage.FETCHING, message="Fetching N64", step=1, total_steps=2
-        )
+        await library.sync._progress.emit_progress(SyncStage.FETCHING, message="Fetching N64", step=1, total_steps=2)
 
         assert library.sync.get_sync_status()["runKind"] == "preview"
 
@@ -1603,7 +1600,7 @@ class TestRunKindOnTheWire:
     async def test_the_cancelled_terminal_carries_it(self, library, emit):
         assert library.sync._box.try_begin_run("run-cancel", kind=SyncRunKind.PREVIEW) is True
 
-        await library.sync._orchestrator._finish_sync("Sync cancelled")
+        await library.sync._progress.emit_cancelled("Sync cancelled")
 
         frames = self._frames(emit)
         assert frames[-1]["stage"] == "cancelled"
@@ -1622,7 +1619,7 @@ class TestRunKindOnTheWire:
         library.settings["enabled_platforms"] = {"1": True}
         # Blow up inside the unit loop, after the plan — the ERROR frame that
         # path builds is a dict literal of its own, not an ``emit_progress``.
-        library.sync._orchestrator._sync_one_unit = AsyncMock(side_effect=RuntimeError("boom"))
+        library.sync._unit_applier.apply_unit = AsyncMock(side_effect=RuntimeError("boom"))
         assert library.sync._box.try_begin_run("run-err", kind=SyncRunKind.APPLY) is True
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -3065,7 +3062,7 @@ class TestDoSyncPerUnit:
         """Cancel flipped during the first unit's ack stops the queue mid-flight.
 
         Both platforms take the live-fetch path (no ``last_sync``) so
-        each fully traverses ``_sync_one_unit`` rather than short-
+        each fully traverses ``apply_unit`` rather than short-
         circuiting. The cancel observed between units must produce
         exactly one ``sync_apply_unit`` and a ``cancelled=True``
         ``sync_complete``.
@@ -3304,7 +3301,7 @@ class TestSyncRunLifecycle:
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
 
         # Heartbeat timeout: the wait gives up (None) while the box is still
-        # RUNNING — _sync_one_unit flags run_interrupted and requests the cancel.
+        # RUNNING — apply_unit flags run_interrupted and requests the cancel.
         async def wait_timeout(_u, _event):
             return
 
@@ -4004,7 +4001,7 @@ class TestDoSyncPerUnitErrors:
 
     @pytest.mark.asyncio
     async def test_build_work_queue_cancelled_error_finishes_sync(self, library, fake_romm_api, emit):
-        """CancelledError during build_work_queue triggers _finish_sync + re-raise."""
+        """CancelledError during build_work_queue triggers emit_cancelled + re-raise."""
 
         _use_fake_romm(library, fake_romm_api)
         # ``list_platforms`` runs in the executor; the fake raises
@@ -4017,7 +4014,7 @@ class TestDoSyncPerUnitErrors:
         with pytest.raises(asyncio.CancelledError):
             await library.sync._orchestrator._do_sync_per_unit()
 
-        # _finish_sync transitioned to IDLE + cleared sync id.
+        # emit_cancelled transitioned to IDLE + cleared sync id.
         assert library.sync._sync_state == SyncState.IDLE
         assert library.sync._current_sync_id is None
         progress_stages = [
@@ -4122,7 +4119,7 @@ class TestDoSyncPerUnitErrors:
     async def test_cancel_mid_unit_fetch_finalizes_gracefully(self, library, fake_romm_api):
         """A cooperative cancel delivered MID per-unit fetch recovers all state (#1035).
 
-        The cancel arrives while ``_sync_one_unit`` is fetching the unit's
+        The cancel arrives while ``apply_unit`` is fetching the unit's
         ROMs (``fetcher._check_cancelling`` raising ``SyncCancelled`` from
         inside ``list_roms``) — NOT at an ``is_cancelling()`` checkpoint and
         NOT during ``build_work_queue``. The fetcher's own ``except
@@ -4186,7 +4183,7 @@ class TestDoSyncPerUnitErrors:
         assert run.status == "cancelled"
         assert run.finished_at is not None
         # 3. The persisted progress snapshot is no longer running.
-        assert library.sync._orchestrator.get_sync_status()["running"] is False
+        assert library.sync._progress.get_sync_status()["running"] is False
 
     @pytest.mark.asyncio
     async def test_real_asyncio_cancel_mid_fetch_is_not_swallowed(self, library, fake_romm_api):
@@ -4309,7 +4306,7 @@ class TestDoSyncPerUnitErrors:
 
 
 class TestSyncOneUnitCollectionAndCancel:
-    """Tests for _sync_one_unit branches: collection units + mid-unit cancel."""
+    """Tests for apply_unit branches: collection units + mid-unit cancel."""
 
     @pytest.mark.asyncio
     async def test_collection_unit_records_membership(self, library, fake_romm_api, emit):
@@ -4345,8 +4342,8 @@ class TestSyncOneUnitCollectionAndCancel:
     @pytest.mark.asyncio
     async def test_sync_collection_unit_threads_kind_and_virtual_type(self, library):
         """_sync_collection_unit stamps the unit's kind + virtual_type onto the membership (#1539)."""
-        orch = library.sync._orchestrator
-        orch._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1, 2], False, False))  # type: ignore[method-assign]
+        applier = library.sync._unit_applier
+        applier._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1, 2], False, False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
             id="vc-1",
@@ -4358,7 +4355,7 @@ class TestSyncOneUnitCollectionAndCancel:
         )
         memberships: dict[tuple[str, str], Any] = {}
 
-        await orch._sync_collection_unit(unit, synced_rom_ids=set(), collection_memberships=memberships)
+        await applier._sync_collection_unit(unit, synced_rom_ids=set(), collection_memberships=memberships)
 
         membership = memberships[("virtual", "vc-1")]
         assert membership.name == "coll-fr"
@@ -4369,8 +4366,8 @@ class TestSyncOneUnitCollectionAndCancel:
     @pytest.mark.asyncio
     async def test_sync_collection_unit_standard_has_no_virtual_type(self, library):
         """A standard collection membership carries kind='standard' and virtual_type=None (#1539)."""
-        orch = library.sync._orchestrator
-        orch._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1], False, False))  # type: ignore[method-assign]
+        applier = library.sync._unit_applier
+        applier._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1], False, False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
             id="7",
@@ -4381,7 +4378,7 @@ class TestSyncOneUnitCollectionAndCancel:
         )
         memberships: dict[tuple[str, str], Any] = {}
 
-        await orch._sync_collection_unit(unit, synced_rom_ids=set(), collection_memberships=memberships)
+        await applier._sync_collection_unit(unit, synced_rom_ids=set(), collection_memberships=memberships)
 
         membership = memberships[("standard", "7")]
         assert membership.kind == "standard"
@@ -4393,7 +4390,7 @@ class TestSyncOneUnitCollectionAndCancel:
         _use_fake_romm(library, fake_romm_api)
 
         # Real fetcher will be called for the unit. Wrap list_roms so the
-        # post-fetch state is CANCELLING when ``_sync_one_unit`` checks it.
+        # post-fetch state is CANCELLING when ``apply_unit`` checks it.
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -4414,7 +4411,7 @@ class TestSyncOneUnitCollectionAndCancel:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._orchestrator._sync_one_unit(
+        applied = await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4448,7 +4445,7 @@ class TestSyncOneUnitCollectionAndCancel:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._orchestrator._sync_one_unit(
+        applied = await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4489,7 +4486,7 @@ class TestSyncOneUnitCollectionAndCancel:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        processed = await library.sync._orchestrator._sync_one_unit(
+        processed = await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4526,7 +4523,7 @@ class TestSyncOneUnitCollectionAndCancel:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        processed = await library.sync._orchestrator._sync_one_unit(
+        processed = await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4568,7 +4565,7 @@ class TestSyncOneUnitCollectionAndCancel:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._orchestrator._sync_one_unit(
+        applied = await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4616,7 +4613,7 @@ class TestSyncOneUnitCollectionAndCancel:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._orchestrator._sync_one_unit(
+        applied = await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4681,7 +4678,7 @@ class TestPerUnitMetadataStamping:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4707,7 +4704,7 @@ class TestPerUnitMetadataStamping:
     async def test_skipped_unit_does_not_stamp_metadata(self, library, fake_romm_api):
         """Incremental-skip platforms must NOT reach ``commit_unit_results``.
 
-        The skipped short-circuit returns from ``_sync_one_unit`` before the
+        The skipped short-circuit returns from ``apply_unit`` before the
         per-unit commit, so no ``rom_metadata`` is written for a skipped unit
         (populated metadata from prior real fetches is preserved, #738).
         """
@@ -4729,7 +4726,7 @@ class TestPerUnitMetadataStamping:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4783,7 +4780,7 @@ class TestPerUnitMetadataStamping:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4834,7 +4831,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4881,7 +4878,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4930,7 +4927,7 @@ class TestPlatformCompletionStamp:
         box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4966,7 +4963,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5012,7 +5009,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="collection", id="7", name="Favs", slug="favs", rom_count=2, collection_kind="standard")
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5064,7 +5061,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.current_sync_id = "run-abc"
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5119,7 +5116,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.current_sync_id = "run-abc"
 
         unit = WorkUnit(type="collection", id="7", name="Favs", slug="favs", rom_count=2, collection_kind="standard")
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5173,7 +5170,7 @@ class TestPlatformCompletionStamp:
         box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5211,7 +5208,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5249,7 +5246,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._orchestrator._sync_one_unit(
+        await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5281,7 +5278,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._orchestrator._sync_one_unit(
+        applied = await library.sync._unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5311,7 +5308,7 @@ class TestPlatformCompletionStamp:
         async def boom(*_args, **_kwargs):
             raise RuntimeError("fetch exploded")
 
-        library.sync._orchestrator._sync_platform_unit = boom
+        library.sync._unit_applier._sync_platform_unit = boom
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
@@ -5319,7 +5316,7 @@ class TestPlatformCompletionStamp:
         synced_rom_ids: set[int] = set()
         platform_rom_ids: set[int] = set()
         with pytest.raises(RuntimeError, match="fetch exploded"):
-            await library.sync._orchestrator._sync_one_unit(
+            await library.sync._unit_applier.apply_unit(
                 unit,
                 sources=sources,
                 unit_index=0,
@@ -7016,7 +7013,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         collections the apply sends. Asserts that the preview took Faves as
         skipped.
         """
-        import services.library.sync_orchestrator as orchestrator_module
+        import services.library.sync_preview as preview_module
 
         fetcher = library.sync._collection_fetcher
         fetch_collection_unit = fetcher.fetch_collection_unit
@@ -7027,7 +7024,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
             collection_skips.append(answer[2])
             return answer
 
-        classify_roms = orchestrator_module.classify_roms
+        classify_roms = preview_module.classify_roms
         classified_as_skipped: list[frozenset[int]] = []
 
         def recording_classify_roms(*args, skipped_rom_ids, **kwargs):
@@ -7036,7 +7033,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
 
         with monkeypatch.context() as patch:
             patch.setattr(fetcher, "fetch_collection_unit", recording_fetch_collection_unit)
-            patch.setattr(orchestrator_module, "classify_roms", recording_classify_roms)
+            patch.setattr(preview_module, "classify_roms", recording_classify_roms)
             summary = (await library.sync.sync_preview())["summary"]
         assert collection_skips == [True]
         box = library.sync._box
@@ -7209,7 +7206,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
         if not faves_skipped:
             fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
         orchestrator = library.sync._orchestrator
-        sync_one_unit = orchestrator._sync_one_unit
+        sync_one_unit = library.sync._unit_applier.apply_unit
         box = library.sync._box
 
         async def stop_after_faves(unit, **kwargs):
@@ -7218,7 +7215,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
                 box.request_cancel()
             return processed
 
-        monkeypatch.setattr(orchestrator, "_sync_one_unit", stop_after_faves)
+        monkeypatch.setattr(library.sync._unit_applier, "apply_unit", stop_after_faves)
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         run_2_starts_at = len(emit.call_args_list)
         await orchestrator._do_sync_per_unit()
@@ -7621,7 +7618,7 @@ class TestFetchNarrationInterplay:
 class TestComponentGroupKeyStamping:
     """The per-unit / preview stamp of component sibling-group keys (#1368).
 
-    ``_stamp_component_group_keys`` delegates to the pure kernel and writes the
+    ``stamp_component_group_keys`` delegates to the pure kernel and writes the
     result back onto the raw ROM dicts before ``build_shortcuts_data`` so the whole
     sync pipeline (shortcut build, group collapse, commit) reads the component key
     rather than a per-ROM coalesce-first key.
@@ -7660,13 +7657,12 @@ class TestComponentGroupKeyStamping:
         # edging into it adopts its canonical summary; a fresh member edging into a
         # DB-resident (fed via resident_keys) adopts THAT summary. The stamp mutates
         # the raw dicts in place.
-        orch = library.sync._orchestrator
         resident = {"id": 1, "platform_id": 57, "sibling_group_key": "igdb:100:57", "sibling_roms": [{"id": 2}]}
         fresh_in_unit = {"id": 2, "platform_id": 57, "ss_id": 22, "sibling_roms": [{"id": 1}]}
         fresh_vs_db = {"id": 3, "platform_id": 57, "moby_id": 9, "sibling_roms": [{"id": 99}]}
         roms = [resident, fresh_in_unit, fresh_vs_db]
 
-        orch._stamp_component_group_keys(roms, {99: "igdb:777:57"})
+        stamp_component_group_keys(roms, {99: "igdb:777:57"})
 
         assert resident["sibling_group_key"] == "igdb:100:57"
         assert fresh_in_unit["sibling_group_key"] == "igdb:100:57"

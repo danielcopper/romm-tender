@@ -15,22 +15,21 @@ path that *can* emit, error paths included, not the ones a fixture happens to
 provoke. It reaches three producer shapes across ``backend/services``, all
 three of which exist today:
 
-* a call to the orchestrator's ``emit_progress``, which the reporter reaches
-  through its injected ``_emit_progress`` and ``services/artwork/service.py`` through an
-  ``emit_progress`` callable passed in per operation;
-* a direct write of the frame to ``sync_progress``, which the cancelled finalize
-  and the error path use because they build the snapshot themselves;
+* a call to ``SyncProgress.emit_progress``, which the reporter and the unit
+  applier reach through their injected ``_emit_progress`` and
+  ``services/artwork/service.py`` through an ``emit_progress`` callable passed in
+  per operation;
+* a direct write of the frame to ``sync_progress``, which the CANCELLED and the
+  ERROR frames use because they build the snapshot themselves;
 * a frame handed straight to the emit primitive as ``_emit("sync_progress", {…})``.
 
 Where the enforcement ends, stated plainly because the invariant register cites
 this file: the scan reads call sites and dict literals, so a frame assembled by
 a helper it cannot follow, or emitted through an aliased callable, is outside it.
-Three such indirections exist today and all are inert rather than holes:
+Two such indirections exist today and both are inert rather than holes:
 
 * the parameterized snapshot inside ``emit_progress`` itself (its ``running``
   and ``stage`` are its parameters, and every caller of it IS scanned);
-* the fetcher's late-bound proxy in ``services/library/service.py``, which
-  forwards whatever its own — scanned — callers passed it;
 * ``finish_run``'s ``self.sync_progress = _default_progress()`` in
   ``services/library/_state.py``. This one is a write to the very attribute
   ``_snapshot_write_sites`` watches, and it is invisible only because the value
@@ -67,6 +66,9 @@ _PROGRESS_EVENT = "sync_progress"
 _KNOWN_PRODUCERS = frozenset(
     {
         "services/library/sync_orchestrator.py",
+        "services/library/sync_preview.py",
+        "services/library/sync_progress.py",
+        "services/library/unit_apply.py",
         "services/library/reporter.py",
         "services/artwork/service.py",
     }
@@ -189,12 +191,12 @@ def _parameter_default(fn: ast.AsyncFunctionDef, name: str) -> ast.expr | None:
 
 def _emit_progress_definition() -> ast.AsyncFunctionDef:
     for module, tree in _modules():
-        if module != "services/library/sync_orchestrator.py":
+        if module != "services/library/sync_progress.py":
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.AsyncFunctionDef) and node.name == "emit_progress":
                 return node
-    raise AssertionError("emit_progress is not defined in services/library/sync_orchestrator.py")
+    raise AssertionError("emit_progress is not defined in services/library/sync_progress.py")
 
 
 class TestTerminalFrameContract:
@@ -227,7 +229,7 @@ class TestScanScope:
         # Non-vacuity with teeth: an empty scan, or one narrowed back to a single
         # non-recursive directory, satisfies every assertion above. artwork.py is
         # the one that a services/library-only glob loses — it emits through an
-        # ``emit_progress`` callable the orchestrator passes in.
+        # ``emit_progress`` callable the cover preparer passes in.
         reached = {site.module for site in _frame_sites()}
         assert reached >= _KNOWN_PRODUCERS, f"the scan no longer reaches {sorted(_KNOWN_PRODUCERS - reached)}"
 
