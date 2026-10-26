@@ -1,28 +1,35 @@
-"""Contract test: the download queue names a platform as the rest of Tender does (#2573).
+"""Contract test: the download queue names a platform as the platform's system does (#2573).
 
-RomM's ROM answer carries no ``platform_name``; its ``platform_custom_name`` and
-``platform_display_name`` are the custom name a user set, which Tender never
-shows (#2564 D2). The name is the one the platform answer the download fetches
-at admission carries (D1): the cached name, else the listing name kept with the
+RomM's ROM answer carries no ``platform_name``: its ``platform_custom_name`` is the
+custom name a user set, and its ``platform_display_name`` that custom name where
+one is set, else the platform's ``name``. Tender never shows a custom name
+(#2564 D2). The name is the one the platform answer the download fetches at
+admission carries (#2573 D1): the cached name, else the listing name kept with the
 platform's ids, else the slug.
 
 Drives the real ``DownloadService`` over the real ``PlatformSystemService`` and
 real SQLite under ``tmp_path``; RomM's transport is the fake. The ROM is served
-as an archive, so the download reports an extracting phase as well.
+as an archive, so the download reports an extracting phase as well. Where a
+download must be paused, cancelled or kept waiting, the fake's transfer is held
+on its worker thread until the test lets it go.
 """
 
 from __future__ import annotations
 
 import asyncio
 import io
+import threading
 import zipfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from domain.platform_system import FOUND, PLATFORM_IDS_KEY, PlatformIds, encode_platform_ids
 
 from ._seed import seed_rom
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
@@ -31,34 +38,35 @@ _SLUG = "game-boy-advance"
 _ROM_ID = 5
 
 
-def _archive() -> bytes:
+def _archive(stem: str) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
-        archive.writestr("golden-sun.gba", b"GBAROM!!")
-        archive.writestr("golden-sun.sav", b"SAVE")
+        archive.writestr(f"{stem}.gba", b"GBAROM!!")
+        archive.writestr(f"{stem}.sav", b"SAVE")
     return buffer.getvalue()
 
 
-def _seed_server(harness) -> None:
-    payload = _archive()
-    harness.romm.roms[_ROM_ID] = {
-        "id": _ROM_ID,
-        "name": "Golden Sun",
-        "fs_name": "golden-sun",
-        "fs_name_no_ext": "golden-sun",
+def _seed_server(harness, rom_id: int = _ROM_ID) -> None:
+    stem = f"golden-sun-{rom_id}"
+    payload = _archive(stem)
+    harness.romm.roms[rom_id] = {
+        "id": rom_id,
+        "name": f"Golden Sun {rom_id}",
+        "fs_name": stem,
+        "fs_name_no_ext": stem,
         "fs_size_bytes": len(payload),
         "platform_slug": _SLUG,
         "platform_custom_name": "GBA Custom",
         "platform_display_name": "GBA Custom",
         "has_multiple_files": True,
         "files": [
-            {"file_name": "golden-sun.gba", "file_size_bytes": 8},
-            {"file_name": "golden-sun.sav", "file_size_bytes": 4},
+            {"file_name": f"{stem}.gba", "file_size_bytes": 8},
+            {"file_name": f"{stem}.sav", "file_size_bytes": 4},
         ],
     }
-    harness.romm.download_payloads[f"rom:{_ROM_ID}:golden-sun"] = payload
+    harness.romm.download_payloads[f"rom:{rom_id}:{stem}"] = payload
     harness.platform_systems.answers[_SLUG] = (FOUND, "gba")
-    seed_rom(harness, _ROM_ID, platform_slug=_SLUG)
+    seed_rom(harness, rom_id, platform_slug=_SLUG)
 
 
 def _keep(harness, *, cached: str | None, kept: str | None) -> None:
@@ -80,6 +88,50 @@ async def _drain_background_tasks() -> None:
 
 def _sent(harness, event: str) -> list[dict[str, Any]]:
     return [call.args[1] for call in harness.emit.call_args_list if call.args[0] == event]
+
+
+def _named_with_status(harness, status: str) -> list[str]:
+    return [frame["platform_name"] for frame in _sent(harness, "download_progress") if frame["status"] == status]
+
+
+async def _until(holds: Callable[[], bool]) -> None:
+    for _ in range(500):
+        if holds():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("the condition never held")
+
+
+class _HeldTransfer:
+    """Holds every ROM transfer of the fake on its worker thread until :meth:`release`.
+
+    Once released, a transfer carries on into the fake's own only when
+    *then_transfer* is set; otherwise it ends having written nothing.
+    """
+
+    def __init__(self, harness, monkeypatch, *, then_transfer: bool) -> None:
+        self._transfer = harness.romm.download_rom_content
+        self._then_transfer = then_transfer
+        self._released = threading.Event()
+        self._lock = threading.Lock()
+        self.held = 0
+        self.ended = 0
+        monkeypatch.setattr(harness.romm, "download_rom_content", self._hold)
+
+    def _hold(self, *args: Any, **kwargs: Any) -> None:
+        with self._lock:
+            self.held += 1
+        try:
+            if not self._released.wait(timeout=10):
+                raise TimeoutError("the held transfer was never released")
+            if self._then_transfer:
+                self._transfer(*args, **kwargs)
+        finally:
+            with self._lock:
+                self.ended += 1
+
+    def release(self) -> None:
+        self._released.set()
 
 
 @pytest.mark.parametrize(
@@ -104,3 +156,44 @@ async def test_the_queue_its_frames_and_its_completion_name_the_platform(harness
     assert {frame["status"] for frame in frames} >= {"downloading", "extracting"}
     assert {frame["platform_name"] for frame in frames} == {shown}
     assert [event["platform_name"] for event in _sent(harness, "download_complete")] == [shown]
+
+
+@pytest.mark.parametrize(
+    ("press", "status"),
+    [
+        pytest.param("pause_download", "paused", id="paused"),
+        pytest.param("cancel_download", "cancelled", id="cancelled"),
+    ],
+)
+async def test_a_paused_or_cancelled_download_s_frame_names_the_platform(harness, monkeypatch, press, status):
+    _seed_server(harness)
+    _keep(harness, cached="Game Boy Advance", kept=None)
+    held = _HeldTransfer(harness, monkeypatch, then_transfer=False)
+
+    assert (await harness.endpoints.start_download(_ROM_ID))["success"] is True
+    await _until(lambda: held.held == 1)
+    assert getattr(harness.endpoints, press)(_ROM_ID)["success"] is True
+    await _drain_background_tasks()
+    held.release()
+    await _until(lambda: held.ended == 1)
+
+    assert _named_with_status(harness, status) == ["Game Boy Advance"]
+
+
+async def test_a_download_waiting_for_a_transfer_slot_names_the_platform(harness, monkeypatch):
+    for rom_id in (_ROM_ID, 6, 7):
+        _seed_server(harness, rom_id)
+    _keep(harness, cached="Game Boy Advance", kept=None)
+    held = _HeldTransfer(harness, monkeypatch, then_transfer=True)
+
+    for rom_id in (_ROM_ID, 6):
+        assert (await harness.endpoints.start_download(rom_id))["success"] is True
+    await _until(lambda: held.held == 2)
+    assert (await harness.endpoints.start_download(7))["success"] is True
+    await _until(lambda: bool(_named_with_status(harness, "queued")))
+    held.release()
+    await _until(lambda: held.ended == 3)
+    await _drain_background_tasks()
+
+    assert _named_with_status(harness, "queued") == ["Game Boy Advance"]
+    assert [event["platform_name"] for event in _sent(harness, "download_complete")] == ["Game Boy Advance"] * 3

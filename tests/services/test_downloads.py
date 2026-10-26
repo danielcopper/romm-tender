@@ -5729,6 +5729,63 @@ class TestDoDownloadCancelReconcile:
         assert downloads.uow.rom_installs.get(77) is not None
         assert [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
+    @pytest.mark.asyncio
+    async def test_a_cancel_during_commit_names_the_platform_in_the_completion(self, make_downloads, tmp_path, emit):
+        import threading
+        from unittest.mock import patch
+
+        downloads = make_downloads(
+            retrodeck_folders=FakeRetroDeckFolders(
+                roms=str(tmp_path / "retrodeck" / "roms"),
+                bios=str(tmp_path / "retrodeck" / "bios"),
+            )
+        )
+        roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
+        roms_dir.mkdir(parents=True)
+        target_path = str(roms_dir / "zelda.z64")
+        rom_detail = {"id": 42, "name": "Zelda", "fs_name": "zelda.z64", "platform_slug": "n64"}
+        _seed_rom(downloads.uow, 42)
+        downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
+
+        def fake_transfer(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
+            with open(dest, "wb") as f:
+                f.write(b"\x00" * 512)
+
+        started = threading.Event()
+        release = threading.Event()
+        real_post_io = downloads.transfer._post_download_single_io
+
+        def blocking_post_io(*args):
+            started.set()
+            release.wait(timeout=5)
+            return real_post_io(*args)
+
+        with (
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_transfer),
+            patch.object(downloads.transfer, "_post_download_single_io", side_effect=blocking_post_io),
+        ):
+            task = asyncio.ensure_future(
+                downloads.transfer.run(
+                    42,
+                    rom_detail,
+                    target_path,
+                    "n64",
+                    "zelda.z64",
+                    _admitted(downloads, 42),
+                    platform_name="Nintendo 64",
+                )
+            )
+            while not started.is_set():
+                await asyncio.sleep(0.01)
+            task.cancel()
+            await asyncio.sleep(0)
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        completed = [c[0][1] for c in emit.call_args_list if c[0][0] == "download_complete"]
+        assert [payload["platform_name"] for payload in completed] == ["Nintendo 64"]
+
 
 class TestDoDownloadCancelEmitsEvent:
     """#1017: a clean cancel must emit a terminal download_progress(cancelled) frame."""
