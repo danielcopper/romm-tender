@@ -166,9 +166,9 @@ class RomRepository(Protocol):
         ...
 
     def set_fs_size_bytes(self, rom_id: int, size: int | None) -> None:
-        """Write the server-reported ROM size for *rom_id* — the download write-back (#1395).
+        """Persist the ROM size :meth:`Rom.record_fs_size_bytes` has just recorded for *rom_id*.
 
-        A between-syncs freshness top-up. Unlike the pin columns above,
+        An install's write between syncs. Unlike the pin columns above,
         ``fs_size_bytes`` ALSO rides the sync upsert in :meth:`save`, so a later
         re-sync re-writes the same authoritative server value — no conflict.
         ``size`` is the byte count, or ``None`` for SQL NULL.

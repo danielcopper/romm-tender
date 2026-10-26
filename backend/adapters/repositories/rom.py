@@ -280,12 +280,11 @@ class SqliteRomRepository(BaseRepository):
         self._conn.execute("UPDATE roms SET applied_launch_options = NULL")
 
     def set_fs_size_bytes(self, rom_id: int, size: int | None) -> None:
-        """Write the server-reported ROM size for ``rom_id`` — the download write-back (#1395).
+        """Write the ROM size ``Rom.record_fs_size_bytes`` has just recorded for ``rom_id``.
 
-        A between-syncs freshness top-up: a completed download stamps the size
-        from the ROM detail it already fetched, so the game-detail UI shows the
-        downloaded ROM's size without waiting for the next sync. Unlike the pin
-        columns (``emulator_override`` / ``selected_disc`` / ``applied_launch_options``),
+        An install records the size from the ROM detail it already fetched, so
+        the game-detail UI shows it without waiting for the next sync. Unlike
+        the pin columns (``emulator_override`` / ``selected_disc`` / ``applied_launch_options``),
         ``fs_size_bytes`` ALSO rides the sync UPSERT in :meth:`save`, so a later
         re-sync re-writes the same authoritative server value — the two write
         paths never conflict. ``size`` is the byte count, or ``None`` for SQL NULL.

@@ -843,11 +843,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   and the repository's column writers, which assign no field and so are no field assignment to the check.
   `RomRepository`'s `set_emulator_override`, `set_selected_disc`, `set_chosen_sgdb_id`, `set_artwork_checked_at` and
   `set_applied_launch_options` each persist one column the aggregate's own verb has just set, so the sync upsert never
-  touches it — but for `set_chosen_sgdb_id(rom_id, None)` in `ArtworkSlots.discard_superseded_choices_io`, which no verb
-  precedes. Three more change aggregate state with no verb: `RomRepository.set_fs_size_bytes`
-  (`RomInstallRecorder.do_record_install`), `clear_all_applied_launch_options` (Force Full Sync, the reset the
-  `applied_launch_options` entry sanctions) and `PlatformSyncStateRepository.revoke_skip` (by design,
-  `domain/platform_sync_state.py`'s docstring)
+  touches it; `set_fs_size_bytes` persists the size `Rom.record_fs_size_bytes` has just set into a column the sync
+  upsert also writes. Two more change aggregate state with no verb: `RomRepository.clear_all_applied_launch_options`
+  (Force Full Sync, the reset the `applied_launch_options` entry sanctions) and
+  `PlatformSyncStateRepository.revoke_skip` (by design, `domain/platform_sync_state.py`'s docstring)
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
   UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a
   bound method, through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory

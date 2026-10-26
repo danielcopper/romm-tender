@@ -1020,9 +1020,10 @@ Format: **invariant** — tier — enforced by.
   fields on purpose. The repository's column writers are outside the check because they write a column in SQL and assign
   no field. Most of them are their column's only write path because the sync's upsert never touches that column (their
   docstrings in `services/protocols/repositories.py`): the aggregate's verb sets the value and the writer persists that
-  one column. The writes the entry names as having no verb change the stored aggregate without its invariants being
-  asked at all, which is why each is named, with what sanctions it where something does. Detail:
-  [Database Design](database-design.md) → AST field-assignment check
+  one column. `set_fs_size_bytes` persists its verb's value too, into a column the upsert also writes. The writes the
+  entry names as having no verb change the stored aggregate without its invariants being asked at all, which is why each
+  is named, with what sanctions it where something does. Detail: [Database Design](database-design.md) → AST
+  field-assignment check
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
   UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py` (the first of the **two** rules that
   script carries, over one shared matcher; the file-I/O rule below is a different hazard with its own seam list and its
