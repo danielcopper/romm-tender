@@ -101,7 +101,8 @@ export async function executeSlotSwitch(
     if (result.reason === "server_unreachable") {
       reportServerReachable(false);
     }
-    const partial = partialSlotSwitchMessage(result.reason, result.set_aside ?? [], purpose);
+    const setAside = result.reason === "switch_stopped" ? result.set_aside : [];
+    const partial = partialSlotSwitchMessage(result.reason, setAside, purpose);
     if (partial !== null) {
       announceSaveSync(romId);
       return { ok: false, reason: result.reason, message: partial, partial: true };

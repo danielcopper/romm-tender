@@ -1380,10 +1380,19 @@ export type SaveSlotsResult =
   { success: true; slots: SaveSlotSummary[]; active_slot: string | null } | SaveSlotsFailure;
 export const getSaveSlots = endpoint<[number], SaveSlotsResult>("get_save_slots");
 export const getSlotSaves = endpoint<[number, string], SlotSavesResponse | EndpointFailure>("get_slot_saves");
-// `files` names the changed local saves on a `pending_uploads` refusal, and
-// `set_aside` the saves a `switch_stopped` answer had already moved into
-// `.romm-backup`.
-export type SwitchSlotResult = SwitchSlotResponse | (EndpointFailure & { files?: string[]; set_aside?: string[] });
+// A switch whose backups stopped partway, naming the saves it had already moved
+// into `.romm-backup`.
+export interface SwitchSlotStopped {
+  success: false;
+  reason: WireReasonSubset<"switch_stopped">;
+  message: string;
+  set_aside: string[];
+}
+// `files` names the changed local saves on a `pending_uploads` refusal.
+export type SwitchSlotResult =
+  | SwitchSlotResponse
+  | SwitchSlotStopped
+  | (Omit<EndpointFailure, "reason"> & { reason: Exclude<WireReason, "switch_stopped">; files?: string[] });
 export const switchSlot = endpoint<[number, string], SwitchSlotResult>("switch_slot");
 
 export const getSlotDeleteInfo = endpoint<[number, string], SlotDeleteInfo | EndpointFailure>("get_slot_delete_info");
