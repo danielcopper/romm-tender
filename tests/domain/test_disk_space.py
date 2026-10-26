@@ -159,6 +159,11 @@ class TestWrittenSinceAdmitted:
     def test_the_transfer_counts_beyond_what_was_on_disk_at_admission(self):
         assert written_since_admitted({"status": "downloading", "_transferred": 150, "_on_disk_at_start": 50}) == 100
 
+    def test_a_transfer_short_of_what_was_on_disk_takes_nothing_off_the_unpack(self):
+        entry = {"status": "extracting", "_transferred": 20, "_on_disk_at_start": 50, "bytes_downloaded": 40}
+
+        assert written_since_admitted(entry) == 40
+
     def test_what_an_extracting_download_has_unpacked_counts_too(self):
         entry = {"status": "extracting", "_transferred": 100, "bytes_downloaded": 40}
 
