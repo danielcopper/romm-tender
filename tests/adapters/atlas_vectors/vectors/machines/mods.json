@@ -1,0 +1,1600 @@
+{
+  "family": "machines",
+  "schema": 5,
+  "spec": "DESIGN.md 'Placements'; atlas/mods.py; docs/research/core-audit.md",
+  "description": "Where each emulator reads mods. The root is read live and the fragment below it is packaged world knowledge, so these vectors pin both halves of that join — and the half this family adds: an emulator may read mods from SEVERAL directories that are different mechanisms rather than alternatives, each with its own role, keying and link. Beside them: the switch, including the value a card writes down for a core that registers its options too late for any probe to read; the caveat that says the frontend patches this core's content as well; and the three ways this question refuses to name a directory at all.",
+  "vectors": [
+    {
+      "name": "one-core-three-trees-each-with-its-own-role-and-link",
+      "rationale": "FBNeo reads mods from three directories that are different mechanisms — a replacement romset, an IPS patch set, a romdata file — all under one switch. The answer states all three, each with its own keying and its own link into the distribution's hub, which is why this family's answer is plural where the texture one is singular.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.info": "corename = \"FinalBurn Neo\"\nneeds_fullpath = \"false\"\n",
+          "/mnt/sd/retrodeck/mods/retroarch-core/fbneo/patched/readme.txt": "put romsets here",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.so": {
+            "library_name": "FinalBurn Neo"
+          }
+        },
+        "symlinks": {
+          "/mnt/sd/retrodeck/bios/fbneo/patched": "/mnt/sd/retrodeck/mods/retroarch-core/fbneo/patched"
+        },
+        "mod_query": {
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "trees": [
+            {
+              "role": "patched",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/patched",
+              "physical_dir": "/mnt/sd/retrodeck/mods/retroarch-core/fbneo/patched",
+              "keying": "rom-name"
+            },
+            {
+              "role": "ips",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/ips",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "romdata",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/romdata",
+              "physical_dir": null,
+              "keying": "rom-name"
+            }
+          ],
+          "needs": [],
+          "enabled": true,
+          "caveats": [
+            {
+              "code": "soft-patching-applies",
+              "data": {
+                "core": "fbneo"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "the-recorded-default-answers-a-switch-no-machine-states",
+      "rationale": "FBNeo registers its options after retro_set_environment, so no probe reads a default and no options file mentions the key. The value written down in the card stands then — and because it is a claim about a build, a machine running another one gets it with unverified-version beside it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.so": {
+            "library_name": "FinalBurn Neo",
+            "library_version": "v9.9.9  deadbee"
+          }
+        },
+        "mod_query": {
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "trees": [
+            {
+              "role": "patched",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/patched",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "ips",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/ips",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "romdata",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/romdata",
+              "physical_dir": null,
+              "keying": "rom-name"
+            }
+          ],
+          "needs": [],
+          "enabled": true,
+          "caveats": [
+            {
+              "code": "unverified-version",
+              "data": {
+                "core": "fbneo",
+                "verification": "drifted",
+                "core_verified": "v1.0.0.03  01e29d5",
+                "core_live": "v9.9.9  deadbee"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an-options-file-outranks-the-recorded-default",
+      "rationale": "The record is the last resort, not the first word: a value in the options file RetroArch would read is what the machine says, and it wins.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "fbneo-allow-patched-romsets = \"disabled\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.so": {
+            "library_name": "FinalBurn Neo"
+          }
+        },
+        "mod_query": {
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "trees": [
+            {
+              "role": "patched",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/patched",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "ips",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/ips",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "romdata",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/romdata",
+              "physical_dir": null,
+              "keying": "rom-name"
+            }
+          ],
+          "needs": [],
+          "enabled": false,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-core-whose-switch-is-an-ini-in-its-own-user-tree",
+      "rationale": "The Dolphin core's mod switch is not a core option: it lives in a GFX.ini inside the user tree the core builds under the root RetroArch hands it. That is emulator-config-unread arriving on a core row for the first time, and the caveat names the file on this machine. The core is also a documented deviation suspect, so the directory carries emulator-read-unestablished beside it — and its .info declares needs_fullpath, so the frontend never patches its content and no soft-patching word rides this answer, which is the other side of the live read the FBNeo row shows.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/mnt/sd/retrodeck/cores/dolphin_libretro.info": "corename = \"dolphin-emu\"\nneeds_fullpath = \"true\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/dolphin_libretro.so": {
+            "library_name": "dolphin-emu"
+          }
+        },
+        "mod_query": {
+          "core_so": "dolphin_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/mnt/sd/retrodeck/saves/dolphin-emu/User/Load/GraphicMods",
+              "physical_dir": null,
+              "keying": null
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "core": "dolphin",
+                "config": "/mnt/sd/retrodeck/saves/dolphin-emu/User/Config/GFX.ini"
+              }
+            },
+            {
+              "code": "emulator-read-unestablished",
+              "data": {
+                "core": "dolphin",
+                "verdict": "suspect"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-core-with-no-switch-at-all-states-nothing-about-one",
+      "rationale": "The Azahar core registers 30 options and none of them names mods, and nobody has established that any setting gates the feature. The answer leaves enabled unstated and names no file — a weaker claim than emulator-config-unread, and the only honest one.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/azahar_libretro.so": {
+            "library_name": "Azahar",
+            "options": {}
+          }
+        },
+        "mod_query": {
+          "core_so": "azahar_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/mnt/sd/retrodeck/saves/azahar-emu/load/mods",
+              "physical_dir": null,
+              "keying": "title-id"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-read-unestablished",
+              "data": {
+                "core": "azahar",
+                "verdict": "suspect"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "soft-patching-rides-the-row-where-both-mechanisms-exist",
+      "rationale": "A caller holding an IPS file for an FBNeo romset has two true places to put it: the core's own ips tree, and beside the ROM where RetroArch itself would apply it. The second is stated as a caveat pointing at the other question — read from the same .info declaration, not recorded.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.info": "corename = \"FinalBurn Neo\"\nneeds_fullpath = \"false\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.so": {
+            "library_name": "FinalBurn Neo"
+          }
+        },
+        "mod_query": {
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "trees": [
+            {
+              "role": "patched",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/patched",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "ips",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/ips",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "romdata",
+              "dir": "/mnt/sd/retrodeck/bios/fbneo/romdata",
+              "physical_dir": null,
+              "keying": "rom-name"
+            }
+          ],
+          "needs": [],
+          "enabled": true,
+          "caveats": [
+            {
+              "code": "soft-patching-applies",
+              "data": {
+                "core": "fbneo"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-core-no-mod-card-reaches-refuses-in-its-own-words",
+      "rationale": "A statement about atlas, never about the emulator: most cores are simply outside the packaged wiring, and the refusal must not be read as 'this core has no mods'.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/mgba_libretro.so": {
+            "library_name": "mGBA"
+          }
+        },
+        "mod_query": {
+          "core_so": "mgba_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "unresolved": {
+            "code": "mod-wiring-unestablished",
+            "data": {
+              "core_so": "mgba_libretro.so"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "mods-follow-the-system-directory-into-the-content-s-own-folder",
+      "rationale": "systemfiles_in_content_dir sends the core to the ROM's own directory, so every tree hanging off that root goes there too — and with no content named the hole is the caller's to fill, on the answer rather than on each tree.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\nsystemfiles_in_content_dir = \"true\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.so": {
+            "library_name": "FinalBurn Neo"
+          }
+        },
+        "mod_query": {
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "trees": [
+            {
+              "role": "patched",
+              "dir": "<content_dir>/fbneo/patched",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "ips",
+              "dir": "<content_dir>/fbneo/ips",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "romdata",
+              "dir": "<content_dir>/fbneo/romdata",
+              "physical_dir": null,
+              "keying": "rom-name"
+            }
+          ],
+          "needs": [
+            "content_dir"
+          ],
+          "enabled": true,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "an-emudeck-core-answers-its-own-default-with-no-hub-behind-it",
+      "rationale": "EmuDeck wires no mods root at all — its installer creates none and links nothing — so the same core answers the same emulator-side directories with no physical_dir behind them.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "emulationPath=\"/mnt/sd/Emulation\"\nbiosPath=\"/mnt/sd/Emulation/bios\"\nromsPath=\"/mnt/sd/Emulation/roms\"\nsavesPath=\"/mnt/sd/Emulation/saves\"\nstoragePath=\"/mnt/sd/Emulation/storage\"\ntoolsPath=\"/mnt/sd/Emulation/tools\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/Emulation/cores\"\nsystem_directory = \"/mnt/sd/Emulation/bios\"\nsavefile_directory = \"/mnt/sd/Emulation/saves/retroarch/saves\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/Emulation/saves/retroarch/saves",
+          "/mnt/sd/Emulation/cores",
+          "/mnt/sd/Emulation/bios"
+        ],
+        "cores": {
+          "/mnt/sd/Emulation/cores/fbneo_libretro.so": {
+            "library_name": "FinalBurn Neo"
+          }
+        },
+        "mod_query": {
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/mnt/sd/Emulation",
+            "health": []
+          }
+        ],
+        "mod_location": {
+          "trees": [
+            {
+              "role": "patched",
+              "dir": "/mnt/sd/Emulation/bios/fbneo/patched",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "ips",
+              "dir": "/mnt/sd/Emulation/bios/fbneo/ips",
+              "physical_dir": null,
+              "keying": "rom-name"
+            },
+            {
+              "role": "romdata",
+              "dir": "/mnt/sd/Emulation/bios/fbneo/romdata",
+              "physical_dir": null,
+              "keying": "rom-name"
+            }
+          ],
+          "needs": [],
+          "enabled": true,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-standalone-entry-answers-where-its-saves-refuse",
+      "rationale": "The deliberate asymmetry, one family over: a standalone emulator's mod directory is its own default below an XDG base the distribution's flatpak pins, so the entry answers it while refusing savefile_location — with emulator-config-unread naming the file that would say whether loading is on.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <fullname>Nintendo GameCube</fullname>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <platform>gc</platform>\n    <theme>gc</theme>\n  </system>\n  <system>\n    <name>n3ds</name>\n    <fullname>Nintendo 3DS</fullname>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .3DS</extension>\n    <command label=\"Azahar (Standalone)\">%EMULATOR_AZAHAR% %ROM%</command>\n    <platform>n3ds</platform>\n    <theme>n3ds</theme>\n  </system>\n  <system>\n    <name>arcade</name>\n    <fullname>Arcade</fullname>\n    <path>%ROMPATH%/arcade</path>\n    <extension>.zip .ZIP</extension>\n    <command label=\"MAME (Standalone)\">%EMULATOR_MAME% %ROM%</command>\n    <platform>arcade</platform>\n    <theme>arcade</theme>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/mods/Dolphin/GraphicMods/readme.txt": "put mods here"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/Load/GraphicMods": "/mnt/sd/retrodeck/mods/Dolphin/GraphicMods"
+        },
+        "entry_mod_query": {
+          "system": "gc"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/Load/GraphicMods",
+              "physical_dir": "/mnt/sd/retrodeck/mods/Dolphin/GraphicMods",
+              "keying": null
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/dolphin-emu/GFX.ini"
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-standalone-emulator-with-no-established-switch-stays-silent-about-one",
+      "rationale": "Azahar's mods row names no configuration file, because nobody has established that any switch exists — not a core option, not a CLI flag. The answer leaves enabled unstated and points nowhere, which is a weaker claim than emulator-config-unread and the only honest one available.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <fullname>Nintendo GameCube</fullname>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <platform>gc</platform>\n    <theme>gc</theme>\n  </system>\n  <system>\n    <name>n3ds</name>\n    <fullname>Nintendo 3DS</fullname>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .3DS</extension>\n    <command label=\"Azahar (Standalone)\">%EMULATOR_AZAHAR% %ROM%</command>\n    <platform>n3ds</platform>\n    <theme>n3ds</theme>\n  </system>\n  <system>\n    <name>arcade</name>\n    <fullname>Arcade</fullname>\n    <path>%ROMPATH%/arcade</path>\n    <extension>.zip .ZIP</extension>\n    <command label=\"MAME (Standalone)\">%EMULATOR_MAME% %ROM%</command>\n    <platform>arcade</platform>\n    <theme>arcade</theme>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "n3ds"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/azahar-emu/load/mods",
+              "physical_dir": null,
+              "keying": "title-id"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "an-installer-written-mod-directory-refuses",
+      "rationale": "MAME's plugin directories are values RetroDECK writes into mame.ini rather than defaults the emulator opens, so quoting them would state an arrangement's directory as an emulator's read location. The row is deliberately absent from the packaged table and the entry refuses.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <fullname>Nintendo GameCube</fullname>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <platform>gc</platform>\n    <theme>gc</theme>\n  </system>\n  <system>\n    <name>n3ds</name>\n    <fullname>Nintendo 3DS</fullname>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .3DS</extension>\n    <command label=\"Azahar (Standalone)\">%EMULATOR_AZAHAR% %ROM%</command>\n    <platform>n3ds</platform>\n    <theme>n3ds</theme>\n  </system>\n  <system>\n    <name>arcade</name>\n    <fullname>Arcade</fullname>\n    <path>%ROMPATH%/arcade</path>\n    <extension>.zip .ZIP</extension>\n    <command label=\"MAME (Standalone)\">%EMULATOR_MAME% %ROM%</command>\n    <platform>arcade</platform>\n    <theme>arcade</theme>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "arcade"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "unresolved": {
+            "code": "standalone-unsupported",
+            "data": {
+              "label": "MAME (Standalone)",
+              "system": "arcade"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "duckstations-cheat-files-sit-where-its-own-default-puts-them",
+      "rationale": "Cheat files are DuckStation's patch mechanism, the counterpart of PCSX2's .pnach patches. The directory is [Folders] Cheats, and RetroDECK never writes that key — so the emulator's own default governs: 'cheats' below the DataRoot, composed the way every folder of this emulator is composed. The tree is stated as a configuration key rather than a fixed XDG subpath because the root it hangs off is not a fixed XDG join at all, which is what a card naming a base outright would get wrong on the other arrangement.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"mods_path\": \"/mnt/sd/retrodeck/mods\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[MemoryCards]\nCard1Type = PerGameTitle\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/mods",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/cheats",
+              "physical_dir": null,
+              "keying": "title"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duckstation-a-configured-cheats-directory-is-read-as-it-stands",
+      "rationale": "A host-spelled absolute [Folders] Cheats is taken as it stands, the way LoadPathFromSettings takes it — the same helper the BIOS search directory and the memory cards go through (a sandbox-spelled one would translate through the launch's sandbox map instead, #277). This is the state an arrangement that does wire the key would leave, and the answer follows the configuration rather than the emulator's default.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"mods_path\": \"/mnt/sd/retrodeck/mods\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[Folders]\nCheats = /mnt/sd/retrodeck/mods/DuckStation/cheats\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/mods",
+          "/mnt/sd/retrodeck/mods/DuckStation/cheats",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/mnt/sd/retrodeck/mods/DuckStation/cheats",
+              "physical_dir": null,
+              "keying": "title"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-duckstation-mods-hang-off-the-dataroot-its-sandbox-pins",
+      "rationale": "Nothing on this machine holds a DuckStation settings.ini, and that used to leave the DataRoot an open question: the emulator picks it from whether XDG_CONFIG_HOME is set (qthost.cpp:562-582), so the answer named the environment-unset side — the data one — and said the environment decides. It does not decide here. Every emulator RetroDECK ships runs inside RetroDECK's own flatpak, and flatpak force-pins XDG_CONFIG_HOME to the per-app config directory after applying every override (flatpak-context.c:3158-3187 at 1.16.6), so the set branch is the only branch such a launch can take. The mod tree is the one below that DataRoot, stated plainly — the same word the save route uses for the same fact, so the routes never disagree about it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"mods_path\": \"/mnt/sd/retrodeck/mods\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/mods",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/cheats",
+              "physical_dir": null,
+              "keying": "title"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duckstation-an-unreadable-settings-file-refuses-the-mod-question",
+      "rationale": "The file that would name the directory exists and cannot be read. Where it reads cheat files from is then unknowable, and the question is refused rather than answered with the default the file might well have overridden.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"mods_path\": \"/mnt/sd/retrodeck/mods\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": {
+            "status": "unreadable"
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/mods",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "unresolved": {
+            "code": "emulator-config-unreadable",
+            "data": {
+              "token": "DUCKSTATION",
+              "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "emudeck-duckstations-cheats-hang-off-the-data-side-dataroot",
+      "rationale": "The arrangement that makes the shape matter. EmuDeck installs DuckStation as an AppImage under ~/Applications and keeps its settings under the data home (emuDeckDuckStation.sh:8), which is the DataRoot a launch outside a flatpak sandbox picks — so the same card answers below a different root, and a card naming 'config' outright would have pointed at a directory this emulator never opens. The answer arrives at all because the mod route now goes through the same variant gate the save route uses.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"DuckStation (Standalone)\">%EMULATOR_DUCKSTATION% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/Applications/DuckStation.AppImage": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.local/share/duckstation/settings.ini": "[MemoryCards]\nCard1Type = PerGameTitle\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.local/share/duckstation/cheats",
+              "physical_dir": null,
+              "keying": "title"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.local/share/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-mod-answer-refused-for-the-variant-names-it-the-same-way",
+      "rationale": "The mod route's half of the same gate, and it must refuse in the same words: two questions about one launch that disagreed about which binary runs would be worse than either refusing. The card exists; the tree does not, because nothing establishes what the Proton build reads.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"DuckStation (Standalone)\">%EMULATOR_DUCKSTATION% %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "unresolved": {
+            "code": "standalone-variant-unestablished",
+            "data": {
+              "label": "DuckStation (Standalone)",
+              "system": "psx",
+              "variant": "proton"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "emudeck-the-flatpaks-own-data-home-carries-its-mod-tree-too",
+      "rationale": "The mod half of the same gate. Dolphin reads graphic mods from a second fixed subpath below the same data home, so the two answers of this entry name sibling directories on one tree — which is what a caller comparing them should find.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu/Dolphin.ini": "[Core]\nSlotA = 8\nSlotB = 255\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Applications",
+          "/home/deck/.local/share/flatpak/app/org.DolphinEmu.dolphin-emu",
+          "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC",
+          "/home/deck/ROMs"
+        ],
+        "entry_mod_query": {
+          "system": "gc"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Load/GraphicMods",
+              "physical_dir": null,
+              "keying": null
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "config": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu/GFX.ini"
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-forks-mods-sit-below-the-name-its-build-spells",
+      "rationale": "The mod half, named as a sibling of the texture tree on the same build — the two answers of one entry must agree about the directory above them, which is exactly what a single stated name makes unavoidable.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"PrimeHack (Standalone)\">%EMULATOR_PRIMEHACK% %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Applications",
+          "/home/deck/.local/share/flatpak/app/io.github.shiiion.primehack",
+          "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/Load/GraphicMods",
+          "/home/deck/ROMs"
+        ],
+        "entry_mod_query": {
+          "system": "gc"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/Load/GraphicMods",
+              "physical_dir": null,
+              "keying": null
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "PRIMEHACK",
+                "config": "/home/deck/.var/app/io.github.shiiion.primehack/config/dolphin-emu/GFX.ini"
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "PRIMEHACK",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-duckstation-a-sandbox-spelled-cheats-directory-is-translated",
+      "rationale": "The cheat tree is read from the same settings.ini the texture and states directories come from, written from inside the same flatpak — so an absolute [Folders] Cheats spelled /var/data/... anchors at the app's private data directory on the host, ~/.var/app/<app id>/data. One sandbox map serves every answer about this emulator, or one machine gets a translated states answer and an untranslated cheats answer for the same config file.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"mods_path\": \"/mnt/sd/retrodeck/mods\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[Folders]\nCheats = /var/data/duckstation/cheats\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/data/duckstation/cheats",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/duckstation/cheats",
+              "physical_dir": null,
+              "keying": "title"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-duckstation-a-sandbox-only-cheats-directory-refuses-with-the-path",
+      "rationale": "settings.ini reads fine and [Folders] Cheats states a path only the emulator's sandbox can spell (/var/lib/ is no XDG bind) — the refusal is emulator-config-path-untranslatable with the stated value in data.path, exactly the outcome the same value in [MemoryCards] Directory already reaches, never a verbatim sandbox path stated as a host tree.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"mods_path\": \"/mnt/sd/retrodeck/mods\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[Folders]\nCheats = /var/lib/cheats\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "unresolved": {
+            "code": "emulator-config-path-untranslatable",
+            "data": {
+              "token": "DUCKSTATION",
+              "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini",
+              "path": "/var/lib/cheats"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-var-spelled-cheats-directory-is-the-host-path-it-names",
+      "rationale": "The cheat tree's half of the same fact: an EmuDeck AppImage launch has no sandbox, so a /var/data value in its settings.ini is a host path rather than the app's private data home. The DataRoot probe still runs — the config-home candidate carries the file here — and the answer names the value as written, where the RetroDECK vector of this key translates it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Standalone)\">%EMULATOR_DUCKSTATION% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/Applications/duckstation.AppImage": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/duckstation/settings.ini": "[Folders]\nCheats = /var/data/duckstation/cheats\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/var/data/duckstation/cheats",
+          "/home/deck/ROMs"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/var/data/duckstation/cheats",
+              "physical_dir": null,
+              "keying": "title"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duckstation-a-case-variant-spelling-of-the-cheats-key-governs",
+      "rationale": "The cheat tree comes from the same settings.ini read through the same CSimpleIniA (ini_settings_interface.h:65 at 1f6de046b), so [folders] cheats is the [Folders] Cheats key to the running emulator, and the relative value joins the DataRoot (LoadPathFromSettings, settings.cpp:1958-1965). An exact-case lookup would have answered the compiled cheats default while the emulator loads from the configured tree (#295).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"mods_path\": \"/mnt/sd/retrodeck/mods\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[folders]\ncheats = mycheats\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/mods",
+          "/mnt/sd/retrodeck/mods/DuckStation/cheats",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/mycheats",
+              "physical_dir": null,
+              "keying": "title"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-the-patch-tree-is-the-configured-patches-directory",
+      "rationale": "#314: the mod answer used to join 'patches' below the DataRoot outright, which is true only for as long as nobody sets the key. EmuFolders::LoadConfig reads [Folders] Patches through LoadPathFromSettings with the compiled default 'patches' (Pcsx2Config.cpp:2288 with :2272-2278) — the same helper the memory-card, texture, savestates and gamesettings directories go through — so a relative value hangs off the DataRoot and the answer follows it there.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <fullname>Sony PlayStation 2</fullname>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% -batch %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nPatches = my-patches\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/my-patches",
+              "physical_dir": null,
+              "keying": "serial"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "PCSX2",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-an-unset-patches-key-is-the-compiled-default",
+      "rationale": "The silence half of #314, and the state both live arrangements are in: RetroDECK does not write [Folders] Patches, so the compiled 'patches' below the DataRoot governs (Pcsx2Config.cpp:2288; :2262 writes that same default into a fresh ini). The answer is the one the fixed join gave — the difference is that it is now read rather than assumed, and would follow the key if a machine set it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <fullname>Sony PlayStation 2</fullname>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% -batch %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nMemoryCards = /mnt/sd/retrodeck/saves/ps2/pcsx2/memcards\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/patches",
+              "physical_dir": null,
+              "keying": "serial"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "PCSX2",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-a-sandbox-spelled-patches-directory-is-listed-at-its-host-spelling",
+      "rationale": "The third witness #314 asks for. PCSX2 writes its configuration from inside the Flatpak sandbox, so an absolute value there is a sandbox spelling: /var/config is bound to the app's own config home, and the answer names the directory as this host reads it rather than a path no host process can open. The same translation the memory-card, texture and states directories already get.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <fullname>Sony PlayStation 2</fullname>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% -batch %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nPatches = /var/config/PCSX2/my-patches\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/my-patches",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_mod_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/my-patches",
+              "physical_dir": null,
+              "keying": "serial"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "PCSX2",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

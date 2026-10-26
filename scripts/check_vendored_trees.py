@@ -8,6 +8,12 @@ patch — pinned by its own ``<pkg>.SHA256SUMS``, so the only thing separating
 is also large enough that reviewing it as a diff reads as noise, which is exactly
 the condition under which a hand-edit or a half-finished re-copy survives review.
 
+The resolver's recorded machines under ``tests/adapters/atlas_vectors/`` are the
+second root, held to the same contract: a copy of data we do not own, taken
+verbatim from a release and kept out of ``backend/`` because everything there
+ships to users. Each root names the README that holds its provenance and its
+re-copy procedure, and the report sends a reader to it.
+
 The contract is one manifest per tree: ``<pkg>.SHA256SUMS`` beside ``<pkg>/``
 pins it, and a package directory with no manifest is a failure. That second half
 is what makes the next vendored package guarded by default rather than guarded
@@ -64,6 +70,10 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 VENDOR_DIR = ROOT / "backend" / "_vendor"
+ATLAS_VECTORS_DIR = ROOT / "tests" / "adapters" / "atlas_vectors"
+
+VENDOR_GUIDE = "backend/_vendor/README.md"
+ATLAS_VECTORS_GUIDE = "tests/adapters/atlas_vectors/README.md"
 
 MANIFEST_SUFFIX = ".SHA256SUMS"
 LICENSE_SUFFIX = ".LICENSE"
@@ -260,7 +270,7 @@ def tree_discrepancies(vendor_dir: pathlib.Path, package: str, manifest_path: pa
     return discrepancies
 
 
-def collect_discrepancies(vendor_dir: pathlib.Path) -> list[str]:
+def collect_discrepancies(vendor_dir: pathlib.Path, guide: str = VENDOR_GUIDE) -> list[str]:
     """Every way ``vendor_dir``'s trees differ from what pins them, grouped by package.
 
     A manifest naming no tree is walked like any other: its entries all report
@@ -268,6 +278,7 @@ def collect_discrepancies(vendor_dir: pathlib.Path) -> list[str]:
     manifest that cannot be read — a bad line, undecodable bytes, a file that
     will not open — is one line against its own package and the sweep goes on,
     so one manifest's refusal never costs the report every other tree's drift.
+    ``guide`` is the README a tree pinned by nothing is sent to.
     """
     manifests = manifest_paths(vendor_dir)
     discrepancies: list[str] = []
@@ -277,36 +288,49 @@ def collect_discrepancies(vendor_dir: pathlib.Path) -> list[str]:
             discrepancies.append(
                 f"{package}/: no {package}{MANIFEST_SUFFIX} — the tree is pinned by nothing. Vendor the "
                 "upstream release manifest beside it, or generate one from the tree if the copy carries a "
-                "local patch (backend/_vendor/README.md)"
+                f"local patch ({guide})"
             )
             continue
         discrepancies.extend(tree_discrepancies(vendor_dir, package, manifest_path))
     return discrepancies
 
 
+def report(root: pathlib.Path, label: str, guide: str) -> bool:
+    """Print every discrepancy under *root* with the way back to a clean copy; whether there was none."""
+    discrepancies = collect_discrepancies(root, guide)
+    if not discrepancies:
+        return True
+    print(f"ERROR: {label}/ is not what its manifests pin:", file=sys.stderr)
+    for line in discrepancies:
+        print(f"  {line}", file=sys.stderr)
+    print(
+        "\nA vendored package is an upstream copy — verbatim, or verbatim plus a\n"
+        "documented local patch. Never hand-edit one, and never fix a problem here\n"
+        "that belongs upstream. Re-copy the tree from the release it pins; where the\n"
+        "copy carries a deliberate local patch, reapply the patch to the fresh copy\n"
+        "and regenerate its manifest from the result:\n"
+        "\n"
+        f"  cd {label} && find <pkg> -type f -not -path '*/__pycache__/*' \\\n"
+        f"      | LC_ALL=C sort | xargs sha256sum > <pkg>{MANIFEST_SUFFIX}\n"
+        "\n"
+        "Regenerating a manifest is also how this gate is silenced without fixing\n"
+        "anything, so it is only ever the last step of such a re-copy, never the answer\n"
+        "to a failure above.\n"
+        "\n"
+        f"Per-package provenance and the full update procedure: {guide}",
+        file=sys.stderr,
+    )
+    return False
+
+
 def main() -> int:
-    discrepancies = collect_discrepancies(VENDOR_DIR)
-    if discrepancies:
-        print("ERROR: backend/_vendor/ is not what its manifests pin:", file=sys.stderr)
-        for line in discrepancies:
-            print(f"  {line}", file=sys.stderr)
-        print(
-            "\nA vendored package is an upstream copy — verbatim, or verbatim plus a\n"
-            "documented local patch. Never hand-edit one, and never fix a problem here\n"
-            "that belongs upstream. Re-copy the tree from the release it pins; where the\n"
-            "copy carries a deliberate local patch, reapply the patch to the fresh copy\n"
-            "and regenerate its manifest from the result:\n"
-            "\n"
-            "  cd backend/_vendor && find <pkg> -type f -not -path '*/__pycache__/*' \\\n"
-            f"      | LC_ALL=C sort | xargs sha256sum > <pkg>{MANIFEST_SUFFIX}\n"
-            "\n"
-            "Regenerating a manifest is also how this gate is silenced without fixing\n"
-            "anything, so it is only ever the last step of such a re-copy, never the answer\n"
-            "to a failure above.\n"
-            "\n"
-            "Per-package provenance and the full update procedure: backend/_vendor/README.md",
-            file=sys.stderr,
-        )
+    # Both roots are read here, at the call, so a test can repoint either one.
+    roots = (
+        (VENDOR_DIR, "backend/_vendor", VENDOR_GUIDE),
+        (ATLAS_VECTORS_DIR, "tests/adapters/atlas_vectors", ATLAS_VECTORS_GUIDE),
+    )
+    clean = [report(root, label, guide) for root, label, guide in roots]
+    if not all(clean):
         return 1
     print("OK: every vendored tree matches the manifest that pins it exactly.")
     return 0

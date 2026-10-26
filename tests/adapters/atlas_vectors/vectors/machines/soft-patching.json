@@ -1,0 +1,767 @@
+{
+  "family": "machines",
+  "schema": 5,
+  "spec": "DESIGN.md 'Placements'; atlas/mods.py; RetroArch a79435a (runloop.c, tasks/task_patch.c, tasks/task_content.c)",
+  "description": "Which files RetroArch patches this content with before any core sees it. The candidate names follow from the content path by upstream arithmetic atlas ports, so these vectors pin that composition — the extension truncation, the archive rule, the attempt order and the indexed continuations — plus the two readings around it: whether this core loads its content into memory, and whether anyone established which formats this build attempts.",
+  "vectors": [
+    {
+      "name": "the-candidate-set-is-the-content-s-own-names-in-attempt-order",
+      "rationale": "Soft patching has no directory of its own: RetroArch composes four names from the content path with its last extension stripped and tries them ips -> bps -> ups -> xdelta, each with nine indexed continuations on top. On RetroDECK the shipped binary was read for its compile-time flags, so every candidate states that this build attempts it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "soft_patch_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.zip"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "soft_patch_candidates": {
+          "candidates": [
+            {
+              "format": "ips",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "bps",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "ups",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "xdelta",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta9"
+              ],
+              "attempted": true
+            }
+          ],
+          "applies": null,
+          "caveats": [
+            {
+              "code": "no-core",
+              "data": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-core-that-loads-its-content-into-memory-is-patched",
+      "rationale": "The frontend patches the content BUFFER, so it patches only what it loads into memory. fbneo's .info declares needs_fullpath = false, which is the declaration atlas reads for it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.info": "corename = \"FinalBurn Neo\"\nneeds_fullpath = \"false\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.so": {
+            "library_name": "FinalBurn Neo"
+          }
+        },
+        "soft_patch_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.zip",
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "soft_patch_candidates": {
+          "candidates": [
+            {
+              "format": "ips",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "bps",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "ups",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "xdelta",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta9"
+              ],
+              "attempted": true
+            }
+          ],
+          "applies": true,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-core-handed-a-full-path-is-never-patched",
+      "rationale": "The other side of the same gate: a core that needs a full path is handed the file, not its bytes, so the patch call is never reached — the candidates are still named, and 'applies' says they are never applied.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/mnt/sd/retrodeck/cores/pcsx2_libretro.info": "corename = \"LRPS2\"\nneeds_fullpath = \"true\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/pcsx2_libretro.so": {
+            "library_name": "LRPS2"
+          }
+        },
+        "soft_patch_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/ps2/Game.chd",
+          "core_so": "pcsx2_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "soft_patch_candidates": {
+          "candidates": [
+            {
+              "format": "ips",
+              "path": "/mnt/sd/retrodeck/roms/ps2/Game.ips",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips1",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips2",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips3",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips4",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips5",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips6",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips7",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips8",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ips9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "bps",
+              "path": "/mnt/sd/retrodeck/roms/ps2/Game.bps",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps1",
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps2",
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps3",
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps4",
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps5",
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps6",
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps7",
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps8",
+                "/mnt/sd/retrodeck/roms/ps2/Game.bps9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "ups",
+              "path": "/mnt/sd/retrodeck/roms/ps2/Game.ups",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups1",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups2",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups3",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups4",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups5",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups6",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups7",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups8",
+                "/mnt/sd/retrodeck/roms/ps2/Game.ups9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "xdelta",
+              "path": "/mnt/sd/retrodeck/roms/ps2/Game.xdelta",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta1",
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta2",
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta3",
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta4",
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta5",
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta6",
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta7",
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta8",
+                "/mnt/sd/retrodeck/roms/ps2/Game.xdelta9"
+              ],
+              "attempted": true
+            }
+          ],
+          "applies": false,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "an-info-that-states-no-declaration-leaves-applicability-unanswered",
+      "rationale": "118 of the 292 .info files a stock RetroDECK ships state no needs_fullpath at all. The file was read and says nothing this reading can use, which is an honest null rather than a caveat: nothing failed.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.info": "corename = \"FinalBurn Neo\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/fbneo_libretro.so": {
+            "library_name": "FinalBurn Neo"
+          }
+        },
+        "soft_patch_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.zip",
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "soft_patch_candidates": {
+          "candidates": [
+            {
+              "format": "ips",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ips9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "bps",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.bps9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "ups",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.ups9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "xdelta",
+              "path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta1",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta2",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta3",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta4",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta5",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta6",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta7",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta8",
+                "/mnt/sd/retrodeck/roms/arcade/sf2ce.xdelta9"
+              ],
+              "attempted": true
+            }
+          ],
+          "applies": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "content-inside-an-archive-is-patched-under-the-entry-s-own-name",
+      "rationale": "path_basedir_wrapper cuts at the archive delimiter and keeps the archive's directory while path_basename returns what follows it, so a patch for pack.zip#Game.nes sits beside the archive as Game.ips.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "soft_patch_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/nes/pack.zip#Game.nes"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "soft_patch_candidates": {
+          "candidates": [
+            {
+              "format": "ips",
+              "path": "/mnt/sd/retrodeck/roms/nes/Game.ips",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/nes/Game.ips1",
+                "/mnt/sd/retrodeck/roms/nes/Game.ips2",
+                "/mnt/sd/retrodeck/roms/nes/Game.ips3",
+                "/mnt/sd/retrodeck/roms/nes/Game.ips4",
+                "/mnt/sd/retrodeck/roms/nes/Game.ips5",
+                "/mnt/sd/retrodeck/roms/nes/Game.ips6",
+                "/mnt/sd/retrodeck/roms/nes/Game.ips7",
+                "/mnt/sd/retrodeck/roms/nes/Game.ips8",
+                "/mnt/sd/retrodeck/roms/nes/Game.ips9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "bps",
+              "path": "/mnt/sd/retrodeck/roms/nes/Game.bps",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/nes/Game.bps1",
+                "/mnt/sd/retrodeck/roms/nes/Game.bps2",
+                "/mnt/sd/retrodeck/roms/nes/Game.bps3",
+                "/mnt/sd/retrodeck/roms/nes/Game.bps4",
+                "/mnt/sd/retrodeck/roms/nes/Game.bps5",
+                "/mnt/sd/retrodeck/roms/nes/Game.bps6",
+                "/mnt/sd/retrodeck/roms/nes/Game.bps7",
+                "/mnt/sd/retrodeck/roms/nes/Game.bps8",
+                "/mnt/sd/retrodeck/roms/nes/Game.bps9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "ups",
+              "path": "/mnt/sd/retrodeck/roms/nes/Game.ups",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/nes/Game.ups1",
+                "/mnt/sd/retrodeck/roms/nes/Game.ups2",
+                "/mnt/sd/retrodeck/roms/nes/Game.ups3",
+                "/mnt/sd/retrodeck/roms/nes/Game.ups4",
+                "/mnt/sd/retrodeck/roms/nes/Game.ups5",
+                "/mnt/sd/retrodeck/roms/nes/Game.ups6",
+                "/mnt/sd/retrodeck/roms/nes/Game.ups7",
+                "/mnt/sd/retrodeck/roms/nes/Game.ups8",
+                "/mnt/sd/retrodeck/roms/nes/Game.ups9"
+              ],
+              "attempted": true
+            },
+            {
+              "format": "xdelta",
+              "path": "/mnt/sd/retrodeck/roms/nes/Game.xdelta",
+              "continuations": [
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta1",
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta2",
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta3",
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta4",
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta5",
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta6",
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta7",
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta8",
+                "/mnt/sd/retrodeck/roms/nes/Game.xdelta9"
+              ],
+              "attempted": true
+            }
+          ],
+          "applies": null,
+          "caveats": [
+            {
+              "code": "no-core",
+              "data": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-build-nobody-read-states-no-format-as-attempted",
+      "rationale": "A bare RetroArch install is whatever binary the user installed. Patching and its xdelta applier are compile-time flags nothing on a machine writes down, so the file names are exact and every 'attempted' is null with the code that says why.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "savefile_directory = \"/saves\"\n"
+        },
+        "dirs": [
+          "/saves"
+        ],
+        "soft_patch_query": {
+          "content_path": "/roms/nes/Game.nes"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "soft_patch_candidates": {
+          "candidates": [
+            {
+              "format": "ips",
+              "path": "/roms/nes/Game.ips",
+              "continuations": [
+                "/roms/nes/Game.ips1",
+                "/roms/nes/Game.ips2",
+                "/roms/nes/Game.ips3",
+                "/roms/nes/Game.ips4",
+                "/roms/nes/Game.ips5",
+                "/roms/nes/Game.ips6",
+                "/roms/nes/Game.ips7",
+                "/roms/nes/Game.ips8",
+                "/roms/nes/Game.ips9"
+              ],
+              "attempted": null
+            },
+            {
+              "format": "bps",
+              "path": "/roms/nes/Game.bps",
+              "continuations": [
+                "/roms/nes/Game.bps1",
+                "/roms/nes/Game.bps2",
+                "/roms/nes/Game.bps3",
+                "/roms/nes/Game.bps4",
+                "/roms/nes/Game.bps5",
+                "/roms/nes/Game.bps6",
+                "/roms/nes/Game.bps7",
+                "/roms/nes/Game.bps8",
+                "/roms/nes/Game.bps9"
+              ],
+              "attempted": null
+            },
+            {
+              "format": "ups",
+              "path": "/roms/nes/Game.ups",
+              "continuations": [
+                "/roms/nes/Game.ups1",
+                "/roms/nes/Game.ups2",
+                "/roms/nes/Game.ups3",
+                "/roms/nes/Game.ups4",
+                "/roms/nes/Game.ups5",
+                "/roms/nes/Game.ups6",
+                "/roms/nes/Game.ups7",
+                "/roms/nes/Game.ups8",
+                "/roms/nes/Game.ups9"
+              ],
+              "attempted": null
+            },
+            {
+              "format": "xdelta",
+              "path": "/roms/nes/Game.xdelta",
+              "continuations": [
+                "/roms/nes/Game.xdelta1",
+                "/roms/nes/Game.xdelta2",
+                "/roms/nes/Game.xdelta3",
+                "/roms/nes/Game.xdelta4",
+                "/roms/nes/Game.xdelta5",
+                "/roms/nes/Game.xdelta6",
+                "/roms/nes/Game.xdelta7",
+                "/roms/nes/Game.xdelta8",
+                "/roms/nes/Game.xdelta9"
+              ],
+              "attempted": null
+            }
+          ],
+          "applies": null,
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "no-core",
+              "data": {}
+            },
+            {
+              "code": "patch-formats-unestablished",
+              "data": {
+                "formats": [
+                  "ips",
+                  "bps",
+                  "ups",
+                  "xdelta"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-core-this-machine-does-not-have-ends-the-question",
+      "rationale": "The candidate files would still be true — they are the content's own — but the question was asked about a core this installation does not have, and the family answers that with one code wherever it is asked.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {},
+        "soft_patch_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/arcade/sf2ce.zip",
+          "core_so": "fbneo_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "soft_patch_candidates": {
+          "unresolved": {
+            "code": "core-not-installed",
+            "data": {
+              "core_so": "fbneo_libretro.so"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a-content-path-that-names-no-file-yields-no-candidates",
+      "rationale": "RetroArch's path math derives an empty name from a trailing-slash path, so it composes no patch name either: every candidate would be a dotfile in a directory nobody named. The answer states none and says why.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nlibretro_info_path = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "soft_patch_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game/"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "soft_patch_candidates": {
+          "candidates": [],
+          "applies": null,
+          "caveats": [
+            {
+              "code": "no-core",
+              "data": {}
+            },
+            {
+              "code": "content-path-unnamed",
+              "data": {
+                "content_path": "/mnt/sd/retrodeck/roms/psx/Game/"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -452,3 +452,81 @@ class TestExitCodes:
         err = capsys.readouterr().err
         assert "atlas.SHA256SUMS: unparseable line 8:" in err
         assert "xargs sha256sum > <pkg>.SHA256SUMS" in err
+
+
+# The second root's shape: one data tree whose manifest was generated here, and
+# a README of ours beside it that pins nothing.
+_VECTORS_TREE = {
+    "vectors/README.md": "# The conformance vectors\n",
+    "vectors/machines/firmware.json": '{"family": "machines", "vectors": []}\n',
+}
+
+
+@pytest.fixture
+def atlas_vectors_dir(tmp_path: Path) -> Path:
+    """A synthetic ``tests/adapters/atlas_vectors/`` whose copy matches its manifest exactly."""
+    root = tmp_path / "atlas_vectors"
+    for relative, text in _VECTORS_TREE.items():
+        _write(root / relative, text)
+    _write(root / "vectors.SHA256SUMS", _generated_manifest_text(_VECTORS_TREE))
+    _write(root / "README.md", "# The resolver's recorded machines\n")
+    return root
+
+
+class TestTheAtlasVectorsRoot:
+    """The resolver's recorded machines are the second root ``main`` holds to the same contract.
+
+    Each drift case runs ``main`` rather than ``collect_discrepancies``: what
+    is new is that the run reads this root at all, and a case over the
+    function alone would pass with the root left out of ``main``.
+    """
+
+    def _main_fails(self, root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> str:
+        monkeypatch.setattr(check, "ATLAS_VECTORS_DIR", root)
+        assert check.main() == 1
+        err = capsys.readouterr().err
+        assert "ERROR: tests/adapters/atlas_vectors/ is not what its manifests pin:" in err
+        assert "cd tests/adapters/atlas_vectors && find <pkg>" in err
+        assert "Per-package provenance and the full update procedure: tests/adapters/atlas_vectors/README.md" in err
+        assert "backend/_vendor/" not in err
+        return err
+
+    def test_the_real_copy_matches_its_manifest(self) -> None:
+        assert check.package_dirs(check.ATLAS_VECTORS_DIR) == {"vectors"}
+        assert check.collect_discrepancies(check.ATLAS_VECTORS_DIR, check.ATLAS_VECTORS_GUIDE) == []
+
+    def test_a_clean_copy_passes(
+        self, atlas_vectors_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr(check, "ATLAS_VECTORS_DIR", atlas_vectors_dir)
+        assert check.main() == 0
+        assert "OK: every vendored tree matches" in capsys.readouterr().out
+
+    def test_a_changed_file_fails(
+        self, atlas_vectors_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _write(atlas_vectors_dir / "vectors" / "machines" / "firmware.json", '{"family": "edited"}\n')
+        err = self._main_fails(atlas_vectors_dir, monkeypatch, capsys)
+        assert "vectors/machines/firmware.json: digest " in err
+
+    def test_an_extra_file_fails(
+        self, atlas_vectors_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _write(atlas_vectors_dir / "vectors" / "machines" / "ours.json", "{}\n")
+        err = self._main_fails(atlas_vectors_dir, monkeypatch, capsys)
+        assert "vectors/machines/ours.json: in the vendored tree but not in the manifest" in err
+
+    def test_a_missing_file_fails(
+        self, atlas_vectors_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (atlas_vectors_dir / "vectors" / "machines" / "firmware.json").unlink()
+        err = self._main_fails(atlas_vectors_dir, monkeypatch, capsys)
+        assert "vectors/machines/firmware.json: in the manifest but missing from the vendored tree" in err
+
+    def test_a_missing_manifest_fails(
+        self, atlas_vectors_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (atlas_vectors_dir / "vectors.SHA256SUMS").unlink()
+        err = self._main_fails(atlas_vectors_dir, monkeypatch, capsys)
+        assert "vectors/: no vectors.SHA256SUMS — the tree is pinned by nothing." in err
+        assert "(tests/adapters/atlas_vectors/README.md)" in err

@@ -1,0 +1,155 @@
+{
+  "family": "machines",
+  "schema": 5,
+  "spec": "DESIGN.md — installations, the machine seam, screenshot locations (issue #142)",
+  "description": "Whole fixture machines in; the canonical ScreenshotPlacement serialization (atlas/contract.py) out, asserted with exact equality: dir, root_kind in the question's own two-word vocabulary, needs, physical_dir, caveat codes + data. No file_set (the names are dated), no fallback_dir (the directory is created at the moment of the shot). Layout facts are sourced from RetroArch task_screenshot.c and configuration.c at the pinned revision.",
+  "vectors": [
+    {
+      "name": "a-configured-screenshot-root-sorts-by-the-contents-directory",
+      "rationale": "RetroDECK points screenshot_directory at its own screenshots tree, and with sort_screenshots_by_content_enable on the shot lands in a subdirectory named after the content's directory — created at the moment of the shot, so no existence claim rides the answer. The names themselves are dated, which is why this question carries no file set at all.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nscreenshot_directory = \"/mnt/sd/retrodeck/screenshots\"\nsort_screenshots_by_content_enable = \"true\"\n",
+          "/mnt/sd/retrodeck/roms/n64/Game (Europe).z64": "rom"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/screenshots",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mupen64plus_next_libretro.so": {
+            "library_name": "Mupen64Plus-Next"
+          }
+        },
+        "screenshot_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/n64/Game (Europe).z64",
+          "core_so": "mupen64plus_next_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "screenshot_location": {
+          "dir": "/mnt/sd/retrodeck/screenshots/n64",
+          "root_kind": "screenshot_directory",
+          "needs": [],
+          "physical_dir": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "an-unset-screenshot-key-lands-the-shots-beside-the-content",
+      "rationale": "With no screenshot_directory anywhere, RetroArch writes the shot into the content's own directory — and asked without content it refuses the shot entirely, which is why the content-rooted answer keeps its hole here instead of inventing a platform default the family does not have.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\n",
+          "/mnt/sd/retrodeck/roms/n64/Game (Europe).z64": "rom"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mupen64plus_next_libretro.so": {
+            "library_name": "Mupen64Plus-Next"
+          }
+        },
+        "screenshot_query": {
+          "core_so": "mupen64plus_next_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "screenshot_location": {
+          "dir": "<content_dir>",
+          "root_kind": "content_directory",
+          "needs": [
+            "content_dir"
+          ],
+          "physical_dir": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-screenshot-directory-that-does-not-exist-is-cleared",
+      "rationale": "The screenshot key is the family whose configured directory must already exist: RetroArch clears a value that is not an existing directory at config load rather than creating it, and the shots land beside the content. The caveat carries the configured spelling machine-readably, so a client can say which line to fix.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nlibretro_directory = \"/app/cores\"\nscreenshot_directory = \"/mnt/sd/retrodeck/screenshots\"\n",
+          "/mnt/sd/retrodeck/roms/n64/Game (Europe).z64": "rom"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mupen64plus_next_libretro.so": {
+            "library_name": "Mupen64Plus-Next"
+          }
+        },
+        "screenshot_query": {
+          "content_path": "/mnt/sd/retrodeck/roms/n64/Game (Europe).z64",
+          "core_so": "mupen64plus_next_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "screenshot_location": {
+          "dir": "/mnt/sd/retrodeck/roms/n64",
+          "root_kind": "content_directory",
+          "needs": [],
+          "physical_dir": null,
+          "caveats": [
+            {
+              "code": "invalid-screenshot-directory",
+              "data": {
+                "configured": "/mnt/sd/retrodeck/screenshots"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

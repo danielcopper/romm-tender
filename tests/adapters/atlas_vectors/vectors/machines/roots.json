@@ -1,0 +1,2428 @@
+{
+  "family": "machines",
+  "schema": 5,
+  "spec": "DESIGN.md — installations; issue #612 (roots)",
+  "description": "The roots question on RetroDECK and EmuDeck: each root's path, whether the settings that decide it held the value (read), the frontend's own default applies (frontend-default), or atlas fell back on the arrangement's layout (assumed), the setting that decides it, and the code where no path can be stated.",
+  "vectors": [
+    {
+      "name": "retrodeck-roots-read-from-the-marker-and-romdirectory",
+      "rationale": "Every root is set: the marker's three paths and ES-DE's ROMDirectory each hold the value, so every entry is read and names the setting it came from.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-assume-an-unset-saves-path-under-the-read-home",
+      "rationale": "saves_path is unset beside a read rd_home_path: the saves root falls back under the home that was read, and is assumed — the setting that would move it is still named.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-assume-a-saves-path-written-empty",
+      "rationale": "saves_path is present and empty: an empty string names no folder, so the saves root falls back under the read home and is assumed, the same as a key that is not written at all.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-assume-an-unset-bios-path-under-the-read-home",
+      "rationale": "bios_path is unset beside a read rd_home_path: the BIOS folder falls back under that home and is assumed.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-assume-an-unset-home-and-read-the-rest",
+      "rationale": "rd_home_path is unset while bios_path and saves_path are set: the installation root is assumed at <home>/retrodeck, and the two set sub-roots stay read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/home/deck/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/home/deck/retrodeck",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-assume-every-root-of-a-marker-without-paths",
+      "rationale": "A marker that parses and has no paths section: the three marker roots are assumed under <home>/retrodeck, and nothing about the marker is a finding.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/home/deck/retrodeck",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/home/deck/retrodeck",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/home/deck/retrodeck/bios",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/home/deck/retrodeck/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-assume-every-root-of-a-marker-with-a-malformed-path",
+      "rationale": "paths.saves_path is not a string, so the marker is invalid and every marker root falls back: all three are assumed, and marker-invalid rides the answer.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": 7}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/home/deck/retrodeck",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": [
+              {
+                "code": "marker-invalid",
+                "data": {
+                  "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                  "key": "paths.saves_path"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/home/deck/retrodeck",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/home/deck/retrodeck/bios",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/home/deck/retrodeck/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": [
+            {
+              "code": "marker-invalid",
+              "data": {
+                "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-read-the-paths-of-a-marker-with-an-invalid-version",
+      "rationale": "A version that is not a string costs the version comparison and nothing else: the paths are kept and read, and marker-invalid with key version rides the answer.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"version\": 7, \"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": [
+              {
+                "code": "marker-invalid",
+                "data": {
+                  "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                  "key": "version"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": [
+            {
+              "code": "marker-invalid",
+              "data": {
+                "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "version"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-assume-every-root-of-an-unreadable-marker",
+      "rationale": "The marker exists and cannot be read: the three marker roots are assumed, and marker-unreadable rides the answer.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": {
+            "status": "unreadable"
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/home/deck/retrodeck",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": [
+              {
+                "code": "marker-unreadable",
+                "data": {
+                  "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                  "status": "unreadable"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/home/deck/retrodeck",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/home/deck/retrodeck/bios",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/home/deck/retrodeck/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": [
+            {
+              "code": "marker-unreadable",
+              "data": {
+                "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "status": "unreadable"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-take-the-frontend-default-for-an-unset-romdirectory",
+      "rationale": "ES-DE's settings set no ROMDirectory: the frontend falls back on <its home>/ROMs, and the ROM entry says frontend-default rather than read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+              "provenance": "frontend-default",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-take-the-frontend-default-without-es-de-settings",
+      "rationale": "No es_settings.xml at all is a reading too: no value is configured, so the frontend's own default applies and the entry still names the setting that would move it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+              "provenance": "frontend-default",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-read-a-romdirectory-after-the-tilde-expansion",
+      "rationale": "A ROMDirectory written with ~ is expanded against the frontend's own home, as ES-DE expands it, and is read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"~/ROMs-on-card\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs-on-card"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs-on-card",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-state-no-rom-root-for-a-relative-romdirectory",
+      "rationale": "A ROMDirectory that is not absolute after the frontend's ~ expansion names no root: the ROM entry has no path and states roms-root-not-absolute, the code health states.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": [
+              {
+                "code": "roms-root-not-absolute",
+                "data": {
+                  "value": "roms"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": null,
+              "provenance": null,
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": [
+                {
+                  "code": "roms-root-not-absolute",
+                  "data": {
+                    "value": "roms"
+                  }
+                }
+              ]
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-state-no-rom-root-for-unreadable-es-de-settings",
+      "rationale": "ES-DE's settings exist and cannot be read: the ROM entry has no path and states config-unreadable about that file, the code health states.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": {
+            "status": "unreadable"
+          }
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios",
+          "/run/media/deck/SD/retrodeck/saves",
+          "/run/media/deck/SD/retrodeck/roms"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": [
+              {
+                "code": "config-unreadable",
+                "data": {
+                  "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                  "status": "unreadable"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": null,
+              "provenance": null,
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": [
+                {
+                  "code": "config-unreadable",
+                  "data": {
+                    "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                    "status": "unreadable"
+                  }
+                }
+              ]
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-carry-the-saves-finding-and-leave-the-rom-finding-to-health",
+      "rationale": "The saves root and the configured ROM root are both not there: saves-root-missing rides the roots answer like every answer, while roms-root-missing stays on health alone.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/run/media/deck/SD/retrodeck\", \"bios_path\": \"/run/media/deck/SD/retrodeck/bios\", \"saves_path\": \"/run/media/deck/SD/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/retrodeck/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/retrodeck",
+          "/run/media/deck/SD/retrodeck/bios"
+        ],
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/run/media/deck/SD/retrodeck",
+            "health": [
+              {
+                "code": "saves-root-missing",
+                "data": {
+                  "path": "/run/media/deck/SD/retrodeck/saves"
+                }
+              },
+              {
+                "code": "roms-root-missing",
+                "data": {
+                  "path": "/run/media/deck/SD/retrodeck/roms"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/retrodeck",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/retrodeck/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/retrodeck/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/retrodeck/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": [
+            {
+              "code": "saves-root-missing",
+              "data": {
+                "path": "/run/media/deck/SD/retrodeck/saves"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-roots-of-an-installation-not-set-up",
+      "rationale": "RetroDECK is deployed and has never written its marker: the marker roots are assumed at the layout setup chooses, each naming the key it would write, and the ROM root has no path and states not-set-up.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.local/share/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\ncommand=retrodeck\n"
+        },
+        "roots_query": {
+          "installation": "retrodeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": [
+              {
+                "code": "not-set-up",
+                "data": {
+                  "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                  "app_id": "net.retrodeck.retrodeck"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/home/deck/retrodeck",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.rd_home_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": null,
+              "provenance": null,
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": [
+                {
+                  "code": "not-set-up",
+                  "data": {
+                    "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                    "app_id": "net.retrodeck.retrodeck"
+                  }
+                }
+              ]
+            },
+            {
+              "root": "bios",
+              "path": "/home/deck/retrodeck/bios",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.bios_path"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/home/deck/retrodeck/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "key": "paths.saves_path"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": [
+            {
+              "code": "not-set-up",
+              "data": {
+                "path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json",
+                "app_id": "net.retrodeck.retrodeck"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-read-from-settings-sh-and-romdirectory",
+      "rationale": "Every root is set: settings.sh names romsPath, biosPath and savesPath, ES-DE names ROMDirectory, so every entry is read; the installation root is the parent of romsPath and names that key.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/Emulation/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/Emulation/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-assume-the-installation-root-of-an-unset-romspath",
+      "rationale": "romsPath is unset: the installation root is the parent of EmuDeck's default ~/Emulation/roms and is assumed, still naming romsPath as the setting that decides it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "biosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/Emulation/roms\" />\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/home/deck/Emulation",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/Emulation/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-assume-a-saves-path-written-empty",
+      "rationale": "savesPath is written with an empty value: it names no folder, so the saves root falls back under ~/Emulation and is assumed, the same as a key that is not written at all.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/Emulation/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves",
+          "/home/deck/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/Emulation/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/home/deck/Emulation/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-assume-unset-bios-and-saves-paths",
+      "rationale": "biosPath and savesPath are unset: both fall back under ~/Emulation, EmuDeck's default, and are assumed.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/Emulation/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/Emulation/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/home/deck/Emulation/bios",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/home/deck/Emulation/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-assume-every-root-of-unreadable-settings",
+      "rationale": "settings.sh exists and cannot be read: the three settings.sh roots are assumed under ~/Emulation, and marker-unreadable rides the answer.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": {
+            "status": "unreadable"
+          },
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/Emulation/roms\" />\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Emulation/saves",
+          "/run/media/deck/SD/Emulation/roms"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": [
+              {
+                "code": "marker-unreadable",
+                "data": {
+                  "path": "/home/deck/.config/EmuDeck/settings.sh",
+                  "status": "unreadable"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/home/deck/Emulation",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/Emulation/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/home/deck/Emulation/bios",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/home/deck/Emulation/saves",
+              "provenance": "assumed",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": [
+            {
+              "code": "marker-unreadable",
+              "data": {
+                "path": "/home/deck/.config/EmuDeck/settings.sh",
+                "status": "unreadable"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-take-the-frontend-default-for-an-unset-romdirectory",
+      "rationale": "ES-DE is on this EmuDeck and sets no ROMDirectory: the frontend falls back on ~/ROMs, and the ROM entry says frontend-default.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves",
+          "/home/deck/ROMs"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/home/deck/ROMs",
+              "provenance": "frontend-default",
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-state-no-rom-root-without-es-de",
+      "rationale": "No ES-DE is on this EmuDeck: no setting decides a frontend ROM root, so the entry names none, has no path, and states emulator-catalogue-unestablished — health states nothing for this, so the code is the one the ROM question states.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": null,
+              "provenance": null,
+              "setting": null,
+              "caveats": [
+                {
+                  "code": "emulator-catalogue-unestablished",
+                  "data": {
+                    "arrangement": "emudeck"
+                  }
+                }
+              ]
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-carry-the-frontend-marker-mismatch-without-es-de",
+      "rationale": "settings.sh records doInstallESDE=true while no ES-DE is on disk: the ROM entry states emulator-catalogue-unestablished, and frontend-marker-mismatch rides the answer, as it rides rom_location().",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\ndoInstallESDE=\"true\"\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": null,
+              "provenance": null,
+              "setting": null,
+              "caveats": [
+                {
+                  "code": "emulator-catalogue-unestablished",
+                  "data": {
+                    "arrangement": "emudeck"
+                  }
+                }
+              ]
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": [
+            {
+              "code": "frontend-marker-mismatch",
+              "data": {
+                "key": "doInstallESDE",
+                "stated": "true",
+                "observed": "absent"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-resolve-an-unset-romdirectory-beside-a-portable-txt",
+      "rationale": "A portable.txt sits beside the AppImage and ROMDirectory is unset. The file moves nothing — an AppImage ES-DE looks for portable.txt in getExePath() (main.cpp:148-149 at v3.4.1), the directory of the canonical /proc/self/exe (FileSystemUtil.cpp:383-404) — inside the image's own mount, never the folder the image file sits in — so the frontend's default resolves against the user's home: the ROM entry is ~/ROMs with provenance frontend-default, and no caveat rides the answer. That directory is not on this machine, which health states as roms-root-missing.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n",
+          "/home/deck/Applications/portable.txt": ""
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": [
+              {
+                "code": "roms-root-missing",
+                "data": {
+                  "path": "/home/deck/ROMs"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/home/deck/ROMs",
+              "provenance": "frontend-default",
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-read-an-absolute-romdirectory-beside-a-portable-txt",
+      "rationale": "A portable.txt is there and ROMDirectory is absolute: the value is read, as roms_dir() and health() answer it, and nothing rides the answer about the file, because an AppImage ES-DE looks for portable.txt in getExePath() (main.cpp:148-149 at v3.4.1), the directory of the canonical /proc/self/exe (FileSystemUtil.cpp:383-404) — inside the image's own mount, never the folder the image file sits in.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/run/media/deck/SD/Emulation/roms\" />\n",
+          "/home/deck/Applications/portable.txt": ""
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": []
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": "/run/media/deck/SD/Emulation/roms",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": []
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-state-no-rom-root-for-a-relative-romdirectory",
+      "rationale": "ROMDirectory is relative even after the frontend's ~ expansion: the ROM entry has no path and states roms-root-not-absolute.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"Emulation/roms\" />\n"
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": [
+              {
+                "code": "roms-root-not-absolute",
+                "data": {
+                  "value": "Emulation/roms"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": null,
+              "provenance": null,
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": [
+                {
+                  "code": "roms-root-not-absolute",
+                  "data": {
+                    "value": "Emulation/roms"
+                  }
+                }
+              ]
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-roots-state-no-rom-root-for-unreadable-es-de-settings",
+      "rationale": "ES-DE's settings exist and cannot be read: the ROM entry has no path and states config-unreadable about that file.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "",
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/run/media/deck/SD/Emulation/roms\"\nbiosPath=\"/run/media/deck/SD/Emulation/bios\"\nsavesPath=\"/run/media/deck/SD/Emulation/saves\"\n",
+          "/home/deck/ES-DE/settings/es_settings.xml": {
+            "status": "unreadable"
+          }
+        },
+        "dirs": [
+          "/run/media/deck/SD/Emulation",
+          "/run/media/deck/SD/Emulation/roms",
+          "/run/media/deck/SD/Emulation/bios",
+          "/run/media/deck/SD/Emulation/saves"
+        ],
+        "roots_query": {
+          "installation": "emudeck"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/run/media/deck/SD/Emulation",
+            "health": [
+              {
+                "code": "config-unreadable",
+                "data": {
+                  "path": "/home/deck/ES-DE/settings/es_settings.xml",
+                  "status": "unreadable"
+                }
+              }
+            ]
+          }
+        ],
+        "roots": {
+          "roots": [
+            {
+              "root": "installation",
+              "path": "/run/media/deck/SD/Emulation",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "romsPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "roms",
+              "path": null,
+              "provenance": null,
+              "setting": {
+                "file": "/home/deck/ES-DE/settings/es_settings.xml",
+                "key": "ROMDirectory"
+              },
+              "caveats": [
+                {
+                  "code": "config-unreadable",
+                  "data": {
+                    "path": "/home/deck/ES-DE/settings/es_settings.xml",
+                    "status": "unreadable"
+                  }
+                }
+              ]
+            },
+            {
+              "root": "bios",
+              "path": "/run/media/deck/SD/Emulation/bios",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "biosPath"
+              },
+              "caveats": []
+            },
+            {
+              "root": "saves",
+              "path": "/run/media/deck/SD/Emulation/saves",
+              "provenance": "read",
+              "setting": {
+                "file": "/home/deck/.config/EmuDeck/settings.sh",
+                "key": "savesPath"
+              },
+              "caveats": []
+            }
+          ],
+          "caveats": []
+        }
+      }
+    }
+  ]
+}

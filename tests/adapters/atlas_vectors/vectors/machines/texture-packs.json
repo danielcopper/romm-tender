@@ -1,0 +1,2968 @@
+{
+  "family": "machines",
+  "schema": 5,
+  "spec": "DESIGN.md 'Placements'; atlas/textures.py; docs/research/core-audit.md",
+  "description": "Where each emulator reads texture packs. The root is read live and the fragment below it is packaged world knowledge, so these vectors pin both halves of that join — plus the switch that says whether replacement is on, the keying of the tree where a citation states it, and the three ways this question refuses to name a directory at all.",
+  "vectors": [
+    {
+      "name": "a-wired-texture-root-answers-the-path-and-the-tree-behind-it",
+      "rationale": "RetroDECK links the core's own texture directory into one shared tree. The answer names the directory the emulator opens and the directory the bytes are really in, exactly as a save placement does — and the option file switches replacement on, so 'enabled' is a live read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "reicast_custom_textures = \"enabled\"\n",
+          "/mnt/sd/retrodeck/texture_packs/retroarch-core/Flycast/textures/readme.txt": "put packs here",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "options": {
+              "reicast_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "symlinks": {
+          "/mnt/sd/retrodeck/bios/dc/textures": "/mnt/sd/retrodeck/texture_packs/retroarch-core/Flycast/textures"
+        },
+        "texture_query": {
+          "core_so": "flycast_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/bios/dc/textures",
+          "needs": [],
+          "physical_dir": "/mnt/sd/retrodeck/texture_packs/retroarch-core/Flycast/textures",
+          "enabled": true,
+          "keying": "game-id",
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-saves-rooted-core-answers-and-says-nobody-has-seen-it-read",
+      "rationale": "Three cores port a standalone emulator and build their tree under a user directory whose root nobody has watched them choose. The row answers — a directory is derived and stated — and carries emulator-read-unestablished, which the audit's own verdict drives.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "ppsspp_texture_replacement = \"disabled\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/ppsspp_libretro.so": {
+            "library_name": "PPSSPP",
+            "options": {
+              "ppsspp_texture_replacement": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "texture_query": {
+          "core_so": "ppsspp_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/saves/PPSSPP/PSP/TEXTURES",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-read-unestablished",
+              "data": {
+                "core": "ppsspp",
+                "verdict": "suspect"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an-option-no-file-states-and-no-core-declares-leaves-the-switch-null",
+      "rationale": "Whether replacement is on is null here, and null is not off: no options file states the key and the probe captured no registration to fall back on, so nothing established it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios/HdPacks",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/mesen_libretro.so": {
+            "library_name": "Mesen"
+          }
+        },
+        "texture_query": {
+          "core_so": "mesen_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/bios/HdPacks",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "the-installed-core-s-own-default-answers-where-no-file-does",
+      "rationale": "The same machine with a core the probe could read: RetroArch would fall back to the default the core registers, so atlas does — a live read, not a recorded one, and here it means on.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios/HdPacks",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/mesen_libretro.so": {
+            "library_name": "Mesen",
+            "options": {
+              "mesen_hdpacks": {
+                "default": "enabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "texture_query": {
+          "core_so": "mesen_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/bios/HdPacks",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-dead-link-under-the-texture-root-degrades-the-way-a-save-root-does",
+      "rationale": "The emulator-side directory traverses a link that resolves nowhere. No physical directory is stated and the dead-symlink caveat says why — the texture family reuses the save family's symlink vocabulary rather than inventing one.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "reicast_custom_textures = \"enabled\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "options": {
+              "reicast_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "symlinks": {
+          "/mnt/sd/retrodeck/bios/dc/textures": "/mnt/sd/retrodeck/texture_packs/gone/Flycast"
+        },
+        "texture_query": {
+          "core_so": "flycast_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/bios/dc/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "game-id",
+          "caveats": [
+            {
+              "code": "dead-symlink",
+              "data": {
+                "link": "/mnt/sd/retrodeck/bios/dc/textures",
+                "target": "/mnt/sd/retrodeck/texture_packs/gone/Flycast",
+                "resolved": "/mnt/sd/retrodeck/texture_packs/gone/Flycast"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-answers-the-default-below-the-root-it-points-retroarch-at",
+      "rationale": "EmuDeck wires its browsable texture trees the other way round — links in the shared tree pointing into the emulator's real directory — so nothing on the read path passes through them and the answer is the plain default below system_directory, with no physical_dir.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"/home/deck/Emulation/roms\"\nsavesPath=\"/home/deck/Emulation/saves\"\nbiosPath=\"/home/deck/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "libretro_directory = \"/home/deck/Emulation/cores\"\nsystem_directory = \"/home/deck/Emulation/bios\"\nsavefile_directory = \"/home/deck/Emulation/saves\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch-core-options.cfg": "mupen64plus-txHiresEnable = \"False\"\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/bios/Mupen64plus/hires_texture"
+        ],
+        "cores": {
+          "/home/deck/Emulation/cores/mupen64plus_next_libretro.so": {
+            "library_name": "Mupen64Plus-Next",
+            "options": {
+              "mupen64plus-txHiresEnable": {
+                "default": "False",
+                "values": [
+                  "False",
+                  "True"
+                ]
+              }
+            }
+          }
+        },
+        "texture_query": {
+          "core_so": "mupen64plus_next_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/home/deck/Emulation/bios/Mupen64plus/hires_texture",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-core-no-texture-card-covers-refuses-instead-of-naming-a-directory",
+      "rationale": "The refusal is its own code and its own claim: atlas has not established where this emulator reads packs. It is not the statement that the emulator has none, and it is not the core-not-installed refusal either — the core is right there.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/mgba_libretro.so": {
+            "library_name": "mGBA"
+          }
+        },
+        "texture_query": {
+          "core_so": "mgba_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "unresolved": {
+            "code": "texture-wiring-unestablished",
+            "data": {
+              "core_so": "mgba_libretro.so"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "an-option-value-the-record-cannot-interpret-leaves-the-switch-null",
+      "rationale": "The option is set to a word no recorded value matches. Reading it as off would be the guess the boundary rule refuses, so the switch stays unanswered and the caveat names the value.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "reicast_custom_textures = \"on\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios/dc/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "options": {
+              "reicast_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "texture_query": {
+          "core_so": "flycast_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/bios/dc/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": "game-id",
+          "caveats": [
+            {
+              "code": "unknown-option-value",
+              "data": {
+                "core": "flycast",
+                "option_key": "reicast_custom_textures",
+                "value": "on"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-system-root-sent-to-the-content-directory-leaves-the-hole-it-cannot-fill",
+      "rationale": "systemfiles_in_content_dir sends the core to the ROM's own directory, so the texture root does too. With no content named the directory stays a template and needs says which value the caller fills — the same hole grammar the save family answers with.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\nsystemfiles_in_content_dir = \"true\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "reicast_custom_textures = \"enabled\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "options": {
+              "reicast_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "texture_query": {
+          "core_so": "flycast_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "<content_dir>/dc/textures",
+          "needs": [
+            "content_dir"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "game-id",
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "the-entry-route-answers-with-the-core-the-catalogue-names",
+      "rationale": "Asked through a launch entry, the question needs no core from the caller: the catalogue already named one. The answer is the handle route's, entry caveats included.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <fullname>Sega Dreamcast</fullname>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n    <command label=\"Flycast (Standalone)\">%EMULATOR_FLYCAST% %ROM%</command>\n    <platform>dreamcast</platform>\n    <theme>dreamcast</theme>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "reicast_custom_textures = \"enabled\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios/dc/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "options": {
+              "reicast_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "entry_texture_query": {
+          "system": "dreamcast"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/bios/dc/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "game-id",
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-standalone-emulator-the-packaged-table-does-not-cover-refuses",
+      "rationale": "Standalone entries are not refused as a class — the vectors below answer several. This one is refused because nothing establishes where THIS emulator reads packs, and the entry route says so with the standalone code rather than naming a directory nobody read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <fullname>Sega Dreamcast</fullname>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n    <command label=\"Flycast (Standalone)\">%EMULATOR_FLYCAST% %ROM%</command>\n    <platform>dreamcast</platform>\n    <theme>dreamcast</theme>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "reicast_custom_textures = \"enabled\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios/dc/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "options": {
+              "reicast_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "entry_texture_query": {
+          "system": "dreamcast",
+          "label": "Flycast (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "unresolved": {
+            "code": "standalone-unsupported",
+            "data": {
+              "label": "Flycast (Standalone)",
+              "system": "dreamcast"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "every-installation-answers-where-its-own-copy-of-the-core-reads",
+      "rationale": "One core, two arrangements, two roots — and both answers are true. The fan-out labels each with the handle that gave it and picks no winner, which is the whole guarantee.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "reicast_custom_textures = \"enabled\"\n",
+          "/home/deck/.config/retroarch/retroarch.cfg": "libretro_directory = \"/home/deck/.config/retroarch/cores\"\nsystem_directory = \"/home/deck/.config/retroarch/system\"\n",
+          "/mnt/sd/retrodeck/texture_packs/retroarch-core/Flycast/textures/readme.txt": "put packs here",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.config/retroarch/system/dc/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "options": {
+              "reicast_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          },
+          "/home/deck/.config/retroarch/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "options": {
+              "reicast_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "symlinks": {
+          "/mnt/sd/retrodeck/bios/dc/textures": "/mnt/sd/retrodeck/texture_packs/retroarch-core/Flycast/textures"
+        },
+        "aggregate_query": {
+          "question": "texture_pack_location",
+          "core_so": "flycast_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          },
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "aggregate": [
+          {
+            "installation": {
+              "kind": "retrodeck",
+              "label": "RetroDECK",
+              "kinds": [
+                "retrodeck"
+              ],
+              "root": "/mnt/sd/retrodeck",
+              "health": []
+            },
+            "answer": {
+              "dir": "/mnt/sd/retrodeck/bios/dc/textures",
+              "needs": [],
+              "physical_dir": "/mnt/sd/retrodeck/texture_packs/retroarch-core/Flycast/textures",
+              "enabled": true,
+              "keying": "game-id",
+              "caveats": []
+            }
+          },
+          {
+            "installation": {
+              "kind": "bare_retroarch_native",
+              "label": "RetroArch (native)",
+              "kinds": [
+                "bare_retroarch_native"
+              ],
+              "root": "/home/deck/.config/retroarch",
+              "health": []
+            },
+            "answer": {
+              "dir": "/home/deck/.config/retroarch/system/dc/textures",
+              "needs": [],
+              "physical_dir": null,
+              "enabled": false,
+              "keying": "game-id",
+              "caveats": [
+                {
+                  "code": "arrangement-unverified",
+                  "data": {
+                    "kind": "bare_retroarch_native"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "a-forks-entry-answers-both-questions-the-emulator-it-forks-answers",
+      "rationale": "One catalogue, two standalone entries, both answering — which is the state this vector now records. PrimeHack was the standing proof that the two standalone outcomes run on evidence rather than on kind: it answered the texture question and refused the save one. Its save card landed, and with it the last texture-carded emulator that refused its save, so the asymmetry now lives the other way round — Vita3K answers its save and refuses the texture question, because its directory hangs off a config nothing reads. (Azahar and then DuckStation were this proof before PrimeHack.)",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <fullname>Nintendo GameCube</fullname>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <platform>gc</platform>\n    <theme>gc</theme>\n  </system>\n  <system>\n    <name>psp</name>\n    <fullname>Sony PlayStation Portable</fullname>\n    <path>%ROMPATH%/psp</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"PPSSPP (Standalone)\">%EMULATOR_PPSSPP% %ROM%</command>\n    <platform>psp</platform>\n    <theme>psp</theme>\n  </system>\n  <system>\n    <name>ps2</name>\n    <fullname>Sony PlayStation 2</fullname>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% -batch %ROM%</command>\n    <platform>ps2</platform>\n    <theme>ps2</theme>\n  </system>\n  <system>\n    <name>wii</name>\n    <fullname>Nintendo Wii</fullname>\n    <path>%ROMPATH%/wii</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"PrimeHack (Standalone)\">%EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n    <platform>wii</platform>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/texture_packs/Dolphin/Textures/readme.txt": "put packs here"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {},
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/Load/Textures": "/mnt/sd/retrodeck/texture_packs/Dolphin/Textures"
+        },
+        "entry_texture_query": {
+          "system": "gc"
+        },
+        "entry_savefile_query": {
+          "system": "wii"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/Wii/title/<save_id>/data",
+          "root_kind": "emulator_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/Wii/title/<save_id>/data",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "emulator-config-missing",
+              "data": {
+                "token": "PRIMEHACK",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/primehack/Dolphin.ini"
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "PRIMEHACK",
+                "key": [
+                  "[Dolphin.General] NANDRootPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            },
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "token": "PRIMEHACK",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/Wii/title/<save_id>/data",
+                "role": "battery",
+                "save_id": "the Wii title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "NandPaths.cpp:49-58 and VolumeWii.cpp:272-278 at shiiion/dolphin 81bfb96"
+              }
+            }
+          ],
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "nand",
+            "readings": [
+              {
+                "key": "NANDRootPath",
+                "value": null,
+                "options_file": "/home/deck/.var/app/net.retrodeck.retrodeck/config/primehack/Dolphin.ini"
+              }
+            ],
+            "alternatives": []
+          }
+        },
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/Load/Textures",
+          "needs": [],
+          "physical_dir": "/mnt/sd/retrodeck/texture_packs/Dolphin/Textures",
+          "enabled": null,
+          "keying": "game-id",
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/dolphin-emu/GFX.ini"
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-standalone-row-below-the-config-base-states-no-keying-it-cannot-cite",
+      "rationale": "The second of the two XDG bases an emulator's tree can hang off, and the honest empty: nothing cited says how this tree is divided per game, so the field is null — which is not the claim that it is undivided.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <fullname>Nintendo GameCube</fullname>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <platform>gc</platform>\n    <theme>gc</theme>\n  </system>\n  <system>\n    <name>psp</name>\n    <fullname>Sony PlayStation Portable</fullname>\n    <path>%ROMPATH%/psp</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"PPSSPP (Standalone)\">%EMULATOR_PPSSPP% %ROM%</command>\n    <platform>psp</platform>\n    <theme>psp</theme>\n  </system>\n  <system>\n    <name>ps2</name>\n    <fullname>Sony PlayStation 2</fullname>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% -batch %ROM%</command>\n    <platform>ps2</platform>\n    <theme>ps2</theme>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ppsspp/PSP/TEXTURES",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {},
+        "entry_texture_query": {
+          "system": "psp"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ppsspp/PSP/TEXTURES",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "PPSSPP",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ppsspp/PSP/SYSTEM/ppsspp.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-feature-with-no-switch-answers-off-as-a-fact-about-the-build",
+      "rationale": "The directory is established and this build offers no way to use it: the setting is not a core option and no configuration reaches it, so 'enabled' is false as a fact about the binary rather than a reading of any file. The caveat names the setting nobody can turn on, and it never rides with the doubt about a read path — here the read path is the part that is certain.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios/pcsx2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/pcsx2_libretro.so": {
+            "library_name": "LRPS2",
+            "library_version": "14d19f8"
+          }
+        },
+        "texture_query": {
+          "core_so": "pcsx2_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/bios/pcsx2/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "feature-switch-absent",
+              "data": {
+                "core": "pcsx2",
+                "option_key": "EmuCore/GS/LoadTextureReplacements"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-saves-rooted-core-follows-the-save-family-into-the-content-directory",
+      "rationale": "savefiles_in_content_dir moves the root RetroArch hands the core, so a texture tree built under it moves too — and with no content named the directory stays a template with the hole the caller fills. Reading the cfg key's value instead would name a directory RetroArch never hands the core, which is exactly what the system-directory route was fixed for once already.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\nsavefiles_in_content_dir = \"true\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "ppsspp_texture_replacement = \"enabled\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/ppsspp_libretro.so": {
+            "library_name": "PPSSPP",
+            "options": {
+              "ppsspp_texture_replacement": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "texture_query": {
+          "core_so": "ppsspp_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "<content_dir>/PPSSPP/PSP/TEXTURES",
+          "needs": [
+            "content_dir"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-read-unestablished",
+              "data": {
+                "core": "ppsspp",
+                "verdict": "suspect"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-different-core-build-reopens-the-claim-that-there-is-no-switch",
+      "rationale": "That a build offers no way to switch a feature on is a claim about that build, and a build is exactly what could add one. A machine running a core the claim was not proven against is told the difference rather than inheriting it — the answer still states the directory and the switch, with the drift beside them.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios/pcsx2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/pcsx2_libretro.so": {
+            "library_name": "LRPS2",
+            "library_version": "0000000"
+          }
+        },
+        "texture_query": {
+          "core_so": "pcsx2_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/bios/pcsx2/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "feature-switch-absent",
+              "data": {
+                "core": "pcsx2",
+                "option_key": "EmuCore/GS/LoadTextureReplacements"
+              }
+            },
+            {
+              "code": "unverified-version",
+              "data": {
+                "core": "pcsx2",
+                "verification": "drifted",
+                "core_verified": "14d19f8",
+                "core_live": "0000000"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "citras-texture-and-mod-trees-ride-the-open-root-question",
+      "rationale": "Citra's rows land after its audit entry did (#106): the core's own binary spells the user-directory name, the load/ table and both loader templates, keyed by title id — but which root the user directory hangs off is the open question the suspect verdict carries for its saves, so both answers ride emulator-read-unestablished until #98 closes it. The replacement switch is read (citra_custom_textures, registered default disabled); the mod loader has no switch at all, which stays a statement about the core, not about a value nobody read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/mnt/sd/retrodeck/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/cores",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/citra_libretro.so": {
+            "library_name": "Citra",
+            "library_version": "5263fae",
+            "options": {
+              "citra_custom_textures": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "texture_query": {
+          "core_so": "citra_libretro.so"
+        },
+        "mod_query": {
+          "core_so": "citra_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/saves/citra-emu/load/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": "title-id",
+          "caveats": [
+            {
+              "code": "emulator-read-unestablished",
+              "data": {
+                "core": "citra",
+                "verdict": "suspect"
+              }
+            }
+          ]
+        },
+        "mod_location": {
+          "trees": [
+            {
+              "role": null,
+              "dir": "/mnt/sd/retrodeck/saves/citra-emu/load/mods",
+              "physical_dir": null,
+              "keying": "title-id"
+            }
+          ],
+          "needs": [],
+          "enabled": null,
+          "caveats": [
+            {
+              "code": "emulator-read-unestablished",
+              "data": {
+                "core": "citra",
+                "verdict": "suspect"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-standalone-emulator-whose-directory-lives-in-its-own-config-refuses",
+      "rationale": "The split inside the standalone kind, held down by a live example: Vita3K opens no texture default — its tree hangs off pref-path in a config.yml that atlas does not read, because that file is YAML and atlas ships no YAML reader — so the entry refuses with standalone-unsupported rather than quoting the path an installer intended. PCSX2 held this example until its own configuration was read (#223), which is exactly the point: the split is evidence, not kind, and it moves when the evidence does.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psvita</name>\n    <path>%ROMPATH%/psvita</path>\n    <extension>.psvita .PSVITA</extension>\n    <command label=\"Vita3K (Standalone)\">%EMULATOR_VITA3K% %ROM%</command>\n    <platform>psvita</platform>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "psvita"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "unresolved": {
+            "code": "standalone-unsupported",
+            "data": {
+              "label": "Vita3K (Standalone)",
+              "system": "psvita"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "retrodeck-pcsx2s-texture-directory-is-the-one-its-config-names",
+      "rationale": "PCSX2's texture directory is a configuration value, not a default it opens: [Folders] Textures, read through the helper the memory-card directory goes through (LoadPathFromSettings, Pcsx2Config.cpp:2272-2278 at v2.6.3) — which is what RetroDECK writes when it points the emulator at its own texture_packs tree. The answer states the load stage rather than the root, because replacements are read from <Textures>/<serial>/replacements (GSTextureReplacements.cpp:262-265, :39): a caller placing a pack at the root would place it where nothing reads it. The serial is the running disc's and stays a hole. The switch is read from the same file, so enabled is a reading rather than None.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /mnt/sd/retrodeck/texture_packs/PCSX2/textures\n[EmuCore/GS]\nLoadTextureReplacements = true\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-a-per-game-settings-file-layers-over-the-global-switch",
+      "rationale": "PCSX2 reads every core setting through a layered settings interface, and a running game installs <DataRoot>/gamesettings/<serial>_<crc>.ini as the top layer of it (UpdateGameSettingsLayer, VMManager.cpp:932-969 at v2.6.3; the path is GetGameSettingsPath, :774-781, and the directory is [Folders] GameSettings defaulting to gamesettings below the DataRoot, Pcsx2Config.cpp:2290). So LoadTextureReplacements has two possible answers on a machine that carries such a file, and which one holds depends on the game — a fact atlas does not have. The answer therefore stays the global reading and says that some games here carry their own, rather than presenting one reading as the whole truth.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /mnt/sd/retrodeck/texture_packs/PCSX2/textures\n[EmuCore/GS]\nLoadTextureReplacements = true\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings/SLES-12345_A1B2C3D4.ini": "[EmuCore/GS]\nLoadTextureReplacements = true\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "per-game-overrides-present",
+              "data": {
+                "token": "PCSX2",
+                "count": "1",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings",
+                "key": [
+                  "[EmuCore/GS] LoadTextureReplacements"
+                ]
+              }
+            },
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-a-per-game-layer-that-cannot-be-read-is-not-an-absent-one",
+      "rationale": "The absence of per-game-overrides-present is what tells a caller this answer holds for every game, so an unreadable gamesettings directory answered the way an empty one is answered claimed exactly what was not established. The directory is there and its contents cannot be read: whether any game on this machine overrides the switch is unknown, and per-game-layer-unread says so. Neither sibling could — 'present' asserts they exist, and silence asserts they do not.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /mnt/sd/retrodeck/texture_packs/PCSX2/textures\n[EmuCore/GS]\nLoadTextureReplacements = true\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        },
+        "unlistable": [
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings"
+        ]
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "per-game-layer-unread",
+              "data": {
+                "token": "PCSX2",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings",
+                "key": [
+                  "[EmuCore/GS] LoadTextureReplacements"
+                ]
+              }
+            },
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-a-switch-value-the-emulator-cannot-read-keeps-the-compiled-default",
+      "rationale": "LoadTextureReplacements = maybe is not a value FromChars<bool> accepts (StringUtil.h:178-197 at v2.6.3), and GetBoolValue leaves the caller's variable untouched when it yields nothing (INISettingsInterface.cpp:198-210) — so the compiled default keeps governing and the setting does *not* become false. The save route states that in an OptionReading provenance; a texture answer carries no readings, so without cfg-value-rejected the answer looked exactly like one for a key nobody had written, and a user who wrote something there would never learn it was ignored.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[EmuCore/GS]\nLoadTextureReplacements = maybe\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "cfg-value-rejected",
+              "data": {
+                "token": "PCSX2",
+                "key": "EmuCore/GS/LoadTextureReplacements",
+                "value": "maybe"
+              }
+            },
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-an-unset-textures-key-is-the-compiled-default-below-the-dataroot",
+      "rationale": "An unset key is not an unknown directory: LoadPathFromSettings falls back to the compiled default 'textures' and resolves it against the DataRoot, which on Linux is the config side either way (Pcsx2Config.cpp:2197-2217, :2293). The switch is unset too, and its compiled default is off — so this answer states where packs would be read from and that nothing is reading them, which are two different facts and both worth having.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nMemoryCards = memcards\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-replacement-switched-off-is-a-reading-not-a-silence",
+      "rationale": "A relative Textures value resolves against the DataRoot the same way, and the switch read as false is the discriminating half: enabled is False because [EmuCore/GS] LoadTextureReplacements says so, which is a different answer from the None every card without a switch states. Nothing is scanned while it is off (GSTextureReplacements.cpp:391-393).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = mytextures\n[EmuCore/GS]\nLoadTextureReplacements = false\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/mytextures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/mytextures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-standalone-entrys-textures-sit-in-the-tree-its-appimage-reads",
+      "rationale": "The texture question went through no variant gate here, so every standalone entry refused it — a statement that stopped being true once the save route established these bases per launch. An AppImage under ~/Applications is sandboxed by nothing, so it reads the host's own XDG tree, and the packed card RetroDECK's token reaches answers below exactly that pair. Nothing about the emulator is new here; only which two directories its fixed subpath hangs off.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/Applications/Dolphin-2603a.AppImage": {
+            "status": "invalid-text"
+          }
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "gc"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.local/share/dolphin-emu/Load/Textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": "game-id",
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "config": "/home/deck/.config/dolphin-emu/GFX.ini"
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-texture-answer-refused-for-the-variant-names-the-variant",
+      "rationale": "No AppImage under ~/Applications and no installed flatpak: the launch falls through to the Windows build under Proton, whose configuration lives inside the Proton prefix and is not read. The refusal names that variant instead of saying the emulator is not covered — the card is right there, and what is missing is the tree, which is a fact about this installation rather than about atlas's coverage.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "gc"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "unresolved": {
+            "code": "standalone-variant-unestablished",
+            "data": {
+              "label": "Dolphin (Standalone)",
+              "system": "gc",
+              "variant": "proton"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-configured-texture-directory-is-read-inside-the-launchs-own-homes",
+      "rationale": "PCSX2's texture directory is a configuration value rather than a fixed subpath, so the gate has to hold for the whole answer and not just for the join: the settings file the resolver reads is itself below the homes the picked binary uses. Here the AppImage variant puts both on the host's own tree, and the switch beside the directory is read from the same file.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/Applications/pcsx2-v2.6.3.AppImage": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /home/deck/Emulation/storage/pcsx2/textures\n[EmuCore/GS]\nLoadTextureReplacements = true\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Emulation/storage/pcsx2/textures",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/Emulation/storage/pcsx2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/home/deck/Emulation/storage/pcsx2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duckstations-texture-directory-is-its-own-default-below-the-dataroot",
+      "rationale": "The directory is [Folders] Textures, read the way every folder of this emulator is read, and RetroDECK never writes that key — so the compiled default governs: 'textures' below the DataRoot. On this arrangement the DataRoot is the config side, because the flatpak sets XDG_CONFIG_HOME, which is why the answer here is the one the old fixed join happened to give. What changed is that it is now read rather than assumed.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"texture_packs_path\": \"/mnt/sd/retrodeck/texture_packs\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[MemoryCards]\nCard1Type = PerGameTitle\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duckstation-a-configured-texture-directory-is-taken-as-it-stands",
+      "rationale": "A host-spelled absolute [Folders] Textures is taken as it stands, the way LoadPathFromSettings takes it — the same helper the BIOS search directory, the memory cards and the cheat directory all go through (a sandbox-spelled one would translate through the launch's sandbox map instead, #277). A relative one would hang off the DataRoot instead.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"texture_packs_path\": \"/mnt/sd/retrodeck/texture_packs\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[Folders]\nTextures = /mnt/sd/retrodeck/texture_packs/Duckstation/textures\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs",
+          "/mnt/sd/retrodeck/texture_packs/Duckstation/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/texture_packs/Duckstation/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-duckstation-textures-hang-off-the-dataroot-its-sandbox-pins",
+      "rationale": "Nothing on this machine holds a DuckStation settings.ini, and that used to leave the DataRoot an open question: the emulator picks it from whether XDG_CONFIG_HOME is set (qthost.cpp:562-582), so the answer named the environment-unset side — the data one — and said the environment decides. It does not decide here. Every emulator RetroDECK ships runs inside RetroDECK's own flatpak, and flatpak force-pins XDG_CONFIG_HOME to the per-app config directory after applying every override (flatpak-context.c:3158-3187 at 1.16.6), so the set branch is the only branch such a launch can take. The texture root is the one below that DataRoot, stated plainly — the same telling the save, BIOS and mod answers of this emulator give, because it is one fact.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"texture_packs_path\": \"/mnt/sd/retrodeck/texture_packs\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duckstation-an-unreadable-settings-file-refuses-the-texture-question",
+      "rationale": "The file that would name the directory exists and cannot be read, so the question is refused rather than answered with a default that file may well have overridden — the same stance the mod route takes on the same file.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"texture_packs_path\": \"/mnt/sd/retrodeck/texture_packs\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": {
+            "status": "unreadable"
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "unresolved": {
+            "code": "emulator-config-unreadable",
+            "data": {
+              "token": "DUCKSTATION",
+              "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "emudeck-duckstations-textures-and-cheats-agree-about-the-dataroot",
+      "rationale": "The machine the fixed join got wrong. EmuDeck installs DuckStation as an AppImage and the launch keeps its settings under the data home, so the texture directory hangs off that root — and now says the same thing this emulator's cheat directory says on the same machine. Under the old card the two answers of one emulator named two different roots, which is the state a card exists to prevent.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/Applications/DuckStation.AppImage": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.local/share/duckstation/settings.ini": "[MemoryCards]\nCard1Type = PerGameTitle\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.local/share/duckstation/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.local/share/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-the-flatpaks-own-data-home-carries-its-texture-tree-too",
+      "rationale": "The same launch, asked the texture question: one variant gate serves all four routes, so an id that establishes the save answer establishes this one in the same read. The tree is the emulator's own fixed subpath, below the app's data home rather than the host's.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu/Dolphin.ini": "[Core]\nSlotA = 8\nSlotB = 255\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Applications",
+          "/home/deck/.local/share/flatpak/app/org.DolphinEmu.dolphin-emu",
+          "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "gc"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Load/Textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": "game-id",
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "config": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu/GFX.ini"
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-forks-textures-sit-below-the-name-its-build-spells",
+      "rationale": "The texture half of the same launch, and the reason the directory name had to leave the cards: this row's subpath is Dolphin's Load/Textures either way, and only the name above it differs. Before the app id was named, this entry refused with standalone-variant-unestablished; naming it without the second spelling would have answered a directory that does not exist here.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"PrimeHack (Standalone)\">%EMULATOR_PRIMEHACK% %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Applications",
+          "/home/deck/.local/share/flatpak/app/io.github.shiiion.primehack",
+          "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/Load/Textures",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "gc"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/Load/Textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": "game-id",
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "PRIMEHACK",
+                "config": "/home/deck/.var/app/io.github.shiiion.primehack/config/dolphin-emu/GFX.ini"
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "PRIMEHACK",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-pcsx2-a-sandbox-spelled-texture-directory-is-translated",
+      "rationale": "PCSX2 wrote this configuration from inside its flatpak, so an absolute [Folders] Textures spelled /var/data/... names the app's private data directory — bound at ~/.var/app/<app id>/data on the host, the same deterministic map the memory-card and states directories already go through (#272). The answer anchors at the host spelling, staged <serial>/replacements below it like every PCSX2 texture answer; taking the sandbox spelling verbatim would name a directory this host reads as something else entirely.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /var/data/PCSX2/textures\n[EmuCore/GS]\nLoadTextureReplacements = true\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/data/PCSX2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/home/deck/.var/app/net.retrodeck.retrodeck/data/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-pcsx2-a-sandbox-only-texture-directory-refuses-with-the-path",
+      "rationale": "PCSX2.ini reads fine and [Folders] Textures states a path only the emulator's sandbox can spell (/var/lib/ is no XDG bind), so no host directory exists for the answer to anchor at. The refusal is emulator-config-path-untranslatable with the stated value in data.path — the same outcome the memory-card and states directories reach (#274), never a verbatim sandbox path stated as if this host could read it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /var/lib/textures\n[EmuCore/GS]\nLoadTextureReplacements = true\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "unresolved": {
+            "code": "emulator-config-path-untranslatable",
+            "data": {
+              "token": "PCSX2",
+              "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini",
+              "path": "/var/lib/textures"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "pcsx2-a-sandbox-only-gamesettings-directory-is-an-unread-layer",
+      "rationale": "The per-game layer check globs the directory [Folders] GameSettings names, and this one only the emulator's sandbox can spell — so the listing cannot be made from here, and the absence of a caveat would claim exactly what was not established (that no game carries an override). The texture answer itself stays the configured host directory; the cause rides in the settled words — sandbox-path-untranslated with the key and the stated value, the caveat every answer-stands-around-it site emits — beside the consequence, per-game-layer-unread with the configured spelling in data.dir, so a client can tell this unread state from a host directory that failed to glob.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /mnt/sd/retrodeck/texture_packs/PCSX2/textures\nGameSettings = /var/lib/gamesettings\n[EmuCore/GS]\nLoadTextureReplacements = true\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "sandbox-path-untranslated",
+              "data": {
+                "key": "GameSettings",
+                "path": "/var/lib/gamesettings"
+              }
+            },
+            {
+              "code": "per-game-layer-unread",
+              "data": {
+                "token": "PCSX2",
+                "dir": "/var/lib/gamesettings",
+                "key": [
+                  "[EmuCore/GS] LoadTextureReplacements"
+                ]
+              }
+            },
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-a-sandbox-spelled-gamesettings-directory-is-listed-at-its-host-spelling",
+      "rationale": "The twin that translates: [Folders] GameSettings spelled /var/config/... is the app's private config directory on the host, and the ini sitting there is a per-game layer this machine really carries — so the check lists the host spelling and states per-game-overrides-present naming it. Globbing the sandbox spelling instead would find nothing and silently claim the answer holds for every game.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /mnt/sd/retrodeck/texture_packs/PCSX2/textures\nGameSettings = /var/config/PCSX2/gamesettings\n[EmuCore/GS]\nLoadTextureReplacements = true\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings/SLUS-20946_07652DD9.ini": "[EmuCore/GS]\nLoadTextureReplacements = false\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "per-game-overrides-present",
+              "data": {
+                "token": "PCSX2",
+                "count": "1",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gamesettings",
+                "key": [
+                  "[EmuCore/GS] LoadTextureReplacements"
+                ]
+              }
+            },
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-duckstation-a-sandbox-spelled-texture-directory-is-translated",
+      "rationale": "DuckStation writes its settings.ini from inside the flatpak, so an absolute [Folders] Textures spelled /var/data/... names the app's private data directory — ~/.var/app/<app id>/data on the host. The answer anchors there, the way the states directory beside it already does (#272); LoadPathFromSettings takes the absolute value as it stands only inside the sandbox that wrote it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"texture_packs_path\": \"/mnt/sd/retrodeck/texture_packs\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[Folders]\nTextures = /var/data/duckstation/textures\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/data/duckstation/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/duckstation/textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrodeck-duckstation-a-sandbox-only-texture-directory-refuses-with-the-path",
+      "rationale": "settings.ini reads fine and [Folders] Textures states a path only the emulator's sandbox can spell (/var/lib/ is no XDG bind) — the refusal is emulator-config-path-untranslatable with the stated value in data.path, the memory-card directory's own outcome (#274), never a verbatim sandbox path and never the unreadable code, whose claim the successful read contradicts.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"texture_packs_path\": \"/mnt/sd/retrodeck/texture_packs\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[Folders]\nTextures = /var/lib/textures\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "unresolved": {
+            "code": "emulator-config-path-untranslatable",
+            "data": {
+              "token": "DUCKSTATION",
+              "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini",
+              "path": "/var/lib/textures"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-var-spelled-texture-directory-is-the-host-path-it-names",
+      "rationale": "The same string RetroDECK's PCSX2 writes from inside its flatpak — /var/data/... — means something else in a config no sandbox wrote. EmuDeck's AppImage launch is a native install, so its PCSX2.ini is host-native and the value is a real (if unusual) host path: translating it to ~/.var/app/<id>/data would invent a directory this emulator never opens. The answer therefore anchors at the value as it stands, with no sandbox caveat, which is the opposite of what the RetroDECK vector of the same key pins.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\nbiosPath=\"$HOME/Emulation/bios\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nsystem_directory = \"/home/deck/Emulation/bios\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.iso .ISO</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/Applications/pcsx2-v2.6.3.AppImage": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/PCSX2/inis/PCSX2.ini": "[Folders]\nTextures = /var/data/pcsx2/textures\n[EmuCore/GS]\nLoadTextureReplacements = true\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/var/data/pcsx2/textures",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/var/data/pcsx2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/var/data/pcsx2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "pcsx2-a-case-variant-spelling-of-the-texture-keys-governs",
+      "rationale": "PCSX2 reads PCSX2.ini through CSimpleIniA, whose comparator matches sections and keys ASCII case-insensitively (INISettingsInterface.h:66, SimpleIni.h:3642-3643 over SI_GenericNoCase :2916-2931 at v2.6.3) — so [folders] textures, gamesettings and [emucore/gs] loadtexturereplacements are the same settings to the running emulator as their canonical spellings. The configured directory governs, the switch reads true, and the per-game layer the case-variant gamesettings line names is found and stated — an exact-case lookup would have answered the compiled default for all three (#295).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"/mnt/sd/retrodeck/saves\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps2</name>\n    <path>%ROMPATH%/ps2</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"PCSX2 (Standalone)\">%EMULATOR_PCSX2% %ROM%</command>\n    <platform>ps2</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/inis/PCSX2.ini": "[folders]\ntextures = /mnt/sd/retrodeck/texture_packs/PCSX2/textures\ngamesettings = gs-layer\n[emucore/gs]\nloadtexturereplacements = true\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gs-layer/SLUS-20946_05D42518.ini": "[EmuCore/GS]\nLoadTextureReplacements = false\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "ps2"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures/<save_id>/replacements",
+          "needs": [
+            "save_id"
+          ],
+          "physical_dir": null,
+          "enabled": true,
+          "keying": "serial",
+          "caveats": [
+            {
+              "code": "per-game-overrides-present",
+              "data": {
+                "token": "PCSX2",
+                "count": "1",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/PCSX2/gs-layer",
+                "key": [
+                  "[EmuCore/GS] LoadTextureReplacements"
+                ]
+              }
+            },
+            {
+              "code": "filenames-content-conditional",
+              "data": {
+                "token": "PCSX2",
+                "root": "/mnt/sd/retrodeck/texture_packs/PCSX2/textures",
+                "save_id": "the disc's serial, as PCSX2 reads it off the running game",
+                "save_id_spelling": "path-segment",
+                "load_stage": "replacements",
+                "dump_stage": "dumps",
+                "citation": "GSTextureReplacements.cpp:39-40, :262-265 and :400-412 at v2.6.3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duckstation-a-case-variant-spelling-of-the-textures-key-governs",
+      "rationale": "DuckStation reads settings.ini through the same CSimpleIniA as PCSX2 (ini_settings_interface.h:65 and the vendored SimpleIni.h:3593-3607 at 1f6de046b), so [folders] textures is the [Folders] Textures key to the running emulator. The relative value joins the DataRoot exactly as the canonical spelling would (LoadPathFromSettings, settings.cpp:1958-1965) — an exact-case lookup would have answered the compiled textures default instead (#295).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"texture_packs_path\": \"/mnt/sd/retrodeck/texture_packs\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <platform>psx</platform>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini": "[folders]\ntextures = packs\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/texture_packs",
+          "/mnt/sd/retrodeck/texture_packs/Duckstation/textures",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/packs",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-per-game-load-path-is-stated-beside-the-texture-answer",
+      "rationale": "The texture tree is not a configured directory for Dolphin — it is Load/Textures below the emulator's own user directory — but that IS reachable from the per-game layer: [Dolphin.General] LoadPath re-points D_LOAD_IDX and the rebuild recomputes D_HIRESTEXTURES_IDX below it (FileUtil.cpp:967-972 at dolphin 2603a), reached through the config-changed callback that re-runs InitCustomPaths when the layer is added (UICommon.cpp:102-118, :131-135). The section is [Dolphin.General] and not [Main.General]: General-section keys arrive only through the free-form <System>.<Section> parse, and the name that parse resolves for System::Main is 'Dolphin' (Config.cpp:157-169), so [Main.General] is dropped with a warning. The answer stays the global reading and states the layer beside it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"false\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nglobal_core_options = \"true\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <fullname>Nintendo GameCube</fullname>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <platform>gc</platform>\n    <theme>gc</theme>\n  </system>\n</systemList>\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/dolphin-emu/Dolphin.ini": "[Core]\nSlotA = 1\nSlotB = 255\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GameSettings/GALE01.ini": "[Dolphin.General]\nLoadPath = /mnt/sd/load\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GameSettings",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "gc"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/Load/Textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": "game-id",
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "config": "/home/deck/.var/app/net.retrodeck.retrodeck/config/dolphin-emu/GFX.ini"
+              }
+            },
+            {
+              "code": "per-game-overrides-present",
+              "data": {
+                "token": "DOLPHIN",
+                "count": "1",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GameSettings",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ]
+              }
+            },
+            {
+              "code": "per-game-build-layer-unread",
+              "data": {
+                "token": "DOLPHIN",
+                "key": [
+                  "[Dolphin.General] LoadPath"
+                ],
+                "layer": "GlobalGame"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-an-installed-flatpak-no-row-names-an-id-for-refuses-as-before",
+      "rationale": "The texture route runs the variant gate before it looks for a card, so an installed flatpak whose emulator the settings table carries no row for asks the table for an app id and gets none. That is an answer, not drift: hundreds of catalogue tokens name emulators atlas states nothing about, and the reading must refuse them exactly as it did rather than raising or joining a path onto an id nobody wrote down. XRoar's token identifies the launch, no texture card covers it, and the refusal stays standalone-unsupported.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>coco</name>\n    <path>%ROMPATH%/coco</path>\n    <extension>.ccc .CCC</extension>\n    <command label=\"XRoar CoCo 2 NTSC (Standalone)\">%EMULATOR_XROAR% -fs -default-machine coco2bus %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Applications",
+          "/var/lib/flatpak/app/uk.org.6809.xroar",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "coco"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "unresolved": {
+            "code": "standalone-unsupported",
+            "data": {
+              "label": "XRoar CoCo 2 NTSC (Standalone)",
+              "system": "coco"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "duckstation-a-degenerate-textures-value-composes-the-emulators-spelling",
+      "rationale": "[Folders] Textures spelled textures//packs/ — a separator run and a trailing separator. The key is a LoadPathFromSettings read (settings.cpp:1981 with :1955-1965 at 1f6de046b), whose Path::Combine collapses the run and strips the tail (file_system.cpp:859-874), so the emulator reads packs from <DataRoot>/textures/packs and the answer spells exactly that. The witness stands for every route through the shared load_path read — textures, cheats and the per-game settings directory compose a relative value through the same ported combine.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.chd .CHD</extension>\n    <command label=\"DuckStation (Standalone)\">/bin/bash /home/deck/Emulation/tools/launchers/duckstation.sh %ROM%</command>\n  </system>\n</systemList>\n",
+          "/home/deck/Applications/DuckStation.AppImage": "",
+          "/home/deck/.local/share/duckstation/settings.ini": "[Folders]\nTextures = textures//packs/\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/.local/share/duckstation/textures/packs",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "entry_texture_query": {
+          "system": "psx"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "entry_texture_pack_location": {
+          "dir": "/home/deck/.local/share/duckstation/textures/packs",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "emulator-config-unread",
+              "data": {
+                "token": "DUCKSTATION",
+                "config": "/home/deck/.local/share/duckstation/settings.ini"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-saves-rooted-core-below-a-relative-save-folder-keeps-the-cwd-hole",
+      "rationale": "PPSSPP's texture tree hangs off the save root. A relative savefile_directory with no cwd is the <cwd> template (file_path.c:1066-1101 expands only ~ and :), so the texture directory below it carries the cwd hole and is not looked at.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\", \"bios_path\": \"/mnt/sd/retrodeck/bios\"}, \"version\": \"0.10.9b\"}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "libretro_directory = \"/mnt/sd/retrodeck/cores\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nsavefile_directory = \"saves\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch-core-options.cfg": "ppsspp_texture_replacement = \"disabled\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/mnt/sd/retrodeck/cores/ppsspp_libretro.so": {
+            "library_name": "PPSSPP",
+            "options": {
+              "ppsspp_texture_replacement": {
+                "default": "disabled",
+                "values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "texture_query": {
+          "core_so": "ppsspp_libretro.so"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "<cwd>/saves/PPSSPP/PSP/TEXTURES",
+          "needs": [
+            "cwd"
+          ],
+          "physical_dir": null,
+          "enabled": false,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "save-dir-launch-dependent",
+              "data": {
+                "key": "savefile_directory",
+                "path": "saves"
+              }
+            },
+            {
+              "code": "emulator-read-unestablished",
+              "data": {
+                "core": "ppsspp",
+                "verdict": "suspect"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

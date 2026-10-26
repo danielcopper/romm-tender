@@ -402,6 +402,7 @@ jobs:
             !.claude/worktrees
             !CHANGELOG.md
             !site
+            !tests/adapters/atlas_vectors/vectors
 
   markdown-format:
     runs-on: ubuntu-latest
