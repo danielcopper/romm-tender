@@ -15,10 +15,11 @@ path that *can* emit, error paths included, not the ones a fixture happens to
 provoke. It reaches three producer shapes across ``backend/services``, all
 three of which exist today:
 
-* a call to ``SyncProgress.emit_progress``, which the reporter and the unit
-  applier reach through their injected ``_emit_progress`` and
-  ``services/artwork/service.py`` through an ``emit_progress`` callable passed in
-  per operation;
+* a call to ``SyncProgress.emit_progress`` — made directly by the preview and
+  the orchestrator, through an injected ``_emit_progress`` by the unit applier
+  and the reporter, through ``_fetch_pages.py``'s page loop by both fetchers, and
+  by ``services/artwork/service.py`` through an ``emit_progress`` callable the
+  cover preparer passes in per operation;
 * a direct write of the frame to ``sync_progress``, which the CANCELLED and the
   ERROR frames use because they build the snapshot themselves;
 * a frame handed straight to the emit primitive as ``_emit("sync_progress", {…})``.

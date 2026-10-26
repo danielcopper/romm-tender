@@ -1366,7 +1366,7 @@ class TestSyncControl:
         assert library.sync._sync_last_heartbeat > old
 
 
-class TestFinishSync:
+class TestEmitCancelled:
     """Tests for SyncProgress.emit_cancelled().
 
     ``emit_cancelled`` emits the terminal CANCELLED progress snapshot only; the
@@ -1617,8 +1617,8 @@ class TestRunKindOnTheWire:
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
         library.settings["enabled_platforms"] = {"1": True}
-        # Blow up inside the unit loop, after the plan — the ERROR frame that
-        # path builds is a dict literal of its own, not an ``emit_progress``.
+        # Blow up inside the unit loop, after the plan — that path's ERROR frame
+        # comes from ``SyncProgress.write_error_frame``, not ``emit_progress``.
         library.sync._unit_applier.apply_unit = AsyncMock(side_effect=RuntimeError("boom"))
         assert library.sync._box.try_begin_run("run-err", kind=SyncRunKind.APPLY) is True
 
@@ -3301,7 +3301,7 @@ class TestSyncRunLifecycle:
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
 
         # Heartbeat timeout: the wait gives up (None) while the box is still
-        # RUNNING — apply_unit flags run_interrupted and requests the cancel.
+        # RUNNING — the chunk dispatcher flags run_interrupted and requests the cancel.
         async def wait_timeout(_u, _event):
             return
 
@@ -4014,7 +4014,7 @@ class TestDoSyncPerUnitErrors:
         with pytest.raises(asyncio.CancelledError):
             await library.sync._orchestrator._do_sync_per_unit()
 
-        # emit_cancelled transitioned to IDLE + cleared sync id.
+        # The run's ``finally: box.finish_run(run_id)`` transitioned to IDLE + cleared sync id.
         assert library.sync._sync_state == SyncState.IDLE
         assert library.sync._current_sync_id is None
         progress_stages = [
@@ -4305,7 +4305,7 @@ class TestDoSyncPerUnitErrors:
         assert complete[0].args[1].get("cancelled") is True
 
 
-class TestSyncOneUnitCollectionAndCancel:
+class TestApplyUnitCollectionAndCancel:
     """Tests for apply_unit branches: collection units + mid-unit cancel."""
 
     @pytest.mark.asyncio
@@ -7206,11 +7206,11 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
         if not faves_skipped:
             fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
         orchestrator = library.sync._orchestrator
-        sync_one_unit = library.sync._unit_applier.apply_unit
+        apply_unit = library.sync._unit_applier.apply_unit
         box = library.sync._box
 
         async def stop_after_faves(unit, **kwargs):
-            processed = await sync_one_unit(unit, **kwargs)
+            processed = await apply_unit(unit, **kwargs)
             if unit.type == "collection":
                 box.request_cancel()
             return processed
