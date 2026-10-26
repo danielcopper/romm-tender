@@ -107,7 +107,7 @@ async def test_cancel_paused_download_evicts_and_get_queue_omits_it(harness):
     The pre-fix bug: ``cancel_download`` required a live task, so a paused
     download's cancel silently no-op'd and its row lingered.
     """
-    queue = harness.app.services.download_service._download_queue
+    queue = harness.app.services.download_service._state.entries
     queue[7] = {
         "rom_id": 7,
         "rom_name": "Paused",
@@ -149,7 +149,7 @@ async def test_clear_completed_downloads_evicts_terminal_and_get_queue_omits_the
     from the queue — not merely hidden client-side. Active/queued/paused/
     extracting entries survive.
     """
-    queue = harness.app.services.download_service._download_queue
+    queue = harness.app.services.download_service._state.entries
     queue[1] = {"rom_id": 1, "rom_name": "Done", "status": "completed"}
     queue[2] = {"rom_id": 2, "rom_name": "Broke", "status": "failed", "error": "boom"}
     queue[3] = {"rom_id": 3, "rom_name": "Stopped", "status": "cancelled"}

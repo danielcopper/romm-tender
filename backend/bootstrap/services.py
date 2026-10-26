@@ -28,7 +28,17 @@ from services.cores import CoreService, CoreServiceConfig
 from services.data_inventory import DataInventoryService, DataInventoryServiceConfig
 from services.disc import DiscService, DiscServiceConfig
 from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
-from services.downloads import DownloadService, DownloadServiceConfig
+from services.downloads import (
+    DownloadQueue,
+    DownloadQueueConfig,
+    DownloadService,
+    DownloadServiceConfig,
+    DownloadsStateBox,
+    DownloadTransfer,
+    DownloadTransferConfig,
+    DownloadUnpacker,
+    DownloadUnpackerConfig,
+)
 from services.emulator_sources import EmulatorSourcesService, EmulatorSourcesServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.store import FirmwareStore, FirmwareStoreConfig
@@ -534,20 +544,51 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
+    downloads_state = DownloadsStateBox()
+    download_queue = DownloadQueue(
+        config=DownloadQueueConfig(
+            state=downloads_state,
+            loop=cfg.runtime.loop,
+            emit=cfg.runtime.emit,
+            clock=cfg.runtime.clock,
+            logger=cfg.runtime.logger,
+        ),
+    )
+    download_unpacker = DownloadUnpacker(
+        config=DownloadUnpackerConfig(
+            download_file_store=cfg.adapters.download_file_store,
+            retrodeck_folders=cfg.callbacks.retrodeck_folders,
+            install_recorder=rom_install_recorder,
+            m3u_support=cfg.callbacks.m3u_support,
+            logger=cfg.runtime.logger,
+        ),
+    )
+    download_transfer = DownloadTransfer(
+        config=DownloadTransferConfig(
+            state=downloads_state,
+            queue=download_queue,
+            unpacker=download_unpacker,
+            romm_api=cfg.adapters.romm_api,
+            install_recorder=rom_install_recorder,
+            conflict_rules=conflict_rules,
+            loop=cfg.runtime.loop,
+            emit=cfg.runtime.emit,
+            logger=cfg.runtime.logger,
+        ),
+    )
     download_service = DownloadService(
         config=DownloadServiceConfig(
+            state=downloads_state,
+            queue=download_queue,
+            transfer=download_transfer,
+            unpacker=download_unpacker,
             romm_api=cfg.adapters.romm_api,
             download_file_store=cfg.adapters.download_file_store,
             platform_systems=platform_systems,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
-            emit=cfg.runtime.emit,
-            clock=cfg.runtime.clock,
-            sleeper=cfg.runtime.sleeper,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
-            install_recorder=rom_install_recorder,
             target_gate=rom_adoption_service.check_download_target,
-            m3u_support=cfg.callbacks.m3u_support,
             uow_factory=cfg.callbacks.uow_factory,
             rom_remover=rom_remover_binding.get,
             conflict_rules=conflict_rules,

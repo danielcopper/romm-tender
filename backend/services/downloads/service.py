@@ -1,130 +1,85 @@
-"""DownloadService — ROM download orchestration.
+"""DownloadService — the façade the endpoints and the composition root call for ROM downloads.
 
-Owns every step between a frontend download request and a finished transfer:
-the occupancy gate, the disk-space pre-flight, the bounded queue, the transfer
-itself, pause, resume and cancel. What a finished transfer becomes — a file
-kept as it is or a folder unpacked from a zip, and the cleanup after a failure —
-is ``unpack.py``'s. Raw filesystem I/O flows through the ``DownloadFileStore``
+What happens before a download's task starts belongs here — its admission,
+the occupancy gate, the sibling supersede and the disk-space pre-flight — and
+so does the control of a running or paused download (cancel, pause, resume),
+the installed-ROM read and the shutdown. The task itself is ``transfer.py``'s,
+the queue's entries and their frames are ``queue.py``'s, what a finished
+transfer becomes is ``unpack.py``'s, and the state they share is
+``_state.py``'s. Raw filesystem I/O flows through the ``DownloadFileStore``
 Protocol; HTTP traffic flows through ``RommRomReader``.
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 from dataclasses import dataclass
-from functools import partial
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from domain.disk_space import NotEnoughSpaceToUnpack, disk_space_verdict
-from domain.download_frames import cancelled_frame, failed_frame
+from domain.disk_space import disk_space_verdict
 from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused
 from domain.rom_candidates import DIR, FILE
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
-from domain.rom_files import (
-    TMP_EXT,
-    ZIP_TMP_EXT,
-    is_multi_file_download,
-    resolve_extract_dir_name,
-    resolve_local_file_name,
-    synthetic_rom_name,
-)
-from domain.served_shape import is_zip_name, listed_unpacked_bytes, served_shapes
+from domain.rom_files import is_multi_file_download
+from domain.served_shape import listed_unpacked_bytes, served_shapes
 from domain.sibling_supersede import supersede_siblings
 from lib.background_tasks import BackgroundTasks
 from lib.errors import NotInstalled, Refused
-from lib.path_safety import coerce_safe_component
-from services.downloads.unpack import DownloadUnpacker, DownloadUnpackerConfig
+from services.downloads._names import partial_tmp_size, safe_extract_dir_name, safe_local_file_name
+from services.downloads._state import DownloadControl
 
 if TYPE_CHECKING:
+    import asyncio
     import logging
 
     from domain.platform_system import PlatformSystem
     from lib.partial_failure import PartialFailure
     from models.state import InstalledRomEntry
+    from services.downloads._state import DownloadsStateBox
+    from services.downloads.queue import DownloadQueue
+    from services.downloads.transfer import DownloadTransfer
+    from services.downloads.unpack import DownloadUnpacker
     from services.protocols import (
-        Clock,
         ConflictRules,
         DownloadFileStore,
         DownloadTargetGateFn,
-        EventEmitter,
         PlatformSystems,
         RetroDeckFolders,
-        RomInstallRecorder,
         RommRomReader,
         RomRemoverProvider,
-        Sleeper,
-        SystemM3uSupportFn,
         UnitOfWorkFactory,
     )
 
-_DOWNLOAD_QUEUE_MAX_TERMINAL = 50
 # One wording for both blocks that refuse a disk that cannot be read or prepared:
 # the user reads the same sentence whichever step raised.
 _START_FAILED_MESSAGE = "Failed to start download"
-
-# A download in one of these statuses has run to a terminal end — it is no
-# longer active/queued/paused/extracting. The queue prune trims the oldest of
-# these over the cap, and "Clear Completed" evicts all of them (#149). In normal
-# flow only completed/failed actually LINGER: a cancel is an explicit discard and
-# evicts its entry on the spot (#149 downloads-round), so "cancelled" stays in
-# this classification defensively (a stray cancelled row is still prune/clearable)
-# and as the transient status the terminal cancel FRAME still carries.
-_TERMINAL_DOWNLOAD_STATUSES = ("completed", "failed", "cancelled")
-
-_ProgressPhase = Literal["downloading", "extracting"]
-
-
-class _DownloadControl:
-    """Per-download cooperative-control flags. Set on the event-loop thread by
-    ``cancel_download`` / ``pause_download``; polled on the executor worker
-    thread by the progress callback, which raises ``CancelledError`` to abort
-    the in-flight HTTP transfer when EITHER flag is set (#144).
-
-    ``cancelled`` and ``paused`` differ only in the terminal handling: a cancel
-    deletes the partial ``.tmp``; a pause keeps it so the transfer can resume
-    from where it stopped. The abort mechanism (raise to unwind the executor
-    transfer) is identical.
-
-    Plain bools — not ``threading.Event`` — because the import-linter
-    ``no-stdlib-io-in-services`` contract forbids ``threading`` in services, and
-    under the GIL a one-way set-once bool flip needs no synchronisation.
-    """
-
-    __slots__ = ("cancelled", "paused")
-
-    def __init__(self) -> None:
-        self.cancelled = False
-        self.paused = False
 
 
 @dataclass(frozen=True)
 class DownloadServiceConfig:
     """Frozen wiring bundle handed to ``DownloadService.__init__``.
 
-    Holds the Protocol-typed adapters, runtime infrastructure, time/sleep
-    seams, the SQLite Unit-of-Work factory, and RetroDECK's folders
-    DownloadService needs at construction time. ``install_recorder`` is the
-    shared writer of the ``rom_installs`` row and the shortcut bake behind it;
-    ``target_gate`` is the pre-flight that refuses to write over content
-    Tender did not put there (ADR-0028). ``conflict_rules`` are what a start or
-    resume checks at its entry, and what a download's task and its
-    ``download_complete`` lease are held through.
+    ``state``, ``queue``, ``transfer`` and ``unpacker`` are the package's
+    parts, built by the composition root over one shared state box: an admitted
+    download's task is ``transfer.run``, and the unpacker answers whether a
+    whole download already sits on disk and removes a paused one's partial.
+    ``target_gate`` is the pre-flight that refuses to write over content Tender
+    did not put there (ADR-0028). ``conflict_rules`` are what a start or resume
+    checks at its entry, and what a download's task is held through.
     """
 
+    state: DownloadsStateBox
+    queue: DownloadQueue
+    transfer: DownloadTransfer
+    unpacker: DownloadUnpacker
     romm_api: RommRomReader
     download_file_store: DownloadFileStore
     platform_systems: PlatformSystems
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    emit: EventEmitter
-    clock: Clock
-    sleeper: Sleeper
     retrodeck_folders: RetroDeckFolders
-    install_recorder: RomInstallRecorder
     target_gate: DownloadTargetGateFn
-    m3u_support: SystemM3uSupportFn
     uow_factory: UnitOfWorkFactory
     # Deferred access to RomRemovalService.remove_rom_unchecked for the sibling
     # supersede — the two services form a construction cycle, so the composition
@@ -142,68 +97,32 @@ class DownloadService:
     """
 
     def __init__(self, *, config: DownloadServiceConfig) -> None:
+        self._state = config.state
+        self._queue = config.queue
+        self._transfer = config.transfer
+        self._unpacker = config.unpacker
         self._romm_api = config.romm_api
         self._download_file_store = config.download_file_store
         self._platform_systems = config.platform_systems
         self._loop = config.loop
         self._logger = config.logger
-        self._emit = config.emit
-        self._clock = config.clock
-        self._sleeper = config.sleeper
         self._retrodeck_folders = config.retrodeck_folders
-        self._install_recorder = config.install_recorder
         self._target_gate = config.target_gate
-        self._m3u_support = config.m3u_support
         self._uow_factory = config.uow_factory
         self._rom_remover = config.rom_remover
         self._rules = config.conflict_rules
         self._tasks = BackgroundTasks(logger=config.logger)
 
-        # Owned state
-        self._download_in_progress: set[int] = set()
-        self._download_queue: dict[int, dict[str, Any]] = {}
-        self._download_tasks: dict[int, asyncio.Task[None]] = {}
-        # Bounded concurrency: at most two ROMs transfer at once. Excess
-        # downloads enter the queue with status "queued" and acquire the
-        # semaphore in FIFO order inside ``_do_download``.
-        self._download_semaphore = asyncio.Semaphore(2)
-        # Reserved bytes per in-flight ROM, so the disk pre-flight accounts for
-        # siblings already committed to download but not yet written to disk.
-        self._reserved_bytes: dict[int, int] = {}
-        # Per-download cooperative-control tokens. The progress callback polls its
-        # captured token on the executor thread; ``cancel_download`` /
-        # ``pause_download`` flip it on the loop thread to abort the in-flight
-        # transfer (#144).
-        self._control_tokens: dict[int, _DownloadControl] = {}
-
     async def shutdown(self) -> None:
         """Cancel the per-ROM download tasks and the progress frames still running, and wait until they have ended.
 
         A download cancelled while its install is being committed waits for the
-        commit's thread before it ends, so this waits for it too.
+        commit's thread before it ends, so this waits for it too. The frames go
+        after the downloads, because a download that ends sends one.
         """
         await self._tasks.shutdown()
-        self._download_tasks.clear()
-
-    def _prune_download_queue(self):
-        """Remove oldest terminal items when over the limit.
-
-        Keeps all non-terminal (queued/downloading/paused/extracting) items.
-        Retains up to _DOWNLOAD_QUEUE_MAX_TERMINAL terminal items, removing the
-        oldest (by insertion order) when the count exceeds the limit. In practice
-        the retained terminals are completed/failed — a cancel evicts its own
-        entry immediately (#149 downloads-round), so it rarely reaches the cap.
-        """
-        terminal_ids = [
-            rid for rid, item in self._download_queue.items() if item.get("status") in _TERMINAL_DOWNLOAD_STATUSES
-        ]
-        excess = len(terminal_ids) - _DOWNLOAD_QUEUE_MAX_TERMINAL
-        if excess <= 0:
-            return
-        # Dict preserves insertion order (Python 3.7+), so the first
-        # entries in terminal_ids are the oldest.
-        for rid in terminal_ids[:excess]:
-            del self._download_queue[rid]
+        await self._queue.shutdown()
+        self._state.tasks.clear()
 
     async def start_download(
         self,
@@ -227,7 +146,7 @@ class DownloadService:
         """
         async with self._rules.hold("start_download", update=True, migration=True, prune=True):
             rom_id = int(rom_id)
-            if rom_id in self._download_in_progress:
+            if rom_id in self._state.in_progress:
                 raise Refused("already_downloading", "Already downloading")
             # The page's report rides with the user's answers because the gate reads
             # them together, but it is added apart from them to keep the difference
@@ -276,19 +195,7 @@ class DownloadService:
                 )
                 raise
             self._logger.info(f"Superseding install of rom {sibling_id} (group of rom {rom_id})")
-            self._evict_if_paused(sibling_id)
-
-    def _evict_if_paused(self, rom_id: int) -> None:
-        """Drop a superseded sibling's queue entry when it is paused (#1298 S1).
-
-        A paused download whose install this supersede just removed is stale — its
-        "paused" row (and partial ``.tmp``) would otherwise linger and could be
-        resumed into a second installed version. Only a paused row is evicted; a
-        live or terminal row for the sibling is left to its own lifecycle.
-        """
-        entry = self._download_queue.get(rom_id)
-        if entry is not None and entry.get("status") == "paused":
-            self.evict(rom_id)
+            self._queue.evict_if_paused(sibling_id)
 
     def _conflicting_sibling_install_ids(self, rom_id: int, adopted_path: str | None = None) -> list[int]:
         """Sibling members with a ``rom_installs`` row that this install still has to remove.
@@ -299,8 +206,8 @@ class DownloadService:
         row in that same UoW and is not listed, so its files are never removed;
         once the UoW has closed, each hand-over is logged with both rom ids and
         the path, and the member's paused queue entry is evicted
-        (``_evict_if_paused``). A ROM with no sibling group key (solo /
-        unbackfilled) has no siblings, so the list is empty.
+        (``DownloadQueue.evict_if_paused``). A ROM with no sibling group key
+        (solo / unbackfilled) has no siblings, so the list is empty.
         """
         with self._uow_factory() as uow:
             rom = uow.roms.get(rom_id)
@@ -313,7 +220,7 @@ class DownloadService:
                 uow.rom_installs.delete(sibling_id)
         for sibling_id in displaced.handed_over:
             self._logger.info(f"Handing the install of rom {sibling_id} at {adopted_path} over to rom {rom_id}")
-            self._evict_if_paused(sibling_id)
+            self._queue.evict_if_paused(sibling_id)
         return list(displaced.removed)
 
     async def _begin_download(self, rom_id, *, resume: bool, replace_existing=False, **answer):
@@ -322,10 +229,10 @@ class DownloadService:
         *answer* passes the adopt dialog's answers, and what the game page reported, through to the gate unread.
         Fetches ROM detail and refuses one RomM holds no file for (``no_file_on_romm``), resolves the platform path,
         then runs the three pre-flights **in this order**: the occupancy gate, the #1298 sibling supersede, the
-        disk-space check. Only then are the queue entry, task, byte reservation and control token registered. On
-        ``resume=True`` the disk pre-flight discounts the bytes already on the existing ``.tmp`` and ``_do_download``
-        appends rather than restarts. The ``already_downloading`` guard stays with ``start_download``;
-        ``resume_download`` validates the paused entry before calling here.
+        disk-space check. Only then is the download admitted into the state box — its queue entry, task, byte
+        reservation and control token. On ``resume=True`` the disk pre-flight discounts the bytes already on the
+        existing ``.tmp`` and the transfer appends rather than restarts. The ``already_downloading`` guard stays with
+        ``start_download``; ``resume_download`` validates the paused entry before calling here.
 
         Holds the ROM's in-progress claim from the first step and gives it back on every way out but a started
         download, a cancelled start included, so the ROM is never stuck "Already downloading". A partial failure the
@@ -333,13 +240,13 @@ class DownloadService:
         disk that cannot be read or prepared) is refused here with ``download_start_failed``; a RomM error and a
         refusal pass on unchanged (which: ``docs/architecture/backend-architecture.md``), and anything else is a bug.
         """
-        self._download_in_progress.add(rom_id)
+        self._state.in_progress.add(rom_id)
         try:
             return await self._start_claimed_download(
                 rom_id, resume=resume, replace_existing=replace_existing, **answer
             )
         except BaseException:
-            self._download_in_progress.discard(rom_id)
+            self._state.in_progress.discard(rom_id)
             raise
 
     def _download_platform_io(self, platform_slug: str) -> PlatformSystem:
@@ -367,7 +274,7 @@ class DownloadService:
             raise folder
         roms_dir = folder
         try:
-            file_name = self._safe_local_file_name(rom_detail)
+            file_name = safe_local_file_name(rom_detail, self._logger)
             file_size = rom_detail.get("fs_size_bytes", 0)
             target_path = os.path.join(roms_dir, file_name)
 
@@ -380,7 +287,7 @@ class DownloadService:
             shapes = served_shapes(rom_detail)
             folder_path = None
             if DIR in shapes:
-                folder_path = os.path.join(roms_dir, self._resolve_safe_extract_dir_name(rom_detail))
+                folder_path = os.path.join(roms_dir, safe_extract_dir_name(rom_detail, self._logger))
             checked_path = target_path if FILE in shapes or folder_path is None else folder_path
             gated = await self._target_gate(
                 rom_detail,
@@ -394,7 +301,7 @@ class DownloadService:
             self._logger.error(f"Failed to prepare download for ROM {rom_id}: {e}")
             raise Refused("download_start_failed", _START_FAILED_MESSAGE) from e
         if gated is not None:
-            self._download_in_progress.discard(rom_id)
+            self._state.in_progress.discard(rom_id)
             return gated
 
         # At most one downloaded version per shortcut binding (#1298): strip a
@@ -418,13 +325,13 @@ class DownloadService:
             # ``kept_download_complete``), so only what the unpack still needs is
             # weighed — as for a resume.
             kept = resume or await self._loop.run_in_executor(
-                None, self._unpacker().kept_download_complete, target_path, rom_detail
+                None, self._unpacker.kept_download_complete, target_path, rom_detail
             )
-            already_on_disk = self._partial_tmp_size(target_path, rom_detail) if kept else 0
+            already_on_disk = partial_tmp_size(self._download_file_store, target_path, rom_detail) if kept else 0
             verdict = disk_space_verdict(
                 file_size=file_size,
                 free_space=self._download_file_store.disk_free(roms_dir),
-                reserved_bytes=self._bytes_reserved_by_others(rom_id),
+                reserved_bytes=self._state.bytes_reserved_by_others(rom_id),
                 multi_file=is_multi_file_download(rom_detail),
                 already_on_disk=already_on_disk,
                 unpacked_size=listed_unpacked_bytes(rom_detail),
@@ -442,25 +349,25 @@ class DownloadService:
         platform_name = rom_detail.get("platform_name", platform_slug)
         # Carry the prior resumability verdict across a resume so the UI keeps
         # showing Pause before the resumed transfer's headers re-confirm it.
-        resumable = bool(self._download_queue.get(rom_id, {}).get("resumable", False))
+        resumable = bool(self._state.entries.get(rom_id, {}).get("resumable", False))
 
         # Create the control token BEFORE the task so the closure captured inside
-        # ``_do_download``'s progress callback polls this exact object. A later
+        # the transfer's progress callback polls this exact object. A later
         # re-download installs a fresh token, leaving the zombie's callback bound
         # to the cancelled one (#144).
-        control = _DownloadControl()
+        control = DownloadControl()
         task = self._tasks.spawn(
-            self._do_download(rom_id, rom_detail, target_path, system, file_name, control, resume=resume),
+            self._transfer.run(rom_id, rom_detail, target_path, system, file_name, control, resume=resume),
             f"download of rom {rom_id}",
         )
 
-        self._download_queue[rom_id] = {
+        entry = {
             "rom_id": rom_id,
             "rom_name": rom_name,
             "platform_name": platform_name,
             "file_name": file_name,
             # Honest initial status: the task hasn't acquired the concurrency
-            # semaphore yet. ``_do_download`` flips this to "downloading" once it
+            # semaphore yet. The transfer flips this to "downloading" once it
             # enters the critical section (#1053).
             "status": "queued",
             "progress": 0,
@@ -483,20 +390,17 @@ class DownloadService:
             "_replace_existing": replace_existing and FILE in served_shapes(rom_detail),
             "_confirmed_paths": answer.get("confirmed_paths"),
             # What this download found on disk when it was admitted, which its
-            # reservation already left out (``_bytes_reserved_by_others``).
+            # reservation already left out (``bytes_reserved_by_others``).
             "_on_disk_at_start": already_on_disk,
         }
-        self._download_tasks[rom_id] = task
-        # Reserve this download's required bytes so a concurrent sibling's
-        # pre-flight sees the outstanding claim (released in ``_do_download``'s
-        # ``finally``).
-        self._reserved_bytes[rom_id] = verdict.needed_bytes
-        self._control_tokens[rom_id] = control
+        # The reservation lets a concurrent sibling's pre-flight see the
+        # outstanding claim; the transfer releases it when the task ends.
+        self._state.admit(rom_id, entry=entry, task=task, reserved=verdict.needed_bytes, control=control)
         return {"success": True, "message": "Download started"}
 
     def task_for_rom(self, rom_id: int) -> asyncio.Task[None] | None:
         """Return the detached task whose lifetime owns this ROM's install write."""
-        return self._download_tasks.get(int(rom_id))
+        return self._state.tasks.get(int(rom_id))
 
     async def _hold_until_started_task_done(
         self, result: dict[str, Any] | PartialFailure, rom_id: int, label: str
@@ -511,589 +415,12 @@ class DownloadService:
         if task is not None:
             await self._rules.hold_until_done(task, label)
 
-    def _safe_local_file_name(self, rom_detail: dict[str, Any]) -> str:
-        """The on-disk name for this ROM: the server's, coerced to one safe component.
-
-        Strips any directory portion and rejects a degenerate result — ``..``
-        would escape the platform directory and ``.`` or ``""`` would resolve to
-        it — falling back to the synthetic ``rom_<id>`` identity. Both repairs
-        are logged, because the name the user sees on disk then differs from the
-        one the server states.
-        """
-        file_name, files_missing = resolve_local_file_name(rom_detail)
-        if files_missing:
-            self._logger.warning(
-                f"has_nested_single_file=true but files list is empty; falling back to fs_name='{file_name}'"
-            )
-        safe_name, name_changed = coerce_safe_component(file_name, synthetic_rom_name(rom_detail))
-        if name_changed:
-            self._logger.warning(f"Sanitized fs_name from '{file_name}' to '{safe_name}'")
-        return safe_name
-
-    def _partial_tmp_size(self, target_path, rom_detail) -> int:
-        """Bytes already on disk in the partial ``.tmp`` for *target_path*.
-
-        Single-file ROMs stream to ``target_path + .tmp``; multi-file ROMs to
-        ``target_path + .zip.tmp``. Returns 0 when no partial exists (the file
-        store reports a missing path as size 0).
-        """
-        tmp_ext = ZIP_TMP_EXT if is_multi_file_download(rom_detail) else TMP_EXT
-        return self._download_file_store.file_size(target_path + tmp_ext)
-
-    def _resolve_safe_extract_dir_name(self, rom_detail: dict[str, Any]) -> str:
-        """Resolve the sanitized base name for the extract dir an unpacked ROM lands in.
-
-        Names the directory after the ROM's identity via
-        ``resolve_extract_dir_name`` (never ``files[0]``), then coerces the
-        server-supplied value to a single safe path component
-        (``coerce_safe_component``): a directory portion (``../evil``, an
-        absolute path) is stripped to its basename, AND a degenerate result
-        (``..``/``.``/empty/whitespace — which would resolve to the roms root
-        or the platform dir and turn a later ``remove_tree`` into a
-        library-wide delete) falls back to the synthetic ``rom_<id>`` identity.
-        Mirrors the ``file_name`` guard in ``_start_claimed_download``.
-        """
-        raw = resolve_extract_dir_name(rom_detail)
-        safe, changed = coerce_safe_component(raw, synthetic_rom_name(rom_detail))
-        if changed:
-            self._logger.warning(f"Sanitized extract dir name from '{raw}' to '{safe}'")
-        return safe
-
-    def _unpacker(self) -> DownloadUnpacker:
-        """The post-processing over this service's seams.
-
-        Built per call, so a seam rebound on this service after construction is
-        the one it uses.
-        """
-        return DownloadUnpacker(
-            config=DownloadUnpackerConfig(
-                download_file_store=self._download_file_store,
-                retrodeck_folders=self._retrodeck_folders,
-                install_recorder=self._install_recorder,
-                m3u_support=self._m3u_support,
-                logger=self._logger,
-            )
-        )
-
-    def _extract_progress(self, rom_id, rom_detail, file_name):
-        """The ``extracting`` phase's progress callback for this download."""
-        rom_name = rom_detail.get("name", file_name)
-        platform_name = rom_detail.get("platform_name", rom_detail.get("platform_slug", ""))
-        return self._make_progress_callback(rom_id, rom_name, platform_name, file_name, phase="extracting")
-
-    def _post_download_multi_io(
-        self, rom_id, rom_detail, target_path, file_name, system, extract_dir_name, reserved_bytes=0
-    ):
-        """Sync helper for _do_download multi-file — extraction + renames in executor.
-
-        *extract_dir_name* is the ROM-identity-derived, sanitized base name for
-        the extract directory (``_resolve_safe_extract_dir_name``) — never a
-        name derived from ``files[0]``. Returns ``(launch_file, error)`` as
-        ``DownloadUnpacker.unpack_and_record`` does.
-        """
-        return self._unpacker().finish_multi(
-            rom_id,
-            rom_detail,
-            target_path,
-            os.path.join(os.path.dirname(target_path), extract_dir_name),
-            system,
-            progress_callback=self._extract_progress(rom_id, rom_detail, file_name),
-            reserved_bytes=reserved_bytes,
-        )
-
-    def _post_download_single_io(self, rom_id, rom_detail, target_path, system, extract_dir_name="", reserved_bytes=0):
-        """Sync helper for _do_download single-file — rename or unpack, then DB persist, in executor.
-
-        Returns ``(path, error)`` as ``DownloadUnpacker.finish_single`` does; a
-        zip holding a disc image is unpacked into *extract_dir_name* beside
-        *target_path*.
-        """
-        file_name = os.path.basename(target_path)
-        return self._unpacker().finish_single(
-            rom_id,
-            rom_detail,
-            target_path,
-            os.path.join(os.path.dirname(target_path), extract_dir_name) if extract_dir_name else None,
-            system,
-            progress_callback=self._extract_progress(rom_id, rom_detail, file_name),
-            reserved_bytes=reserved_bytes,
-        )
-
-    def _make_progress_callback(
-        self, rom_id, rom_name, platform_name, file_name, control=None, *, phase: _ProgressPhase = "downloading"
-    ):
-        """Build a throttled progress callback for one *phase* of a download.
-
-        The callback logs a one-line summary at most every 30s and emits at
-        most every 0.5s, except that the final tick (``done >= total``) always
-        emits. ``last_emit`` starts at 0.0 so the first extracting tick emits
-        immediately and the UI switches to the "extracting" phase promptly once
-        the byte transfer finishes.
-
-        *control*, when given, is polled on every tick. The extracting phase is
-        handed none: extraction is not cancellable.
-        """
-        last_emit = [0.0]  # mutable container for closure
-        last_log = [0.0]
-
-        def progress_callback(done, total):
-            if control is not None and (control.cancelled or control.paused):
-                # Abort the in-flight transfer thread (#144). CancelledError is a
-                # BaseException, so it propagates untouched through the adapter's
-                # Exception-only retry/translate — no retry, no error translation.
-                # Both cancel and pause unwind through here; the terminal handling
-                # in ``_do_download`` branches on which flag was set.
-                raise asyncio.CancelledError()
-            now = self._clock.monotonic()
-            if now - last_log[0] >= 30.0:
-                last_log[0] = now
-                self._log_progress(phase, rom_name, done, total)
-            if now - last_emit[0] < 0.5 and done < total:
-                return
-            last_emit[0] = now
-            progress = done / total if total else 0
-
-            # This callback runs on a ``run_in_executor`` worker thread. Both the
-            # queue-dict mutation and the emit-scheduling must happen on the loop
-            # thread, so marshal them across via ``call_soon_threadsafe`` (#973).
-            self._loop.call_soon_threadsafe(
-                self._apply_progress,
-                phase,
-                rom_id,
-                rom_name,
-                platform_name,
-                file_name,
-                progress,
-                done,
-                total,
-            )
-
-        return progress_callback
-
-    def _log_progress(self, phase: _ProgressPhase, rom_name, done, total):
-        """Log a throttled one-line human-readable progress summary (MB + %)."""
-        label = "Extract" if phase == "extracting" else "Download"
-        mb_done = done / (1024 * 1024)
-        mb_total = total / (1024 * 1024) if total else 0
-        pct = (done / total * 100) if total else 0
-        self._logger.info(f"{label} progress: {rom_name} — {mb_done:.1f}/{mb_total:.1f} MB ({pct:.0f}%)")
-
-    def _live_entry(self, rom_id) -> dict[str, Any] | None:
-        # Every applier the worker queues with ``call_soon_threadsafe`` reads the entry
-        # here. None for an evicted entry (never resurrected) and for an ended one: a
-        # callback queued before the end can run after the terminal frame, because from
-        # 3.13 asyncio settles an executor future that finished before the loop chained
-        # it without yielding (``asyncio.futures._chain_future``).
-        entry = self._download_queue.get(rom_id)
-        return None if entry is None or entry.get("status") in _TERMINAL_DOWNLOAD_STATUSES else entry
-
-    def _apply_progress(self, phase: _ProgressPhase, rom_id, rom_name, platform_name, file_name, progress, done, total):
-        """Update the live queue entry and schedule a ``download_progress`` emit for *phase*.
-
-        Runs on the loop thread, marshaled from the worker via ``call_soon_threadsafe``;
-        an evicted or ended entry is left alone and no frame is sent (``_live_entry``).
-        Extracting flips the entry to "extracting" and reports ``resumable: False``,
-        as extraction never resumes; downloading keeps the status and its ``resumable``.
-        """
-        entry = self._live_entry(rom_id)
-        if entry is None:
-            return
-        extracting = phase == "extracting"
-        if extracting:
-            entry["status"] = "extracting"
-        else:
-            entry["_transferred"] = done
-        entry.update(
-            {
-                "progress": progress,
-                "bytes_downloaded": done,
-                "total_bytes": total,
-            }
-        )
-        self._tasks.spawn(
-            self._emit(
-                "download_progress",
-                {
-                    "rom_id": rom_id,
-                    "rom_name": rom_name,
-                    "platform_name": platform_name,
-                    "file_name": file_name,
-                    "status": phase,
-                    "progress": progress,
-                    "bytes_downloaded": done,
-                    "total_bytes": total,
-                    "resumable": False if extracting else entry.get("resumable", False),
-                },
-            ),
-            "download_progress",
-        )
-
-    async def _finalize_download_complete(self, rom_id, rom_detail, final_path, rom_name, platform_name):
-        """Mark the queue entry completed and emit ``download_complete``.
-
-        Resolves the bound Steam ``shortcut_app_id`` for this rom_id (or ``None``
-        when the ROM hasn't been synced yet) plus the ROM's full active core
-        (resolved ``.so`` or ``None``) and the multi-disc launch path so the
-        frontend confirm-sets launch options on the exact shortcut without a
-        full-library scan to re-resolve rom_id→app_id, and the re-bake keeps the
-        per-game/per-platform core AND the selected disc across uninstall →
-        reinstall. Called from the normal success path and from the cancel handler
-        when the install committed before the cancel landed (#1049).
-        """
-        entry = self._download_queue[rom_id]
-        entry["status"] = "completed"
-        entry["progress"] = 1.0
-        app_id, launch_options = await self._loop.run_in_executor(
-            None, self._install_recorder.do_resolve_launch_bake, rom_id, rom_detail, final_path
-        )
-        payload = {
-            "rom_id": rom_id,
-            "rom_name": rom_name,
-            "platform_name": platform_name,
-            "file_path": final_path,
-            "app_id": app_id,
-            "launch_options": launch_options,
-            "resumable": entry.get("resumable", False),
-        }
-        # A bound ROM's event carries a lease for the frontend's write of the
-        # launch command onto its shortcut; an unbound ROM has no shortcut to
-        # write to, so its lease would hold off every cleanup until it expired.
-        if app_id is None:
-            await self._emit("download_complete", payload)
-        else:
-            await self._rules.emit_under_lease(
-                "download_complete",
-                lambda token: self._emit("download_complete", {**payload, "prune_lease_token": token}),
-            )
-        # Record the freshly baked launch command as this ROM's applied state (the
-        # value the frontend confirm-sets onto the shortcut), so the next sync
-        # skips the now-correct shortcut instead of re-touching it (delta apply,
-        # #1383). Only when the ROM has a bound shortcut — an unbound ROM has none
-        # to record, and the next sync creates + records it. Second of the six
-        # writer sites.
-        if app_id is not None:
-            await self._loop.run_in_executor(
-                None, self._install_recorder.do_record_applied_launch_options, rom_id, launch_options
-            )
-        self._logger.info(f"Download complete: {rom_name} -> {final_path}")
-
-    async def _reconcile_post_io(self, post_io_future):
-        """After a cancel, settle an in-flight post-IO commit and report whether
-        the install committed. Executor threads run to completion regardless of
-        cancellation, so letting the future settle here lets a race-committed
-        install be honored instead of torn down. Returns (final_path, committed).
-        """
-        if post_io_future is None:
-            return (None, False)  # cancel landed before the post-IO phase started
-        # Let the (shielded) executor future settle WITHOUT awaiting it directly:
-        # ``asyncio.wait`` reports completion through the future's own state, so a
-        # cancelled or failed commit is inspected here, never swallowed — the
-        # caller's ``except asyncio.CancelledError`` keeps ownership of the re-raise.
-        await asyncio.wait({post_io_future})
-        if post_io_future.cancelled() or post_io_future.exception() is not None:
-            # Executor work was cancelled before it ran, or the commit raised.
-            return (None, False)
-        final_path, post_io_error = post_io_future.result()
-        if post_io_error is None and final_path is not None:
-            return (final_path, True)
-        return (None, False)
-
-    def _make_on_meta(self, rom_id, rom_name, platform_name, file_name):
-        """Build the one-shot resumability callback the adapter fires when the
-        download's response headers arrive (before the body streams).
-
-        It records the server's ``range_supported`` verdict on the queue entry
-        and emits a ``download_progress`` frame carrying it, so the frontend can
-        flip Pause/Cancel live DURING the transfer instead of only learning the
-        verdict at the end. Runs on the executor transfer thread, so it hops back
-        to the loop via ``call_soon_threadsafe`` like the progress callback (#973).
-        """
-
-        def on_meta(range_supported: bool) -> None:
-            def _apply() -> None:
-                entry = self._live_entry(rom_id)
-                if entry is None:
-                    return
-                entry["resumable"] = range_supported
-                self._tasks.spawn(
-                    self._emit(
-                        "download_progress",
-                        {
-                            "rom_id": rom_id,
-                            "rom_name": rom_name,
-                            "platform_name": platform_name,
-                            "file_name": file_name,
-                            "status": entry.get("status", "downloading"),
-                            "progress": entry.get("progress", 0),
-                            "bytes_downloaded": entry.get("bytes_downloaded", 0),
-                            "total_bytes": entry.get("total_bytes", 0),
-                            "resumable": range_supported,
-                        },
-                    ),
-                    "download_progress",
-                )
-
-            self._loop.call_soon_threadsafe(_apply)
-
-        return on_meta
-
-    async def _do_download(self, rom_id, rom_detail, target_path, system, file_name, control=None, *, resume=False):
-        if control is None:
-            # Direct invocation (no ``_start_claimed_download``): own + register a control
-            # so the ``finally``'s identity-gated cleanup releases this task's
-            # registrations like the real path does.
-            control = _DownloadControl()
-            self._control_tokens[rom_id] = control
-        rom_name = rom_detail.get("name", file_name)
-        platform_name = rom_detail.get("platform_name", rom_detail.get("platform_slug", ""))
-        has_multiple = is_multi_file_download(rom_detail)
-        # Name the extract dir from the ROM's identity, not files[0] (which may be
-        # an arbitrary inner asset for a nested-single folder game). Computed once
-        # here and threaded to both the extraction and the cleanup so the dir a
-        # failure tears down matches the dir extraction created.
-        extract_dir_name = self._extract_dir_name(rom_detail, target_path)
-        progress_callback = self._make_progress_callback(rom_id, rom_name, platform_name, file_name, control)
-        on_meta = self._make_on_meta(rom_id, rom_name, platform_name, file_name)
-        # Tracks the resolved launch path once extraction returns it, so a
-        # failure AFTER the ES-DE collapse rename cleans up the *renamed* dir
-        # (``os.path.dirname(final_path)``) — not just the staging name.
-        final_path: str | None = None
-        # The post-IO commit future, declared before the try so the cancel
-        # handler can reconcile a race-committed install (#1049). Stays ``None``
-        # while waiting on the concurrency semaphore or during the transfer.
-        post_io_future: asyncio.Future[tuple[str | None, str | None]] | None = None
-
-        try:
-            self._logger.info(f"Download starting: {rom_name} (rom_id={rom_id}, multi={has_multiple}) -> {target_path}")
-
-            # Bounded concurrency (#1053): only two ROMs transfer at once. If the
-            # semaphore is already held, surface an honest "queued" frame so the
-            # UI shows the wait instead of a stalled "downloading" bar.
-            if self._download_semaphore.locked():
-                entry = self._download_queue[rom_id]
-                entry["status"] = "queued"
-                await self._emit(
-                    "download_progress",
-                    {
-                        "rom_id": rom_id,
-                        "rom_name": rom_name,
-                        "platform_name": platform_name,
-                        "file_name": file_name,
-                        "status": "queued",
-                        "progress": 0,
-                        "bytes_downloaded": 0,
-                        "total_bytes": rom_detail.get("fs_size_bytes", 0),
-                        "resumable": entry.get("resumable", False),
-                    },
-                )
-
-            async with self._download_semaphore:
-                self._download_queue[rom_id]["status"] = "downloading"
-                fetch = partial(self._fetch_unless_whole, rom_id, rom_detail, file_name, target_path, progress_callback)
-
-                if has_multiple:
-                    # Multi-file ROM: API returns ZIP, download to temp then extract
-                    await fetch(target_path + ZIP_TMP_EXT, resume=resume, on_meta=on_meta)
-                    post_io_future = self._loop.run_in_executor(
-                        None,
-                        self._post_download_multi_io,
-                        rom_id,
-                        rom_detail,
-                        target_path,
-                        file_name,
-                        system,
-                        extract_dir_name,
-                        self._bytes_reserved_by_others(rom_id),
-                    )
-                    # Shield the commit await: a cancel here must propagate to this
-                    # coroutine WITHOUT cancelling the underlying future, so
-                    # ``_reconcile_post_io`` can re-await it for the real result. A
-                    # bare ``await`` cancels the asyncio future (the executor thread
-                    # still commits), so the re-await would raise CancelledError and
-                    # the committed install would be mis-reported as not committed
-                    # → torn down (#1049).
-                    final_path, post_io_error = await asyncio.shield(post_io_future)
-                else:
-                    await fetch(target_path + TMP_EXT, resume=resume, on_meta=on_meta)
-                    post_io_future = self._loop.run_in_executor(
-                        None,
-                        self._post_download_single_io,
-                        rom_id,
-                        rom_detail,
-                        target_path,
-                        system,
-                        extract_dir_name,
-                        self._bytes_reserved_by_others(rom_id),
-                    )
-                    # Shielded so a racing cancel leaves the future intact for
-                    # ``_reconcile_post_io`` to re-await (see the multi-file branch).
-                    final_path, post_io_error = await asyncio.shield(post_io_future)
-
-                if post_io_error is not None or final_path is None:
-                    # The download succeeded but the install record failed its
-                    # invariant; the artifact was already cleaned up by the worker.
-                    # ``final_path is None`` always coincides with a non-None error
-                    # — the guard narrows the type for the launch-command build below.
-                    raise ValueError(post_io_error or "install record produced no launch path")
-
-                await self._finalize_download_complete(rom_id, rom_detail, final_path, rom_name, platform_name)
-
-        except asyncio.CancelledError:
-            # The cancel/pause may have raced a committing install. Executor
-            # threads run to completion, so wait for the post-IO future before
-            # deciding (#1049).
-            committed_path, committed = await self._reconcile_post_io(post_io_future)
-            if committed:
-                # The ROM IS installed — surface completed, don't tear it down.
-                # This also bakes launch_options for the just-committed install.
-                await self._finalize_download_complete(rom_id, rom_detail, committed_path, rom_name, platform_name)
-                self._logger.info(f"Download cancelled after install committed; surfaced as complete: {rom_name}")
-            elif control.paused:
-                # PAUSE: keep the partial ``.tmp`` so the transfer can resume from
-                # where it stopped. NOTHING is cleaned up. The entry stays "paused"
-                # in the queue (``_prune_download_queue`` only prunes terminal
-                # completed/failed/cancelled, so "paused" is retained). Record the
-                # target path (internal ``_``-prefixed key, stripped from the wire
-                # by ``get_download_queue``) so a later cancel of this now-task-less
-                # download can delete the partial without re-fetching rom detail.
-                entry = self._download_queue[rom_id]
-                entry["status"] = "paused"
-                entry["_target_path"] = target_path
-                await self._emit(
-                    "download_progress",
-                    {
-                        "rom_id": rom_id,
-                        "rom_name": rom_name,
-                        "platform_name": platform_name,
-                        "file_name": file_name,
-                        "status": "paused",
-                        "progress": entry.get("progress", 0),
-                        "bytes_downloaded": entry.get("bytes_downloaded", 0),
-                        "total_bytes": entry.get("total_bytes", 0),
-                        "resumable": entry.get("resumable", False),
-                    },
-                )
-                self._logger.info(f"Download paused: {rom_name}")
-            else:
-                entry = self._download_queue[rom_id]
-                entry["status"] = "cancelled"
-                self._cleanup_partial_download(target_path, has_multiple, extract_dir_name, final_path)
-                # #1017: emit a terminal frame so the frontend resets the button
-                # out of its downloading state (the global cancel path was silent).
-                await self._emit(
-                    "download_progress",
-                    {
-                        "rom_id": rom_id,
-                        "rom_name": rom_name,
-                        "platform_name": platform_name,
-                        "file_name": file_name,
-                        "status": "cancelled",
-                        "progress": entry.get("progress", 0),
-                        "bytes_downloaded": entry.get("bytes_downloaded", 0),
-                        "total_bytes": entry.get("total_bytes", 0),
-                        "resumable": entry.get("resumable", False),
-                    },
-                )
-                # A cancel is an explicit discard — drop the entry so no
-                # "cancelled" row lingers in the queue view or QAM summary (#149
-                # downloads-round). The terminal frame above already told the
-                # frontend; the store listener drops it there. Emitted BEFORE the
-                # evict so the frame carries the entry's final progress values.
-                self.evict(rom_id)
-                self._logger.info(f"Download cancelled: {rom_name}")
-            raise
-
-        except Exception as e:
-            self._download_queue[rom_id]["status"] = "failed"
-            self._download_queue[rom_id]["error"] = str(e)
-            self._cleanup_failed_download(e, target_path, has_multiple, extract_dir_name, final_path)
-            self._logger.error(f"Download failed for {rom_name}: {e}")
-            await self._emit("download_failed", failed_frame(rom_id, rom_name, platform_name, str(e)))
-
-        finally:
-            # A re-download (or resume) can overwrite these per-download
-            # registrations with a fresh attempt's BEFORE this (older/superseded)
-            # task's finally runs. Gate ALL of them on the control-token identity
-            # so a zombie/superseded task never evicts the newer attempt's task,
-            # in-progress flag, reservation, or token (#144). The control is
-            # registered by ``_start_claimed_download``; a direct-call test that never
-            # registered it simply skips these no-op pops.
-            if self._control_tokens.get(rom_id) is control:
-                self._download_tasks.pop(rom_id, None)
-                self._download_in_progress.discard(rom_id)
-                self._reserved_bytes.pop(rom_id, None)
-                del self._control_tokens[rom_id]
-            self._prune_download_queue()
-
-    async def _fetch_unless_whole(
-        self, rom_id, rom_detail, file_name, target_path, progress_callback, partial_path, *, resume, on_meta
-    ) -> None:
-        """Transfer this download into *partial_path*, unless it already sits whole there.
-
-        A zip already whole on disk — kept after a failed unpack, or paused after
-        its last byte — is unpacked without a transfer (``kept_download_complete``).
-        """
-        if await self._loop.run_in_executor(None, self._unpacker().kept_download_complete, target_path, rom_detail):
-            self._logger.info(f"Unpacking the download already on disk for {rom_detail.get('name', file_name)}")
-            return
-        await self._loop.run_in_executor(
-            None,
-            partial(
-                self._romm_api.download_rom_content,
-                rom_id,
-                file_name,
-                partial_path,
-                progress_callback,
-                resume=resume,
-                on_meta=on_meta,
-            ),
-        )
-
-    def _extract_dir_name(self, rom_detail: dict[str, Any], target_path: str) -> str:
-        """The extract dir's name where a download may be unpacked — a multi-file ROM or a single zip — else ``""``."""
-        may_unpack = is_multi_file_download(rom_detail) or is_zip_name(target_path)
-        return self._resolve_safe_extract_dir_name(rom_detail) if may_unpack else ""
-
-    def _cleanup_failed_download(self, error, target_path, has_multiple, extract_dir_name, final_path) -> None:
-        """Remove what a failed download left behind (``_cleanup_partial_download``)."""
-        # Too little space to unpack keeps the download whole for a retry; nothing
-        # was extracted yet, so there is nothing else to remove.
-        if not isinstance(error, NotEnoughSpaceToUnpack):
-            self._cleanup_partial_download(target_path, has_multiple, extract_dir_name, final_path)
-
-    def _bytes_reserved_by_others(self, rom_id: int) -> int:
-        """What other downloads have claimed and not yet written, which free space does not lack yet.
-
-        Read on the loop, where both change; what is written is
-        :meth:`_written_since_admitted`.
-        """
-        return sum(
-            max(reserved - self._written_since_admitted(other), 0)
-            for other, reserved in self._reserved_bytes.items()
-            if other != rom_id
-        )
-
-    def _written_since_admitted(self, rom_id: int) -> int:
-        """Bytes *rom_id*'s download has put on disk since admitted: its transfer, and what it has unpacked so far."""
-        entry = self._download_queue.get(rom_id) or {}
-        transferred = max(entry.get("_transferred", 0) - entry.get("_on_disk_at_start", 0), 0)
-        unpacked = entry.get("bytes_downloaded", 0) if entry.get("status") == "extracting" else 0
-        return transferred + unpacked
-
-    def _cleanup_partial_download(self, target_path, has_multiple, extract_dir_name, final_path=None):
-        """``DownloadUnpacker.remove_partial_download`` over this service's seams."""
-        self._unpacker().remove_partial_download(target_path, has_multiple, extract_dir_name, final_path)
-
-    def _remove_partial_tmp_files(self, target_path: str) -> None:
-        """``DownloadUnpacker.remove_partial_tmp_files`` over this service's seams."""
-        self._unpacker().remove_partial_tmp_files(target_path)
-
     def cancel_download(self, rom_id):
         """Cancel a download, whether it is running or paused.
 
         A running download has a live task: flip its cooperative-cancel token
         (stops the executor transfer thread, not just the asyncio wrapper — #144)
-        and cancel the task; ``_do_download``'s terminal handler deletes the
+        and cancel the task; the transfer's terminal handler deletes the
         partial, emits the terminal ``cancelled`` frame, and evicts the entry.
 
         A **paused** download has NO task — the pause already cancelled it,
@@ -1105,14 +432,14 @@ class DownloadService:
         with ``no_active_download`` so the frontend can surface it.
         """
         rom_id = int(rom_id)
-        task = self._download_tasks.get(rom_id)
+        task = self._state.tasks.get(rom_id)
         if task:
-            token = self._control_tokens.get(rom_id)
+            token = self._state.control_tokens.get(rom_id)
             if token is not None:
                 token.cancelled = True  # stop the executor transfer thread, not just the asyncio wrapper (#144)
             task.cancel()
             return {"success": True, "message": "Download cancelled"}
-        entry = self._download_queue.get(rom_id)
+        entry = self._state.entries.get(rom_id)
         if entry is not None and entry.get("status") == "paused":
             self._cancel_paused_download(rom_id, entry)
             return {"success": True, "message": "Download cancelled"}
@@ -1132,26 +459,23 @@ class DownloadService:
         """
         target_path = entry.get("_target_path")
         if target_path:
-            self._remove_partial_tmp_files(target_path)
-        # cancel_download runs on the loop thread; schedule the terminal frame the
-        # same way the progress callbacks do.
-        self._tasks.spawn(self._emit("download_progress", cancelled_frame(rom_id, entry)), "download_progress")
-        self.evict(rom_id)
+            self._unpacker.remove_partial_tmp_files(target_path)
+        self._queue.cancel_paused(rom_id, entry)
 
     def pause_download(self, rom_id):
         """Pause an in-flight download, keeping the partial ``.tmp`` for resume.
 
         Mirrors ``cancel_download`` but flips ``control.paused`` instead of
-        ``cancelled`` before cancelling the task, so ``_do_download``'s terminal
+        ``cancelled`` before cancelling the task, so the transfer's terminal
         handler routes to the pause branch (status "paused", no cleanup) rather
         than the cancel branch (status "cancelled", ``.tmp`` deleted). Kept
         defensive — the frontend only offers Pause when a download is resumable.
         """
         rom_id = int(rom_id)
-        task = self._download_tasks.get(rom_id)
+        task = self._state.tasks.get(rom_id)
         if not task:
             raise Refused("no_active_download", "No active download for this ROM")
-        token = self._control_tokens.get(rom_id)
+        token = self._state.control_tokens.get(rom_id)
         if token is not None:
             token.paused = True  # stop the executor transfer thread, keeping the .tmp (#144)
         task.cancel()
@@ -1183,11 +507,11 @@ class DownloadService:
         """
         async with self._rules.hold("resume_download", update=True, migration=True, prune=True):
             rom_id = int(rom_id)
-            entry = self._download_queue.get(rom_id)
+            entry = self._state.entries.get(rom_id)
             if entry is None or entry.get("status") != "paused":
                 raise Refused("not_paused", "No paused download for this ROM")
             if self._resume_target_superseded(rom_id):
-                self.evict(rom_id)
+                self._queue.evict(rom_id)
                 raise Refused("superseded", "Another version is now active")
             replace_existing = bool(entry.get("_replace_existing"))
             result = await self._begin_download(
@@ -1218,36 +542,13 @@ class DownloadService:
                 for member in uow.roms.iter_by_group_key(rom.sibling_group_key)
             )
 
-    def get_download_queue(self):
-        # Drop internal ``_``-prefixed keys (e.g. ``_target_path``, kept on a
-        # paused entry only for the paused-cancel cleanup) so they never cross
-        # the wire to the frontend ``DownloadItem`` shape.
-        return {
-            "downloads": [
-                {k: v for k, v in entry.items() if not k.startswith("_")} for entry in self._download_queue.values()
-            ]
-        }
+    def get_download_queue(self) -> dict[str, Any]:
+        """The queue's answer: every entry, as the frontend's ``DownloadItem`` shape."""
+        return self._queue.get_download_queue()
 
     def clear_completed_downloads(self) -> dict[str, Any]:
-        """Evict every terminal (completed/failed/cancelled) entry from the queue.
-
-        The frontend "Clear Completed" action calls this so a dismissed download
-        stays cleared across a QAM reopen or menu switch (#149): the backend queue
-        is the source ``get_download_queue`` re-seeds the frontend from on every
-        mount, so a purely-local hide reappeared on the next reopen. Active,
-        queued, paused, and extracting entries are left untouched — only terminal
-        ones are removed. In normal flow those are completed/failed only, since a
-        cancel already evicted its own entry (#149 downloads-round); a stray
-        cancelled row would still clear here. Idempotent: an empty queue or one
-        with no terminal entries clears nothing and reports ``cleared: 0``. A ROM
-        re-downloaded after being cleared re-enters the queue via ``start_download``.
-        """
-        terminal_ids = [
-            rid for rid, item in self._download_queue.items() if item.get("status") in _TERMINAL_DOWNLOAD_STATUSES
-        ]
-        for rid in terminal_ids:
-            del self._download_queue[rid]
-        return {"success": True, "cleared": len(terminal_ids)}
+        """Evict every terminal entry from the queue (``DownloadQueue.clear_completed_downloads``)."""
+        return self._queue.clear_completed_downloads()
 
     def active_download_rom_ids(self) -> set[int]:
         """Snapshot the rom ids with an in-flight or queued download (#1298 F1).
@@ -1260,7 +561,7 @@ class DownloadService:
         ``resume_download`` instead. Returns a copy so the caller cannot mutate the
         live control set.
         """
-        return set(self._download_in_progress)
+        return set(self._state.in_progress)
 
     def get_installed_rom(self, rom_id: int) -> InstalledRomEntry | None:
         """Return the install record for *rom_id* as a frontend-shaped dict, or ``None``.
@@ -1289,8 +590,8 @@ class DownloadService:
 
     def evict(self, rom_id: int) -> None:
         """Remove the queue entry for *rom_id* if present. Idempotent."""
-        self._download_queue.pop(int(rom_id), None)
+        self._queue.evict(rom_id)
 
     def clear(self) -> None:
         """Remove all entries from the download queue."""
-        self._download_queue.clear()
+        self._queue.clear()

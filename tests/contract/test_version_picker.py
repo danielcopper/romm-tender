@@ -475,7 +475,7 @@ async def test_switch_version_blocked_by_active_download(harness):
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID)
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     # Mark sibling 2 as actively downloading in the real DownloadService state.
-    harness.app.services.download_service._download_in_progress.add(2)
+    harness.app.services.download_service._state.in_progress.add(2)
 
     result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert result["success"] is False

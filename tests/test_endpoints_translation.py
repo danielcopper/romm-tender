@@ -104,7 +104,17 @@ from main import Endpoints
 from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.cores import CoreService, CoreServiceConfig
-from services.downloads import DownloadService, DownloadServiceConfig
+from services.downloads import (
+    DownloadQueue,
+    DownloadQueueConfig,
+    DownloadService,
+    DownloadServiceConfig,
+    DownloadsStateBox,
+    DownloadTransfer,
+    DownloadTransferConfig,
+    DownloadUnpacker,
+    DownloadUnpackerConfig,
+)
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
@@ -2006,23 +2016,50 @@ def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
             conflict_rules=_make_conflict_rules(),
         )
     )
+    download_emit = FakeEventSink().emit
+    download_rules = _make_conflict_rules()
+    state = DownloadsStateBox()
+    queue = DownloadQueue(
+        config=DownloadQueueConfig(state=state, loop=loop, emit=download_emit, clock=FakeClock(), logger=LOGGER)
+    )
+    unpacker = DownloadUnpacker(
+        config=DownloadUnpackerConfig(
+            download_file_store=world.store,
+            retrodeck_folders=folders,
+            install_recorder=recorder,
+            m3u_support=lambda system_name: True,
+            logger=LOGGER,
+        )
+    )
+    transfer = DownloadTransfer(
+        config=DownloadTransferConfig(
+            state=state,
+            queue=queue,
+            unpacker=unpacker,
+            romm_api=world.romm_api,
+            install_recorder=recorder,
+            conflict_rules=download_rules,
+            loop=loop,
+            emit=download_emit,
+            logger=LOGGER,
+        )
+    )
     downloads = DownloadService(
         config=DownloadServiceConfig(
+            state=state,
+            queue=queue,
+            transfer=transfer,
+            unpacker=unpacker,
             romm_api=world.romm_api,
             download_file_store=world.store,
             platform_systems=platform_systems,
             loop=loop,
             logger=LOGGER,
-            emit=FakeEventSink().emit,
-            clock=FakeClock(),
-            sleeper=FakeSleeper(),
             retrodeck_folders=folders,
-            install_recorder=recorder,
             target_gate=adoption.check_download_target,
-            m3u_support=lambda system_name: True,
             uow_factory=uow_factory,
             rom_remover=lambda: _remove_nothing,
-            conflict_rules=_make_conflict_rules(),
+            conflict_rules=download_rules,
         )
     )
     services = _make_services_bundle(download_service=downloads, rom_adoption_service=adoption)

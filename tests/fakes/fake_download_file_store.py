@@ -41,7 +41,7 @@ class FakeDownloadFileStore:
     - ``remove_failures`` / ``remove_tree_failures`` — sets of paths that
       raise ``OSError`` on the respective operation; used by partial-
       failure tests in ``cleanup_leftover_tmp_files`` and
-      ``_cleanup_partial_download``.
+      ``DownloadUnpacker.remove_partial_download``.
     - ``decode_calls`` / ``extract_calls`` / ``walk_calls`` /
       ``member_checksum_calls`` — captured argument lists for tests that
       need to assert on adapter calls.
