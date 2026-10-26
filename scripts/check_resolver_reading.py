@@ -76,6 +76,7 @@ import ast
 import json
 import re
 import sys
+import types
 import typing
 from pathlib import Path
 
@@ -363,7 +364,7 @@ def resolver_vocabulary_values() -> frozenset[str]:
     """Every value of the resolver's closed vocabularies that is no code.
 
     A string constant ``atlas.__all__`` holds, and a string in a tuple, a
-    frozenset or a ``Literal`` it exports.
+    frozenset, a ``Literal`` or a union of ``Literal`` types it exports.
     """
     atlas = _vendored_atlas()
     found: set[str] = set()
@@ -375,9 +376,19 @@ def resolver_vocabulary_values() -> frozenset[str]:
             found.add(value)
         elif isinstance(value, tuple | frozenset):
             found.update(member for member in value if isinstance(member, str))
-        elif typing.get_origin(value) is typing.Literal:
-            found.update(member for member in typing.get_args(value) if isinstance(member, str))
+        else:
+            found.update(_literal_strings(value))
     return frozenset(found) - frozenset(resolver_codes().values())
+
+
+def _literal_strings(annotation: object) -> set[str]:
+    """The strings a ``Literal`` type admits, followed through a union of them."""
+    origin = typing.get_origin(annotation)
+    if origin is typing.Literal:
+        return {member for member in typing.get_args(annotation) if isinstance(member, str)}
+    if origin is typing.Union or origin is types.UnionType:
+        return {member for arm in typing.get_args(annotation) for member in _literal_strings(arm)}
+    return set()
 
 
 def resolver_values() -> frozenset[str]:

@@ -12,7 +12,8 @@ import importlib.util
 import inspect
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Literal
 
 import pytest
 
@@ -309,6 +310,16 @@ class TestTheVocabulary:
         assert {"read", "unknown", "none", "open", "unsupported", "file", "directory", "required"}.isdisjoint(_VALUES)
         # A code is no value: the codes are watched as codes.
         assert "marker-missing" not in check.resolver_vocabulary_values()
+
+    def test_a_value_stated_only_in_a_union_of_literals_is_watched(self, monkeypatch):
+        planted = SimpleNamespace(
+            __all__=["PlantedStatus", "PlantedCount"],
+            PlantedStatus=Literal["answered"] | Literal["planted-only-here", "planted-too"] | None,
+            PlantedCount=int | str,
+        )
+        monkeypatch.setattr(check, "_vendored_atlas", lambda: planted)
+
+        assert check.resolver_vocabulary_values() == {"answered", "planted-only-here", "planted-too"}
 
     def test_a_generic_word_the_resolver_no_longer_states_fails(self, tmp_path, monkeypatch):
         monkeypatch.setattr(check, "GENERIC_VALUES", {"not-a-value": "a reason"})
