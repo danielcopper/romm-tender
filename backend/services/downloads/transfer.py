@@ -181,9 +181,11 @@ class DownloadTransfer:
         progress callback polls it, and the release at the end is gated on it
         (:meth:`DownloadsStateBox.release`). *platform_name* is the name the
         admission's platform answer carries; every frame and event of this
-        download names the platform by it, because RomM's ROM answer carries no
-        such name. On *resume* the transfer appends to the partial file instead
-        of restarting it.
+        download names the platform by it, because RomM's ROM answer
+        (``RomSchema``) carries no ``platform_name``, and its
+        ``platform_display_name`` is the custom name a user set wherever one is
+        set. On *resume* the transfer appends to the partial file instead of
+        restarting it.
         """
         rom_name = rom_detail.get("name", file_name)
         has_multiple = is_multi_file_download(rom_detail)

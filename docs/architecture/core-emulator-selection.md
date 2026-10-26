@@ -222,11 +222,13 @@ gives the slug's platform, or it has no system here, the platform has none.
 
 **Where there is none.** Where no id gives a switched-on system but some id gives a switched-off one, the platform's
 pages say **"System _system_ is switched off in _source_."**; where no id gives any, **"_source_ has no system for
-_platform_, so Tender cannot download its games."**, _platform_ being RomM's display name. The emulator list's reason is
-then `platform_system_off` or `no_platform_system`, nothing is downloaded, and the platform's BIOS download and an
-adoption's replace are refused the same way. Every other use keeps a state it already has: an uninstalled game's save
-answer is not established, the search for a copy already on disk finds nothing, and the launch falls back to the plain
-one.
+_platform_, so Tender cannot download its games."**. _platform_ there, and wherever else the platform's system names the
+platform — the pages that show the system, and a download's queue entry and every frame and event it sends — is the name
+the `platform_names` cache holds for its slug, else the `name` kept with its ids (below), else the slug itself
+([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is then
+`platform_system_off` or `no_platform_system`, nothing is downloaded, and the platform's BIOS download and an adoption's
+replace are refused the same way. Every other use keeps a state it already has: an uninstalled game's save answer is not
+established, the search for a copy already on disk finds nothing, and the launch falls back to the plain one.
 
 **Each source is asked for itself.** A download, and every question about where one would land — an uninstalled game's
 save answer, whether the target is taken, the search for a copy already there, an adoption's target — asks
@@ -237,19 +239,19 @@ game keeps the system its install record holds** for its saves, its emulator cho
 started from its page and its launch (`PlatformSystems.rom_system`); only a new download, and the platform page's BIOS
 download, follow the source's current answer. A source that renames, moves or drops a system is not followed yet.
 
-**The ids are kept.** `kv_config`'s `platform_ids` holds every listed platform's four ids and display name, replaced at
-the start of every sync from RomM's listing (a failed write is logged and leaves the run alone). Where none are kept for
-a platform — the first start after an update — `PlatformSystemService` reads the listing once and keeps it. Where that
-read fails, the question answers the reason `classify_error` gives it — `server_unreachable` while RomM is offline — as
-every other read that needs RomM does, and keeps nothing; the next read with RomM reachable keeps the ids. A game not
-downloaded then shows the offline state on its page (its save status, its BIOS tab reading unknown), and its emulator
-menu, its BIOS tab and the platform page say **"RomM cannot be reached, so Tender does not know this platform's system
-yet."**; where RomM answered but refused the read for any other reason (`auth_failed`, `not_found`, `config_error`, …),
-they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**, and the cause itself
-shows where Tender's connection state shows it; a downloaded game keeps its recorded system and is not affected. The
-game page's two looks at the disk — whether a download's target is already taken, and whether the game is there under
-another name — must reach no network, so they never read the listing: for them a platform with no kept ids has no
-system, and they go quiet.
+**The ids are kept.** `kv_config`'s `platform_ids` holds every listed platform's four ids and the `name` RomM's listing
+gives it, replaced at the start of every sync from RomM's listing (a failed write is logged and leaves the run alone).
+Where none are kept for a platform — the first start after an update — `PlatformSystemService` reads the listing once
+and keeps it. Where that read fails, the question answers the reason `classify_error` gives it — `server_unreachable`
+while RomM is offline — as every other read that needs RomM does, and keeps nothing; the next read with RomM reachable
+keeps the ids. A game not downloaded then shows the offline state on its page (its save status, its BIOS tab reading
+unknown), and its emulator menu, its BIOS tab and the platform page say **"RomM cannot be reached, so Tender does not
+know this platform's system yet."**; where RomM answered but refused the read for any other reason (`auth_failed`,
+`not_found`, `config_error`, …), they say **"RomM did not give this platform's ids, so Tender does not know its system
+yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded game keeps its recorded
+system and is not affected. The game page's two looks at the disk — whether a download's target is already taken, and
+whether the game is there under another name — must reach no network, so they never read the listing: for them a
+platform with no kept ids has no system, and they go quiet.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 

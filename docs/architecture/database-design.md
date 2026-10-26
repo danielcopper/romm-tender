@@ -288,8 +288,8 @@ maps 1:1 onto these tables.
 `SyncRun` carries its own invariants, so per GLOSSARY.md it gets a typed table rather than untyped `kv_config` rows. The
 full live `kv_config` key set is `device_id` (the server-issued device identity), `platform_names` (the JSON-encoded
 `platform_slug → name` cache), `platform_ids` (each RomM platform's IGDB, libretro, ScreenScraper and TheGamesDB ids and
-its display name, keyed by slug: replaced with every listed platform's at the start of every sync, and read from RomM
-once for a platform none are kept for — what a platform's system is asked with, see
+the `name` RomM's listing gives it, keyed by slug: replaced with every listed platform's at the start of every sync, and
+read from RomM once for a platform none are kept for — what a platform's system is asked with, see
 [core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)), `retrodeck_home_path` (+ its
 pending-migration `_previous`, and — when the home is changed _again_ before the migration runs — a `_hops` JSON array
 of the additional pending homes, oldest→newest, so files under an intermediate home are never stranded,
@@ -306,14 +306,14 @@ miscellaneous singleton scalars. The `platform_names` cache is a single JSON blo
 so five reads need no RomM: the game-detail platform name, a platform removal's answer, whose name the frontend finds
 that platform's Steam collection by, the next sync's name, in its preview as in its apply, for the Steam collection of a
 platform RomM no longer lists, whose kept games stay in it, a BIOS row a link of Tender's into another platform's store
-folder serves, and the platform answer a download is admitted with (`PlatformSystemService`), whose name the download
-queue's entry, its progress frames and its completion event carry
-([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). Each refresh writes the name of every platform
-the run's own platform listing names, its sync on in Tender or not — RomM's `name`, never a custom name set in RomM
-([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1, D2) — and keeps the cached name of every other
-platform a bound game is still on, a stopped run's refresh included. The schema version is **not** a `kv_config` key —
-it is tracked in `PRAGMA user_version` by the [migration runner](#the-migration-framework)
-([#781](https://github.com/danielcopper/romm-tender/issues/781)).
+folder serves, and the [platform system](core-emulator-selection.md#a-platforms-system) (`PlatformSystemService`), whose
+name its `no_platform_system` refusal, the pages that show the system, and a download's queue entry and every frame and
+event it sends, `download_failed` included, carry ([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1).
+Each refresh writes the name of every platform the run's own platform listing names, its sync on in Tender or not —
+RomM's `name`, never a custom name set in RomM ([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1, D2)
+— and keeps the cached name of every other platform a bound game is still on, a stopped run's refresh included. The
+schema version is **not** a `kv_config` key — it is tracked in `PRAGMA user_version` by the
+[migration runner](#the-migration-framework) ([#781](https://github.com/danielcopper/romm-tender/issues/781)).
 
 `SyncRun` is a **history** table, not a single "last run" row: a 1-row table would let a newly-started run
 (`status='running'`, no stats yet) erase the last completed run's displayable stats. "Last successful sync" is the
@@ -363,8 +363,8 @@ removal), so foreign keys are deliberately sparse:
   [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md)
   dropped the `Platform` aggregate — so it is just a string. The platform's name is not stored on the row: it lives in
   the `kv_config` `platform_names` cache ([One table per aggregate](#one-table-per-aggregate) says what writes and reads
-  it), and a reader with no name cached for a slug takes the bare slug — except the platform answer, which takes the
-  name kept with the platform's ids first.
+  it), and a reader with no name cached for a slug takes the bare slug; which name the platform system takes is
+  [core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)'s.
 
 The split moved the FK policy from the epic's "one FK only" (written for the mega-table world) to "CASCADE for the
 per-ROM ownership relationships the split introduced; no FK for cross-aggregate references" — same intent, applied to

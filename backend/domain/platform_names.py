@@ -9,10 +9,12 @@ platform's name without asking RomM — among them the game-detail page's platfo
 name, a platform removal's answer, whose name the frontend uses to find that
 platform's Steam collection, the next sync, which names the Steam collection of
 a platform RomM no longer lists by it, a BIOS row a link of Tender's into
-another platform's store folder serves, and the platform answer a download is
-admitted with, whose name the download queue shows. Anything that turns the
-stored string back into the ``slug → name`` mapping belongs here; reading the
-value out of ``kv_config`` stays in the service.
+another platform's store folder serves, and the platform's system, whose name
+its ``no_platform_system`` refusal, the pages that show the system, and a
+download's queue entry and every frame and event it sends, ``download_failed``
+included, carry. Anything that turns the stored string back into the
+``slug → name`` mapping belongs here; reading the value out of ``kv_config``
+stays in the service.
 """
 
 from __future__ import annotations

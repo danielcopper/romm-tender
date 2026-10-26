@@ -60,8 +60,9 @@ PLATFORM_SYSTEM_OFF = "platform_system_off"
 class PlatformIds:
     """A RomM platform's ids in the vocabularies the resolver knows; ``None`` where RomM holds none.
 
-    ``name`` is RomM's display name, kept beside them because the platform
-    names a sync keeps cover only the platforms it synced.
+    ``name`` is the ``name`` RomM's platform listing gives it, kept beside them
+    so the platform's system can name a platform the platform-name cache holds
+    no name for.
     """
 
     igdb_id: int | None = None
