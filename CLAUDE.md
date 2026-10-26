@@ -549,13 +549,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   once a reading module imports its constant). Unseen by the ESLint rule: a second site in a listed or excepted file
   reading the name it stands there for; a name as a plain string (`"satisfied" in row`, `Pick<T, "satisfied">`,
   `T["satisfied"]`); a code, value or name spelled as the name of a class field, a class method, a method in a type, an
-  enum member, a JSX attribute or a binding (a variable, a parameter, a function, an import or an export), or as a
-  qualified name in a type (`typeof a.pal`); test files, `src/test-setup.ts` and `src/test-utils/`; a code or name built
-  at run time; a field reached through a spread or `Object.entries`; a generic word of those vocabularies, which the
-  check leaves out (`GENERIC_VALUES`); a word the panel alone speaks with a meaning of its own, which the rule leaves
-  out in the panel (`PANEL_GENERIC_VALUES`); a word of Tender's own spoken inside one of those vocabularies
-  (`"rejected"`); and a watched value handed on through a parameter or a field of Tender's own name. Unseen by the
-  classification test: whether a reading module that names a code reads it rightly. Prompt-only: an entry on
+  enum member, a JSX attribute or a binding (a variable, a parameter, a function, a class, a type, an import or an
+  export), or as a qualified name in a type (`typeof a.pal`); test files, `src/test-setup.ts` and `src/test-utils/`; a
+  code or name built at run time; a field reached through a spread or `Object.entries`; a generic word of those
+  vocabularies, which the check leaves out (`GENERIC_VALUES`); a word the panel alone speaks with a meaning of its own,
+  which the rule leaves out in the panel (`PANEL_GENERIC_VALUES`); a word of Tender's own spoken inside one of those
+  vocabularies (`"rejected"`); and a watched value handed on through a parameter or a field of Tender's own name. Unseen
+  by the classification test: whether a reading module that names a code reads it rightly. Prompt-only: an entry on
   `NOT_THE_RESOLVERS` is a name that means something else in its module, never a read of the resolver's answer; a code
   the resolver adds is classified by a reading module rather than added to the list; Tender keeps no table of its own
   for anything the resolver answers (find rules, launch command patterns, launch-file types, RomM regions); a join is on

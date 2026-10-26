@@ -71,9 +71,8 @@ const RESOLVER_VOCABULARY = { codes: [...codes, ...values], names };
 const RESOLVER_READERS_TODAY = {
   "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
   "src/bigpicture/GameInfoTab.tsx": ["launchable"],
-  "src/types/api.ts": ["launchable"],
-  "src/utils/launchTarget.ts": ["launchable"],
   "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "mismatch", "satisfied"],
+  "src/types/api.ts": ["launchable"],
   "src/types/firmware.ts": [
     "by-name",
     "by-name-then-content",
@@ -153,6 +152,7 @@ const RESOLVER_READERS_TODAY = {
     "saves-root-missing",
   ],
   "src/utils/firmwareIdentifications.ts": ["known_as"],
+  "src/utils/launchTarget.ts": ["launchable"],
 };
 
 // Values of the resolver's closed vocabularies that the panel's own code also

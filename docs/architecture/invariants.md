@@ -340,20 +340,20 @@ Format: **invariant** — tier — enforced by.
   the ESLint rule: a second site in a listed or excepted file reading the name it stands there for; a name as a plain
   string (`"satisfied" in row`, `Pick<T, "satisfied">`, `T["satisfied"]`); a code, value or name spelled as the name of
   a class field, a class method, a method in a type, an enum member, a JSX attribute or a binding (a variable, a
-  parameter, a function, an import or an export), or as a qualified name in a type (`typeof a.pal`); test files,
-  `src/test-setup.ts` and `src/test-utils/`; a code or name built at run time; a field reached through a spread or
-  `Object.entries`; a generic word of those vocabularies, which the check leaves out (`GENERIC_VALUES`); a word the
-  panel alone speaks with a meaning of its own, which the rule leaves out in the panel (`PANEL_GENERIC_VALUES`); a word
-  of Tender's own spoken inside one of those vocabularies (`"rejected"`); and a watched value handed on through a
-  parameter or a field of Tender's own name. Unseen by the classification test: whether a reading module that names a
-  code reads it rightly. Prompt-only: an entry on `NOT_THE_RESOLVERS` is a name that means something else in its module,
-  never a read of the resolver's answer; a code the resolver adds is classified by a reading module rather than added to
-  the list; Tender keeps no table of its own for anything the resolver answers (find rules, launch command patterns,
-  launch-file types, RomM regions); a join is on the resolver's keys (`declared`, `(emulator, declared_index)`), never
-  on `file_name` alone or a label; where the resolver gives no answer, Tender says it could not be established and an
-  emu-atlas issue asks for it; no decision is proposed that lets Tender work out a fact the resolver states — because
-  the resolver is slow, cannot answer yet, or another page already does it; and the derivations and imports on today's
-  lists stand until the issue that builds their kind's reading module removes them
+  parameter, a function, a class, a type, an import or an export), or as a qualified name in a type (`typeof a.pal`);
+  test files, `src/test-setup.ts` and `src/test-utils/`; a code or name built at run time; a field reached through a
+  spread or `Object.entries`; a generic word of those vocabularies, which the check leaves out (`GENERIC_VALUES`); a
+  word the panel alone speaks with a meaning of its own, which the rule leaves out in the panel
+  (`PANEL_GENERIC_VALUES`); a word of Tender's own spoken inside one of those vocabularies (`"rejected"`); and a watched
+  value handed on through a parameter or a field of Tender's own name. Unseen by the classification test: whether a
+  reading module that names a code reads it rightly. Prompt-only: an entry on `NOT_THE_RESOLVERS` is a name that means
+  something else in its module, never a read of the resolver's answer; a code the resolver adds is classified by a
+  reading module rather than added to the list; Tender keeps no table of its own for anything the resolver answers (find
+  rules, launch command patterns, launch-file types, RomM regions); a join is on the resolver's keys (`declared`,
+  `(emulator, declared_index)`), never on `file_name` alone or a label; where the resolver gives no answer, Tender says
+  it could not be established and an emu-atlas issue asks for it; no decision is proposed that lets Tender work out a
+  fact the resolver states — because the resolver is slow, cannot answer yet, or another page already does it; and the
+  derivations and imports on today's lists stand until the issue that builds their kind's reading module removes them
   ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D5): fixing one is not a finding, extending one or
   copying it to a new page is. Without the rule, every layer after the adapter decides a fact of its own from the raw
   answer, and the layers disagree: whether a file is required, whether a one-of group is met, whether a file is there,

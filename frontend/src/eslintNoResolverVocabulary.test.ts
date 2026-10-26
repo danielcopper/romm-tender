@@ -54,9 +54,8 @@ const FIXTURE = "src/utils/__eslint_fixtures__/answer.ts";
 const READERS_WHEN_WRITTEN: ByFile = {
   "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
   "src/bigpicture/GameInfoTab.tsx": ["launchable"],
-  "src/types/api.ts": ["launchable"],
-  "src/utils/launchTarget.ts": ["launchable"],
   "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "mismatch", "satisfied"],
+  "src/types/api.ts": ["launchable"],
   "src/types/firmware.ts": [
     "by-name",
     "by-name-then-content",
@@ -136,6 +135,7 @@ const READERS_WHEN_WRITTEN: ByFile = {
     "saves-root-missing",
   ],
   "src/utils/firmwareIdentifications.ts": ["known_as"],
+  "src/utils/launchTarget.ts": ["launchable"],
 };
 
 const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
