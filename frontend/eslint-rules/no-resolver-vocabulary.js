@@ -48,6 +48,14 @@ export default {
     const checkName = (node, name) => {
       if (name !== null && watchedNames.has(name)) context.report({ node, messageId: "name", data: { token: name } });
     };
+    // A quoted key is a `Literal` and checked as a code there; Prettier strips
+    // the quotes off any key that needs none, so the unquoted spelling is
+    // checked as a code here, unless it is reported as a name already.
+    const checkKey = (key, computed) => {
+      const name = keyName(key, computed);
+      if (watchedNames.has(name)) checkName(key, name);
+      else if (key.type === "Identifier" && !computed) checkCode(key, name);
+    };
 
     return {
       Literal(node) {
@@ -57,13 +65,13 @@ export default {
         checkCode(node, node.value.cooked);
       },
       MemberExpression(node) {
-        checkName(node.property, keyName(node.property, node.computed));
+        checkKey(node.property, node.computed);
       },
       Property(node) {
-        checkName(node.key, keyName(node.key, node.computed));
+        checkKey(node.key, node.computed);
       },
       TSPropertySignature(node) {
-        checkName(node.key, keyName(node.key, node.computed));
+        checkKey(node.key, node.computed);
       },
     };
   },

@@ -116,7 +116,7 @@ const RESOLVER_READERS_TODAY = {
     "unrecognised",
     "verified",
   ],
-  "src/utils/biosGroup.ts": ["mismatch", "ntsc-j", "ntsc-u", "satisfied"],
+  "src/utils/biosGroup.ts": ["mismatch", "ntsc-j", "ntsc-u", "pal", "satisfied"],
   "src/utils/biosPlaceWords.ts": ["declared_kind", "satisfied"],
   "src/utils/biosSummary.ts": [
     "by-name",
@@ -153,10 +153,44 @@ const RESOLVER_READERS_TODAY = {
 };
 
 // Names that mean something else in a file, each with what it means there.
-// The list only shrinks, as the one above does.
+// The list only shrinks, as the one above does. Three words the panel speaks
+// with a meaning of its own in many files are not explained per file:
+// `background` is a CSS property in a style object, `disabled` whether a
+// control takes a press, and `tag` a log line's prefix.
 const NOT_THE_RESOLVERS = {
+  "src/bigpicture/AchievementsTab.tsx": ["background"],
   // An artwork slot's outcome: Steam did not take the image.
-  "src/bigpicture/ArtworkTab.tsx": ["refused"],
+  "src/bigpicture/ArtworkTab.tsx": ["background", "refused"],
+  "src/bigpicture/CustomPlayButton.tsx": ["background", "tag"],
+  "src/bigpicture/EmulatorSelector.tsx": ["background"],
+  "src/bigpicture/RemovedGamesCleanup.tsx": ["background"],
+  "src/bigpicture/RomMPlaySection.tsx": ["background", "tag"],
+  "src/bigpicture/SavesTab.tsx": ["background"],
+  "src/bigpicture/SgdbGamePickerModal.tsx": ["background", "disabled"],
+  "src/bigpicture/SlotSetupWizard.tsx": ["background"],
+  "src/bigpicture/UpdateDot.tsx": ["background"],
+  "src/bigpicture/WarningCard.tsx": ["background"],
+  "src/bigpicture/bios/BiosFiles.tsx": ["background"],
+  "src/bigpicture/data/DataDetail.tsx": ["disabled"],
+  "src/bigpicture/layout/pane.tsx": ["background"],
+  "src/bigpicture/panelSection.tsx": ["background"],
+  "src/bigpicture/saves/SaveFileRow.tsx": ["background"],
+  "src/bigpicture/saves/SlotPanel.tsx": ["background"],
+  "src/bigpicture/saves/VersionHistoryPanel.tsx": ["background"],
+  "src/bigpicture/settings/EmulatorSourcesSection.tsx": ["background"],
+  "src/bigpicture/settings/PreferredRegionModal.tsx": ["background"],
+  // Here `tag` is also the label under a folder tile.
+  "src/bigpicture/settings/TenderFolderSection.tsx": ["background", "disabled", "tag"],
+  "src/bigpicture/sync/paneTable.tsx": ["background"],
+  "src/boot/FallbackActions.tsx": ["background", "disabled"],
+  "src/boot/StartupFailurePanel.tsx": ["background"],
+  "src/boot/fallbackButtons.tsx": ["disabled"],
+  "src/shared/CoreChangeModal.tsx": ["background"],
+  "src/shared/SyncConflictModal.tsx": ["background"],
+  "src/utils/launchGateOps.ts": ["tag"],
+  "src/utils/launchInterceptor.ts": ["tag"],
+  "src/utils/romUninstall.ts": ["tag"],
+  "src/utils/runningGame.ts": ["tag"],
   // How many of the start-up check's searches into Steam's interface ran.
   "src/boot/steamModules.ts": ["checked"],
   // The panel bundle's own kind.
@@ -165,13 +199,29 @@ const NOT_THE_RESOLVERS = {
   // Whether the launch gate could ask which emulator source starts the game.
   "src/utils/launchGate.ts": ["checked"],
   "src/utils/startingSource.ts": ["checked"],
-  // A React key.
-  "src/bigpicture/GameInfoTab.tsx": ["rom-name"],
+  // A React key, and whether an install's own file can be started.
+  "src/bigpicture/GameInfoTab.tsx": ["launchable", "rom-name"],
+  // Whether an install's own file can be started.
+  "src/types/api.ts": ["launchable"],
+  "src/utils/launchTarget.ts": ["launchable"],
   // An outcome of the adoption's own content check against RomM's checksums.
+  "src/bigpicture/AdoptExistingModal.tsx": ["mismatch"],
   "src/types/downloads.ts": ["mismatch"],
+  // Something carrying the game's name that a download cannot adopt.
+  "src/bigpicture/AdoptUnusableModal.tsx": ["unusable"],
+  // The key of a source report's own catalogue state.
+  "src/types/emulatorSources.ts": ["catalogue"],
+  "src/utils/emulatorSourceWording.ts": ["catalogue"],
+  // The emulator setting a `bios-unchosen` note names, not the region source.
+  "src/types/firmware.ts": ["setting"],
+  // The release the update card on Main names.
+  "src/utils/updateDot.ts": ["card"],
   // The conditions in Steam a toast still waits on.
   "src/utils/steamReadyForToasts.ts": ["unmet"],
   "src/utils/failedUpdateToast.ts": ["unmet"],
+  // Whether save sync is switched off, on the device list's failure answer.
+  "src/api/backend.ts": ["disabled"],
+  "src/bigpicture/SettingsPage.tsx": ["disabled"],
 };
 
 export default tseslint.config(
