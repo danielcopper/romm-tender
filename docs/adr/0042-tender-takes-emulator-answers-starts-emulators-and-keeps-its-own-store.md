@@ -120,7 +120,9 @@ answer and disagreed. Its reading half is now held by checks; the rest stays pro
   distinctive answer field name named in any other backend module or in the panel. At every update of the vendored
   resolver a test fails on a code no reading module classifies.
 - **No exception for a derivation.** The modules that read the answer today stand on the check's lists, which only
-  shrink; the issues that build each reading module remove them. Only infrastructure and homonyms are excepted: by name
-  and with its reason, the one machine the sources holder keeps and the zstd codec handed to the resolver; the tests as
-  a whole, because they build the resolver's machines and answers rather than read an answer for display; and a name
-  that means something else in a module, on a list of its own that only shrinks.
+  shrink; the issues that build each reading module remove them. Only infrastructure, homonyms and generic words are
+  excepted: by name and with its reason, the one machine the sources holder keeps and the zstd codec handed to the
+  resolver; the tests as a whole, because they build the resolver's machines and answers rather than read an answer for
+  display; a name that means something else in a module, on a list of its own that only shrinks; and a word of the
+  resolver's vocabularies that Tender's own code speaks with a meaning of its own too widely to except file by file,
+  left unwatched on lists that only shrink, one for the backend and the panel and one for the panel alone.
