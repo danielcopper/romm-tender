@@ -2,13 +2,14 @@
 
 A code is classified once a reading module names it: it imports the code's
 constant from the resolver, to read it or to hold it in a set it deliberately
-ignores or cannot reach, with the reason beside that set. An update of the
-resolver that adds a code fails here until a reading module classifies it, and
-one that drops a code a reading module names fails here too.
+ignores or cannot reach, with the reason beside that set. This test sees the
+import and not the reason. An update of the resolver that adds a code fails
+here until a reading module classifies it, and one that drops a code a reading
+module names fails here too.
 
-The codes are the caveat, health-issue, unresolved and reason families, taken
-from ``atlas.__all__`` by their constant's prefix. Which modules read the answer
-is ``READING_MODULES`` in ``scripts/check_resolver_reading.py``.
+The codes and the modules that read the answer are the ones
+``scripts/check_resolver_reading.py`` watches: ``CODE_FAMILIES`` and
+``READING_MODULES``.
 """
 
 from __future__ import annotations
@@ -17,14 +18,15 @@ import ast
 import importlib.util
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from _vendor import atlas
+if TYPE_CHECKING:
+    from types import ModuleType
 
 _REPO = Path(__file__).resolve().parents[2]
-_FAMILIES = ("CAVEAT_", "HEALTH_ISSUE_", "UNRESOLVED_", "REASON_")
 
 
-def _reading_modules() -> frozenset[str]:
+def _load_check_module() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
         "check_resolver_reading", _REPO / "scripts" / "check_resolver_reading.py"
     )
@@ -33,13 +35,15 @@ def _reading_modules() -> frozenset[str]:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    return module.READING_MODULES
+    return module
+
+
+_check = _load_check_module()
+_FAMILIES: tuple[str, ...] = _check.CODE_FAMILIES
 
 
 def _codes() -> frozenset[str]:
-    return frozenset(
-        name for name in atlas.__all__ if name.startswith(_FAMILIES) and isinstance(getattr(atlas, name), str)
-    )
+    return frozenset(_check.resolver_codes())
 
 
 def _named_in(source: str) -> frozenset[str]:
@@ -56,7 +60,7 @@ def _named_in(source: str) -> frozenset[str]:
 def _classified() -> frozenset[str]:
     backend = _REPO / "backend"
     return frozenset().union(
-        *(_named_in((backend / module).read_text(encoding="utf-8")) for module in _reading_modules())
+        *(_named_in((backend / module).read_text(encoding="utf-8")) for module in _check.READING_MODULES)
     )
 
 

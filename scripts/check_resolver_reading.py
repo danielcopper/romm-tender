@@ -24,10 +24,12 @@ answer for display.
   reads today; :data:`NOT_THE_RESOLVERS` the names that mean something else in
   a module, with the reason.
 
-:data:`READERS_TODAY` and :data:`INTERNALS_TO_REMOVE` only shrink: an entry
-nothing needs any more fails, as does an exception or grant nothing carries,
-and ``tests/scripts/test_check_resolver_reading.py`` fails on an entry either
-list did not hold when it was written.
+An entry nothing needs any more fails, on every list here.
+:data:`READERS_TODAY`, :data:`INTERNALS_TO_REMOVE` and :data:`NOT_THE_RESOLVERS`
+only shrink, and ``tests/scripts/test_check_resolver_reading.py`` fails on an
+entry one of them did not hold when it was written; it holds
+:data:`READING_MODULES`, :data:`IMPORT_GRANTS` and :data:`INTERNALS_GRANTED` to
+exactly what they are.
 
 The panel is held by ESLint (``tender/no-resolver-vocabulary`` in
 ``frontend/eslint.config.js``), over the codes and names this script writes to
@@ -38,14 +40,19 @@ What it does not see:
 
 * a code or name built at run time (``"marker-" + kind``, ``getattr(x, name)``),
   or held in a constant another module defines;
-* a watched name read through ``dataclasses.asdict``, ``vars`` or ``**``
+* a watched name read through ``hasattr``, ``operator.attrgetter``, an ``in``
+  test (``"satisfied" in row``), a ``match`` class or mapping pattern,
+  ``setdefault`` or ``pop``, ``dataclasses.asdict``, ``vars`` or ``**``
   unpacking, or written as an attribute (``x.satisfied = …``);
+* the values of the resolver's other closed vocabularies (``GRANULARITY_*``,
+  ``CHECKED_*``, ``PROVENANCE_*`` …), which are no codes here;
+* a watched value handed on through a parameter or a field of Tender's own
+  name, which a later layer may still judge again;
 * an import through ``importlib`` or ``__import__`` whose module name is not a
-  string constant;
-* which of a module's sites reads a listed name: once a module is listed for a
-  name, a second site in it reading that name passes;
-* a fact the reading module passes on under a name of Tender's own, which a
-  later layer may still judge again.
+  string constant, and a module object such a call answers;
+* which of a module's sites reads a name it is listed or excepted for: once a
+  module stands on :data:`READERS_TODAY` or :data:`NOT_THE_RESOLVERS` for a
+  name, a second site in it reading that name passes, whatever it reads.
 
 Exit 0 when nothing outside the lists reads the resolver, 1 (one line per
 finding) otherwise. ``--write`` rewrites :data:`FRONTEND_VOCABULARY` and exits 0.
@@ -278,11 +285,17 @@ def scanned_modules(backend: Path) -> list[Path]:
 # --- Imports ---------------------------------------------------------------
 
 
-def _names_resolver(node: ast.AST) -> bool:
-    """Whether *node* is ``atlas`` or ``_vendor.atlas``."""
+def _names_resolver(node: ast.AST, bound: set[str], *, by_path: bool) -> bool:
+    """Whether *node* is the resolver's package: a name it is bound to, or ``_vendor.atlas`` where *by_path*."""
     if isinstance(node, ast.Name):
-        return node.id == "atlas"
-    return isinstance(node, ast.Attribute) and node.attr == "atlas" and isinstance(node.value, ast.Name)
+        return node.id in bound
+    return (
+        by_path
+        and isinstance(node, ast.Attribute)
+        and node.attr == "atlas"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "_vendor"
+    )
 
 
 def _imported_module(node: ast.Call) -> str | None:
@@ -303,12 +316,15 @@ def resolver_imports(tree: ast.AST, exports: frozenset[str]) -> list[tuple[int, 
     ``atlas.__all__``, and ``None`` when it is.
     """
     found: list[tuple[int, str | None]] = []
-    holds_package = False
+    # The names the package is bound to (``atlas`` or an alias), and whether
+    # ``import _vendor.atlas`` lets it be reached as ``_vendor.atlas``.
+    bound: set[str] = set()
+    by_path = False
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.level == 0:
             module = node.module or ""
             if module == "_vendor" and any(alias.name == "atlas" for alias in node.names):
-                holds_package = True
+                bound.update(alias.asname or "atlas" for alias in node.names if alias.name == "atlas")
                 found.append((node.lineno, None))
             elif module == RESOLVER:
                 found.extend(
@@ -320,7 +336,10 @@ def resolver_imports(tree: ast.AST, exports: frozenset[str]) -> list[tuple[int, 
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name == RESOLVER:
-                    holds_package = True
+                    if alias.asname is None:
+                        by_path = True
+                    else:
+                        bound.add(alias.asname)
                     found.append((node.lineno, None))
                 elif alias.name.startswith(f"{RESOLVER}."):
                     found.append((node.lineno, alias.name))
@@ -330,12 +349,11 @@ def resolver_imports(tree: ast.AST, exports: frozenset[str]) -> list[tuple[int, 
                 found.append((node.lineno, None))
             elif module is not None and module.startswith(f"{RESOLVER}."):
                 found.append((node.lineno, module))
-    if holds_package:
-        found.extend(
-            (node.lineno, f"{RESOLVER}.{node.attr}")
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Attribute) and _names_resolver(node.value) and node.attr not in exports
-        )
+    found.extend(
+        (node.lineno, f"{RESOLVER}.{node.attr}")
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and _names_resolver(node.value, bound, by_path=by_path) and node.attr not in exports
+    )
     return found
 
 

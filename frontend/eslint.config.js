@@ -54,9 +54,10 @@ const NO_CLASS_HASHES = [
     'This looks like one of Steam\'s minified class hashes, which a Steam update changes. Find the element through the selector ladder instead (docs/architecture/desktop-dom-architecture.md, "The selector ladder").',
 }));
 
-// The resolver's codes and answer field names, written from the vendored
-// resolver by `scripts/check_resolver_reading.py --write`, which also fails
-// when the file is not what it would write today.
+// The resolver's codes, taken from the vendored resolver, and the answer field
+// names the backend's check watches (`WATCHED_NAMES`), both written by
+// `scripts/check_resolver_reading.py --write`, which also fails when the file
+// is not what it would write today.
 const { codes, names } = JSON.parse(readFileSync(path.join(import.meta.dirname, "resolver-vocabulary.json"), "utf8"));
 const RESOLVER_VOCABULARY = { codes, names };
 
@@ -132,6 +133,7 @@ const RESOLVER_READERS_TODAY = {
 };
 
 // Names that mean something else in a file, each with what it means there.
+// The list only shrinks, as the one above does.
 const NOT_THE_RESOLVERS = {
   // An artwork slot's outcome: Steam did not take the image.
   "src/bigpicture/ArtworkTab.tsx": ["refused"],

@@ -41,9 +41,10 @@ async function configured(): Promise<Options> {
 
 const FIXTURE = "src/utils/__eslint_fixtures__/answer.ts";
 
-// What each file read when the list was written. The configured list may lose
-// entries, never gain one: a new reader is built in the backend's reading
-// module, not added here.
+// What each file read, and what each excepted, when the lists were written.
+// The configured lists may lose entries, never gain one: a new reader is built
+// in the backend's reading module, not added here, and a new homonym is an
+// edit of this test.
 const READERS_WHEN_WRITTEN: ByFile = {
   "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
   "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "satisfied"],
@@ -110,6 +111,22 @@ const READERS_WHEN_WRITTEN: ByFile = {
   ],
   "src/utils/firmwareIdentifications.ts": ["known_as"],
 };
+
+const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
+  "src/bigpicture/ArtworkTab.tsx": ["refused"],
+  "src/boot/steamModules.ts": ["checked"],
+  "src/utils/launchGate.ts": ["checked"],
+  "src/utils/startingSource.ts": ["checked"],
+  "src/utils/steamReadyForToasts.ts": ["unmet"],
+  "src/utils/failedUpdateToast.ts": ["unmet"],
+};
+
+/** The `file: token` entries of `configured` that `whenWritten` did not hold. */
+function addedTo(configured: ByFile, whenWritten: ByFile): string[] {
+  return Object.entries(configured).flatMap(([file, tokens]) =>
+    tokens.filter((token) => !(whenWritten[file] ?? []).includes(token)).map((token) => `${file}: ${token}`),
+  );
+}
 
 describe("no panel code reads the resolver's vocabulary", () => {
   it.each([
@@ -191,10 +208,13 @@ describe("no panel code reads the resolver's vocabulary", () => {
 
   it("lists no reader it did not list when it was written", async () => {
     const { readers } = await configured();
-    const added = Object.entries(readers).flatMap(([file, tokens]) =>
-      tokens.filter((token) => !(READERS_WHEN_WRITTEN[file] ?? []).includes(token)).map((token) => `${file}: ${token}`),
-    );
 
-    expect(added).toEqual([]);
+    expect(addedTo(readers, READERS_WHEN_WRITTEN)).toEqual([]);
+  });
+
+  it("excepts no name it did not except when it was written", async () => {
+    const { notTheResolvers } = await configured();
+
+    expect(addedTo(notTheResolvers, NOT_THE_RESOLVERS_WHEN_WRITTEN)).toEqual([]);
   });
 }, 120_000);

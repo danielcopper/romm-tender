@@ -37,9 +37,9 @@ check = _load_check_module()
 _CODES = frozenset(check.resolver_codes().values())
 _EXPORTS = check.resolver_exports()
 
-# What the two shrinking lists held when they were written. Either may lose
-# entries, never gain one: a new reader is built into the reading module of its
-# kind, never added to a list.
+# What the shrinking lists held when they were written. Each may lose entries,
+# never gain one: a new reader is built into the reading module of its kind,
+# never added to a list, and a new homonym is an edit of this test.
 _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
     "domain/bios_status.py": frozenset(
         {
@@ -126,6 +126,13 @@ _INTERNALS_WHEN_WRITTEN = frozenset(
     }
 )
 
+_NOT_THE_RESOLVERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
+    "adapters/gavel_native.py": frozenset({"size_fixed"}),
+    "host/server.py": frozenset({"refused"}),
+    "services/rom_adoption/service.py": frozenset({"unread"}),
+    "services/saves/status/service.py": frozenset({"checked"}),
+}
+
 _READING = "adapters/atlas_firmware.py"
 _SERVICE = "services/firmware/rows.py"
 
@@ -172,6 +179,27 @@ class TestTheRealTree:
     def test_the_internals_list_only_shrinks(self):
         assert check.INTERNALS_TO_REMOVE <= _INTERNALS_WHEN_WRITTEN
 
+    def test_the_homonym_list_only_shrinks(self):
+        added = {
+            (module, name)
+            for module, names in check.NOT_THE_RESOLVERS.items()
+            for name in names
+            if name not in _NOT_THE_RESOLVERS_WHEN_WRITTEN.get(module, frozenset())
+        }
+
+        assert added == set()
+
+    def test_the_reading_modules_and_the_grants_are_the_decided_ones(self):
+        assert {
+            "adapters/atlas_catalogue.py",
+            "adapters/atlas_firmware.py",
+            "adapters/atlas_saves.py",
+            "adapters/emulator_sources.py",
+            "adapters/retrodeck_folders.py",
+        } == check.READING_MODULES
+        assert set(check.IMPORT_GRANTS) == {"adapters/atlas_zstd.py"}
+        assert set(check.INTERNALS_GRANTED) == {("adapters/emulator_sources.py", "_vendor.atlas.machine.RealMachine")}
+
 
 class TestTheVocabulary:
     def test_the_codes_are_the_four_families_by_their_constants_name(self):
@@ -180,7 +208,8 @@ class TestTheVocabulary:
         assert {name.split("_")[0] for name in codes} == {"CAVEAT", "HEALTH", "UNRESOLVED", "REASON"}
         assert codes["CAVEAT_FIRMWARE_IMAGE_IDENTIFIED"] == "firmware-image-identified"
         assert codes["HEALTH_ISSUE_MARKER_MISSING"] == "marker-missing"
-        # A closed vocabulary of another kind is no code: its words are generic.
+        # Only these four families are codes here; the values of the resolver's
+        # other closed vocabularies are not watched.
         assert "ROLE_SETTINGS" not in codes
         assert "GRANULARITY_SHARED_CARD" not in codes
 
@@ -221,6 +250,8 @@ class TestImports:
             ("import _vendor.atlas.firmware\n", "_vendor.atlas.firmware"),
             ("from _vendor import atlas\nx = atlas.firmware\n", "_vendor.atlas.firmware"),
             ("import _vendor.atlas\nx = _vendor.atlas.machine\n", "_vendor.atlas.machine"),
+            ("from _vendor import atlas as resolver\nx = resolver.firmware\n", "_vendor.atlas.firmware"),
+            ("import _vendor.atlas as resolver\nx = resolver.machine\n", "_vendor.atlas.machine"),
             ("import importlib\nimportlib.import_module('_vendor.atlas.machine')\n", "_vendor.atlas.machine"),
         ],
     )
