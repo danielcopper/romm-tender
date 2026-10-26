@@ -928,7 +928,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the vendored file set EQUALS the manifest's set restricted to that prefix, and a package directory with NO manifest is
   a failure** — check — `scripts/check_vendored_trees.py`; unchecked: the manifest itself, regenerated only as the last
   step of a deliberate re-copy and never to answer a failing gate; unseen by the check: a single-module file under
-  `_vendor/` and files below a symlinked directory. `backend/native/` is pinned by its own `sha256sum -c`
+  `_vendor/`, files below a symlinked directory, and whether the recorded machines are the release asset's contents.
+  `backend/native/` is pinned by its own `sha256sum -c`
 - **The release tarball is what the installer expects — one top-level `romm-tender/`, the files an install starts from
   plus the version file, the installer an installed tree rolls back with and the licence texts a distributed copy
   carries, nothing the packager prunes, a sidecar `sha256sum -c` accepts** — check — `scripts/check_release_tarball.py`,
@@ -973,8 +974,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `TestTheRegionDecides`), `tests/services/test_firmware.py` (`TestTheRegionRuleOnThePlatform`,
   `TestTheGamePageReadsItsOwnRegion`, `TestTheConsolesOwnFirmwareDemand`),
   `tests/contract/test_bios_search_found_nothing_read.py` (a not-met verdict with no row is sent to both reads),
-  `tests/services/test_firmware_vectors.py` (the platform page's level against each emulator's verdict on every machine
-  the resolver recorded, today's mismatches on a list that only shrinks), `frontend/src/utils/playSection.test.ts`,
+  `tests/services/test_firmware_vectors.py` (the platform page's level against each emulator's verdict on the resolver's
+  recorded firmware machines; today's mismatches, every amber the exception above produces among them (#2585 D4), which
+  #2580 removes, stand on a list that only shrinks), `frontend/src/utils/playSection.test.ts`,
   `frontend/src/bigpicture/BiosTab.test.tsx` and `frontend/src/bigpicture/library/PlatformsTab.test.tsx`. Prompt-only:
   no surface computes a colour — `domain/bios_status.py::compute_bios_level` is the one place a level is made, and
   `region_decides` counts nothing of its own; the console's need for an image reaches a surface only as words under a

@@ -476,9 +476,8 @@ def atlas_vectors_dir(tmp_path: Path) -> Path:
 class TestTheAtlasVectorsRoot:
     """The resolver's recorded machines are the second root ``main`` holds to the same contract.
 
-    Each drift case runs ``main`` rather than ``collect_discrepancies``: what
-    is new is that the run reads this root at all, and a case over the
-    function alone would pass with the root left out of ``main``.
+    Each drift case runs ``main`` rather than ``collect_discrepancies``: a case
+    over the function alone would pass with the root left out of ``main``.
     """
 
     def _main_fails(self, root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> str:
@@ -486,7 +485,8 @@ class TestTheAtlasVectorsRoot:
         assert check.main() == 1
         err = capsys.readouterr().err
         assert "ERROR: tests/adapters/atlas_vectors/ is not what its manifests pin:" in err
-        assert "cd tests/adapters/atlas_vectors && find <pkg>" in err
+        assert "cd tests/adapters/atlas_vectors && find vectors" in err
+        assert "local patch" not in err
         assert "Per-package provenance and the full update procedure: tests/adapters/atlas_vectors/README.md" in err
         assert "backend/_vendor/" not in err
         return err
@@ -529,4 +529,4 @@ class TestTheAtlasVectorsRoot:
         (atlas_vectors_dir / "vectors.SHA256SUMS").unlink()
         err = self._main_fails(atlas_vectors_dir, monkeypatch, capsys)
         assert "vectors/: no vectors.SHA256SUMS — the tree is pinned by nothing." in err
-        assert "(tests/adapters/atlas_vectors/README.md)" in err
+        assert "Put the manifest tests/adapters/atlas_vectors/README.md describes beside it" in err

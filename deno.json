@@ -4,7 +4,7 @@
     // docs/assets is excluded as well as being outside the md include: passing an
     // explicit path (deno fmt docs/) overrides include but still honours exclude,
     // and deno fmt treats SVG as markup — it has re-expanded the minified logo.
-    // The resolver's recorded machines are a verbatim copy, upstream's README included.
+    // Why the resolver's recorded machines are left out: tests/adapters/atlas_vectors/README.md.
     "exclude": [
       "CHANGELOG.md",
       "site/",

@@ -10,21 +10,24 @@ the condition under which a hand-edit or a half-finished re-copy survives review
 
 The resolver's recorded machines under ``tests/adapters/atlas_vectors/`` are the
 second root, held to the same contract: a copy of data we do not own, taken
-verbatim from a release and kept out of ``backend/`` because everything there
-ships to users. Each root names the README that holds its provenance and its
-re-copy procedure, and the report sends a reader to it.
+verbatim from a release. Each root names the README that holds its provenance
+and its re-copy procedure, and the report sends a reader to it.
 
 The contract is one manifest per tree: ``<pkg>.SHA256SUMS`` beside ``<pkg>/``
 pins it, and a package directory with no manifest is a failure. That second half
 is what makes the next vendored package guarded by default rather than guarded
 if someone remembers — nothing here is named after a package.
 
-What a manifest IS differs per package, and does not change what is asserted:
-for a tree taken verbatim from a release it is upstream's own manifest, so the
-digests additionally prove identity with the tagged release; for a tree carrying
-a deliberate local patch it is our own digest of the patched copy, so they prove
-only that nobody has since reached into it. Which kind each one is, is recorded
-per package in ``backend/_vendor/README.md``.
+What a manifest IS differs per tree, and does not change what is asserted.
+For a tree taken verbatim from a release whose manifest upstream publishes, it
+is that manifest, so the digests additionally prove identity with the tagged
+release. For a tree carrying a deliberate local patch it is our own digest of
+the patched copy. For a tree taken verbatim from a release that publishes no
+per-file manifest — the recorded machines, whose release asset upstream digests
+only as a whole — it is our own digest of the copy as taken. Either of the last
+two proves only that nobody has reached into the tree since its manifest was
+written, never that the tree is upstream's. Which kind each one is, is recorded
+in the README its root names.
 
 Three assertions per tree:
 
@@ -76,6 +79,28 @@ VENDOR_GUIDE = "backend/_vendor/README.md"
 ATLAS_VECTORS_GUIDE = "tests/adapters/atlas_vectors/README.md"
 
 MANIFEST_SUFFIX = ".SHA256SUMS"
+
+# The way back to a clean copy, per root: a vendored package may carry a local
+# patch to reapply, the recorded machines never do.
+VENDOR_RECOVERY = (
+    "A vendored package is an upstream copy — verbatim, or verbatim plus a\n"
+    "documented local patch. Never hand-edit one, and never fix a problem here\n"
+    "that belongs upstream. Re-copy the tree from the release it pins; where the\n"
+    "copy carries a deliberate local patch, reapply the patch to the fresh copy\n"
+    "and regenerate its manifest from the result:\n"
+    "\n"
+    "  cd backend/_vendor && find <pkg> -type f -not -path '*/__pycache__/*' \\\n"
+    f"      | LC_ALL=C sort | xargs sha256sum > <pkg>{MANIFEST_SUFFIX}\n"
+)
+ATLAS_VECTORS_RECOVERY = (
+    "The recorded machines are a verbatim copy of one emu-atlas release, the\n"
+    "release of the vendored resolver. Never hand-edit one. Re-copy the folder\n"
+    "from that release and regenerate the manifest from the copy:\n"
+    "\n"
+    "  cd tests/adapters/atlas_vectors && find vectors -type f -not -path '*/__pycache__/*' \\\n"
+    f"      | LC_ALL=C sort | xargs sha256sum > vectors{MANIFEST_SUFFIX}\n"
+)
+
 LICENSE_SUFFIX = ".LICENSE"
 
 PYCACHE = "__pycache__"
@@ -286,16 +311,15 @@ def collect_discrepancies(vendor_dir: pathlib.Path, guide: str = VENDOR_GUIDE) -
         manifest_path = manifests.get(package)
         if manifest_path is None:
             discrepancies.append(
-                f"{package}/: no {package}{MANIFEST_SUFFIX} — the tree is pinned by nothing. Vendor the "
-                "upstream release manifest beside it, or generate one from the tree if the copy carries a "
-                f"local patch ({guide})"
+                f"{package}/: no {package}{MANIFEST_SUFFIX} — the tree is pinned by nothing. Put the "
+                f"manifest {guide} describes beside it"
             )
             continue
         discrepancies.extend(tree_discrepancies(vendor_dir, package, manifest_path))
     return discrepancies
 
 
-def report(root: pathlib.Path, label: str, guide: str) -> bool:
+def report(root: pathlib.Path, label: str, guide: str, recovery: str) -> bool:
     """Print every discrepancy under *root* with the way back to a clean copy; whether there was none."""
     discrepancies = collect_discrepancies(root, guide)
     if not discrepancies:
@@ -304,14 +328,7 @@ def report(root: pathlib.Path, label: str, guide: str) -> bool:
     for line in discrepancies:
         print(f"  {line}", file=sys.stderr)
     print(
-        "\nA vendored package is an upstream copy — verbatim, or verbatim plus a\n"
-        "documented local patch. Never hand-edit one, and never fix a problem here\n"
-        "that belongs upstream. Re-copy the tree from the release it pins; where the\n"
-        "copy carries a deliberate local patch, reapply the patch to the fresh copy\n"
-        "and regenerate its manifest from the result:\n"
-        "\n"
-        f"  cd {label} && find <pkg> -type f -not -path '*/__pycache__/*' \\\n"
-        f"      | LC_ALL=C sort | xargs sha256sum > <pkg>{MANIFEST_SUFFIX}\n"
+        f"\n{recovery}"
         "\n"
         "Regenerating a manifest is also how this gate is silenced without fixing\n"
         "anything, so it is only ever the last step of such a re-copy, never the answer\n"
@@ -326,10 +343,10 @@ def report(root: pathlib.Path, label: str, guide: str) -> bool:
 def main() -> int:
     # Both roots are read here, at the call, so a test can repoint either one.
     roots = (
-        (VENDOR_DIR, "backend/_vendor", VENDOR_GUIDE),
-        (ATLAS_VECTORS_DIR, "tests/adapters/atlas_vectors", ATLAS_VECTORS_GUIDE),
+        (VENDOR_DIR, "backend/_vendor", VENDOR_GUIDE, VENDOR_RECOVERY),
+        (ATLAS_VECTORS_DIR, "tests/adapters/atlas_vectors", ATLAS_VECTORS_GUIDE, ATLAS_VECTORS_RECOVERY),
     )
-    clean = [report(root, label, guide) for root, label, guide in roots]
+    clean = [report(*root) for root in roots]
     if not all(clean):
         return 1
     print("OK: every vendored tree matches the manifest that pins it exactly.")

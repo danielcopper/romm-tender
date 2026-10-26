@@ -25,7 +25,8 @@ The copy lives under `tests/` rather than `backend/_vendor/`, because everything
   release is not the vendored resolver's version, or when `backend/_vendor/atlas.SHA256SUMS` does not list that digest
   for that asset.
 
-What neither sees is whether the files are the tarball's contents; that is the update procedure's step 2.
+What neither sees is whether the files are the asset's contents; steps 1 and 2 of the update procedure are the only
+guard there.
 
 The copy is excluded from markdownlint and `deno fmt` (`mise.toml`, `.github/workflows/ci.yml`, `deno.json`), so that
 upstream's README in it stays byte for byte as upstream wrote it.
@@ -56,6 +57,8 @@ Together with the resolver, never on its own: the vectors are the answers of one
    ```
 
 4. Put the new asset name and its digest in the release line above.
-5. Run `python scripts/check_vendored_trees.py` and `tests/services/test_firmware_vectors.py`. A new release may answer
-   differently; a level that no longer matches is a finding, and the list of known mismatches in that test changes only
-   by an entry that now matches going away.
+5. Compare `fixture_machine` and `_target` in `tests/services/test_firmware_vectors.py` with `fixture_machine` and
+   `_select` in the new release's `tests/test_machine_vectors.py`, and bring them and the line numbers they cite up to
+   date: a machine built differently from upstream's is not the machine the vector recorded.
+6. Run `python scripts/check_vendored_trees.py` and `tests/services/test_firmware_vectors.py`. A new release may answer
+   differently; what that test's list of known mismatches may then do is its module docstring's.

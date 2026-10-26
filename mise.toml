@@ -58,8 +58,8 @@ description = "Lint Markdown with markdownlint-cli2 (CI parity)"
 # the package and silently re-scope every one of them. `markdownlint-cli2` is a
 # dependency of the frontend package because that is where this repo's only
 # node_modules lives — not because linting Markdown belongs to the frontend; most
-# of what it reads is under docs/. The resolver's recorded machines are a
-# verbatim copy, and upstream's README in it is not ours to lint.
+# of what it reads is under docs/. Why the resolver's recorded machines are left
+# out: tests/adapters/atlas_vectors/README.md.
 run = "frontend/node_modules/.bin/markdownlint-cli2 \"**/*.md\" \"!**/node_modules\" \"!**/.venv\" \"!.claude/worktrees\" \"!CHANGELOG.md\" \"!site\" \"!tests/adapters/atlas_vectors/vectors\""
 
 [tasks.lint]
