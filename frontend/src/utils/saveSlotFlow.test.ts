@@ -413,9 +413,12 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
     vi.clearAllMocks();
   });
 
-  it.each(["activate", "create"] as const)(
-    "words a switch_stopped answer with the saves set aside and reloads the SAVES tab ($0)",
-    async (purpose) => {
+  it.each([
+    { purpose: "activate" as const, outcome: "switched" },
+    { purpose: "create" as const, outcome: "created" },
+  ])(
+    "words a switch_stopped answer with the saves set aside and reloads the SAVES tab ($purpose)",
+    async ({ purpose, outcome }) => {
       vi.mocked(backend.switchSlot).mockResolvedValueOnce({
         success: false,
         reason: "switch_stopped",
@@ -427,8 +430,7 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
         await expect(executeSlotSwitch(7, "main", purpose)).resolves.toEqual({
           ok: false,
           reason: "switch_stopped",
-          message:
-            "The slot wasn't switched: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.",
+          message: `The slot wasn't ${outcome}: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.`,
           partial: true,
         });
       } finally {

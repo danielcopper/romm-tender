@@ -71,7 +71,7 @@ export async function findStrandedVersion(appId: number, isCancelled: () => bool
 }
 
 /** Whether the switch activates an existing slot or creates a new one; it picks the failure sentences. */
-type SlotSwitchPurpose = "activate" | "create";
+export type SlotSwitchPurpose = "activate" | "create";
 
 /**
  * `reason` is the failure answer's, and `null` when the call threw. `partial`
@@ -101,7 +101,7 @@ export async function executeSlotSwitch(
     if (result.reason === "server_unreachable") {
       reportServerReachable(false);
     }
-    const partial = partialSlotSwitchMessage(result.reason, result.set_aside ?? []);
+    const partial = partialSlotSwitchMessage(result.reason, result.set_aside ?? [], purpose);
     if (partial !== null) {
       announceSaveSync(romId);
       return { ok: false, reason: result.reason, message: partial, partial: true };

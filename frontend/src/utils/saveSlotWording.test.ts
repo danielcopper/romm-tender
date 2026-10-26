@@ -465,14 +465,20 @@ describe("a slot switch whose backup failed", () => {
   });
 
   it("names the saves a switch that stopped partway had already moved", () => {
-    expect(partialSlotSwitchMessage("switch_stopped", ["pokemon.srm", "pokemon.rtc"])).toBe(
+    expect(partialSlotSwitchMessage("switch_stopped", ["pokemon.srm", "pokemon.rtc"], "activate")).toBe(
       "The slot wasn't switched: a save couldn't be moved to .romm-backup. " +
         "Already moved there: pokemon.srm, pokemon.rtc.",
     );
   });
 
+  it("says a new slot wasn't created where creating it stopped partway", () => {
+    expect(partialSlotSwitchMessage("switch_stopped", ["pokemon.srm"], "create")).toBe(
+      "The slot wasn't created: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.",
+    );
+  });
+
   it("says a switch that downloaded only part of the new slot switched", () => {
-    expect(partialSlotSwitchMessage("switch_incomplete", [])).toBe(
+    expect(partialSlotSwitchMessage("switch_incomplete", [], "activate")).toBe(
       "Switched slots, but not every save of the new slot downloaded. Sync Save Files to finish.",
     );
   });
@@ -480,7 +486,7 @@ describe("a slot switch whose backup failed", () => {
   it("has no partial sentence for any other answer", () => {
     const reasons: WireReason[] = ["backup_failed", "pending_uploads", "server_unreachable", "not_found"];
     for (const reason of reasons) {
-      expect(partialSlotSwitchMessage(reason, [])).toBeNull();
+      expect(partialSlotSwitchMessage(reason, [], "activate")).toBeNull();
     }
   });
 });

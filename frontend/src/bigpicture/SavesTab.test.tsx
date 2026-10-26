@@ -901,7 +901,7 @@ describe("SavesTab", () => {
         set_aside: ["pokemon.srm"],
       });
       const shown =
-        "The slot wasn't switched: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.";
+        "The slot wasn't created: a save couldn't be moved to .romm-backup. Already moved there: pokemon.srm.";
       const details: unknown[] = [];
       const listener = (e: Event) => details.push((e as CustomEvent).detail);
       globalThis.addEventListener("romm_data_changed", listener);
