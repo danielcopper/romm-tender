@@ -4183,7 +4183,7 @@ class TestDoSyncPerUnitErrors:
         assert run.status == "cancelled"
         assert run.finished_at is not None
         # 3. The persisted progress snapshot is no longer running.
-        assert library.sync._progress.get_sync_status()["running"] is False
+        assert library.sync.get_sync_status()["running"] is False
 
     @pytest.mark.asyncio
     async def test_real_asyncio_cancel_mid_fetch_is_not_swallowed(self, library, fake_romm_api):
