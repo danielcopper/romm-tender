@@ -234,17 +234,6 @@ def _do_upload(svc, rom_id, file_path, filename, system, *, server_save=None, co
     return save_state
 
 
-def _do_download(svc, server_save, saves_dir, filename, rom_id, system):
-    """Run the download worker the way the op-entry does and return the mutated state."""
-    engine = svc._sync_engine
-    save_state, device_id = read_save_state_or_new(engine._uow_factory, rom_id), _stored_device_id(svc)
-    svc._save_transfer.download_save_file(
-        server_save, saves_dir, filename, save_state, device_id, system, _default_slot(svc)
-    )
-    write_save_state(engine._uow_factory, rom_id, save_state)
-    return save_state
-
-
 def _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba"):
     """Register a ROM install in the ``rom_installs`` aggregate (WS3).
 

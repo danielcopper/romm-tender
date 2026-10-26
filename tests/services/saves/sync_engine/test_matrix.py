@@ -950,25 +950,25 @@ class TestOwnUploadIds:
 
 
 class TestPromoteLocalSlotPersistsState:
-    """Regression for #346.
+    """A sync's upload that promotes a slot still marked ``'local'`` persists the promotion.
 
-    The PUT-path edge case from the issue: server save tracked but the slot
-    marker is still ``'local'`` (stale). On promotion, the in-memory mutation
-    must reach disk so the next backend start sees ``source='server'``.
+    The server save is tracked but the slot marker is stale; the next backend
+    start must read ``source='server'``.
     """
 
-    def test_put_path_promotion_survives_reload(self, tmp_path):
-        """A PUT upload that promotes a stale local-slot marker persists to disk."""
+    @pytest.mark.asyncio
+    async def test_the_promotion_survives_a_reload(self, tmp_path):
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc, device_id="dev-1")
         _install_rom(svc, tmp_path)
-        save_path = _create_save(tmp_path)
+        _create_save(tmp_path, content=b"freshly-edited save")
 
-        # Pre-existing tracked server save → upload_save called with save_id=100 (PUT path).
-        fake.saves[100] = _server_save(save_id=100, rom_id=42, slot="default")
-        server_save = fake.saves[100]
-
-        # rom_state has the slot still flagged 'local' (stale marker).
+        fake.saves[100] = _server_save_with_syncs(
+            save_id=100,
+            slot="default",
+            device_syncs=[{"device_id": "dev-1", "is_current": True}],
+        )
+        fake.stage_device_sync(100, "dev-1", "2026-02-17T06:00:00Z")
         _seed_save_state_dict(
             svc,
             42,
@@ -980,45 +980,36 @@ class TestPromoteLocalSlotPersistsState:
             },
         )
 
-        in_mem = _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba", server_save=server_save).slots["default"]
-        assert in_mem["source"] == "server"
-        assert in_mem["count"] == 1
+        result = await svc.sync_rom_saves(42)
 
-        # The promotion reached SQLite — re-reading the aggregate sees source=server.
+        assert result["uploaded"] == 1
         reloaded = _require_save_state(svc, 42).slots["default"]
         assert reloaded["source"] == "server"
         assert reloaded["count"] == 1
 
 
 class TestAnUploadsFileStatePersistence:
-    """Regression for #409.
+    """A sync's upload into a slot already marked ``source='server'`` persists the file's new baseline.
 
-    The PUT branch with a slot already marked ``source='server'`` is a no-op
-    for slot promotion. Without the operation entry's unconditional persist
-    after ``upload_save_file``, the per-file ``last_sync_hash`` /
-    ``tracked_save_id`` the upload records never reaches disk on that path — so
-    after a backend restart the next sync re-detects drift and re-uploads the
-    same content. This test asserts the upload outcome is persisted regardless
-    of which slot-promotion branch fired.
+    Promoting the slot is a no-op there, so the baseline is the only change the
+    upload makes; were it not persisted, the next sync after a backend restart
+    would read the stale baseline as drift and upload the same content again.
     """
 
-    def test_put_path_persists_file_sync_state_when_slot_already_server(self, tmp_path):
-        """PUT with slot.source='server' (no promotion) still persists file sync state."""
+    @pytest.mark.asyncio
+    async def test_the_new_baseline_survives_a_reload(self, tmp_path):
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc, device_id="dev-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=b"freshly-edited save")
         expected_hash = _file_md5(str(save_path))
 
-        # Pre-existing tracked server save → upload_save called with save_id=100 (PUT path).
-        fake.saves[100] = _server_save(save_id=100, rom_id=42, slot="default")
-        server_save = fake.saves[100]
-
-        # Slot already known-server: RomSaveSyncState.promote_slot_to_server is a no-op
-        # on this branch, so the file-state writes have no incidental persist
-        # to ride on. File state holds a stale baseline hash to make the
-        # regression visible — after the upload, the on-disk hash must be the
-        # current local hash (not the stale one).
+        fake.saves[100] = _server_save_with_syncs(
+            save_id=100,
+            slot="default",
+            device_syncs=[{"device_id": "dev-1", "is_current": True}],
+        )
+        fake.stage_device_sync(100, "dev-1", "2026-02-17T06:00:00Z")
         _seed_save_state_dict(
             svc,
             42,
@@ -1030,18 +1021,13 @@ class TestAnUploadsFileStatePersistence:
             },
         )
 
-        in_mem_file = _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba", server_save=server_save).files[
-            "pokemon.srm"
-        ]
-        # In-memory state captured the fresh hash.
-        assert in_mem_file.last_sync_hash == expected_hash
-        assert in_mem_file.tracked_save_id == 100
+        result = await svc.sync_rom_saves(42)
 
-        # The fresh hash reached SQLite — without it, the next sync re-detects
-        # drift and uploads the same content again (#409 leak).
+        assert result["uploaded"] == 1
+        (new_id,) = set(fake.saves) - {100}
         reloaded_file = _require_save_state(svc, 42).files["pokemon.srm"]
         assert reloaded_file.last_sync_hash == expected_hash
-        assert reloaded_file.tracked_save_id == 100
+        assert reloaded_file.tracked_save_id == new_id
 
 
 class TestAutocleanupLimitThreading:
@@ -1828,7 +1814,8 @@ class TestSyncRomSavesDispatch:
         assert "pokemon.srm" in errors[0]
         assert not any(c[0] == "download_save_content" for c in fake.call_log)
 
-    def test_sync_rom_saves_persists_last_sync_check_at(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_sync_rom_saves_persists_last_sync_check_at(self, tmp_path):
         """Every sync run records last_sync_check_at on the rom-level entry."""
         svc, _ = make_service(tmp_path)
         _enable_sync_with_device(svc)
@@ -1838,7 +1825,7 @@ class TestSyncRomSavesDispatch:
         before_entry = _get_save_state(svc, 42)
         assert before_entry is None or before_entry.last_sync_check_at is None
 
-        _do_sync(svc, 42)
+        await svc.sync_rom_saves(42)
 
         after = _require_save_state(svc, 42).last_sync_check_at
         assert after is not None and isinstance(after, str)
