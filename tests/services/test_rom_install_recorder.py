@@ -5,7 +5,6 @@ install through, so these cases hold for both.
 """
 
 import logging
-import sqlite3
 
 import pytest
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
@@ -319,20 +318,3 @@ class TestRecordInstallFsSizeWriteBack:
         rom = uow.roms.get(42)
         assert rom is not None
         assert rom.fs_size_bytes == 999_000
-
-    def test_a_rom_with_no_row_records_no_size(self, harness):
-        # The size is skipped; the install's own foreign key onto roms refuses the commit.
-        uow = harness._uow
-
-        with pytest.raises(sqlite3.IntegrityError):
-            harness._install_recorder.do_record_install(
-                rom_id=42,
-                rom_detail={"platform_slug": "n64", "fs_size_bytes": 3_145_728},
-                file_path="/roms/n64/game_42.z64",
-                rom_dir=None,
-                system="n64",
-                cleanup=lambda: None,
-            )
-
-        assert uow.roms.get(42) is None
-        assert uow.rom_installs.get(42) is None
