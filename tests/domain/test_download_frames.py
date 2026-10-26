@@ -1,8 +1,50 @@
-"""Tests for domain/download_frames.py — the terminal download_progress payload."""
+"""Tests for domain/download_frames.py — the payloads a download sends the frontend."""
 
 from __future__ import annotations
 
-from domain.download_frames import cancelled_frame
+from domain.download_frames import cancelled_frame, progress_frame, queue_answer
+
+
+class TestProgressFrame:
+    def test_carries_the_download_and_where_it_stands(self):
+        frame = progress_frame(
+            7,
+            "Some Game",
+            "Nintendo 64",
+            "some-game.z64",
+            status="downloading",
+            progress=0.5,
+            bytes_downloaded=512,
+            total_bytes=1024,
+            resumable=True,
+        )
+
+        assert frame == {
+            "rom_id": 7,
+            "rom_name": "Some Game",
+            "platform_name": "Nintendo 64",
+            "file_name": "some-game.z64",
+            "status": "downloading",
+            "progress": 0.5,
+            "bytes_downloaded": 512,
+            "total_bytes": 1024,
+            "resumable": True,
+        }
+
+
+class TestQueueAnswer:
+    def test_lists_every_entry_in_order_without_the_backends_own_keys(self):
+        entries = {
+            2: {"rom_id": 2, "status": "paused", "_target_path": "/roms/n64/b.z64", "_on_disk_at_start": 0},
+            1: {"rom_id": 1, "status": "downloading", "_transferred": 10},
+        }
+
+        assert queue_answer(entries) == {
+            "downloads": [{"rom_id": 2, "status": "paused"}, {"rom_id": 1, "status": "downloading"}]
+        }
+
+    def test_an_empty_queue_answers_an_empty_list(self):
+        assert queue_answer({}) == {"downloads": []}
 
 
 class TestCancelledFrame:

@@ -5,7 +5,13 @@ are the boundary (exactly enough is enough) and every claim that must be counted
 against the free space the store reported.
 """
 
-from domain.disk_space import NotEnoughSpaceToUnpack, disk_space_verdict, unpack_space_verdict
+from domain.disk_space import (
+    NotEnoughSpaceToUnpack,
+    bytes_reserved_by_others,
+    disk_space_verdict,
+    unpack_space_verdict,
+    written_since_admitted,
+)
 
 _MB = 1024 * 1024
 _HEADROOM = 100 * _MB
@@ -132,3 +138,34 @@ class TestUnpackSpaceVerdict:
     def test_the_failure_states_both_figures(self):
         verdict = unpack_space_verdict(unpacked_size=500 * _MB, free_space=200 * _MB, reserved_bytes=0)
         assert str(NotEnoughSpaceToUnpack(verdict)) == "Not enough space to unpack (200MB free, need 600MB)"
+
+
+class TestBytesReservedByOthers:
+    def test_leaves_out_the_asking_downloads_own_claim(self):
+        assert bytes_reserved_by_others({1: 100, 2: 300}, {}, 1) == 300
+
+    def test_what_another_download_has_written_is_no_longer_claimed(self):
+        entries = {2: {"status": "downloading", "_transferred": 120, "_on_disk_at_start": 20}}
+
+        assert bytes_reserved_by_others({2: 300}, entries, 1) == 200
+
+    def test_a_claim_never_counts_below_nothing(self):
+        entries = {2: {"status": "downloading", "_transferred": 500}}
+
+        assert bytes_reserved_by_others({2: 300}, entries, 1) == 0
+
+
+class TestWrittenSinceAdmitted:
+    def test_the_transfer_counts_beyond_what_was_on_disk_at_admission(self):
+        assert written_since_admitted({"status": "downloading", "_transferred": 150, "_on_disk_at_start": 50}) == 100
+
+    def test_what_an_extracting_download_has_unpacked_counts_too(self):
+        entry = {"status": "extracting", "_transferred": 100, "bytes_downloaded": 40}
+
+        assert written_since_admitted(entry) == 140
+
+    def test_the_bytes_of_a_download_that_is_not_extracting_are_its_transfer(self):
+        assert written_since_admitted({"status": "downloading", "_transferred": 100, "bytes_downloaded": 100}) == 100
+
+    def test_an_entry_with_nothing_recorded_has_written_nothing(self):
+        assert written_since_admitted({}) == 0

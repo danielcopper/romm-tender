@@ -10,6 +10,10 @@ user, are decided here.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # Headroom a download must leave unclaimed. An emulator writes saves, states and
 # shader caches beside the ROM it just fetched, so a transfer that fills the card
@@ -89,6 +93,28 @@ def unpack_space_verdict(*, unpacked_size: int, free_space: int, reserved_bytes:
         needed_bytes=needed,
         free_mb=max(available, 0) // _BYTES_PER_MB,
     )
+
+
+def bytes_reserved_by_others(
+    reserved_bytes: Mapping[int, int], entries: Mapping[int, Mapping[str, Any]], rom_id: int
+) -> int:
+    """What downloads other than *rom_id*'s have claimed and not yet written, which free space does not lack yet.
+
+    *reserved_bytes* is each admitted download's claim and *entries* the queue's
+    entries, from which :func:`written_since_admitted` reads what each has written.
+    """
+    return sum(
+        max(reserved - written_since_admitted(entries.get(other) or {}), 0)
+        for other, reserved in reserved_bytes.items()
+        if other != rom_id
+    )
+
+
+def written_since_admitted(entry: Mapping[str, Any]) -> int:
+    """Bytes a download has put on disk since admitted: its transfer, and what it has unpacked so far."""
+    transferred = max(entry.get("_transferred", 0) - entry.get("_on_disk_at_start", 0), 0)
+    unpacked = entry.get("bytes_downloaded", 0) if entry.get("status") == "extracting" else 0
+    return transferred + unpacked
 
 
 class NotEnoughSpaceToUnpack(Exception):
