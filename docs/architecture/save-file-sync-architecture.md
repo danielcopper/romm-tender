@@ -267,12 +267,13 @@ a failure answer, `pending_uploads` names the changed files in `files`, and a Ro
    the next sync. Saves are never carried between slots; the switch only downloads or backs up, never uploads.
 
 A backup that fails in step 1 ends the switch there, with the previous slot still active and nothing downloaded. Where
-nothing was moved yet — the folder check failed, or the first move did — it refuses with `backup_failed`
-(`SlotSwitchBackupFailed`), and the state is not written. Where some files were already moved, those stop being tracked,
-the state is persisted with the previous slot active, and the answer is the partial failure `SlotSwitchStopped`
-(`reason="switch_stopped"`), whose `set_aside` names the files now in `.romm-backup`. Nothing is put back: a move back
-could overwrite what an emulator wrote in between, and one that failed would leave this answer anyway. A database write
-that fails after the backups or downloads is a backend error, as in every other flow.
+nothing was moved yet it refuses, and the state is not written: with `backup_folder_unusable`
+(`SlotSwitchBackupFolderUnusable`) when the folder check failed, and with `backup_failed` (`SlotSwitchBackupFailed`)
+when the first move did. Where some files were already moved, those stop being tracked, the state is persisted with the
+previous slot active, and the answer is the partial failure `SlotSwitchStopped` (`reason="switch_stopped"`), whose
+`set_aside` names the files now in `.romm-backup`. Nothing is put back: a move back could overwrite what an emulator
+wrote in between, and one that failed would leave this answer anyway. A database write that fails after the backups or
+downloads is a backend error, as in every other flow.
 
 A **named** target slot with no server saves is just the case where step 3 is a no-op: every local file is backed up,
 tracking is cleared, and the slot starts fresh — with every prior save recoverable under `.romm-backup`. (An empty /

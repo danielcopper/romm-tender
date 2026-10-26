@@ -23,6 +23,7 @@ from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.saves.slots.switching import (
     PendingUploads,
     SlotSwitchBackupFailed,
+    SlotSwitchBackupFolderUnusable,
     SlotSwitchIncomplete,
     SlotSwitchStopped,
 )
@@ -2336,7 +2337,7 @@ class TestASwitchWhoseBackupFails:
         outside.mkdir()
         (srm.parent / BACKUP_DIR_NAME).symlink_to(outside, target_is_directory=True)
 
-        with pytest.raises(SlotSwitchBackupFailed, match="Nothing was moved"):
+        with pytest.raises(SlotSwitchBackupFolderUnusable, match="Nothing was moved"):
             await svc.switch_slot(42, "target")
 
         assert srm.read_bytes() == b"srm bytes"
@@ -2356,9 +2357,10 @@ class TestASwitchWhoseBackupFails:
 
         monkeypatch.setattr(svc._save_file_store, "make_dirs", make_dirs)
 
-        with pytest.raises(SlotSwitchBackupFailed) as caught:
+        with pytest.raises(SlotSwitchBackupFolderUnusable) as caught:
             await svc.switch_slot(42, "target")
 
+        assert caught.value.reason == "backup_folder_unusable"
         assert caught.value.message == (
             "Could not use the .romm-backup folder (saves folder is read-only). Nothing was moved."
         )
@@ -2392,7 +2394,7 @@ class TestASwitchWhoseBackupFails:
         outside.mkdir()
         (srm.parent / BACKUP_DIR_NAME).symlink_to(outside, target_is_directory=True)
 
-        with pytest.raises(SlotSwitchBackupFailed, match="Nothing was moved"):
+        with pytest.raises(SlotSwitchBackupFolderUnusable, match="Nothing was moved"):
             await svc.switch_slot(42, "target")
 
         assert [c for c in fake.call_log if c[0] == "download_save_content"] == []

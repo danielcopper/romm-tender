@@ -33,6 +33,7 @@ export type WireReason =
   | "already_stopping"
   | "authorization_reserved"
   | "backup_failed"
+  | "backup_folder_unusable"
   | "bios_download_damaged"
   | "bios_download_failed"
   | "blocked_by_migration"

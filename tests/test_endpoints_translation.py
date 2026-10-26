@@ -1140,6 +1140,26 @@ class TestTheSlotRefusalsOnTheWire:
             "message": "Could not move pokemon.srm into .romm-backup (saves folder is read-only). Nothing was moved.",
         }
 
+    async def test_a_switch_whose_backup_folder_cannot_be_used_answers_backup_folder_unusable(
+        self, tmp_path, monkeypatch
+    ):
+        svc, _fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _seed_two_synced_saves(svc, tmp_path)
+
+        def make_dirs(_path: str) -> None:
+            raise PermissionError("saves folder is read-only")
+
+        monkeypatch.setattr(svc._save_file_store, "make_dirs", make_dirs)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "switch_slot", [42, "target"]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "backup_folder_unusable",
+            "message": "Could not use the .romm-backup folder (saves folder is read-only). Nothing was moved.",
+        }
+
     async def test_a_switch_over_unsynced_changes_answers_the_files(self, tmp_path):
         svc, _fake = _slots_seeded(
             tmp_path, files={"pokemon.srm": FileSyncState(last_sync_hash="before-the-last-play", tracked_save_id=100)}

@@ -201,6 +201,9 @@ export function switchSlotFailureMessage(
   if (reason === "backup_failed") {
     return "Can't switch — a save couldn't be moved to .romm-backup, nothing was moved";
   }
+  if (reason === "backup_folder_unusable") {
+    return "Can't switch — the .romm-backup folder can't take backups, nothing was moved";
+  }
   if (reason === "save_shape_unsupported" && message) {
     return message;
   }
@@ -221,6 +224,9 @@ export function createSlotFailureMessage(reason: WireReason): string {
   }
   if (reason === "backup_failed") {
     return "Can't create a slot — a save couldn't be moved to .romm-backup, nothing was moved";
+  }
+  if (reason === "backup_folder_unusable") {
+    return "Can't create a slot — the .romm-backup folder can't take backups, nothing was moved";
   }
   return "Failed to create slot";
 }

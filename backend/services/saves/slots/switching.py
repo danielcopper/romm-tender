@@ -70,6 +70,15 @@ class SlotSwitchBackupFailed(NamedRefused):
     reason = "backup_failed"
 
 
+class SlotSwitchBackupFolderUnusable(NamedRefused):
+    """A slot switch whose ``.romm-backup`` folder cannot take backups, refused before its first move.
+
+    The previous slot stays active and every local save stays where it was.
+    """
+
+    reason = "backup_folder_unusable"
+
+
 @dataclass(frozen=True)
 class SlotSwitchStopped(PartialFailure):
     """A slot switch whose backups stopped partway: the previous slot stays active, nothing was downloaded.
@@ -174,8 +183,9 @@ class SlotSwitcher:
         :class:`SlotSwitchIncomplete` so the caller can retry.
 
         The slot changes only once every one of those backups went through. A
-        backup that fails before anything was moved raises
-        :class:`SlotSwitchBackupFailed`; one that fails after some files were
+        backup folder that cannot take backups raises
+        :class:`SlotSwitchBackupFolderUnusable`, and a backup that fails before
+        anything was moved raises :class:`SlotSwitchBackupFailed`; one that fails after some files were
         moved persists the previous slot with those files untracked, downloads
         nothing, and answers a :class:`SlotSwitchStopped` naming them.
         """
@@ -302,7 +312,8 @@ class SlotSwitcher:
         save is destroyed without a backup. The backup folder is made ready
         before the switch's first move — a backup here, or a download that
         will back up the local file it overwrites — and this raises
-        :class:`SlotSwitchBackupFailed` when the folder cannot take backups;
+        :class:`SlotSwitchBackupFolderUnusable` when the folder cannot take
+        backups;
         where nothing will be moved, the folder is neither checked nor
         created. The first backup that fails stops the loop, and only the
         files moved before it are untracked; when every backup went through,
@@ -323,7 +334,9 @@ class SlotSwitcher:
                 self._save_backup.prepare_save_backup_folder(saves_dir)
             except (OSError, ValueError) as e:
                 self._log_debug(f"switch_slot: backup folder of {saves_dir} cannot take backups: {e}")
-                raise SlotSwitchBackupFailed(f"Could not use the .romm-backup folder ({e}). Nothing was moved.") from e
+                raise SlotSwitchBackupFolderUnusable(
+                    f"Could not use the .romm-backup folder ({e}). Nothing was moved."
+                ) from e
         moved: list[str] = []
         for filename in to_move:
             try:

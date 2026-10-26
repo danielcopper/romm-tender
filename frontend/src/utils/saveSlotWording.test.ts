@@ -484,3 +484,14 @@ describe("a slot switch whose backup failed", () => {
     }
   });
 });
+
+describe("a slot switch whose backup folder can't take backups", () => {
+  it("says the folder can't take backups and nothing was moved", () => {
+    expect(switchSlotFailureMessage("backup_folder_unusable", "Could not use the .romm-backup folder (denied).")).toBe(
+      "Can't switch — the .romm-backup folder can't take backups, nothing was moved",
+    );
+    expect(createSlotFailureMessage("backup_folder_unusable")).toBe(
+      "Can't create a slot — the .romm-backup folder can't take backups, nothing was moved",
+    );
+  });
+});
