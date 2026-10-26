@@ -18,14 +18,15 @@ answer for display.
   the resolver's codes (every string constant in ``atlas.__all__`` whose name
   starts with one of :data:`CODE_FAMILIES`) or one of the values of its other
   closed vocabularies (every other string constant ``atlas.__all__`` holds, and
-  every string in a tuple, a frozenset or a ``Literal`` it exports, less
-  :data:`GENERIC_VALUES`) — both taken from the vendored resolver when the
-  check runs — and no code reads one of :data:`WATCHED_NAMES`, the
-  answer's distinctive field names — as an attribute, a keyword argument, a
-  ``getattr`` constant, a subscript or ``.get`` constant, or a dict literal's
-  key. Docstrings are not read. :data:`READERS_TODAY` lists what each module
-  reads today; :data:`NOT_THE_RESOLVERS` the names that mean something else in
-  a module, with the reason.
+  every string in a tuple, a frozenset, a ``Literal`` or a union of ``Literal``
+  types it exports, less :data:`GENERIC_VALUES`) — both taken from the
+  vendored resolver when the check runs — and no code reads one of
+  :data:`WATCHED_NAMES`, the answer's distinctive field names — as an
+  attribute, a keyword argument, a ``getattr`` constant, a subscript or
+  ``.get`` constant, or a dict literal's key. Docstrings are not read.
+  :data:`READERS_TODAY` lists what each module reads today;
+  :data:`NOT_THE_RESOLVERS` the names that mean something else in a module,
+  with the reason.
 
 An entry nothing needs any more fails on every list but
 :data:`READING_MODULES`: a reader that reads nothing, a grant or internal no
