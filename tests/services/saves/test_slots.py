@@ -2487,6 +2487,78 @@ class TestASwitchWhoseBackupFails:
         assert srm.read_bytes() == b"played since the last sync"
 
 
+class TestASwitchWhoseBackupFailsIsLoggedAsAWarning:
+    """A refused or stopped backup of a slot switch reaches the warning log, and its answer passes through unchanged."""
+
+    @staticmethod
+    def _warnings(caplog) -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+
+    @pytest.mark.asyncio
+    async def test_a_first_move_that_failed_is_logged_with_its_file_and_error(self, tmp_path, monkeypatch, caplog):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _seed_two_synced_saves(svc, tmp_path)
+        _fail_renames_from_call(svc, monkeypatch, failing_call=1)
+
+        with caplog.at_level("WARNING", logger="test"), pytest.raises(SlotSwitchBackupFailed) as caught:
+            await svc.switch_slot(42, "target")
+
+        assert caught.value.message == (
+            "Could not move pokemon.srm into .romm-backup (saves folder is read-only). Nothing was moved."
+        )
+        assert self._warnings(caplog) == [
+            "Slot switch of rom 42 to 'target' refused (backup_failed): "
+            "Could not move pokemon.srm into .romm-backup (saves folder is read-only). Nothing was moved."
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_backup_folder_that_cannot_be_used_is_logged_with_its_error(self, tmp_path, monkeypatch, caplog):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _seed_two_synced_saves(svc, tmp_path)
+
+        def make_dirs(_path: str) -> None:
+            raise PermissionError("saves folder is read-only")
+
+        monkeypatch.setattr(svc._save_file_store, "make_dirs", make_dirs)
+
+        with caplog.at_level("WARNING", logger="test"), pytest.raises(SlotSwitchBackupFolderUnusable) as caught:
+            await svc.switch_slot(42, "target")
+
+        assert caught.value.reason == "backup_folder_unusable"
+        assert self._warnings(caplog) == [
+            "Slot switch of rom 42 to 'target' refused (backup_folder_unusable): "
+            "Could not use the .romm-backup folder (saves folder is read-only). Nothing was moved."
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_switch_that_stopped_is_logged_with_the_failed_file_and_the_files_set_aside(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _seed_two_synced_saves(svc, tmp_path)
+        _fail_renames_from_call(svc, monkeypatch, failing_call=2)
+
+        with caplog.at_level("WARNING", logger="test"):
+            result = await svc.switch_slot(42, "target")
+
+        assert result == SlotSwitchStopped(
+            reason="switch_stopped",
+            message=(
+                "Could not move pokemon.rtc into .romm-backup, so the slot was not switched. "
+                "These were already moved to .romm-backup: pokemon.srm."
+            ),
+            set_aside=["pokemon.srm"],
+        )
+        assert self._warnings(caplog) == [
+            "Slot switch of rom 42 to 'target' stopped (switch_stopped): "
+            "Could not move pokemon.rtc into .romm-backup, so the slot was not switched. "
+            "These were already moved to .romm-backup: pokemon.srm."
+        ]
+
+
 class TestSlotsContentDirGate:
     """#239: slot-switch and slot-choice migration write to ``saves_dir``,
     which RetroArch ignores in content-dir mode — so they are refused before

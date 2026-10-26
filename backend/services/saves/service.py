@@ -34,6 +34,7 @@ from services.saves.rom_info import RomInfoService, RomInfoServiceConfig
 from services.saves.save_backup import SaveBackup, SaveBackupConfig
 from services.saves.save_transfer import SaveTransfer, SaveTransferConfig
 from services.saves.slots import SlotsService, SlotsServiceConfig
+from services.saves.slots.switching import SlotSwitchBackupFailed, SlotSwitchBackupFolderUnusable, SlotSwitchStopped
 from services.saves.status import StatusService, StatusServiceConfig
 from services.saves.sync_engine import SaveSweepIncomplete, SyncEngine, SyncEngineConfig
 from services.saves.sync_engine.devices import DeviceRegistry
@@ -47,7 +48,7 @@ if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
     from models.sync import ClientSaveState
     from services.protocols import UnitOfWorkFactory
-    from services.saves.slots.switching import SlotSwitchIncomplete, SlotSwitchStopped
+    from services.saves.slots.switching import SlotSwitchIncomplete
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,7 @@ class SaveService:
 
     def __init__(self, *, config: SaveServiceConfig) -> None:
         self._config = config
+        self._logger = config.logger
         self._settings = config.settings
         self._save_file_store = config.save_file_store
         self._uow_factory: UnitOfWorkFactory = config.uow_factory
@@ -410,9 +412,24 @@ class SaveService:
     async def switch_slot(
         self, rom_id: int, new_slot: str
     ) -> dict[str, Any] | SlotSwitchIncomplete | SlotSwitchStopped:
-        """Switch the active save slot with immediate state sync."""
+        """Switch the active save slot with immediate state sync.
+
+        A switch whose backups refused or stopped is logged as a warning; its
+        refusal is raised and its answer returned unchanged.
+        """
         async with self._rules.hold("switch_slot", update=True, migration=True, prune=True):
-            return await self._slots.switch_slot(rom_id, new_slot)
+            try:
+                result = await self._slots.switch_slot(rom_id, new_slot)
+            except (SlotSwitchBackupFailed, SlotSwitchBackupFolderUnusable) as refusal:
+                self._logger.warning(
+                    f"Slot switch of rom {rom_id} to {new_slot!r} refused ({refusal.reason}): {refusal.message}"
+                )
+                raise
+        if isinstance(result, SlotSwitchStopped):
+            self._logger.warning(
+                f"Slot switch of rom {rom_id} to {new_slot!r} stopped ({result.reason}): {result.message}"
+            )
+        return result
 
     def is_save_tracking_configured(self, rom_id: int) -> dict[str, Any]:
         """Check if save slot tracking is configured for a game."""
