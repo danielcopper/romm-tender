@@ -10,7 +10,7 @@ or, for ``artwork``, the two modules — its ``SEAM_OWNERS`` entry names), the t
 shapes of "holding" the scan sees (an attribute named after the seam, an
 annotation naming its Protocol), the
 per-seam nature of ownership (owning one seam grants nothing about another),
-the composition root's narrow licence to **pass** a seam without **using** one,
+that no module of the package passes a seam on,
 and the documented blind spots.
 """
 
@@ -198,47 +198,16 @@ class TestFindViolations:
         assert len(findings) == 4
 
 
-class TestCompositionRoot:
-    """A composition root may PASS a seam on; it may not USE one."""
+class TestNoModulePassesASeamOn:
+    """``bootstrap/library.py`` hands each seam to its owner; inside the package nothing hands one on."""
 
-    def test_facade_wiring_is_not_flagged(self, patched_check):
-        # The seam arrives annotated on LibraryServiceConfig and leaves as a
-        # keyword-argument value — the whole of the real façade's seam contact.
+    def test_a_seam_passed_on_as_a_keyword_value_is_flagged(self, patched_check):
         findings = patched_check(
             {
                 "service.py": (
-                    "class LibraryServiceConfig:\n"
-                    "    active_core: ActiveCoreReader\n"
-                    "    disc_resolver: DiscResolver\n"
-                    "    renderer_rss: RendererRssFn\n"
-                    "    renderer_gc: RendererGcFn\n\n"
                     "class LibraryService:\n"
                     "    def __init__(self, config):\n"
-                    "        self._shortcut_launch_resolver = ShortcutLaunchResolver(\n"
-                    "            config=ShortcutLaunchResolverConfig(\n"
-                    "                active_core=config.active_core, disc_resolver=config.disc_resolver\n"
-                    "            )\n"
-                    "        )\n"
-                    "        self._budget = SessionBudgetMonitor(\n"
-                    "            config=SessionBudgetMonitorConfig(\n"
-                    "                renderer_rss=config.renderer_rss, renderer_gc=config.renderer_gc\n"
-                    "            )\n"
-                    "        )\n"
-                ),
-            }
-        )
-        assert findings == []
-
-    def test_facade_method_that_uses_a_seam_is_flagged(self, patched_check):
-        # The regression a blanket file exemption could not tell from wiring:
-        # the façade grows a second holder of a UoW-opening seam.
-        findings = patched_check(
-            {
-                "service.py": (
-                    "class LibraryServiceConfig:\n    active_core: ActiveCoreReader\n\n"
-                    "class LibraryService:\n"
-                    "    def peek(self, rom_id):\n"
-                    "        return self._config.active_core.active_emulator_for_rom(rom_id)\n"
+                    "        ShortcutLaunchResolverConfig(active_core=config.active_core)\n"
                 ),
             }
         )
@@ -246,24 +215,18 @@ class TestCompositionRoot:
         assert "service.py" in findings[0]
         assert "active_core" in findings[0]
 
-    def test_facade_storing_a_seam_on_itself_is_flagged(self, patched_check):
-        # Storing is holding, not passing: the assignment's RHS is not a
-        # keyword-argument value.
+    def test_a_seam_annotated_on_the_facade_config_is_flagged(self, patched_check):
         findings = patched_check(
             {
-                "service.py": (
-                    "class LibraryServiceConfig:\n    disc_resolver: DiscResolver\n\n"
-                    "class LibraryService:\n"
-                    "    def __init__(self, config):\n        self._disc = config.disc_resolver\n"
-                ),
+                "service.py": "class LibraryServiceConfig:\n    renderer_rss: RendererRssFn\n",
             }
         )
         assert len(findings) == 1
-        assert "disc_resolver" in findings[0]
+        assert "renderer_rss" in findings[0]
 
     def test_seam_annotation_on_a_non_facade_config_is_flagged(self, patched_check):
-        # Only LibraryServiceConfig is bootstrap's delivery point; a second
-        # config declaring the same seam is a second holder.
+        # A config of a module that does not own the seam declaring it is a
+        # second holder.
         findings = patched_check(
             {
                 "sync_orchestrator.py": "class SyncOrchestratorConfig:\n    active_core: ActiveCoreReader\n",
@@ -271,31 +234,6 @@ class TestCompositionRoot:
         )
         assert len(findings) == 1
         assert "active_core" in findings[0]
-
-    def test_facade_config_field_of_another_class_in_the_same_file_is_flagged(self, patched_check):
-        findings = patched_check(
-            {
-                "service.py": (
-                    "class LibraryServiceConfig:\n    renderer_rss: RendererRssFn\n\n"
-                    "class OtherConfig:\n    renderer_rss: RendererRssFn\n"
-                ),
-            }
-        )
-        assert len(findings) == 1
-        assert "renderer_rss" in findings[0]
-
-    def test_pass_through_licence_does_not_leak_to_the_receiver(self, patched_check):
-        # A keyword value is exempt; the same attribute read into a local or
-        # returned is not.
-        findings = patched_check(
-            {
-                "reporter.py": (
-                    "def wire(config):\n    Thing(active_core=config.active_core)\n    return config.active_core\n"
-                ),
-            }
-        )
-        assert len(findings) == 1
-        assert findings[0].endswith("the 'active_core' seam is held only by shortcut_launch_resolver.py.")
 
 
 class TestDocumentedBlindSpots:
@@ -357,8 +295,8 @@ class TestMainEntryPoint:
         assert "Seam-owner confinement gate" in captured.out
 
     def test_real_repo_run_is_clean(self, capsys):
-        # The real library package holds each seam only in its owner module,
-        # and the façade only passes them on — the check must exit 0.
+        # The real library package holds each seam only in its owner module —
+        # the check must exit 0.
         rc = check.main([])
         assert rc == 0
         captured = capsys.readouterr()
@@ -393,6 +331,6 @@ class TestSeamTable:
         assert set(check.SEAM_PROTOCOLS.values()) == set(check.SEAM_OWNERS)
 
     def test_no_owner_set_names_the_facade(self):
-        # The façade's licence is structural (pass-through only). Re-adding it
-        # as an owner would restore the hole this narrowing closed.
+        # The façade holds no seam; naming it as an owner would let it hold
+        # every one of them again.
         assert all("service.py" not in owners for owners in check.SEAM_OWNERS.values())
