@@ -2261,7 +2261,8 @@ class TestASwitchWhoseBackupFails:
         assert result == SlotSwitchStopped(
             reason="switch_stopped",
             message=(
-                "Could not move pokemon.rtc into .romm-backup, so the slot was not switched. "
+                "Could not move pokemon.rtc into .romm-backup (saves folder is read-only), "
+                "so the slot was not switched. "
                 "These were already moved to .romm-backup: pokemon.srm."
             ),
             set_aside=["pokemon.srm"],
@@ -2301,6 +2302,7 @@ class TestASwitchWhoseBackupFails:
 
         assert isinstance(result, SlotSwitchStopped)
         assert result.set_aside == ["pokemon.srm"]
+        assert result.message.startswith("Could not move pokemon.sav into .romm-backup (saves folder is read-only), ")
         state = _require_save_state(svc, 42)
         assert state.active_slot == "default"
         assert "pokemon.srm" not in state.files
@@ -2547,14 +2549,16 @@ class TestASwitchWhoseBackupFailsIsLoggedAsAWarning:
         assert result == SlotSwitchStopped(
             reason="switch_stopped",
             message=(
-                "Could not move pokemon.rtc into .romm-backup, so the slot was not switched. "
+                "Could not move pokemon.rtc into .romm-backup (saves folder is read-only), "
+                "so the slot was not switched. "
                 "These were already moved to .romm-backup: pokemon.srm."
             ),
             set_aside=["pokemon.srm"],
         )
         assert self._warnings(caplog) == [
             "Slot switch of rom 42 to 'target' stopped (switch_stopped): "
-            "Could not move pokemon.rtc into .romm-backup, so the slot was not switched. "
+            "Could not move pokemon.rtc into .romm-backup (saves folder is read-only), "
+            "so the slot was not switched. "
             "These were already moved to .romm-backup: pokemon.srm."
         ]
 

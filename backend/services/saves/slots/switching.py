@@ -359,8 +359,8 @@ class SlotSwitcher:
         """Report a switch whose backups stopped, naming what was already set aside.
 
         Raises :class:`SlotSwitchBackupFailed`, naming the error, where nothing
-        was moved yet. Once files are in ``.romm-backup`` the answer names them
-        and the file that failed; its error goes to the debug log only, and
+        was moved yet. Once files are in ``.romm-backup`` the answer's message
+        names them, the file that failed and its error;
         ``SaveService.switch_slot`` logs the answer as a warning.
         """
         self._log_debug(
@@ -374,7 +374,8 @@ class SlotSwitcher:
         return SlotSwitchStopped(
             reason="switch_stopped",
             message=(
-                f"Could not move {set_aside.failed} into .romm-backup, so the slot was not switched. "
+                f"Could not move {set_aside.failed} into .romm-backup ({set_aside.error}), "
+                "so the slot was not switched. "
                 f"These were already moved to .romm-backup: {', '.join(set_aside.moved)}."
             ),
             set_aside=list(set_aside.moved),

@@ -1120,7 +1120,8 @@ class TestTheSlotRefusalsOnTheWire:
             "success": False,
             "reason": "switch_stopped",
             "message": (
-                "Could not move pokemon.rtc into .romm-backup, so the slot was not switched. "
+                "Could not move pokemon.rtc into .romm-backup (saves folder is read-only), "
+                "so the slot was not switched. "
                 "These were already moved to .romm-backup: pokemon.srm."
             ),
             "set_aside": ["pokemon.srm"],
