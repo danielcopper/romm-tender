@@ -131,9 +131,11 @@ from services.update_output import UpdateOutputService, UpdateOutputServiceConfi
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
+    _fail_renames_from_call,
     _file_md5,
     _install_rom,
     _seed_save_state,
+    _seed_two_synced_saves,
     _server_save,
     _server_save_with_syncs,
     make_service,
@@ -1107,8 +1109,10 @@ class TestTheSlotRefusalsOnTheWire:
         }
 
     async def test_a_switch_whose_backups_stopped_partway_answers_the_files_set_aside(self, tmp_path, monkeypatch):
-        svc, _fake = self._two_synced_saves(tmp_path)
-        self._rename_failing_from_call(svc, monkeypatch, failing_call=2)
+        svc, _fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _seed_two_synced_saves(svc, tmp_path)
+        _fail_renames_from_call(svc, monkeypatch, failing_call=2)
 
         message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "switch_slot", [42, "target"]))
 
@@ -1123,8 +1127,10 @@ class TestTheSlotRefusalsOnTheWire:
         }
 
     async def test_a_switch_whose_first_backup_failed_answers_backup_failed(self, tmp_path, monkeypatch):
-        svc, _fake = self._two_synced_saves(tmp_path)
-        self._rename_failing_from_call(svc, monkeypatch, failing_call=1)
+        svc, _fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _seed_two_synced_saves(svc, tmp_path)
+        _fail_renames_from_call(svc, monkeypatch, failing_call=1)
 
         message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "switch_slot", [42, "target"]))
 
@@ -1133,41 +1139,6 @@ class TestTheSlotRefusalsOnTheWire:
             "reason": "backup_failed",
             "message": "Could not move pokemon.srm into .romm-backup (saves folder is read-only). Nothing was moved.",
         }
-
-    @staticmethod
-    def _two_synced_saves(tmp_path):
-        svc, fake = make_service(tmp_path)
-        _enable_sync_with_device(svc)
-        _install_rom(svc, tmp_path)
-        srm = _create_save(tmp_path, ext=".srm", content=b"srm bytes")
-        rtc = _create_save(tmp_path, ext=".rtc", content=b"rtc bytes")
-        _seed_save_state(
-            svc,
-            42,
-            RomSaveSyncState(
-                active_slot="default",
-                slot_confirmed=True,
-                files={
-                    "pokemon.srm": FileSyncState(last_sync_hash=_file_md5(str(srm)), tracked_save_id=100),
-                    "pokemon.rtc": FileSyncState(last_sync_hash=_file_md5(str(rtc)), tracked_save_id=101),
-                },
-            ),
-        )
-        return svc, fake
-
-    @staticmethod
-    def _rename_failing_from_call(svc, monkeypatch, failing_call: int) -> None:
-        store = svc._save_file_store
-        original = store.rename
-        calls = {"n": 0}
-
-        def rename(src: str, dst: str) -> None:
-            calls["n"] += 1
-            if calls["n"] >= failing_call:
-                raise PermissionError("saves folder is read-only")
-            original(src, dst)
-
-        monkeypatch.setattr(store, "rename", rename)
 
     async def test_a_switch_over_unsynced_changes_answers_the_files(self, tmp_path):
         svc, _fake = _slots_seeded(

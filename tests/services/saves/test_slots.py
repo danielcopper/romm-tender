@@ -28,6 +28,7 @@ from services.saves.slots.switching import (
 )
 from tests.services.saves._helpers import (
     _create_save,
+    _fail_renames_from_call,
     _file_md5,
     _get_save_state,
     _install_rom,
@@ -36,6 +37,7 @@ from tests.services.saves._helpers import (
     _seed_rom,
     _seed_save_state,
     _seed_save_state_dict,
+    _seed_two_synced_saves,
     _server_save,
     _set_device_id,
     _uow,
@@ -2231,38 +2233,6 @@ class TestSwitchSlot:
 class TestASwitchWhoseBackupFails:
     """A slot switch changes the slot only once every local save the new slot does not provide is backed up."""
 
-    def _two_synced_saves(self, svc, tmp_path):
-        """``pokemon.srm`` and ``pokemon.rtc`` on disk, both synced under slot ``default``."""
-        _install_rom(svc, tmp_path)
-        srm = _create_save(tmp_path, ext=".srm", content=b"srm bytes")
-        rtc = _create_save(tmp_path, ext=".rtc", content=b"rtc bytes")
-        _seed_save_state(
-            svc,
-            42,
-            RomSaveSyncState(
-                active_slot="default",
-                slot_confirmed=True,
-                files={
-                    "pokemon.srm": FileSyncState(last_sync_hash=_file_md5(str(srm)), tracked_save_id=100),
-                    "pokemon.rtc": FileSyncState(last_sync_hash=_file_md5(str(rtc)), tracked_save_id=101),
-                },
-            ),
-        )
-        return srm, rtc
-
-    def _rename_failing_from_call(self, svc, monkeypatch, failing_call: int) -> None:
-        store = svc._save_file_store
-        original = store.rename
-        calls = {"n": 0}
-
-        def rename(src: str, dst: str) -> None:
-            calls["n"] += 1
-            if calls["n"] >= failing_call:
-                raise PermissionError("saves folder is read-only")
-            original(src, dst)
-
-        monkeypatch.setattr(store, "rename", rename)
-
     def _later_readings_establish_nothing(self, svc, monkeypatch) -> None:
         """Every save reading after the first answers that nothing is established, which names no saves folder."""
         save_locations = svc._rom_info._save_locations
@@ -2282,8 +2252,8 @@ class TestASwitchWhoseBackupFails:
     ):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        srm, rtc = self._two_synced_saves(svc, tmp_path)
-        self._rename_failing_from_call(svc, monkeypatch, failing_call=2)
+        srm, rtc = _seed_two_synced_saves(svc, tmp_path)
+        _fail_renames_from_call(svc, monkeypatch, failing_call=2)
 
         result = await svc.switch_slot(42, "target")
 
@@ -2311,7 +2281,7 @@ class TestASwitchWhoseBackupFails:
     async def test_a_file_the_backup_did_not_move_keeps_its_tracking_when_the_switch_stops(self, tmp_path, monkeypatch):
         svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        srm, rtc = _seed_two_synced_saves(svc, tmp_path)
         sav = _create_save(tmp_path, ext=".sav", content=b"sav bytes")
         backup = svc._save_backup
         original = backup.back_up_save_file
@@ -2341,9 +2311,9 @@ class TestASwitchWhoseBackupFails:
     async def test_a_first_backup_that_fails_refuses_with_nothing_moved(self, tmp_path, monkeypatch):
         svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        srm, rtc = _seed_two_synced_saves(svc, tmp_path)
         before = _require_save_state(svc, 42)
-        self._rename_failing_from_call(svc, monkeypatch, failing_call=1)
+        _fail_renames_from_call(svc, monkeypatch, failing_call=1)
 
         with pytest.raises(SlotSwitchBackupFailed) as caught:
             await svc.switch_slot(42, "target")
@@ -2360,7 +2330,7 @@ class TestASwitchWhoseBackupFails:
     async def test_a_backup_folder_that_is_a_link_refuses_with_nothing_moved(self, tmp_path):
         svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        srm, rtc = _seed_two_synced_saves(svc, tmp_path)
         before = _require_save_state(svc, 42)
         outside = tmp_path / "outside"
         outside.mkdir()
@@ -2378,7 +2348,7 @@ class TestASwitchWhoseBackupFails:
     async def test_a_backup_folder_that_cannot_be_created_refuses_with_nothing_moved(self, tmp_path, monkeypatch):
         svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        srm, rtc = _seed_two_synced_saves(svc, tmp_path)
         before = _require_save_state(svc, 42)
 
         def make_dirs(_path: str) -> None:
@@ -2437,7 +2407,7 @@ class TestASwitchWhoseBackupFails:
     async def test_the_later_steps_read_the_save_answer_the_switch_took_at_its_start(self, tmp_path, monkeypatch):
         svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        srm, rtc = _seed_two_synced_saves(svc, tmp_path)
         self._later_readings_establish_nothing(svc, monkeypatch)
 
         result = await svc.switch_slot(42, "target")
@@ -2453,7 +2423,7 @@ class TestASwitchWhoseBackupFails:
     async def test_the_pending_check_reads_the_save_answer_the_switch_took_at_its_start(self, tmp_path, monkeypatch):
         svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        srm, _rtc = self._two_synced_saves(svc, tmp_path)
+        srm, _rtc = _seed_two_synced_saves(svc, tmp_path)
         srm.write_bytes(b"played since the last sync")
         self._later_readings_establish_nothing(svc, monkeypatch)
 

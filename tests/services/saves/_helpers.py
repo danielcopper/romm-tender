@@ -389,3 +389,41 @@ def _server_save_with_syncs(
         base["slot"] = slot
     base["device_syncs"] = device_syncs if device_syncs is not None else []
     return base
+
+
+def _seed_two_synced_saves(svc, tmp_path):
+    """Install ROM 42 with ``pokemon.srm`` and ``pokemon.rtc`` on disk, both synced under slot ``default``.
+
+    Returns the two save paths.
+    """
+    _install_rom(svc, tmp_path)
+    srm = _create_save(tmp_path, ext=".srm", content=b"srm bytes")
+    rtc = _create_save(tmp_path, ext=".rtc", content=b"rtc bytes")
+    _seed_save_state(
+        svc,
+        42,
+        RomSaveSyncState(
+            active_slot="default",
+            slot_confirmed=True,
+            files={
+                "pokemon.srm": FileSyncState(last_sync_hash=_file_md5(str(srm)), tracked_save_id=100),
+                "pokemon.rtc": FileSyncState(last_sync_hash=_file_md5(str(rtc)), tracked_save_id=101),
+            },
+        ),
+    )
+    return srm, rtc
+
+
+def _fail_renames_from_call(svc, monkeypatch, failing_call: int) -> None:
+    """Make the save-file store's ``rename`` raise ``PermissionError`` from its *failing_call*-th call on."""
+    store = svc._save_file_store
+    original = store.rename
+    calls = {"n": 0}
+
+    def rename(src: str, dst: str) -> None:
+        calls["n"] += 1
+        if calls["n"] >= failing_call:
+            raise PermissionError("saves folder is read-only")
+        original(src, dst)
+
+    monkeypatch.setattr(store, "rename", rename)
