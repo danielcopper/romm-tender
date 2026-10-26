@@ -20,6 +20,7 @@ from fakes.fake_download_queue_cleanup import FakeDownloadQueueCleanup
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -86,7 +87,7 @@ def service(logger, queue_cleanup, rom_files, uow, emitter, prune_conflicts):
     return RomRemovalService(
         config=RomRemovalServiceConfig(
             logger=logger,
-            loop=asyncio.new_event_loop(),
+            loop=running_loop(),
             clock=FakeClock(),
             emit=emitter,
             rom_file_store=rom_files,
