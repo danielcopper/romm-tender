@@ -398,7 +398,7 @@ class TestVocabulary:
             "row.satisfied = True\n",
         ],
     )
-    def test_what_is_not_watched_is_not_found(self, tmp_path, lists, source):
+    def test_what_the_scan_does_not_see_is_not_found(self, tmp_path, lists, source):
         backend = _tree(tmp_path, {_SERVICE: source})
 
         assert check.vocabulary_findings(backend, _WATCHED) == []

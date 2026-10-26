@@ -2806,8 +2806,9 @@ vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) copy in `backend
 
 - **The seam exists because of a contract, not a preference.** `domain/` may not import `_vendor` (the
   `domain-stdlib-only` import-linter contract), so the answer has to arrive through an adapter. That adapter is the one
-  module that reads it ("Resolver-reading gate" under Boundary Enforcement): what `domain/firmware_wants.py` and the
-  modules after it still read of the resolver's vocabulary stands on that gate's list, which only shrinks.
+  module that reads it ([Resolver-reading gate](#6-resolver-reading-gate) under Boundary Enforcement): what
+  `domain/firmware_wants.py` and the modules after it still read of the resolver's vocabulary stands on that gate's list
+  of today's readers (`READERS_TODAY`), which only shrinks.
 - **Never cached.** A firmware answer is about files the user is actively downloading and deleting, so it is read per
   query.
 - **Failure is "unknown", never "nothing needed".** The resolver raises on its own invariant violations and promises
