@@ -16,7 +16,6 @@ from tests.services.library._helpers import (
     _make_loop_raising,
     _make_registry_entry,
     _seed_rom_row,
-    rebind_loop,
 )
 
 
@@ -38,7 +37,7 @@ class TestGetPlatforms:
     """Tests for get_platforms() — lines 90-117."""
 
     @pytest.mark.asyncio
-    async def test_returns_platforms_with_rom_count(self, library):
+    async def test_returns_platforms_with_rom_count(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -53,7 +52,7 @@ class TestGetPlatforms:
                 {},
             ]
         )
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
 
         result = await library.sync.get_platforms()
         assert result["success"] is True
@@ -63,7 +62,7 @@ class TestGetPlatforms:
         assert result["platforms"][1]["name"] == "SNES"
 
     @pytest.mark.asyncio
-    async def test_skips_zero_rom_count(self, library):
+    async def test_skips_zero_rom_count(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -76,7 +75,7 @@ class TestGetPlatforms:
                 {},
             ]
         )
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
 
         result = await library.sync.get_platforms()
         assert result["success"] is True
@@ -84,7 +83,7 @@ class TestGetPlatforms:
         assert result["platforms"][0]["name"] == "N64"
 
     @pytest.mark.asyncio
-    async def test_sync_enabled_from_settings(self, library):
+    async def test_sync_enabled_from_settings(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -97,7 +96,7 @@ class TestGetPlatforms:
                 {},
             ]
         )
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
         library.settings["enabled_platforms"] = {"1": True, "2": False}
 
         result = await library.sync.get_platforms()
@@ -105,27 +104,27 @@ class TestGetPlatforms:
         assert result["platforms"][1]["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_default_sync_enabled_when_no_prefs(self, library):
+    async def test_default_sync_enabled_when_no_prefs(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(
             side_effect=[[{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}], {}]
         )
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
         library.settings["enabled_platforms"] = {}
 
         result = await library.sync.get_platforms()
         assert result["platforms"][0]["sync_enabled"] is True
 
     @pytest.mark.asyncio
-    async def test_http_error(self, library):
+    async def test_http_error(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         failure = Exception("Connection refused")
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(side_effect=failure)
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
         call = library.sync.get_platforms()
 
         with pytest.raises(Exception, match="Connection refused") as excinfo:
@@ -153,7 +152,7 @@ class TestSetAllPlatformsSync:
     """Tests for set_all_platforms_sync() — lines 126-139."""
 
     @pytest.mark.asyncio
-    async def test_enables_all(self, library):
+    async def test_enables_all(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -163,7 +162,7 @@ class TestSetAllPlatformsSync:
                 {"id": 2, "name": "SNES"},
             ]
         )
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
 
         result = await library.sync.set_all_platforms_sync(True)
         assert result["success"] is True
@@ -171,25 +170,25 @@ class TestSetAllPlatformsSync:
         assert library.settings["enabled_platforms"]["2"] is True
 
     @pytest.mark.asyncio
-    async def test_disables_all(self, library):
+    async def test_disables_all(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(return_value=[{"id": 1, "name": "N64"}])
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
 
         result = await library.sync.set_all_platforms_sync(False)
         assert result["success"] is True
         assert library.settings["enabled_platforms"]["1"] is False
 
     @pytest.mark.asyncio
-    async def test_http_error(self, library):
+    async def test_http_error(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         failure = Exception("timeout")
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(side_effect=failure)
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
         call = library.sync.set_all_platforms_sync(True)
 
         with pytest.raises(Exception, match="timeout") as excinfo:
@@ -202,12 +201,12 @@ class TestGetCollections:
     """Tests for LibraryService.get_collections()."""
 
     @pytest.mark.asyncio
-    async def test_returns_standard_smart_and_virtual_collections(self, library):
+    async def test_returns_standard_smart_and_virtual_collections(self, make_library):
         """User, smart, and virtual collections all appear in the result."""
         user = [{"id": 1, "name": "My Faves", "rom_count": 3, "is_favorite": False}]
         smart = [{"id": 5, "name": "Recent Adds", "rom_count": 12}]
         franchise = [{"id": 101, "name": "Mario", "rom_count": 5, "is_favorite": False}]
-        rebind_loop(library.sync, _make_collections_loop(user, smart, franchise))
+        library = make_library(loop=_make_collections_loop(user, smart, franchise))
 
         result = await library.sync.get_collections()
 
@@ -219,10 +218,10 @@ class TestGetCollections:
         assert "Mario" in names
 
     @pytest.mark.asyncio
-    async def test_standard_collection_has_standard_kind(self, library):
+    async def test_standard_collection_has_standard_kind(self, make_library):
         """Non-favorite standard collections carry kind='standard' and is_favorite=False."""
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
-        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library = make_library(loop=_make_collections_loop(user=user))
 
         result = await library.sync.get_collections()
 
@@ -230,10 +229,10 @@ class TestGetCollections:
         assert result["collections"][0]["is_favorite"] is False
 
     @pytest.mark.asyncio
-    async def test_virtual_collection_has_virtual_kind_and_type(self, library):
+    async def test_virtual_collection_has_virtual_kind_and_type(self, make_library):
         """Virtual collections carry kind='virtual' and a virtual_type sub-field."""
         franchise = [{"id": 101, "name": "Zelda", "rom_count": 4}]
-        rebind_loop(library.sync, _make_collections_loop(virtual=franchise))
+        library = make_library(loop=_make_collections_loop(virtual=franchise))
 
         result = await library.sync.get_collections()
 
@@ -241,10 +240,10 @@ class TestGetCollections:
         assert result["collections"][0]["virtual_type"] == "franchise"
 
     @pytest.mark.asyncio
-    async def test_smart_collection_has_smart_kind(self, library):
+    async def test_smart_collection_has_smart_kind(self, make_library):
         """Smart collections carry kind='smart' and is_favorite=False."""
         smart = [{"id": 7, "name": "Filter A", "rom_count": 10}]
-        rebind_loop(library.sync, _make_collections_loop(smart=smart))
+        library = make_library(loop=_make_collections_loop(smart=smart))
 
         result = await library.sync.get_collections()
 
@@ -252,12 +251,12 @@ class TestGetCollections:
         assert result["collections"][0]["is_favorite"] is False
 
     @pytest.mark.asyncio
-    async def test_kind_order_standard_smart_virtual(self, library):
+    async def test_kind_order_standard_smart_virtual(self, make_library):
         """Standard collections precede smart, which precede virtual (sort order)."""
         user = [{"id": 1, "name": "U1", "rom_count": 1, "is_favorite": False}]
         smart = [{"id": 5, "name": "S1", "rom_count": 1}]
         franchise = [{"id": 101, "name": "F1", "rom_count": 1}]
-        rebind_loop(library.sync, _make_collections_loop(user, smart, franchise))
+        library = make_library(loop=_make_collections_loop(user, smart, franchise))
 
         result = await library.sync.get_collections()
 
@@ -268,10 +267,10 @@ class TestGetCollections:
         assert standard_idx < smart_idx < virtual_idx
 
     @pytest.mark.asyncio
-    async def test_favorite_collection_has_is_favorite_true(self, library):
+    async def test_favorite_collection_has_is_favorite_true(self, make_library):
         """Collections with is_favorite=True carry kind='standard' and is_favorite=True."""
         user = [{"id": 1, "name": "Top Picks", "rom_count": 5, "is_favorite": True}]
-        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library = make_library(loop=_make_collections_loop(user=user))
 
         result = await library.sync.get_collections()
 
@@ -279,13 +278,13 @@ class TestGetCollections:
         assert result["collections"][0]["is_favorite"] is True
 
     @pytest.mark.asyncio
-    async def test_respects_enabled_settings(self, library):
+    async def test_respects_enabled_settings(self, make_library):
         """sync_enabled reflects the per-bucket enabled_collections setting."""
         user = [
             {"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False},
             {"id": 2, "name": "Shooters", "rom_count": 3, "is_favorite": False},
         ]
-        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library = make_library(loop=_make_collections_loop(user=user))
         library.sync._settings["enabled_collections"] = {
             "standard": {"1": True, "2": False},
             "smart": {},
@@ -299,10 +298,10 @@ class TestGetCollections:
         assert by_id["2"]["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_respects_smart_bucket_enabled_settings(self, library):
+    async def test_respects_smart_bucket_enabled_settings(self, make_library):
         """Smart-collection sync_enabled comes from the smart bucket only."""
         smart = [{"id": 7, "name": "Filter A", "rom_count": 1}]
-        rebind_loop(library.sync, _make_collections_loop(smart=smart))
+        library = make_library(loop=_make_collections_loop(smart=smart))
         library.sync._settings["enabled_collections"] = {
             "standard": {"7": True},  # same id under a different bucket — must not leak
             "smart": {"7": False},
@@ -315,11 +314,11 @@ class TestGetCollections:
         assert smart_entry["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_defaults_to_disabled_when_no_settings(self, library):
+    async def test_defaults_to_disabled_when_no_settings(self, make_library):
         """When enabled_collections is absent all collections default to sync_enabled=False."""
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
         franchise = [{"id": 101, "name": "Zelda", "rom_count": 3}]
-        rebind_loop(library.sync, _make_collections_loop(user=user, virtual=franchise))
+        library = make_library(loop=_make_collections_loop(user=user, virtual=franchise))
         library.sync._settings.pop("enabled_collections", None)
 
         result = await library.sync.get_collections()
@@ -328,10 +327,10 @@ class TestGetCollections:
             assert c["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_api_error_reaches_the_caller(self, library):
+    async def test_api_error_reaches_the_caller(self, make_library):
         """When list_collections raises, the exception reaches the caller unchanged."""
         failure = Exception("Connection refused")
-        rebind_loop(library.sync, _make_loop_raising(failure))
+        library = make_library(loop=_make_loop_raising(failure))
         call = library.sync.get_collections()
 
         with pytest.raises(Exception, match="Connection refused") as excinfo:
@@ -340,9 +339,9 @@ class TestGetCollections:
         assert excinfo.value is failure
 
     @pytest.mark.asyncio
-    async def test_empty_collections(self, library):
+    async def test_empty_collections(self, make_library):
         """All endpoints returning [] still yields success=True with empty list."""
-        rebind_loop(library.sync, _make_collections_loop())
+        library = make_library(loop=_make_collections_loop())
 
         result = await library.sync.get_collections()
 
@@ -350,7 +349,7 @@ class TestGetCollections:
         assert result["collections"] == []
 
     @pytest.mark.asyncio
-    async def test_virtual_failure_still_returns_standard_collections(self, library):
+    async def test_virtual_failure_still_returns_standard_collections(self, make_library):
         """If every virtual-type fetch fails, standard + smart collections are still returned."""
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
 
@@ -367,7 +366,7 @@ class TestGetCollections:
             raise Exception("Virtual endpoint unavailable")  # every virtual type
 
         mock_loop.run_in_executor = AsyncMock(side_effect=_executor)
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
 
         result = await library.sync.get_collections()
 
@@ -376,7 +375,7 @@ class TestGetCollections:
         assert result["collections"][0]["name"] == "RPGs"
 
     @pytest.mark.asyncio
-    async def test_smart_failure_still_returns_standard_and_virtual(self, library):
+    async def test_smart_failure_still_returns_standard_and_virtual(self, make_library):
         """If smart fetch fails, standard + virtual collections still come through."""
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
         franchise = [{"id": 101, "name": "Mario", "rom_count": 3}]
@@ -396,7 +395,7 @@ class TestGetCollections:
             return []  # remaining virtual type(s)
 
         mock_loop.run_in_executor = AsyncMock(side_effect=_executor)
-        rebind_loop(library.sync, mock_loop)
+        library = make_library(loop=mock_loop)
 
         result = await library.sync.get_collections()
 
@@ -406,23 +405,23 @@ class TestGetCollections:
         assert "Mario" in names
 
     @pytest.mark.asyncio
-    async def test_rom_count_falls_back_to_rom_ids_length(self, library):
+    async def test_rom_count_falls_back_to_rom_ids_length(self, make_library):
         """When rom_count is absent, len(rom_ids) is used."""
         user = [{"id": 1, "name": "RPGs", "rom_ids": [10, 20, 30], "is_favorite": False}]
-        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library = make_library(loop=_make_collections_loop(user=user))
 
         result = await library.sync.get_collections()
 
         assert result["collections"][0]["rom_count"] == 3
 
     @pytest.mark.asyncio
-    async def test_collections_sorted_alphabetically_within_kind(self, library):
+    async def test_collections_sorted_alphabetically_within_kind(self, make_library):
         """Within a kind, collections are sorted by name (case-insensitive)."""
         user = [
             {"id": 2, "name": "Zelda", "rom_count": 1, "is_favorite": False},
             {"id": 1, "name": "Metroid", "rom_count": 1, "is_favorite": False},
         ]
-        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library = make_library(loop=_make_collections_loop(user=user))
 
         result = await library.sync.get_collections()
 
@@ -430,10 +429,10 @@ class TestGetCollections:
         assert names == ["Metroid", "Zelda"]
 
     @pytest.mark.asyncio
-    async def test_collection_id_is_string(self, library):
+    async def test_collection_id_is_string(self, make_library):
         """IDs are always returned as strings regardless of the API response type."""
         user = [{"id": 42, "name": "Favorites", "rom_count": 1, "is_favorite": False}]
-        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library = make_library(loop=_make_collections_loop(user=user))
 
         result = await library.sync.get_collections()
 
@@ -444,13 +443,13 @@ class TestGetCollectionsOwnerScope:
     """get_collections tags each collection with is_own for the owner scope (#1532)."""
 
     @pytest.mark.asyncio
-    async def test_own_and_foreign_standard_collections_tagged(self, library):
+    async def test_own_and_foreign_standard_collections_tagged(self, make_library):
         """With a known identity, user collections split on user_id."""
         user = [
             {"id": 1, "name": "Mine", "rom_count": 1, "is_favorite": False, "user_id": 7},
             {"id": 2, "name": "Theirs", "rom_count": 1, "is_favorite": False, "user_id": 8},
         ]
-        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library = make_library(loop=_make_collections_loop(user=user))
         library.sync._settings["romm_user_id"] = 7
 
         result = await library.sync.get_collections()
@@ -460,12 +459,12 @@ class TestGetCollectionsOwnerScope:
         assert by_name["Theirs"]["is_own"] is False
 
     @pytest.mark.asyncio
-    async def test_smart_collections_tagged_by_owner(self, library):
+    async def test_smart_collections_tagged_by_owner(self, make_library):
         smart = [
             {"id": 5, "name": "MySmart", "rom_count": 1, "user_id": 7},
             {"id": 6, "name": "TheirSmart", "rom_count": 1, "user_id": 8},
         ]
-        rebind_loop(library.sync, _make_collections_loop(smart=smart))
+        library = make_library(loop=_make_collections_loop(smart=smart))
         library.sync._settings["romm_user_id"] = 7
 
         result = await library.sync.get_collections()
@@ -475,10 +474,10 @@ class TestGetCollectionsOwnerScope:
         assert by_name["TheirSmart"]["is_own"] is False
 
     @pytest.mark.asyncio
-    async def test_virtual_always_own_even_with_known_identity(self, library):
+    async def test_virtual_always_own_even_with_known_identity(self, make_library):
         """Virtual collections have no owner — always is_own=True."""
         franchise = [{"id": 101, "name": "Mario", "rom_count": 1}]
-        rebind_loop(library.sync, _make_collections_loop(virtual=franchise))
+        library = make_library(loop=_make_collections_loop(virtual=franchise))
         library.sync._settings["romm_user_id"] = 7
 
         result = await library.sync.get_collections()
@@ -486,12 +485,12 @@ class TestGetCollectionsOwnerScope:
         assert result["collections"][0]["is_own"] is True
 
     @pytest.mark.asyncio
-    async def test_unknown_identity_leaves_owned_kinds_unestablished(self, library):
+    async def test_unknown_identity_leaves_owned_kinds_unestablished(self, make_library):
         """No stored romm_user_id → standard and smart rows say None, not own; virtual stays own."""
         user = [{"id": 2, "name": "Theirs", "rom_count": 1, "is_favorite": False, "user_id": 8}]
         smart = [{"id": 5, "name": "TheirSmart", "rom_count": 1, "user_id": 8}]
         franchise = [{"id": 101, "name": "Mario", "rom_count": 1}]
-        rebind_loop(library.sync, _make_collections_loop(user=user, smart=smart, virtual=franchise))
+        library = make_library(loop=_make_collections_loop(user=user, smart=smart, virtual=franchise))
         library.sync._settings.pop("romm_user_id", None)
 
         result = await library.sync.get_collections()
@@ -505,10 +504,16 @@ class TestGetCollectionsOwnerScope:
 class TestGetCollectionsInSteamCount:
     """How many of a collection's members the sync's collection filing resolves to a shortcut."""
 
+    @pytest.fixture
+    def library(self, make_library):
+        """The library over a loop whose listings each ``_in_steam_count`` call sets."""
+        self._loop = MagicMock()
+        return make_library(loop=self._loop)
+
     async def _in_steam_count(self, library, rom_ids, *, kind="standard"):
         listing = [{"id": 1, "name": "C", "rom_ids": rom_ids}]
         loop_arg = {"standard": "user", "smart": "smart", "virtual": "virtual"}[kind]
-        rebind_loop(library.sync, _make_collections_loop(**{loop_arg: listing}))
+        self._loop.run_in_executor = _make_collections_loop(**{loop_arg: listing}).run_in_executor
         result = await library.sync.get_collections()
         assert result["success"] is True
         return result["collections"][0]["in_steam_count"]
@@ -555,17 +560,19 @@ class TestGetCollectionsInSteamCount:
         assert await self._in_steam_count(library, [10, 11], kind="virtual") == 1
 
     @pytest.mark.asyncio
-    async def test_a_failed_local_read_lists_every_collection_without_the_count(self, library, monkeypatch, caplog):
+    async def test_a_failed_local_read_lists_every_collection_without_the_count(
+        self, make_library, monkeypatch, caplog
+    ):
         import logging
 
         def _raise():
             raise RuntimeError("database is locked")
 
-        monkeypatch.setattr(library.sync._local_library_reader, "do_read_reachable_rom_ids", _raise)
         user = [{"id": 1, "name": "U", "rom_ids": [10], "owner_username": "alice"}]
         smart = [{"id": 2, "name": "S", "rom_ids": [10]}]
         franchise = [{"id": "fr-1", "name": "F", "rom_ids": [10]}]
-        rebind_loop(library.sync, _make_collections_loop(user, smart, franchise))
+        library = make_library(loop=_make_collections_loop(user, smart, franchise))
+        monkeypatch.setattr(library.sync._local_library_reader, "do_read_reachable_rom_ids", _raise)
 
         with caplog.at_level(logging.WARNING):
             result = await library.sync.get_collections()
@@ -582,10 +589,10 @@ class TestGetCollectionsOwnerUsername:
     """Standard and smart collections forward RomM's ``owner_username``; virtual ones have no owner."""
 
     @pytest.mark.asyncio
-    async def test_standard_and_smart_forward_the_owner_name(self, library):
+    async def test_standard_and_smart_forward_the_owner_name(self, make_library):
         user = [{"id": 1, "name": "U", "rom_count": 1, "owner_username": "alice"}]
         smart = [{"id": 2, "name": "S", "rom_count": 1, "owner_username": "bob"}]
-        rebind_loop(library.sync, _make_collections_loop(user=user, smart=smart))
+        library = make_library(loop=_make_collections_loop(user=user, smart=smart))
 
         result = await library.sync.get_collections()
 
@@ -594,10 +601,10 @@ class TestGetCollectionsOwnerUsername:
         assert by_kind["smart"]["owner_username"] == "bob"
 
     @pytest.mark.asyncio
-    async def test_a_listing_without_the_owner_name_forwards_none(self, library):
+    async def test_a_listing_without_the_owner_name_forwards_none(self, make_library):
         user = [{"id": 1, "name": "U", "rom_count": 1}]
         smart = [{"id": 2, "name": "S", "rom_count": 1}]
-        rebind_loop(library.sync, _make_collections_loop(user=user, smart=smart))
+        library = make_library(loop=_make_collections_loop(user=user, smart=smart))
 
         result = await library.sync.get_collections()
 
@@ -606,9 +613,9 @@ class TestGetCollectionsOwnerUsername:
             assert c["owner_username"] is None
 
     @pytest.mark.asyncio
-    async def test_virtual_collections_carry_no_owner_name(self, library):
+    async def test_virtual_collections_carry_no_owner_name(self, make_library):
         franchise = [{"id": "fr-1", "name": "F", "rom_count": 1, "owner_username": "alice"}]
-        rebind_loop(library.sync, _make_collections_loop(virtual=franchise))
+        library = make_library(loop=_make_collections_loop(virtual=franchise))
 
         result = await library.sync.get_collections()
 
@@ -687,19 +694,19 @@ class TestSaveCollectionSync:
         assert ec["standard"] == {}
         assert ec["virtual"] == {}
 
-    async def test_calls_save_settings(self, library):
+    async def test_calls_save_settings(self, make_library):
         """settings_persister is triggered after updating the setting."""
         recorder = FakeSettingsPersister()
-        library.sync._fetcher._settings_persister = recorder
+        library = make_library(settings_persister=recorder)
 
         await library.sync.save_collection_sync("1", "standard", True)
 
         assert recorder.save_count == 1
 
-    async def test_does_not_call_save_settings_on_invalid_kind(self, library):
+    async def test_does_not_call_save_settings_on_invalid_kind(self, make_library):
         """Invalid kind short-circuits before persistence."""
         recorder = FakeSettingsPersister()
-        library.sync._fetcher._settings_persister = recorder
+        library = make_library(settings_persister=recorder)
         call = library.sync.save_collection_sync("1", "bogus", True)
 
         with pytest.raises(Refused):

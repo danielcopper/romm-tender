@@ -54,7 +54,6 @@ from tests.services.library._helpers import (
     _seed_install,
     _seed_platform,
     _seed_rom_row,
-    _use_fake_romm,
 )
 
 # ── Test helpers ─────────────────────────────────────────────────
@@ -230,8 +229,8 @@ class TestSyncPreview:
     fix for #738)."""
 
     @pytest.mark.asyncio
-    async def test_returns_correct_summary(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_returns_correct_summary(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -273,7 +272,7 @@ class TestSyncPreview:
         ]
 
     @pytest.mark.asyncio
-    async def test_terminal_frame_is_emitted_before_the_snapshot_goes_idle(self, library, fake_romm_api, emit):
+    async def test_terminal_frame_is_emitted_before_the_snapshot_goes_idle(self, make_library, fake_romm_api, emit):
         """The run's ending reaches the panel as an EVENT; what it leaves behind is idle.
 
         Ordering, not merely outcome: the terminal frame is emitted while the run
@@ -284,7 +283,7 @@ class TestSyncPreview:
         preview into a green "Preview ready" over its own progress rows.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -313,8 +312,8 @@ class TestSyncPreview:
         assert status["runId"] == ""
 
     @pytest.mark.asyncio
-    async def test_populates_pending_delta(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_populates_pending_delta(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -331,7 +330,7 @@ class TestSyncPreview:
         assert library.sync._pending_delta.created_at == library.sync._orchestrator._clock.time()
 
     @pytest.mark.asyncio
-    async def test_does_not_write_metadata(self, library, fake_romm_api, emit):
+    async def test_does_not_write_metadata(self, make_library, fake_romm_api, emit):
         """Preview MUST NOT persist ``rom_metadata`` (#738 regression).
 
         The bug: preview wrote metadata as a side-effect, and the per-unit
@@ -343,7 +342,7 @@ class TestSyncPreview:
         reporter's per-unit commit during apply, not at preview time.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -361,7 +360,7 @@ class TestSyncPreview:
             assert uow.rom_metadata.get(1) is None
 
     @pytest.mark.asyncio
-    async def test_excludes_unbound_rows_from_baseline(self, library, fake_romm_api, emit):
+    async def test_excludes_unbound_rows_from_baseline(self, make_library, fake_romm_api, emit):
         """An unbound (NULL ``shortcut_app_id``) row must NOT enter the
         classify baseline, so it cannot inflate ``remove_count`` (R1xR3).
 
@@ -372,7 +371,7 @@ class TestSyncPreview:
         as a removal. The NULL-exclusion guard keeps ``remove_count`` at 0.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -408,8 +407,8 @@ class TestSyncPreview:
         assert "already in progress" in excinfo.value.message
 
     @pytest.mark.asyncio
-    async def test_resets_sync_running_on_completion(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_resets_sync_running_on_completion(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -435,7 +434,6 @@ class TestPreviewCollectionDiff:
     @staticmethod
     def _seed_three_kinds(library, fake_romm_api):
         """Enable a standard, a smart and a franchise collection, one game each."""
-        _use_fake_romm(library, fake_romm_api)
         for rid in (20, 21, 22):
             fake_romm_api.roms[rid] = {
                 "id": rid,
@@ -464,7 +462,8 @@ class TestPreviewCollectionDiff:
         }
 
     @pytest.mark.asyncio
-    async def test_by_label_unchanged_collections_show_no_diff(self, library, fake_romm_api):
+    async def test_by_label_unchanged_collections_show_no_diff(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._seed_three_kinds(library, fake_romm_api)
         library.settings["collection_naming_mode"] = "by_label"
         _seed_completed_run(
@@ -479,7 +478,8 @@ class TestPreviewCollectionDiff:
         assert diff["removed"] == []
 
     @pytest.mark.asyncio
-    async def test_merge_unchanged_collections_show_no_diff(self, library, fake_romm_api):
+    async def test_merge_unchanged_collections_show_no_diff(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._seed_three_kinds(library, fake_romm_api)
         library.settings["collection_naming_mode"] = "merge"
         _seed_completed_run(library, at="2026-01-01T00:00:00", collections=["Favorites", "Filter", "Metroid"])
@@ -491,7 +491,8 @@ class TestPreviewCollectionDiff:
         assert diff["removed"] == []
 
     @pytest.mark.asyncio
-    async def test_by_label_a_real_change_shows_under_the_steam_names(self, library, fake_romm_api):
+    async def test_by_label_a_real_change_shows_under_the_steam_names(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._seed_three_kinds(library, fake_romm_api)
         library.settings["collection_naming_mode"] = "by_label"
         _seed_completed_run(
@@ -505,11 +506,12 @@ class TestPreviewCollectionDiff:
         assert diff["removed"] == ["Gone (Smart)"]
 
     @pytest.mark.asyncio
-    async def test_switching_the_naming_mode_shows_the_renamed_collections(self, library, fake_romm_api):
+    async def test_switching_the_naming_mode_shows_the_renamed_collections(self, make_library, fake_romm_api):
         """A mode switch renames the labelled kinds' Steam collections, so they read as added and removed.
 
         A standard collection's Steam name is the same in both modes and stays out of the diff.
         """
+        library = make_library(romm_api=fake_romm_api)
         self._seed_three_kinds(library, fake_romm_api)
         library.settings["collection_naming_mode"] = "by_label"
         _seed_completed_run(library, at="2026-01-01T00:00:00", collections=["Favorites", "Filter", "Metroid"])
@@ -521,9 +523,9 @@ class TestPreviewCollectionDiff:
         assert diff["removed"] == ["Filter", "Metroid"]
 
     @pytest.mark.asyncio
-    async def test_collections_differing_only_in_case_match_their_one_recorded_name(self, library, fake_romm_api):
+    async def test_collections_differing_only_in_case_match_their_one_recorded_name(self, make_library, fake_romm_api):
         """The reporter merges the two into one Steam collection and records one spelling of it."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         for rid in (20, 21):
             fake_romm_api.roms[rid] = {
                 "id": rid,
@@ -546,9 +548,11 @@ class TestPreviewCollectionDiff:
         assert diff["removed"] == []
 
     @pytest.mark.asyncio
-    async def test_a_platform_name_whose_case_changed_is_no_platform_collection_change(self, library, fake_romm_api):
+    async def test_a_platform_name_whose_case_changed_is_no_platform_collection_change(
+        self, make_library, fake_romm_api
+    ):
         """Steam's collection identity ignores case, so the platform's Steam collection stays the same one."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -579,16 +583,12 @@ class TestPreviewCoverRefreshCount:
     _OLD = "/cover/big.png?ts=2026-01-01 00:00:00"
     _NEW = "/cover/big.png?ts=2026-07-11 12:00:00"
 
-    @staticmethod
-    def _preview_setup(library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
-
     @pytest.mark.asyncio
-    async def test_platform_unit_mismatch_counted_without_downloads_or_writes(self, library, fake_romm_api):
+    async def test_platform_unit_mismatch_counted_without_downloads_or_writes(self, make_library, fake_romm_api):
         # A bound, content-unchanged platform ROM whose server cover changed:
         # the shortcut delta is empty but the cover count is 1 — and the
         # preview stays read-only (no cover download, fingerprint untouched).
-        self._preview_setup(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -616,8 +616,8 @@ class TestPreviewCoverRefreshCount:
             assert uow.roms.get(10).cover_source == self._OLD
 
     @pytest.mark.asyncio
-    async def test_a_cover_set_in_steam_is_not_counted(self, library, fake_romm_api, home):
-        self._preview_setup(library, fake_romm_api)
+    async def test_a_cover_set_in_steam_is_not_counted(self, make_library, fake_romm_api, home):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -638,11 +638,11 @@ class TestPreviewCoverRefreshCount:
         assert result["summary"]["cover_refresh_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_collection_unit_mismatch_is_counted(self, library, fake_romm_api):
+    async def test_collection_unit_mismatch_is_counted(self, make_library, fake_romm_api):
         # The hardware repro was a collection-unit ROM: its platform is NOT
         # enabled, so the ROM only enters the preview union via the enabled
         # collection — the count must still see it.
-        self._preview_setup(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.roms[20] = {
             "id": 20,
             "name": "CGame",
@@ -668,11 +668,11 @@ class TestPreviewCoverRefreshCount:
         assert result["summary"]["changed_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_unchanged_and_null_fingerprints_count_zero(self, library, fake_romm_api):
+    async def test_unchanged_and_null_fingerprints_count_zero(self, make_library, fake_romm_api):
         # An unchanged fingerprint is no work; a NULL fingerprint is the silent
         # adopt path (or the apply path's own download) — neither is user-visible
         # cover work, so the pure no-changes preview keeps its shape.
-        self._preview_setup(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -708,16 +708,12 @@ class TestPreviewRestampPlatformCount:
     and short-circuits exactly as before.
     """
 
-    @staticmethod
-    def _preview_setup(library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
-
     @pytest.mark.asyncio
-    async def test_unstamped_platform_counted_with_empty_delta(self, library, fake_romm_api):
+    async def test_unstamped_platform_counted_with_empty_delta(self, make_library, fake_romm_api):
         # A bound, content-unchanged platform ROM with NO completion stamp: the
         # shortcut delta is empty (0 new / changed / removed) but the platform
         # needs a re-stamp run, so restamp_platform_count is 1.
-        self._preview_setup(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -739,11 +735,11 @@ class TestPreviewRestampPlatformCount:
         assert summary["cover_refresh_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_stamped_platform_not_counted(self, library, fake_romm_api):
+    async def test_stamped_platform_not_counted(self, make_library, fake_romm_api):
         # The same unchanged platform WITH a matching completion stamp: no
         # re-stamp is owed, so the count stays 0 and the "up to date"
         # short-circuit is preserved.
-        self._preview_setup(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -764,10 +760,10 @@ class TestPreviewRestampPlatformCount:
         assert summary["changed_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_counts_only_unstamped_across_mixed_platforms(self, library, fake_romm_api):
+    async def test_counts_only_unstamped_across_mixed_platforms(self, make_library, fake_romm_api):
         # Two enabled platforms, one stamped and one not: only the unstamped one
         # is counted (the count is not a whole-library boolean).
-        self._preview_setup(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -790,12 +786,12 @@ class TestPreviewRestampPlatformCount:
         assert result["summary"]["restamp_platform_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_a_platform_whose_skip_was_revoked_is_counted(self, library, fake_romm_api):
+    async def test_a_platform_whose_skip_was_revoked_is_counted(self, make_library, fake_romm_api):
         # The stamp is still there, but a revoked one authorises no skip, so the
         # platform full-fetches and only an apply can give it a stamp that does.
         # Were it not counted, an empty delta would offer no Apply and the
         # platform would full-fetch on every sync.
-        self._preview_setup(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -844,8 +840,10 @@ class TestPreviewOverASkippedUnit:
         )
 
     @pytest.mark.asyncio
-    async def test_a_launch_command_only_difference_on_a_skipped_platform_is_unchanged(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_a_launch_command_only_difference_on_a_skipped_platform_is_unchanged(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
         # The platform lists no ROMs, so a full fetch would read the game as
         # removed: only the skip keeps it in the preview.
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
@@ -865,11 +863,13 @@ class TestPreviewOverASkippedUnit:
         assert summary["platform_breakdown"] == []
 
     @pytest.mark.asyncio
-    async def test_a_launch_command_only_difference_on_a_skipped_collection_is_unchanged(self, library, fake_romm_api):
+    async def test_a_launch_command_only_difference_on_a_skipped_collection_is_unchanged(
+        self, make_library, fake_romm_api
+    ):
         from domain.collection_sync_state import CollectionSyncState
         from domain.platform_skip import rom_id_checksum
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         # The game's platform is off, so only the collection brings it in.
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[10])
@@ -902,11 +902,13 @@ class TestPreviewOverASkippedUnit:
         assert summary["platform_breakdown"] == []
 
     @pytest.mark.asyncio
-    async def test_a_name_difference_on_a_skipped_platform_is_still_changed(self, library, fake_romm_api, monkeypatch):
+    async def test_a_name_difference_on_a_skipped_platform_is_still_changed(
+        self, make_library, fake_romm_api, monkeypatch
+    ):
         # A skip rebuilds its rows from the database, so their identity cannot
         # drift there today; the fetch is stubbed to show that one which did would
         # still be counted.
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         library.settings["enabled_platforms"] = {"1": True}
         self._installed_game(library, applied_launch_options=self.OLD_CMD)
@@ -930,9 +932,9 @@ class TestPreviewOverASkippedUnit:
         assert [row["changed_count"] for row in summary["platform_breakdown"]] == [1]
 
     @pytest.mark.asyncio
-    async def test_a_launch_command_only_difference_on_a_fetched_platform_is_changed(self, library, fake_romm_api):
+    async def test_a_launch_command_only_difference_on_a_fetched_platform_is_changed(self, make_library, fake_romm_api):
         # No stamp, so the platform is fetched and the apply rewrites the command.
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A", "fs_name": "a.z64"}]
         )
@@ -950,7 +952,7 @@ class TestPreviewOverASkippedUnit:
 
     @pytest.mark.asyncio
     async def test_a_skipped_collection_member_on_a_fetched_platform_is_changed(
-        self, library, fake_romm_api, monkeypatch
+        self, make_library, fake_romm_api, monkeypatch
     ):
         from domain.collection_sync_state import CollectionSyncState
         from domain.platform_skip import rom_id_checksum
@@ -958,7 +960,7 @@ class TestPreviewOverASkippedUnit:
         # The platform has no stamp and is fetched; the collection holding the
         # same game is stamped and skipped. The game belongs to the platform unit,
         # whose apply rewrites the command.
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A", "fs_name": "a.z64"}]
         )
@@ -1172,7 +1174,6 @@ class TestGetPendingPreview:
 
     @staticmethod
     def _preview_setup(library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -1188,7 +1189,7 @@ class TestGetPendingPreview:
         assert library.sync.get_pending_preview() == {"success": True, "preview": None}
 
     @pytest.mark.asyncio
-    async def test_withholds_the_snapshot_while_a_run_is_in_flight(self, library, fake_romm_api):
+    async def test_withholds_the_snapshot_while_a_run_is_in_flight(self, make_library, fake_romm_api):
         """A panel that remounts mid-run must not be handed a card to render over
         the run's own progress rows. The snapshot is withheld, not discarded —
         the frontend's own store guard can be wrong about a live run exactly
@@ -1196,6 +1197,7 @@ class TestGetPendingPreview:
         optimistic running flag while the backend keeps the delta), so the
         backend is the one that has to be right.
         """
+        library = make_library(romm_api=fake_romm_api)
         self._preview_setup(library, fake_romm_api)
         await library.sync.sync_preview()
         box = library.sync._box
@@ -1205,7 +1207,8 @@ class TestGetPendingPreview:
         assert box.pending_delta is not None
 
     @pytest.mark.asyncio
-    async def test_hands_the_snapshot_back_once_the_run_is_over(self, library, fake_romm_api):
+    async def test_hands_the_snapshot_back_once_the_run_is_over(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._preview_setup(library, fake_romm_api)
         fresh = await library.sync.sync_preview()
         box = library.sync._box
@@ -1217,9 +1220,10 @@ class TestGetPendingPreview:
         assert library.sync.get_pending_preview() == {"success": True, "preview": fresh}
 
     @pytest.mark.asyncio
-    async def test_hands_back_the_exact_answer_sync_preview_returned(self, library, fake_romm_api):
+    async def test_hands_back_the_exact_answer_sync_preview_returned(self, make_library, fake_romm_api):
         """The restored card must be what the user was shown — the same payload,
         not a second assembly of it that can drift from the first."""
+        library = make_library(romm_api=fake_romm_api)
         self._preview_setup(library, fake_romm_api)
 
         fresh = await library.sync.sync_preview()
@@ -1229,7 +1233,8 @@ class TestGetPendingPreview:
         assert restored == {"success": True, "preview": fresh}
 
     @pytest.mark.asyncio
-    async def test_answer_carries_the_absolute_expiry_deadline(self, library, fake_romm_api):
+    async def test_answer_carries_the_absolute_expiry_deadline(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._preview_setup(library, fake_romm_api)
         clock = library.sync._orchestrator._clock
 
@@ -1238,10 +1243,11 @@ class TestGetPendingPreview:
         assert fresh["expires_at"] == clock.time() + 1800
 
     @pytest.mark.asyncio
-    async def test_over_age_snapshot_is_dropped_and_answered_as_none(self, library, fake_romm_api):
+    async def test_over_age_snapshot_is_dropped_and_answered_as_none(self, make_library, fake_romm_api):
         """Past the TTL the read answers "nothing pending" AND clears the box —
         the apply refuses the same snapshot, so leaving it staged would only
         offer the user an Apply that cannot succeed."""
+        library = make_library(romm_api=fake_romm_api)
         self._preview_setup(library, fake_romm_api)
         await library.sync.sync_preview()
         assert library.sync._pending_delta is not None
@@ -1251,7 +1257,8 @@ class TestGetPendingPreview:
         assert library.sync._pending_delta is None
 
     @pytest.mark.asyncio
-    async def test_just_under_the_ttl_is_still_handed_back(self, library, fake_romm_api):
+    async def test_just_under_the_ttl_is_still_handed_back(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._preview_setup(library, fake_romm_api)
         fresh = await library.sync.sync_preview()
         library.sync._orchestrator._clock.advance(1799)
@@ -1259,9 +1266,10 @@ class TestGetPendingPreview:
         assert library.sync.get_pending_preview() == {"success": True, "preview": fresh}
 
     @pytest.mark.asyncio
-    async def test_cancelled_preview_leaves_nothing_to_hand_back(self, library, fake_romm_api):
+    async def test_cancelled_preview_leaves_nothing_to_hand_back(self, make_library, fake_romm_api):
         """A cancel landing after the unit loop stages no delta (#1202), so the
         read has nothing to restore — the panel comes back to an idle page."""
+        library = make_library(romm_api=fake_romm_api)
         self._preview_setup(library, fake_romm_api)
         preview = library.sync._preview
         box = library.sync._box
@@ -1542,8 +1550,8 @@ class TestRunKindOnTheWire:
         assert library.sync._box.run_kind is SyncRunKind.APPLY
 
     @pytest.mark.asyncio
-    async def test_every_preview_frame_says_preview_including_the_terminal(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_every_preview_frame_says_preview_including_the_terminal(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -1564,8 +1572,8 @@ class TestRunKindOnTheWire:
         assert frames[-1]["runKind"] == "preview"
 
     @pytest.mark.asyncio
-    async def test_every_apply_frame_says_apply(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_every_apply_frame_says_apply(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -1607,8 +1615,8 @@ class TestRunKindOnTheWire:
         assert frames[-1]["runKind"] == "preview"
 
     @pytest.mark.asyncio
-    async def test_the_per_unit_error_terminal_carries_it(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_the_per_unit_error_terminal_carries_it(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -1629,10 +1637,10 @@ class TestRunKindOnTheWire:
         assert frames[-1]["runKind"] == "apply"
 
     @pytest.mark.asyncio
-    async def test_a_finished_run_leaves_no_kind_behind(self, library, fake_romm_api):
+    async def test_a_finished_run_leaves_no_kind_behind(self, make_library, fake_romm_api):
         """The idle snapshot states no kind, so a later mount reads "not
         established" rather than the previous run's answer."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -1652,8 +1660,8 @@ class TestSyncPreviewErrorHandling:
     """Tests for sync_preview error paths."""
 
     @pytest.mark.asyncio
-    async def test_general_exception_reaches_the_caller(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_general_exception_reaches_the_caller(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         # Cause the platforms listing to blow up — exception bubbles up
         # through build_work_queue into sync_preview exactly like a
         # mid-paginate RomM failure would in production.
@@ -1680,10 +1688,10 @@ class TestSyncPreviewErrorHandling:
     )
     @pytest.mark.asyncio
     async def test_a_failed_collection_listing_fails_the_preview(
-        self, library, fake_romm_api, emit, kind, failing_listing
+        self, make_library, fake_romm_api, emit, kind, failing_listing
     ):
         """A collection listing that fails fails the preview as a failed platform listing does (#2112)."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.settings["enabled_collections"] = {kind: {"7": True}}
@@ -1700,7 +1708,7 @@ class TestSyncPreviewErrorHandling:
         assert library.sync._pending_delta is None
 
     @pytest.mark.asyncio
-    async def test_cancelled_error_refuses_with_cancelled(self, library, fake_romm_api, emit):
+    async def test_cancelled_error_refuses_with_cancelled(self, make_library, fake_romm_api, emit):
         """A cooperative cancel during sync_preview refuses with ``cancelled`` rather
         than letting ``SyncCancelled`` out of the use case (#1035).
 
@@ -1716,7 +1724,7 @@ class TestSyncPreviewErrorHandling:
 
         from domain.sync_state import SyncCancelled
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.list_platforms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
         library.settings["enabled_platforms"] = {"1": True}
@@ -1755,9 +1763,9 @@ class TestSyncPreviewErrorHandling:
     )
     @pytest.mark.asyncio
     async def test_a_failed_preview_discards_the_staged_preview_and_ends_with_an_error_frame(
-        self, library, fake_romm_api, emit, failure
+        self, make_library, fake_romm_api, emit, failure
     ):
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = failure
         library.settings["enabled_platforms"] = {"1": True}
         self._stage_an_earlier_preview(library)
@@ -1774,11 +1782,11 @@ class TestSyncPreviewErrorHandling:
 
     @pytest.mark.asyncio
     async def test_a_cancelled_preview_discards_the_staged_preview_and_ends_with_a_cancelled_frame(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
         from domain.sync_state import SyncCancelled
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
         library.settings["enabled_platforms"] = {"1": True}
         self._stage_an_earlier_preview(library)
@@ -1802,8 +1810,8 @@ class TestBuildWorkQueue:
     """Phase 0 of the per-unit pipeline: enumerate platforms + collections without fetching ROMs."""
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_nothing_enabled(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_returns_empty_when_nothing_enabled(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {}
 
@@ -1811,8 +1819,8 @@ class TestBuildWorkQueue:
         assert units == []
 
     @pytest.mark.asyncio
-    async def test_includes_enabled_platforms(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_includes_enabled_platforms(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 12},
             {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 99},
@@ -1827,8 +1835,8 @@ class TestBuildWorkQueue:
         assert units[0].rom_count == 12
 
     @pytest.mark.asyncio
-    async def test_includes_enabled_collections_after_platforms(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_includes_enabled_collections_after_platforms(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 4}]
         fake_romm_api.collections = [{"id": 7, "name": "Favorites", "rom_count": 3, "is_favorite": True}]
         fake_romm_api.smart_collections = [{"id": 5, "name": "Filter", "rom_count": 2}]
@@ -1856,8 +1864,8 @@ class TestFetchPlatformUnit:
     """Per-unit platform ROM fetch with incremental-skip path."""
 
     @pytest.mark.asyncio
-    async def test_full_fetch_when_no_registry(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_full_fetch_when_no_registry(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -1873,8 +1881,8 @@ class TestFetchPlatformUnit:
         assert roms[0]["platform_name"] == "N64"
 
     @pytest.mark.asyncio
-    async def test_skips_when_registry_matches_count(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_skips_when_registry_matches_count(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         # No ROMs seeded on the fake; the platform's listing reports zero
         # updates after the completion stamp so the incremental-skip path fires.
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
@@ -1887,12 +1895,12 @@ class TestFetchPlatformUnit:
         assert {r["id"] for r in roms} == {10, 11}
 
     @pytest.mark.asyncio
-    async def test_null_group_key_forces_full_fetch_for_backfill(self, library, fake_romm_api):
+    async def test_null_group_key_forces_full_fetch_for_backfill(self, make_library, fake_romm_api):
         # A pre-#1295 registry row (NULL sibling_group_key) must NOT skip even
         # when count matches + zero server updates — the platform is re-fetched so
         # the commit backfills its version metadata. One bound row un-backfilled
         # is enough to force the whole platform's fetch.
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -1912,8 +1920,8 @@ class TestFetchPlatformUnit:
         assert {r["id"] for r in roms} == {10, 11}
 
     @pytest.mark.asyncio
-    async def test_full_fetch_when_count_mismatch(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_full_fetch_when_count_mismatch(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         # roms says 1 ROM but the unit reports 3 → incremental-skip
         # check still says zero updated (no updated_at > last_sync), but
         # count mismatch forces a full fetch.
@@ -1937,8 +1945,8 @@ class TestFetchCollectionUnit:
     """Per-unit collection ROM fetch with cross-unit deduplication."""
 
     @pytest.mark.asyncio
-    async def test_returns_new_roms_and_member_ids(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_returns_new_roms_and_member_ids(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.roms = {
             1: {"id": 1, "platform_id": 1, "platform_name": "N64", "collection_ids": [7]},
             2: {"id": 2, "platform_id": 2, "platform_name": "SNES", "collection_ids": [7]},
@@ -1963,8 +1971,8 @@ class TestFetchCollectionUnit:
         assert synced == {1, 2, 3}
 
     @pytest.mark.asyncio
-    async def test_dedups_against_already_synced(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_dedups_against_already_synced(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.roms = {
             1: {"id": 1, "platform_id": 1, "platform_name": "N64", "virtual_collection_ids": ["9"]},
             2: {"id": 2, "platform_id": 2, "platform_name": "SNES", "virtual_collection_ids": ["9"]},
@@ -1994,8 +2002,8 @@ class TestDoSyncPerUnit:
     """End-to-end orchestration of the per-unit pipeline."""
 
     @pytest.mark.asyncio
-    async def test_empty_queue_terminates_cleanly(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_empty_queue_terminates_cleanly(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         # No platforms enabled → empty work queue.
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {}
@@ -2010,8 +2018,8 @@ class TestDoSyncPerUnit:
         assert plan_events[0][0][1]["total_units"] == 0
 
     @pytest.mark.asyncio
-    async def test_emits_sync_plan_with_queue(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_emits_sync_plan_with_queue(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -2032,13 +2040,13 @@ class TestDoSyncPerUnit:
         assert payload["run_id"] == "run-plan"
 
     @pytest.mark.asyncio
-    async def test_sync_plan_carries_skip_aware_estimate_fields(self, library, fake_romm_api, emit):
+    async def test_sync_plan_carries_skip_aware_estimate_fields(self, make_library, fake_romm_api, emit):
         """#1382: platform units ride predicted_skip / collapsed_count, the raw
         ``total_roms`` stays untouched (backward compat), and the additive
         ``total_estimated_items`` zero-weights predicted skips and prices the
         rest at their collapsed count (raw fallback)."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # N64: skip-eligible — stamp matches the server count, 2 persisted rows
         # in one sibling group with a bound representative → predicted skip,
@@ -2082,7 +2090,7 @@ class TestDoSyncPerUnit:
         assert "bound_count" not in units["Faves"]
 
     @pytest.mark.asyncio
-    async def test_unstamped_zero_delta_platform_restamps_and_records_run(self, library, fake_romm_api, emit):
+    async def test_unstamped_zero_delta_platform_restamps_and_records_run(self, make_library, fake_romm_api, emit):
         """#1416: an unstamped platform with a 0 shortcut delta still runs the apply.
 
         A late-ack recovery leaves the platform complete but unstamped. The next
@@ -2092,7 +2100,7 @@ class TestDoSyncPerUnit:
         stops full-fetching forever and the "interrupted" status heals.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -2132,8 +2140,8 @@ class TestDoSyncPerUnit:
             assert completed.id == "run-restamp"
 
     @pytest.mark.asyncio
-    async def test_processes_each_unit_in_order(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_processes_each_unit_in_order(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
 
         # Live-fetch platforms (no last_sync, empty registry) so both
         # units reach the apply branch and emit ``sync_apply_unit``.
@@ -2172,14 +2180,14 @@ class TestDoSyncPerUnit:
         assert unit_events[1]["unit_index"] == 1
 
     @pytest.mark.asyncio
-    async def test_emitted_unit_carries_run_id(self, library, fake_romm_api, emit):
+    async def test_emitted_unit_carries_run_id(self, make_library, fake_romm_api, emit):
         """Each ``sync_apply_unit`` payload carries the run's ``current_sync_id``.
 
         The frontend keys its once-per-run existing-shortcut scan cache off
         ``run_id``, so every unit emitted within a run must carry the same id.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -2210,7 +2218,7 @@ class TestDoSyncPerUnit:
         assert all(e["run_id"] == "run-abc" for e in unit_events)
 
     @pytest.mark.asyncio
-    async def test_emitted_shortcuts_carry_install_launch_options(self, library, fake_romm_api, emit):
+    async def test_emitted_shortcuts_carry_install_launch_options(self, make_library, fake_romm_api, emit):
         """Installed ROMs get the full launch command; uninstalled ROMs get ``""``.
 
         The orchestrator builds the ``{rom_id: file_path}`` map from
@@ -2218,7 +2226,7 @@ class TestDoSyncPerUnit:
         emitted ``sync_apply_unit`` shortcuts carry per-ROM launch options.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -2248,7 +2256,7 @@ class TestDoSyncPerUnit:
         assert by_rom[11]["launch_options"] == ""
 
     @pytest.mark.asyncio
-    async def test_apply_bakes_emulator_override_into_launch_options(self, library, fake_romm_api, emit):
+    async def test_apply_bakes_emulator_override_into_launch_options(self, make_library, fake_romm_api, emit):
         """A pinned ``emulator_override`` bakes the ``-e`` form; a NULL pin stays plain (R6).
 
         Two installed ROMs on the same platform: rom 10 carries a resolvable
@@ -2256,7 +2264,7 @@ class TestDoSyncPerUnit:
         sync-apply ``core_overrides`` map drives ``build_shortcuts_data`` per-ROM.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
@@ -2295,10 +2303,10 @@ class TestDoSyncPerUnit:
         assert "-e" not in by_rom[11]["launch_options"]
 
     @pytest.mark.asyncio
-    async def test_apply_stale_override_bakes_plain_with_warning(self, library, fake_romm_api, caplog, emit):
+    async def test_apply_stale_override_bakes_plain_with_warning(self, make_library, fake_romm_api, caplog, emit):
         """A stale override LABEL (no longer in available_cores) bakes PLAIN + WARNs (B4)."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         # The options no longer carry the pinned label → label_to_invocation → None.
         library.core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
@@ -2338,7 +2346,7 @@ class TestDoSyncPerUnit:
         assert "no longer resolves" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_skipped_unit_short_circuits_apply(self, library, fake_romm_api, emit):
+    async def test_skipped_unit_short_circuits_apply(self, make_library, fake_romm_api, emit):
         """``skipped=True`` from the fetcher short-circuits the whole apply+commit branch.
 
         For a unit whose registry already matches the server-side ROM
@@ -2349,7 +2357,7 @@ class TestDoSyncPerUnit:
         the final stale-cleanup pass doesn't mistakenly remove them.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # roms matches platform count + zero updates → incremental skip.
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
@@ -2391,7 +2399,7 @@ class TestDoSyncPerUnit:
         assert collection_events[0]["platform_app_ids"] == {"N64": [1010]}
 
     @pytest.mark.asyncio
-    async def test_stale_entries_unbound_but_rows_kept_after_finalize(self, library, fake_romm_api, emit):
+    async def test_stale_entries_unbound_but_rows_kept_after_finalize(self, make_library, fake_romm_api, emit):
         """End-to-end: a stale ROM (disabled platform) is unbound during finalize —
         its ``shortcut_app_id`` is NULLed while the row survives (ADR-0007), not just
         dropped from the frontend via ``sync_stale``.
@@ -2402,7 +2410,7 @@ class TestDoSyncPerUnit:
         bound-shortcut count matches the still-synced ROMs.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # rom_id 10 is the live N64 ROM (synced this run). rom_id 99 is a leftover
         # from a now-disabled platform — present in roms but in no enabled unit.
@@ -2444,7 +2452,7 @@ class TestDoSyncPerUnit:
         assert stats["total_shortcuts"] == 1
 
     @pytest.mark.asyncio
-    async def test_sync_stale_excludes_unbound_roms(self, library, fake_romm_api, emit):
+    async def test_sync_stale_excludes_unbound_roms(self, make_library, fake_romm_api, emit):
         """An already-unbound stale ROM (NULL ``shortcut_app_id``) is excluded
         from the ``sync_stale`` payload — it has no Steam shortcut to remove.
 
@@ -2453,7 +2461,7 @@ class TestDoSyncPerUnit:
         the bound stale ROM appears in ``remove``, each entry carrying its app_id.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_completed_run(library, at="2025-01-01T00:00:00Z")
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
@@ -2481,7 +2489,7 @@ class TestDoSyncPerUnit:
         assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}], "prune_lease_token": "sync_stale:1"}]
 
     @pytest.mark.asyncio
-    async def test_appid_reuse_collision_excluded_from_sync_stale(self, library, fake_romm_api, emit):
+    async def test_appid_reuse_collision_excluded_from_sync_stale(self, make_library, fake_romm_api, emit):
         """A new server-issued rom_id reusing an old appId must NOT be wiped (#1036).
 
         Old row (rom 1, app 5000) survives a server switch / re-import; the new
@@ -2492,7 +2500,7 @@ class TestDoSyncPerUnit:
         (bound this run), so ``sync_stale`` carries NO removal and the live
         shortcut survives."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Old colliding row from before the reassignment: rom 1 bound to app 5000.
         # No completed run is seeded so the platform full-fetches (no incremental
@@ -2534,12 +2542,12 @@ class TestDoSyncPerUnit:
             assert {r.rom_id for r in uow.roms.iter_all()} == {1, 2}
 
     @pytest.mark.asyncio
-    async def test_genuinely_stale_still_removed_alongside_collision(self, library, fake_romm_api, emit):
+    async def test_genuinely_stale_still_removed_alongside_collision(self, make_library, fake_romm_api, emit):
         """A genuinely-stale ROM (its appId NOT bound this run) is still removed,
         even while a colliding appId is excluded — the fix narrows removals, it
         does not disable the stale path (#1036)."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # rom 1 collides (app 5000 re-bound to rom 2 this run); rom 99 is a
         # genuinely-removed ROM on a now-disabled platform (app 9900, not re-bound).
@@ -2572,11 +2580,11 @@ class TestDoSyncPerUnit:
         assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}], "prune_lease_token": "sync_stale:1"}]
 
     @pytest.mark.asyncio
-    async def test_group_emits_one_shortcut_per_sibling_group(self, library, fake_romm_api, emit):
+    async def test_group_emits_one_shortcut_per_sibling_group(self, make_library, fake_romm_api, emit):
         """A platform with a 3-version sibling group emits ONE shortcut for the
         game (ADR-0021); the non-representative dumps are persisted unbound."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -2624,7 +2632,6 @@ class TestDoSyncPerUnit:
     async def _apply_group_and_get_shortcuts(self, library, fake_romm_api, emit, roms):
         """Seed a single-platform sibling group, run one apply unit, return the
         emitted ``sync_apply_unit`` shortcut dicts. Shared by the region tests."""
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=roms)
         library.settings["enabled_platforms"] = {"1": True}
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -2642,10 +2649,11 @@ class TestDoSyncPerUnit:
         return unit_events[0]["shortcuts"]
 
     @pytest.mark.asyncio
-    async def test_region_priority_picks_and_names_representative(self, library, fake_romm_api, emit):
+    async def test_region_priority_picks_and_names_representative(self, make_library, fake_romm_api, emit):
         """No default/installed/bound: region priority binds the USA dump AND
         names the shortcut after it, even though Japan sorts first alphabetically
         (ADR-0021 §3 region leg + canonical naming)."""
+        library = make_library(romm_api=fake_romm_api)
         shortcuts = await self._apply_group_and_get_shortcuts(
             library,
             fake_romm_api,
@@ -2660,10 +2668,11 @@ class TestDoSyncPerUnit:
         assert shortcuts[0]["name"] == "Zelda (USA)"
 
     @pytest.mark.asyncio
-    async def test_preferred_region_setting_threads_into_apply_collapse(self, library, fake_romm_api, emit):
+    async def test_preferred_region_setting_threads_into_apply_collapse(self, make_library, fake_romm_api, emit):
         """Setting ``preferred_region`` re-heads the ranking: with Japan preferred,
         the Japanese dump becomes the representative + shortcut name — proving the
         setting is threaded into the apply collapse call site."""
+        library = make_library(romm_api=fake_romm_api)
         library.settings["preferred_region"] = "Japan"
         shortcuts = await self._apply_group_and_get_shortcuts(
             library,
@@ -2679,11 +2688,11 @@ class TestDoSyncPerUnit:
         assert shortcuts[0]["name"] == "Zelda (JP)"
 
     @pytest.mark.asyncio
-    async def test_preview_new_names_follow_region_canonical(self, library, fake_romm_api, emit):
+    async def test_preview_new_names_follow_region_canonical(self, make_library, fake_romm_api, emit):
         """The preview collapse call site also applies region priority: the new
         game's reported name is the region-canonical (USA) name."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -2703,7 +2712,6 @@ class TestDoSyncPerUnit:
 
     def _seed_rescanned_saturn_game(self, library, fake_romm_api):
         """A bound "Game (USA).zip" (app 5000) RomM keeps without its file, beside the folder a rescan made of it."""
-        _use_fake_romm(library, fake_romm_api)
         _seed_rom_row(
             library,
             1,
@@ -2741,9 +2749,12 @@ class TestDoSyncPerUnit:
         library.settings["enabled_platforms"] = {"1": True}
 
     @pytest.mark.asyncio
-    async def test_a_bound_rom_without_a_file_rebinds_onto_its_rescanned_folder(self, library, fake_romm_api, emit):
+    async def test_a_bound_rom_without_a_file_rebinds_onto_its_rescanned_folder(
+        self, make_library, fake_romm_api, emit
+    ):
         """The shortcut of a ROM RomM holds no file for moves onto the same dump in its
         new shape: one shortcut, keyed by the old row so the appId is reused (#2196)."""
+        library = make_library(romm_api=fake_romm_api)
         self._seed_rescanned_saturn_game(library, fake_romm_api)
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
 
@@ -2767,8 +2778,9 @@ class TestDoSyncPerUnit:
             assert uow.roms.get(2).has_file_on_disk is True
 
     @pytest.mark.asyncio
-    async def test_the_preview_offers_apply_for_a_rebind_alone(self, library, fake_romm_api, emit):
+    async def test_the_preview_offers_apply_for_a_rebind_alone(self, make_library, fake_romm_api, emit):
         """A rebind whose name and launch command stay the same is one changed game."""
+        library = make_library(romm_api=fake_romm_api)
         self._seed_rescanned_saturn_game(library, fake_romm_api)
 
         result = await library.sync.sync_preview()
@@ -2782,7 +2794,6 @@ class TestDoSyncPerUnit:
 
         With *server_usa_id*, RomM also serves the USA dump again under that id.
         """
-        _use_fake_romm(library, fake_romm_api)
         _seed_rom_row(
             library,
             1,
@@ -2812,9 +2823,10 @@ class TestDoSyncPerUnit:
 
     @pytest.mark.asyncio
     async def test_a_vanished_bound_version_keeps_its_binding_beside_live_siblings_under_other_names(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
         """The binding, the appId and the launch command stay; no shortcut is removed (D1)."""
+        library = make_library(romm_api=fake_romm_api)
         self._seed_zelda_whose_bound_usa_dump_is_gone(library, fake_romm_api)
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -2830,8 +2842,11 @@ class TestDoSyncPerUnit:
             assert uow.roms.get(3).shortcut_app_id is None
 
     @pytest.mark.asyncio
-    async def test_a_vanished_bound_version_moves_onto_the_same_dump_under_a_new_id(self, library, fake_romm_api, emit):
+    async def test_a_vanished_bound_version_moves_onto_the_same_dump_under_a_new_id(
+        self, make_library, fake_romm_api, emit
+    ):
         """A re-import reissued the USA dump's id: the shortcut follows it (D2)."""
+        library = make_library(romm_api=fake_romm_api)
         self._seed_zelda_whose_bound_usa_dump_is_gone(library, fake_romm_api, server_usa_id=4)
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -2845,9 +2860,9 @@ class TestDoSyncPerUnit:
             assert uow.roms.get(1).shortcut_app_id is None
 
     @pytest.mark.asyncio
-    async def test_a_game_whose_every_version_is_gone_keeps_its_shortcut(self, library, fake_romm_api, emit):
+    async def test_a_game_whose_every_version_is_gone_keeps_its_shortcut(self, make_library, fake_romm_api, emit):
         """D3: the platform was read whole, and none of the game's versions came back."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_rom_row(library, 1, app_id=5000, platform_slug="n64", name="Zelda (USA)", sibling_group_key="igdb:100:1")
         _seed_rom_row(library, 9, app_id=5009, platform_slug="n64", name="Mario", sibling_group_key="igdb:200:1")
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 9, "name": "Mario"}])
@@ -2868,7 +2883,7 @@ class TestDoSyncPerUnit:
         assert sorted(collections["platform_app_ids"]["N64"]) == [5000, 5009]
 
     @pytest.mark.asyncio
-    async def test_skipped_platform_collection_unbound_sibling_never_rebinds(self, library, fake_romm_api, emit):
+    async def test_skipped_platform_collection_unbound_sibling_never_rebinds(self, make_library, fake_romm_api, emit):
         """#1296 CRITICAL: a skipped platform + a collection holding an UNBOUND
         sibling of a group must NEVER rebind the live installed game.
 
@@ -2883,7 +2898,7 @@ class TestDoSyncPerUnit:
         options and orphan the installed ROM).
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # A 2-version Zelda group on N64: rom 10 bound + installed (active
         # version), rom 11 the unbound JP sibling. Both persisted + backfilled so
@@ -2968,7 +2983,7 @@ class TestDoSyncPerUnit:
 
     @pytest.mark.asyncio
     async def test_disabled_platform_bound_row_kept_while_a_collection_delivers_its_sibling_and_not_rebound(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
         """Disabled-platform variant of #1296: the bound row keeps its shortcut, and
         the collection does NOT rebind it.
@@ -2980,7 +2995,7 @@ class TestDoSyncPerUnit:
         moving it onto rom 11.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # rom 11 (the unbound sibling) lives on N64 + in the collection; rom 10 is
         # a bound DB row on the (now disabled) platform.
@@ -3036,8 +3051,8 @@ class TestDoSyncPerUnit:
             assert uow.roms.get(11).shortcut_app_id is None
 
     @pytest.mark.asyncio
-    async def test_downloads_artwork_when_not_skipped(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_downloads_artwork_when_not_skipped(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
 
         # No prior sync → full fetch path → skipped=False → artwork pipeline runs.
         _seed_platform(
@@ -3058,7 +3073,7 @@ class TestDoSyncPerUnit:
         download_artwork.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cancel_between_units_stops_processing(self, library, fake_romm_api, emit):
+    async def test_cancel_between_units_stops_processing(self, make_library, fake_romm_api, emit):
         """Cancel flipped during the first unit's ack stops the queue mid-flight.
 
         Both platforms take the live-fetch path (no ``last_sync``) so
@@ -3068,7 +3083,7 @@ class TestDoSyncPerUnit:
         ``sync_complete``.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Two live-fetch platforms (no last_sync, empty registry).
         _seed_platform(
@@ -3107,11 +3122,11 @@ class TestDoSyncPerUnit:
         assert complete_events[0].get("cancelled") is True
 
     @pytest.mark.asyncio
-    async def test_normal_completion_emits_finalizing_running(self, library, fake_romm_api, emit):
+    async def test_normal_completion_emits_finalizing_running(self, make_library, fake_romm_api, emit):
         """A normal-completion run emits a non-terminal finalizing snapshot
         after the unit loop, before the reporter's terminal done emit."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -3145,11 +3160,11 @@ class TestDoSyncPerUnit:
         assert done[0]["running"] is False
 
     @pytest.mark.asyncio
-    async def test_cancelled_run_does_not_emit_finalizing(self, library, fake_romm_api, emit):
+    async def test_cancelled_run_does_not_emit_finalizing(self, make_library, fake_romm_api, emit):
         """A cancelled run skips the finalizing snapshot — its terminal emit
         is the reporter's cancelled snapshot."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -3205,8 +3220,8 @@ class TestSyncRunLifecycle:
     """
 
     @pytest.mark.asyncio
-    async def test_clean_run_persists_completed_with_platforms(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_clean_run_persists_completed_with_platforms(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
@@ -3232,12 +3247,12 @@ class TestSyncRunLifecycle:
         assert run.platforms_completed == ["N64"]
 
     @pytest.mark.asyncio
-    async def test_empty_queue_preserves_prior_baseline(self, library, fake_romm_api):
+    async def test_empty_queue_preserves_prior_baseline(self, make_library, fake_romm_api):
         """A zero-unit sync must NOT open or complete a SyncRun — an empty
         completed run would reset the preview baseline (next preview would
         report every platform as 'added'). The prior completed run stays the
         baseline source, matching the JSON era's return-early behaviour."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # A prior real sync completed with N64 synced — this is the baseline
         # the next preview must keep reading.
@@ -3261,8 +3276,8 @@ class TestSyncRunLifecycle:
             assert latest.platforms_completed == ["Nintendo 64"]
 
     @pytest.mark.asyncio
-    async def test_cancelled_run_persists_cancelled(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_cancelled_run_persists_cancelled(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 20, "name": "B"}])
@@ -3288,13 +3303,13 @@ class TestSyncRunLifecycle:
         assert run.error == "Sync cancelled"
 
     @pytest.mark.asyncio
-    async def test_heartbeat_timeout_run_persists_interrupted(self, library, fake_romm_api):
+    async def test_heartbeat_timeout_run_persists_interrupted(self, make_library, fake_romm_api):
         """A heartbeat timeout (the frontend stopped responding, not a user cancel)
         ends the run as ``interrupted`` — the terminal write branches on
         ``box.run_interrupted`` so a crash is never blamed on the user's Cancel."""
         from services.library import sync_orchestrator
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
@@ -3319,8 +3334,8 @@ class TestSyncRunLifecycle:
         assert run.error == sync_orchestrator._SYNC_INTERRUPTED
 
     @pytest.mark.asyncio
-    async def test_exception_in_unit_loop_persists_errored(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_exception_in_unit_loop_persists_errored(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
 
         # build_work_queue succeeds, then list_roms raises during the unit fetch.
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
@@ -3341,7 +3356,7 @@ class TestSyncRunLifecycle:
         assert run.error  # carries a human-readable detail
 
     @pytest.mark.asyncio
-    async def test_terminal_write_failure_after_finalize_persists_errored(self, library, fake_romm_api):
+    async def test_terminal_write_failure_after_finalize_persists_errored(self, make_library, fake_romm_api):
         """A terminal write that raises AFTER finalize must still mark the run
         ``errored`` — not leave it stuck ``running``.
 
@@ -3358,7 +3373,7 @@ class TestSyncRunLifecycle:
         the nulling lives — put a null back before the terminal write and it is
         what keeps this test true.
         """
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
@@ -3732,8 +3747,8 @@ class TestRealOrchestratorLateAckRecovery:
     state is hand-set; the commit is observed through the shared UoW."""
 
     @pytest.mark.asyncio
-    async def test_heartbeat_timeout_then_late_ack_commits_binding(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_heartbeat_timeout_then_late_ack_commits_binding(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -3790,11 +3805,11 @@ class TestRealOrchestratorLateAckRecovery:
         assert box.abandoned_chunk is None
 
     @pytest.mark.asyncio
-    async def test_next_run_start_drops_an_unacked_stash(self, library, fake_romm_api, emit):
+    async def test_next_run_start_drops_an_unacked_stash(self, make_library, fake_romm_api, emit):
         """If the frontend crash never acks, the abandoned chunk is inert until the
         next run's ``try_begin_run`` drops it — bounded lifetime (#1367)."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -3934,9 +3949,9 @@ class TestTheRunIsHeldUntilItEnds:
 
         assert spawned == ["library sync run"]
 
-    async def test_the_error_paths_frame_starts_through_the_helper(self, library, fake_romm_api, monkeypatch):
+    async def test_the_error_paths_frame_starts_through_the_helper(self, make_library, fake_romm_api, monkeypatch):
         spawned = record_spawns(monkeypatch)
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         fake_romm_api.list_roms_side_effect = RuntimeError("boom")
         library.settings["enabled_platforms"] = {"1": True}
@@ -4000,10 +4015,10 @@ class TestDoSyncPerUnitErrors:
     """Tests for error/cancel paths inside _do_sync_per_unit."""
 
     @pytest.mark.asyncio
-    async def test_build_work_queue_cancelled_error_finishes_sync(self, library, fake_romm_api, emit):
+    async def test_build_work_queue_cancelled_error_finishes_sync(self, make_library, fake_romm_api, emit):
         """CancelledError during build_work_queue triggers emit_cancelled + re-raise."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         # ``list_platforms`` runs in the executor; the fake raises
         # CancelledError exactly like an asyncio cancel would propagate.
         fake_romm_api.list_platforms_side_effect = asyncio.CancelledError()
@@ -4023,10 +4038,10 @@ class TestDoSyncPerUnitErrors:
         assert "cancelled" in progress_stages
 
     @pytest.mark.asyncio
-    async def test_build_work_queue_general_exception_emits_error(self, library, fake_romm_api, emit):
+    async def test_build_work_queue_general_exception_emits_error(self, make_library, fake_romm_api, emit):
         """A non-cancellation exception during build_work_queue is logged + surfaced."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = RuntimeError("RomM down")
         library.settings["enabled_platforms"] = {"1": True}
         library.sync._box.sync_state = SyncState.RUNNING
@@ -4044,10 +4059,10 @@ class TestDoSyncPerUnitErrors:
         assert library.sync._sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
-    async def test_outer_exception_handler_emits_error_progress(self, library, fake_romm_api, emit):
+    async def test_outer_exception_handler_emits_error_progress(self, make_library, fake_romm_api, emit):
         """An exception raised after build_work_queue (e.g. during a unit) hits the outer except."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # build_work_queue succeeds (platforms listing returns a unit), then
         # list_roms blows up when the unit is fetched.
@@ -4072,7 +4087,7 @@ class TestDoSyncPerUnitErrors:
         assert library.sync._sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
-    async def test_pagination_failure_does_not_emit_partial_stale_removal(self, library, fake_romm_api, emit):
+    async def test_pagination_failure_does_not_emit_partial_stale_removal(self, make_library, fake_romm_api, emit):
         """#630 safety invariant: a fetch_platform_unit failure must NOT trigger
         the stale-cleanup pass with a partial ROM set.
 
@@ -4087,7 +4102,7 @@ class TestDoSyncPerUnitErrors:
         ``sync_stale`` event is ever emitted.
         """
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         # Mid-pagination failure — the bug scenario from #630.
@@ -4116,7 +4131,7 @@ class TestDoSyncPerUnitErrors:
         assert library.sync._sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
-    async def test_cancel_mid_unit_fetch_finalizes_gracefully(self, library, fake_romm_api):
+    async def test_cancel_mid_unit_fetch_finalizes_gracefully(self, make_library, fake_romm_api):
         """A cooperative cancel delivered MID per-unit fetch recovers all state (#1035).
 
         The cancel arrives while ``apply_unit`` is fetching the unit's
@@ -4138,7 +4153,7 @@ class TestDoSyncPerUnitErrors:
         """
         from domain.sync_state import SyncCancelled
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # One live-fetch platform (no last_sync, empty registry) so the unit
         # takes the real per-unit fetch rather than the incremental-skip path.
@@ -4186,7 +4201,7 @@ class TestDoSyncPerUnitErrors:
         assert library.sync.get_sync_status()["running"] is False
 
     @pytest.mark.asyncio
-    async def test_real_asyncio_cancel_mid_fetch_is_not_swallowed(self, library, fake_romm_api):
+    async def test_real_asyncio_cancel_mid_fetch_is_not_swallowed(self, make_library, fake_romm_api):
         """A REAL ``asyncio.CancelledError`` mid per-unit fetch PROPAGATES (#1035).
 
         This is the key safety guard the SyncCancelled split buys: the
@@ -4205,7 +4220,7 @@ class TestDoSyncPerUnitErrors:
         ``_do_sync_per_unit``. The SyncRun is left ``running`` — it is NOT marked
         cancelled by the cooperative swallow path.
         """
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -4248,7 +4263,7 @@ class TestDoSyncPerUnitErrors:
         assert run.finished_at is None
 
     @pytest.mark.asyncio
-    async def test_real_asyncio_cancel_mid_preview_is_not_swallowed(self, library, fake_romm_api):
+    async def test_real_asyncio_cancel_mid_preview_is_not_swallowed(self, make_library, fake_romm_api):
         """A REAL ``asyncio.CancelledError`` mid sync_preview PROPAGATES (#1035).
 
         Symmetric to the per-unit guard: ``sync_preview``'s
@@ -4258,7 +4273,7 @@ class TestDoSyncPerUnitErrors:
         use case — it is NOT mapped onto the canonical ``cancelled`` failure
         dict. The ``finally`` still restores sync_state to IDLE.
         """
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.list_platforms = MagicMock(side_effect=asyncio.CancelledError("real task cancel"))
         library.settings["enabled_platforms"] = {"1": True}
@@ -4277,10 +4292,10 @@ class TestDoSyncPerUnitErrors:
         assert library.sync._sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
-    async def test_cancelling_state_before_first_unit_skips_processing(self, library, fake_romm_api, emit):
+    async def test_cancelling_state_before_first_unit_skips_processing(self, make_library, fake_romm_api, emit):
         """If state is CANCELLING when the unit loop starts, no units run."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Two units in the queue; CANCELLING gates the loop before either fires.
         fake_romm_api.platforms = [
@@ -4309,10 +4324,10 @@ class TestApplyUnitCollectionAndCancel:
     """Tests for apply_unit branches: collection units + mid-unit cancel."""
 
     @pytest.mark.asyncio
-    async def test_collection_unit_records_membership(self, library, fake_romm_api, emit):
+    async def test_collection_unit_records_membership(self, make_library, fake_romm_api, emit):
         """A collection unit populates collection_memberships with its rom_ids."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Seed a real (non-virtual) collection with two ROMs.
         _seed_collection(
@@ -4385,9 +4400,9 @@ class TestApplyUnitCollectionAndCancel:
         assert membership.virtual_type is None
 
     @pytest.mark.asyncio
-    async def test_cancel_after_fetch_returns_zero_applied(self, library, fake_romm_api):
+    async def test_cancel_after_fetch_returns_zero_applied(self, make_library, fake_romm_api):
         """CANCELLING flipped after fetch_platform_unit → unit returns 0."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Real fetcher will be called for the unit. Wrap list_roms so the
         # post-fetch state is CANCELLING when ``apply_unit`` checks it.
@@ -4423,9 +4438,9 @@ class TestApplyUnitCollectionAndCancel:
         assert applied == 0
 
     @pytest.mark.asyncio
-    async def test_cancel_after_artwork_returns_zero_applied(self, library, fake_romm_api):
+    async def test_cancel_after_artwork_returns_zero_applied(self, make_library, fake_romm_api):
         """CANCELLING flipped after the artwork download → unit returns 0."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Real fetcher runs; artwork download is intercepted to flip state mid-flight.
         _seed_platform(
@@ -4457,12 +4472,12 @@ class TestApplyUnitCollectionAndCancel:
         assert applied == 0
 
     @pytest.mark.asyncio
-    async def test_cancel_after_artwork_still_counts_delta_skips(self, library, fake_romm_api):
+    async def test_cancel_after_artwork_still_counts_delta_skips(self, make_library, fake_romm_api):
         """A mid-unit cancel AFTER the delta is computed returns the delta-skip
         count: those ROMs were verified already-correct in Steam, so they are
         processed — same as a wholesale-skipped unit's ROMs — and the terminal
         frame's "N of M games processed" numerator must not drop them."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # rom 10 is content-unchanged (delta-skipped); rom 11 is brand-new, so
         # the unit reaches the artwork step where the cancel lands.
@@ -4498,11 +4513,11 @@ class TestApplyUnitCollectionAndCancel:
         assert processed == 1, "the delta-skipped ROM is processed; the cancelled apply is not"
 
     @pytest.mark.asyncio
-    async def test_cancel_after_cover_refresh_still_counts_delta_skips(self, library, fake_romm_api):
+    async def test_cancel_after_cover_refresh_still_counts_delta_skips(self, make_library, fake_romm_api):
         """Same invariant at the sibling guard: a cancel landing during the
         cover-refresh pass — after the delta is computed, before the artwork
         download — still returns the delta-skip count."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # rom 10 is content-unchanged (delta-skipped); the cancel lands inside
         # the cover-refresh pass, so the guard right after it fires.
@@ -4535,14 +4550,14 @@ class TestApplyUnitCollectionAndCancel:
         assert processed == 1, "the delta-skipped ROM is processed even on a pre-apply cancel"
 
     @pytest.mark.asyncio
-    async def test_user_cancel_clears_pending_and_drops_event(self, library, fake_romm_api):
+    async def test_user_cancel_clears_pending_and_drops_event(self, make_library, fake_romm_api):
         """A user cancel during the wait discards in-flight work: pending_sync
         cleared, unit event nulled, no abandoned-chunk stash.
 
         ``_wait_for_unit_complete`` returns None while the box is already
         CANCELLING (the cancel branch), so the unit's in-flight state is
         intentionally dropped and a stray late ack can't commit it (#1052)."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Live-fetch path so the unit reaches the apply branch where
         # ``_wait_for_unit_complete`` is called.
@@ -4583,7 +4598,7 @@ class TestApplyUnitCollectionAndCancel:
         assert library.sync._box.abandoned_chunk is None
 
     @pytest.mark.asyncio
-    async def test_heartbeat_timeout_retains_pending_and_stashes_roms(self, library, fake_romm_api):
+    async def test_heartbeat_timeout_retains_pending_and_stashes_roms(self, make_library, fake_romm_api):
         """A heartbeat timeout (not a cancel) stashes the abandoned chunk so a
         late ``report_unit_results`` can still commit the delivered bindings.
 
@@ -4593,7 +4608,7 @@ class TestApplyUnitCollectionAndCancel:
         commit to read, and the dispatch identity (``unit_complete_event`` +
         ``active_unit_id`` + ``active_chunk_index``) is cleared. The box flips
         CANCELLING so the outer loop stops (#1052 / #1367)."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -4642,11 +4657,11 @@ class TestPerUnitMetadataStamping:
     """Per-unit metadata stamping folded into the reporter's commit (#738/#784)."""
 
     @pytest.mark.asyncio
-    async def test_acked_roms_threaded_to_commit(self, library, fake_romm_api):
+    async def test_acked_roms_threaded_to_commit(self, make_library, fake_romm_api):
         """The orchestrator threads the acked ROM dicts into ``commit_unit_results``
         so the reporter can stamp ``rom_metadata`` in the same write UoW as the
         ``roms`` upsert (atomic — no separate metadata hop)."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -4701,14 +4716,14 @@ class TestPerUnitMetadataStamping:
         assert meta.genres == ("RPG",)
 
     @pytest.mark.asyncio
-    async def test_skipped_unit_does_not_stamp_metadata(self, library, fake_romm_api):
+    async def test_skipped_unit_does_not_stamp_metadata(self, make_library, fake_romm_api):
         """Incremental-skip platforms must NOT reach ``commit_unit_results``.
 
         The skipped short-circuit returns from ``apply_unit`` before the
         per-unit commit, so no ``rom_metadata`` is written for a skipped unit
         (populated metadata from prior real fetches is preserved, #738).
         """
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # roms matches platform rom_count + zero updates → incremental skip.
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
@@ -4741,11 +4756,11 @@ class TestPerUnitMetadataStamping:
             assert uow.rom_metadata.get(10) is None
 
     @pytest.mark.asyncio
-    async def test_all_fetched_roms_threaded_ack_subset_binds(self, library, fake_romm_api):
+    async def test_all_fetched_roms_threaded_ack_subset_binds(self, make_library, fake_romm_api):
         """Group-aware persist (ADR-0021): the WHOLE unit fetch is threaded into
         ``commit_unit_results`` (every sibling gets an identity row), while the
         frontend ack — a subset — decides which representatives bind."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -4808,10 +4823,10 @@ class TestPlatformCompletionStamp:
     """
 
     @pytest.mark.asyncio
-    async def test_stamp_written_after_final_platform_chunk(self, library, fake_romm_api):
+    async def test_stamp_written_after_final_platform_chunk(self, make_library, fake_romm_api):
         """A platform unit that completes stamps ``platform_sync_state`` with the
         server ROM count and the clock's completion timestamp (real commit)."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -4849,12 +4864,12 @@ class TestPlatformCompletionStamp:
         assert stamp.completed_at == "2026-01-01T00:00:00+00:00"
 
     @pytest.mark.asyncio
-    async def test_stamp_only_on_final_chunk_carries_unit_rom_count(self, library, fake_romm_api, monkeypatch):
+    async def test_stamp_only_on_final_chunk_carries_unit_rom_count(self, make_library, fake_romm_api, monkeypatch):
         """Across a multi-chunk platform, only the FINAL chunk's commit carries the
         stamp, and it records the unit's whole ``rom_count`` (not the chunk size)."""
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -4897,12 +4912,12 @@ class TestPlatformCompletionStamp:
         assert stamps[2].rom_count == 5
 
     @pytest.mark.asyncio
-    async def test_no_stamp_on_user_cancel_mid_unit(self, library, fake_romm_api, monkeypatch):
+    async def test_no_stamp_on_user_cancel_mid_unit(self, make_library, fake_romm_api, monkeypatch):
         """A user cancel before a platform's last chunk leaves NO stamp — the platform
         is only partially applied, so the next run must re-fetch it."""
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -4941,10 +4956,10 @@ class TestPlatformCompletionStamp:
             assert uow.platform_sync_state.get("n64") is None
 
     @pytest.mark.asyncio
-    async def test_no_stamp_on_heartbeat_timeout(self, library, fake_romm_api):
+    async def test_no_stamp_on_heartbeat_timeout(self, make_library, fake_romm_api):
         """A heartbeat timeout (wait returns None while NOT cancelling) abandons the
         chunk without committing it — no stamp, even on a single-chunk platform."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -4977,10 +4992,10 @@ class TestPlatformCompletionStamp:
             assert uow.platform_sync_state.get("n64") is None
 
     @pytest.mark.asyncio
-    async def test_no_stamp_for_collection_unit(self, library, fake_romm_api):
+    async def test_no_stamp_for_collection_unit(self, make_library, fake_romm_api):
         """A collection unit never carries a platform stamp — every chunk's commit
         carries ``platform_stamp=None``; its own stamp is the collection stamp."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -5024,7 +5039,7 @@ class TestPlatformCompletionStamp:
         assert all(s is None for s in stamps)
 
     @pytest.mark.asyncio
-    async def test_platform_threads_one_generation_through_every_chunk(self, library, fake_romm_api, monkeypatch):
+    async def test_platform_threads_one_generation_through_every_chunk(self, make_library, fake_romm_api, monkeypatch):
         """Every chunk of a platform unit carries the SAME generation, and the final
         chunk's stamp records that same value (#1504).
 
@@ -5034,7 +5049,7 @@ class TestPlatformCompletionStamp:
         """
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -5080,11 +5095,11 @@ class TestPlatformCompletionStamp:
         assert final_stamp.fetch_id == "run-abc"
 
     @pytest.mark.asyncio
-    async def test_collection_unit_writes_no_generation(self, library, fake_romm_api):
+    async def test_collection_unit_writes_no_generation(self, make_library, fake_romm_api):
         """A collection spans platforms, so its commits pass no generation — marking
         a foreign platform's row would drop it from that platform's counted rows
         and suppress that platform's skip (#1504)."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -5133,7 +5148,9 @@ class TestPlatformCompletionStamp:
         assert routes == ["collection"] * len(seen)
 
     @pytest.mark.asyncio
-    async def test_apply_start_clears_preexisting_stamp_on_cancel_mid_unit(self, library, fake_romm_api, monkeypatch):
+    async def test_apply_start_clears_preexisting_stamp_on_cancel_mid_unit(
+        self, make_library, fake_romm_api, monkeypatch
+    ):
         """A pre-existing (stale) stamp is cleared when the apply begins, so a cancel
         before the final chunk leaves NO stamp — the #1025 silent-gap regression.
 
@@ -5143,7 +5160,7 @@ class TestPlatformCompletionStamp:
         """
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -5184,11 +5201,11 @@ class TestPlatformCompletionStamp:
             assert uow.platform_sync_state.get("n64") is None
 
     @pytest.mark.asyncio
-    async def test_apply_start_clears_preexisting_stamp_on_heartbeat_timeout(self, library, fake_romm_api):
+    async def test_apply_start_clears_preexisting_stamp_on_heartbeat_timeout(self, make_library, fake_romm_api):
         """A heartbeat timeout abandons the chunk without committing it, and its late-ack
         commit (unreachable today, #1367) carries no stamp — but the apply-start clear
         already removed the pre-existing stamp, so none survives the interruption."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -5222,10 +5239,10 @@ class TestPlatformCompletionStamp:
             assert uow.platform_sync_state.get("n64") is None
 
     @pytest.mark.asyncio
-    async def test_completing_reapply_refreshes_stale_stamp(self, library, fake_romm_api):
+    async def test_completing_reapply_refreshes_stale_stamp(self, make_library, fake_romm_api):
         """A platform that re-applies to completion replaces a stale stamp with a fresh
         one (current server count + the injected completion clock), not the old values."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -5263,10 +5280,10 @@ class TestPlatformCompletionStamp:
         assert stamp.rom_count == 2  # current server count, not the stale 99
 
     @pytest.mark.asyncio
-    async def test_skipped_platform_keeps_its_stamp(self, library, fake_romm_api):
+    async def test_skipped_platform_keeps_its_stamp(self, make_library, fake_romm_api):
         """An incremental-skipped platform returns before the apply-start clear, so its
         completion stamp is preserved untouched (the skip is what the stamp exists for)."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Stamp + one matching bound row + unchanged server → the fetch incremental-skips.
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=1)
@@ -5299,10 +5316,10 @@ class TestPlatformCompletionStamp:
         assert stamp.completed_at == "2025-01-01T00:00:00"  # untouched
 
     @pytest.mark.asyncio
-    async def test_fetch_failure_before_chunk_loop_keeps_stamp(self, library, fake_romm_api):
+    async def test_fetch_failure_before_chunk_loop_keeps_stamp(self, make_library, fake_romm_api):
         """A fetch that raises before the chunk loop is not an apply start, so the old
         stamp is preserved (fetch failure ≠ apply started)."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform_stamp(library, "n64", at="2020-01-01T00:00:00+00:00", rom_count=5)
 
         async def boom(*_args, **_kwargs):
@@ -5343,8 +5360,8 @@ class TestCollectionTurnedOffAndBackOn:
     """
 
     @pytest.mark.asyncio
-    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
         )
@@ -5394,9 +5411,9 @@ class TestCollectionTurnedOffAndBackOn:
 
     @pytest.mark.asyncio
     async def test_a_collection_the_run_processed_keeps_its_stamp_when_a_game_it_does_not_hold_is_unbound(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -5442,9 +5459,9 @@ class TestCollectionTurnedOffAndBackOn:
 
     @pytest.mark.asyncio
     async def test_a_collection_the_run_full_fetched_keeps_its_fresh_stamp_when_a_game_it_does_not_hold_is_unbound(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -5502,10 +5519,10 @@ class TestFailedCollectionListing:
 
     @pytest.mark.parametrize("kind", ["standard", "smart", "virtual"])
     @pytest.mark.asyncio
-    async def test_the_run_fails_and_leaves_the_collection_as_it_was(self, library, fake_romm_api, emit, kind):
+    async def test_the_run_fails_and_leaves_the_collection_as_it_was(self, make_library, fake_romm_api, emit, kind):
         from lib.errors import RommConnectionError
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
         )
@@ -5588,13 +5605,13 @@ class TestFailedCollectionListing:
         ],
     )
     @pytest.mark.asyncio
-    async def test_a_listing_that_answers_with_something_but_a_list_fails_the_run(self, library, emit, kind, path):
+    async def test_a_listing_that_answers_with_something_but_a_list_fails_the_run(self, make_library, emit, kind, path):
         from adapters.romm.romm_api import RommApiAdapter
 
         answers = {"/api/platforms": [], path: {"detail": "not a list"}}
         client = MagicMock()
         client.request.side_effect = lambda requested: answers.get(requested, [])
-        library.sync._fetcher._romm_api = RommApiAdapter(client)
+        library = make_library(romm_api=RommApiAdapter(client))
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {kind: {"7": True}}
         box = library.sync._box
@@ -5621,10 +5638,10 @@ class TestPlatformListingThatIsNotAList:
     """
 
     @pytest.mark.asyncio
-    async def test_the_run_fails_and_leaves_every_binding_as_it_was(self, library, fake_romm_api, emit):
+    async def test_the_run_fails_and_leaves_every_binding_as_it_was(self, make_library, fake_romm_api, emit):
         from adapters.romm.romm_api import RommApiAdapter
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
         )
@@ -5691,7 +5708,6 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
     @staticmethod
     async def _stop_after_applying_n64(library, fake_romm_api):
         """Run 1: apply N64 in full, whose fetch no longer returns the bound V, then cancel inside GBA."""
-        _use_fake_romm(library, fake_romm_api)
 
         # RomM serves A and B; V (rom 3) was deleted since the last completed fetch.
         _seed_platform(
@@ -5743,8 +5759,9 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
 
     @pytest.mark.asyncio
     async def test_next_completed_run_skips_the_platform_and_keeps_the_vanished_version(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._stop_after_applying_n64(library, fake_romm_api)
         box = library.sync._box
 
@@ -5765,8 +5782,9 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
             assert uow.roms.get(1).shortcut_app_id == 5001
 
     @pytest.mark.asyncio
-    async def test_preview_after_the_stop_skips_the_platform_and_counts_no_removal(self, library, fake_romm_api):
+    async def test_preview_after_the_stop_skips_the_platform_and_counts_no_removal(self, make_library, fake_romm_api):
         """The preview skips N64 too, and a version gone from it is no removal."""
+        library = make_library(romm_api=fake_romm_api)
         await self._stop_after_applying_n64(library, fake_romm_api)
         fake_romm_api.call_log.clear()
 
@@ -5789,7 +5807,6 @@ class TestOnlyAFreshStampRestoresTheSkip:
 
     @staticmethod
     def _seed_n64(library, fake_romm_api, *, roms):
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -5826,8 +5843,9 @@ class TestOnlyAFreshStampRestoresTheSkip:
 
     @pytest.mark.asyncio
     async def test_a_hidden_rom_with_a_shortcut_is_fetched_in_full_once_then_skipped(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
+        library = make_library(romm_api=fake_romm_api)
         from domain.platform_skip import rom_id_checksum
 
         self._seed_n64(library, fake_romm_api, roms=(1, 2))
@@ -5868,8 +5886,11 @@ class TestOnlyAFreshStampRestoresTheSkip:
         assert not self._walked_n64(fake_romm_api)
 
     @pytest.mark.asyncio
-    async def test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped(self, library, fake_romm_api, emit):
+    async def test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped(
+        self, make_library, fake_romm_api, emit
+    ):
         """Every stamp after the upgrade to migration 031: one full fetch and one Apply, then the skip again."""
+        library = make_library(romm_api=fake_romm_api)
         from domain.platform_sync_state import PlatformSyncState
 
         self._seed_n64(library, fake_romm_api, roms=(1, 2))
@@ -5900,13 +5921,14 @@ class TestOnlyAFreshStampRestoresTheSkip:
         assert preview["summary"]["restamp_platform_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync(self, library, fake_romm_api):
+    async def test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync(self, make_library, fake_romm_api):
         """#743 Done when: the stamp's reference is its fetch's start, not the run's end.
 
         The apply takes half an hour on the clock; RomM records an edit twenty
         minutes in, after N64's fetch started and before its final chunk
         committed. The next sync fetches N64 in full.
         """
+        library = make_library(romm_api=fake_romm_api)
         self._seed_n64(library, fake_romm_api, roms=(1, 2))
         clock = library.sync._orchestrator._clock
 
@@ -5943,7 +5965,6 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
     _WALKS = ("list_roms_by_collection", "list_roms_by_smart_collection")
 
     def _seed_faves(self, library, fake_romm_api, *, kind="standard", listed=(1, 2), members=(1, 2)):
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -5996,8 +6017,11 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
             return uow.collection_sync_state.get("7", kind)
 
     @pytest.mark.asyncio
-    async def test_a_stamp_without_a_fetch_start_is_fetched_in_full_once_then_skipped(self, library, fake_romm_api):
+    async def test_a_stamp_without_a_fetch_start_is_fetched_in_full_once_then_skipped(
+        self, make_library, fake_romm_api
+    ):
         """Every stamp after the upgrade to migration 032: one full fetch and one Apply, then the skip again."""
+        library = make_library(romm_api=fake_romm_api)
         from domain.platform_skip import rom_id_checksum
 
         self._seed_faves(library, fake_romm_api)
@@ -6034,7 +6058,9 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
         assert preview["summary"]["restamp_collection_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync(self, library, fake_romm_api):
+    async def test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync(
+        self, make_library, fake_romm_api
+    ):
         """#2477 Done when: the stamp's reference is its fetch's start, not the run's end.
 
         The apply takes half an hour on the clock; RomM records an edit to a
@@ -6042,6 +6068,7 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
         its final chunk committed. The next sync fetches the collection in full
         and offers Apply for it.
         """
+        library = make_library(romm_api=fake_romm_api)
         self._seed_faves(library, fake_romm_api)
         clock = library.sync._orchestrator._clock
 
@@ -6066,9 +6093,10 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("failure", ["raised", "unreadable"])
     async def test_a_collection_whose_probe_failed_is_fetched_in_full_and_not_counted(
-        self, library, fake_romm_api, failure
+        self, make_library, fake_romm_api, failure
     ):
         """#2477 D3: a fresh stamp settles nothing there, and a failing probe would offer Apply on every sync."""
+        library = make_library(romm_api=fake_romm_api)
         self._seed_faves(library, fake_romm_api)
         await self._apply(library, "run-1")
         assert self._stamp(library).listing_rom_id_checksum is not None
@@ -6085,8 +6113,9 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
         assert preview["summary"]["restamp_collection_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_an_empty_collection_and_one_without_updated_at_are_not_counted(self, library, fake_romm_api):
+    async def test_an_empty_collection_and_one_without_updated_at_are_not_counted(self, make_library, fake_romm_api):
         """The apply writes neither of them a stamp, so a re-stamp Apply would change nothing for them (#2477 D3)."""
+        library = make_library(romm_api=fake_romm_api)
         self._seed_faves(library, fake_romm_api)
         fake_romm_api.collections += [
             {"id": 8, "name": "Empty", "rom_count": 0, "rom_ids": [], "updated_at": self._LISTED_AT},
@@ -6102,9 +6131,10 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
 
     @pytest.mark.asyncio
     async def test_an_own_smart_collection_whose_walk_returns_more_than_its_listing_is_skipped_once_stamped(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
         """Its stamp replays the walk's extra member, while the skip compares only the listing's ids."""
+        library = make_library(romm_api=fake_romm_api)
         self._seed_faves(library, fake_romm_api, kind="smart", listed=(1,), members=(1, 2))
 
         await self._apply(library, "run-1")
@@ -6129,8 +6159,8 @@ class TestPlatformTurnedOffAndBackOn:
     """
 
     @pytest.mark.asyncio
-    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -6187,8 +6217,10 @@ class TestPlatformTurnedOffAndBackOn:
         assert (stamp.fetch_id, stamp.skip_revoked) == ("run-3", False)
 
     @pytest.mark.asyncio
-    async def test_a_platform_the_run_processed_keeps_its_skip_when_romm_drops_a_game(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_a_platform_the_run_processed_keeps_its_skip_when_romm_drops_a_game(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
         )
@@ -6227,10 +6259,10 @@ class TestPlatformTurnedOffAndBackOn:
 
     @pytest.mark.asyncio
     async def test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
         """D15: RomM's platform list is a complete answer, so its games are gone from RomM, not turned off."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
@@ -6270,9 +6302,9 @@ class TestPlatformTurnedOffAndBackOn:
         assert gba.skip_revoked is False
 
     @pytest.mark.asyncio
-    async def test_a_platform_romm_no_longer_lists_keeps_its_steam_collection(self, library, fake_romm_api, emit):
+    async def test_a_platform_romm_no_longer_lists_keeps_its_steam_collection(self, make_library, fake_romm_api, emit):
         """D15 rows stay in their platform's collection under its last known name, as D1's kept rows do."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         # A name that does not fold equal to its slug, so a collection keyed by the slug reads as a change.
         _seed_platform(fake_romm_api, platform_id=1, name="Nintendo 64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
@@ -6308,9 +6340,9 @@ class TestPlatformTurnedOffAndBackOn:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("stop", ["cancelled", "paused", "interrupted"])
-    async def test_a_stopped_run_in_between_keeps_the_collection_s_name(self, library, fake_romm_api, emit, stop):
+    async def test_a_stopped_run_in_between_keeps_the_collection_s_name(self, make_library, fake_romm_api, emit, stop):
         """A stopped run still writes the names cache; the delisted platform's name has to survive it."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
@@ -6353,9 +6385,9 @@ class TestPlatformTurnedOffAndBackOn:
         assert [event["platform_app_ids"] for event in complete] == [{"N64": [5001], "GBA": [5004]}]
 
     @pytest.mark.asyncio
-    async def test_a_platform_read_mid_run_still_counts_as_unlisted(self, library, fake_romm_api, emit):
+    async def test_a_platform_read_mid_run_still_counts_as_unlisted(self, make_library, fake_romm_api, emit):
         """A game page asking for N64's system mid-run keeps ids for it again; the run's own listing still decides."""
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
@@ -6410,7 +6442,6 @@ class TestAVersionReachedOnlyThroughACollection:
 
     @staticmethod
     async def _bind_both_then_drop_21(library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=2,
@@ -6460,7 +6491,8 @@ class TestAVersionReachedOnlyThroughACollection:
         return [event["remove"] for event in stale], binding
 
     @pytest.mark.asyncio
-    async def test_a_404_keeps_the_shortcut(self, library, fake_romm_api, emit):
+    async def test_a_404_keeps_the_shortcut(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_both_then_drop_21(library, fake_romm_api)
         fake_romm_api.get_rom_once_side_effect_by_id[21] = RommNotFoundError("Rom with id 21 not found")
 
@@ -6468,21 +6500,24 @@ class TestAVersionReachedOnlyThroughACollection:
         assert ("get_rom_once", (21,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
 
     @pytest.mark.asyncio
-    async def test_a_rom_romm_still_returns_is_removed(self, library, fake_romm_api, emit):
+    async def test_a_rom_romm_still_returns_is_removed(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_both_then_drop_21(library, fake_romm_api)
 
         assert await self._complete_run_2(library, emit) == ([[{"rom_id": 21, "app_id": 6021}]], None)
 
     @pytest.mark.asyncio
-    async def test_an_answer_that_establishes_nothing_keeps_the_shortcut(self, library, fake_romm_api, emit):
+    async def test_an_answer_that_establishes_nothing_keeps_the_shortcut(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_both_then_drop_21(library, fake_romm_api)
         fake_romm_api.get_rom_once_side_effect_by_id[21] = RommConnectionError("connection refused")
 
         assert await self._complete_run_2(library, emit) == ([[]], 6021)
 
     @pytest.mark.asyncio
-    async def test_a_404_keeps_asking_on_every_later_run(self, library, fake_romm_api, emit):
+    async def test_a_404_keeps_asking_on_every_later_run(self, make_library, fake_romm_api, emit):
         """The run that kept the row rewrote Faves' record without it; the route still says collection."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_both_then_drop_21(library, fake_romm_api)
         fake_romm_api.get_rom_once_side_effect_by_id[21] = RommNotFoundError("Rom with id 21 not found")
         assert await self._complete_run_2(library, emit) == ([[]], 6021)
@@ -6494,8 +6529,9 @@ class TestAVersionReachedOnlyThroughACollection:
         assert ("get_rom_once", (21,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
 
     @pytest.mark.asyncio
-    async def test_a_stopped_run_leaves_the_row_asked_at_the_next_one(self, library, fake_romm_api, emit):
+    async def test_a_stopped_run_leaves_the_row_asked_at_the_next_one(self, make_library, fake_romm_api, emit):
         """A run that committed Faves without 21, then stopped before its stale removal, changes nothing for 21."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_both_then_drop_21(library, fake_romm_api)
         fake_romm_api.get_rom_once_side_effect_by_id[21] = RommNotFoundError("Rom with id 21 not found")
         box = library.sync._box
@@ -6520,8 +6556,11 @@ class TestAVersionReachedOnlyThroughACollection:
         assert ("get_rom_once", (21,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
 
     @pytest.mark.asyncio
-    async def test_a_row_last_delivered_through_its_platform_is_removed_unasked(self, library, fake_romm_api, emit):
+    async def test_a_row_last_delivered_through_its_platform_is_removed_unasked(
+        self, make_library, fake_romm_api, emit
+    ):
         """The contrast: GBA was on when 21 was committed, and is turned off now."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_both_then_drop_21(library, fake_romm_api)
         with library.uow as uow:
             row = uow.roms.get(21)
@@ -6536,8 +6575,9 @@ class TestAVersionReachedOnlyThroughACollection:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("listed", "remove"), [(True, []), (False, [{"rom_id": 21, "app_id": 6021}])])
     async def test_a_row_no_unit_delivered_since_the_route_was_recorded_follows_the_collection_records(
-        self, library, fake_romm_api, emit, listed, remove
+        self, make_library, fake_romm_api, emit, listed, remove
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_both_then_drop_21(library, fake_romm_api)
         _seed_rom_row(library, 21, app_id=6021, platform_slug="gba", name="B")
         fake_romm_api.get_rom_once_side_effect_by_id[21] = RommNotFoundError("Rom with id 21 not found")
@@ -6554,7 +6594,8 @@ class TestAVersionReachedOnlyThroughACollection:
         ("answer", "remove_count"),
         [(RommNotFoundError("Rom with id 21 not found"), 0), (None, 1), (RommConnectionError("refused"), 0)],
     )
-    async def test_the_preview_gives_the_same_answers(self, library, fake_romm_api, answer, remove_count):
+    async def test_the_preview_gives_the_same_answers(self, make_library, fake_romm_api, answer, remove_count):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_both_then_drop_21(library, fake_romm_api)
         if answer is not None:
             fake_romm_api.get_rom_once_side_effect_by_id[21] = answer
@@ -6575,7 +6616,6 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @staticmethod
     async def _bind_20_then_switch_to_22(library, fake_romm_api, *, key_of_22=None):
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=2,
@@ -6638,7 +6678,10 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         return any(name == "list_roms_by_collection" for name, _args, _kwargs in fake_romm_api.call_log)
 
     @pytest.mark.asyncio
-    async def test_a_collection_skipped_as_unchanged_keeps_the_switched_version(self, library, fake_romm_api, emit):
+    async def test_a_collection_skipped_as_unchanged_keeps_the_switched_version(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api)
         fake_romm_api.call_log.clear()
 
@@ -6647,7 +6690,8 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         assert ("get_rom_once", (22,)) not in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
 
     @pytest.mark.asyncio
-    async def test_a_collection_fetched_again_keeps_the_switched_version(self, library, fake_romm_api, emit):
+    async def test_a_collection_fetched_again_keeps_the_switched_version(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api)
         self._fetch_faves_again(fake_romm_api)
         fake_romm_api.call_log.clear()
@@ -6657,7 +6701,8 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("fetched", [False, True], ids=["skipped", "fetched"])
-    async def test_the_preview_counts_no_removal(self, library, fake_romm_api, fetched):
+    async def test_the_preview_counts_no_removal(self, make_library, fake_romm_api, fetched):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api)
         if fetched:
             self._fetch_faves_again(fake_romm_api)
@@ -6677,8 +6722,9 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @pytest.mark.asyncio
     async def test_a_version_the_collection_delivers_for_the_first_time_keeps_the_switched_one(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api)
         self._faves_now_holds_only_23(fake_romm_api)
         with library.uow as uow:
@@ -6688,8 +6734,9 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @pytest.mark.asyncio
     async def test_the_preview_counts_no_removal_for_a_version_delivered_for_the_first_time(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api)
         self._faves_now_holds_only_23(fake_romm_api)
 
@@ -6713,8 +6760,9 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @pytest.mark.asyncio
     async def test_a_switched_version_a_collection_last_delivered_is_asked_and_marked_on_a_404(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api)
         self._record_on_22(library, route="collection")
         fake_romm_api.get_rom_once_side_effect_by_id[22] = RommNotFoundError("Rom with id 22 not found")
@@ -6726,8 +6774,9 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @pytest.mark.asyncio
     async def test_a_switched_version_romm_still_returns_stays_bound_and_has_its_mark_cleared(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api)
         self._record_on_22(library, route="collection", mark="not_found")
 
@@ -6736,8 +6785,9 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @pytest.mark.asyncio
     async def test_the_preview_counts_no_removal_for_a_switched_version_romm_still_returns(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api)
         self._record_on_22(library, route="collection")
 
@@ -6753,9 +6803,10 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @pytest.mark.asyncio
     async def test_a_switched_version_whose_stored_key_a_rematch_left_behind_is_judged_by_that_key(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
         """The gap #2533 D10 accepts: 22 is removed, and the collection mints a new shortcut for 20."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="romm:22:2")
         self._rematch_left_22s_key_behind(fake_romm_api)
         box = library.sync._box
@@ -6772,8 +6823,9 @@ class TestAVersionSwitchedOffTheCollectionsMember:
 
     @pytest.mark.asyncio
     async def test_the_preview_counts_the_same_removal_and_new_shortcut_for_a_key_a_rematch_left_behind(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="romm:22:2")
         self._rematch_left_22s_key_behind(fake_romm_api)
 
@@ -6782,14 +6834,16 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         assert (result["summary"]["remove_count"], result["summary"]["new_count"]) == (1, 1)
 
     @pytest.mark.asyncio
-    async def test_a_bound_version_of_another_game_is_still_removed(self, library, fake_romm_api, emit):
+    async def test_a_bound_version_of_another_game_is_still_removed(self, make_library, fake_romm_api, emit):
         """The contrast: 22 is a game of its own that no unit delivered, on a platform RomM lists."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="igdb:301:2")
 
         assert await self._run_2(library, emit) == ([[{"rom_id": 22, "app_id": 6020}]], None)
 
     @pytest.mark.asyncio
-    async def test_the_preview_counts_the_other_game_s_removal(self, library, fake_romm_api):
+    async def test_the_preview_counts_the_other_game_s_removal(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_then_switch_to_22(library, fake_romm_api, key_of_22="igdb:301:2")
 
         result = await library.sync.sync_preview()
@@ -6824,7 +6878,6 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
 
     @classmethod
     async def _bind_20(cls, library, fake_romm_api, *, gba_synced=False):
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=2,
@@ -6890,8 +6943,9 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
 
     @pytest.mark.asyncio
     async def test_a_version_gone_from_romm_whose_dump_the_collection_lists_under_a_new_id(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
         del fake_romm_api.roms[20]
         fake_romm_api.get_rom_once_side_effect_by_id[20] = RommNotFoundError("Rom with id 20 not found")
@@ -6903,8 +6957,9 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("installed", [False, True], ids=["not-installed", "installed"])
     async def test_the_collection_listing_a_same_stem_copy_of_a_live_version(
-        self, library, fake_romm_api, emit, installed
+        self, make_library, fake_romm_api, emit, installed
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
         if installed:
             with library.uow as uow:
@@ -6926,8 +6981,9 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("same_collection", [True, False], ids=["same-collection", "another-collection"])
     async def test_a_version_without_a_file_beside_a_same_stem_version_with_one(
-        self, library, fake_romm_api, emit, same_collection
+        self, make_library, fake_romm_api, emit, same_collection
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
         fake_romm_api.roms[20]["has_file_on_disk"] = False
         fake_romm_api.roms[21] = self._golf(21, "USA", fs_name="Golf (USA)")
@@ -6942,9 +6998,10 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
 
     @pytest.mark.asyncio
     async def test_a_game_its_platform_delivers_still_moves_onto_the_dump_under_a_new_id(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
         """The contrast: GBA is synced, so its unit holds the whole game and the move is counted and made."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api, gba_synced=True)
         del fake_romm_api.roms[20]
         fake_romm_api.roms[24] = self._golf(24, "USA")
@@ -6953,8 +7010,9 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
 
     @pytest.mark.asyncio
     async def test_a_game_its_platform_delivers_still_moves_off_a_version_without_a_file(
-        self, library, fake_romm_api, emit
+        self, make_library, fake_romm_api, emit
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api, gba_synced=True)
         fake_romm_api.roms[20]["has_file_on_disk"] = False
         fake_romm_api.roms[21] = self._golf(21, "USA", fs_name="Golf (USA)")
@@ -6977,7 +7035,6 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
 
     @classmethod
     async def _bind_20(cls, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=2,
@@ -7061,8 +7118,9 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
     @pytest.mark.asyncio
     @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_a_hidden_member_beside_a_same_stem_copy_on_its_platform(
-        self, library, fake_romm_api, emit, monkeypatch, platform_groups
+        self, make_library, fake_romm_api, emit, monkeypatch, platform_groups
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
         library.settings["collection_create_platform_groups"] = platform_groups
         fake_romm_api.hidden_rom_ids = {20}
@@ -7079,8 +7137,9 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
     @pytest.mark.asyncio
     @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_a_member_gone_from_romm_whose_dump_returned_on_its_platform_under_a_new_id(
-        self, library, fake_romm_api, emit, monkeypatch, platform_groups
+        self, make_library, fake_romm_api, emit, monkeypatch, platform_groups
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
         library.settings["collection_create_platform_groups"] = platform_groups
         del fake_romm_api.roms[20]
@@ -7099,13 +7158,14 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
     @pytest.mark.asyncio
     @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_a_hidden_member_without_a_same_stem_copy_keeps_its_binding(
-        self, library, fake_romm_api, emit, monkeypatch, platform_groups
+        self, make_library, fake_romm_api, emit, monkeypatch, platform_groups
     ):
         """The binding stays, and 20 keeps its place in the preview's union, so both collection diffs are the apply's.
 
         GBA's fetch no longer returns 20, which Faves' skip rebuilds, so GBA's
         collection files it as a kept row whatever the setting.
         """
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
         library.settings["collection_create_platform_groups"] = platform_groups
         fake_romm_api.hidden_rom_ids = {20}
@@ -7162,8 +7222,9 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
     @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
     @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_the_game_stays_in_its_platform_s_collection(
-        self, library, fake_romm_api, emit, monkeypatch, faves_skipped, platform_groups
+        self, make_library, fake_romm_api, emit, monkeypatch, faves_skipped, platform_groups
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
         library.settings["collection_create_platform_groups"] = platform_groups
         fake_romm_api.hidden_rom_ids = {20}
@@ -7180,9 +7241,10 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
 
     @pytest.mark.asyncio
     async def test_a_game_on_a_platform_the_run_does_not_read_stays_out_of_its_collection(
-        self, library, fake_romm_api, emit, monkeypatch
+        self, make_library, fake_romm_api, emit, monkeypatch
     ):
         """With GBA off and platform groups off, the game Faves' skip rebuilds is filed under no platform."""
+        library = make_library(romm_api=fake_romm_api)
         await TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt._bind_20(library, fake_romm_api)
         library.settings["collection_create_platform_groups"] = False
 
@@ -7197,9 +7259,10 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
     @pytest.mark.asyncio
     @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
     async def test_a_stopped_apply_files_it_by_the_setting_alone(
-        self, library, fake_romm_api, emit, monkeypatch, faves_skipped
+        self, make_library, fake_romm_api, emit, monkeypatch, faves_skipped
     ):
         """A stopped run keeps no stale row, so with platform groups off it files neither case under GBA."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
         library.settings["collection_create_platform_groups"] = False
         fake_romm_api.hidden_rom_ids = {20}
@@ -7245,7 +7308,6 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
 
     @classmethod
     async def _bind_20(cls, library, fake_romm_api, *, n64_synced):
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=4,
@@ -7311,9 +7373,10 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
     async def test_a_member_a_collection_rebuilt_is_named_as_the_apply_names_it(
-        self, library, fake_romm_api, emit, monkeypatch, faves_skipped
+        self, make_library, fake_romm_api, emit, monkeypatch, faves_skipped
     ):
         """N64 is synced and 20 hidden in RomM, so N64's fetch no longer returns it while Faves still lists it."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api, n64_synced=True)
         fake_romm_api.hidden_rom_ids = {20}
         if not faves_skipped:
@@ -7331,9 +7394,10 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
     @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
     @pytest.mark.parametrize("name_cached", [False, True], ids=["no-name-cached", "name-cached-then-renamed-in-romm"])
     async def test_a_platform_only_collections_reach_is_named_as_the_apply_names_it(
-        self, library, fake_romm_api, emit, monkeypatch, faves_skipped, name_cached
+        self, make_library, fake_romm_api, emit, monkeypatch, faves_skipped, name_cached
     ):
         """N64's sync is off for the second run; to cache a name, the first run syncs N64, which RomM renames after."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api, n64_synced=name_cached)
         library.settings["enabled_platforms"] = {"4": False}
         if name_cached:
@@ -7364,7 +7428,6 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
 
     @staticmethod
     async def _bind_20_and_30(library, fake_romm_api, *, n64_synced):
-        _use_fake_romm(library, fake_romm_api)
         golf = TestThePreviewNamesAPlatformCollectionAsTheApplyDoes._golf
         _seed_platform(
             fake_romm_api,
@@ -7403,8 +7466,9 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
     @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
     @pytest.mark.parametrize("n64_synced_first", [False, True], ids=["n64-off-in-run-1", "n64-synced-in-run-1"])
     async def test_a_platform_not_synced_is_labelled_as_the_apply_names_it(
-        self, library, fake_romm_api, emit, faves_skipped, n64_synced_first
+        self, make_library, fake_romm_api, emit, faves_skipped, n64_synced_first
     ):
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_and_30(library, fake_romm_api, n64_synced=n64_synced_first)
         library.settings["enabled_platforms"] = {"4": False}
         library.settings["enabled_collections"] = {"standard": {"7": True, "8": False}}
@@ -7435,8 +7499,9 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
         ]
 
     @pytest.mark.asyncio
-    async def test_a_platform_romm_no_longer_lists_is_labelled_with_its_cached_name(self, library, fake_romm_api):
+    async def test_a_platform_romm_no_longer_lists_is_labelled_with_its_cached_name(self, make_library, fake_romm_api):
         """RomM stops listing N64 and both collections are off: its answer removes 20 and 30, and nothing names N64."""
+        library = make_library(romm_api=fake_romm_api)
         await self._bind_20_and_30(library, fake_romm_api, n64_synced=False)
         with library.uow as uow:
             assert json.loads(uow.kv_config.get("platform_names")) == {"n64": "Nintendo 64"}
@@ -7470,7 +7535,7 @@ class TestRegression738CacheCorruption:
     """
 
     @pytest.mark.asyncio
-    async def test_delta_sync_preserves_populated_metadata(self, library, fake_romm_api):
+    async def test_delta_sync_preserves_populated_metadata(self, make_library, fake_romm_api):
         """Populated ``rom_metadata`` rows survive a per-unit delta sync of unchanged platforms.
 
         Scenario: ``uow`` has 3 ROMs on platform N64 with populated
@@ -7481,7 +7546,7 @@ class TestRegression738CacheCorruption:
         """
         from domain.rom_metadata import RomMetadata
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Pre-existing populated metadata rows (the "160 entries" scenario
         # boiled down to 3 ROMs), each backed by a bound Rom row (FK parent).
@@ -7562,8 +7627,8 @@ class TestFetchNarrationInterplay:
     """
 
     @pytest.mark.asyncio
-    async def test_unit_anchor_is_fetching_stage(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_unit_anchor_is_fetching_stage(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -7582,8 +7647,8 @@ class TestFetchNarrationInterplay:
         assert first["totalSteps"] == 1
 
     @pytest.mark.asyncio
-    async def test_no_fetching_frame_after_first_chunk_emit(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_no_fetching_frame_after_first_chunk_emit(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -7625,12 +7690,12 @@ class TestComponentGroupKeyStamping:
     """
 
     @pytest.mark.asyncio
-    async def test_platform_unit_stamps_shared_component_key(self, library, fake_romm_api):
+    async def test_platform_unit_stamps_shared_component_key(self, make_library, fake_romm_api):
         # Two dumps of one game with UNEVEN coverage — rom 10 igdb+ss, rom 11 ss
         # only, RomM listing them as siblings. Both must persist under the SAME
         # component key (igdb), so the ss-only dump does not split into its own
         # group (the #1368 bug). A platform unit is a complete view → recompute.
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -7675,7 +7740,6 @@ class TestDeltaRestrictedApply:
 
     @staticmethod
     def _apply_setup(library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
@@ -7686,10 +7750,11 @@ class TestDeltaRestrictedApply:
         return [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
 
     @pytest.mark.asyncio
-    async def test_unchanged_item_skipped_but_row_committed_and_stamped(self, library, fake_romm_api, emit):
+    async def test_unchanged_item_skipped_but_row_committed_and_stamped(self, make_library, fake_romm_api, emit):
         # rom 10 is content-unchanged (identity + recorded applied "" both match the
         # uninstalled built ""); rom 11 changed its name. Only rom 11 is emitted; both
         # rows still commit and the platform is stamped.
+        library = make_library(romm_api=fake_romm_api)
         self._apply_setup(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -7724,9 +7789,10 @@ class TestDeltaRestrictedApply:
             assert uow.platform_sync_state.get("n64") is not None
 
     @pytest.mark.asyncio
-    async def test_empty_delta_platform_still_stamps_and_commits_all_rows(self, library, fake_romm_api, emit):
+    async def test_empty_delta_platform_still_stamps_and_commits_all_rows(self, make_library, fake_romm_api, emit):
         # Every item content-unchanged → an empty delta. The pipeline still emits one
         # empty chunk (unit_total 0), commits every row, and writes the platform stamp.
+        library = make_library(romm_api=fake_romm_api)
         self._apply_setup(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -7754,9 +7820,10 @@ class TestDeltaRestrictedApply:
             assert uow.platform_sync_state.get("n64") is not None
 
     @pytest.mark.asyncio
-    async def test_null_recorded_applied_forces_reapply(self, library, fake_romm_api, emit):
+    async def test_null_recorded_applied_forces_reapply(self, make_library, fake_romm_api, emit):
         # A bound row whose applied_launch_options is NULL (pre-migration-015 /
         # never recorded) is unknown → always re-applied, even with matching identity.
+        library = make_library(romm_api=fake_romm_api)
         self._apply_setup(library, fake_romm_api)
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A", "fs_name": "a.z64"}]
@@ -7783,7 +7850,6 @@ class TestSessionBudgetGate:
         """Seed a 2-ROM platform and force one shortcut per chunk (2 chunks)."""
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -7805,8 +7871,9 @@ class TestSessionBudgetGate:
 
     @pytest.mark.asyncio
     async def test_pause_at_second_chunk_persists_paused_with_budget_reason(
-        self, library, fake_romm_api, monkeypatch, emit
+        self, make_library, fake_romm_api, monkeypatch, emit
     ):
+        library = make_library(romm_api=fake_romm_api)
         from services.library.session_budget import SYNC_PAUSED_BUDGET
 
         self._arm_two_chunk_apply(library, fake_romm_api, monkeypatch)
@@ -7841,7 +7908,6 @@ class TestSessionBudgetGate:
         """Seed a 1-ROM platform (→ one chunk = the run's first chunk)."""
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "Solo"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -7856,13 +7922,16 @@ class TestSessionBudgetGate:
         library.sync._box.current_sync_id = run_id
 
     @pytest.mark.asyncio
-    async def test_first_chunk_proceeds_when_projection_stays_below_cliff(self, library, fake_romm_api, monkeypatch):
+    async def test_first_chunk_proceeds_when_projection_stays_below_cliff(
+        self, make_library, fake_romm_api, monkeypatch
+    ):
         # One ROM → one chunk = the run's first. It is gated PREDICTIVELY against the
         # CLIFF (2.45 GB), not the ceiling: at 2.4 GB — ABOVE the 2.2 GB ceiling the
         # old absolute first-chunk check would have paused at — this light 1-item
         # chunk projects 2.4025 GB (create + cover), still below the cliff, so it
         # proceeds into the safety margin and the run completes. The gate DID run, so
         # the GC fired.
+        library = make_library(romm_api=fake_romm_api)
         self._arm_single_chunk_apply(library, fake_romm_api, monkeypatch, run_id="run-solo")
         library.renderer_gc.result = True
         library.renderer_rss.rss_kb = 2_400_000  # above the 2.2M ceiling, below the 2.45M cliff
@@ -7876,7 +7945,8 @@ class TestSessionBudgetGate:
         assert library.renderer_gc.calls >= 1  # the predictive-vs-cliff check GCs + measures
 
     @pytest.mark.asyncio
-    async def test_first_chunk_repauses_when_projection_reaches_cliff(self, library, fake_romm_api, monkeypatch):
+    async def test_first_chunk_repauses_when_projection_reaches_cliff(self, make_library, fake_romm_api, monkeypatch):
+        library = make_library(romm_api=fake_romm_api)
         from services.library.session_budget import SYNC_PAUSED_BUDGET
 
         # A resume whose first chunk would be PROJECTED to reach the cliff (no Steam
@@ -7897,7 +7967,8 @@ class TestSessionBudgetGate:
         assert library.renderer_gc.calls >= 1
 
     @pytest.mark.asyncio
-    async def test_fail_open_rss_none_completes_all_chunks(self, library, fake_romm_api, monkeypatch):
+    async def test_fail_open_rss_none_completes_all_chunks(self, make_library, fake_romm_api, monkeypatch):
+        library = make_library(romm_api=fake_romm_api)
         self._arm_two_chunk_apply(library, fake_romm_api, monkeypatch)
         library.renderer_gc.result = False
         library.renderer_rss.rss_kb = None  # measurement unavailable → gate skipped
@@ -7917,8 +7988,8 @@ class TestSessionBudgetGate:
     # ── Preview prognosis + post-run advisory ────────────────────
 
     @pytest.mark.asyncio
-    async def test_preview_flags_pause_likely_when_run_would_cross(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_preview_flags_pause_likely_when_run_would_cross(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.renderer_rss.rss_kb = 2_199_000  # 1 planned create (+2500) crosses 2.2M ceiling
@@ -7929,8 +8000,8 @@ class TestSessionBudgetGate:
         assert result["pause_likely"] is True
 
     @pytest.mark.asyncio
-    async def test_preview_pause_likely_false_with_headroom(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_preview_pause_likely_false_with_headroom(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.renderer_rss.rss_kb = 440_000  # fresh baseline
@@ -7940,8 +8011,8 @@ class TestSessionBudgetGate:
         assert result["pause_likely"] is False
 
     @pytest.mark.asyncio
-    async def test_preview_pause_likely_false_when_rss_unavailable(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_preview_pause_likely_false_when_rss_unavailable(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.renderer_rss.rss_kb = None  # fail-open → no warning
@@ -7951,12 +8022,12 @@ class TestSessionBudgetGate:
         assert result["pause_likely"] is False
 
     @pytest.mark.asyncio
-    async def test_preview_large_unchanged_resync_does_not_warn(self, library, fake_romm_api, emit):
+    async def test_preview_large_unchanged_resync_does_not_warn(self, make_library, fake_romm_api, emit):
         # MEDIUM-1: unchanged items are not priced, so a fully-unchanged re-sync
         # near the ceiling does NOT warn — even though the OLD all-touches formula
         # (which priced unchanged at the create rate) would have crossed here.
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -7986,8 +8057,8 @@ class TestSessionBudgetGate:
         assert result["pause_likely"] is False
 
     @pytest.mark.asyncio
-    async def test_completed_run_recommends_restart_when_rss_high(self, library, fake_romm_api, emit):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_completed_run_recommends_restart_when_rss_high(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -8079,12 +8150,14 @@ class TestSessionBudgetGate:
         assert box.last_run_delta_kb == 1_600_000
 
     @pytest.mark.asyncio
-    async def test_baseline_captured_at_run_start_so_skip_only_run_reports_zero_delta(self, library, fake_romm_api):
+    async def test_baseline_captured_at_run_start_so_skip_only_run_reports_zero_delta(
+        self, make_library, fake_romm_api
+    ):
         # LOW-1: the baseline is captured at RUN START, not at the first chunk gate,
         # so a fully-incremental-skip run (nothing applied, no gate ever fires) still
         # records a baseline and reports an honest ≈ +0.0 GB delta instead of wiping
         # last_run_delta_kb to None on every no-op re-sync.
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         # roms matches platform count + zero updates → the platform incremental-skips.
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
@@ -8125,10 +8198,11 @@ class TestSessionBudgetGate:
 
     @pytest.mark.asyncio
     async def test_sync_complete_emits_after_completed_syncrun_persisted(
-        self, library, fake_romm_api, monkeypatch, emit
+        self, make_library, fake_romm_api, monkeypatch, emit
     ):
         # A clean run: when sync_complete fires, the SyncRun is ALREADY 'completed', so
         # a frontend stats refetch can't read the prior run's status (#39).
+        library = make_library(romm_api=fake_romm_api)
         self._arm_single_chunk_apply(library, fake_romm_api, monkeypatch, run_id="run-order-done")
         library.renderer_rss.rss_kb = 440_000  # low → completes
 
@@ -8137,9 +8211,12 @@ class TestSessionBudgetGate:
         assert status == "completed"
 
     @pytest.mark.asyncio
-    async def test_sync_complete_emits_after_paused_syncrun_persisted(self, library, fake_romm_api, monkeypatch, emit):
+    async def test_sync_complete_emits_after_paused_syncrun_persisted(
+        self, make_library, fake_romm_api, monkeypatch, emit
+    ):
         # A budget-paused run: when sync_complete fires, the SyncRun is ALREADY 'paused'
         # — the emit-last ordering that closes the emit-before-persist race (#39).
+        library = make_library(romm_api=fake_romm_api)
         self._arm_two_chunk_apply(library, fake_romm_api, monkeypatch)  # run id "run-budget"
         library.renderer_gc.result = True
         library.renderer_rss.rss_kb = 2_199_000  # first chunk passes, second pauses
@@ -8159,7 +8236,6 @@ class TestRunProgressCounters:
 
     @staticmethod
     def _arm(library, fake_romm_api, *, run_id="run-progress"):
-        _use_fake_romm(library, fake_romm_api)
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = run_id
@@ -8176,7 +8252,8 @@ class TestRunProgressCounters:
         library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
 
     @pytest.mark.asyncio
-    async def test_committed_chunks_count_toward_done(self, library, fake_romm_api, monkeypatch):
+    async def test_committed_chunks_count_toward_done(self, make_library, fake_romm_api, monkeypatch):
+        library = make_library(romm_api=fake_romm_api)
         from services.library import chunk_dispatcher
 
         # Two brand-new ROMs, one shortcut per chunk → two chunks, both acked and
@@ -8200,7 +8277,8 @@ class TestRunProgressCounters:
         assert box.run_done_items == 2
 
     @pytest.mark.asyncio
-    async def test_emitted_but_uncommitted_chunk_does_not_count(self, library, fake_romm_api, monkeypatch):
+    async def test_emitted_but_uncommitted_chunk_does_not_count(self, make_library, fake_romm_api, monkeypatch):
+        library = make_library(romm_api=fake_romm_api)
         from services.library import chunk_dispatcher
 
         # The first chunk is emitted, then the user cancels mid-wait: the wait gives
@@ -8230,7 +8308,8 @@ class TestRunProgressCounters:
         assert box.run_done_items == 0, "an emitted chunk whose ack never landed is not done"
 
     @pytest.mark.asyncio
-    async def test_paused_run_counts_only_the_committed_chunk(self, library, fake_romm_api, monkeypatch):
+    async def test_paused_run_counts_only_the_committed_chunk(self, make_library, fake_romm_api, monkeypatch):
+        library = make_library(romm_api=fake_romm_api)
         from services.library import chunk_dispatcher
 
         # The session-budget gate pauses at the second chunk's boundary — before its
@@ -8258,9 +8337,10 @@ class TestRunProgressCounters:
         assert box.run_done_items == 1
 
     @pytest.mark.asyncio
-    async def test_delta_skipped_items_count_as_done(self, library, fake_romm_api):
+    async def test_delta_skipped_items_count_as_done(self, make_library, fake_romm_api):
         # rom 10 is content-unchanged (skipped by the delta-restricted apply — its
         # shortcut is already correct), rom 11 changed and is applied. Both are done.
+        library = make_library(romm_api=fake_romm_api)
         self._arm(library, fake_romm_api, run_id="run-delta-progress")
         _seed_platform(
             fake_romm_api,
@@ -8284,11 +8364,12 @@ class TestRunProgressCounters:
         assert box.run_done_items == 2, "1 skipped-unchanged + 1 acked in the single chunk"
 
     @pytest.mark.asyncio
-    async def test_wholesale_skipped_unit_counts_its_roms(self, library, fake_romm_api):
+    async def test_wholesale_skipped_unit_counts_its_roms(self, make_library, fake_romm_api):
         # A platform the incremental gate skips entirely (its stamp matches the
         # server) never reaches the apply — but its games ARE done. This is what a
         # resume sees for every platform it finished before the pause, so without
         # this the resumed run's banner would under-report badly.
+        library = make_library(romm_api=fake_romm_api)
         self._arm(library, fake_romm_api, run_id="run-skip")
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
@@ -8303,8 +8384,9 @@ class TestRunProgressCounters:
         assert box.run_done_items == 1
 
     @pytest.mark.asyncio
-    async def test_counters_reset_at_run_start(self, library, fake_romm_api):
+    async def test_counters_reset_at_run_start(self, make_library, fake_romm_api):
         # A stale run's counters must never leak into the next run's banner.
+        library = make_library(romm_api=fake_romm_api)
         self._arm(library, fake_romm_api, run_id="run-reset")
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "Alpha"}])
         library.settings["enabled_platforms"] = {"1": True}
@@ -8319,8 +8401,9 @@ class TestRunProgressCounters:
         assert box.run_done_items == 1
 
     @pytest.mark.asyncio
-    async def test_the_session_budget_status_surfaces_the_run_progress(self, library, fake_romm_api):
+    async def test_the_session_budget_status_surfaces_the_run_progress(self, make_library, fake_romm_api):
         # The pair rides the existing session-budget payload the QAM already polls.
+        library = make_library(romm_api=fake_romm_api)
         self._arm(library, fake_romm_api, run_id="run-status")
         _seed_platform(
             fake_romm_api,
@@ -8360,15 +8443,15 @@ class TestProcessedGamesNumerator:
 
     @staticmethod
     def _arm(library, fake_romm_api, *, run_id):
-        _use_fake_romm(library, fake_romm_api)
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = run_id
 
     @pytest.mark.asyncio
-    async def test_clean_run_payload_counts_delta_skips(self, library, fake_romm_api, emit):
+    async def test_clean_run_payload_counts_delta_skips(self, make_library, fake_romm_api, emit):
         # rom 10 is content-unchanged (delta-skipped), rom 11 changed and is
         # acked — both are processed, so the sync_complete payload reports 2.
+        library = make_library(romm_api=fake_romm_api)
         self._arm(library, fake_romm_api, run_id="run-numerator-clean")
         _seed_platform(
             fake_romm_api,
@@ -8396,13 +8479,14 @@ class TestProcessedGamesNumerator:
         assert complete[-1]["total_games"] == 2, "1 delta-skipped + 1 applied are both processed"
 
     @pytest.mark.asyncio
-    async def test_resumed_run_interrupt_frame_counts_delta_skips(self, library, fake_romm_api, monkeypatch, emit):
+    async def test_resumed_run_interrupt_frame_counts_delta_skips(self, make_library, fake_romm_api, monkeypatch, emit):
         """The resume-then-interrupt shape: a platform the prior run finished
         wholesale-skips, the partial platform delta-skips its already-applied
         ROM and commits one more chunk, then the heartbeat times out. The
         terminal frame's numerator counts all three kinds of processed ROM
         (and agrees with the paused banner's ``run_done_items``)."""
 
+        library = make_library(romm_api=fake_romm_api)
         from services.library import chunk_dispatcher
 
         self._arm(library, fake_romm_api, run_id="run-resume-interrupt")
@@ -8471,7 +8555,6 @@ class TestOneReadingOfTheSourcesPerRun:
 
     @staticmethod
     def _two_platforms(library, fake_romm_api) -> None:
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -8494,7 +8577,8 @@ class TestOneReadingOfTheSourcesPerRun:
         _seed_rom_row(library, 3, app_id=1003, platform_slug="snes", name="Game C", fs_name="c.sfc")
 
     @pytest.mark.asyncio
-    async def test_a_preview_resolves_every_rom_through_one_reading(self, library, fake_romm_api):
+    async def test_a_preview_resolves_every_rom_through_one_reading(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._two_platforms(library, fake_romm_api)
 
         assert (await library.sync.sync_preview())["success"] is True
@@ -8507,7 +8591,8 @@ class TestOneReadingOfTheSourcesPerRun:
         assert all(handed is reading for handed in library.core_info.default_readings)
 
     @pytest.mark.asyncio
-    async def test_two_previews_take_two_readings(self, library, fake_romm_api):
+    async def test_two_previews_take_two_readings(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._two_platforms(library, fake_romm_api)
 
         await library.sync.sync_preview()
@@ -8519,7 +8604,8 @@ class TestOneReadingOfTheSourcesPerRun:
         assert all(handed is second for handed in library.core_info.readings[3:])
 
     @pytest.mark.asyncio
-    async def test_an_apply_hands_every_unit_the_same_reading(self, library, fake_romm_api):
+    async def test_an_apply_hands_every_unit_the_same_reading(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         self._two_platforms(library, fake_romm_api)
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
@@ -8539,8 +8625,10 @@ class TestTheShortcutArtworkJobAfterARun:
     """Every run's end asks for the shortcut artwork job."""
 
     @pytest.mark.asyncio
-    async def test_an_apply_run_asks_for_it_once_steam_has_had_time_to_write_its_file(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_an_apply_run_asks_for_it_once_steam_has_had_time_to_write_its_file(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {}
         library.sync._box.sync_state = SyncState.RUNNING
@@ -8550,8 +8638,8 @@ class TestTheShortcutArtworkJobAfterARun:
         assert library.artwork_job.requests == [True]
 
     @pytest.mark.asyncio
-    async def test_an_apply_run_that_failed_asks_for_it_too(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_an_apply_run_that_failed_asks_for_it_too(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = RuntimeError("boom")
         library.settings["enabled_platforms"] = {"1": True}
         library.sync._box.sync_state = SyncState.RUNNING
@@ -8562,8 +8650,8 @@ class TestTheShortcutArtworkJobAfterARun:
         assert library.artwork_job.requests == [True]
 
     @pytest.mark.asyncio
-    async def test_a_preview_asks_for_it_without_waiting(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_a_preview_asks_for_it_without_waiting(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {}
 

@@ -29,18 +29,17 @@ import pytest
 from domain.sync_diff import BIND_ROM_ID_KEY
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
-from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row, _use_fake_romm
+from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row
 
 
 class TestDownloadArtworkDelegation:
     """Tests for _download_artwork."""
 
     @pytest.mark.asyncio
-    async def test_delegates_to_artwork_manager(self, library):
+    async def test_delegates_to_artwork_manager(self, make_library):
         """When _artwork is bound, the call is forwarded with progress + cancel hooks."""
         fake_download = AsyncMock(return_value={1: "/path/a.png", 2: "/path/b.png"})
-        library.sync._cover_preparer._artwork = MagicMock()
-        library.sync._cover_preparer._artwork.download_artwork = fake_download
+        library = make_library(artwork=MagicMock(download_artwork=fake_download))
 
         roms = [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
         result = await library.sync._cover_preparer._download_artwork(roms, progress_step=3, progress_total_steps=7)
@@ -58,11 +57,10 @@ class TestDownloadArtworkDelegation:
         assert is_cancelling() is True
 
     @pytest.mark.asyncio
-    async def test_forwards_unit_label_to_artwork(self, library):
+    async def test_forwards_unit_label_to_artwork(self, make_library):
         """The unit display name is threaded through as the cover-progress label."""
         fake_download = AsyncMock(return_value={})
-        library.sync._cover_preparer._artwork = MagicMock()
-        library.sync._cover_preparer._artwork.download_artwork = fake_download
+        library = make_library(artwork=MagicMock(download_artwork=fake_download))
 
         await library.sync._cover_preparer._download_artwork(
             [{"id": 1, "name": "A"}], progress_step=1, progress_total_steps=1, label="Game Boy Advance"
@@ -188,7 +186,6 @@ class TestCoverRefreshPass:
 
     @staticmethod
     def _apply_setup(library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
@@ -205,11 +202,12 @@ class TestCoverRefreshPass:
         return Path(library.artwork._cover_cache_dir) / f"{rom_id}.png"
 
     @pytest.mark.asyncio
-    async def test_changed_cover_on_delta_skipped_rom_rides_first_chunk(self, library, fake_romm_api, emit):
+    async def test_changed_cover_on_delta_skipped_rom_rides_first_chunk(self, make_library, fake_romm_api, emit):
         # rom 10 is content-unchanged (delta-skipped: no shortcut emitted) but its
         # server cover source changed. The pass re-downloads the cache, persists
         # the fresh fingerprint, and the {rom_id, app_id} entry rides chunk 0 so
         # the frontend re-applies the tile.
+        library = make_library(romm_api=fake_romm_api)
         self._apply_setup(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -236,9 +234,10 @@ class TestCoverRefreshPass:
             assert uow.roms.get(10).cover_source == self._NEW
 
     @pytest.mark.asyncio
-    async def test_null_fingerprint_adopts_without_refresh_entry(self, library, fake_romm_api, emit):
+    async def test_null_fingerprint_adopts_without_refresh_entry(self, make_library, fake_romm_api, emit):
         # A pre-#1386 row (fingerprint NULL) with an existing cache file adopts
         # the fresh fingerprint silently: no download, no refresh entry.
+        library = make_library(romm_api=fake_romm_api)
         self._apply_setup(library, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -264,9 +263,10 @@ class TestCoverRefreshPass:
             assert uow.roms.get(10).cover_source == self._NEW
 
     @pytest.mark.asyncio
-    async def test_refreshes_ride_only_the_first_chunk(self, library, fake_romm_api, monkeypatch, emit):
+    async def test_refreshes_ride_only_the_first_chunk(self, make_library, fake_romm_api, monkeypatch, emit):
         # Four changed items at chunk size 2 → two chunks; rom 1's cover also
         # changed. The refresh entry rides chunk 0 only; chunk 1 carries [].
+        library = make_library(romm_api=fake_romm_api)
         from services.library import chunk_dispatcher
 
         self._apply_setup(library, fake_romm_api)
@@ -307,9 +307,10 @@ class TestCoverRefreshPass:
         assert events[1]["cover_refreshes"] == []
 
     @pytest.mark.asyncio
-    async def test_headroom_clips_refresh_list_before_emit(self, library, fake_romm_api, emit):
+    async def test_headroom_clips_refresh_list_before_emit(self, make_library, fake_romm_api, emit):
         # A live RSS reading leaves headroom for exactly ONE transient cover after
         # the (empty) chunk's own cost: two refreshes clip to one — never a pause.
+        library = make_library(romm_api=fake_romm_api)
         from domain.session_budget import CLIFF_KB, COVER_TRANSIENT_KB
 
         self._apply_setup(library, fake_romm_api)
@@ -348,10 +349,9 @@ class TestCoverRefreshPass:
     # ── delegation ───────────────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_refresh_delegates_to_artwork_manager(self, library):
+    async def test_refresh_delegates_to_artwork_manager(self, make_library):
         fake_refresh = AsyncMock(return_value=[{"rom_id": 1, "app_id": 10}])
-        library.sync._cover_preparer._artwork = MagicMock()
-        library.sync._cover_preparer._artwork.refresh_changed_covers = fake_refresh
+        library = make_library(artwork=MagicMock(refresh_changed_covers=fake_refresh))
 
         registry = {"1": {"app_id": 10, "cover_source": "/old.png?ts=1"}}
         result = await library.sync._cover_preparer.refresh_changed_covers(

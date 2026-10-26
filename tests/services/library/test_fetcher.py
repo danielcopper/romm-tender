@@ -24,16 +24,6 @@ from lib.romm_paging import LIST_PAGE_SIZE
 from tests.services.library._helpers import _fetching_frames, _seed_collection_stamp, _seed_persisted_rom
 
 
-def _wire_fake(library, fake_romm_api):
-    """Point the fetcher at the shared ``FakeRommApi``.
-
-    The ``library`` fixture wires the LibraryService with a bare
-    ``MagicMock`` romm_api; tests that drive end-to-end need to swap
-    that for the seeded fake on the fetcher's captured ref.
-    """
-    library.sync._fetcher._romm_api = fake_romm_api
-
-
 class TestCheckCancelling:
     """Tests for _check_cancelling() — pure state check, no API surface."""
 
@@ -57,8 +47,8 @@ class TestFetchEnabledPlatforms:
     """Tests for _fetch_enabled_platforms() — list_platforms + enabled-filter."""
 
     @pytest.mark.asyncio
-    async def test_filters_by_enabled(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_filters_by_enabled(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64"},
             {"id": 2, "name": "SNES", "slug": "snes"},
@@ -74,8 +64,8 @@ class TestFetchEnabledPlatforms:
         assert "SNES" not in names
 
     @pytest.mark.asyncio
-    async def test_all_enabled_when_no_prefs(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_all_enabled_when_no_prefs(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64"},
             {"id": 2, "name": "SNES", "slug": "snes"},
@@ -86,13 +76,13 @@ class TestFetchEnabledPlatforms:
         assert len(result) == 2
 
     @pytest.mark.asyncio
-    async def test_a_listing_that_is_not_a_list_raises(self, library):
+    async def test_a_listing_that_is_not_a_list_raises(self, make_library):
         """A non-list answer raises instead of reading as no platforms, and never as a 404 verdict."""
         from adapters.romm.romm_api import RommApiAdapter
 
         client = MagicMock()
         client.request.return_value = {"error": "bad response"}
-        library.sync._fetcher._romm_api = RommApiAdapter(client)
+        library = make_library(romm_api=RommApiAdapter(client))
 
         with pytest.raises(RommApiError, match=r"^Unexpected response from /api/platforms: dict$") as exc_info:
             await library.sync._fetcher._fetch_enabled_platforms()
@@ -103,9 +93,9 @@ class TestGetPlatformsMaterialization:
     """Tests for get_platforms() — the #1007 empty-map → full-map self-heal."""
 
     @pytest.mark.asyncio
-    async def test_materializes_full_all_true_map_when_empty(self, library, fake_romm_api):
+    async def test_materializes_full_all_true_map_when_empty(self, make_library, fake_romm_api):
         """Empty map + shown platforms → persisted full all-True map (one save)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
             {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
@@ -120,9 +110,9 @@ class TestGetPlatformsMaterialization:
         assert all(p["sync_enabled"] is True for p in result["platforms"])
 
     @pytest.mark.asyncio
-    async def test_excludes_zero_rom_platforms_from_materialized_map(self, library, fake_romm_api):
+    async def test_excludes_zero_rom_platforms_from_materialized_map(self, make_library, fake_romm_api):
         """A rom_count==0 platform is neither shown nor materialized."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
             {"id": 2, "name": "Empty", "slug": "empty", "rom_count": 0},
@@ -135,9 +125,9 @@ class TestGetPlatformsMaterialization:
         assert [p["slug"] for p in result["platforms"]] == ["n64"]
 
     @pytest.mark.asyncio
-    async def test_does_not_re_materialize_when_map_non_empty(self, library, fake_romm_api):
+    async def test_does_not_re_materialize_when_map_non_empty(self, make_library, fake_romm_api):
         """A non-empty stored map is read literally — no re-write, no save."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
             {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
@@ -153,9 +143,9 @@ class TestGetPlatformsMaterialization:
         assert by_id == {1: False, 2: False}
 
     @pytest.mark.asyncio
-    async def test_does_not_persist_when_no_shown_platforms(self, library, fake_romm_api):
+    async def test_does_not_persist_when_no_shown_platforms(self, make_library, fake_romm_api):
         """Empty map + zero shown platforms → sentinel survives, no save."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "Empty", "slug": "empty", "rom_count": 0},
         ]
@@ -169,14 +159,14 @@ class TestGetPlatformsMaterialization:
         assert library.settings_persister.save_count == 0
 
     @pytest.mark.asyncio
-    async def test_one_off_toggle_after_materialization_keeps_others_enabled(self, library, fake_romm_api):
+    async def test_one_off_toggle_after_materialization_keeps_others_enabled(self, make_library, fake_romm_api):
         """#1007 regression: get_platforms → save one OFF → other platforms still sync.
 
         Reproduces the data-loss path end-to-end at the fetcher seam: open the
         Platforms page (materialize), un-toggle exactly ONE platform, then run
         the sync-time filter and assert every OTHER platform survives.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
             {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
@@ -203,9 +193,9 @@ class TestBuildWorkQueueErrorPaths:
     """Tests for build_work_queue() collection-list failure / filter branches."""
 
     @pytest.mark.asyncio
-    async def test_standard_collection_list_failure_fails_the_build(self, library, fake_romm_api):
+    async def test_standard_collection_list_failure_fails_the_build(self, make_library, fake_romm_api):
         """A failed standard listing raises instead of reading as no collections."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {
             "standard": {"1": True},
@@ -224,9 +214,9 @@ class TestBuildWorkQueueErrorPaths:
             await library.sync._fetcher.build_work_queue()
 
     @pytest.mark.asyncio
-    async def test_virtual_collection_list_failure_fails_the_build(self, library, fake_romm_api):
+    async def test_virtual_collection_list_failure_fails_the_build(self, make_library, fake_romm_api):
         """A virtual listing that fails for every type raises instead of reading as no collections."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {
             "standard": {"7": True},
@@ -241,9 +231,9 @@ class TestBuildWorkQueueErrorPaths:
             await library.sync._fetcher.build_work_queue()
 
     @pytest.mark.asyncio
-    async def test_one_virtual_type_failure_fails_the_build(self, library, fake_romm_api):
+    async def test_one_virtual_type_failure_fails_the_build(self, make_library, fake_romm_api):
         """One failing virtual type fails the build even though the other type answers."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {
             "standard": {},
@@ -262,9 +252,9 @@ class TestBuildWorkQueueErrorPaths:
             await library.sync._fetcher.build_work_queue()
 
     @pytest.mark.asyncio
-    async def test_virtual_type_threads_onto_work_units(self, library, fake_romm_api):
+    async def test_virtual_type_threads_onto_work_units(self, make_library, fake_romm_api):
         """Each virtual unit carries its query virtual_type; standard units carry None (#1539)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {
             "standard": {"7": True},
@@ -286,9 +276,9 @@ class TestBuildWorkQueueErrorPaths:
         assert by_name["Faves"].virtual_type is None
 
     @pytest.mark.asyncio
-    async def test_smart_collection_list_failure_fails_the_build(self, library, fake_romm_api):
+    async def test_smart_collection_list_failure_fails_the_build(self, make_library, fake_romm_api):
         """A failed smart listing raises instead of reading as no collections."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {
             "standard": {"7": True},
@@ -311,9 +301,9 @@ class TestBuildWorkQueueErrorPaths:
         ],
     )
     @pytest.mark.asyncio
-    async def test_a_kind_with_no_enabled_id_is_never_listed(self, library, fake_romm_api, kind, listing):
+    async def test_a_kind_with_no_enabled_id_is_never_listed(self, make_library, fake_romm_api, kind, listing):
         """A kind the user syncs nothing of is not listed, so its listing failing cannot fail the build."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         # Every kind has an enabled collection except *kind*, whose only id is off.
         enabled = {"standard": {"7": True}, "smart": {"5": True}, "virtual": {"fr-1": True}}
@@ -335,9 +325,9 @@ class TestBuildWorkQueueErrorPaths:
         assert listing not in {name for name, _args, _kwargs in fake_romm_api.call_log}
 
     @pytest.mark.asyncio
-    async def test_a_virtual_type_with_no_enabled_id_is_never_listed(self, library, fake_romm_api):
+    async def test_a_virtual_type_with_no_enabled_id_is_never_listed(self, make_library, fake_romm_api):
         """Only the virtual types the enabled ids encode are listed, so another type failing cannot fail the build."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         series_id = base64.urlsafe_b64encode(json.dumps({"name": "Halo", "type": "collection"}).encode()).decode()
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {series_id: True}}
@@ -364,9 +354,9 @@ class TestBuildWorkQueueErrorPaths:
     )
     @pytest.mark.asyncio
     async def test_the_log_names_the_listing_that_failed(
-        self, library, fake_romm_api, caplog, kind, failing_listing, label
+        self, make_library, fake_romm_api, caplog, kind, failing_listing, label
     ):
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {kind: {"7": True}}
         setattr(fake_romm_api, failing_listing, RuntimeError("Connection refused"))
@@ -377,9 +367,9 @@ class TestBuildWorkQueueErrorPaths:
         assert f"Failed to list {label} collections for the work queue: Connection refused" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_skips_disabled_collections_in_all_buckets(self, library, fake_romm_api):
+    async def test_skips_disabled_collections_in_all_buckets(self, make_library, fake_romm_api):
         """Collections returned by the API but not in enabled_ids are filtered out."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         library.settings["enabled_platforms"] = {}
         # Only the "1" user / "5" smart / "100" virtual collections are enabled.
         library.settings["enabled_collections"] = {
@@ -415,10 +405,10 @@ class TestGetCollectionsVirtualFailOpen:
     """get_collections is per-virtual-type fail-open (#1538)."""
 
     @pytest.mark.asyncio
-    async def test_one_virtual_type_failure_still_lists_the_other(self, library, fake_romm_api):
+    async def test_one_virtual_type_failure_still_lists_the_other(self, make_library, fake_romm_api):
         """AC1 fail-open at the use case: one failing virtual type never fails
         get_collections nor drops the healthy type's collection."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         # The franchise type is down; the collection type answers normally.
         fake_romm_api.virtual_collections = {
             "collection": [{"id": "vc-1", "name": "Series One", "slug": "s1", "rom_count": 2}],
@@ -441,13 +431,13 @@ class TestGetCollectionsVirtualFailOpen:
 
 class TestGetCollectionsMalformedListing:
     @pytest.mark.asyncio
-    async def test_a_standard_listing_that_is_not_a_list_fails_the_call(self, library):
+    async def test_a_standard_listing_that_is_not_a_list_fails_the_call(self, make_library):
         """The adapter raises on a non-list answer, and the standard listing's failure fails the whole call."""
         from adapters.romm.romm_api import RommApiAdapter
 
         client = MagicMock()
         client.request.side_effect = lambda path: {"detail": "not a list"} if path == "/api/collections" else []
-        library.sync._fetcher._romm_api = RommApiAdapter(client)
+        library = make_library(romm_api=RommApiAdapter(client))
         call = library.sync._fetcher.get_collections()
 
         with pytest.raises(RommApiError) as excinfo:
@@ -463,16 +453,16 @@ class TestPlatformListingThatIsNotAList:
     """The Library page's two platform reads let the adapter's error on a non-list listing reach the caller."""
 
     @staticmethod
-    def _wire_malformed_listing(library):
+    def _library_over_a_malformed_listing(make_library):
         from adapters.romm.romm_api import RommApiAdapter
 
         client = MagicMock()
         client.request.return_value = {"detail": "not a list"}
-        library.sync._fetcher._romm_api = RommApiAdapter(client)
+        return make_library(romm_api=RommApiAdapter(client))
 
     @pytest.mark.asyncio
-    async def test_get_platforms_fails(self, library):
-        self._wire_malformed_listing(library)
+    async def test_get_platforms_fails(self, make_library):
+        library = self._library_over_a_malformed_listing(make_library)
         call = library.sync._fetcher.get_platforms()
 
         with pytest.raises(RommApiError) as excinfo:
@@ -481,8 +471,8 @@ class TestPlatformListingThatIsNotAList:
         assert classify_error(excinfo.value) == ("server_unreachable", "Unexpected response from /api/platforms: dict")
 
     @pytest.mark.asyncio
-    async def test_set_all_platforms_sync_fails_and_writes_nothing(self, library):
-        self._wire_malformed_listing(library)
+    async def test_set_all_platforms_sync_fails_and_writes_nothing(self, make_library):
+        library = self._library_over_a_malformed_listing(make_library)
         library.settings["enabled_platforms"] = {"1": True}
         call = library.sync._fetcher.set_all_platforms_sync(False)
 
@@ -607,9 +597,9 @@ class TestBuildWorkQueueOwnerScope:
         }
 
     @pytest.mark.asyncio
-    async def test_own_scope_drops_foreign_keeps_own_and_virtual(self, library, fake_romm_api):
+    async def test_own_scope_drops_foreign_keeps_own_and_virtual(self, make_library, fake_romm_api):
         """AC2: a foreign user + foreign smart collection are excluded; own + ALL virtual survive."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         self._enable_all(library)
         self._seed(fake_romm_api)
         library.settings["romm_user_id"] = 7
@@ -620,9 +610,9 @@ class TestBuildWorkQueueOwnerScope:
         assert [u.name for u in units] == ["Mine", "MySmart", "Mario"]
 
     @pytest.mark.asyncio
-    async def test_all_scope_keeps_every_collection(self, library, fake_romm_api):
+    async def test_all_scope_keeps_every_collection(self, make_library, fake_romm_api):
         """AC3: the default "all" scope syncs every collection — today's behaviour, byte-for-byte."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         self._enable_all(library)
         self._seed(fake_romm_api)
         library.settings["romm_user_id"] = 7
@@ -633,9 +623,9 @@ class TestBuildWorkQueueOwnerScope:
         assert [u.name for u in units] == ["Mine", "Theirs", "MySmart", "TheirSmart", "Mario"]
 
     @pytest.mark.asyncio
-    async def test_own_scope_unknown_identity_keeps_every_collection(self, library, fake_romm_api):
+    async def test_own_scope_unknown_identity_keeps_every_collection(self, make_library, fake_romm_api):
         """AC4 (load-bearing): "own" with no known identity must drop nothing."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         self._enable_all(library)
         self._seed(fake_romm_api)
         library.settings.pop("romm_user_id", None)
@@ -646,9 +636,9 @@ class TestBuildWorkQueueOwnerScope:
         assert [u.name for u in units] == ["Mine", "Theirs", "MySmart", "TheirSmart", "Mario"]
 
     @pytest.mark.asyncio
-    async def test_own_scope_is_default_all_when_setting_absent(self, library, fake_romm_api):
+    async def test_own_scope_is_default_all_when_setting_absent(self, make_library, fake_romm_api):
         """No collection_owner_scope setting → treated as "all" (nothing dropped)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         self._enable_all(library)
         self._seed(fake_romm_api)
         library.settings["romm_user_id"] = 7
@@ -663,9 +653,9 @@ class TestTryUnitIncrementalSkip:
     """Tests for _try_unit_incremental_skip() exception fallback."""
 
     @pytest.mark.asyncio
-    async def test_falls_back_on_delta_api_exception(self, library, fake_romm_api):
+    async def test_falls_back_on_delta_api_exception(self, make_library, fake_romm_api):
         """Lines 447-451: delta-fetch raises => warning logged, returns None to force full fetch."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.list_roms_newest_first_side_effect = RuntimeError("delta boom")
 
@@ -691,8 +681,8 @@ class TestIncrementalSkipGroupParity:
     rom_count is compared against ALL persisted rows, not just the bound reps."""
 
     @pytest.mark.asyncio
-    async def test_skips_when_all_persisted_rows_match_server_count(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_skips_when_all_persisted_rows_match_server_count(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         # A 3-sibling group: one bound representative + two unbound siblings.
@@ -711,8 +701,8 @@ class TestIncrementalSkipGroupParity:
         assert {r["id"] for r in result} == {10}
 
     @pytest.mark.asyncio
-    async def test_a_skip_keeps_what_the_last_sync_stored_of_whether_romm_has_a_file(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_a_skip_keeps_what_the_last_sync_stored_of_whether_romm_has_a_file(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", has_file_on_disk=False)
@@ -725,8 +715,8 @@ class TestIncrementalSkipGroupParity:
         assert {r["id"]: r["has_file_on_disk"] for r in result} == {10: False, 20: True}
 
     @pytest.mark.asyncio
-    async def test_no_skip_when_server_count_differs_from_persisted(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_no_skip_when_server_count_differs_from_persisted(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_completed_run(uow)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -739,8 +729,8 @@ class TestIncrementalSkipGroupParity:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_null_group_key_forces_full_fetch_backfill(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_null_group_key_forces_full_fetch_backfill(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_completed_run(uow)
         # A legacy bound row whose sibling_group_key was never captured — even
@@ -765,8 +755,8 @@ class TestIncrementalSkipZeroBoundRows:
     """
 
     @pytest.mark.asyncio
-    async def test_no_skip_when_zero_bound_rows(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_no_skip_when_zero_bound_rows(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_completed_run(uow)
         # Rows persist but every shortcut_app_id was cleared by the mass delete;
@@ -782,9 +772,9 @@ class TestIncrementalSkipZeroBoundRows:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_fetch_platform_unit_full_fetches_when_zero_bound_rows(self, library, fake_romm_api):
+    async def test_fetch_platform_unit_full_fetches_when_zero_bound_rows(self, make_library, fake_romm_api):
         """End-to-end: the mass-deleted platform re-paginates its ROMs (skipped=False)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_completed_run(uow)
         _seed_persisted_rom(uow, 10, app_id=None, group_key="igdb:100:1")
@@ -800,9 +790,9 @@ class TestIncrementalSkipZeroBoundRows:
         assert len(unit_roms) == 3
 
     @pytest.mark.asyncio
-    async def test_skips_when_a_bound_row_survives(self, library, fake_romm_api):
+    async def test_skips_when_a_bound_row_survives(self, make_library, fake_romm_api):
         """Guard is scoped to zero bindings: one surviving shortcut still skips."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         # One bound representative survives + two unbound siblings → registry_count > 0.
@@ -872,9 +862,9 @@ class TestIncrementalSkipSupersededRows:
     """
 
     @pytest.mark.asyncio
-    async def test_platform_with_superseded_rows_skips_again(self, library, fake_romm_api):
+    async def test_platform_with_superseded_rows_skips_again(self, make_library, fake_romm_api):
         """The headline case: 2 server ROMs, 4 local rows (2 superseded) → skip."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
         # The two rows the last complete fetch returned.
@@ -891,10 +881,10 @@ class TestIncrementalSkipSupersededRows:
         assert {r["id"] for r in result} == {25135, 25136}
 
     @pytest.mark.asyncio
-    async def test_superseded_rows_are_not_deleted_by_the_skip(self, library, fake_romm_api):
+    async def test_superseded_rows_are_not_deleted_by_the_skip(self, make_library, fake_romm_api):
         """The skip excludes the superseded rows from the count but leaves them on
         disk — ADR-0007's identity anchors survive (no destructive op here)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new")
         _seed_persisted_rom(uow, 25135, app_id=1001, group_key="igdb:100:1", fetch_id="run-new")
@@ -909,7 +899,7 @@ class TestIncrementalSkipSupersededRows:
         assert superseded.last_fetch_id == "run-old"
 
     @pytest.mark.asyncio
-    async def test_skip_repeats_because_the_reference_point_never_drifts(self, library, fake_romm_api):
+    async def test_skip_repeats_because_the_reference_point_never_drifts(self, make_library, fake_romm_api):
         """Two consecutive skips, not just the first.
 
         A skipped unit returns before any apply chunk, so neither the stamp's
@@ -917,7 +907,7 @@ class TestIncrementalSkipSupersededRows:
         compares against the SAME reference point every run — the failure mode
         that would wedge the skip off after exactly one success.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
         # A bound representative plus an UNBOUND sibling — both rode the last
@@ -943,10 +933,10 @@ class TestIncrementalSkipSupersededRows:
         assert sibling.last_fetch_id == "run-new"
 
     @pytest.mark.asyncio
-    async def test_genuine_divergence_still_full_fetches(self, library, fake_romm_api):
+    async def test_genuine_divergence_still_full_fetches(self, make_library, fake_romm_api):
         """A real local/server gap must NOT be masked by the generation filter: RomM
         serves a third ROM the last fetch did not return → full fetch."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(
             uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new", rom_ids=(25135, 25136)
@@ -965,9 +955,9 @@ class TestIncrementalSkipSupersededRows:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_no_row_carries_the_stamps_generation_forces_full_fetch(self, library, fake_romm_api):
+    async def test_no_row_carries_the_stamps_generation_forces_full_fetch(self, make_library, fake_romm_api):
         """Every row predates the stamp's generation → nothing countable → full fetch."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new")
         _seed_persisted_rom(uow, 4375, app_id=1001, group_key="igdb:100:1", fetch_id="run-old")
@@ -978,10 +968,10 @@ class TestIncrementalSkipSupersededRows:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_dropped_null_key_row_no_longer_forces_a_backfill_fetch(self, library, fake_romm_api):
+    async def test_dropped_null_key_row_no_longer_forces_a_backfill_fetch(self, make_library, fake_romm_api):
         """A dropped row's NULL group key can never be filled in, so it must not
         wedge the platform into a full fetch on every sync forever."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new")
         _seed_persisted_rom(uow, 25135, app_id=1001, group_key="igdb:100:1", fetch_id="run-new")
@@ -996,10 +986,10 @@ class TestIncrementalSkipSupersededRows:
         assert {r["id"] for r in result} == {25135}
 
     @pytest.mark.asyncio
-    async def test_current_generation_null_key_row_still_forces_a_backfill_fetch(self, library, fake_romm_api):
+    async def test_current_generation_null_key_row_still_forces_a_backfill_fetch(self, make_library, fake_romm_api):
         """The gate is narrowed, not disabled: a row the last fetch returned with
         no group key is backfillable and still costs a full fetch."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new")
         _seed_persisted_rom(uow, 25135, app_id=1001, group_key=None, fetch_id="run-new")
@@ -1010,10 +1000,10 @@ class TestIncrementalSkipSupersededRows:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_pre_migration_stamp_backfills_on_any_null_key_row(self, library, fake_romm_api):
+    async def test_pre_migration_stamp_backfills_on_any_null_key_row(self, make_library, fake_romm_api):
         """A stamp with no generation cannot say which rows its fetch saw, so it
         keeps the pre-#1504 behaviour and lets any NULL-key row force the fetch."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id=None)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id=None)
@@ -1025,11 +1015,11 @@ class TestIncrementalSkipSupersededRows:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_pre_migration_stamp_is_fetched_in_full(self, library, fake_romm_api):
+    async def test_pre_migration_stamp_is_fetched_in_full(self, make_library, fake_romm_api):
         """A stamp written before the generation contract predates migration 031 too,
         so it records no checksum and no fetch start: the platform is fetched in full
         rather than skipping through the upgrade (#743 D2)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_stamp_from_before_031(uow, "n64", rom_count=2, fetch_id=None)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id=None)
@@ -1053,8 +1043,8 @@ class TestIncrementalSkipBoundRowNotReturned:
     """
 
     @pytest.mark.asyncio
-    async def test_bound_row_of_an_older_generation_no_longer_holds_the_skip(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_bound_row_of_an_older_generation_no_longer_holds_the_skip(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new", rom_ids=(1, 2))
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
@@ -1072,8 +1062,8 @@ class TestIncrementalSkipBoundRowNotReturned:
             assert uow.roms.get(3).shortcut_app_id == 5003
 
     @pytest.mark.asyncio
-    async def test_bound_row_with_no_generation_no_longer_holds_the_skip(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_bound_row_with_no_generation_no_longer_holds_the_skip(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new", rom_ids=(1, 2))
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
@@ -1088,9 +1078,9 @@ class TestIncrementalSkipBoundRowNotReturned:
         assert {r["id"] for r in result} == {1, 2, 3}
 
     @pytest.mark.asyncio
-    async def test_a_reissued_id_forces_a_full_fetch(self, library, fake_romm_api):
+    async def test_a_reissued_id_forces_a_full_fetch(self, make_library, fake_romm_api):
         """RomM serving the gone version's dump under a new id changes the id set, so the platform is walked."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new", rom_ids=(1, 2))
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
@@ -1105,10 +1095,10 @@ class TestIncrementalSkipBoundRowNotReturned:
         assert {r["id"] for r in unit_roms} == {1, 2, 4}
 
     @pytest.mark.asyncio
-    async def test_skips_when_every_bound_row_carries_the_generation(self, library, fake_romm_api):
+    async def test_skips_when_every_bound_row_carries_the_generation(self, make_library, fake_romm_api):
         """The control: every bound row rode the stamp's fetch, and an unbound row of
         an older generation holds nothing off."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
@@ -1123,11 +1113,11 @@ class TestIncrementalSkipBoundRowNotReturned:
 
     @pytest.mark.asyncio
     async def test_pre_migration_stamp_is_fetched_in_full_whatever_generation_a_bound_row_carries(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
         """A stamp with no generation predates migration 031 as well, so it records no
         checksum: full fetch (#743 D2)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_stamp_from_before_031(uow, "n64", rom_count=2, fetch_id=None)
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-old")
@@ -1149,9 +1139,9 @@ class TestIncrementalSkipFromPlatformStamp:
     """
 
     @pytest.mark.asyncio
-    async def test_skip_fires_from_stamp_without_completed_run(self, library, fake_romm_api):
+    async def test_skip_fires_from_stamp_without_completed_run(self, make_library, fake_romm_api):
         """The crash-resume scenario: stamp present, NO completed run → still skips."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         # NO completed run is seeded — only the per-platform stamp.
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
@@ -1166,9 +1156,9 @@ class TestIncrementalSkipFromPlatformStamp:
         assert {r["id"] for r in result} == {10}
 
     @pytest.mark.asyncio
-    async def test_a_revoked_stamp_never_skips(self, library, fake_romm_api):
+    async def test_a_revoked_stamp_never_skips(self, make_library, fake_romm_api):
         """The crash-resume scenario above with the stamp's skip revoked: a full fetch, and no probe."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -1184,14 +1174,14 @@ class TestIncrementalSkipFromPlatformStamp:
         assert not [c for c in fake_romm_api.call_log if c[0] == "list_roms_newest_first"]
 
     @pytest.mark.asyncio
-    async def test_the_reference_is_the_fetch_start_less_the_margin(self, library, fake_romm_api):
+    async def test_the_reference_is_the_fetch_start_less_the_margin(self, make_library, fake_romm_api):
         """The stamp's fetch start less ten minutes, not its ``completed_at``, is the reference (#743 D1).
 
         The fetch started at 23:00 and the run completed an hour later. A ROM last
         updated at 22:50, the reference itself, is not after it: skip. The one
         request asks RomM for the newest ROM and sends no time filter.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_completed_run(uow)
         _seed_platform_stamp(
@@ -1208,10 +1198,10 @@ class TestIncrementalSkipFromPlatformStamp:
 
     @pytest.mark.asyncio
     async def test_a_rom_edited_after_the_fetch_started_but_before_the_run_completed_is_fetched_in_full(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
         """#743 Done when: an edit between the platform's fetch and the run's completion is seen next sync."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(
             uow, "n64", at="2025-06-01T00:00:00", rom_count=1, rom_ids=(10,), fetch_started_at="2025-05-31T23:00:00"
@@ -1226,9 +1216,9 @@ class TestIncrementalSkipFromPlatformStamp:
 
     @pytest.mark.asyncio
     async def test_the_full_fetch_log_says_which_rom_was_newer_than_the_reference(
-        self, library, fake_romm_api, logger, caplog
+        self, make_library, fake_romm_api, logger, caplog
     ):
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(
             uow, "n64", at="2025-06-01T00:00:00", rom_count=1, rom_ids=(10,), fetch_started_at="2025-05-31T23:00:00"
@@ -1247,9 +1237,9 @@ class TestIncrementalSkipFromPlatformStamp:
 
     @pytest.mark.asyncio
     async def test_the_full_fetch_log_says_when_the_answer_could_not_be_read(
-        self, library, fake_romm_api, logger, caplog
+        self, make_library, fake_romm_api, logger, caplog
     ):
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, rom_ids=(10,))
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -1262,9 +1252,9 @@ class TestIncrementalSkipFromPlatformStamp:
         assert "Per-unit fetch N64: RomM's answer could not be read (" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_a_rom_with_no_readable_updated_at_is_fetched_in_full(self, library, fake_romm_api):
+    async def test_a_rom_with_no_readable_updated_at_is_fetched_in_full(self, make_library, fake_romm_api):
         """Nothing establishes that such a ROM is unchanged, so it holds the skip off."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, rom_ids=(10,))
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -1276,9 +1266,11 @@ class TestIncrementalSkipFromPlatformStamp:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_as_many_roms_added_as_removed_with_nothing_newer_is_fetched_in_full(self, library, fake_romm_api):
+    async def test_as_many_roms_added_as_removed_with_nothing_newer_is_fetched_in_full(
+        self, make_library, fake_romm_api
+    ):
         """#743 Done when: the count and every ``updated_at`` agree, only the id set differs."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-1", rom_ids=(10, 11))
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id="run-1")
@@ -1291,9 +1283,9 @@ class TestIncrementalSkipFromPlatformStamp:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_a_stamp_without_a_checksum_is_fetched_in_full_without_asking_romm(self, library, fake_romm_api):
+    async def test_a_stamp_without_a_checksum_is_fetched_in_full_without_asking_romm(self, make_library, fake_romm_api):
         """#743 Done when: every stamp upgraded by migration 031 records none."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_stamp_from_before_031(uow, "n64", rom_count=1, fetch_id="run-1")
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id="run-1")
@@ -1306,9 +1298,9 @@ class TestIncrementalSkipFromPlatformStamp:
         assert not [c for c in fake_romm_api.call_log if c[0] == "list_roms_newest_first"]
 
     @pytest.mark.asyncio
-    async def test_the_skip_check_is_one_request(self, library, fake_romm_api):
+    async def test_the_skip_check_is_one_request(self, make_library, fake_romm_api):
         """#743 Done when: a skipped platform costs RomM exactly one request, whatever its size."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         ids = tuple(range(1, 1201))
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=len(ids), fetch_id="run-1", rom_ids=ids)
@@ -1322,14 +1314,14 @@ class TestIncrementalSkipFromPlatformStamp:
         assert [c[:2] for c in fake_romm_api.call_log] == [("list_roms_newest_first", (1,))]
 
     @pytest.mark.asyncio
-    async def test_a_changed_server_rom_count_alone_does_not_hold_the_skip(self, library, fake_romm_api):
+    async def test_a_changed_server_rom_count_alone_does_not_hold_the_skip(self, make_library, fake_romm_api):
         """RomM's platform count includes hidden ROMs, so it no longer decides the skip (#743 D2).
 
         The stamped count (3) differs from the server's (4) — a hidden ROM
         deleted, say — while the visible ids and every ``updated_at`` are as the
         stamp recorded: the platform skips.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -1343,14 +1335,14 @@ class TestIncrementalSkipFromPlatformStamp:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_no_skip_when_stamp_and_zero_bound_rows(self, library, fake_romm_api):
+    async def test_no_skip_when_stamp_and_zero_bound_rows(self, make_library, fake_romm_api):
         """Guard precedence: even with a valid stamp, zero bound rows force a full fetch.
 
         The zero-bound-rows guard (a mass-deleted platform, ADR-0007) is checked
         before the stamp reference is trusted, so a stamp can never resurrect a
         skip that has no shortcuts to reconstruct.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         _seed_persisted_rom(uow, 10, app_id=None, group_key="igdb:100:1")
@@ -1363,7 +1355,7 @@ class TestIncrementalSkipFromPlatformStamp:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_no_stamp_never_skips_even_with_completed_run(self, library, fake_romm_api):
+    async def test_no_stamp_never_skips_even_with_completed_run(self, make_library, fake_romm_api):
         """The stamp is the SOLE skip authority: no stamp → full fetch, run history irrelevant.
 
         A completed run alone cannot vouch for a platform's completeness — its
@@ -1371,7 +1363,7 @@ class TestIncrementalSkipFromPlatformStamp:
         since (the #1025 silent-gap scenario). With a completed run seeded but
         no stamp, the skip must NOT fire and no delta probe is sent.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_completed_run(uow)  # finished at 2025-01-01T00:00:00, no stamp
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -1395,7 +1387,7 @@ class TestStaleStampPartialGapRegression:
     """
 
     @pytest.mark.asyncio
-    async def test_stale_stamp_skips_partial_platform_but_cleared_stamp_refetches(self, library, fake_romm_api):
+    async def test_stale_stamp_skips_partial_platform_but_cleared_stamp_refetches(self, make_library, fake_romm_api):
         """The interrupted-re-apply aftermath: 5 persisted rows, only 2 rebound before a
         crash, 3 still unbound. The server is unchanged (delta 0) and its rom_count (5)
         still equals the 5 persisted rows — every count the skip matches on lines up,
@@ -1405,7 +1397,7 @@ class TestStaleStampPartialGapRegression:
         never recreated). Once the stamp is cleared — exactly what the apply-start clear
         / local-removal invalidation does — the platform full-fetches and recreates them.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         # Two rebound representatives (chunk 0 committed before the crash) ...
         _seed_persisted_rom(uow, 10, app_id=1010, group_key="igdb:10:1")
@@ -1440,14 +1432,14 @@ class TestFetchPlatformUnit:
             await library.sync._fetcher.fetch_platform_unit(unit)
 
     @pytest.mark.asyncio
-    async def test_first_page_exception_propagates(self, library, fake_romm_api):
+    async def test_first_page_exception_propagates(self, make_library, fake_romm_api):
         """A page-fetch failure must raise so the orchestrator aborts before stale-cleanup.
 
         Previous behaviour swallowed the exception and returned ``([], False)``
         — which classified every existing ROM as stale and wiped the Steam
         shortcut library. See #630.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         # No prior sync => incremental skip returns None and we fall through to pagination.
 
         fake_romm_api.list_roms_side_effect = RuntimeError("page boom")
@@ -1457,7 +1449,7 @@ class TestFetchPlatformUnit:
             await library.sync._fetcher.fetch_platform_unit(unit)
 
     @pytest.mark.asyncio
-    async def test_second_page_exception_propagates(self, library, fake_romm_api):
+    async def test_second_page_exception_propagates(self, make_library, fake_romm_api):
         """Page 1 OK + page 2 raises must propagate so partial accumulation never
         reaches the stale-cleanup pass. See #630.
 
@@ -1465,7 +1457,7 @@ class TestFetchPlatformUnit:
         page 1 — instead we wrap ``list_roms`` to raise on the second call
         after the first page's bytes are already consumed by the caller.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # Seed exactly one full page worth of ROMs (500 items at limit=500) so a
         # full page 1 advances the offset and a second request is attempted.
@@ -1487,9 +1479,9 @@ class TestFetchPlatformUnit:
             await library.sync._fetcher.fetch_platform_unit(unit)
 
     @pytest.mark.asyncio
-    async def test_paginates_across_multiple_pages(self, library, fake_romm_api):
+    async def test_paginates_across_multiple_pages(self, make_library, fake_romm_api):
         """A full first page must trigger offset += limit and a second fetch."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         # One full page + a one-ROM tail at the 500-ROM page size => page 1 fills
         # to the limit, page 2 carries the tail (exercises offset += limit).
@@ -1506,8 +1498,10 @@ class TestFetchPlatformUnit:
 
 class TestTheWorkQueueNamesThePlatformsLeftOff:
     @pytest.mark.asyncio
-    async def test_fetch_enabled_platforms_answers_every_listed_platform_it_does_not_sync(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_fetch_enabled_platforms_answers_every_listed_platform_it_does_not_sync(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64"},
             {"id": 2, "name": "SNES", "slug": "snes"},
@@ -1521,9 +1515,9 @@ class TestTheWorkQueueNamesThePlatformsLeftOff:
 
     @pytest.mark.asyncio
     async def test_every_collection_unit_carries_the_platforms_left_off_and_its_listed_members(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 1},
             {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 1},
@@ -1555,8 +1549,8 @@ class TestFetchProgressNarration:
     """
 
     @pytest.mark.asyncio
-    async def test_platform_fetch_emits_per_page_fetching_frames(self, library, fake_romm_api, emit):
-        _wire_fake(library, fake_romm_api)
+    async def test_platform_fetch_emits_per_page_fetching_frames(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         # 3084 ROMs at the 500-ROM page size → 7 pages (6 full + an 84-item tail).
         # Every page emits a frame (interval 1).
         rom_count = 3084
@@ -1580,8 +1574,8 @@ class TestFetchProgressNarration:
         assert frames[-1]["message"] == "Fetching GBA (page 7/7)"
 
     @pytest.mark.asyncio
-    async def test_single_page_fetch_emits_one_frame(self, library, fake_romm_api, emit):
-        _wire_fake(library, fake_romm_api)
+    async def test_single_page_fetch_emits_one_frame(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         _seed_pages(fake_romm_api, platform_id=1, count=3)
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
@@ -1592,10 +1586,10 @@ class TestFetchProgressNarration:
         assert frames[0]["message"] == "Fetching N64 (page 1/1)"
 
     @pytest.mark.asyncio
-    async def test_incremental_skip_emits_no_fetching_frame(self, library, fake_romm_api, emit):
+    async def test_incremental_skip_emits_no_fetching_frame(self, make_library, fake_romm_api, emit):
         """A platform that incremental-skips returns before any page → no frames."""
 
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -1609,11 +1603,11 @@ class TestFetchProgressNarration:
         assert _fetching_frames(emit) == []
 
     @pytest.mark.asyncio
-    async def test_no_step_context_leaves_bar_indeterminate(self, library, fake_romm_api, emit):
+    async def test_no_step_context_leaves_bar_indeterminate(self, make_library, fake_romm_api, emit):
         """Callers that pass no coarse position (default 0) still narrate pages,
         but leave step/totalSteps at 0 so the main bar stays indeterminate."""
 
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_pages(fake_romm_api, platform_id=1, count=3)
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
@@ -1636,8 +1630,8 @@ class TestPlanEstimates:
     """
 
     @pytest.mark.asyncio
-    async def test_predicts_skip_and_collapsed_count_when_local_conditions_hold(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_predicts_skip_and_collapsed_count_when_local_conditions_hold(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1655,9 +1649,9 @@ class TestPlanEstimates:
         assert units[0].collapsed_count == 1
 
     @pytest.mark.asyncio
-    async def test_a_revoked_stamp_predicts_no_skip_and_no_collapsed_count(self, library, fake_romm_api):
+    async def test_a_revoked_stamp_predicts_no_skip_and_no_collapsed_count(self, make_library, fake_romm_api):
         """The estimate reads the stamp the gate reads, so a revoked one is no stamp here either."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1674,10 +1668,10 @@ class TestPlanEstimates:
         assert units[0].collapsed_count is None
 
     @pytest.mark.asyncio
-    async def test_bound_row_not_returned_predicts_a_skip(self, library, fake_romm_api):
+    async def test_bound_row_not_returned_predicts_a_skip(self, make_library, fake_romm_api):
         """A bound row the stamp's fetch did not return no longer holds the gate's
         skip (#743 D10), so the estimate prices the platform as one."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1691,9 +1685,9 @@ class TestPlanEstimates:
         assert units[0].predicted_skip is True
 
     @pytest.mark.asyncio
-    async def test_every_bound_row_carrying_the_generation_predicts_skip(self, library, fake_romm_api):
+    async def test_every_bound_row_carrying_the_generation_predicts_skip(self, make_library, fake_romm_api):
         """The control for the case above: the stale row unbound, the skip returns."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1707,10 +1701,10 @@ class TestPlanEstimates:
         assert units[0].predicted_skip is True
 
     @pytest.mark.asyncio
-    async def test_grandfathered_group_counts_each_bound_sibling(self, library, fake_romm_api):
+    async def test_grandfathered_group_counts_each_bound_sibling(self, make_library, fake_romm_api):
         """A pre-ADR-0021 group with two bound duplicates keeps both shortcuts
         (§5), so the plan estimate prices 2, not one-per-group."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1724,8 +1718,8 @@ class TestPlanEstimates:
         assert units[0].collapsed_count == 2
 
     @pytest.mark.asyncio
-    async def test_never_synced_platform_predicts_no_skip_and_no_collapsed_count(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_never_synced_platform_predicts_no_skip_and_no_collapsed_count(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
 
@@ -1735,13 +1729,13 @@ class TestPlanEstimates:
         assert units[0].collapsed_count is None
 
     @pytest.mark.asyncio
-    async def test_partial_rows_without_stamp_predict_no_collapsed_count(self, library, fake_romm_api):
+    async def test_partial_rows_without_stamp_predict_no_collapsed_count(self, make_library, fake_romm_api):
         """#1412: a never-synced but enabled platform carrying only partial
         collection-sibling rows (no completion stamp) must NOT price the ETA at
         the partial local count — the estimate omits collapsed_count so the
         frontend weights the unit at the full server rom_count instead.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         # A big platform whose only local rows are a couple of favorited siblings
         # (ADR-0021) — no stamp, because it was never synced as a platform.
@@ -1759,10 +1753,10 @@ class TestPlanEstimates:
         assert units[0].bound_count == 2
 
     @pytest.mark.asyncio
-    async def test_bound_count_counts_rows_carrying_a_shortcut(self, library, fake_romm_api):
+    async def test_bound_count_counts_rows_carrying_a_shortcut(self, make_library, fake_romm_api):
         """#1511: the count of rows already bound to a Steam shortcut, which the
         frontend prices at the cheap update rate instead of the create rate."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1776,10 +1770,10 @@ class TestPlanEstimates:
         assert units[0].bound_count == 2
 
     @pytest.mark.asyncio
-    async def test_bound_count_is_zero_for_a_platform_with_no_persisted_rows(self, library, fake_romm_api):
+    async def test_bound_count_is_zero_for_a_platform_with_no_persisted_rows(self, make_library, fake_romm_api):
         """Zero is knowledge, not absence: a never-synced platform mirrors
         nothing, so every planned item really is a create."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
 
@@ -1789,12 +1783,12 @@ class TestPlanEstimates:
 
     @pytest.mark.asyncio
     async def test_force_full_sync_shape_keeps_bound_count_so_the_re_apply_prices_as_updates(
-        self, library, fake_romm_api
+        self, make_library, fake_romm_api
     ):
         """The #1511 over-read: a Force Full Sync clears every completion stamp
         but unbinds nothing, so the run is all cheap updates. Without
         bound_count the plan prices it as a fresh import (~4x the real cost)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1810,7 +1804,7 @@ class TestPlanEstimates:
         assert units[0].bound_count == 2
 
     @pytest.mark.asyncio
-    async def test_force_full_sync_of_a_sibling_heavy_platform_mints_nothing(self, library, fake_romm_api):
+    async def test_force_full_sync_of_a_sibling_heavy_platform_mints_nothing(self, make_library, fake_romm_api):
         """The #1517 over-read: a Force Full Sync drops the collapsed count, so
         the unit is weighed at the pre-collapse rom_count — which counts each
         sibling duplicate. Deriving creates by subtracting the bound rows from
@@ -1818,7 +1812,7 @@ class TestPlanEstimates:
         cover download it never performs); new_shortcut_count reports none,
         because the clear takes the stamps and not the bindings.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 4}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1836,14 +1830,14 @@ class TestPlanEstimates:
         assert units[0].new_shortcut_count == 0
 
     @pytest.mark.asyncio
-    async def test_never_synced_partial_platform_counts_the_unmirrored_remainder(self, library, fake_romm_api):
+    async def test_never_synced_partial_platform_counts_the_unmirrored_remainder(self, make_library, fake_romm_api):
         """The safety-critical shape (#1412 / #1517): a never-synced platform
         whose only local rows are collection siblings (ADR-0021). Counting
         creates from the known rows alone would price a handful of items for a
         whole platform — a short read. The unmirrored server ROMs count too, so
         creates + bound rows still cover the full rom_count.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "SNES", "slug": "snes", "rom_count": 100}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1859,9 +1853,9 @@ class TestPlanEstimates:
         assert units[0].new_shortcut_count + units[0].bound_count == units[0].rom_count
 
     @pytest.mark.asyncio
-    async def test_first_ever_sync_counts_every_server_rom_as_a_create(self, library, fake_romm_api):
+    async def test_first_ever_sync_counts_every_server_rom_as_a_create(self, make_library, fake_romm_api):
         """Nothing persisted, nothing bound — the whole platform is new work."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
 
@@ -1871,10 +1865,10 @@ class TestPlanEstimates:
         assert units[0].bound_count == 0
 
     @pytest.mark.asyncio
-    async def test_partially_applied_platform_mints_only_its_unbound_groups(self, library, fake_romm_api):
+    async def test_partially_applied_platform_mints_only_its_unbound_groups(self, make_library, fake_romm_api):
         """A fetched-but-not-fully-applied platform: the groups that never got a
         shortcut are the creates, the bound rows the updates."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 4}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1892,8 +1886,10 @@ class TestPlanEstimates:
         assert units[0].new_shortcut_count + units[0].bound_count == units[0].collapsed_count
 
     @pytest.mark.asyncio
-    async def test_a_changed_server_count_still_predicts_a_skip_and_keeps_collapsed_count(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_a_changed_server_count_still_predicts_a_skip_and_keeps_collapsed_count(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         # Server reports 4 ROMs since the 3-ROM stamp: the gate no longer reads the
         # count (#743 D2), so neither does the estimate, and the persisted rows
@@ -1911,8 +1907,8 @@ class TestPlanEstimates:
         assert units[0].collapsed_count == 2
 
     @pytest.mark.asyncio
-    async def test_backfill_pending_predicts_no_skip(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_backfill_pending_predicts_no_skip(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1927,10 +1923,10 @@ class TestPlanEstimates:
         assert units[0].collapsed_count == 1
 
     @pytest.mark.asyncio
-    async def test_dropped_null_key_row_predicts_a_skip(self, library, fake_romm_api):
+    async def test_dropped_null_key_row_predicts_a_skip(self, make_library, fake_romm_api):
         """The estimate replays the gate's generation-gated backfill too, so a
         dropped keyless row no longer prices a phantom full fetch every run."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1943,8 +1939,8 @@ class TestPlanEstimates:
         assert units[0].predicted_skip is True
 
     @pytest.mark.asyncio
-    async def test_zero_bound_rows_predicts_no_skip(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_zero_bound_rows_predicts_no_skip(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -1958,10 +1954,10 @@ class TestPlanEstimates:
         assert units[0].predicted_skip is False
 
     @pytest.mark.asyncio
-    async def test_unstamped_collection_carries_no_estimate_fields(self, library, fake_romm_api):
+    async def test_unstamped_collection_carries_no_estimate_fields(self, make_library, fake_romm_api):
         """Without a stamp a collection's membership is unknown — every rider
         stays None, and the seed prices the unit exactly as it did pre-#1511."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = []
         fake_romm_api.collections = [{"id": 7, "name": "Faves", "slug": "faves", "rom_count": 4}]
         library.settings["enabled_platforms"] = {}
@@ -1980,10 +1976,10 @@ class TestPlanEstimates:
         assert units[0].new_shortcut_count is None
 
     @pytest.mark.asyncio
-    async def test_stamped_collection_counts_its_bound_members(self, library, fake_romm_api):
+    async def test_stamped_collection_counts_its_bound_members(self, make_library, fake_romm_api):
         """#1511: a stamped collection's member set comes from the stamp (no ROM
         fetch), so its already-bound members price at the cheap update rate."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = []
         fake_romm_api.collections = [{"id": 7, "name": "Faves", "slug": "faves", "rom_count": 3}]
@@ -2009,10 +2005,10 @@ class TestPlanEstimates:
         assert units[0].new_shortcut_count is None
 
     @pytest.mark.asyncio
-    async def test_stamped_collection_ignores_members_with_no_persisted_row(self, library, fake_romm_api):
+    async def test_stamped_collection_ignores_members_with_no_persisted_row(self, make_library, fake_romm_api):
         """A stale member set can name ROMs no longer persisted locally; those
         are not bound and must not be counted (estimate-only, no freshness probe)."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = []
         fake_romm_api.collections = [{"id": 7, "name": "Faves", "slug": "faves", "rom_count": 2}]
@@ -2034,10 +2030,10 @@ class TestPlanEstimates:
         assert units[0].bound_count == 1
 
     @pytest.mark.asyncio
-    async def test_an_unstamped_virtual_collection_carries_no_bound_count(self, library, fake_romm_api):
+    async def test_an_unstamped_virtual_collection_carries_no_bound_count(self, make_library, fake_romm_api):
         """The count is read from the stamp's stored member set only, so an
         unstamped collection is omitted and priced as all-creates."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = []
         fake_romm_api.virtual_collections = {
@@ -2053,8 +2049,8 @@ class TestPlanEstimates:
         assert units[0].bound_count is None
 
     @pytest.mark.asyncio
-    async def test_a_stamped_virtual_collection_counts_its_bound_members(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_a_stamped_virtual_collection_counts_its_bound_members(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = []
         fake_romm_api.virtual_collections = {
@@ -2079,10 +2075,10 @@ class TestPlanEstimates:
         assert [(u.collection_kind, u.bound_count) for u in units] == [("virtual", 1)]
 
     @pytest.mark.asyncio
-    async def test_collection_bound_count_read_failure_leaves_the_field_none(self, library, fake_romm_api):
+    async def test_collection_bound_count_read_failure_leaves_the_field_none(self, make_library, fake_romm_api):
         """Fail-open, like the platform sibling: a DB failure degrades the
         estimate to its pre-#1511 reading, never the plan."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = []
         fake_romm_api.collections = [{"id": 7, "name": "Faves", "slug": "faves", "rom_count": 3}]
         library.settings["enabled_platforms"] = {}
@@ -2099,7 +2095,7 @@ class TestPlanEstimates:
         assert units[0].bound_count is None
 
     @pytest.mark.asyncio
-    async def test_force_full_sync_clears_stamps_so_plan_predicts_no_skips(self, library, fake_romm_api):
+    async def test_force_full_sync_clears_stamps_so_plan_predicts_no_skips(self, make_library, fake_romm_api):
         """clear_sync_cache runs BEFORE the run, so a forced plan reads no stamps.
 
         Pins the PLATFORM-vs-COLLECTION asymmetry the clear exposes (#1511): a
@@ -2108,7 +2104,7 @@ class TestPlanEstimates:
         only from the stamp the clear just deleted, so its unit reverts to create
         pricing for that run. The estimate reads long, never short.
         """
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         library.settings["enabled_platforms"] = {"1": True}
@@ -2157,9 +2153,9 @@ class TestPlanEstimates:
             assert uow.roms.get(20).shortcut_app_id == 2001
 
     @pytest.mark.asyncio
-    async def test_estimate_read_failure_leaves_fields_none_and_plan_intact(self, library, fake_romm_api):
+    async def test_estimate_read_failure_leaves_fields_none_and_plan_intact(self, make_library, fake_romm_api):
         """Fail-open: a DB failure degrades the estimate, never the plan."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
 
@@ -2180,8 +2176,8 @@ class TestTheSyncKeepsThePlatformsIds:
     """Every sync keeps each listed platform's ids, which the platform's system is asked with offline."""
 
     @pytest.mark.asyncio
-    async def test_every_listed_platform_is_kept_switched_off_ones_too(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_every_listed_platform_is_kept_switched_off_ones_too(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3, "igdb_id": 4},
             {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 2, "igdb_id": 19, "tgdb_id": 6},
@@ -2198,8 +2194,8 @@ class TestTheSyncKeepsThePlatformsIds:
         }
 
     @pytest.mark.asyncio
-    async def test_a_write_that_fails_leaves_the_plan_and_says_so(self, library, fake_romm_api, caplog):
-        _wire_fake(library, fake_romm_api)
+    async def test_a_write_that_fails_leaves_the_plan_and_says_so(self, make_library, fake_romm_api, caplog):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
 
@@ -2226,8 +2222,8 @@ class TestGetPlatformsCarriesNoDerivedCount:
     """
 
     @pytest.mark.asyncio
-    async def test_a_synced_platform_reports_the_server_count_and_nothing_else(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_a_synced_platform_reports_the_server_count_and_nothing_else(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 4}]
         # Stamped and persisted — the exact state that used to produce a garnish.
@@ -2245,9 +2241,9 @@ class TestGetPlatformsCarriesNoDerivedCount:
         assert set(entry) == {"id", "name", "slug", "rom_count", "sync_enabled"}
 
     @pytest.mark.asyncio
-    async def test_the_platform_list_needs_no_database_at_all(self, library, fake_romm_api):
+    async def test_the_platform_list_needs_no_database_at_all(self, make_library, fake_romm_api):
         """A dead database no longer even reaches the platform list."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 4}]
 
         def _boom():
@@ -2267,8 +2263,8 @@ class TestPredictionNeverFeedsSkipGate:
     fields say."""
 
     @pytest.mark.asyncio
-    async def test_skip_eligible_platform_skips_regardless_of_prediction_fields(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_skip_eligible_platform_skips_regardless_of_prediction_fields(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -2287,9 +2283,9 @@ class TestPredictionNeverFeedsSkipGate:
         assert [{rom["id"] for rom in r} for r in results] == [{10}] * 3
 
     @pytest.mark.asyncio
-    async def test_ineligible_platform_full_fetches_even_when_prediction_says_skip(self, library, fake_romm_api):
+    async def test_ineligible_platform_full_fetches_even_when_prediction_says_skip(self, make_library, fake_romm_api):
         """A (wrong) predicted_skip=True can only mis-estimate, never mis-skip."""
-        _wire_fake(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         # No stamp, no rows — the gate must full-fetch.
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1, predicted_skip=True)
 
@@ -2302,8 +2298,8 @@ class TestAskRommForRoms:
     """``ask_romm_for_roms`` — one exact-id question per ROM, read only as far as it proves."""
 
     @pytest.mark.asyncio
-    async def test_each_answer_is_what_its_question_proved(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_each_answer_is_what_its_question_proved(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         fake_romm_api.roms[1] = {"id": 1, "name": "Still here"}
         fake_romm_api.get_rom_once_side_effect_by_id[2] = RommNotFoundError("Rom with id 2 not found")
         fake_romm_api.get_rom_once_side_effect_by_id[3] = RommApiError("HTTP 404: Not Found")
@@ -2320,8 +2316,8 @@ class TestAskRommForRoms:
         ]
 
     @pytest.mark.asyncio
-    async def test_asking_about_nothing_sends_nothing(self, library, fake_romm_api):
-        _wire_fake(library, fake_romm_api)
+    async def test_asking_about_nothing_sends_nothing(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
 
         assert await library.sync._fetcher.ask_romm_for_roms([]) == {}
         assert fake_romm_api.call_log == []

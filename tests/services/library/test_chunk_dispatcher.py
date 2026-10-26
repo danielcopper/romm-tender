@@ -28,7 +28,7 @@ import pytest
 
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
-from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row, _use_fake_romm
+from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row
 
 
 class TestApplyChunking:
@@ -42,14 +42,16 @@ class TestApplyChunking:
     """
 
     @pytest.mark.asyncio
-    async def test_large_unit_emits_one_event_and_commit_per_chunk(self, library, fake_romm_api, monkeypatch, emit):
+    async def test_large_unit_emits_one_event_and_commit_per_chunk(
+        self, make_library, fake_romm_api, monkeypatch, emit
+    ):
         """Five singletons at chunk size 2 → three ``sync_apply_unit`` events with
         continuous unit-wide chunk fields, and one commit per chunk carrying only
         that chunk's rows."""
 
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -95,12 +97,12 @@ class TestApplyChunking:
         assert commit_rows == [[1, 2], [3, 4], [5]]
 
     @pytest.mark.asyncio
-    async def test_the_final_chunk_s_stamp_checksums_every_chunk_s_ids(self, library, fake_romm_api, monkeypatch):
+    async def test_the_final_chunk_s_stamp_checksums_every_chunk_s_ids(self, make_library, fake_romm_api, monkeypatch):
         """The stamp the final chunk carries names the whole fetch, not that chunk's rows (#743 D2)."""
         from domain.platform_skip import rom_id_checksum
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -141,11 +143,11 @@ class TestApplyChunking:
         assert stamps[2].rom_id_checksum == rom_id_checksum(range(1, 6))
 
     @pytest.mark.asyncio
-    async def test_small_unit_emits_exactly_one_chunk(self, library, fake_romm_api, emit):
+    async def test_small_unit_emits_exactly_one_chunk(self, make_library, fake_romm_api, emit):
         """A unit under the chunk size emits a single chunk — regression guard that
         the chunk fields collapse to the today's one-shot behaviour."""
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(
             fake_romm_api,
@@ -182,12 +184,12 @@ class TestApplyChunking:
         assert len(event["shortcuts"]) == 3
 
     @pytest.mark.asyncio
-    async def test_user_cancel_between_chunks_keeps_committed_chunks(self, library, fake_romm_api, monkeypatch):
+    async def test_user_cancel_between_chunks_keeps_committed_chunks(self, make_library, fake_romm_api, monkeypatch):
         """A user cancel during chunk 1's wait discards the rest but leaves chunk 0
         committed — the whole point of chunking (#1025)."""
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -240,7 +242,9 @@ class TestApplyChunking:
         assert box.abandoned_chunk is None
 
     @pytest.mark.asyncio
-    async def test_cancel_in_inter_chunk_window_never_emits_next_chunk(self, library, fake_romm_api, monkeypatch, emit):
+    async def test_cancel_in_inter_chunk_window_never_emits_next_chunk(
+        self, make_library, fake_romm_api, monkeypatch, emit
+    ):
         """A cancel landing AFTER chunk 0's commit but BEFORE chunk 1's emit stops
         the unit at the top of the loop: chunk 1 is never emitted, chunk 0's commit
         persists, staging cleared. Complements
@@ -251,7 +255,7 @@ class TestApplyChunking:
 
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -307,12 +311,12 @@ class TestApplyChunking:
         assert box.abandoned_chunk is None
 
     @pytest.mark.asyncio
-    async def test_heartbeat_timeout_on_chunk_stashes_only_that_chunk(self, library, fake_romm_api, monkeypatch):
+    async def test_heartbeat_timeout_on_chunk_stashes_only_that_chunk(self, make_library, fake_romm_api, monkeypatch):
         """A heartbeat timeout on chunk 1 stashes ONLY chunk 1's rows (not the whole
         unit) under chunk 1's identity, so a late ack commits just that chunk."""
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
         _seed_platform(
@@ -399,14 +403,14 @@ class TestWaitForUnitCompleteCancelled:
     """Tests for asyncio.CancelledError in _wait_for_unit_complete."""
 
     @pytest.mark.asyncio
-    async def test_cancelled_error_during_sleep_is_logged_and_reraised(self, library):
+    async def test_cancelled_error_during_sleep_is_logged_and_reraised(self, make_library):
         """If the inner sleep is cancelled, log + re-raise so the outer loop sees the cancel."""
 
         class _CancellingSleeper:
             async def sleep(self, _seconds: float) -> None:
                 raise asyncio.CancelledError()
 
-        library.sync._chunk_dispatcher._sleeper = _CancellingSleeper()
+        library = make_library(sleeper=_CancellingSleeper())
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._sync_last_heartbeat = library.sync._chunk_dispatcher._clock.monotonic()
 
@@ -430,8 +434,8 @@ class TestWholeUnitStaging:
     """
 
     @pytest.mark.asyncio
-    async def test_delta_and_full_set_are_staged_into_their_own_fields(self, library, fake_romm_api):
-        _use_fake_romm(library, fake_romm_api)
+    async def test_delta_and_full_set_are_staged_into_their_own_fields(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
         # rom 10 is content-unchanged (skipped from the delta); rom 11 changed its
         # name, so the delta is {11} while the built set is {10, 11}.
         _seed_platform(
@@ -856,10 +860,12 @@ class TestInterChunkCancelGuard:
     """
 
     @pytest.mark.asyncio
-    async def test_cancel_near_the_ceiling_is_recorded_as_cancelled(self, library, fake_romm_api, monkeypatch, emit):
+    async def test_cancel_near_the_ceiling_is_recorded_as_cancelled(
+        self, make_library, fake_romm_api, monkeypatch, emit
+    ):
         from services.library import chunk_dispatcher
 
-        _use_fake_romm(library, fake_romm_api)
+        library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -914,7 +920,6 @@ class TestThePlaceholderIcon:
     """Each chunk names the placeholder icon the frontend gives the shortcuts it mints."""
 
     async def _apply_one_unit(self, library, fake_romm_api) -> None:
-        _use_fake_romm(library, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "G1"}])
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -933,14 +938,16 @@ class TestThePlaceholderIcon:
         )
 
     @pytest.mark.asyncio
-    async def test_a_chunk_names_the_shortcut_artwork_jobs_placeholder(self, library, fake_romm_api, emit):
+    async def test_a_chunk_names_the_shortcut_artwork_jobs_placeholder(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         await self._apply_one_unit(library, fake_romm_api)
 
         (event,) = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert event["icon_placeholder_path"] == "/grid/tender-icon-placeholder.png"
 
     @pytest.mark.asyncio
-    async def test_a_chunk_names_none_where_there_is_no_placeholder(self, library, fake_romm_api, emit):
+    async def test_a_chunk_names_none_where_there_is_no_placeholder(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
         library.artwork_job.placeholder = None
 
         await self._apply_one_unit(library, fake_romm_api)

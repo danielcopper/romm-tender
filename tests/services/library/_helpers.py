@@ -16,29 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 from services.library.fetcher import _SUPPORTED_VIRTUAL_TYPES
 
 
-def rebind_loop(library_service, loop):
-    """Rebind the event loop on every LibraryService sub-service.
-
-    Seven of the façade's sub-services (fetcher, collection fetcher, unit
-    applier, preview, orchestrator, reporter, session-budget monitor) hold their
-    own ctor-bound ``_loop``. Tests that swap in a mock loop must propagate it to
-    all seven so async calls land on the override. ``ShortcutLaunchResolver``,
-    ``LocalLibraryReader``, ``SyncRunRecorder``, ``ChunkDispatcher``,
-    ``CoverPreparer`` and ``SyncProgress`` hold none — the first three are
-    synchronous workers their holders offload through *their* loops (the unit
-    applier's, the preview's and the orchestrator's, and for the reader also the
-    fetcher's for the reachable set), and the other three offload nothing
-    themselves.
-    """
-    library_service._fetcher._loop = loop
-    library_service._collection_fetcher._loop = loop
-    library_service._unit_applier._loop = loop
-    library_service._preview._loop = loop
-    library_service._orchestrator._loop = loop
-    library_service._reporter._loop = loop
-    library_service._session_budget._loop = loop
-
-
 def _make_loop_raising(exc):
     """Return a mock loop whose run_in_executor always raises exc."""
     mock_loop = MagicMock()
@@ -177,19 +154,6 @@ def _seed_rom_row(
     with library.uow:
         library.uow.roms.save(rom)
         library.uow.roms.set_applied_launch_options(rom_id, applied_launch_options)
-
-
-def _use_fake_romm(library, fake_romm_api):
-    """Swap the harness's ``MagicMock`` ``romm_api`` for the seeded fake.
-
-    The two fetchers and the artwork service each hold the ``romm_api`` they
-    were built with, so all three are rebound here.
-    """
-    library.romm_api = fake_romm_api
-    library.sync._fetcher._romm_api = fake_romm_api
-    library.sync._collection_fetcher._romm_api = fake_romm_api
-    library.artwork._romm_api = fake_romm_api
-    return fake_romm_api
 
 
 def _seed_platform(fake_romm_api, *, platform_id, name, slug, roms):

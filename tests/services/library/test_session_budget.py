@@ -427,10 +427,10 @@ class TestTheShortcutArtworkJobsReading:
         assert library.renderer_rss.calls == 2
 
     @pytest.mark.asyncio
-    async def test_a_seam_that_raises_is_not_above_it(self, library):
+    async def test_a_seam_that_raises_is_not_above_it(self, make_library):
         def unreadable() -> int:
             raise OSError("no /proc")
 
-        library.sync._session_budget._renderer_rss = unreadable
+        library = make_library(renderer_rss=unreadable)
 
         assert await library.sync.renderer_above_ceiling() is False
