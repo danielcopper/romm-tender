@@ -299,6 +299,8 @@ class TestTheVocabulary:
             "memory-card",
             "staticpath",
             "game-id",
+            # Stated only in a tuple the resolver exports.
+            "second-document",
         } <= _VALUES
         assert {"read", "unknown", "none", "open", "unsupported", "file", "directory", "required"}.isdisjoint(_VALUES)
         # A code is no value: the codes are watched as codes.
