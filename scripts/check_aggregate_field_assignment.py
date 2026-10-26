@@ -1,35 +1,53 @@
 #!/usr/bin/env python3
 """Aggregate field-assignment ban — Cosmic Python enforcement.
 
-Aggregate roots in ``backend/domain/`` decorated with ``@cosmic_aggregate``
-expose mutation only through verb-named methods on the root. External code
-must NOT do ``aggregate.field = value`` — that bypasses the aggregate's
-invariants. This check scans ``backend/services/`` for such patterns and
-fails CI if any are found.
+An aggregate root — a class in ``backend/domain/`` decorated with
+``@cosmic_aggregate`` — changes its state only through its own verb-named
+methods. Code outside them must not assign, delete or mutate a field
+directly, or it bypasses the invariants those methods keep.
 
-Heuristic (conservative by design):
+The check reads every ``@cosmic_aggregate`` class under ``backend/domain/``
+(the decorator by its bare name or as an attribute ending in it) and collects
+its fields: the names its own class body annotates. A field annotated
+``list``, ``dict`` or ``set`` — bare, subscripted, or inside a ``| None``
+union — is a container field. It then scans every ``.py`` under ``backend/``
+but ``_vendor/`` and ``native/``, ``domain/`` included, and fails on:
 
-  1. Parse every file under ``backend/domain/``; collect the class names
-     decorated with ``@cosmic_aggregate`` (or attribute paths ending in
-     ``cosmic_aggregate``). Build a lowercase-name set.
-  2. Parse every file under ``backend/services/``; flag every ``Assign``
-     node whose target is an ``Attribute`` on a plain ``Name`` whose name
-     (case-insensitively) exactly equals the snake_case form of one of the
-     aggregate names (variable ``rom`` matches aggregate ``Rom``; ``rom_state``
-     does not). Skip ``self.x = ...`` and ``some[key].x = ...`` — those are
-     method-body internals and subscript-receiver patterns, not aggregate-field
-     assignments.
+- a store or ``del`` on ``<receiver>.<field>`` — assignment, augmented
+  assignment, an annotated assignment with a value, a ``for`` or ``with``
+  target — for any receiver but bare ``self``;
+- ``setattr`` / ``delattr`` (builtin, or ``object.__setattr__`` /
+  ``object.__delattr__`` / a bound ``__setattr__`` / ``__delattr__``) whose
+  field name is a string literal, on any receiver but bare ``self``;
+- an item store, item ``del``, attribute store or mutating method call
+  (``append``, ``update``, ``pop``, …: ``MUTATING_METHODS``) reached through
+  ``<receiver>.<container field>``, for any receiver but bare ``self``.
 
-The heuristic can produce both false positives (variable named ``rom``
-holding something else) and false negatives (assignment via complex
-expressions like ``service.get_rom().field = ...``). It is a guardrail,
-not a prover. The escape hatch is a trailing comment on the same line:
+It matches by field NAME, not by type: it cannot know what a receiver holds,
+so a finding names the aggregates that declare the field. A non-aggregate
+value whose attribute shares a field name takes a trailing comment on the
+flagged line::
 
-    rom.cover_path = path  # pragma: no aggregate-check
+    saves[index].id = save_id  # pragma: no aggregate-check
 
-Aggregates that don't carry the decorator (e.g. old JSON-era containers
-like ``SaveSyncState``) are NOT flagged — old code keeps working until
-the SQLite cutover wave replaces them.
+Unseen by it:
+
+- a container field, or a mutable value inside one, bound to another name
+  first or handed to a helper that mutates it
+  (``files = state.files; files[k] = v``), or reached through a call
+  (``state.slots.get(k).update(...)``, ``getattr(state, "files")[k] = v``);
+- a container mutated through one of its dunder methods
+  (``state.files.__setitem__(k, v)``);
+- a ``setattr`` / ``delattr`` whose name is not a string literal;
+- a field the decorated class body does not annotate, an aggregate declared
+  outside ``backend/domain/``, and a container field annotated with a type
+  alias or an abstract type (``Mapping``, ``Sequence``);
+- a store through bare ``self`` in any class, an aggregate's own methods and
+  every other class alike;
+- ``tests/`` and ``scripts/``, which are not scanned;
+- a repository method that writes a column in SQL (``RomRepository.set_*``,
+  ``PlatformSyncStateRepository.revoke_skip``): no field is assigned;
+- a file it cannot read or parse, which it skips without a word.
 
 Exit 0 on no findings, exit 1 if any findings (one line per finding).
 """
@@ -37,15 +55,51 @@ Exit 0 on no findings, exit 1 if any findings (one line per finding).
 from __future__ import annotations
 
 import ast
-import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DOMAIN_DIR = REPO_ROOT / "backend" / "domain"
-SERVICES_DIR = REPO_ROOT / "backend" / "services"
+BACKEND_DIR = REPO_ROOT / "backend"
+DOMAIN_DIR = BACKEND_DIR / "domain"
 DECORATOR_NAME = "cosmic_aggregate"
 ESCAPE_HATCH = "pragma: no aggregate-check"
+
+# Upstream copies, relative to BACKEND_DIR.
+EXEMPT_DIRS = ("_vendor", "native")
+
+CONTAINER_TYPES = frozenset({"list", "dict", "set"})
+
+# Every method of list, dict and set that changes the container in place.
+MUTATING_METHODS = frozenset(
+    {
+        "append",
+        "extend",
+        "insert",
+        "pop",
+        "remove",
+        "clear",
+        "sort",
+        "reverse",
+        "update",
+        "setdefault",
+        "popitem",
+        "add",
+        "discard",
+        "difference_update",
+        "intersection_update",
+        "symmetric_difference_update",
+    }
+)
+
+
+@dataclass(frozen=True)
+class AggregateFields:
+    """The aggregates found, and which of them declare each field name."""
+
+    classes: frozenset[str]
+    owners: dict[str, frozenset[str]]
+    containers: frozenset[str]
 
 
 def _decorator_matches(node: ast.expr) -> bool:
@@ -59,73 +113,159 @@ def _decorator_matches(node: ast.expr) -> bool:
     return False
 
 
-def collect_aggregate_class_names(domain_dir: Path) -> set[str]:
-    """Walk ``domain_dir`` and return all class names decorated with ``@cosmic_aggregate``."""
-    names: set[str] = set()
-    if not domain_dir.is_dir():
-        return names
-    for path in sorted(domain_dir.rglob("*.py")):
+def _is_container_annotation(annotation: ast.expr) -> bool:
+    if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+        try:
+            annotation = ast.parse(annotation.value, mode="eval").body
+        except SyntaxError:
+            return False
+    if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+        return _is_container_annotation(annotation.left) or _is_container_annotation(annotation.right)
+    if isinstance(annotation, ast.Subscript):
+        annotation = annotation.value
+    return isinstance(annotation, ast.Name) and annotation.id in CONTAINER_TYPES
+
+
+def collect_aggregate_fields(domain_dir: Path) -> AggregateFields:
+    """Walk ``domain_dir`` and return every ``@cosmic_aggregate`` class with its field names."""
+    classes: set[str] = set()
+    owners: dict[str, set[str]] = {}
+    containers: set[str] = set()
+    paths = sorted(domain_dir.rglob("*.py")) if domain_dir.is_dir() else []
+    for path in paths:
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        except SyntaxError:
+        except (OSError, SyntaxError):
             continue
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and any(_decorator_matches(d) for d in node.decorator_list):
-                names.add(node.name)
-    return names
+            if not (isinstance(node, ast.ClassDef) and any(_decorator_matches(d) for d in node.decorator_list)):
+                continue
+            classes.add(node.name)
+            for statement in node.body:
+                if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+                    owners.setdefault(statement.target.id, set()).add(node.name)
+                    if _is_container_annotation(statement.annotation):
+                        containers.add(statement.target.id)
+    return AggregateFields(
+        classes=frozenset(classes),
+        owners={name: frozenset(owning) for name, owning in owners.items()},
+        containers=frozenset(containers),
+    )
 
 
-def _receiver_name(target: ast.expr) -> str | None:
-    """Return the variable name of an Attribute target's receiver, or None.
-
-    ``rom.cover_path``        -> "rom"
-    ``self.x``                -> None  (skipped — method-body internal)
-    ``d["k"].field``          -> None  (Subscript receiver — not flagged)
-    ``a.b.c``                 -> None  (nested attribute, not a plain Name)
-    """
-    if not isinstance(target, ast.Attribute):
-        return None
-    receiver = target.value
-    if not isinstance(receiver, ast.Name):
-        return None
-    if receiver.id == "self":
-        return None
-    return receiver.id
+def _is_bare_self(node: ast.expr) -> bool:
+    return isinstance(node, ast.Name) and node.id == "self"
 
 
-def _to_snake(class_name: str) -> str:
-    """Convert a CamelCase class name to its snake_case identifier form.
-
-    ``RomInstall`` -> ``rom_install``; ``Rom`` -> ``rom``.
-    """
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", class_name).lower()
-
-
-def _name_matches_any_aggregate(name: str, aggregate_names: set[str]) -> str | None:
-    """Return the aggregate class name whose snake_case form exactly equals ``name``.
-
-    Exact-identifier match (not substring): the variable ``rom_state`` does not
-    match the aggregate ``Rom`` — only a variable named exactly ``rom`` does.
-    This keeps short aggregate names (``Rom``) from false-matching the many
-    unrelated ``rom*`` variables in the codebase. The trade-off is recall (a Rom
-    held in a differently-named variable won't be caught), accepted because this
-    is a guardrail — with the ``# pragma: no aggregate-check`` escape hatch and
-    code review as backstops — not a prover.
-    """
-    lowered = name.lower()
-    for agg in aggregate_names:
-        if _to_snake(agg) == lowered:
-            return agg
+def _container_in_chain(node: ast.expr, containers: frozenset[str]) -> ast.Attribute | None:
+    """The first ``<receiver>.<container field>`` in ``node``'s attribute/subscript chain, receiver not bare self."""
+    while isinstance(node, (ast.Attribute, ast.Subscript)):
+        if isinstance(node, ast.Attribute) and node.attr in containers and not _is_bare_self(node.value):
+            return node
+        node = node.value
     return None
 
 
-def find_violations(services_dir: Path, aggregate_names: set[str]) -> list[str]:
-    """Scan ``services_dir`` for aggregate.field = value assignments. Return ``file:line:col message`` lines."""
-    findings: list[str] = []
-    if not aggregate_names or not services_dir.is_dir():
-        return findings
+def _set_or_del_attr(call: ast.Call) -> tuple[str, ast.expr, ast.expr] | None:
+    """``(verb, receiver, name)`` for a ``setattr``/``delattr`` shape, or None."""
+    func = call.func
+    if isinstance(func, ast.Name) and func.id in {"setattr", "delattr"} and len(call.args) >= 2:
+        return func.id, call.args[0], call.args[1]
+    if isinstance(func, ast.Attribute) and func.attr in {"__setattr__", "__delattr__"}:
+        verb = func.attr.strip("_")
+        if isinstance(func.value, ast.Name) and func.value.id == "object":
+            if len(call.args) >= 2:
+                return verb, call.args[0], call.args[1]
+            return None
+        if call.args:
+            return verb, func.value, call.args[0]
+    return None
 
-    for path in sorted(services_dir.rglob("*.py")):
+
+def _owners_text(owners: frozenset[str]) -> str:
+    return ", ".join(sorted(owners))
+
+
+def _file_findings(tree: ast.Module, fields: AggregateFields) -> list[tuple[int, int, str]]:
+    """``(line, col, message)`` for every flagged node in ``tree``."""
+    bare_annotations = {
+        id(node.target) for node in ast.walk(tree) if isinstance(node, ast.AnnAssign) and node.value is None
+    }
+    found: list[tuple[int, int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            if id(node) in bare_annotations:
+                continue
+            verb = "deleted" if isinstance(node.ctx, ast.Del) else "assigned"
+            if isinstance(node, ast.Attribute) and node.attr in fields.owners and not _is_bare_self(node.value):
+                found.append(
+                    (
+                        node.lineno,
+                        node.col_offset,
+                        f"'{ast.unparse(node)}' is {verb} — '{node.attr}' is a field name of "
+                        f"{_owners_text(fields.owners[node.attr])}",
+                    )
+                )
+                continue
+            container = _container_in_chain(node.value, fields.containers)
+            if container is not None:
+                found.append(
+                    (
+                        node.lineno,
+                        node.col_offset,
+                        f"'{ast.unparse(node)}' is {verb} through '{container.attr}', a container field of "
+                        f"{_owners_text(fields.owners[container.attr])}",
+                    )
+                )
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr in MUTATING_METHODS:
+                container = _container_in_chain(func.value, fields.containers)
+                if container is not None:
+                    found.append(
+                        (
+                            node.lineno,
+                            node.col_offset,
+                            f"'{ast.unparse(func)}(...)' mutates '{container.attr}', a container field of "
+                            f"{_owners_text(fields.owners[container.attr])}",
+                        )
+                    )
+                    continue
+            shape = _set_or_del_attr(node)
+            if shape is None:
+                continue
+            verb, receiver, name = shape
+            if (
+                isinstance(name, ast.Constant)
+                and isinstance(name.value, str)
+                and name.value in fields.owners
+                and not _is_bare_self(receiver)
+            ):
+                found.append(
+                    (
+                        node.lineno,
+                        node.col_offset,
+                        f"'{verb}({ast.unparse(receiver)}, {name.value!r}, ...)' — '{name.value}' is a field name of "
+                        f"{_owners_text(fields.owners[name.value])}",
+                    )
+                )
+    return sorted(found)
+
+
+def _iter_scanned_files(backend_dir: Path) -> list[Path]:
+    """Every ``.py`` under the backend except the exempt trees."""
+    exempt = tuple(backend_dir / name for name in EXEMPT_DIRS)
+    return sorted(path for path in backend_dir.rglob("*.py") if not any(path.is_relative_to(root) for root in exempt))
+
+
+def find_violations(files: list[Path] | None = None, fields: AggregateFields | None = None) -> list[str]:
+    """Return ``file:line:col message`` for every aggregate field mutated outside bare ``self``."""
+    if fields is None:
+        fields = collect_aggregate_fields(DOMAIN_DIR)
+    if files is None:
+        files = _iter_scanned_files(BACKEND_DIR)
+    findings: list[str] = []
+    for path in files:
         try:
             source = path.read_text(encoding="utf-8")
         except OSError:
@@ -135,33 +275,12 @@ def find_violations(services_dir: Path, aggregate_names: set[str]) -> list[str]:
         except SyntaxError:
             continue
         source_lines = source.splitlines()
-
-        for node in ast.walk(tree):
-            targets: list[ast.expr] = []
-            if isinstance(node, ast.Assign):
-                targets = list(node.targets)
-            elif isinstance(node, ast.AugAssign) or (isinstance(node, ast.AnnAssign) and node.value is not None):
-                targets = [node.target]
-            else:
-                continue
-            for target in targets:
-                receiver = _receiver_name(target)
-                if receiver is None:
-                    continue
-                matched = _name_matches_any_aggregate(receiver, aggregate_names)
-                if matched is None:
-                    continue
-                line_idx = node.lineno - 1
-                if 0 <= line_idx < len(source_lines) and ESCAPE_HATCH in source_lines[line_idx]:
-                    continue
-                rel = path.relative_to(REPO_ROOT)
-                if not isinstance(target, ast.Attribute):
-                    continue  # unreachable: _receiver_name only succeeds on Attribute targets
-                findings.append(
-                    f"{rel}:{node.lineno}:{node.col_offset} "
-                    f"aggregate field-assignment '{receiver}.{target.attr} = ...' "
-                    f"forbidden ({matched} is @cosmic_aggregate; call a verb-named method instead)"
-                )
+        rel = path.relative_to(REPO_ROOT)
+        findings.extend(
+            f"{rel}:{line}:{col} {message}; call a verb-named method on the aggregate instead"
+            for line, col, message in _file_findings(tree, fields)
+            if ESCAPE_HATCH not in source_lines[line - 1]
+        )
     return findings
 
 
@@ -169,20 +288,23 @@ def main(argv: list[str]) -> int:
     if any(a in {"-h", "--help"} for a in argv):
         print(__doc__)
         return 0
-    aggregate_names = collect_aggregate_class_names(DOMAIN_DIR)
-    findings = find_violations(SERVICES_DIR, aggregate_names)
+    findings = find_violations()
     if findings:
         for line in findings:
             print(line)
         print()
         print(
-            "ERROR: aggregate roots must mutate state only through verb-named methods "
-            "on the aggregate (CLAUDE.md → Aggregates)."
+            "ERROR: aggregate roots change state only through their own verb-named methods "
+            "(CLAUDE.md → Invariant register). A value that only shares a field name takes "
+            f"'# {ESCAPE_HATCH}' on the flagged line."
         )
         return 1
-    print(f"OK: no aggregate field-assignment violations in {SERVICES_DIR.relative_to(REPO_ROOT)}.")
+    print(
+        f"OK: no aggregate field is mutated outside bare self in {BACKEND_DIR.relative_to(REPO_ROOT)}/ "
+        f"({' and '.join(f'{name}/' for name in EXEMPT_DIRS)} not scanned)."
+    )
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    raise SystemExit(main(sys.argv[1:]))

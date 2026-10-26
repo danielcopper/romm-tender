@@ -376,7 +376,7 @@ def _build_saves(
         epoch = parse_iso_to_epoch(save.get("updated_at"))
         save_id = int(save["id"])
         saves_by_id[save_id] = save
-        saves[index].id = save_id
+        saves[index].id = save_id  # pragma: no aggregate-check
         saves[index].updated_at_epoch = 0.0 if epoch is None else epoch
         saves[index].has_updated_at = 0 if epoch is None else 1
         saves[index].content_hash = content_hash
