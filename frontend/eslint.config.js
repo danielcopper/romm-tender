@@ -54,12 +54,15 @@ const NO_CLASS_HASHES = [
     'This looks like one of Steam\'s minified class hashes, which a Steam update changes. Find the element through the selector ladder instead (docs/architecture/desktop-dom-architecture.md, "The selector ladder").',
 }));
 
-// The resolver's codes, taken from the vendored resolver, and the answer field
-// names the backend's check watches (`WATCHED_NAMES`), both written by
+// The resolver's codes and the watched values of its other closed vocabularies,
+// taken from the vendored resolver, and the answer field names the backend's
+// check watches (`WATCHED_NAMES`), all written by
 // `scripts/check_resolver_reading.py --write`, which also fails when the file
 // is not what it would write today.
-const { codes, names } = JSON.parse(readFileSync(path.join(import.meta.dirname, "resolver-vocabulary.json"), "utf8"));
-const RESOLVER_VOCABULARY = { codes, names };
+const { codes, values, names } = JSON.parse(
+  readFileSync(path.join(import.meta.dirname, "resolver-vocabulary.json"), "utf8"),
+);
+const RESOLVER_VOCABULARY = { codes: [...codes, ...values], names };
 
 // The files that read the resolver's vocabulary today, and what each reads.
 // The list only shrinks: src/eslintNoResolverVocabulary.test.ts fails on an
@@ -67,8 +70,10 @@ const RESOLVER_VOCABULARY = { codes, names };
 // written.
 const RESOLVER_READERS_TODAY = {
   "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
-  "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "satisfied"],
+  "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "mismatch", "satisfied"],
   "src/types/firmware.ts": [
+    "by-name",
+    "by-name-then-content",
     "caveats",
     "checked",
     "declaration",
@@ -76,10 +81,15 @@ const RESOLVER_READERS_TODAY = {
     "declared_kind",
     "known_as",
     "locating",
+    "mismatch",
+    "not-comparable",
+    "packaged",
     "refused",
     "requirements_met",
     "satisfied",
     "supplied_by",
+    "unrecognised",
+    "verified",
   ],
   "src/utils/biosFetchable.ts": ["caveats", "declared_kind", "firmware-path-inaccessible"],
   "src/utils/biosFileNote.ts": [
@@ -96,12 +106,17 @@ const RESOLVER_READERS_TODAY = {
     "firmware-path-obstructed",
     "firmware-scan-incomplete",
     "firmware-unreadable",
+    "mismatch",
+    "not-comparable",
     "satisfied",
     "supplied_by",
+    "unrecognised",
+    "verified",
   ],
-  "src/utils/biosGroup.ts": ["satisfied"],
+  "src/utils/biosGroup.ts": ["mismatch", "satisfied"],
   "src/utils/biosPlaceWords.ts": ["declared_kind", "satisfied"],
   "src/utils/biosSummary.ts": [
+    "by-name",
     "caveats",
     "checked",
     "declared",
@@ -142,6 +157,8 @@ const NOT_THE_RESOLVERS = {
   // Whether the launch gate could ask which emulator source starts the game.
   "src/utils/launchGate.ts": ["checked"],
   "src/utils/startingSource.ts": ["checked"],
+  // An outcome of the adoption's own content check against RomM's checksums.
+  "src/types/downloads.ts": ["mismatch"],
   // The conditions in Steam a toast still waits on.
   "src/utils/steamReadyForToasts.ts": ["unmet"],
   "src/utils/failedUpdateToast.ts": ["unmet"],

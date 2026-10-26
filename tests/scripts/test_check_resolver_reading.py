@@ -35,6 +35,8 @@ def _load_check_module() -> ModuleType:
 check = _load_check_module()
 
 _CODES = frozenset(check.resolver_codes().values())
+_VALUES = check.resolver_values()
+_WATCHED = _CODES | _VALUES
 _EXPORTS = check.resolver_exports()
 
 # What the shrinking lists held when they were written. Each may lose entries,
@@ -60,14 +62,21 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
     "domain/firmware_rows.py": frozenset({"present"}),
     "domain/firmware_wants.py": frozenset(
         {
+            "by-name",
+            "by-name-then-content",
+            "cannot-run-without-firmware",
             "caveats",
+            "core-supplies-an-alternative",
             "declared_kind",
             "firmware-image-identified",
             "firmware-image-unlisted",
             "firmware-path-inaccessible",
             "firmware-scan-incomplete",
             "refused",
+            "runs-without-firmware",
             "system_firmware",
+            "unrecognised",
+            "verified",
         }
     ),
     "domain/save_answer.py": frozenset(
@@ -88,13 +97,17 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "save-inside-content",
             "save-inside-image",
             "saves-root-missing",
+            "shared-card",
+            "shared-file",
             "size_fixed",
             "sorted-dir-missing",
         }
     ),
     "domain/source_roots.py": frozenset(
         {
+            "assumed",
             "bios-root-missing",
+            "frontend-default",
             "marker-invalid",
             "marker-missing",
             "marker-unreadable",
@@ -129,7 +142,8 @@ _INTERNALS_WHEN_WRITTEN = frozenset(
 _NOT_THE_RESOLVERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
     "adapters/gavel_native.py": frozenset({"size_fixed"}),
     "host/server.py": frozenset({"refused"}),
-    "services/rom_adoption/service.py": frozenset({"unread"}),
+    "domain/rom_adoption.py": frozenset({"mismatch"}),
+    "services/rom_adoption/service.py": frozenset({"mismatch", "unread"}),
     "services/saves/status/service.py": frozenset({"checked"}),
 }
 
@@ -161,10 +175,10 @@ def lists(monkeypatch: pytest.MonkeyPatch):
 class TestTheRealTree:
     def test_nothing_reads_the_resolver_outside_the_lists(self):
         assert check.import_findings(check.BACKEND, _EXPORTS) == []
-        assert check.vocabulary_findings(check.BACKEND, _CODES) == []
+        assert check.vocabulary_findings(check.BACKEND, _WATCHED) == []
 
     def test_the_panels_copy_is_what_the_check_writes_today(self):
-        assert check.frontend_findings(_CODES) == []
+        assert check.frontend_findings(_CODES, _VALUES) == []
 
     def test_the_readers_list_only_shrinks(self):
         added = {
@@ -208,10 +222,35 @@ class TestTheVocabulary:
         assert {name.split("_")[0] for name in codes} == {"CAVEAT", "HEALTH", "UNRESOLVED", "REASON"}
         assert codes["CAVEAT_FIRMWARE_IMAGE_IDENTIFIED"] == "firmware-image-identified"
         assert codes["HEALTH_ISSUE_MARKER_MISSING"] == "marker-missing"
-        # Only these four families are codes here; the values of the resolver's
-        # other closed vocabularies are not watched.
+        # The other closed vocabularies are watched by value, not as codes.
         assert "ROLE_SETTINGS" not in codes
         assert "GRANULARITY_SHARED_CARD" not in codes
+
+    def test_the_values_are_the_six_vocabularies_less_the_generic_words(self):
+        assert {
+            "cannot-run-without-firmware",
+            "shared-card",
+            "per-game-files",
+            "assumed",
+            "frontend-default",
+            "by-name-then-content",
+            "packaged",
+            "mismatch",
+            "not-comparable",
+        } <= _VALUES
+        assert {"read", "unknown", "none", "open", "unsupported"}.isdisjoint(_VALUES)
+        # A role is no value watched here: its words are Tender's own too.
+        assert "settings" not in _VALUES
+
+    def test_every_generic_word_is_a_value_of_one_of_the_vocabularies(self):
+        atlas = check._vendored_atlas()
+        values = {
+            value
+            for name in atlas.__all__
+            if name.startswith(check.VALUE_FAMILIES) and isinstance(value := getattr(atlas, name), str)
+        }
+
+        assert set(check.GENERIC_VALUES) - values == set()
 
     def test_every_watched_name_is_a_field_of_some_answer(self):
         # A field, or a property the answer computes (``requirements_met``).
@@ -332,12 +371,18 @@ class TestVocabulary:
             ("x = {'caveats': []}\n", "caveats"),
             ("x = 'marker-missing'\n", "marker-missing"),
             ("x = {'firmware-image-identified': 'Identified'}\n", "firmware-image-identified"),
+            ("x = state == 'cannot-run-without-firmware'\n", "cannot-run-without-firmware"),
+            ("x = granularity in ('shared-card',)\n", "shared-card"),
+            ("x = provenance == 'assumed'\n", "assumed"),
+            ("x = locating == 'by-name-then-content'\n", "by-name-then-content"),
+            ("x = declaration == 'packaged'\n", "packaged"),
+            ("x = checked == 'not-comparable'\n", "not-comparable"),
         ],
     )
     def test_a_read_outside_a_reading_module_is_found(self, tmp_path, lists, source, token):
         backend = _tree(tmp_path, {_SERVICE: source, _READING: source})
 
-        [finding] = check.vocabulary_findings(backend, _CODES)
+        [finding] = check.vocabulary_findings(backend, _WATCHED)
 
         assert finding.startswith(f"backend/{_SERVICE}:1 names the resolver's ")
         assert f"{token!r} outside a reading module" in finding
@@ -349,19 +394,20 @@ class TestVocabulary:
             "def f():\n    '''marker-missing'''\n",
             "x = row.path + row.label + row.regions\n",
             "x = 'marker'\n",
+            "x = ('read', 'unknown', 'none', 'open', 'unsupported')\n",
             "row.satisfied = True\n",
         ],
     )
     def test_what_is_not_watched_is_not_found(self, tmp_path, lists, source):
         backend = _tree(tmp_path, {_SERVICE: source})
 
-        assert check.vocabulary_findings(backend, _CODES) == []
+        assert check.vocabulary_findings(backend, _WATCHED) == []
 
     def test_a_listed_module_reads_only_what_it_is_listed_for(self, tmp_path, lists):
         lists.setattr(check, "READERS_TODAY", {_SERVICE: frozenset({"satisfied", "marker-missing"})})
         backend = _tree(tmp_path, {_SERVICE: "x = (row.satisfied, 'marker-missing', row.checked)\n"})
 
-        [finding] = check.vocabulary_findings(backend, _CODES)
+        [finding] = check.vocabulary_findings(backend, _WATCHED)
 
         assert "'checked'" in finding
 
@@ -369,7 +415,7 @@ class TestVocabulary:
         lists.setattr(check, "READERS_TODAY", {_SERVICE: frozenset({"satisfied", "marker-missing"})})
         backend = _tree(tmp_path, {_SERVICE: "x = row.satisfied\n"})
 
-        assert check.vocabulary_findings(backend, _CODES) == [
+        assert check.vocabulary_findings(backend, _WATCHED) == [
             f"backend/{_SERVICE} reads 'marker-missing' no longer: take it off READERS_TODAY."
         ]
 
@@ -377,11 +423,11 @@ class TestVocabulary:
         lists.setattr(check, "NOT_THE_RESOLVERS", {"host/server.py": {"refused": "a reason"}})
         backend = _tree(tmp_path, {"host/server.py": "x = verdict.refused\n"})
 
-        assert check.vocabulary_findings(backend, _CODES) == []
+        assert check.vocabulary_findings(backend, _WATCHED) == []
 
         (backend / "host" / "server.py").write_text("", encoding="utf-8")
 
-        assert check.vocabulary_findings(backend, _CODES) == [
+        assert check.vocabulary_findings(backend, _WATCHED) == [
             "backend/host/server.py reads 'refused' no longer: take it off NOT_THE_RESOLVERS."
         ]
 
@@ -393,13 +439,13 @@ class TestThePanelsCopy:
         monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
         monkeypatch.setattr(check, "FRONTEND_VOCABULARY", copy)
 
-        assert check.frontend_findings(_CODES) == [
+        assert check.frontend_findings(_CODES, _VALUES) == [
             "frontend/resolver-vocabulary.json does not exist: run `python scripts/check_resolver_reading.py --write`."
         ]
 
-        copy.write_text(check.frontend_vocabulary(_CODES - {"marker-missing"}), encoding="utf-8")
+        copy.write_text(check.frontend_vocabulary(_CODES, _VALUES - {"shared-card"}), encoding="utf-8")
 
-        [finding] = check.frontend_findings(_CODES)
+        [finding] = check.frontend_findings(_CODES, _VALUES)
         assert finding.startswith("frontend/resolver-vocabulary.json is not what the vendored resolver")
 
     def test_the_write_is_what_the_check_compares_with(self, tmp_path, monkeypatch):
@@ -409,4 +455,4 @@ class TestThePanelsCopy:
         monkeypatch.setattr(check, "FRONTEND_VOCABULARY", copy)
 
         assert check.main(["--write"]) == 0
-        assert check.frontend_findings(_CODES) == []
+        assert check.frontend_findings(_CODES, _VALUES) == []

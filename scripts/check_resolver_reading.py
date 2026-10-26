@@ -16,8 +16,10 @@ answer for display.
   the reason, and :data:`INTERNALS_TO_REMOVE` the ones still held today.
 * **Vocabulary.** Outside the reading modules, no string literal equals one of
   the resolver's codes (every string constant in ``atlas.__all__`` whose name
-  starts with one of :data:`CODE_FAMILIES`, taken from the vendored resolver
-  when the check runs) and no code reads one of :data:`WATCHED_NAMES`, the
+  starts with one of :data:`CODE_FAMILIES`) or one of the values of its other
+  closed vocabularies (:data:`VALUE_FAMILIES`, less :data:`GENERIC_VALUES`,
+  the words Tender's own code speaks too) — both taken from the vendored
+  resolver when the check runs — and no code reads one of :data:`WATCHED_NAMES`, the
   answer's distinctive field names — as an attribute, a keyword argument, a
   ``getattr`` constant, a subscript or ``.get`` constant, or a dict literal's
   key. Docstrings are not read. :data:`READERS_TODAY` lists what each module
@@ -44,8 +46,10 @@ What it does not see:
   test (``"satisfied" in row``), a ``match`` class or mapping pattern,
   ``setdefault`` or ``pop``, ``dataclasses.asdict``, ``vars`` or ``**``
   unpacking, or written as an attribute (``x.satisfied = …``);
-* the values of the resolver's other closed vocabularies (``GRANULARITY_*``,
-  ``CHECKED_*``, ``PROVENANCE_*`` …), which are no codes here;
+* a value on :data:`GENERIC_VALUES`, and a word of Tender's own that it
+  speaks inside one of the resolver's vocabularies (``CHECKED_REJECTED =
+  "rejected"`` in ``domain/firmware_wants.py``), which the resolver does not
+  export;
 * a watched value handed on through a parameter or a field of Tender's own
   name, which a later layer may still judge again;
 * an import through ``importlib`` or ``__import__`` whose module name is not a
@@ -108,6 +112,27 @@ INTERNALS_TO_REMOVE = frozenset(
 )
 
 CODE_FAMILIES = ("CAVEAT_", "HEALTH_ISSUE_", "UNRESOLVED_", "REASON_")
+
+# The resolver's other closed vocabularies: the console's own firmware, a save's
+# granularity, a root's provenance, how a file is located, a declaration's state
+# and a file's ``checked`` verdict. Their values are watched like the codes.
+VALUE_FAMILIES = ("SYSTEM_FIRMWARE_", "GRANULARITY_", "PROVENANCE_", "LOCATING_", "DECLARATION_", "CHECKED_")
+
+# Values of those vocabularies that are generic words in Tender's own code too,
+# and so are not watched: where else each is spoken.
+GENERIC_VALUES: dict[str, str] = {
+    "absent": "the running-apps reader's word for an app Steam does not list",
+    "none": "the word for nothing chosen across artwork, saves, prune and the panel",
+    "open": "the crash watchdog's word for an unresolved injection",
+    "read": "the shortcut file reader's word for a file it read",
+    "refused": "an artwork slot's outcome, and the endpoint answers' refusals",
+    "unchecked": "the save-stranding and launch-prompt words for a check not made",
+    "unestablished": "the save answer's own state for a save nothing established",
+    "unknown": "the word for anything not known, in a dozen modules and the panel",
+    "unread": "the adoption content check's and the artwork tab's word for a file not read",
+    "unreadable": "the shortcut file reader's and the Steam Input writer's word for a file they could not read",
+    "unsupported": "the word for an action a game or a server cannot take, in saves, discs and the panel",
+}
 
 # The answer's field names that state a fact: its verdicts, their causes, the
 # provenance and granularity of what it read, and the console's own firmware.
@@ -172,14 +197,21 @@ READERS_TODAY: dict[str, frozenset[str]] = {
     "domain/firmware_rows.py": frozenset({"present"}),
     "domain/firmware_wants.py": frozenset(
         {
+            "by-name",
+            "by-name-then-content",
+            "cannot-run-without-firmware",
             "caveats",
+            "core-supplies-an-alternative",
             "declared_kind",
             "firmware-image-identified",
             "firmware-image-unlisted",
             "firmware-path-inaccessible",
             "firmware-scan-incomplete",
             "refused",
+            "runs-without-firmware",
             "system_firmware",
+            "unrecognised",
+            "verified",
         }
     ),
     "domain/save_answer.py": frozenset(
@@ -200,13 +232,17 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "save-inside-content",
             "save-inside-image",
             "saves-root-missing",
+            "shared-card",
+            "shared-file",
             "size_fixed",
             "sorted-dir-missing",
         }
     ),
     "domain/source_roots.py": frozenset(
         {
+            "assumed",
             "bios-root-missing",
+            "frontend-default",
             "marker-invalid",
             "marker-missing",
             "marker-unreadable",
@@ -244,7 +280,11 @@ NOT_THE_RESOLVERS: dict[str, dict[str, str]] = {
     "host/server.py": {
         "refused": "the admission verdict on a connection to the backend",
     },
+    "domain/rom_adoption.py": {
+        "mismatch": "an outcome of the adoption's own content check against RomM's checksums",
+    },
     "services/rom_adoption/service.py": {
+        "mismatch": "an outcome of the adoption's own content check, keying its wording",
         "unread": "an outcome of the adoption's own content check, keying its wording",
     },
     "services/saves/status/service.py": {
@@ -262,6 +302,16 @@ def resolver_codes() -> dict[str, str]:
         if name.startswith(CODE_FAMILIES) and isinstance(value, str):
             codes[name] = value
     return codes
+
+
+def resolver_values() -> frozenset[str]:
+    """The values of the resolver's other closed vocabularies that are watched."""
+    atlas = _vendored_atlas()
+    return frozenset(
+        value
+        for name in atlas.__all__
+        if name.startswith(VALUE_FAMILIES) and isinstance(value := getattr(atlas, name), str)
+    ) - set(GENERIC_VALUES)
 
 
 def resolver_exports() -> frozenset[str]:
@@ -352,7 +402,9 @@ def resolver_imports(tree: ast.AST, exports: frozenset[str]) -> list[tuple[int, 
     found.extend(
         (node.lineno, f"{RESOLVER}.{node.attr}")
         for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and _names_resolver(node.value, bound, by_path=by_path) and node.attr not in exports
+        if isinstance(node, ast.Attribute)
+        and _names_resolver(node.value, bound, by_path=by_path)
+        and node.attr not in exports
     )
     return found
 
@@ -454,7 +506,7 @@ def vocabulary_findings(backend: Path, codes: frozenset[str]) -> list[str]:
             read.setdefault(module, set()).add(token)
             if token in listed or token in excepted:
                 continue
-            what = "the resolver's code" if token in codes else "the resolver's field name"
+            what = "the resolver's field name" if token in WATCHED_NAMES else "the resolver's code or value"
             findings.append(
                 f"backend/{module}:{line} names {what} {token!r} outside a reading module: "
                 "read Tender's own view from the reading module instead."
@@ -475,12 +527,13 @@ def vocabulary_findings(backend: Path, codes: frozenset[str]) -> list[str]:
 # --- The panel's copy ------------------------------------------------------
 
 
-def frontend_vocabulary(codes: frozenset[str]) -> str:
+def frontend_vocabulary(codes: frozenset[str], values: frozenset[str]) -> str:
     return (
         json.dumps(
             {
                 "generated_by": "scripts/check_resolver_reading.py --write",
                 "codes": sorted(codes),
+                "values": sorted(values),
                 "names": sorted(WATCHED_NAMES),
             },
             indent=2,
@@ -489,13 +542,13 @@ def frontend_vocabulary(codes: frozenset[str]) -> str:
     )
 
 
-def frontend_findings(codes: frozenset[str]) -> list[str]:
+def frontend_findings(codes: frozenset[str], values: frozenset[str]) -> list[str]:
     path = FRONTEND_VOCABULARY.relative_to(REPO_ROOT)
     if not FRONTEND_VOCABULARY.exists():
         return [f"{path} does not exist: run `python scripts/check_resolver_reading.py --write`."]
-    if FRONTEND_VOCABULARY.read_text(encoding="utf-8") != frontend_vocabulary(codes):
+    if FRONTEND_VOCABULARY.read_text(encoding="utf-8") != frontend_vocabulary(codes, values):
         return [
-            f"{path} is not what the vendored resolver and WATCHED_NAMES give today: "
+            f"{path} is not what the vendored resolver, GENERIC_VALUES and WATCHED_NAMES give today: "
             "run `python scripts/check_resolver_reading.py --write` and commit the result."
         ]
     return []
@@ -506,14 +559,15 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 0
     codes = frozenset(resolver_codes().values())
+    values = resolver_values()
     if "--write" in argv:
-        FRONTEND_VOCABULARY.write_text(frontend_vocabulary(codes), encoding="utf-8")
+        FRONTEND_VOCABULARY.write_text(frontend_vocabulary(codes, values), encoding="utf-8")
         print(f"Wrote {FRONTEND_VOCABULARY.relative_to(REPO_ROOT)}.")
         return 0
     findings = [
         *import_findings(BACKEND, resolver_exports()),
-        *vocabulary_findings(BACKEND, codes),
-        *frontend_findings(codes),
+        *vocabulary_findings(BACKEND, codes | values),
+        *frontend_findings(codes, values),
     ]
     if findings:
         for line in findings:
@@ -525,7 +579,8 @@ def main(argv: list[str]) -> int:
         )
         return 1
     print(
-        f"OK: the resolver is imported and its {len(codes)} codes and {len(WATCHED_NAMES)} field names are read "
+        f"OK: the resolver is imported and its {len(codes)} codes, {len(values)} closed-vocabulary values and "
+        f"{len(WATCHED_NAMES)} field names are read "
         "only where the reading modules and the lists allow."
     )
     return 0

@@ -231,6 +231,25 @@
     "whdload-prefs-unread",
     "whdload-savepath-unrecorded"
   ],
+  "values": [
+    "assumed",
+    "by-name",
+    "by-name-then-content",
+    "cannot-run-without-firmware",
+    "core-supplies-an-alternative",
+    "frontend-default",
+    "mismatch",
+    "not-comparable",
+    "packaged",
+    "per-game-directory",
+    "per-game-file",
+    "per-game-files",
+    "runs-without-firmware",
+    "shared-card",
+    "shared-file",
+    "unrecognised",
+    "verified"
+  ],
   "names": [
     "absent_by_search",
     "availability",

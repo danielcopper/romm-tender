@@ -47,8 +47,10 @@ const FIXTURE = "src/utils/__eslint_fixtures__/answer.ts";
 // edit of this test.
 const READERS_WHEN_WRITTEN: ByFile = {
   "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
-  "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "satisfied"],
+  "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "mismatch", "satisfied"],
   "src/types/firmware.ts": [
+    "by-name",
+    "by-name-then-content",
     "caveats",
     "checked",
     "declaration",
@@ -56,10 +58,15 @@ const READERS_WHEN_WRITTEN: ByFile = {
     "declared_kind",
     "known_as",
     "locating",
+    "mismatch",
+    "not-comparable",
+    "packaged",
     "refused",
     "requirements_met",
     "satisfied",
     "supplied_by",
+    "unrecognised",
+    "verified",
   ],
   "src/utils/biosFetchable.ts": ["caveats", "declared_kind", "firmware-path-inaccessible"],
   "src/utils/biosFileNote.ts": [
@@ -76,12 +83,17 @@ const READERS_WHEN_WRITTEN: ByFile = {
     "firmware-path-obstructed",
     "firmware-scan-incomplete",
     "firmware-unreadable",
+    "mismatch",
+    "not-comparable",
     "satisfied",
     "supplied_by",
+    "unrecognised",
+    "verified",
   ],
-  "src/utils/biosGroup.ts": ["satisfied"],
+  "src/utils/biosGroup.ts": ["mismatch", "satisfied"],
   "src/utils/biosPlaceWords.ts": ["declared_kind", "satisfied"],
   "src/utils/biosSummary.ts": [
+    "by-name",
     "caveats",
     "checked",
     "declared",
@@ -115,6 +127,7 @@ const READERS_WHEN_WRITTEN: ByFile = {
 const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
   "src/bigpicture/ArtworkTab.tsx": ["refused"],
   "src/boot/steamModules.ts": ["checked"],
+  "src/types/downloads.ts": ["mismatch"],
   "src/utils/launchGate.ts": ["checked"],
   "src/utils/startingSource.ts": ["checked"],
   "src/utils/steamReadyForToasts.ts": ["unmet"],
@@ -144,6 +157,12 @@ describe("no panel code reads the resolver's vocabulary", () => {
     ],
     ["a field in a type", "export type T = { requirements_met: boolean | null };\n", ["requirements_met"]],
     ["a field in an interface", "export interface I {\n  caveats: string[];\n}\n", ["caveats"]],
+    ["the console's own firmware", 'export const v = "runs-without-firmware";\n', ["runs-without-firmware"]],
+    ["a granularity", 'export const v = "shared-file";\n', ["shared-file"]],
+    ["a root's provenance", 'export const v = "frontend-default";\n', ["frontend-default"]],
+    ["how a file is located", 'export const v = "by-name";\n', ["by-name"]],
+    ["a declaration's state", 'export const v = "packaged";\n', ["packaged"]],
+    ["a checked verdict", 'export type V = "verified" | "mismatch";\n', ["verified", "mismatch"]],
   ])("reports %s", async (_kind, source, tokens) => {
     expect(await reported(FIXTURE, source)).toEqual(tokens);
   });
@@ -151,6 +170,7 @@ describe("no panel code reads the resolver's vocabulary", () => {
   it.each([
     ["a generic field name", "export const f = (a: { path: string; label: string }) => a.path + a.label;\n"],
     ["a word that is no code", 'export const c = "marker";\n'],
+    ["a generic word of a closed vocabulary", 'export const c = ["read", "unknown", "none", "unsupported"];\n'],
     ["a field name as a plain string", 'export const c = "satisfied";\n'],
     ["a computed key", "export const f = (a: Record<string, boolean>, k: string) => a[k];\n"],
   ])("leaves %s alone", async (_kind, source) => {
@@ -172,16 +192,19 @@ describe("no panel code reads the resolver's vocabulary", () => {
     expect(await reported("src/boot/steamModules.ts", source)).toEqual(["satisfied"]);
   });
 
-  it("watches every code and name the backend's check wrote", async () => {
+  it("watches every code, value and name the backend's check wrote", async () => {
     const written = JSON.parse(fs.readFileSync("resolver-vocabulary.json", "utf8")) as {
       codes: string[];
+      values: string[];
       names: string[];
     };
     const { codes, names } = await configured();
 
-    expect(codes).toEqual(written.codes);
+    expect(codes).toEqual([...written.codes, ...written.values]);
     expect(names).toEqual(written.names);
     expect(codes).toContain("firmware-image-identified");
+    expect(codes).toContain("shared-card");
+    expect(codes).not.toContain("unknown");
     expect(names).toContain("requirements_met");
   });
 

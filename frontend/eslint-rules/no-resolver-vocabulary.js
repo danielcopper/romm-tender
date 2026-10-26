@@ -29,7 +29,7 @@ export default {
       },
     ],
     messages: {
-      code: "'{{token}}' is one of the resolver's codes. The panel words Tender's own marks, which the backend's reading module decides; it never reads the resolver's codes.",
+      code: "'{{token}}' is one of the resolver's codes or the value of one of its closed vocabularies. The panel words Tender's own marks, which the backend's reading module decides; it never reads the resolver's codes or values.",
       name: "'{{token}}' is one of the resolver's answer field names. The panel reads Tender's own view of the answer, which the backend's reading module builds; it never reads the resolver's fields.",
     },
   },
