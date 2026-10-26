@@ -16,9 +16,11 @@ but ``_vendor/`` and ``native/``, ``domain/`` included, and fails on:
 - a store or ``del`` on ``<receiver>.<field>`` — assignment, augmented
   assignment, an annotated assignment with a value, a ``for`` or ``with``
   target — for any receiver but bare ``self``;
-- ``setattr`` / ``delattr`` (builtin, or ``object.__setattr__`` /
-  ``object.__delattr__`` / a bound ``__setattr__`` / ``__delattr__``) whose
-  field name is a string literal, on any receiver but bare ``self``;
+- ``setattr`` / ``delattr`` — builtin, a class-qualified ``__setattr__`` /
+  ``__delattr__`` (``object.__setattr__(rom, ...)``,
+  ``type(rom).__setattr__(rom, ...)``) or a bound one
+  (``rom.__setattr__(...)``) — whose field name is a string literal, on any
+  receiver but bare ``self``;
 - an item store, item ``del``, attribute store or mutating method call
   (``append``, ``update``, ``pop``, …: ``MUTATING_METHODS``) reached through
   ``<receiver>.<container field>``, for any receiver but bare ``self``.
@@ -150,19 +152,26 @@ def _container_in_chain(node: ast.expr, containers: frozenset[str]) -> ast.Attri
     return None
 
 
+def _is_str_literal(node: ast.expr) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
+
 def _set_or_del_attr(call: ast.Call) -> tuple[str, ast.expr, ast.expr] | None:
-    """``(verb, receiver, name)`` for a ``setattr``/``delattr`` shape, or None."""
+    """``(verb, receiver, name)`` for a ``setattr``/``delattr`` shape, or None.
+
+    A ``__setattr__`` / ``__delattr__`` whose first argument is a string is
+    bound (``rom.__setattr__("name", v)``); otherwise it is class-qualified
+    (``Rom.__setattr__(rom, "name", v)``) and the receiver is that argument.
+    """
     func = call.func
     if isinstance(func, ast.Name) and func.id in {"setattr", "delattr"} and len(call.args) >= 2:
         return func.id, call.args[0], call.args[1]
-    if isinstance(func, ast.Attribute) and func.attr in {"__setattr__", "__delattr__"}:
+    if isinstance(func, ast.Attribute) and func.attr in {"__setattr__", "__delattr__"} and call.args:
         verb = func.attr.strip("_")
-        if isinstance(func.value, ast.Name) and func.value.id == "object":
-            if len(call.args) >= 2:
-                return verb, call.args[0], call.args[1]
-            return None
-        if call.args:
+        if _is_str_literal(call.args[0]):
             return verb, func.value, call.args[0]
+        if len(call.args) >= 2:
+            return verb, call.args[0], call.args[1]
     return None
 
 

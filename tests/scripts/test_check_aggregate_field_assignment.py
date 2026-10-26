@@ -401,6 +401,10 @@ class TestSetattr:
             "object.__setattr__(rom, 'name', 'a')",
             "object.__delattr__(rom, 'name')",
             "rom.__setattr__('name', 'a')",
+            "Rom.__setattr__(rom, 'name', 'a')",
+            "Rom.__delattr__(rom, 'name')",
+            "type(rom).__setattr__(rom, 'name', 'a')",
+            "type(rom).__delattr__(rom, 'name')",
         ],
     )
     def test_a_literal_field_name_flagged(self, patched_check, call: str):
@@ -429,6 +433,15 @@ class TestSetattr:
         _, findings = patched_check(
             domain_files=_DOMAIN,
             services_files={"service.py": "class S:\n    def change(self):\n        setattr(self, 'name', 'a')\n"},
+        )
+        assert findings == []
+
+    def test_a_class_qualified_call_on_bare_self_allowed(self, patched_check):
+        _, findings = patched_check(
+            domain_files=_DOMAIN,
+            services_files={
+                "service.py": "class S:\n    def change(self):\n        Rom.__setattr__(self, 'name', 'a')\n"
+            },
         )
         assert findings == []
 
