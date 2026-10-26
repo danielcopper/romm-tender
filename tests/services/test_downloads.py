@@ -3756,11 +3756,12 @@ class TestDoDownloadCancelled:
 
         downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
+        control = _admitted(downloads, 42)
         with (
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download_cancel),
             pytest.raises(asyncio.CancelledError),
         ):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", control)
 
         # A cancel is an explicit discard: the entry is evicted, not left as a
         # lingering "cancelled" row (#149 downloads-round).
@@ -5636,11 +5637,12 @@ class TestDoDownloadCancelEmitsEvent:
             },
         )
 
+        control = _admitted(downloads, 42)
         with (
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download_cancel),
             pytest.raises(asyncio.CancelledError),
         ):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", control)
 
         # A terminal cancelled frame reached the frontend (was silent before #1017).
         cancelled = [
