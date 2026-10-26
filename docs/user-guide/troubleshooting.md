@@ -654,6 +654,8 @@ If you need to recover a save by hand, look in the `.romm-backup` folder inside 
 `<saves_path>/gba/.romm-backup/`): every file Tender moves aside is timestamped there. Tender moves a save aside
 whenever it is about to be overwritten or removed — not just when resolving a conflict with **Use Server**, but also
 when you switch save slots and when the setup wizard copies an archived save (one uploaded without a slot) into a slot.
+If a save can't be moved aside when you switch slots, the switch stops and the slot you were on stays active; you're
+told which saves, if any, were already moved into `.romm-backup`.
 
 Backups are **not** kept forever. The folder keeps the **newest 10 backups per save file**; older ones are pruned the
 next time that same save is moved aside. Backups of a different save file are never pruned to make room. If you want to

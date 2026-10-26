@@ -246,10 +246,15 @@ would carry, no un-uploaded local changes on tracked files, server reachable —
 a failure answer, `pending_uploads` names the changed files in `files`, and a RomM error from the fetch answers
 `classify_error`'s reason rather than a refusal):
 
-1. The active slot is flipped in memory.
-2. Every local save file the target slot does **not** provide is backed up into `.romm-backup` (never deleted outright)
+1. Every local save file the target slot does **not** provide is backed up into `.romm-backup` (never deleted outright)
    and dropped from tracking — so no stale extension (e.g. a `.rtc` left behind when the new slot holds only `.srm`)
-   lingers to upload into the new slot, and a never-synced local save is always recoverable (#965, #1058).
+   lingers to upload into the new slot, and a never-synced local save is always recoverable (#965, #1058). Before the
+   first move the save backup checks that the folder can take backups (`SaveBackup.prepare_save_backup_folder`: not a
+   link, inside the saves directory, created if missing, listable). A file loses its tracking only once it was moved.
+   The local files are those of the save answer the switch took at its start, as for the pending-changes check: one
+   switch never acts on two directories.
+2. Only then is the active slot flipped in memory — a file the backup could not move would otherwise sit under the new
+   slot, and the next sync would upload the previous slot's save into it.
 3. For each canonical local target the new slot **does** provide, the **newest** server save by `updated_at` is
    downloaded. Two server saves mapping to one target collapse to the newest, so the on-disk result and
    `tracked_save_id` are deterministic, not server-list-order dependent (#1058). The download backs up the file it
@@ -258,6 +263,14 @@ a failure answer, `pending_uploads` names the changed files in `files`, and a Ro
    persists this coherent state and answers the partial failure `SlotSwitchIncomplete` (`reason="switch_incomplete"`) so
    the caller can retry — the completed targets are already correct, and a failed target re-resolves as `Download` on
    the next sync. Saves are never carried between slots; the switch only downloads or backs up, never uploads.
+
+A backup that fails in step 1 ends the switch there, with the previous slot still active and nothing downloaded. Where
+nothing was moved yet — the folder check failed, or the first move did — it refuses with `backup_failed`
+(`SlotSwitchBackupFailed`), and the state is not written. Where some files were already moved, those stop being tracked,
+the state is persisted with the previous slot active, and the answer is the partial failure `SlotSwitchStopped`
+(`reason="switch_stopped"`), whose `set_aside` names the files now in `.romm-backup`. Nothing is put back: a move back
+could overwrite what an emulator wrote in between, and one that failed would leave this answer anyway. A database write
+that fails after the downloads stays a backend error, as in every other flow.
 
 A **named** target slot with no server saves is just the case where step 3 is a no-op: every local file is backed up,
 tracking is cleared, and the slot starts fresh — with every prior save recoverable under `.romm-backup`. (An empty /
@@ -268,7 +281,9 @@ On the SAVES tab every slot is a collapsible panel, and the active slot's panel 
 changes — **Activate Slot**, or a copy that makes its target active — the new active slot's panel opens and the old
 one's closes, reading its files again when it is reopened. Every other panel keeps its state. Activate Slot and New Slot
 both switch through `executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which answers the new save status or
-the sentence the tab shows.
+the sentence the tab shows. On either partial answer, `switch_incomplete` or `switch_stopped`, it also announces the
+ROM's save sync, so the tab reads back the slot and the files the backend saved, and the surface shows the sentence as a
+toast rather than inline.
 
 #### Inside `.romm-backup` — naming and retention
 
@@ -282,7 +297,9 @@ file (`BACKUP_RETENTION`, which every `back_up_save_file` caller passes as `keep
 bounding disk use on the Deck while keeping a deep-enough recovery net. The cap is per save file — backups of a
 different save file in the same folder are never pruned by another file's backup. One deliberate exception: the backup a
 call just wrote is never pruned in that same call, so under sustained same-second churn the folder may briefly hold one
-extra copy (11) — honouring the cap by deleting the just-saved file would defeat the backup.
+extra copy (11) — honouring the cap by deleting the just-saved file would defeat the backup. A removal of an older copy
+that fails is logged as a warning and leaves that copy in place: the file was moved, so the backup still answers moved
+to every caller, which would otherwise treat a file already in `.romm-backup` as not moved.
 
 #### Removed-game cleanup and save recovery
 
@@ -1488,12 +1505,12 @@ rollback API.
   `server_unreachable`, a definitive 404 `not_found`, and any other RomM answer `romm_refused` with `classify_error`'s
   message, which the panel words "Couldn't restore the save: …".
 - **Step 1 (download) fails**: state is not mutated. Local file unchanged, except where the failure came after it was
-  moved into `.romm-backup` (the move into place or the backup's pruning failing): it stays there, and the next sync
-  downloads the slot's newest save (row 4). The `.tmp` is handled as
-  [Negotiate as transport](#negotiate-as-transport-one-decision-kernel) describes. A RomM error is not caught here: the
-  endpoint answers the shared failure shape (`success: false`) with `classify_error`'s reason and message. Where this
-  device cannot write the download (`DeviceWriteError`, a full disk among them) the status is `write_failed`, its
-  message naming the system's words for the fault, and the panel words it "Couldn't restore the save: …".
+  moved into `.romm-backup` (the move into place failing): it stays there, and the next sync downloads the slot's newest
+  save (row 4). The `.tmp` is handled as [Negotiate as transport](#negotiate-as-transport-one-decision-kernel)
+  describes. A RomM error is not caught here: the endpoint answers the shared failure shape (`success: false`) with
+  `classify_error`'s reason and message. Where this device cannot write the download (`DeviceWriteError`, a full disk
+  among them) the status is `write_failed`, its message naming the system's words for the fault, and the panel words it
+  "Couldn't restore the save: …".
 - **Step 1 (download) succeeds, step 2 (PUT) fails**: state mutation from the download is persisted. Status:
   `put_failed`. Local file and local state both point at the target. Cross-device propagation is incomplete — other
   devices still see the original newest save. Calling `rollback_to_version` again is safe and idempotent: step 1 is
