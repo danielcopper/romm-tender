@@ -71,7 +71,7 @@ from adapters.steam_config import SteamConfigAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
-from bootstrap import ServicesBundle
+from bootstrap import LibraryWiring, ServicesBundle, wire_library
 from domain.bios_file import BiosFile
 from domain.refusal import DomainRefused, NamedDomainRefused
 from domain.rom import Rom
@@ -118,7 +118,6 @@ from services.downloads import (
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
-from services.library import LibraryService, LibraryServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
@@ -1252,8 +1251,8 @@ class TestTheSlotRefusalsOnTheWire:
 
 def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home: Path) -> CallDispatcher:
     """The real dispatcher over ``Endpoints`` whose library use cases are the real ``LibraryService`` over a fake."""
-    service = LibraryService(
-        config=LibraryServiceConfig(
+    service = wire_library(
+        LibraryWiring(
             romm_api=romm_api,
             steam_config=SteamConfigAdapter(user_home=str(home), logger=LOGGER),
             settings={"enabled_platforms": {}, "enabled_collections": {"standard": {}, "smart": {}, "virtual": {}}},
@@ -1275,8 +1274,8 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(),
-        )
-    )
+        ),
+    ).service
     endpoints = Endpoints(_make_application(_make_services_bundle(sync_service=service)), HostStatus())
     return CallDispatcher(endpoints, LOGGER)
 

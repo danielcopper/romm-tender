@@ -65,7 +65,7 @@ async def _sync_acking(harness, bindings) -> None:
         return {str(rom_id): app_id for rom_id, app_id in bindings(harness).items()}
 
     service = harness.app.services.sync_service
-    service._chunk_dispatcher._wait_for_unit_complete = ack
+    service._orchestrator._unit_applier._chunk_dispatcher._wait_for_unit_complete = ack
     assert service._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
     await service._orchestrator._do_sync_per_unit()
 

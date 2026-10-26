@@ -1,7 +1,7 @@
 """Tests for CoverPreparer — one work unit's covers, made ready before the apply.
 
 The preparer is reached through the library façade
-(``library.sync._cover_preparer``) so every test drives the same
+(``library.cover_preparer``) so every test drives the same
 instance the orchestrator holds, over the shared state box the cancel signal
 lands on.
 
@@ -42,7 +42,7 @@ class TestDownloadArtworkDelegation:
         library = make_library(artwork=MagicMock(download_artwork=fake_download))
 
         roms = [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
-        result = await library.sync._cover_preparer._download_artwork(roms, progress_step=3, progress_total_steps=7)
+        result = await library.cover_preparer._download_artwork(roms, progress_step=3, progress_total_steps=7)
 
         assert result == {1: "/path/a.png", 2: "/path/b.png"}
         fake_download.assert_called_once()
@@ -62,7 +62,7 @@ class TestDownloadArtworkDelegation:
         fake_download = AsyncMock(return_value={})
         library = make_library(artwork=MagicMock(download_artwork=fake_download))
 
-        await library.sync._cover_preparer._download_artwork(
+        await library.cover_preparer._download_artwork(
             [{"id": 1, "name": "A"}], progress_step=1, progress_total_steps=1, label="Game Boy Advance"
         )
 
@@ -81,7 +81,7 @@ class TestAttachUnitCoverPaths:
 
     @staticmethod
     def _preparer(library, cover_paths):
-        preparer = library.sync._cover_preparer
+        preparer = library.cover_preparer
         preparer._download_artwork = AsyncMock(return_value=cover_paths)
         return preparer
 
@@ -157,7 +157,7 @@ class TestAttachUnitCoverPaths:
         """When ArtworkService applied a different source than the ROM's fresh
         ``path_cover`` — the #1450 ``url_cover`` fallback — the accumulator's value
         is what the commit persists."""
-        preparer = library.sync._cover_preparer
+        preparer = library.cover_preparer
 
         async def download(_roms, *, applied_sources: dict[int, str], **_kwargs):
             applied_sources[10] = "https://cdn.example/fallback.png"
@@ -186,8 +186,8 @@ class TestCoverRefreshPass:
 
     @staticmethod
     def _apply_setup(library, fake_romm_api):
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-cover"
 
@@ -354,7 +354,7 @@ class TestCoverRefreshPass:
         library = make_library(artwork=MagicMock(refresh_changed_covers=fake_refresh))
 
         registry = {"1": {"app_id": 10, "cover_source": "/old.png?ts=1"}}
-        result = await library.sync._cover_preparer.refresh_changed_covers(
+        result = await library.cover_preparer.refresh_changed_covers(
             [{"id": 1, "name": "A"}], registry, progress_step=3, progress_total_steps=7, label="N64"
         )
 

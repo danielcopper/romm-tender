@@ -1,7 +1,8 @@
 """The ``library`` fixture every test under ``tests/services/library/`` runs on, and its factory.
 
-``make_library`` builds a :class:`LibraryService` beside the artwork, metadata
-and shortcut-removal services; ``library`` is what it builds with no argument.
+``make_library`` builds a :class:`LibraryService` through ``wire_library``, the
+way ``bootstrap/`` does, beside the artwork, metadata and shortcut-removal
+services; ``library`` is what it builds with no argument.
 All but the metadata service check conflict rules, and theirs share one
 :class:`PruneConflicts`, which refuses nothing unless a test holds a claim.
 """
@@ -28,10 +29,20 @@ from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
 from adapters.steam_config import SteamConfigAdapter
+from bootstrap import LibraryWiring, wire_library
 from lib.prune_conflicts import PruneConflicts
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.artwork import ArtworkService, ArtworkServiceConfig
-from services.library import LibraryService, LibraryServiceConfig
+from services.library import (
+    ChunkDispatcher,
+    CollectionFetcher,
+    CoverPreparer,
+    LibraryService,
+    LocalLibraryReader,
+    ShortcutLaunchResolver,
+    SyncRunRecorder,
+    UnitApplier,
+)
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 
@@ -40,12 +51,20 @@ from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalSer
 class LibraryHarness:
     """The wired library services and the seams a test seeds or asserts against.
 
-    ``sync`` is the :class:`LibraryService` under test. ``uow`` is the one
-    :class:`FakeUnitOfWork` every service's factory wraps, so a row a test
-    seeds there is the row the services read.
+    ``sync`` is the :class:`LibraryService` under test; the parts after it are
+    the ones ``wire_library`` built that the façade does not hold. ``uow`` is
+    the one :class:`FakeUnitOfWork` every service's factory wraps, so a row a
+    test seeds there is the row the services read.
     """
 
     sync: LibraryService
+    local_library_reader: LocalLibraryReader
+    collection_fetcher: CollectionFetcher
+    shortcut_launch_resolver: ShortcutLaunchResolver
+    chunk_dispatcher: ChunkDispatcher
+    cover_preparer: CoverPreparer
+    sync_run_recorder: SyncRunRecorder
+    unit_applier: UnitApplier
     artwork: ArtworkService
     metadata: MetadataService
     shortcut_removal: ShortcutRemovalService
@@ -166,8 +185,8 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
         emulator_sources = FakeEmulatorSources()
         artwork_job = FakeShortcutArtworkJob()
 
-        sync_service = LibraryService(
-            config=LibraryServiceConfig(
+        parts = wire_library(
+            LibraryWiring(
                 romm_api=api,
                 steam_config=steam_config,
                 settings=settings,
@@ -205,7 +224,14 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
             ),
         )
         return LibraryHarness(
-            sync=sync_service,
+            sync=parts.service,
+            local_library_reader=parts.local_library_reader,
+            collection_fetcher=parts.collection_fetcher,
+            shortcut_launch_resolver=parts.shortcut_launch_resolver,
+            chunk_dispatcher=parts.chunk_dispatcher,
+            cover_preparer=parts.cover_preparer,
+            sync_run_recorder=parts.sync_run_recorder,
+            unit_applier=parts.unit_applier,
             artwork=artwork_service,
             metadata=metadata_service,
             shortcut_removal=shortcut_removal_service,

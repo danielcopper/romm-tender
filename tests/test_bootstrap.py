@@ -905,7 +905,7 @@ class TestWireServices:
 
         result = wire_services(self._make_config(deps))
 
-        assert result.sync_service._unit_applier._launcher_exe == deps["launcher"].path
+        assert result.sync_service._orchestrator._unit_applier._launcher_exe == deps["launcher"].path
         deps["loop"].close()
 
     def test_migration_service_receives_the_firmware_resolver(self, tmp_path):

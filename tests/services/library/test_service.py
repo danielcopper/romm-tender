@@ -572,7 +572,7 @@ class TestGetCollectionsInSteamCount:
         smart = [{"id": 2, "name": "S", "rom_ids": [10]}]
         franchise = [{"id": "fr-1", "name": "F", "rom_ids": [10]}]
         library = make_library(loop=_make_collections_loop(user, smart, franchise))
-        monkeypatch.setattr(library.sync._local_library_reader, "do_read_reachable_rom_ids", _raise)
+        monkeypatch.setattr(library.local_library_reader, "do_read_reachable_rom_ids", _raise)
 
         with caplog.at_level(logging.WARNING):
             result = await library.sync.get_collections()

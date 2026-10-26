@@ -34,6 +34,7 @@ from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.steam_config import SteamConfigAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
+from bootstrap import LibraryWiring, wire_library
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_choice import ArtworkSlotChoice
 from domain.artwork_slot_handover import ArtworkSlotHandover
@@ -42,7 +43,7 @@ from domain.rom import Rom
 from lib.errors import Refused, SgdbApiError, SgdbKeyUnsendableError, SgdbRateLimitedError, SteamGridDirMissingError
 from lib.prune_conflicts import PruneConflicts
 from models.shortcut_artwork import SlotAnswer, WrittenIcon
-from services.library import LibraryService, LibraryServiceConfig
+from services.library import LibraryService
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 
 
@@ -102,8 +103,8 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
     clock = FakeClock()
     cover = FakeCoverSlotReader()
 
-    library = LibraryService(
-        config=LibraryServiceConfig(
+    library = wire_library(
+        LibraryWiring(
             romm_api=fake_romm_api,
             steam_config=steam_config,
             settings=settings,
@@ -126,7 +127,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
             artwork_job=FakeShortcutArtworkJob(),
         ),
-    )
+    ).service
 
     # Bind the fake SGDB transport to the in-memory artwork cache so
     # `download_image` writes land in the cache the service consults.
@@ -1159,8 +1160,8 @@ class TestDebugLoggerProtocolSeam:
 
         steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
 
-        library = LibraryService(
-            config=LibraryServiceConfig(
+        library = wire_library(
+            LibraryWiring(
                 romm_api=fake_romm_api,
                 steam_config=steam_config,
                 settings=settings,
@@ -1183,7 +1184,7 @@ class TestDebugLoggerProtocolSeam:
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
                 artwork_job=FakeShortcutArtworkJob(),
             ),
-        )
+        ).service
 
         fake_steamgrid_db_api.bind_artwork_cache(sgdb_artwork_cache)
         clock = FakeClock()

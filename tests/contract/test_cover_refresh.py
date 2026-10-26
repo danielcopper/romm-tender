@@ -39,7 +39,7 @@ def _orchestrator(harness):
 
 
 def _dispatcher(harness):
-    return harness.app.services.sync_service._chunk_dispatcher
+    return harness.app.services.sync_service._orchestrator._unit_applier._chunk_dispatcher
 
 
 def _box(harness):

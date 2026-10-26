@@ -21,11 +21,11 @@ from domain.sync_run import SyncRun
 
 
 def _recorder(library):
-    return library.sync._sync_run_recorder
+    return library.sync_run_recorder
 
 
 def _clock(library):
-    return library.sync._sync_run_recorder._clock
+    return library.sync_run_recorder._clock
 
 
 def _seed_running(library, run_id="run-1", *, platforms_planned=1, roms_planned=1):

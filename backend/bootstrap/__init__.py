@@ -2,7 +2,7 @@
 
 ``adapters.py`` owns adapter instantiation and the typed bundles it
 hands on; ``services.py`` turns those bundles into the live service
-instances; ``application.py`` composes the two into the
+instances, and ``library.py`` builds the library service's parts for it; ``application.py`` composes the two into the
 :class:`Application` ``main.py`` runs, whose start-up repairs each run
 through the wrapper in ``startup.py``; ``check.py`` copies the live data a
 pre-install check builds on. The names re-exported below are
@@ -21,6 +21,7 @@ from .adapters import (
 )
 from .application import Application, build_application
 from .check import copy_live_data
+from .library import LibraryParts, LibraryWiring, wire_library
 from .services import ServicesBundle, WiringConfig, wire_services
 
 __all__ = [
@@ -28,6 +29,8 @@ __all__ = [
     "Application",
     "BootstrapResult",
     "CallbackBundle",
+    "LibraryParts",
+    "LibraryWiring",
     "RuntimeAdaptersBundle",
     "RuntimeBundle",
     "ServicesBundle",
@@ -36,5 +39,6 @@ __all__ = [
     "bootstrap",
     "build_application",
     "copy_live_data",
+    "wire_library",
     "wire_services",
 ]

@@ -2,24 +2,23 @@
 
 Owns the public use cases the endpoints call (platform/
 collection metadata, sync preview/apply/cancel, reporting, the
-``roms``-derived queries) and the shared :class:`LibrarySyncStateBox` that
-threads through every sub-service. Implementation lives in the
-sub-service modules: :class:`LibraryFetcher` for the listings, the work
-queue and a platform unit's ROMs, :class:`CollectionFetcher` for a collection
-unit's ROMs, :class:`SyncOrchestrator` for a run's lifecycle, control
-and safety heartbeat, its unit loop and its finalize, :class:`UnitApplier` for
-one unit's apply, :class:`SyncPreview` for the preview and its staged snapshot,
-:class:`SyncProgress` for the ``sync_progress`` frames and the status read,
-:class:`SyncReporter` for post-apply
-finalisation and the ``roms``-derived queries,
-:class:`SessionBudgetMonitor` for Steam's renderer-heap budget,
+``roms``-derived queries) over the shared :class:`LibrarySyncStateBox`.
+Implementation lives in the sub-service modules: :class:`LibraryFetcher` for
+the listings, the work queue and a platform unit's ROMs, :class:`CollectionFetcher`
+for a collection unit's ROMs, :class:`SyncOrchestrator` for a run's lifecycle,
+control and safety heartbeat, its unit loop and its finalize, :class:`UnitApplier`
+for one unit's apply, :class:`SyncPreview` for the preview and its staged
+snapshot, :class:`SyncProgress` for the ``sync_progress`` frames and the status
+read, :class:`SyncReporter` for post-apply finalisation and the ``roms``-derived
+queries, :class:`SessionBudgetMonitor` for Steam's renderer-heap budget,
 :class:`ShortcutLaunchResolver` for each ROM's launch facts,
 :class:`ChunkDispatcher` for one unit's emit → ack → commit round-trips,
 :class:`CoverPreparer` for a unit's covers, :class:`SyncRunRecorder` for the
-run's own ``SyncRun`` row, :class:`LocalLibraryReader` for what
-this device already recorded about the library. The façade itself only wires the
-pieces together, checks each use case's conflict rules and delegates — anything
-that touches RomM or mutates in-flight sync state belongs in a sub-service.
+run's own ``SyncRun`` row, :class:`LocalLibraryReader` for what this device
+already recorded about the library. ``bootstrap/library.py`` builds the box and
+every part and hands the façade the ones it calls; the façade builds none of
+them. It checks each use case's conflict rules and delegates — anything that
+touches RomM or mutates in-flight sync state belongs in a sub-service.
 """
 
 from __future__ import annotations
@@ -27,327 +26,65 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from services.library._state import CollectionMembership, LibrarySyncStateBox
-from services.library.chunk_dispatcher import ChunkDispatcher, ChunkDispatcherConfig
-from services.library.collection_fetcher import CollectionFetcher, CollectionFetcherConfig
-from services.library.cover_preparer import CoverPreparer, CoverPreparerConfig
-from services.library.fetcher import LibraryFetcher, LibraryFetcherConfig
-from services.library.local_library_reader import LocalLibraryReader, LocalLibraryReaderConfig
-from services.library.reporter import SyncReporter, SyncReporterConfig
-from services.library.session_budget import SessionBudgetMonitor, SessionBudgetMonitorConfig
-from services.library.shortcut_launch_resolver import ShortcutLaunchResolver, ShortcutLaunchResolverConfig
-from services.library.sync_orchestrator import SyncOrchestrator, SyncOrchestratorConfig
-from services.library.sync_preview import SyncPreview, SyncPreviewConfig
-from services.library.sync_progress import SyncProgress, SyncProgressConfig
-from services.library.sync_run_recorder import SyncRunRecorder, SyncRunRecorderConfig
-from services.library.unit_apply import UnitApplier, UnitApplierConfig
-
 if TYPE_CHECKING:
-    import asyncio
-    import logging
-
     from domain.preview_delta import PreviewDelta
     from domain.sync_state import SyncState
-    from services.protocols import (
-        ActiveCoreReader,
-        ArtworkManager,
-        Clock,
-        ConflictRules,
-        DebugLogger,
-        DiscResolver,
-        EmulatorSourcesReader,
-        EventEmitter,
-        RendererGcFn,
-        RendererRssFn,
-        RommLibraryApi,
-        SettingsPersister,
-        ShortcutArtworkJob,
-        Sleeper,
-        SteamConfigStore,
-        UnitOfWorkFactory,
-        UuidGen,
-    )
+    from services.library._state import CollectionMembership, LibrarySyncStateBox
+    from services.library.fetcher import LibraryFetcher
+    from services.library.reporter import SyncReporter
+    from services.library.session_budget import SessionBudgetMonitor
+    from services.library.sync_orchestrator import SyncOrchestrator
+    from services.library.sync_preview import SyncPreview
+    from services.library.sync_progress import SyncProgress
+    from services.protocols import ConflictRules
 
 
 @dataclass(frozen=True)
 class LibraryServiceConfig:
-    """Frozen wiring bundle handed to ``LibraryService.__init__``.
+    """Frozen wiring bundle handed to ``LibraryService.__init__``: the parts the façade calls.
 
-    Holds the Protocol-typed adapters, the live settings dict, runtime
-    infrastructure, time/sleep/uuid seams, event
-    emitter, the ``settings.json`` persister and the SQLite Unit-of-Work
-    factory (the synced-ROM registry, last-sync timestamp, sync stats and
-    metadata cache now live in ``roms`` / ``sync_runs`` / ``rom_metadata``
-    via the UoW), debug-logger seam, the artwork peer service, and the
-    shared per-ROM ``active_core`` resolver (used to bake each ROM's full
-    active core into ``launch_options`` at sync) and the shared ``disc_resolver``
-    (used to bake each multi-disc ROM's selected disc into ``launch_options`` at
-    sync), and the ``emulator_sources`` a run takes its one reading of. The
-    ``renderer_rss`` / ``renderer_gc`` seams feed the session-budget gate: the
-    RSS reader measures the Steam renderer's heap and the GC trigger settles it
-    before a reading, so the apply can pause before Steam's per-session budget is
-    exhausted. ``conflict_rules`` are what a library use case checks at
-    its entry, under its endpoint's name, and what the ``sync_stale`` /
-    ``sync_complete`` events take their leases through. The ``artwork_job`` is handed
-    to the orchestrator and the preview and, as its placeholder path, to the
-    chunk dispatcher.
+    ``bootstrap/library.py`` builds them, over the one ``sync_state_box`` they
+    share. ``conflict_rules`` are what a library use case checks at its entry,
+    under its endpoint's name; ``settings`` is the live settings dict.
     """
 
-    romm_api: RommLibraryApi
-    steam_config: SteamConfigStore
-    settings: dict[str, Any]
-    loop: asyncio.AbstractEventLoop
-    logger: logging.Logger
-    launcher_exe: str
-    emit: EventEmitter
-    clock: Clock
-    uuid_gen: UuidGen
-    sleeper: Sleeper
-    settings_persister: SettingsPersister
-    log_debug: DebugLogger
-    artwork: ArtworkManager
-    uow_factory: UnitOfWorkFactory
-    active_core: ActiveCoreReader
-    disc_resolver: DiscResolver
-    emulator_sources: EmulatorSourcesReader
-    renderer_rss: RendererRssFn
-    renderer_gc: RendererGcFn
+    sync_state_box: LibrarySyncStateBox
+    fetcher: LibraryFetcher
+    progress: SyncProgress
+    session_budget: SessionBudgetMonitor
+    reporter: SyncReporter
+    preview: SyncPreview
+    orchestrator: SyncOrchestrator
     conflict_rules: ConflictRules
-    artwork_job: ShortcutArtworkJob
+    settings: dict[str, Any]
 
 
 class LibraryService:
     """Façade for the library sync pipeline.
 
-    Composes :class:`LibraryFetcher` (platform/collection roundtrips +
-    metadata-cache stamping), :class:`CollectionFetcher` (a collection unit's
-    ROMs), :class:`SyncOrchestrator` (a run's lifecycle and control + safety
-    heartbeat, its unit loop and its finalize), :class:`UnitApplier` (one unit's
-    apply, from its fetch to its last chunk), :class:`SyncPreview` (the
-    read-only preview, its staged snapshot and its cancel), :class:`SyncProgress`
-    (the ``sync_progress`` frames and the status read), :class:`SyncReporter`
-    (post-apply finalisation + the
-    ``roms``-derived queries), :class:`SessionBudgetMonitor` (Steam's
-    renderer-heap budget), :class:`ShortcutLaunchResolver` (each ROM's installed
-    path + active emulator), :class:`ChunkDispatcher` (one unit's apply, emitted
-    and committed a chunk at a time), :class:`CoverPreparer` (a unit's covers,
-    refreshed and downloaded before its shortcuts are emitted),
-    :class:`SyncRunRecorder` (the run's ``SyncRun`` row, opened at its plan and
-    closed at its outcome), and
-    :class:`LocalLibraryReader` (this device's own record of the library, read
-    back out of SQLite) over a single shared :class:`LibrarySyncStateBox`. The
-    façade itself owns the box and exposes the use cases the endpoints call;
-    every implementation method lives on one of the sub-services. A use case an
-    endpoint calls checks its conflict rules at its entry, under that endpoint's
-    name, and raises the rule's refusal when one holds (GLOSSARY.md →
-    Conflict rules).
+    Holds the parts its use cases delegate to — :class:`LibraryFetcher`
+    (platform/collection roundtrips and the sync toggles), :class:`SyncOrchestrator`
+    (a run's lifecycle and control + safety heartbeat), :class:`SyncPreview`
+    (the read-only preview, its staged snapshot and its cancel),
+    :class:`SyncProgress` (the status read), :class:`SessionBudgetMonitor`
+    (Steam's renderer-heap budget) and :class:`SyncReporter` (the per-unit
+    commit and the ``roms``-derived queries) — over the shared
+    :class:`LibrarySyncStateBox`. ``bootstrap/library.py`` builds them and the
+    parts they hold; the façade builds none. A use case an endpoint calls
+    checks its conflict rules at its entry, under that endpoint's name, and
+    raises the rule's refusal when one holds (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: LibraryServiceConfig) -> None:
         self._config = config
-        self._logger = config.logger
         self._rules = config.conflict_rules
-        self._box = LibrarySyncStateBox()
-
-        # Sub-service: LocalLibraryReader — the fetcher's inward pair, reading
-        # the local database where the fetcher reads RomM. Constructed first:
-        # the fetcher holds it for the collections listing's reachable set, and
-        # the preview, the unit applier and the orchestrator hold it and offload
-        # every other read through their own executors.
-        self._local_library_reader = LocalLibraryReader(config=LocalLibraryReaderConfig(uow_factory=config.uow_factory))
-
-        # Sub-service: progress — the run's ``sync_progress`` frames. Constructed
-        # before every part that narrates a run, each of which is handed it, or
-        # its ``emit_progress``.
-        self._progress = SyncProgress(
-            config=SyncProgressConfig(emit=config.emit, logger=config.logger, sync_state_box=self._box)
-        )
-
-        # Sub-service: fetcher — the listings, the work queue and a platform
-        # unit's ROMs. Constructed before the preview, the unit applier and the
-        # orchestrator, which hold it.
-        self._fetcher = LibraryFetcher(
-            config=LibraryFetcherConfig(
-                romm_api=config.romm_api,
-                settings=config.settings,
-                loop=config.loop,
-                logger=config.logger,
-                settings_persister=config.settings_persister,
-                log_debug=config.log_debug,
-                uow_factory=config.uow_factory,
-                sync_state_box=self._box,
-                emit_progress=self._progress.emit_progress,
-                local_library_reader=self._local_library_reader,
-            )
-        )
-
-        # Sub-service: CollectionFetcher — a collection unit's skip, members and
-        # walk. Built beside the fetcher, which queues the collection units it
-        # fetches, and held by the preview and the unit applier.
-        self._collection_fetcher = CollectionFetcher(
-            config=CollectionFetcherConfig(
-                romm_api=config.romm_api,
-                loop=config.loop,
-                logger=config.logger,
-                uow_factory=config.uow_factory,
-                sync_state_box=self._box,
-                emit_progress=self._progress.emit_progress,
-            )
-        )
-
-        # Sub-service: ShortcutLaunchResolver — resolves, per ROM, which file
-        # is launched and which program runs it. Constructed before the
-        # preview and the unit applier, which resolve every bake's launch facts
-        # through it, and the orchestrator, which takes a run's one reading of
-        # the emulator sources from it.
-        self._shortcut_launch_resolver = ShortcutLaunchResolver(
-            config=ShortcutLaunchResolverConfig(
-                uow_factory=config.uow_factory,
-                active_core=config.active_core,
-                disc_resolver=config.disc_resolver,
-                emulator_sources=config.emulator_sources,
-            )
-        )
-
-        # Sub-service: session-budget monitor. Constructed before its holders:
-        # the chunk dispatcher asks it at every chunk boundary, the preview for
-        # its prognosis, the orchestrator for the run-start baseline and the
-        # terminal memory delta.
-        self._session_budget = SessionBudgetMonitor(
-            config=SessionBudgetMonitorConfig(
-                loop=config.loop,
-                logger=config.logger,
-                sync_state_box=self._box,
-                renderer_rss=config.renderer_rss,
-                renderer_gc=config.renderer_gc,
-            )
-        )
-
-        # Sub-service: reporter — post-apply finalisation and the
-        # ``roms``-derived queries. Constructed before the chunk dispatcher,
-        # which commits every chunk through it, and the orchestrator, which
-        # finalises the run's collections and emits ``sync_complete`` through it.
-        self._reporter = SyncReporter(
-            config=SyncReporterConfig(
-                steam_config=config.steam_config,
-                settings=config.settings,
-                loop=config.loop,
-                logger=config.logger,
-                emit=config.emit,
-                clock=config.clock,
-                uow_factory=config.uow_factory,
-                sync_state_box=self._box,
-                emit_progress=self._progress.emit_progress,
-                artwork=config.artwork,
-                conflict_rules=config.conflict_rules,
-            )
-        )
-
-        # Sub-service: chunk dispatcher — one work unit's apply, emitted to the
-        # frontend and committed a chunk at a time. Constructed before the unit
-        # applier, which holds it and hands it each unit's built delta.
-        self._chunk_dispatcher = ChunkDispatcher(
-            config=ChunkDispatcherConfig(
-                logger=config.logger,
-                emit=config.emit,
-                clock=config.clock,
-                sleeper=config.sleeper,
-                sync_state_box=self._box,
-                reporter=self._reporter,
-                session_budget=self._session_budget,
-                icon_placeholder_path=config.artwork_job.placeholder_path,
-            )
-        )
-
-        # Sub-service: cover preparer — the apply path's covers, bound to this
-        # run's progress and cancel signals. Constructed before the unit
-        # applier, which asks it for each unit's covers before the delta is
-        # handed to the dispatcher, and the preview, which counts the cover-only
-        # work through it. It is one of the two modules the ``artwork`` seam is
-        # confined to; the reporter above is the other, for commit-time
-        # cover-path finalisation.
-        self._cover_preparer = CoverPreparer(
-            config=CoverPreparerConfig(
-                artwork=config.artwork,
-                sync_state_box=self._box,
-                emit_progress=self._progress.emit_progress,
-            )
-        )
-
-        # Sub-service: run recorder — the ``SyncRun`` row for this run.
-        # Constructed before the orchestrator, which decides which terminal
-        # status a stopped run earns and hands that decision here to be written.
-        self._sync_run_recorder = SyncRunRecorder(
-            config=SyncRunRecorderConfig(
-                clock=config.clock,
-                uow_factory=config.uow_factory,
-            )
-        )
-
-        # Sub-service: unit applier — one work unit's apply, from its fetch to
-        # its last chunk. Constructed before the orchestrator, which hands it
-        # each unit of a run.
-        self._unit_applier = UnitApplier(
-            config=UnitApplierConfig(
-                settings=config.settings,
-                loop=config.loop,
-                logger=config.logger,
-                launcher_exe=config.launcher_exe,
-                clock=config.clock,
-                uow_factory=config.uow_factory,
-                sync_state_box=self._box,
-                fetcher=self._fetcher,
-                collection_fetcher=self._collection_fetcher,
-                shortcut_launch_resolver=self._shortcut_launch_resolver,
-                local_library_reader=self._local_library_reader,
-                cover_preparer=self._cover_preparer,
-                chunk_dispatcher=self._chunk_dispatcher,
-                emit_progress=self._progress.emit_progress,
-            )
-        )
-
-        # Sub-service: preview — the read-only preview, its staged snapshot and
-        # its cancel.
-        self._preview = SyncPreview(
-            config=SyncPreviewConfig(
-                settings=config.settings,
-                loop=config.loop,
-                logger=config.logger,
-                launcher_exe=config.launcher_exe,
-                clock=config.clock,
-                uuid_gen=config.uuid_gen,
-                sync_state_box=self._box,
-                fetcher=self._fetcher,
-                collection_fetcher=self._collection_fetcher,
-                shortcut_launch_resolver=self._shortcut_launch_resolver,
-                local_library_reader=self._local_library_reader,
-                session_budget=self._session_budget,
-                cover_preparer=self._cover_preparer,
-                progress=self._progress,
-                artwork_job=config.artwork_job,
-            )
-        )
-
-        self._orchestrator = SyncOrchestrator(
-            config=SyncOrchestratorConfig(
-                loop=config.loop,
-                logger=config.logger,
-                emit=config.emit,
-                clock=config.clock,
-                uuid_gen=config.uuid_gen,
-                sync_state_box=self._box,
-                fetcher=self._fetcher,
-                unit_applier=self._unit_applier,
-                reporter=self._reporter,
-                shortcut_launch_resolver=self._shortcut_launch_resolver,
-                local_library_reader=self._local_library_reader,
-                session_budget=self._session_budget,
-                sync_run_recorder=self._sync_run_recorder,
-                conflict_rules=config.conflict_rules,
-                artwork_job=config.artwork_job,
-                progress=self._progress,
-            )
-        )
+        self._box = config.sync_state_box
+        self._fetcher = config.fetcher
+        self._progress = config.progress
+        self._session_budget = config.session_budget
+        self._reporter = config.reporter
+        self._preview = config.preview
+        self._orchestrator = config.orchestrator
 
     # ── Public properties ────────────────────────────────────────
 

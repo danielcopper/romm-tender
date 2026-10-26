@@ -73,7 +73,7 @@ async def test_the_shortcut_follows_the_same_dump_and_its_page_offers_the_instal
         event.set()
         return {str(rom_id): _APP_ID for rom_id in sync._box.pending_sync}
 
-    sync._chunk_dispatcher._wait_for_unit_complete = ack_reuse
+    sync._orchestrator._unit_applier._chunk_dispatcher._wait_for_unit_complete = ack_reuse
     assert sync._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
     await sync._orchestrator._do_sync_per_unit()
 

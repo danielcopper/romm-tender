@@ -73,7 +73,7 @@ def _romm_lists_n64_and_faves_reaches_20(harness) -> None:
         event.set()
         return {str(rom_id): 6000 + rom_id for rom_id in sync._box.pending_sync}
 
-    sync._chunk_dispatcher._wait_for_unit_complete = ack
+    sync._orchestrator._unit_applier._chunk_dispatcher._wait_for_unit_complete = ack
 
 
 async def _apply(harness, run_id: str) -> dict[str, Any]:

@@ -36,7 +36,7 @@ class TestRegistryProjections:
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="Null", fs_name="null.z64", cover_source=None)
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        registry = library.sync._local_library_reader.do_read_apply_registry(unit)
+        registry = library.local_library_reader.do_read_apply_registry(unit)
 
         assert registry["10"]["cover_source"] == self._OLD
         assert registry["11"]["cover_source"] is None
@@ -46,7 +46,7 @@ class TestRegistryProjections:
             library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64", cover_source=self._OLD
         )
 
-        registry, _platforms, _collections = library.sync._local_library_reader.do_read_preview_baseline({"n64": "N64"})
+        registry, _platforms, _collections = library.local_library_reader.do_read_preview_baseline({"n64": "N64"})
 
         assert registry["10"]["cover_source"] == self._OLD
 
@@ -58,7 +58,7 @@ class TestResidentGroupKeys:
         _seed_rom_row(library, 1, app_id=100, platform_slug="n64", sibling_group_key="igdb:5:1")
         _seed_rom_row(library, 2, app_id=None, platform_slug="n64", sibling_group_key=None)
 
-        keys = library.sync._local_library_reader.do_read_resident_group_keys()
+        keys = library.local_library_reader.do_read_resident_group_keys()
 
         assert keys == {1: "igdb:5:1"}
 
@@ -69,29 +69,29 @@ class TestReachableRomIds:
     def test_a_bound_row_is_reachable(self, library):
         _seed_rom_row(library, 1, app_id=100, platform_slug="n64", sibling_group_key=None)
 
-        assert library.sync._local_library_reader.do_read_reachable_rom_ids() == {1}
+        assert library.local_library_reader.do_read_reachable_rom_ids() == {1}
 
     def test_an_unbound_row_is_reachable_through_its_groups_binding(self, library):
         _seed_rom_row(library, 1, app_id=100, platform_slug="n64", sibling_group_key="igdb:5:1")
         _seed_rom_row(library, 2, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
 
-        assert library.sync._local_library_reader.do_read_reachable_rom_ids() == {1, 2}
+        assert library.local_library_reader.do_read_reachable_rom_ids() == {1, 2}
 
     def test_a_group_with_no_binding_reaches_nothing(self, library):
         _seed_rom_row(library, 1, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
         _seed_rom_row(library, 2, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
 
-        assert library.sync._local_library_reader.do_read_reachable_rom_ids() == set()
+        assert library.local_library_reader.do_read_reachable_rom_ids() == set()
 
     def test_null_keyed_unbound_rows_are_not_folded_into_a_bound_null_keyed_row(self, library):
         """A NULL key relates a row to nothing, so a binding on another NULL-keyed row does not reach it."""
         _seed_rom_row(library, 1, app_id=100, platform_slug="n64", sibling_group_key=None)
         _seed_rom_row(library, 2, app_id=None, platform_slug="n64", sibling_group_key=None)
 
-        assert library.sync._local_library_reader.do_read_reachable_rom_ids() == {1}
+        assert library.local_library_reader.do_read_reachable_rom_ids() == {1}
 
     def test_no_rows_reach_nothing(self, library):
-        assert library.sync._local_library_reader.do_read_reachable_rom_ids() == set()
+        assert library.local_library_reader.do_read_reachable_rom_ids() == set()
 
     def test_agrees_with_the_syncs_collection_filing(self, library):
         """The set is exactly the rom_ids ``SyncReporter._member_app_id`` resolves to a shortcut.
@@ -112,7 +112,7 @@ class TestReachableRomIds:
         _seed_rom_row(library, 8, app_id=800, platform_slug="n64", sibling_group_key="igdb:7:n64")
         missing = 99
 
-        reachable = library.sync._local_library_reader.do_read_reachable_rom_ids()
+        reachable = library.local_library_reader.do_read_reachable_rom_ids()
 
         reporter = library.sync._reporter
         with library.uow as uow:
@@ -137,10 +137,10 @@ class TestCollectionListedRomIds:
             library.uow, "franchise-1", "virtual", updated_at="", completed_at="t", rom_count=2, member_rom_ids=(2, 3)
         )
 
-        assert library.sync._local_library_reader.do_read_collection_listed_rom_ids() == frozenset({1, 2, 3})
+        assert library.local_library_reader.do_read_collection_listed_rom_ids() == frozenset({1, 2, 3})
 
     def test_no_stamp_lists_nothing(self, library):
-        assert library.sync._local_library_reader.do_read_collection_listed_rom_ids() == frozenset()
+        assert library.local_library_reader.do_read_collection_listed_rom_ids() == frozenset()
 
 
 class TestStaleScan:
@@ -149,7 +149,7 @@ class TestStaleScan:
         _seed_rom_row(library, 2, app_id=200, platform_slug="gba")
         _seed_rom_row(library, 3, app_id=None, platform_slug="gba")
 
-        stale = library.sync._local_library_reader.do_scan_stale_roms({1}, set())
+        stale = library.local_library_reader.do_scan_stale_roms({1}, set())
 
         assert stale == [StaleRow(2, 200, "gba", sibling_group_key="romm:seed:1")]
 
@@ -157,7 +157,7 @@ class TestStaleScan:
         _seed_rom_row(library, 1, app_id=100, platform_slug="gba", sibling_group_key="igdb:7:1")
         _seed_rom_row(library, 2, app_id=200, platform_slug="gba", sibling_group_key=None)
 
-        stale = library.sync._local_library_reader.do_scan_stale_roms(set(), set())
+        stale = library.local_library_reader.do_scan_stale_roms(set(), set())
 
         assert sorted((row.rom_id, row.sibling_group_key) for row in stale) == [(1, "igdb:7:1"), (2, None)]
 
@@ -169,7 +169,7 @@ class TestKeptPlatformNames:
         with library.uow as uow:
             uow.kv_config.set("platform_names", '{"n64": "Nintendo 64", "gba": "Game Boy Advance"}')
 
-        assert library.sync._local_library_reader.do_read_kept_platform_names({"n64", "psx"}) == {"n64": "Nintendo 64"}
+        assert library.local_library_reader.do_read_kept_platform_names({"n64", "psx"}) == {"n64": "Nintendo 64"}
 
     def test_no_kept_names_answers_none(self, library):
-        assert library.sync._local_library_reader.do_read_kept_platform_names({"n64"}) == {}
+        assert library.local_library_reader.do_read_kept_platform_names({"n64"}) == {}

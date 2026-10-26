@@ -54,7 +54,7 @@ async def test_a_run_cancelled_at_shutdown_in_the_middle_of_a_chunk_leaves_the_r
         return None
 
     sync_service = harness.app.services.sync_service
-    sync_service._chunk_dispatcher._wait_for_unit_complete = the_panel_acks_n64_only
+    sync_service._orchestrator._unit_applier._chunk_dispatcher._wait_for_unit_complete = the_panel_acks_n64_only
 
     assert (await harness.endpoints.start_sync())["success"] is True
     await asyncio.wait_for(second_chunk_waiting.wait(), 10)

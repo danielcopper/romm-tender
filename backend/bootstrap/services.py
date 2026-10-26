@@ -45,7 +45,6 @@ from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
-from services.library import LibraryService, LibraryServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
@@ -72,6 +71,8 @@ from services.update_outcome import UpdateOutcomeService, UpdateOutcomeServiceCo
 from services.update_output import UpdateOutputService, UpdateOutputServiceConfig
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
 
+from .library import LibraryWiring, wire_library
+
 if TYPE_CHECKING:
     from typing import Any
 
@@ -79,6 +80,7 @@ if TYPE_CHECKING:
     from domain.update_release import UpdateSource
     from lib.errors import Refused
     from models.shortcut_launcher import ShortcutLauncher
+    from services.library import LibraryService
     from services.protocols import (
         InstalledRomRemoverFn,
         RendererAboveCeilingFn,
@@ -479,8 +481,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     )
     removal_in_flight_binding.set(shortcut_removal_service.is_removal_in_flight)
 
-    sync_service = LibraryService(
-        config=LibraryServiceConfig(
+    sync_service = wire_library(
+        LibraryWiring(
             romm_api=cfg.adapters.romm_api,
             steam_config=cfg.adapters.steam_config,
             settings=cfg.stores.settings,
@@ -503,7 +505,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             conflict_rules=conflict_rules,
             artwork_job=shortcut_artwork_service,
         ),
-    )
+    ).service
     pending_sync_binding.set(lambda: sync_service.pending_sync)
     sync_in_flight_binding.set(sync_service.is_sync_in_flight)
     renderer_above_ceiling_binding.set(lambda: sync_service.renderer_above_ceiling)

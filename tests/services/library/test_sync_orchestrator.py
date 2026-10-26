@@ -982,7 +982,7 @@ class TestPreviewOverASkippedUnit:
                     listing_rom_id_checksum=rom_id_checksum((10,)),
                 )
             )
-        fetcher = library.sync._collection_fetcher
+        fetcher = library.collection_fetcher
         fetch_collection_unit = fetcher.fetch_collection_unit
         collection_skips: list[bool] = []
 
@@ -1582,8 +1582,8 @@ class TestRunKindOnTheWire:
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         assert library.sync._box.try_begin_run("run-apply", kind=SyncRunKind.APPLY) is True
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -1627,7 +1627,7 @@ class TestRunKindOnTheWire:
         library.settings["enabled_platforms"] = {"1": True}
         # Blow up inside the unit loop, after the plan — that path's ERROR frame
         # comes from ``SyncProgress.write_error_frame``, not ``emit_progress``.
-        library.sync._unit_applier.apply_unit = AsyncMock(side_effect=RuntimeError("boom"))
+        library.unit_applier.apply_unit = AsyncMock(side_effect=RuntimeError("boom"))
         assert library.sync._box.try_begin_run("run-err", kind=SyncRunKind.APPLY) is True
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -1963,9 +1963,7 @@ class TestFetchCollectionUnit:
             unwalked_platform_ids=(1, 2, 3),
         )
         synced: set[int] = set()
-        new_roms, ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
-            unit, synced
-        )
+        new_roms, ids, _skipped, _restamp_settles = await library.collection_fetcher.fetch_collection_unit(unit, synced)
         assert [r["id"] for r in new_roms] == [1, 2, 3]
         assert ids == [1, 2, 3]
         assert synced == {1, 2, 3}
@@ -1990,9 +1988,7 @@ class TestFetchCollectionUnit:
 
         # rom_id=1 was already fetched via a platform unit
         synced: set[int] = {1}
-        new_roms, ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
-            unit, synced
-        )
+        new_roms, ids, _skipped, _restamp_settles = await library.collection_fetcher.fetch_collection_unit(unit, synced)
         assert [r["id"] for r in new_roms] == [2]
         # All collection rom_ids reported back even if not in new_roms
         assert ids == [1, 2]
@@ -2024,8 +2020,8 @@ class TestDoSyncPerUnit:
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
         library.settings["enabled_platforms"] = {"1": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-plan"
 
@@ -2066,8 +2062,8 @@ class TestDoSyncPerUnit:
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20, 21, 22])
         library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {}}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-est"
 
@@ -2116,8 +2112,8 @@ class TestDoSyncPerUnit:
         with library.uow as uow:
             assert uow.platform_sync_state.get("n64") is None
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-restamp"
 
@@ -2161,13 +2157,13 @@ class TestDoSyncPerUnit:
         )
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_unit, event):
             event.set()
             return {str(_unit.id * 10): 9000 + int(_unit.id)}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -2205,8 +2201,8 @@ class TestDoSyncPerUnit:
         )
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-abc"
@@ -2239,8 +2235,8 @@ class TestDoSyncPerUnit:
         # rom 10 has an install record; rom 11 does not.
         _seed_install(library, 10, file_path="/roms/n64/installed.z64", platform_slug="n64")
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
@@ -2282,8 +2278,8 @@ class TestDoSyncPerUnit:
         with library.uow:
             library.uow.roms.set_emulator_override(10, "PCSX ReARMed")
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
@@ -2324,8 +2320,8 @@ class TestDoSyncPerUnit:
         with library.uow:
             library.uow.roms.set_emulator_override(10, "Removed Core")
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
@@ -2366,9 +2362,9 @@ class TestDoSyncPerUnit:
         library.settings["enabled_platforms"] = {"1": True}
 
         download_artwork = AsyncMock(return_value={})
-        library.sync._cover_preparer._download_artwork = download_artwork
+        library.cover_preparer._download_artwork = download_artwork
         wait_mock = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait_mock
+        library.chunk_dispatcher._wait_for_unit_complete = wait_mock
         commit_mock = AsyncMock()
         library.sync._reporter.commit_unit_results = commit_mock  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
@@ -2427,8 +2423,8 @@ class TestDoSyncPerUnit:
         ]
         library.settings["enabled_platforms"] = {"1": True, "2": False}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = AsyncMock(return_value={})
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
@@ -2477,8 +2473,8 @@ class TestDoSyncPerUnit:
         ]
         library.settings["enabled_platforms"] = {"1": True, "2": False}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = AsyncMock(return_value={})
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
@@ -2516,7 +2512,7 @@ class TestDoSyncPerUnit:
         )
         library.settings["enabled_platforms"] = {"1": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         # The frontend re-uses the same appId (CRC32 of unchanged exe+name) and
         # acks it for the new rom_id. The REAL commit runs so committed_app_ids
@@ -2525,7 +2521,7 @@ class TestDoSyncPerUnit:
             event.set()
             return {"2": 5000}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = ack_same_appid
+        library.chunk_dispatcher._wait_for_unit_complete = ack_same_appid
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -2564,13 +2560,13 @@ class TestDoSyncPerUnit:
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[])
         library.settings["enabled_platforms"] = {"1": True, "2": False}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_same_appid(_unit, event):
             event.set()
             return {"2": 5000}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = ack_same_appid
+        library.chunk_dispatcher._wait_for_unit_complete = ack_same_appid
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -2605,13 +2601,13 @@ class TestDoSyncPerUnit:
             ],
         )
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_reps(_unit, event):
             event.set()
             return {str(rid): 9000 + rid for rid in library.sync._box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = ack_reps
+        library.chunk_dispatcher._wait_for_unit_complete = ack_reps
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -2634,13 +2630,13 @@ class TestDoSyncPerUnit:
         emitted ``sync_apply_unit`` shortcut dicts. Shared by the region tests."""
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=roms)
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_reps(_unit, event):
             event.set()
             return {str(rid): 9000 + rid for rid in library.sync._box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = ack_reps
+        library.chunk_dispatcher._wait_for_unit_complete = ack_reps
         library.sync._box.sync_state = SyncState.RUNNING
         await library.sync._orchestrator._do_sync_per_unit()
 
@@ -2756,13 +2752,13 @@ class TestDoSyncPerUnit:
         new shape: one shortcut, keyed by the old row so the appId is reused (#2196)."""
         library = make_library(romm_api=fake_romm_api)
         self._seed_rescanned_saturn_game(library, fake_romm_api)
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_reuse(_unit, event):
             event.set()
             return {str(rid): 5000 for rid in library.sync._box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = ack_reuse
+        library.chunk_dispatcher._wait_for_unit_complete = ack_reuse
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -2812,13 +2808,13 @@ class TestDoSyncPerUnit:
             served.append({"id": server_usa_id, "name": "Zelda (USA)", "igdb_id": 100, "fs_name_no_ext": "zelda_usa"})
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=served)
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_reuse(_unit, event):
             event.set()
             return {str(rid): 5000 for rid in library.sync._box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = ack_reuse
+        library.chunk_dispatcher._wait_for_unit_complete = ack_reuse
         library.sync._box.sync_state = SyncState.RUNNING
 
     @pytest.mark.asyncio
@@ -2868,8 +2864,8 @@ class TestDoSyncPerUnit:
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 9, "name": "Mario"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.settings["collection_create_platform_groups"] = False
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -2953,8 +2949,8 @@ class TestDoSyncPerUnit:
             sibling_group_key="igdb:100:1",
         )
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -3029,8 +3025,8 @@ class TestDoSyncPerUnit:
             sibling_group_key="igdb:100:1",
         )
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -3065,8 +3061,8 @@ class TestDoSyncPerUnit:
         library.settings["enabled_platforms"] = {"1": True}
 
         download_artwork = AsyncMock(return_value={10: "/grid/a.png"})
-        library.sync._cover_preparer._download_artwork = download_artwork
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = download_artwork
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -3102,7 +3098,7 @@ class TestDoSyncPerUnit:
         )
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
@@ -3110,7 +3106,7 @@ class TestDoSyncPerUnit:
             library.sync._box.sync_state = SyncState.CANCELLING
             return {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -3137,8 +3133,8 @@ class TestDoSyncPerUnit:
         )
         library.settings["enabled_platforms"] = {"1": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -3182,14 +3178,14 @@ class TestDoSyncPerUnit:
         )
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             library.sync._box.sync_state = SyncState.CANCELLING
             return {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -3225,13 +3221,13 @@ class TestSyncRunLifecycle:
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"10": 9001}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-clean"
 
@@ -3282,14 +3278,14 @@ class TestSyncRunLifecycle:
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 20, "name": "B"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             library.sync._box.sync_state = SyncState.CANCELLING
             return {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-cancel"
 
@@ -3313,14 +3309,14 @@ class TestSyncRunLifecycle:
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         # Heartbeat timeout: the wait gives up (None) while the box is still
         # RUNNING — the chunk dispatcher flags run_interrupted and requests the cancel.
         async def wait_timeout(_u, _event):
             return
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait_timeout
+        library.chunk_dispatcher._wait_for_unit_complete = wait_timeout
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-interrupted"
 
@@ -3377,20 +3373,20 @@ class TestSyncRunLifecycle:
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"10": 9001}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
 
         # The terminal completed-write raises (e.g. a SQLite lock during the
         # short write UoW), which is what routes the run into the error path.
         def boom(*_args, **_kwargs):
             raise RuntimeError("terminal write boom")
 
-        library.sync._sync_run_recorder.do_complete_run = boom  # type: ignore[method-assign]
+        library.sync_run_recorder.do_complete_run = boom  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-terminal-fail"
 
@@ -3725,7 +3721,7 @@ class TestLateAckReconciliationWithStaleScan:
         # app 5000 for removal — it's a freshly-committed binding.
         stale = await asyncio.get_running_loop().run_in_executor(
             None,
-            library.sync._local_library_reader.do_scan_stale_roms,
+            library.local_library_reader.do_scan_stale_roms,
             set(),  # synced_rom_ids — neither rom counts as synced for this scan
             set(box.committed_app_ids),
         )
@@ -3759,12 +3755,12 @@ class TestRealOrchestratorLateAckRecovery:
         )
         library.settings["enabled_platforms"] = {"1": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         # The frontend never acks, so the REAL _wait_for_unit_complete runs; the
         # clock-advancing sleeper pushes it past the heartbeat timeout on the
         # second poll — a genuine timeout, no cancel, no stubbed wait.
         orch = library.sync._orchestrator
-        dispatcher = library.sync._chunk_dispatcher
+        dispatcher = library.chunk_dispatcher
         dispatcher._sleeper = _ClockAdvancingSleeper(dispatcher._clock, 999.0)
 
         # Real run start (claims the slot + stamps current_sync_id).
@@ -3820,9 +3816,9 @@ class TestRealOrchestratorLateAckRecovery:
         )
         library.settings["enabled_platforms"] = {"1": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         orch = library.sync._orchestrator
-        dispatcher = library.sync._chunk_dispatcher
+        dispatcher = library.chunk_dispatcher
         dispatcher._sleeper = _ClockAdvancingSleeper(dispatcher._clock, 999.0)
 
         assert library.sync._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
@@ -4175,7 +4171,7 @@ class TestDoSyncPerUnitErrors:
         # finalize gracefully for the WRONG reason.
         fake_romm_api.list_roms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-mid-fetch-cancel"
 
@@ -4237,7 +4233,7 @@ class TestDoSyncPerUnitErrors:
         # below pins that the real cancel originated from the per-unit fetch.
         fake_romm_api.list_roms = MagicMock(side_effect=asyncio.CancelledError("real task cancel"))
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-real-cancel"
 
@@ -4304,7 +4300,7 @@ class TestDoSyncPerUnitErrors:
         ]
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.CANCELLING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -4344,8 +4340,8 @@ class TestApplyUnitCollectionAndCancel:
         library.settings["enabled_platforms"] = {}
         library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {}}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -4357,7 +4353,7 @@ class TestApplyUnitCollectionAndCancel:
     @pytest.mark.asyncio
     async def test_sync_collection_unit_threads_kind_and_virtual_type(self, library):
         """_sync_collection_unit stamps the unit's kind + virtual_type onto the membership (#1539)."""
-        applier = library.sync._unit_applier
+        applier = library.unit_applier
         applier._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1, 2], False, False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
@@ -4381,7 +4377,7 @@ class TestApplyUnitCollectionAndCancel:
     @pytest.mark.asyncio
     async def test_sync_collection_unit_standard_has_no_virtual_type(self, library):
         """A standard collection membership carries kind='standard' and virtual_type=None (#1539)."""
-        applier = library.sync._unit_applier
+        applier = library.unit_applier
         applier._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1], False, False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
@@ -4426,7 +4422,7 @@ class TestApplyUnitCollectionAndCancel:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._unit_applier.apply_unit(
+        applied = await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4456,11 +4452,11 @@ class TestApplyUnitCollectionAndCancel:
             library.sync._box.sync_state = SyncState.CANCELLING
             return {}
 
-        library.sync._cover_preparer._download_artwork = cancel_during_artwork
+        library.cover_preparer._download_artwork = cancel_during_artwork
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._unit_applier.apply_unit(
+        applied = await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4497,11 +4493,11 @@ class TestApplyUnitCollectionAndCancel:
             library.sync._box.sync_state = SyncState.CANCELLING
             return {}
 
-        library.sync._cover_preparer._download_artwork = cancel_during_artwork
+        library.cover_preparer._download_artwork = cancel_during_artwork
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        processed = await library.sync._unit_applier.apply_unit(
+        processed = await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4534,11 +4530,11 @@ class TestApplyUnitCollectionAndCancel:
             library.sync._box.sync_state = SyncState.CANCELLING
             return []
 
-        library.sync._cover_preparer.refresh_changed_covers = cancel_during_cover_refresh
+        library.cover_preparer.refresh_changed_covers = cancel_during_cover_refresh
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        processed = await library.sync._unit_applier.apply_unit(
+        processed = await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4569,18 +4565,18 @@ class TestApplyUnitCollectionAndCancel:
             roms=[{"id": 1, "name": "A"}],
         )
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         # The wait observes a user cancel: flip CANCELLING, then give up (None).
         async def wait_user_cancel(_unit, _event):
             library.sync._box.sync_state = SyncState.CANCELLING
             return
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait_user_cancel
+        library.chunk_dispatcher._wait_for_unit_complete = wait_user_cancel
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._unit_applier.apply_unit(
+        applied = await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4618,17 +4614,17 @@ class TestApplyUnitCollectionAndCancel:
             roms=[{"id": 1, "name": "A"}],
         )
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         # Heartbeat timeout: the wait gives up (None) WITHOUT a user cancel.
         async def wait_timeout(_unit, _event):
             return
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait_timeout
+        library.chunk_dispatcher._wait_for_unit_complete = wait_timeout
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._unit_applier.apply_unit(
+        applied = await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4683,17 +4679,17 @@ class TestPerUnitMetadataStamping:
             )
 
         library.sync._reporter.commit_unit_results = tracked_commit  # type: ignore[method-assign]
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"10": 5001}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4731,17 +4727,17 @@ class TestPerUnitMetadataStamping:
 
         commit_mock = AsyncMock()
         library.sync._reporter.commit_unit_results = commit_mock  # type: ignore[method-assign]
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"10": 5001}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4784,18 +4780,18 @@ class TestPerUnitMetadataStamping:
             commit_calls.append((rid_to_aid, unit_roms))
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         # Frontend ack's only 3 out of 5 ROMs.
         async def fake_wait(_u, event):
             event.set()
             return {"1": 5001, "3": 5003, "5": 5005}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4836,17 +4832,17 @@ class TestPlatformCompletionStamp:
             roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}],
         )
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"1": 5001, "2": 5002}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4888,12 +4884,12 @@ class TestPlatformCompletionStamp:
             stamps.append(platform_stamp)
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4928,7 +4924,7 @@ class TestPlatformCompletionStamp:
             roms=[{"id": i, "name": f"G{i}"} for i in range(1, 6)],
         )
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def wait(_unit, event):
@@ -4938,11 +4934,11 @@ class TestPlatformCompletionStamp:
             box.sync_state = SyncState.CANCELLING  # user cancel during chunk 1
             return None
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait
+        library.chunk_dispatcher._wait_for_unit_complete = wait
         box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -4969,16 +4965,16 @@ class TestPlatformCompletionStamp:
             roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}],
         )
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def timeout_wait(_unit, _event):
             return None  # heartbeat timeout — box is NOT cancelling
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = timeout_wait
+        library.chunk_dispatcher._wait_for_unit_complete = timeout_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5014,17 +5010,17 @@ class TestPlatformCompletionStamp:
             stamps.append(platform_stamp)
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"1": 5001, "2": 5002}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="collection", id="7", name="Favs", slug="favs", rom_count=2, collection_kind="standard")
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5070,13 +5066,13 @@ class TestPlatformCompletionStamp:
             routes.append(delivered_through)
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-abc"
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5120,18 +5116,18 @@ class TestPlatformCompletionStamp:
             routes.append(delivered_through)
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"1": 5001, "2": 5002}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-abc"
 
         unit = WorkUnit(type="collection", id="7", name="Favs", slug="favs", rom_count=2, collection_kind="standard")
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5173,7 +5169,7 @@ class TestPlatformCompletionStamp:
         # A stale completion stamp left by a prior fully-synced run.
         _seed_platform_stamp(library, "n64", at="2020-01-01T00:00:00+00:00", rom_count=5)
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def wait(_unit, event):
@@ -5183,11 +5179,11 @@ class TestPlatformCompletionStamp:
             box.sync_state = SyncState.CANCELLING  # user cancel during chunk 1
             return None
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait
+        library.chunk_dispatcher._wait_for_unit_complete = wait
         box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5216,16 +5212,16 @@ class TestPlatformCompletionStamp:
         )
         _seed_platform_stamp(library, "n64", at="2020-01-01T00:00:00+00:00", rom_count=2)
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def timeout_wait(_unit, _event):
             return None  # heartbeat timeout — box is NOT cancelling
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = timeout_wait
+        library.chunk_dispatcher._wait_for_unit_complete = timeout_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5253,17 +5249,17 @@ class TestPlatformCompletionStamp:
         )
         _seed_platform_stamp(library, "n64", at="2020-01-01T00:00:00+00:00", rom_count=99)
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"1": 5001, "2": 5002}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
-        await library.sync._unit_applier.apply_unit(
+        await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5290,12 +5286,12 @@ class TestPlatformCompletionStamp:
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
-        applied = await library.sync._unit_applier.apply_unit(
+        applied = await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
             unit_index=0,
@@ -5325,7 +5321,7 @@ class TestPlatformCompletionStamp:
         async def boom(*_args, **_kwargs):
             raise RuntimeError("fetch exploded")
 
-        library.sync._unit_applier._sync_platform_unit = boom
+        library.unit_applier._sync_platform_unit = boom
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
@@ -5333,7 +5329,7 @@ class TestPlatformCompletionStamp:
         synced_rom_ids: set[int] = set()
         platform_rom_ids: set[int] = set()
         with pytest.raises(RuntimeError, match="fetch exploded"):
-            await library.sync._unit_applier.apply_unit(
+            await library.unit_applier.apply_unit(
                 unit,
                 sources=sources,
                 unit_index=0,
@@ -5370,14 +5366,14 @@ class TestCollectionTurnedOffAndBackOn:
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
         library.settings["enabled_platforms"] = {"1": False, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_game(unit, event):
             event.set()
             return {"collection": {"1": 5001, "2": 5002}, "platform": {"4": 5004}}[unit.type]
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -5425,14 +5421,14 @@ class TestCollectionTurnedOffAndBackOn:
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
         library.settings["enabled_collections"] = {"standard": {"7": True}}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_n64_game(unit, event):
             event.set()
             return {"1": 5001, "2": 5002, "3": 5003} if unit.slug == "n64" else {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -5473,14 +5469,14 @@ class TestCollectionTurnedOffAndBackOn:
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
         library.settings["enabled_collections"] = {"standard": {"7": True}}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_n64_game(unit, event):
             event.set()
             return {"1": 5001, "2": 5002, "3": 5003} if unit.slug == "n64" else {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -5545,14 +5541,14 @@ class TestFailedCollectionListing:
         library.settings["enabled_platforms"] = {"1": False, "2": True}
         library.settings["enabled_collections"] = {kind: {str(collection_id): True}}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_game(unit, event):
             event.set()
             return {"collection": {"1": 5001, "2": 5002}, "platform": {"4": 5004}}[unit.type]
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
 
         async def run_to_its_end(run_id):
             box.sync_state = SyncState.RUNNING
@@ -5654,14 +5650,14 @@ class TestPlatformListingThatIsNotAList:
         library.settings["enabled_platforms"] = {"1": False, "2": True}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_game(unit, event):
             event.set()
             return {"collection": {"1": 5001, "2": 5002}, "platform": {"4": 5004}}[unit.type]
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
 
         async def run_to_its_end(run_id):
             box.sync_state = SyncState.RUNNING
@@ -5736,7 +5732,7 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
                 row.record_fetch_generation("run-0")
                 uow.roms.save(row)
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def cancel_inside_gba(unit, event):
@@ -5746,7 +5742,7 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
             event.set()
             return {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = cancel_inside_gba
+        library.chunk_dispatcher._wait_for_unit_complete = cancel_inside_gba
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-1"
         await library.sync._orchestrator._do_sync_per_unit()
@@ -5767,7 +5763,7 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
 
         # Run 2 completes.
         run_2_starts_at = len(emit.call_args_list)
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-2"
         await library.sync._orchestrator._do_sync_per_unit()
@@ -5822,12 +5818,12 @@ class TestOnlyAFreshStampRestoresTheSkip:
             _seed_rom_row(
                 library, rom_id, app_id=5000 + rom_id, platform_slug="n64", name=f"G{rom_id}", fs_name=f"g{rom_id}.z64"
             )
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
     @staticmethod
     async def _apply(library, run_id, wait=_fake_wait_set_event):
         box = library.sync._box
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait
+        library.chunk_dispatcher._wait_for_unit_complete = wait
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = run_id
         await library.sync._orchestrator._do_sync_per_unit()
@@ -5994,12 +5990,12 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
             )
         library.settings["enabled_platforms"] = {"1": False}
         library.settings["enabled_collections"] = {kind: {"7": True}}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
     @staticmethod
     async def _apply(library, run_id, wait=_fake_wait_set_event):
         box = library.sync._box
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait
+        library.chunk_dispatcher._wait_for_unit_complete = wait
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = run_id
         await library.sync._orchestrator._do_sync_per_unit()
@@ -6171,14 +6167,14 @@ class TestPlatformTurnedOffAndBackOn:
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1])
         library.settings["enabled_collections"] = {"standard": {"7": True}}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_n64_game(unit, event):
             event.set()
             return {"1": 5001, "2": 5002, "3": 5003} if unit.slug == "n64" else {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -6226,7 +6222,7 @@ class TestPlatformTurnedOffAndBackOn:
         )
         library.settings["enabled_platforms"] = {"1": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         app_ids = {1: 5001, 2: 5002}
@@ -6236,7 +6232,7 @@ class TestPlatformTurnedOffAndBackOn:
             served = {rom_id: app_id for rom_id, app_id in app_ids.items() if rom_id in fake_romm_api.roms}
             return {str(rom_id): app_id for rom_id, app_id in served.items()} if unit.slug == "n64" else {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_romm_serves
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_romm_serves
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -6267,14 +6263,14 @@ class TestPlatformTurnedOffAndBackOn:
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_game(unit, event):
             event.set()
             return {"n64": {"1": 5001}, "gba": {"4": 5004}}.get(unit.slug, {})
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -6310,14 +6306,14 @@ class TestPlatformTurnedOffAndBackOn:
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_game(unit, event):
             event.set()
             return {"n64": {"1": 5001}, "gba": {"4": 5004}}.get(unit.slug, {})
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -6347,14 +6343,14 @@ class TestPlatformTurnedOffAndBackOn:
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_game(unit, event):
             event.set()
             return {"n64": {"1": 5001}, "gba": {"4": 5004}}.get(unit.slug, {})
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -6401,7 +6397,7 @@ class TestPlatformTurnedOffAndBackOn:
             )
         )
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_every_game(unit, event):
@@ -6410,7 +6406,7 @@ class TestPlatformTurnedOffAndBackOn:
             event.set()
             return {"n64": {"1": 5001}, "gba": {"4": 5004, "5": 5005}}.get(unit.slug, {})
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
 
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
@@ -6453,14 +6449,14 @@ class TestAVersionReachedOnlyThroughACollection:
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
         library.settings["enabled_platforms"] = {"2": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_what_the_collection_holds(unit, event):
             event.set()
             return {str(rid): 6000 + rid for rid in box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_collection_holds
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_collection_holds
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-1"
         await library.sync._orchestrator._do_sync_per_unit()
@@ -6535,21 +6531,21 @@ class TestAVersionReachedOnlyThroughACollection:
         await self._bind_both_then_drop_21(library, fake_romm_api)
         fake_romm_api.get_rom_once_side_effect_by_id[21] = RommNotFoundError("Rom with id 21 not found")
         box = library.sync._box
-        cancel_after_the_collection = library.sync._chunk_dispatcher._wait_for_unit_complete
+        cancel_after_the_collection = library.chunk_dispatcher._wait_for_unit_complete
 
         async def commit_then_stop(unit, event):
             applied = await cancel_after_the_collection(unit, event)
             box.sync_state = SyncState.CANCELLING
             return applied
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = commit_then_stop
+        library.chunk_dispatcher._wait_for_unit_complete = commit_then_stop
         fake_romm_api.call_log.clear()
         # A stopped run removes nothing and asks nothing.
         assert await self._complete_run(library, emit, "run-2") == ([[]], 6021)
         assert ("get_rom_once", (21,)) not in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
         with library.uow as uow:
             assert {rid for stamp in uow.collection_sync_state.iter_all() for rid in stamp.member_rom_ids} == {20}
-        library.sync._chunk_dispatcher._wait_for_unit_complete = cancel_after_the_collection
+        library.chunk_dispatcher._wait_for_unit_complete = cancel_after_the_collection
         fake_romm_api.call_log.clear()
 
         assert await self._complete_run(library, emit, "run-3") == ([[]], 6021)
@@ -6631,14 +6627,14 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
         library.settings["enabled_platforms"] = {"2": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_what_the_collection_holds(unit, event):
             event.set()
             return {str(rid): 6000 + rid for rid in box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_collection_holds
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_collection_holds
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-1"
         await library.sync._orchestrator._do_sync_per_unit()
@@ -6815,7 +6811,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
             event.set()
             return {str(rid): 7000 + rid for rid in box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_new_shortcuts_under_new_app_ids
+        library.chunk_dispatcher._wait_for_unit_complete = bind_new_shortcuts_under_new_app_ids
 
         assert await self._run_2(library, emit) == ([[{"rom_id": 22, "app_id": 6020}]], None)
         with library.uow as uow:
@@ -6893,14 +6889,14 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
         library.settings["enabled_collections"] = {"standard": {"7": True}}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_what_the_unit_emits(unit, event):
             event.set()
             return {str(rid): 6000 + rid for rid in box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         await library.sync._orchestrator._do_sync_per_unit()
         assert cls._bindings(library) == {20: 6020}
@@ -7050,14 +7046,14 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
         library.settings["enabled_platforms"] = {"2": True}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_what_the_unit_emits(unit, event):
             event.set()
             return {str(rid): 6000 + rid for rid in box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         await library.sync._orchestrator._do_sync_per_unit()
         assert cls._bindings(library) == {20: 6020}
@@ -7072,7 +7068,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         """
         import services.library.sync_preview as preview_module
 
-        fetcher = library.sync._collection_fetcher
+        fetcher = library.collection_fetcher
         fetch_collection_unit = fetcher.fetch_collection_unit
         collection_skips: list[bool] = []
 
@@ -7196,7 +7192,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
     @staticmethod
     async def _preview_then_apply(library, emit, monkeypatch):
         """``(faves_skips, platform_collection_diff, platform_app_ids)`` over one preview and the apply it starts."""
-        fetcher = library.sync._collection_fetcher
+        fetcher = library.collection_fetcher
         fetch_collection_unit = fetcher.fetch_collection_unit
         faves_skips: list[bool] = []
 
@@ -7269,7 +7265,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
         if not faves_skipped:
             fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
         orchestrator = library.sync._orchestrator
-        apply_unit = library.sync._unit_applier.apply_unit
+        apply_unit = library.unit_applier.apply_unit
         box = library.sync._box
 
         async def stop_after_faves(unit, **kwargs):
@@ -7278,7 +7274,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
                 box.request_cancel()
             return processed
 
-        monkeypatch.setattr(library.sync._unit_applier, "apply_unit", stop_after_faves)
+        monkeypatch.setattr(library.unit_applier, "apply_unit", stop_after_faves)
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         run_2_starts_at = len(emit.call_args_list)
         await orchestrator._do_sync_per_unit()
@@ -7324,14 +7320,14 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         library.settings["enabled_platforms"] = {"4": n64_synced}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         library.settings["collection_create_platform_groups"] = True
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_what_the_unit_emits(unit, event):
             event.set()
             return {str(rid): 6000 + rid for rid in box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         await library.sync._orchestrator._do_sync_per_unit()
         with library.uow as uow:
@@ -7344,7 +7340,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         The diff the apply made compares the platform collections it sends with
         the ones the run before it sent, by the rule the preview counts with.
         """
-        fetcher = library.sync._collection_fetcher
+        fetcher = library.collection_fetcher
         fetch_collection_unit = fetcher.fetch_collection_unit
         faves_skips: list[bool] = []
 
@@ -7449,14 +7445,14 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
         library.settings["enabled_platforms"] = {"4": n64_synced}
         library.settings["enabled_collections"] = {"standard": {"7": True, "8": True}}
         library.settings["collection_create_platform_groups"] = True
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
         async def bind_what_the_unit_emits(unit, event):
             event.set()
             return {str(rid): 6000 + rid for rid in box.pending_sync}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         await library.sync._orchestrator._do_sync_per_unit()
         with library.uow as uow:
@@ -7599,13 +7595,13 @@ class TestRegression738CacheCorruption:
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
 
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
             event.set()
             return {"1": 1001, "2": 1002, "3": 1003}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -7631,8 +7627,8 @@ class TestFetchNarrationInterplay:
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -7657,8 +7653,8 @@ class TestFetchNarrationInterplay:
             roms=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}],
         )
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -7707,8 +7703,8 @@ class TestComponentGroupKeyStamping:
             ],
         )
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -7740,8 +7736,8 @@ class TestDeltaRestrictedApply:
 
     @staticmethod
     def _apply_setup(library, fake_romm_api):
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-delta"
 
@@ -7858,14 +7854,14 @@ class TestSessionBudgetGate:
             roms=[{"id": 10, "name": "Alpha"}, {"id": 11, "name": "Beta"}],
         )
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
 
         async def fake_wait(_u, event):
             event.set()
             return {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-budget"
 
@@ -7910,14 +7906,14 @@ class TestSessionBudgetGate:
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "Solo"}])
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
 
         async def fake_wait(_u, event):
             event.set()
             return {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = run_id
 
@@ -8061,14 +8057,14 @@ class TestSessionBudgetGate:
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.renderer_rss.rss_kb = 1_900_000  # > 1.8M post-run advisory floor
 
         async def fake_wait(_u, event):
             event.set()
             return {"10": 9001}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-restart"
 
@@ -8163,7 +8159,7 @@ class TestSessionBudgetGate:
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         library.settings["enabled_platforms"] = {"1": True}
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.renderer_rss.rss_kb = 1_200_000  # below the GC-skip floor → raw both ends
         # A stale delta from a prior run — the fresh no-op run must overwrite it, not
         # leave it and not wipe it to None.
@@ -8236,7 +8232,7 @@ class TestRunProgressCounters:
 
     @staticmethod
     def _arm(library, fake_romm_api, *, run_id="run-progress"):
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = run_id
 
@@ -8249,7 +8245,7 @@ class TestRunProgressCounters:
             event.set()
             return pending.pop(0) if pending else {}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
 
     @pytest.mark.asyncio
     async def test_committed_chunks_count_toward_done(self, make_library, fake_romm_api, monkeypatch):
@@ -8300,7 +8296,7 @@ class TestRunProgressCounters:
             box.request_cancel()
             return None
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = cancel_mid_wait
+        library.chunk_dispatcher._wait_for_unit_complete = cancel_mid_wait
 
         await library.sync._orchestrator._do_sync_per_unit()
 
@@ -8443,7 +8439,7 @@ class TestProcessedGamesNumerator:
 
     @staticmethod
     def _arm(library, fake_romm_api, *, run_id):
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = run_id
 
@@ -8471,7 +8467,7 @@ class TestProcessedGamesNumerator:
             event.set()
             return {"11": 1011}
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = fake_wait
+        library.chunk_dispatcher._wait_for_unit_complete = fake_wait
 
         await library.sync._orchestrator._do_sync_per_unit()
 
@@ -8527,7 +8523,7 @@ class TestProcessedGamesNumerator:
                 return ack
             return None  # heartbeat timeout — the box is still RUNNING
 
-        library.sync._chunk_dispatcher._wait_for_unit_complete = wait_ack_then_timeout
+        library.chunk_dispatcher._wait_for_unit_complete = wait_ack_then_timeout
 
         await library.sync._orchestrator._do_sync_per_unit()
 
@@ -8607,8 +8603,8 @@ class TestOneReadingOfTheSourcesPerRun:
     async def test_an_apply_hands_every_unit_the_same_reading(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         self._two_platforms(library, fake_romm_api)
-        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         assert library.sync._box.try_begin_run("run-apply", kind=SyncRunKind.APPLY) is True
 
         await library.sync._orchestrator._do_sync_per_unit()
