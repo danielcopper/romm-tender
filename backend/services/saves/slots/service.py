@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from services.saves.slots.deletion import SlotDeleter
 from services.saves.slots.listing import SlotListing
 from services.saves.slots.setup import SetupWizard
-from services.saves.slots.switching import SlotSwitcher, SlotSwitchIncomplete
+from services.saves.slots.switching import SlotSwitcher, SlotSwitchIncomplete, SlotSwitchStopped
 
 if TYPE_CHECKING:
     import asyncio
@@ -149,7 +149,9 @@ class SlotsService:
     # Slot switching — delegates to :class:`SlotSwitcher`.
     # ------------------------------------------------------------------
 
-    async def switch_slot(self, rom_id: int, new_slot: str) -> dict[str, Any] | SlotSwitchIncomplete:
+    async def switch_slot(
+        self, rom_id: int, new_slot: str
+    ) -> dict[str, Any] | SlotSwitchIncomplete | SlotSwitchStopped:
         """Switch the active save slot with immediate state sync."""
         return await self._switcher.switch_slot(rom_id, new_slot)
 

@@ -520,6 +520,18 @@ class TestTheSaveStepsInsideAUnitOfWork:
         assert "_back_up_save" in findings[0]
         assert "file-I/O seam" in findings[0]
 
+    def test_preparing_the_backup_folder_inside_uow_is_flagged(self):
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self, saves_dir):\n"
+            "        with self._uow_factory() as uow:\n"
+            "            self._save_backup.prepare_save_backup_folder(saves_dir)\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert "prepare_save_backup_folder" in findings[0]
+        assert "file-I/O seam" in findings[0]
+
 
 class TestIoSeamsClean:
     def test_io_seam_after_uow_closes_is_clean(self):

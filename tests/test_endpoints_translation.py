@@ -1106,6 +1106,69 @@ class TestTheSlotRefusalsOnTheWire:
             "message": "Switched to slot but 1 save(s) failed to download — retry",
         }
 
+    async def test_a_switch_whose_backups_stopped_partway_answers_the_files_set_aside(self, tmp_path, monkeypatch):
+        svc, _fake = self._two_synced_saves(tmp_path)
+        self._rename_failing_from_call(svc, monkeypatch, failing_call=2)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "switch_slot", [42, "target"]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "switch_stopped",
+            "message": (
+                "Could not move pokemon.rtc into .romm-backup, so the slot was not switched. "
+                "These were already moved to .romm-backup: pokemon.srm."
+            ),
+            "set_aside": ["pokemon.srm"],
+        }
+
+    async def test_a_switch_whose_first_backup_failed_answers_backup_failed(self, tmp_path, monkeypatch):
+        svc, _fake = self._two_synced_saves(tmp_path)
+        self._rename_failing_from_call(svc, monkeypatch, failing_call=1)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "switch_slot", [42, "target"]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "backup_failed",
+            "message": "Could not move pokemon.srm into .romm-backup (saves folder is read-only). Nothing was moved.",
+        }
+
+    @staticmethod
+    def _two_synced_saves(tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        srm = _create_save(tmp_path, ext=".srm", content=b"srm bytes")
+        rtc = _create_save(tmp_path, ext=".rtc", content=b"rtc bytes")
+        _seed_save_state(
+            svc,
+            42,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                files={
+                    "pokemon.srm": FileSyncState(last_sync_hash=_file_md5(str(srm)), tracked_save_id=100),
+                    "pokemon.rtc": FileSyncState(last_sync_hash=_file_md5(str(rtc)), tracked_save_id=101),
+                },
+            ),
+        )
+        return svc, fake
+
+    @staticmethod
+    def _rename_failing_from_call(svc, monkeypatch, failing_call: int) -> None:
+        store = svc._save_file_store
+        original = store.rename
+        calls = {"n": 0}
+
+        def rename(src: str, dst: str) -> None:
+            calls["n"] += 1
+            if calls["n"] >= failing_call:
+                raise PermissionError("saves folder is read-only")
+            original(src, dst)
+
+        monkeypatch.setattr(store, "rename", rename)
+
     async def test_a_switch_over_unsynced_changes_answers_the_files(self, tmp_path):
         svc, _fake = _slots_seeded(
             tmp_path, files={"pokemon.srm": FileSyncState(last_sync_hash="before-the-last-play", tracked_save_id=100)}

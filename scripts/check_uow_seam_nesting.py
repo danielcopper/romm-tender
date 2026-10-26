@@ -346,10 +346,13 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # retention. Its consumers in services/saves/ hold the object, so the
         # method names are what they write; the adoption renamer holds the
         # ordinary backup as a call-shaped SaveBackupFn bound to
-        # ``_back_up_save``, listed beside it.
+        # ``_back_up_save``, listed beside it. ``prepare_save_backup_folder``
+        # makes that folder ready without moving anything: the link and
+        # containment checks, the folder's creation and its listing.
         "back_up_save_file",
         "back_up_claimed_save_file",
         "_back_up_save",
+        "prepare_save_backup_folder",
         # SaveTransfer (services/saves/save_transfer.py) — every step moves a save
         # file between this device and RomM or measures one: a download or an
         # upload with RomM, a server copy fetched into a temporary file, the

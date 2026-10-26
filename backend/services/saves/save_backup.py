@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 from domain.save_backup import BACKUP_DIR_NAME, backup_name, backup_timestamp, select_backups_to_prune
 
 if TYPE_CHECKING:
+    import logging
+
     from models.prune import MutationOutcome, SourceClaim
     from services.protocols import Clock, SaveFileStore
 
@@ -25,12 +27,14 @@ if TYPE_CHECKING:
 class SaveBackupConfig:
     """Frozen wiring bundle handed to ``SaveBackup.__init__``.
 
-    Holds the save-file store the moves go through and the clock a backup's
-    name is stamped by.
+    Holds the save-file store the moves go through, the clock a backup's
+    name is stamped by, and the logger a retention removal that failed is
+    reported to.
     """
 
     save_file_store: SaveFileStore
     clock: Clock
+    logger: logging.Logger
 
 
 class SaveBackup:
@@ -43,6 +47,19 @@ class SaveBackup:
     def __init__(self, *, config: SaveBackupConfig) -> None:
         self._save_file_store = config.save_file_store
         self._clock = config.clock
+        self._logger = config.logger
+
+    def prepare_save_backup_folder(self, saves_dir: str) -> None:
+        """Make sure ``.romm-backup`` in *saves_dir* can take a backup, moving nothing.
+
+        For a caller that moves several files and must tell a folder that
+        cannot take backups from a file that cannot be moved, before the first
+        move. Creates the folder when it is missing. Raises what
+        :meth:`back_up_save_file` raises for the folder: ``ValueError`` when it
+        is a link or lies outside *saves_dir*, and the store's ``OSError`` when
+        it cannot be created or listed.
+        """
+        self._backup_folder_contents(saves_dir)
 
     def back_up_save_file(self, saves_dir: str, filename: str, *, keep: int) -> bool:
         """Move *filename* in *saves_dir* aside into ``.romm-backup`` before it is destroyed.
@@ -52,20 +69,18 @@ class SaveBackup:
         ``_<n>`` counter so a multi-file slot backed up within one second never
         overwrites an earlier backup, and the newest *keep* backups of the file
         are kept — older ones are removed to bound the recovery net's disk use.
-        The backup written by this call is never removed in its own call.
-        Returns ``True`` when a file was moved, ``False`` when there was nothing
-        at *filename* to back up. Raises ``ValueError`` when the backup folder is
-        a link or lies outside *saves_dir*, and the store's ``OSError`` when a
-        move fails.
+        The backup written by this call is never removed in its own call, and a
+        removal that fails is logged as a warning and leaves that older backup
+        in place: the file was moved, so the call still answers ``True``.
+        Returns ``False`` when there was nothing at *filename* to back up.
+        Raises ``ValueError`` when the backup folder is a link or lies outside
+        *saves_dir*, and the store's ``OSError`` when the folder cannot be made
+        ready or the move fails.
         """
         local_path = os.path.join(saves_dir, filename)
         if not self._save_file_store.is_file(local_path):
             return False
-        backup_dir = os.path.join(saves_dir, BACKUP_DIR_NAME)
-        if self._save_file_store.is_symlink(backup_dir) or not self._save_file_store.is_within(backup_dir, saves_dir):
-            raise ValueError(f"Unsafe save backup directory: {backup_dir}")
-        self._save_file_store.make_dirs(backup_dir)
-        existing = set(self._save_file_store.listdir(backup_dir))
+        backup_dir, existing = self._backup_folder_contents(saves_dir)
         backup = self._backup_name(filename, existing)
         self._save_file_store.rename(local_path, os.path.join(backup_dir, backup))
         existing.add(backup)
@@ -74,7 +89,10 @@ class SaveBackup:
                 # A freed base name reused for this newer backup sorts oldest;
                 # removing it would destroy the save just backed up.
                 continue
-            self._save_file_store.remove_file(os.path.join(backup_dir, stale))
+            try:
+                self._save_file_store.remove_file(os.path.join(backup_dir, stale))
+            except OSError as e:
+                self._logger.warning(f"Kept an older backup of {filename} past its retention: {stale} ({e})")
         return True
 
     def back_up_claimed_save_file(
@@ -103,6 +121,14 @@ class SaveBackup:
             safe_root,
             claim,
         )
+
+    def _backup_folder_contents(self, saves_dir: str) -> tuple[str, set[str]]:
+        """The ``.romm-backup`` folder of *saves_dir*, created if missing, and the names in it."""
+        backup_dir = os.path.join(saves_dir, BACKUP_DIR_NAME)
+        if self._save_file_store.is_symlink(backup_dir) or not self._save_file_store.is_within(backup_dir, saves_dir):
+            raise ValueError(f"Unsafe save backup directory: {backup_dir}")
+        self._save_file_store.make_dirs(backup_dir)
+        return backup_dir, set(self._save_file_store.listdir(backup_dir))
 
     def _backup_name(self, filename: str, existing: set[str]) -> str:
         """A name for a backup of *filename* taken now, free among *existing*."""

@@ -8,6 +8,7 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
+from domain.save_backup import BACKUP_DIR_NAME, BACKUP_RETENTION
 from lib.errors import (
     NotInstalled,
     Refused,
@@ -19,7 +20,12 @@ from lib.errors import (
     ServerUnreachable,
 )
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
-from services.saves.slots.switching import PendingUploads, SlotSwitchIncomplete
+from services.saves.slots.switching import (
+    PendingUploads,
+    SlotSwitchBackupFailed,
+    SlotSwitchIncomplete,
+    SlotSwitchStopped,
+)
 from tests.services.saves._helpers import (
     _create_save,
     _file_md5,
@@ -2220,6 +2226,242 @@ class TestSwitchSlot:
         status = result["save_status"]
         surfaced_server_ids = [f.get("server_save_id") for f in status["files"]]
         assert 77 not in surfaced_server_ids
+
+
+class TestASwitchWhoseBackupFails:
+    """A slot switch changes the slot only once every local save the new slot does not provide is backed up."""
+
+    def _two_synced_saves(self, svc, tmp_path):
+        """``pokemon.srm`` and ``pokemon.rtc`` on disk, both synced under slot ``default``."""
+        _install_rom(svc, tmp_path)
+        srm = _create_save(tmp_path, ext=".srm", content=b"srm bytes")
+        rtc = _create_save(tmp_path, ext=".rtc", content=b"rtc bytes")
+        _seed_save_state(
+            svc,
+            42,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                files={
+                    "pokemon.srm": FileSyncState(last_sync_hash=_file_md5(str(srm)), tracked_save_id=100),
+                    "pokemon.rtc": FileSyncState(last_sync_hash=_file_md5(str(rtc)), tracked_save_id=101),
+                },
+            ),
+        )
+        return srm, rtc
+
+    def _rename_failing_from_call(self, svc, monkeypatch, failing_call: int) -> None:
+        store = svc._save_file_store
+        original = store.rename
+        calls = {"n": 0}
+
+        def rename(src: str, dst: str) -> None:
+            calls["n"] += 1
+            if calls["n"] >= failing_call:
+                raise PermissionError("saves folder is read-only")
+            original(src, dst)
+
+        monkeypatch.setattr(store, "rename", rename)
+
+    def _later_readings_establish_nothing(self, svc, monkeypatch) -> None:
+        """Every save reading after the first answers that nothing is established, which names no saves folder."""
+        save_locations = svc._rom_info._save_locations
+        assert isinstance(save_locations, FakeSaveLocationReader)
+        original = save_locations.resolve_save_answer
+
+        def resolve_save_answer(**kwargs):
+            answer = original(**kwargs)
+            save_locations.installation = False
+            return answer
+
+        monkeypatch.setattr(save_locations, "resolve_save_answer", resolve_save_answer)
+
+    @pytest.mark.asyncio
+    async def test_a_second_backup_that_fails_keeps_the_previous_slot_and_untracks_only_the_moved_file(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        self._rename_failing_from_call(svc, monkeypatch, failing_call=2)
+
+        result = await svc.switch_slot(42, "target")
+
+        assert result == SlotSwitchStopped(
+            reason="switch_stopped",
+            message=(
+                "Could not move pokemon.rtc into .romm-backup, so the slot was not switched. "
+                "These were already moved to .romm-backup: pokemon.srm."
+            ),
+            set_aside=["pokemon.srm"],
+        )
+        state = _require_save_state(svc, 42)
+        assert state.active_slot == "default"
+        assert "target" not in state.slots
+        # The persisted state matches the saves folder: the moved file is in the
+        # backup and untracked, the one left in place keeps its baseline.
+        assert not srm.exists()
+        assert [p.read_bytes() for p in (srm.parent / BACKUP_DIR_NAME).glob("pokemon_*.srm")] == [b"srm bytes"]
+        assert "pokemon.srm" not in state.files
+        assert rtc.read_bytes() == b"rtc bytes"
+        assert state.files["pokemon.rtc"].tracked_save_id == 101
+        assert [c for c in fake.call_log if c[0] == "download_save_content"] == []
+
+    @pytest.mark.asyncio
+    async def test_a_file_the_backup_did_not_move_keeps_its_tracking_when_the_switch_stops(self, tmp_path, monkeypatch):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        sav = _create_save(tmp_path, ext=".sav", content=b"sav bytes")
+        backup = svc._save_backup
+        original = backup.back_up_save_file
+
+        def back_up(saves_dir: str, filename: str, *, keep: int) -> bool:
+            if filename == "pokemon.rtc":
+                # Gone between the listing and its backup: nothing to move.
+                rtc.unlink()
+            if filename == "pokemon.sav":
+                raise PermissionError("saves folder is read-only")
+            return original(saves_dir, filename, keep=keep)
+
+        monkeypatch.setattr(backup, "back_up_save_file", back_up)
+
+        result = await svc.switch_slot(42, "target")
+
+        assert isinstance(result, SlotSwitchStopped)
+        assert result.set_aside == ["pokemon.srm"]
+        state = _require_save_state(svc, 42)
+        assert state.active_slot == "default"
+        assert "pokemon.srm" not in state.files
+        assert state.files["pokemon.rtc"].tracked_save_id == 101
+        assert not srm.exists()
+        assert sav.read_bytes() == b"sav bytes"
+
+    @pytest.mark.asyncio
+    async def test_a_first_backup_that_fails_refuses_with_nothing_moved(self, tmp_path, monkeypatch):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        before = _require_save_state(svc, 42)
+        self._rename_failing_from_call(svc, monkeypatch, failing_call=1)
+
+        with pytest.raises(SlotSwitchBackupFailed) as caught:
+            await svc.switch_slot(42, "target")
+
+        assert caught.value.reason == "backup_failed"
+        assert caught.value.message == (
+            "Could not move pokemon.srm into .romm-backup (saves folder is read-only). Nothing was moved."
+        )
+        assert srm.read_bytes() == b"srm bytes"
+        assert rtc.read_bytes() == b"rtc bytes"
+        assert _require_save_state(svc, 42) == before
+
+    @pytest.mark.asyncio
+    async def test_a_backup_folder_that_is_a_link_refuses_with_nothing_moved(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        before = _require_save_state(svc, 42)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (srm.parent / BACKUP_DIR_NAME).symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(SlotSwitchBackupFailed, match="Nothing was moved"):
+            await svc.switch_slot(42, "target")
+
+        assert srm.read_bytes() == b"srm bytes"
+        assert rtc.read_bytes() == b"rtc bytes"
+        assert list(outside.iterdir()) == []
+        assert _require_save_state(svc, 42) == before
+
+    @pytest.mark.asyncio
+    async def test_a_backup_folder_that_cannot_be_created_refuses_with_nothing_moved(self, tmp_path, monkeypatch):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        before = _require_save_state(svc, 42)
+
+        def make_dirs(_path: str) -> None:
+            raise PermissionError("saves folder is read-only")
+
+        monkeypatch.setattr(svc._save_file_store, "make_dirs", make_dirs)
+
+        with pytest.raises(SlotSwitchBackupFailed) as caught:
+            await svc.switch_slot(42, "target")
+
+        assert caught.value.message == (
+            "Could not use the .romm-backup folder (saves folder is read-only). Nothing was moved."
+        )
+        assert srm.read_bytes() == b"srm bytes"
+        assert rtc.read_bytes() == b"rtc bytes"
+        assert _require_save_state(svc, 42) == before
+
+    @pytest.mark.asyncio
+    async def test_a_backup_whose_retention_removal_fails_is_answered_as_backed_up(self, tmp_path, monkeypatch):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _install_rom(svc, tmp_path)
+        srm = _create_save(tmp_path, ext=".srm", content=b"srm bytes")
+        _seed_save_state(
+            svc,
+            42,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                files={"pokemon.srm": FileSyncState(last_sync_hash=_file_md5(str(srm)), tracked_save_id=100)},
+            ),
+        )
+        backup_dir = srm.parent / BACKUP_DIR_NAME
+        backup_dir.mkdir()
+        older = [backup_dir / f"pokemon_20250101_00000{i}.srm" for i in range(BACKUP_RETENTION)]
+        for path in older:
+            path.write_bytes(b"older")
+
+        def remove_file(_path: str) -> None:
+            raise PermissionError("backup folder is read-only")
+
+        monkeypatch.setattr(svc._save_file_store, "remove_file", remove_file)
+
+        result = await svc.switch_slot(42, "target")
+
+        assert isinstance(result, dict)
+        assert result["success"] is True
+        state = _require_save_state(svc, 42)
+        assert state.active_slot == "target"
+        assert "pokemon.srm" not in state.files
+        assert not srm.exists()
+        assert b"srm bytes" in {p.read_bytes() for p in backup_dir.iterdir()}
+        assert all(path.exists() for path in older)
+
+    @pytest.mark.asyncio
+    async def test_the_later_steps_read_the_save_answer_the_switch_took_at_its_start(self, tmp_path, monkeypatch):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        srm, rtc = self._two_synced_saves(svc, tmp_path)
+        self._later_readings_establish_nothing(svc, monkeypatch)
+
+        result = await svc.switch_slot(42, "target")
+
+        assert isinstance(result, dict)
+        assert result["success"] is True
+        assert not srm.exists()
+        assert not rtc.exists()
+        assert len(list((srm.parent / BACKUP_DIR_NAME).iterdir())) == 2
+        assert _require_save_state(svc, 42).files == {}
+
+    @pytest.mark.asyncio
+    async def test_the_pending_check_reads_the_save_answer_the_switch_took_at_its_start(self, tmp_path, monkeypatch):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        srm, _rtc = self._two_synced_saves(svc, tmp_path)
+        srm.write_bytes(b"played since the last sync")
+        self._later_readings_establish_nothing(svc, monkeypatch)
+
+        with pytest.raises(PendingUploads) as caught:
+            await svc.switch_slot(42, "target")
+
+        assert caught.value.details == {"files": ["pokemon.srm"]}
+        assert srm.read_bytes() == b"played since the last sync"
 
 
 class TestSlotsContentDirGate:

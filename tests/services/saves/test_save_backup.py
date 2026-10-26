@@ -223,3 +223,87 @@ class TestSaveBackupRetention:
 
         assert save.read_bytes() == b"keep"
         assert list(outside.iterdir()) == []
+
+
+class TestARetentionRemovalThatFails:
+    """A backup whose move went through answers moved even when removing an older backup fails afterwards."""
+
+    def test_the_file_is_answered_as_moved_and_the_older_backup_is_kept(self, tmp_path, monkeypatch, caplog):
+        svc = _service(tmp_path)
+        saves_dir = tmp_path / "saves" / "gba"
+        backup_dir = saves_dir / BACKUP_DIR_NAME
+        backup_dir.mkdir(parents=True)
+        older = [backup_dir / f"game_20250101_00000{i}.srm" for i in range(BACKUP_RETENTION)]
+        for path in older:
+            path.write_bytes(b"older")
+        save = saves_dir / "game.srm"
+        save.write_bytes(b"the only copy")
+
+        def remove_file(_path: str) -> None:
+            raise PermissionError("backup folder is read-only")
+
+        monkeypatch.setattr(svc._save_file_store, "remove_file", remove_file)
+
+        with caplog.at_level("WARNING", logger="test"):
+            moved = svc._save_backup.back_up_save_file(str(saves_dir), "game.srm", keep=BACKUP_RETENTION)
+
+        assert moved is True
+        assert not save.exists()
+        assert (backup_dir / backup_name("game.srm", backup_timestamp(_NOW), set())).read_bytes() == b"the only copy"
+        assert all(path.exists() for path in older)
+        assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
+            "Kept an older backup of game.srm past its retention: game_20250101_000000.srm (backup folder is read-only)"
+        ]
+
+
+class TestPreparingTheBackupFolder:
+    """``prepare_save_backup_folder`` makes ``.romm-backup`` ready, or raises, and moves nothing."""
+
+    def test_a_missing_folder_is_created_and_no_save_moves(self, tmp_path):
+        svc = _service(tmp_path)
+        saves_dir = tmp_path / "saves" / "gba"
+        saves_dir.mkdir(parents=True)
+        save = saves_dir / "game.srm"
+        save.write_bytes(b"keep")
+
+        svc._save_backup.prepare_save_backup_folder(str(saves_dir))
+
+        assert list((saves_dir / BACKUP_DIR_NAME).iterdir()) == []
+        assert save.read_bytes() == b"keep"
+
+    def test_a_folder_that_is_a_link_raises(self, tmp_path):
+        svc = _service(tmp_path)
+        saves_dir = tmp_path / "saves" / "gba"
+        saves_dir.mkdir(parents=True)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (saves_dir / BACKUP_DIR_NAME).symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(ValueError, match="Unsafe save backup directory"):
+            svc._save_backup.prepare_save_backup_folder(str(saves_dir))
+
+    def test_a_folder_that_cannot_be_created_raises_the_stores_error(self, tmp_path, monkeypatch):
+        svc = _service(tmp_path)
+        saves_dir = tmp_path / "saves" / "gba"
+        saves_dir.mkdir(parents=True)
+
+        def make_dirs(_path: str) -> None:
+            raise PermissionError("saves folder is read-only")
+
+        monkeypatch.setattr(svc._save_file_store, "make_dirs", make_dirs)
+
+        with pytest.raises(PermissionError, match="read-only"):
+            svc._save_backup.prepare_save_backup_folder(str(saves_dir))
+
+    def test_a_folder_that_cannot_be_listed_raises_the_stores_error(self, tmp_path, monkeypatch):
+        svc = _service(tmp_path)
+        saves_dir = tmp_path / "saves" / "gba"
+        saves_dir.mkdir(parents=True)
+
+        def listdir(_path: str) -> list[str]:
+            raise PermissionError("backup folder cannot be read")
+
+        monkeypatch.setattr(svc._save_file_store, "listdir", listdir)
+
+        with pytest.raises(PermissionError, match="cannot be read"):
+            svc._save_backup.prepare_save_backup_folder(str(saves_dir))

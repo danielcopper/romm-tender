@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
     from models.sync import ClientSaveState
     from services.protocols import UnitOfWorkFactory
-    from services.saves.slots.switching import SlotSwitchIncomplete
+    from services.saves.slots.switching import SlotSwitchIncomplete, SlotSwitchStopped
 
 
 @dataclass(frozen=True)
@@ -121,7 +121,7 @@ class SaveService:
         # Built once and handed to every service that backs a save file up or
         # moves one, so each holds the step it uses rather than the whole engine.
         self._save_backup = SaveBackup(
-            config=SaveBackupConfig(save_file_store=config.save_file_store, clock=config.clock),
+            config=SaveBackupConfig(save_file_store=config.save_file_store, clock=config.clock, logger=config.logger),
         )
         self._save_transfer = SaveTransfer(
             config=SaveTransferConfig(
@@ -407,7 +407,9 @@ class SaveService:
         """Fetch server save files for a specific slot."""
         return await self._slots.get_slot_saves(rom_id, slot)
 
-    async def switch_slot(self, rom_id: int, new_slot: str) -> dict[str, Any] | SlotSwitchIncomplete:
+    async def switch_slot(
+        self, rom_id: int, new_slot: str
+    ) -> dict[str, Any] | SlotSwitchIncomplete | SlotSwitchStopped:
         """Switch the active save slot with immediate state sync."""
         async with self._rules.hold("switch_slot", update=True, migration=True, prune=True):
             return await self._slots.switch_slot(rom_id, new_slot)
