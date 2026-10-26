@@ -84,6 +84,7 @@ run = [
     "python scripts/check_background_tasks.py",
     "python scripts/check_seam_owner.py",
     "python scripts/check_read_only_module.py",
+    "python scripts/check_resolver_reading.py",
     "python scripts/check_coverage_exclusions.py",
     "python scripts/check_lock_sync.py",
     "python scripts/check_markdown_links.py",
