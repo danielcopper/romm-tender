@@ -190,7 +190,7 @@ const NOT_THE_RESOLVERS = {
   // The key of a source report's own catalogue state.
   "src/types/emulatorSources.ts": ["catalogue"],
   "src/utils/emulatorSourceWording.ts": ["catalogue"],
-  // The emulator setting a `bios-unchosen` note names, not the region source.
+  // The empty emulator setting Tender's own `bios-unchosen` note names, not the region source.
   "src/types/firmware.ts": ["setting"],
   // The release the update card on Main names.
   "src/utils/updateDot.ts": ["card"],

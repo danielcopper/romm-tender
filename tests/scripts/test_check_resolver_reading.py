@@ -137,7 +137,6 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "locating",
             "refused",
             "requirements_met",
-            "setting",
         }
     ),
     "services/firmware/replacement.py": frozenset({"present", "satisfied"}),
@@ -200,6 +199,7 @@ _NOT_THE_RESOLVERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
     "host/server.py": frozenset({"refused"}),
     "services/downloads/service.py": frozenset({"launchable"}),
     "services/emulator_sources.py": frozenset({"catalogue"}),
+    "services/firmware/emulator_answers.py": frozenset({"setting"}),
     "services/rom_adoption/service.py": frozenset({"mismatch", "unread"}),
     "services/saves/status/service.py": frozenset({"checked", "unestablished"}),
 }

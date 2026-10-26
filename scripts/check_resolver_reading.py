@@ -298,7 +298,6 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "locating",
             "refused",
             "requirements_met",
-            "setting",
         }
     ),
     "services/firmware/replacement.py": frozenset({"present", "satisfied"}),
@@ -340,6 +339,9 @@ NOT_THE_RESOLVERS: dict[str, dict[str, str]] = {
     },
     "services/emulator_sources.py": {
         "catalogue": "the key of a source report's own catalogue state",
+    },
+    "services/firmware/emulator_answers.py": {
+        "setting": "the empty emulator setting Tender's own bios-unchosen note names, not the region source",
     },
     "services/rom_adoption/service.py": {
         "mismatch": "an outcome of the adoption's own content check, keying its wording",
