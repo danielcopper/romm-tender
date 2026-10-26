@@ -3404,8 +3404,8 @@ names for pervasive primitives like `Clock`).
 
 ## Boundary Enforcement
 
-Four CI-gated layers keep the dependency direction and the call-site rules from drifting. Aggregate-specific enforcement
-(the `@cosmic_aggregate` decorator and the field-assignment check) is documented in
+The CI-gated checks below keep the dependency direction and the call-site rules from drifting. Aggregate-specific
+enforcement (the `@cosmic_aggregate` decorator and the field-assignment check) is documented in
 [Database Design](database-design.md).
 
 ### 1. import-linter (CI-enforced)

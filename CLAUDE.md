@@ -532,20 +532,26 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
   `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
   resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the
-  resolver's codes or distinctive answer field names; and every caveat, health-issue and unresolved code the vendored
-  resolver states is classified by one of them. Excepted by name: `adapters/atlas_zstd.py` imports the resolver to hand
-  it the zstd codec, `adapters/emulator_sources.py` holds `RealMachine`, and `tests/` is not scanned. The modules that
-  read the answer today, `atlas_firmware.py`'s three private imports and the codes nothing classifies stand on lists
-  that only shrink** — check + test — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and
-  that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring),
-  the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
+  resolver's codes or distinctive answer field names; and every caveat, health-issue, unresolved and reason code the
+  vendored resolver states is classified by one of them. Excepted by name: `adapters/atlas_zstd.py` imports the resolver
+  to hand it the zstd codec, `adapters/emulator_sources.py` holds `RealMachine`, and `tests/` is not scanned. The
+  modules that read the answer today, `atlas_firmware.py`'s three private imports and the codes nothing classifies stand
+  on lists that only shrink** — check + test + prompt-only — `scripts/check_resolver_reading.py` (the backend's imports
+  and vocabulary, and that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed
+  in its docstring), the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
   `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
   once a reading module imports its constant). The readers' and the imports' lists fail on an entry nothing needs any
   more, and their tests on an entry the list did not hold when it was written; the codes nothing classifies are that
   test's own list, which fails on a code a reading module classifies or the resolver no longer states, so a code added
   to it is an edit of the test. Unseen by the ESLint rule: test files and `src/test-utils/`, a code or name built at run
   time, a name in a type operator (`Pick<T, "satisfied">`), and a field reached through a spread or `Object.entries`.
-  Unseen by the classification test: whether a reading module that names a code reads it rightly
+  Unseen by the classification test: whether a reading module that names a code reads it rightly. Prompt-only: Tender
+  keeps no table of its own for anything the resolver answers (find rules, launch command patterns, launch-file types,
+  RomM regions); a join is on the resolver's keys (`declared`, `(emulator, declared_index)`), never on `file_name` alone
+  or a label; where the resolver gives no answer, Tender says it could not be established and an emu-atlas issue asks
+  for it; no decision is proposed that lets Tender work out a fact the resolver states — because the resolver is slow,
+  cannot answer yet, or another page already does it; and the derivations and imports on today's lists stand until #2195
+  and #2580 remove them: fixing one is not a finding, extending one or copying it to a new page is
 - **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
   `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
   `domain/emulator_sources.py::answering_source` names** — test + prompt-only —
