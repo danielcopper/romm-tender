@@ -265,13 +265,13 @@ class TestTheRealTree:
         assert added == set()
 
     def test_the_reading_modules_and_the_grants_are_the_decided_ones(self):
-        assert {
+        assert set(check.READING_MODULES) == {
             "adapters/atlas_catalogue.py",
             "adapters/atlas_firmware.py",
             "adapters/atlas_saves.py",
             "adapters/emulator_sources.py",
             "adapters/retrodeck_folders.py",
-        } == check.READING_MODULES
+        }
         assert set(check.IMPORT_GRANTS) == {"adapters/atlas_zstd.py"}
         assert set(check.INTERNALS_GRANTED) == {("adapters/emulator_sources.py", "_vendor.atlas.machine.RealMachine")}
 
