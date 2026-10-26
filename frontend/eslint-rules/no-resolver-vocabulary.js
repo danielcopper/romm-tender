@@ -23,8 +23,9 @@ export default {
           names: { type: "array", items: { type: "string" } },
           readers: BY_FILE,
           notTheResolvers: BY_FILE,
+          generic: { type: "object", additionalProperties: { type: "string" } },
         },
-        required: ["codes", "names", "readers", "notTheResolvers"],
+        required: ["codes", "names", "readers", "notTheResolvers", "generic"],
         additionalProperties: false,
       },
     ],
@@ -34,9 +35,9 @@ export default {
     },
   },
   create(context) {
-    const [{ codes, names, readers, notTheResolvers }] = context.options;
+    const [{ codes, names, readers, notTheResolvers, generic }] = context.options;
     const file = path.relative(context.cwd, context.filename).split(path.sep).join("/");
-    const here = new Set([...(readers[file] ?? []), ...(notTheResolvers[file] ?? [])]);
+    const here = new Set([...(readers[file] ?? []), ...(notTheResolvers[file] ?? []), ...Object.keys(generic)]);
     const watchedCodes = new Set(codes.filter((code) => !here.has(code)));
     const watchedNames = new Set(names.filter((name) => !here.has(name)));
 

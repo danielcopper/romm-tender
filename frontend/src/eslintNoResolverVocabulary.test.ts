@@ -19,7 +19,13 @@ import tseslint from "typescript-eslint";
 const RULE = "tender/no-resolver-vocabulary";
 
 type ByFile = Record<string, string[]>;
-type Options = { codes: string[]; names: string[]; readers: ByFile; notTheResolvers: ByFile };
+type Options = {
+  codes: string[];
+  names: string[];
+  readers: ByFile;
+  notTheResolvers: ByFile;
+  generic: Record<string, string>;
+};
 
 const eslint = new ESLint({ cwd: process.cwd(), overrideConfig: tseslint.configs.disableTypeChecked });
 
@@ -130,40 +136,12 @@ const READERS_WHEN_WRITTEN: ByFile = {
 };
 
 const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
-  "src/api/backend.ts": ["disabled"],
-  "src/bigpicture/AchievementsTab.tsx": ["background"],
   "src/bigpicture/AdoptExistingModal.tsx": ["mismatch"],
   "src/bigpicture/AdoptUnusableModal.tsx": ["unusable"],
-  "src/bigpicture/ArtworkTab.tsx": ["background", "refused"],
-  "src/bigpicture/CustomPlayButton.tsx": ["background", "tag"],
-  "src/bigpicture/EmulatorSelector.tsx": ["background"],
+  "src/bigpicture/ArtworkTab.tsx": ["refused"],
   "src/bigpicture/GameInfoTab.tsx": ["launchable", "rom-name"],
-  "src/bigpicture/RemovedGamesCleanup.tsx": ["background"],
-  "src/bigpicture/RomMPlaySection.tsx": ["background", "tag"],
-  "src/bigpicture/SavesTab.tsx": ["background"],
-  "src/bigpicture/SettingsPage.tsx": ["disabled"],
-  "src/bigpicture/SgdbGamePickerModal.tsx": ["background", "disabled"],
-  "src/bigpicture/SlotSetupWizard.tsx": ["background"],
-  "src/bigpicture/UpdateDot.tsx": ["background"],
-  "src/bigpicture/WarningCard.tsx": ["background"],
-  "src/bigpicture/bios/BiosFiles.tsx": ["background"],
-  "src/bigpicture/data/DataDetail.tsx": ["disabled"],
-  "src/bigpicture/layout/pane.tsx": ["background"],
-  "src/bigpicture/panelSection.tsx": ["background"],
-  "src/bigpicture/saves/SaveFileRow.tsx": ["background"],
-  "src/bigpicture/saves/SlotPanel.tsx": ["background"],
-  "src/bigpicture/saves/VersionHistoryPanel.tsx": ["background"],
-  "src/bigpicture/settings/EmulatorSourcesSection.tsx": ["background"],
-  "src/bigpicture/settings/PreferredRegionModal.tsx": ["background"],
-  "src/bigpicture/settings/TenderFolderSection.tsx": ["background", "disabled", "tag"],
-  "src/bigpicture/sync/paneTable.tsx": ["background"],
-  "src/boot/FallbackActions.tsx": ["background", "disabled"],
-  "src/boot/StartupFailurePanel.tsx": ["background"],
-  "src/boot/fallbackButtons.tsx": ["disabled"],
   "src/boot/searchingCopy.ts": ["standalone"],
   "src/boot/steamModules.ts": ["checked"],
-  "src/shared/CoreChangeModal.tsx": ["background"],
-  "src/shared/SyncConflictModal.tsx": ["background"],
   "src/types/api.ts": ["launchable"],
   "src/types/downloads.ts": ["mismatch"],
   "src/types/emulatorSources.ts": ["catalogue"],
@@ -172,15 +150,13 @@ const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
   "src/utils/emulatorSourceWording.ts": ["catalogue"],
   "src/utils/failedUpdateToast.ts": ["unmet"],
   "src/utils/launchGate.ts": ["checked"],
-  "src/utils/launchGateOps.ts": ["tag"],
-  "src/utils/launchInterceptor.ts": ["tag"],
   "src/utils/launchTarget.ts": ["launchable"],
-  "src/utils/romUninstall.ts": ["tag"],
-  "src/utils/runningGame.ts": ["tag"],
   "src/utils/startingSource.ts": ["checked"],
   "src/utils/steamReadyForToasts.ts": ["unmet"],
   "src/utils/updateDot.ts": ["card"],
 };
+
+const PANEL_GENERIC_WHEN_WRITTEN = ["background", "disabled", "tag"];
 
 /** The `file: token` entries of `configured` that `whenWritten` did not hold. */
 function addedTo(configured: ByFile, whenWritten: ByFile): string[] {
@@ -248,6 +224,11 @@ describe("no panel code reads the resolver's vocabulary", () => {
     expect(await reported("src/utils/biosGroup.ts", source)).toEqual(["requirements_met"]);
   });
 
+  it("leaves a generic word of the panel's own alone anywhere", async () => {
+    const source = 'export const s = { background: "red", disabled: true, tag: "x" };\n';
+    expect(await reported(FIXTURE, source)).toEqual([]);
+  });
+
   it("lets through a name that means something else in a file", async () => {
     const source = "export const f = (a: Record<string, number>) => [a.checked, a.satisfied];\n";
     expect(await reported("src/boot/steamModules.ts", source)).toEqual(["satisfied"]);
@@ -288,6 +269,52 @@ describe("no panel code reads the resolver's vocabulary", () => {
 
     expect(listed).not.toEqual([]);
     expect(unused).toEqual([]);
+  });
+
+  it("lists no generic word the resolver no longer states", async () => {
+    const written = JSON.parse(fs.readFileSync("resolver-vocabulary.json", "utf8")) as { values: string[] };
+    const { generic } = await configured();
+
+    expect(Object.keys(generic).filter((word) => !written.values.includes(word))).toEqual([]);
+  });
+
+  it("lists no generic word the panel's own code no longer speaks", async () => {
+    const options = await configured();
+    const config = (await eslint.calculateConfigForFile(path.join(process.cwd(), "src/index.tsx"))) as Linter.Config;
+    const sources: string[] = [];
+    for (const file of fs.globSync("src/**/*.{ts,tsx}")) {
+      const absolute = path.join(process.cwd(), file);
+      const own = (await eslint.calculateConfigForFile(absolute)) as Linter.Config | undefined;
+      if (own?.rules?.[RULE] !== undefined) sources.push(absolute);
+    }
+    // Only this rule, over every file the config hands it, with nothing excepted.
+    const unexcepted = new ESLint({
+      cwd: process.cwd(),
+      overrideConfigFile: true,
+      overrideConfig: {
+        files: ["**/*.{ts,tsx}"],
+        languageOptions: { parser: tseslint.parser },
+        plugins: { tender: config.plugins?.tender ?? {} },
+        rules: { [RULE]: ["error", { ...options, readers: {}, notTheResolvers: {}, generic: {} }] },
+      },
+    });
+
+    const spoken = new Set(
+      (await unexcepted.lintFiles(sources)).flatMap((r) =>
+        r.messages.filter((m) => m.ruleId === RULE).map((m) => /^'([^']+)'/.exec(m.message)?.[1] ?? m.message),
+      ),
+    );
+
+    expect(sources).toContain(path.join(process.cwd(), "src/index.tsx"));
+    expect(sources).not.toContain(path.join(process.cwd(), "src/eslintNoResolverVocabulary.test.ts"));
+    expect(Object.keys(options.generic)).not.toEqual([]);
+    expect(Object.keys(options.generic).filter((word) => !spoken.has(word))).toEqual([]);
+  });
+
+  it("lists no generic word it did not list when it was written", async () => {
+    const { generic } = await configured();
+
+    expect(Object.keys(generic).filter((word) => !PANEL_GENERIC_WHEN_WRITTEN.includes(word))).toEqual([]);
   });
 
   it("lists no reader it did not list when it was written", async () => {

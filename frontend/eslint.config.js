@@ -152,45 +152,23 @@ const RESOLVER_READERS_TODAY = {
   "src/utils/firmwareIdentifications.ts": ["known_as"],
 };
 
+// Values of the resolver's closed vocabularies that the panel's own code also
+// speaks with a meaning of its own, too widely to except file by file, and so
+// are not watched in the panel: where each is spoken. The backend's check still
+// watches them. The list only shrinks, as the one above does, and the test also
+// fails on a word the panel's own code no longer speaks or the resolver no
+// longer states.
+const PANEL_GENERIC_VALUES = {
+  background: "a CSS property in a style object",
+  disabled: "whether a control takes a press, and whether save sync is switched off",
+  tag: "a log line's prefix, and the label under a folder tile",
+};
+
 // Names that mean something else in a file, each with what it means there.
-// The list only shrinks, as the one above does. Three words the panel speaks
-// with a meaning of its own in many files are not explained per file:
-// `background` is a CSS property in a style object, `disabled` whether a
-// control takes a press, and `tag` a log line's prefix.
+// The list only shrinks, as the two above do.
 const NOT_THE_RESOLVERS = {
-  "src/bigpicture/AchievementsTab.tsx": ["background"],
   // An artwork slot's outcome: Steam did not take the image.
-  "src/bigpicture/ArtworkTab.tsx": ["background", "refused"],
-  "src/bigpicture/CustomPlayButton.tsx": ["background", "tag"],
-  "src/bigpicture/EmulatorSelector.tsx": ["background"],
-  "src/bigpicture/RemovedGamesCleanup.tsx": ["background"],
-  "src/bigpicture/RomMPlaySection.tsx": ["background", "tag"],
-  "src/bigpicture/SavesTab.tsx": ["background"],
-  "src/bigpicture/SgdbGamePickerModal.tsx": ["background", "disabled"],
-  "src/bigpicture/SlotSetupWizard.tsx": ["background"],
-  "src/bigpicture/UpdateDot.tsx": ["background"],
-  "src/bigpicture/WarningCard.tsx": ["background"],
-  "src/bigpicture/bios/BiosFiles.tsx": ["background"],
-  "src/bigpicture/data/DataDetail.tsx": ["disabled"],
-  "src/bigpicture/layout/pane.tsx": ["background"],
-  "src/bigpicture/panelSection.tsx": ["background"],
-  "src/bigpicture/saves/SaveFileRow.tsx": ["background"],
-  "src/bigpicture/saves/SlotPanel.tsx": ["background"],
-  "src/bigpicture/saves/VersionHistoryPanel.tsx": ["background"],
-  "src/bigpicture/settings/EmulatorSourcesSection.tsx": ["background"],
-  "src/bigpicture/settings/PreferredRegionModal.tsx": ["background"],
-  // Here `tag` is also the label under a folder tile.
-  "src/bigpicture/settings/TenderFolderSection.tsx": ["background", "disabled", "tag"],
-  "src/bigpicture/sync/paneTable.tsx": ["background"],
-  "src/boot/FallbackActions.tsx": ["background", "disabled"],
-  "src/boot/StartupFailurePanel.tsx": ["background"],
-  "src/boot/fallbackButtons.tsx": ["disabled"],
-  "src/shared/CoreChangeModal.tsx": ["background"],
-  "src/shared/SyncConflictModal.tsx": ["background"],
-  "src/utils/launchGateOps.ts": ["tag"],
-  "src/utils/launchInterceptor.ts": ["tag"],
-  "src/utils/romUninstall.ts": ["tag"],
-  "src/utils/runningGame.ts": ["tag"],
+  "src/bigpicture/ArtworkTab.tsx": ["refused"],
   // How many of the start-up check's searches into Steam's interface ran.
   "src/boot/steamModules.ts": ["checked"],
   // The panel bundle's own kind.
@@ -219,9 +197,6 @@ const NOT_THE_RESOLVERS = {
   // The conditions in Steam a toast still waits on.
   "src/utils/steamReadyForToasts.ts": ["unmet"],
   "src/utils/failedUpdateToast.ts": ["unmet"],
-  // Whether save sync is switched off, on the device list's failure answer.
-  "src/api/backend.ts": ["disabled"],
-  "src/bigpicture/SettingsPage.tsx": ["disabled"],
 };
 
 export default tseslint.config(
@@ -480,7 +455,12 @@ export default tseslint.config(
     rules: {
       "tender/no-resolver-vocabulary": [
         "error",
-        { ...RESOLVER_VOCABULARY, readers: RESOLVER_READERS_TODAY, notTheResolvers: NOT_THE_RESOLVERS },
+        {
+          ...RESOLVER_VOCABULARY,
+          readers: RESOLVER_READERS_TODAY,
+          notTheResolvers: NOT_THE_RESOLVERS,
+          generic: PANEL_GENERIC_VALUES,
+        },
       ],
     },
   },
