@@ -3529,8 +3529,9 @@ into `mise run lint`) fails on a backend module outside those adapters that impo
 `atlas.__all__` does not export, and, outside the adapters, on a string equal to one of the resolver's codes or a read
 of one of its distinctive answer field names. The panel is held by the ESLint rule `tender/no-resolver-vocabulary` over
 the same codes and names, which the script writes to `frontend/resolver-vocabulary.json`.
-`tests/adapters/test_resolver_codes.py` fails at an update of the vendored resolver on a code no adapter classifies. The
-rule, its lists and what each check does not see are the invariant register's ([invariants](invariants.md)).
+`tests/adapters/test_resolver_codes.py` fails at an update of the vendored resolver on a code it adds that no adapter
+classifies. The rule, its lists and what each check does not see are the invariant register's
+([invariants](invariants.md)).
 
 ### 7. Enforced: underscore prefix
 

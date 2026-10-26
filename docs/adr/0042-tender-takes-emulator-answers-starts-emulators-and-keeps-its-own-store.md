@@ -106,7 +106,7 @@ Measured before deciding (2026-10-04):
 
 Decided in [#2579](https://github.com/danielcopper/romm-tender/issues/2579). The first decision held only as prose:
 after the adapter, nothing kept the reading together, and the layers behind it each derived facts of their own from the
-answer and disagreed. It is now held by checks.
+answer and disagreed. Its reading half is now held by checks; the rest stays prose.
 
 - **The reading module of each kind of answer is its adapter**, the module that asks the resolver: firmware, saves, the
   catalogue, the folders and the sources. It translates the answer into Tender's own types, joined on the resolver's
@@ -119,6 +119,7 @@ answer and disagreed. It is now held by checks.
   the resolver does not export, and a resolver code or distinctive answer field name named in any other backend module
   or in the panel. At every update of the vendored resolver a test fails on a code no reading module classifies.
 - **No exception for a derivation.** The modules that read the answer today stand on the check's lists, which only
-  shrink; the issues that build each reading module remove them. Only infrastructure is excepted: by name and with its
-  reason, the one machine the sources holder keeps and the zstd codec handed to the resolver; and the tests as a whole,
-  because they build the resolver's machines and answers rather than read an answer for display.
+  shrink; the issues that build each reading module remove them. Only infrastructure and homonyms are excepted: by name
+  and with its reason, the one machine the sources holder keeps and the zstd codec handed to the resolver; the tests as
+  a whole, because they build the resolver's machines and answers rather than read an answer for display; and a name
+  that means something else in a module, on a list of its own that only shrinks.
