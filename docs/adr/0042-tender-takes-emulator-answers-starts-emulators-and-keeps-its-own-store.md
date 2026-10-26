@@ -119,6 +119,6 @@ answer and disagreed. It is now held by checks.
   the resolver does not export, and a resolver code or distinctive answer field name named in any other backend module
   or in the panel. At every update of the vendored resolver a test fails on a code no reading module classifies.
 - **No exception for a derivation.** The modules that read the answer today stand on the check's lists, which only
-  shrink; the issues that build each reading module remove them. Only infrastructure is excepted, by name and with its
-  reason: the one machine the sources holder keeps, the zstd codec handed to the resolver, and the tests, which build
-  the resolver's own answers.
+  shrink; the issues that build each reading module remove them. Only infrastructure is excepted: by name and with its
+  reason, the one machine the sources holder keeps and the zstd codec handed to the resolver; and the tests as a whole,
+  because they build the resolver's machines and answers rather than read an answer for display.

@@ -533,12 +533,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
   resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the
   resolver's codes or distinctive answer field names; and every caveat, health-issue, unresolved and reason code the
-  vendored resolver states is classified by one of them. Excepted by name: `adapters/atlas_zstd.py` imports the resolver
-  to hand it the zstd codec, `adapters/emulator_sources.py` holds `RealMachine`, and `tests/` is not scanned. The
-  modules that read the answer today, `atlas_firmware.py`'s three private imports and the codes nothing classifies stand
-  on lists that only shrink** — check + test + prompt-only — `scripts/check_resolver_reading.py` (the backend's imports
-  and vocabulary, and that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed
-  in its docstring), the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
+  vendored resolver states is classified by one of them. Excepted by name, each with its reason:
+  `adapters/atlas_zstd.py` imports the resolver to hand it the zstd codec, and `adapters/emulator_sources.py` holds
+  `RealMachine`; `tests/` is excepted as a whole, because tests build the resolver's machines and answers rather than
+  read an answer for display. The modules that read the answer today, `atlas_firmware.py`'s three private imports and
+  the codes nothing classifies stand on lists that only shrink** — check + test + prompt-only —
+  `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and that
+  `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring), the
+  ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
   `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
   once a reading module imports its constant). The readers' and the imports' lists fail on an entry nothing needs any
   more, and their tests on an entry the list did not hold when it was written; the codes nothing classifies are that
