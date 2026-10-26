@@ -522,7 +522,7 @@ class TestAdoptHead:
 
 
 class TestAdoptHeadWithLocalChange:
-    def test_the_baseline_is_composed_from_the_head_alone(self):
+    def test_the_baseline_is_the_head_s_and_keeps_the_previous_sync_time(self):
         previous = FileSyncState(
             tracked_save_id=5,
             last_sync_hash="copy-hash",

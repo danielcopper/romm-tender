@@ -106,13 +106,14 @@ byte-identical to that server save?" — is answered by a two-route disjunction,
 
 The baseline pair is written together at the recorded-baseline writer sites (`RomSaveSyncState.record_transfer` on
 upload/download; `RomSaveSyncState.adopt_head` for the adopt of an identical head — in the sync, the status read and
-keep_local's adopt without an upload; and `RomSaveSyncState.adopt_head_with_local_change` for copy to slot's
-`upload_failed` baseline) with honest provenance per flow — the upload response's `content_hash` (RomM hashed the bytes
-it received), the adopted server save's `content_hash` on download or adopt — recording `None` when a response/save
-carries none rather than fabricating one from a local recomputation, so a stored server hash always truthfully pairs
-with its `last_sync_hash`. The negotiate inventory (`build_save_inventory`) still sends the locally-computed
-`content_hash`: echoing the stored hash buys nothing while the computed hash already is RomM's scheme (#1457), and it
-stays the client's own statement of local content.
+keep_local's adopt without an upload; `RomSaveSyncState.adopt_head_with_local_change` for copy to slot's
+`upload_failed`) with honest provenance per flow — the upload response's `content_hash` (RomM hashed the bytes it
+received), the adopted server save's `content_hash` on download or adopt, and for a failed copy upload the target slot
+head's `content_hash` as both hashes. Where a response or save carries none, `record_transfer` and `adopt_head` record
+`None` and `adopt_head_with_local_change` drops the file's tracking — never a hash fabricated from a local recomputation
+— so a stored server hash always truthfully pairs with its `last_sync_hash`. The negotiate inventory
+(`build_save_inventory`) still sends the locally-computed `content_hash`: echoing the stored hash buys nothing while the
+computed hash already is RomM's scheme (#1457), and it stays the client's own statement of local content.
 
 Every local hash that reaches this comparison — the matrix's `local_hash`, the post-op baseline (`last_sync_hash`), the
 drift check, the slot-switch pending-changes check, and the keep_local adopt-without-upload probe — is computed with
@@ -1588,7 +1589,9 @@ neither in place):
    next sync uploads the copy as its first save (row 2). Where the newest save carries no `content_hash` or no id, there
    is no baseline to record from it, and the file's tracking is dropped instead: with no baseline beside a head it
    cannot prove the copy identical to, the next sync answers a conflict — row 8b where this device is current on that
-   save, row 11b where it is not.
+   save, row 11b where it is not. Neither alternative holds: a hash made up to differ from the copy would claim a sync
+   that never happened, and keeping the download's baseline, which the copy matches, would let a next sync on a head
+   this device is not current on download that head over the copy.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?, message?} |

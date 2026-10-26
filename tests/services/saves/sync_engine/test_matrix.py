@@ -991,9 +991,9 @@ class TestPromoteLocalSlotPersistsState:
 class TestAnUploadsFileStatePersistence:
     """A sync's upload into a slot already marked ``source='server'`` persists the file's new baseline.
 
-    Promoting the slot is a no-op there, so the baseline is the only change the
-    upload makes; were it not persisted, the next sync after a backend restart
-    would read the stale baseline as drift and upload the same content again.
+    Promoting the slot is a no-op there, so no slot change carries the baseline
+    to disk; were it not persisted, the next sync after a backend restart would
+    read the stale baseline as drift and upload the same content again.
     """
 
     @pytest.mark.asyncio
