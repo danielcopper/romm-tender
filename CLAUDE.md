@@ -281,6 +281,21 @@ locally with `mise run docs`.
   to render as a row's headline. Nothing mechanical carries any of this; the vocabulary overlaps ours almost exactly
   (`satisfied`, `required`, `present`, `cores`, `description` all exist on both sides and name different types), which
   is what makes a wrong reading look like a correct one.
+- **Tender works out no new fact the resolver states — not in code and not by decision.** The target, open in #2579, is
+  one reading module per kind of resolver answer, with every later layer reading only its view; today the firmware
+  answer alone is read in the adapter, in `domain/`, in `services/firmware/` and in the frontend. Until #2579's check is
+  in CI this is prompt-only, and each of these is a finding, never "no rule violated": a new site that decides something
+  from one of the resolver's verdicts, causes or caveat codes (`requirements_met`, `satisfied`, `checked`, a group's
+  verdict, a granularity), whether it reads them off the resolver's answer or off a Tender type that passes them on
+  under the same name, instead of going through the reader that already decides that fact; a join on `file_name` where
+  the resolver states `declared`; an import from anywhere but the top-level `atlas` namespace (`atlas.__all__`), the one
+  exception being `RealMachine`, which `adapters/emulator_sources.py` holds; a new Tender table for something the
+  resolver answers (find rules, launch command patterns, launch-file types, RomM regions). The derivations and imports
+  that exist today, some of them pinned by entries in the register below, stand until #2195 and #2580 remove them:
+  fixing one is not a finding, extending one or copying it to a new page is. Where the resolver gives no answer, Tender
+  says it could not be established and an emu-atlas issue asks for the answer; a decision that lets Tender work out a
+  resolver fact — because the resolver is slow, cannot answer yet, or another page already does it — is not proposed.
+  Once #2579's check is in CI, this entry shrinks to that check's one-line statement in the register.
 
 ## Current State
 
