@@ -540,28 +540,29 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   whole, because tests build the resolver's machines and answers rather than read an answer for display; and a name that
   means something else in a module stands on `NOT_THE_RESOLVERS`, in the backend's check and in the panel's rule. The
   modules that read the answer today (`READERS_TODAY`, `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three private
-  imports (`INTERNALS_TO_REMOVE`), the homonyms, the generic words left unwatched (`GENERIC_VALUES`) and the codes
-  nothing classifies (`_UNCLASSIFIED`) stand on lists that only shrink** — check + test + prompt-only —
-  `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and that
+  imports (`INTERNALS_TO_REMOVE`), the homonyms, the generic words left unwatched (`GENERIC_VALUES`, and in the panel
+  alone `PANEL_GENERIC_VALUES`) and the codes nothing classifies (`_UNCLASSIFIED`) stand on lists that only shrink** —
+  check + test + prompt-only — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and that
   `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring), the
   ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
   `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
   once a reading module imports its constant). Unseen by the ESLint rule: a second site in a listed or excepted file
   reading the name it stands there for; a name as a plain string (`"satisfied" in row`, `Pick<T, "satisfied">`,
-  `T["satisfied"]`); a class field, a JSX attribute or an enum member; test files, `src/test-setup.ts` and
-  `src/test-utils/`; a code or name built at run time; a field reached through a spread or `Object.entries`; a generic
-  word of those vocabularies, which the check leaves out (`GENERIC_VALUES`), and a word of Tender's own spoken inside
-  one (`"rejected"`); and a watched value handed on through a parameter or a field of Tender's own name. Unseen by the
-  classification test: whether a reading module that names a code reads it rightly. Prompt-only: an entry on
-  `NOT_THE_RESOLVERS` is a name that means something else in its module, never a read of the resolver's answer; a code
-  the resolver adds is classified by a reading module rather than added to the list; Tender keeps no table of its own
-  for anything the resolver answers (find rules, launch command patterns, launch-file types, RomM regions); a join is on
-  the resolver's keys (`declared`, `(emulator, declared_index)`), never on `file_name` alone or a label; where the
-  resolver gives no answer, Tender says it could not be established and an emu-atlas issue asks for it; no decision is
-  proposed that lets Tender work out a fact the resolver states — because the resolver is slow, cannot answer yet, or
-  another page already does it; and the derivations and imports on today's lists stand until the issue that builds their
-  kind's reading module removes them (#2579 D5): fixing one is not a finding, extending one or copying it to a new page
-  is
+  `T["satisfied"]`); a code, value or name spelled as the name of a class field, a class method, a method in a type, an
+  enum member or a JSX attribute; test files, `src/test-setup.ts` and `src/test-utils/`; a code or name built at run
+  time; a field reached through a spread or `Object.entries`; a generic word of those vocabularies, which the check
+  leaves out (`GENERIC_VALUES`); a word the panel alone speaks with a meaning of its own, which the rule leaves out in
+  the panel (`PANEL_GENERIC_VALUES`); a word of Tender's own spoken inside one of those vocabularies (`"rejected"`); and
+  a watched value handed on through a parameter or a field of Tender's own name. Unseen by the classification test:
+  whether a reading module that names a code reads it rightly. Prompt-only: an entry on `NOT_THE_RESOLVERS` is a name
+  that means something else in its module, never a read of the resolver's answer; a code the resolver adds is classified
+  by a reading module rather than added to the list; Tender keeps no table of its own for anything the resolver answers
+  (find rules, launch command patterns, launch-file types, RomM regions); a join is on the resolver's keys (`declared`,
+  `(emulator, declared_index)`), never on `file_name` alone or a label; where the resolver gives no answer, Tender says
+  it could not be established and an emu-atlas issue asks for it; no decision is proposed that lets Tender work out a
+  fact the resolver states — because the resolver is slow, cannot answer yet, or another page already does it; and the
+  derivations and imports on today's lists stand until the issue that builds their kind's reading module removes them
+  (#2579 D5): fixing one is not a finding, extending one or copying it to a new page is
 - **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
   `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
   `domain/emulator_sources.py::answering_source` names** — test + prompt-only —

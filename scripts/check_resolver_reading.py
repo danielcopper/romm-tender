@@ -53,6 +53,9 @@ What it does not see:
   test (``"satisfied" in row``), a ``match`` class or mapping pattern,
   ``setdefault`` or ``pop``, ``dataclasses.asdict``, ``vars`` or ``**``
   unpacking, or written as an attribute (``x.satisfied = …``);
+* a code or value spelled as a name rather than a string — an attribute
+  (``obj.libretro``), a keyword argument, a parameter or a field — which is
+  seen only where it is also on :data:`WATCHED_NAMES` and read as a name;
 * a value on :data:`GENERIC_VALUES`, nor whether a generic word is still
   spoken with a meaning of Tender's own rather than read from an answer; and a word of Tender's own that it
   speaks inside one of the resolver's vocabularies (``CHECKED_REJECTED =
