@@ -45,7 +45,9 @@ _SYNC_COLUMNS = (
     # The server-reported ROM size in bytes (#1395). Like the version dimensions
     # above (and unlike the user pins), it is a server-derived fact that rides
     # the UPSERT and refreshes every sync — set directly from the fetched dict,
-    # no confirmed-else-preserved merge. NULL = unknown.
+    # no confirmed-else-preserved merge: RomM's listing states the size for
+    # every ROM, so the sync never writes an unknown size over one an install
+    # recorded (Database Design, the ``roms`` table row). NULL = unknown.
     "fs_size_bytes",
     # Whether RomM holds a file for the ROM: server-derived like the size, set
     # directly from the fetched dict. A STRICT 0/1 INTEGER.
@@ -282,12 +284,14 @@ class SqliteRomRepository(BaseRepository):
     def set_fs_size_bytes(self, rom_id: int, size: int | None) -> None:
         """Write the ROM size ``Rom.record_fs_size_bytes`` has just recorded for ``rom_id``.
 
-        An install records the size from the ROM detail it already fetched, so
-        the game-detail UI shows it without waiting for the next sync. Unlike
-        the pin columns (``emulator_override`` / ``selected_disc`` / ``applied_launch_options``),
-        ``fs_size_bytes`` ALSO rides the sync UPSERT in :meth:`save`, so a later
-        re-sync re-writes the same authoritative server value — the two write
-        paths never conflict. ``size`` is the byte count, or ``None`` for SQL NULL.
+        An install records the size from the ROM detail it already fetched,
+        which keeps the Data Management page's installed size current until the
+        next sync. Unlike the pin columns (``emulator_override`` /
+        ``selected_disc`` / ``applied_launch_options``),
+        ``fs_size_bytes`` ALSO rides the sync UPSERT in :meth:`save`, and the
+        next sync writes RomM's listing value over this one; Database Design's
+        ``roms`` table row says why the two writes agree. ``size`` is the byte
+        count, or ``None`` for SQL NULL.
         """
         self._conn.execute(
             "UPDATE roms SET fs_size_bytes = ? WHERE rom_id = ?",

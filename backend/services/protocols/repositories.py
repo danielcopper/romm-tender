@@ -169,9 +169,10 @@ class RomRepository(Protocol):
         """Persist the ROM size :meth:`Rom.record_fs_size_bytes` has just recorded for *rom_id*.
 
         An install's write between syncs. Unlike the pin columns above,
-        ``fs_size_bytes`` ALSO rides the sync upsert in :meth:`save`, so a later
-        re-sync re-writes the same authoritative server value — no conflict.
-        ``size`` is the byte count, or ``None`` for SQL NULL.
+        ``fs_size_bytes`` ALSO rides the sync upsert in :meth:`save`, and the
+        next sync writes RomM's listing value over this one; Database Design's
+        ``roms`` table row says why the two writes agree. ``size`` is the byte
+        count, or ``None`` for SQL NULL.
         """
         ...
 
