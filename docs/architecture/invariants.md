@@ -1338,14 +1338,14 @@ Format: **invariant** — tier — enforced by.
   release. The release line in that folder's README names the asset and its digest, and
   `tests/services/test_firmware_vectors.py` holds that line against the vendored resolver's version and upstream's
   manifest — which ties the NAME of the copy's release to the resolver's, and nothing more. **Nothing compares the files
-  with the asset's contents**: the README's update step that unpacks the checked asset is the only guard. **Two things
-  are outside it by accident of shape, and neither is loud.** The gate sees **directories only** (`package_dirs` filters
-  on `entry.is_dir()`), so a single-module dependency dropped in as `_vendor/six.py` is never asked for a manifest — and
-  there is no shape here that could pin one: dropping a `six.SHA256SUMS` beside it makes the gate fail with "it pins no
-  vendored tree", so the guarded-by-default half is a property of package DIRECTORIES alone. And `rglob` does not
-  descend into a symlinked directory, so every file below one is invisible to the set comparison whatever the per-file
-  symlink guard does; git records the link itself as mode 120000, which is what makes it a review question rather than a
-  silent one
+  with the asset's contents**: steps 1 and 2 of that README's update procedure, which check the asset and unpack it, are
+  the only guard. **Two things are outside it by accident of shape, and neither is loud.** The gate sees **directories
+  only** (`package_dirs` filters on `entry.is_dir()`), so a single-module dependency dropped in as `_vendor/six.py` is
+  never asked for a manifest — and there is no shape here that could pin one: dropping a `six.SHA256SUMS` beside it
+  makes the gate fail with "it pins no vendored tree", so the guarded-by-default half is a property of package
+  DIRECTORIES alone. And `rglob` does not descend into a symlinked directory, so every file below one is invisible to
+  the set comparison whatever the per-file symlink guard does; git records the link itself as mode 120000, which is what
+  makes it a review question rather than a silent one
 - **The release tarball is what the installer expects — one top-level `romm-tender/`, the files an install starts from
   plus the version file, the installer an installed tree rolls back with and the licence texts a distributed copy
   carries, nothing the packager prunes, a sidecar `sha256sum -c` accepts** — check — `scripts/check_release_tarball.py`,
@@ -1436,7 +1436,7 @@ Format: **invariant** — tier — enforced by.
   two differ today — the amber against a verdict not established, and a verdict Tender withholds beside EmuDeck's sealed
   catalogue — the pair stands on a list that only shrinks
   ([#2585](https://github.com/danielcopper/romm-tender/issues/2585) D4, D5). Every amber the exception above produces is
-  among them, which [#2580](https://github.com/danielcopper/romm-tender/issues/2580) removes. Recorded in
+  among them; [#2580](https://github.com/danielcopper/romm-tender/issues/2580) removes those ambers. Recorded in
   [#2190](https://github.com/danielcopper/romm-tender/issues/2190) D1, D10 and D13, under ADR-0042 §1. **The rule spans
   the adapter, the domain, the service and every surface, and nothing joins them**: `adapters/atlas_firmware.py` carries
   `requirements_met`, the console's `system_firmware` and its world-knowledge mark, whether that console's image is

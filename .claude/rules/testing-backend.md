@@ -119,10 +119,9 @@ adopt-baseline flag) turns this tier red, and for one of those breakages it is t
 
 `tests/adapters/atlas_vectors/` holds emu-atlas's `vectors/` folder, copied verbatim from the release whose resolver is
 vendored at `backend/_vendor/atlas/`. Its manifest, which `scripts/check_vendored_trees.py` checks, pins the copy
-against edits; the release line in that folder's `README.md` ties the release's name to the resolver's. Nothing compares
-the files with the release asset's contents — the README's re-copy procedure is the only guard there. **Never edit a
-vector, and never list a mismatch to make the sweep pass** — the copy changes only by a re-copy with the resolver it
-belongs to.
+against edits; `tests/services/test_firmware_vectors.py` holds the release line in that folder's `README.md` against the
+resolver's version. What neither sees is that README's. **Never edit a vector, and never list a mismatch to make the
+sweep pass** — the copy changes only by a re-copy with the resolver it belongs to.
 
 `tests/services/test_firmware_vectors.py` runs the copy's firmware vectors through the platform page's BIOS read — the
 real service over the real resolver adapter on the vector's machine — and holds the level against each emulator's
