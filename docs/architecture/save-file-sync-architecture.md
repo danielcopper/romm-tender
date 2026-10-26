@@ -250,9 +250,10 @@ a failure answer, `pending_uploads` names the changed files in `files`, and a Ro
    and dropped from tracking — so no stale extension (e.g. a `.rtc` left behind when the new slot holds only `.srm`)
    lingers to upload into the new slot, and a never-synced local save is always recoverable (#965, #1058). Before the
    first move the save backup checks that the folder can take backups (`SaveBackup.prepare_save_backup_folder`: not a
-   link, inside the saves directory, created if missing, listable). A file loses its tracking only once it was moved.
-   The local files are those of the save answer the switch took at its start, as for the pending-changes check: one
-   switch never acts on two directories.
+   link, inside the saves directory, created if missing, listable). A file loses its tracking only once it was moved;
+   once every backup went through, a tracked file with no local file left loses its tracking too. The local files are
+   those of the save answer the switch took at its start, as for the pending-changes check: one switch never reads two
+   save answers.
 2. Only then is the active slot flipped in memory — a file the backup could not move would otherwise sit under the new
    slot, and the next sync would upload the previous slot's save into it.
 3. For each canonical local target the new slot **does** provide, the **newest** server save by `updated_at` is
@@ -270,7 +271,7 @@ nothing was moved yet — the folder check failed, or the first move did — it 
 the state is persisted with the previous slot active, and the answer is the partial failure `SlotSwitchStopped`
 (`reason="switch_stopped"`), whose `set_aside` names the files now in `.romm-backup`. Nothing is put back: a move back
 could overwrite what an emulator wrote in between, and one that failed would leave this answer anyway. A database write
-that fails after the downloads stays a backend error, as in every other flow.
+that fails after the backups or downloads is a backend error, as in every other flow.
 
 A **named** target slot with no server saves is just the case where step 3 is a no-op: every local file is backed up,
 tracking is cleared, and the slot starts fresh — with every prior save recoverable under `.romm-backup`. (An empty /

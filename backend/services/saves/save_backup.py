@@ -71,8 +71,8 @@ class SaveBackup:
         are kept — older ones are removed to bound the recovery net's disk use.
         The backup written by this call is never removed in its own call, and a
         removal that fails is logged as a warning and leaves that older backup
-        in place: the file was moved, so the call still answers ``True``.
-        Returns ``False`` when there was nothing at *filename* to back up.
+        in place. Returns ``True`` when the file was moved, a failed removal
+        included, and ``False`` when there was nothing at *filename* to back up.
         Raises ``ValueError`` when the backup folder is a link or lies outside
         *saves_dir*, and the store's ``OSError`` when the folder cannot be made
         ready or the move fails.

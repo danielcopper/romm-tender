@@ -658,8 +658,8 @@ If a save can't be moved aside when you switch slots, the switch stops and the s
 told which saves, if any, were already moved into `.romm-backup`.
 
 Backups are **not** kept forever. The folder keeps the **newest 10 backups per save file**; older ones are pruned the
-next time that same save is moved aside. Backups of a different save file are never pruned to make room. If you want to
-keep a particular recovery copy long-term, move it out of `.romm-backup` yourself.
+next time that same save is moved aside (one that can't be removed is kept). Backups of a different save file are never
+pruned to make room. If you want to keep a particular recovery copy long-term, move it out of `.romm-backup` yourself.
 
 ## Artwork Missing
 

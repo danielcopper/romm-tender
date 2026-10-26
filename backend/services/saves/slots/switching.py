@@ -173,9 +173,8 @@ class SlotSwitcher:
         download failure still persists the flipped slot and answers a
         :class:`SlotSwitchIncomplete` so the caller can retry.
 
-        The slot changes only once every one of those backups went through: a
-        file left in the saves folder under the new slot would upload into it
-        on the next sync. A backup that fails before anything was moved raises
+        The slot changes only once every one of those backups went through. A
+        backup that fails before anything was moved raises
         :class:`SlotSwitchBackupFailed`; one that fails after some files were
         moved persists the previous slot with those files untracked, downloads
         nothing, and answers a :class:`SlotSwitchStopped` naming them.
@@ -299,12 +298,11 @@ class SlotSwitcher:
     ) -> _SetAside:
         """Back up and untrack every local save the new slot does not provide.
 
-        So no stale file lingers to upload into the new slot (#1058) and no
-        never-synced save is destroyed without a backup (#965). The backup
-        folder is made ready before the first move, and raises
-        :class:`SlotSwitchBackupFailed` when it cannot take backups. The first
-        backup that fails stops the loop, and only the files moved before it
-        are untracked; when every backup went through, tracked files with no
+        No stale file is left to upload into the new slot, and no never-synced
+        save is destroyed without a backup. The backup folder is made ready
+        before the first move; this raises :class:`SlotSwitchBackupFailed` when
+        the folder cannot take backups. The first backup that fails stops the
+        loop, and only the files moved before it are untracked; when every backup went through, tracked files with no
         local file left are untracked too. Mutates *save_state* in memory; the
         caller owns the write Unit of Work. Runs synchronously — call via
         ``run_in_executor``.
@@ -373,7 +371,7 @@ class SlotSwitcher:
         targets: dict[str, dict[str, Any]],
         default_slot: str | None,
     ) -> list[str]:
-        """Download the newest server save per target of the new slot (#1058).
+        """Download the newest server save per target of the new slot.
 
         Mutates *save_state* in memory; the caller owns the write Unit of Work.
         Runs synchronously — call via ``run_in_executor``. Returns the filenames
