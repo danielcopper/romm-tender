@@ -8,9 +8,8 @@
 
 import { useEffect, useState } from "react";
 import { getRomMetadataShared } from "../api/sharedReads";
-import { debugLog } from "../api/backend";
+import { logWarn } from "../api/backend";
 import type { RomMetadata } from "../types";
-import { detach } from "./detach";
 
 /** One ROM's record, tagged with the ROM it was read for. */
 interface LoadedMetadata {
@@ -32,7 +31,7 @@ export function useRomMetadata(romId: number | null): RomMetadata | null {
         if (!cancelled) setLoaded({ romId, metadata });
       },
       (e: unknown) => {
-        detach(debugLog(`useRomMetadata: the metadata read for rom ${romId} failed: ${String(e)}`));
+        logWarn(`useRomMetadata: the metadata read for rom ${romId} failed: ${String(e)}`);
         if (!cancelled) setLoaded({ romId, metadata: null });
       },
     );

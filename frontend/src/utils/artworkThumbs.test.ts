@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
 import type { ArtworkSlotRow } from "../api/backend";
 import { coverUrls, slotThumbnailUrls, steamsCover } from "./artworkThumbs";
-import { _resetArtworkSlotsForTests, artworkThumbToken, loadArtworkSlots, writeSlotArtwork } from "./artworkSlotsStore";
+import {
+  _resetArtworkSlotsForTests,
+  artworkThumbToken,
+  loadArtworkSlots,
+  noteArtworkWritten,
+  writeSlotArtwork,
+} from "./artworkSlotsStore";
 
 const row = (overrides: Partial<ArtworkSlotRow>): ArtworkSlotRow => ({
   slot: "hero",
@@ -183,6 +189,7 @@ describe("steamsCover", () => {
 
   it("signs the cover by the held read of the ROM asked about, with that slot's token", async () => {
     await loadArtworkSlots(5000, 42);
+    noteArtworkWritten(5000, ["cover"]);
 
     expect(steamsCover(5000, 42)).toEqual([
       `https://steamloopback.host/customimages/5000p.png?v=9&s=c1&t=${artworkThumbToken(5000, "cover")}`,

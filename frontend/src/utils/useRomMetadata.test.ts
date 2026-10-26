@@ -31,7 +31,9 @@ function deferred<T>() {
 describe("useRomMetadata", () => {
   beforeEach(() => {
     vi.mocked(sharedReads.getRomMetadataShared).mockReset();
-    vi.mocked(backend.debugLog).mockReset().mockResolvedValue(undefined);
+    vi.spyOn(backend, "logWarn")
+      .mockReset()
+      .mockImplementation(() => {});
   });
 
   it("answers nothing and reads nothing for no ROM", () => {
@@ -57,7 +59,7 @@ describe("useRomMetadata", () => {
     const { result } = renderHook(() => useRomMetadata(42));
 
     await waitFor(() =>
-      expect(backend.debugLog).toHaveBeenCalledExactlyOnceWith(
+      expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
         "useRomMetadata: the metadata read for rom 42 failed: Error: socket closed",
       ),
     );
@@ -93,7 +95,7 @@ describe("useRomMetadata", () => {
     expect(result.current?.summary).toBe("First.");
 
     await waitFor(() => expect(result.current).toBeNull());
-    expect(backend.debugLog).toHaveBeenCalledExactlyOnceWith(
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
       "useRomMetadata: the metadata read for rom 42 failed: Error: socket closed",
     );
   });
@@ -116,7 +118,7 @@ describe("useRomMetadata", () => {
 
     await act(async () => rejectFirst(new Error("socket closed")));
     expect(result.current?.summary).toBe("Second.");
-    expect(backend.debugLog).toHaveBeenCalledExactlyOnceWith(
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
       "useRomMetadata: the metadata read for rom 42 failed: Error: socket closed",
     );
   });

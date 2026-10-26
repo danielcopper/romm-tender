@@ -15,9 +15,7 @@
  * the classification can be wrong and fail rather than wrong and green.
  *
  * It sweeps the source rather than naming the files, for the reason
- * `test-utils/componentSources.ts` gives at length: a file missing from a
- * hand-kept list carries no lock at all and cannot be told from one that never
- * drifted.
+ * `test-utils/componentSources.ts` gives.
  */
 
 import { globSync, readFileSync } from "node:fs";

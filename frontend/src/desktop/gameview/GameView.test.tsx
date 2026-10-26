@@ -1,8 +1,9 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { noteArtworkWritten } from "../../utils/artworkSlotsStore";
+import { _resetArtworkSlotsForTests, loadArtworkSlots, noteArtworkWritten } from "../../utils/artworkSlotsStore";
 import { GameView } from "./GameView";
+import * as backend from "../../api/backend";
 import * as gameDetailStore from "../../utils/gameDetailStore";
 import * as sharedReads from "../../api/sharedReads";
 import * as artwork from "../../utils/artwork";
@@ -60,6 +61,7 @@ describe("GameView", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetArtworkSlotsForTests();
     vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detail());
     vi.mocked(sharedReads.getRomMetadataShared).mockReturnValue(new Promise(() => {}));
     vi.mocked(connectionHeartbeat.registerConnectionHeartbeat).mockReturnValue(releaseHeartbeat);
@@ -83,6 +85,29 @@ describe("GameView", () => {
     );
     await waitFor(() => expect(screen.getByText("A golf game.")).toBeInTheDocument());
     expect(sharedReads.getRomMetadataShared).toHaveBeenCalledWith(42);
+  });
+
+  it("signs the cover by the ARTWORK read held for the page's ROM", async () => {
+    vi.mocked(backend.getArtworkSlots).mockResolvedValue({
+      success: true,
+      has_api_key: true,
+      game: { sgdb_id: 7, source: "romm", name: "Mario Golf" },
+      slots: [
+        {
+          slot: "cover",
+          state: "automatic",
+          source: "romm",
+          image_id: null,
+          has_choice: false,
+          signature: "c42",
+        },
+      ],
+    });
+    await loadArtworkSlots(APP_ID, 42);
+
+    render(<GameView appId={APP_ID} />);
+
+    expect(screen.getByRole("img")).toHaveAttribute("src", expect.stringContaining("&s=c42&"));
   });
 
   it("loads the cover anew once Tender writes it", () => {

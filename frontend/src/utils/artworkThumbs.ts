@@ -1,5 +1,6 @@
 /**
- * Where the ARTWORK tab's row thumbnails come from: Steam's own copy of each slot's image (#2381 D14).
+ * Where the ARTWORK tab's row thumbnails, and the cover GAME INFO and the desktop About card show, come from: Steam's own
+ * copy of each slot's image (#2381 D14).
  *
  * Steam serves its grid folder to the renderer under `https://steamloopback.host/customimages/`, and its
  * `appStore.GetCustom…URLs` getters answer the URLs it tries for a slot, `.jpg` before `.png`. The row shows the first
