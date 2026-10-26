@@ -53,7 +53,12 @@ class DownloadUnpackerConfig:
 
 
 class DownloadUnpacker:
-    """Turns a finished transfer into a recorded install. Every method blocks; the service calls each off the loop."""
+    """Turns a finished transfer into a recorded install. Every method blocks.
+
+    ``kept_download_complete`` and the unpack run off the loop; the removal of a
+    partial download runs on it, in the transfer and in the cancel of a paused
+    download.
+    """
 
     def __init__(self, *, config: DownloadUnpackerConfig) -> None:
         self._download_file_store = config.download_file_store
@@ -65,8 +70,8 @@ class DownloadUnpacker:
     def kept_download_complete(self, target_path: str, rom_detail: dict[str, Any]) -> bool:
         """Whether a zip this ROM downloads already sits whole in its partial file.
 
-        The download service asks before every transfer and unpacks a whole one
-        without fetching it: a failed unpack keeps the downloaded zip for a
+        The admission weighs a whole one without what is already on disk, and the
+        transfer unpacks it without fetching it: a failed unpack keeps the downloaded zip for a
         retry, and a download paused after its last byte has nothing left to
         fetch — a resume would ask for a range past its end, which a server
         refuses. Whole means it opens as a zip: the central directory sits at its
@@ -320,8 +325,8 @@ class DownloadUnpacker:
 
         *extract_dir_name* is the same ROM-identity-derived base name extraction
         created the staging dir under (``_names.safe_extract_dir_name``), so
-        cleanup targets exactly that dir
-        rather than re-deriving it from a stale source. A single zip's is not
+        cleanup targets exactly that dir rather than re-deriving it from a stale
+        source. A single zip's is not
         removed here: whether it was unpacked at all is known only inside the
         unpack, which removes its own directory on failure, and a folder of that
         name it never created is not this download's to delete.

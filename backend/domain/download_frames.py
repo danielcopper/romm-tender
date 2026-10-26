@@ -4,8 +4,8 @@ What a ``download_progress`` frame, the ``download_failed`` payload and the
 download queue's answer carry is a wire contract rather than an implementation
 detail of whoever emits them: the frontend store reads every one of them by its
 keys, and a terminal frame is the last thing it hears about a ROM. Anything that
-builds one belongs here; deciding *when* to emit one is the download service's
-concern.
+builds one belongs here; deciding *when* to send one is the download queue's
+and the transfer's concern.
 """
 
 from __future__ import annotations

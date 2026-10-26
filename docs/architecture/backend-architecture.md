@@ -1721,13 +1721,16 @@ outside that folder stays and its record goes. The answer names each file it lef
 
 #### DownloadService notes
 
-**The package is split along its jobs** (#2574), as `services/library/` is, and `bootstrap/` builds every part and hands
-it in, so the façade builds none of them:
+**The package is split along its jobs**, as `services/library/` is, and `bootstrap/` builds every part and hands it in,
+so the façade builds none of them:
 
-- `DownloadsStateBox` (`_state.py`) holds what the parts share: the queue's entries, the in-progress claims, each
-  admitted download's task, byte reservation and control token, and the semaphore. An admitted download's registrations
-  are written by its two verbs alone — `admit` and `release` — and `release` gives them back only for the control token
-  that registered them, so a superseded task never releases a newer attempt's (#144).
+- `DownloadsStateBox` (`_state.py`) holds what the façade, the queue and the transfer share: the queue's entries, the
+  in-progress claims, each admitted download's task, byte reservation and control token, and the semaphore. The claims,
+  tasks, reservations and tokens change only through its verbs: a start takes its claim and drops it when it ends
+  without a download (`claim`, `drop_claim`); once its pre-flights pass it registers four things — the entry, the task,
+  the reservation and the token (`admit`); the task gives back the claim and all of them but the entry (`release`), and
+  only while its token is still the one registered, so a superseded task never releases a newer attempt's; the shutdown
+  forgets the tasks it has ended (`forget_tasks`). The entries are the queue's to change once admitted.
 - `DownloadQueue` (`queue.py`) owns the entries' changes and every `download_progress` frame that reports one, and sends
   the frames nobody awaits as tasks of its own `BackgroundTasks`, which `DownloadService.shutdown` awaits after the
   façade's own.
@@ -1736,7 +1739,7 @@ it in, so the façade builds none of them:
   failed.
 - `_names.py` holds the safe file and folder names and the partial file's size, as functions both the façade and the
   transfer call.
-- `DownloadService` (`service.py`) stays the one surface the endpoints and the other services call: admission (the
+- `DownloadService` (`service.py`) is the one surface the endpoints and the other services call: admission (the
   occupancy gate, the sibling supersede, the disk-space pre-flight), control (cancel, pause, resume), the installed-ROM
   read and the shutdown.
 
@@ -1813,7 +1816,7 @@ download alike — is weighed against free space less what other downloads have 
 headroom (`unpack_space_verdict`, `domain/disk_space.py`; what another download has written is its transfer since it was
 admitted plus what it has unpacked so far, `written_since_admitted` in the same module). Too little raises
 `NotEnoughSpaceToUnpack`: the download fails with "Not enough space to unpack", nothing is recorded, and the downloaded
-`.tmp` / `.zip.tmp` is **kept**. Before every transfer the service asks whether that file is already whole
+`.tmp` / `.zip.tmp` is **kept**. Before every transfer `DownloadTransfer` asks whether that file is already whole
 (`kept_download_complete`, off the event loop) — it opens as a zip, and a single `.tmp` is exactly RomM's stated size —
 and a whole one skips the transfer and goes straight to the unpack, its pre-flight discounting the kept bytes. Skipping
 is what spares a resume of a whole file the range past its end that a server answers with 416; the size check keeps a
@@ -1941,8 +1944,9 @@ has installed the package in the emulator is separate work
 
 **Where the knowledge comes from.** The accept-list is the frontend's own per-system declaration, read live by the
 vendored emu-atlas resolver and handed over by `AtlasCatalogueAdapter.get_supported_extensions`, wired in as
-`DownloadServiceConfig.system_extensions`. The consuming call site is a single `self._system_extensions(system)` behind
-one Protocol-typed config field, which is what let Tender's own duplicate parser leave in #1840 as one wiring change.
+`RomInstallRecorderConfig.system_extensions` (`services/rom_install_recorder.py`). The consuming call site is a single
+`self._system_extensions(system)` behind one Protocol-typed config field, which is what let Tender's own duplicate
+parser leave in #1840 as one wiring change.
 
 Filesystem writes go through `DownloadFileAdapter`. ZIP extraction is ZIP-slip protected and streamed: `extract_zip`
 copies each member in chunks and reports byte progress through an optional callback, so an unpacked download — a
@@ -1958,10 +1962,10 @@ it once the entry has been evicted or its status is terminal.
 `asyncio.Semaphore(2)` around the transfer + post-IO critical section. `start_download` enters the queue with status
 **`queued`** and reserves the download's required bytes in the state box; `DownloadTransfer.run` flips the status to
 `downloading` only once it acquires the semaphore (emitting a `download_progress` `status: "queued"` frame first if it
-has to wait), and releases the reservation in its `finally`. The disk pre-flight subtracts what siblings have reserved
-and not yet written (`DownloadsStateBox.bytes_reserved_by_others`, the same figure the check before unpacking uses; free
-space already lacks what they wrote) so two concurrent downloads that each fit alone but not together can't both pass —
-the second is refused with `insufficient_space`.
+has to wait), and releases the reservation in its `finally`. The disk pre-flight subtracts what other downloads have
+reserved and not yet written (`DownloadsStateBox.bytes_reserved_by_others`, the same figure the check before unpacking
+uses; free space already lacks what they wrote) so two concurrent downloads that each fit alone but not together can't
+both pass — the second is refused with `insufficient_space`.
 
 **Cancel reaches the UI and never destroys a live install**: cancelling a download emits a terminal `download_progress`
 `status: "cancelled"` frame so the frontend resets the button out of its downloading state (the cancel path used to be
@@ -3535,7 +3539,7 @@ Protocol-typed (services never import each other's concrete classes). Selected w
 | **LibraryService**          | `RommLibraryApi`, `SteamConfigStore`, `ArtworkManager`, `Clock`/`UuidGen`/`Sleeper`, `SettingsPersister`, `UnitOfWorkFactory` (roms / sync_runs / kv_config / rom_metadata), `ConflictRules` (the rules its use cases check at their entry, and the leases `sync_complete` and `sync_stale` carry), `ShortcutArtworkJob` (the placeholder icon's path, and a run requested at each sync's end)                                                                                                                                                                                                                                                                                                 |
 | **MetadataService**         | `UnitOfWorkFactory` (reads `rom_metadata` / `roms`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **SaveService**             | `RommApi`, `RetryStrategy`, `SaveFileStore`, `UnitOfWorkFactory` (`rom_save_sync_states` / `rom_save_files` / `answered_save_directories`), `Clock`, `RetroDeckFolders`, `SaveLocationReader`, `PlatformSystems`, `ActiveCoreReader`, `UpdateInProgressFn` and `MigrationPendingFn` (the sync engine's own update and RetroDECK migration backstops), `ConflictRules` (the rules its use cases check at their entry)                                                                                                                                                                                                                                                                           |
-| **DownloadService**         | its parts (`DownloadsStateBox`, `DownloadQueue`, `DownloadTransfer`, `DownloadUnpacker`), `RommApi`, `DownloadFileStore`, `RetroDeckFolders`, `PlatformSystems`, `UnitOfWorkFactory`, `DownloadTargetGateFn` + `RomRemoverProvider` cross-service seams (the queue takes `Clock`; the transfer and the unpacker take `RomInstallRecorder`), `ConflictRules` (the rules a start and a resume check at their entry, the operation a download's task holds, and the lease a bound ROM's `download_complete` carries)                                                                                                                                                                              |
+| **DownloadService**         | its parts (`DownloadsStateBox`, `DownloadQueue`, `DownloadTransfer`, `DownloadUnpacker`), `RommApi`, `DownloadFileStore`, `RetroDeckFolders`, `PlatformSystems`, `UnitOfWorkFactory`, `DownloadTargetGateFn` + `RomRemoverProvider` cross-service seams (the queue takes `Clock`; the transfer and the unpacker take `RomInstallRecorder`), `ConflictRules` (the rules a start and a resume check at their entry and the operation a download's task holds; the transfer takes the lease a bound ROM's `download_complete` carries)                                                                                                                                                            |
 | **FirmwareService**         | `RommApi`, `FirmwareFileStore`, `FirmwarePlatformResolver`, `FirmwareResolver`, `CoreInfoProvider`, `RetroDeckFolders`, `UnitOfWorkFactory` (`firmware_cache`, `downloaded_bios`), the live settings and `SettingsPersister` (the per-platform emulator overrides the refiling moves), `ConflictRules` (the rule each download and delete checks at its entry)                                                                                                                                                                                                                                                                                                                                 |
 | **SteamGridService**        | `SteamGridDbApi`, `RommApi`, `SteamConfigStore`, `SgdbArtworkCache`, `Clock` (an artwork slot's outcome, a keep-current check's time), `UnitOfWorkFactory` (`sgdb_id`, `chosen_sgdb_id` and `artwork_checked_at` on `roms`, `artwork_slot_outcomes`, `artwork_slot_choices`, `artwork_slot_handovers`), `PendingSyncReader`, `CoverSlotReader` (the cover's state and RomM's cover reload, from `ArtworkService`), `ConflictRules` (the rule the artwork fetch, the slot fetch and its report, the icon save, the resolution, the manual pick, the ARTWORK tab's five endpoints and `keep_artwork_current` check at their entry, and the lease an artwork, slot or tab answer carries)         |
 | **ShortcutArtworkService**  | `SteamConfigStore` (the worklist, the grid directory's listing and Tender's two icons), `ShortcutArtworkSource` (the SteamGridDB service's icon and artwork half), `UnitOfWorkFactory` (bound shortcuts on `roms`, `artwork_slot_outcomes`), `ConflictRules` + `EventEmitter` (each `shortcut_artwork` batch under its lease), `Sleeper`/`Clock`, one `WorkInFlightFn` each for a sync, a removed-game cleanup and a shortcut removal, `PanelConnectedFn`, `RendererAboveCeilingProvider`, `TenderLogoFn`                                                                                                                                                                                      |

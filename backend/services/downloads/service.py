@@ -1,12 +1,10 @@
-"""DownloadService — the façade the endpoints and the composition root call for ROM downloads.
+"""DownloadService — the façade the endpoints and the other services call for ROM downloads.
 
 What happens before a download's task starts belongs here — its admission,
 the occupancy gate, the sibling supersede and the disk-space pre-flight — and
 so does the control of a running or paused download (cancel, pause, resume),
-the installed-ROM read and the shutdown. The task itself is ``transfer.py``'s,
-the queue's entries and their frames are ``queue.py``'s, what a finished
-transfer becomes is ``unpack.py``'s, and the state they share is
-``_state.py``'s. Raw filesystem I/O flows through the ``DownloadFileStore``
+the installed-ROM read and the shutdown. The package's other parts are named
+in its ``__init__``. Raw filesystem I/O flows through the ``DownloadFileStore``
 Protocol; HTTP traffic flows through ``RommRomReader``.
 """
 
@@ -89,10 +87,11 @@ class DownloadServiceConfig:
 
 
 class DownloadService:
-    """ROM download engine: downloads and queue management.
+    """The download package's one surface: admission, control, the installed-ROM read and the shutdown.
 
-    A start and a resume check their endpoint's conflict rules at their entry,
-    under that endpoint's name, and raise the rule's refusal when one holds
+    The queue's reads and clears pass through to :class:`DownloadQueue`. A start
+    and a resume check their endpoint's conflict rules at their entry, under
+    that endpoint's name, and raise the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules).
     """
 
@@ -117,8 +116,9 @@ class DownloadService:
         """Cancel the per-ROM download tasks and the progress frames still running, and wait until they have ended.
 
         A download cancelled while its install is being committed waits for the
-        commit's thread before it ends, so this waits for it too. The frames go
-        after the downloads, because a download that ends sends one.
+        commit's thread before it ends, so this waits for it too. The queue's
+        frames go after the downloads: while a cancelled download waits for its
+        unpack's thread, that thread's progress ticks still start frames.
         """
         await self._tasks.shutdown()
         await self._queue.shutdown()
@@ -393,7 +393,7 @@ class DownloadService:
             # reservation already left out (``bytes_reserved_by_others``).
             "_on_disk_at_start": already_on_disk,
         }
-        # The reservation lets a concurrent sibling's pre-flight see the
+        # The reservation lets another download's pre-flight see the
         # outstanding claim; the transfer releases it when the task ends.
         self._state.admit(rom_id, entry=entry, task=task, reserved=verdict.needed_bytes, control=control)
         return {"success": True, "message": "Download started"}
@@ -543,7 +543,7 @@ class DownloadService:
             )
 
     def get_download_queue(self) -> dict[str, Any]:
-        """The queue's answer: every entry, as the frontend's ``DownloadItem`` shape."""
+        """``DownloadQueue.get_download_queue``."""
         return self._queue.get_download_queue()
 
     def clear_completed_downloads(self) -> dict[str, Any]:
@@ -589,9 +589,9 @@ class DownloadService:
     # ── DownloadQueueCleanup Protocol ──────────────────────────────
 
     def evict(self, rom_id: int) -> None:
-        """Remove the queue entry for *rom_id* if present. Idempotent."""
+        """``DownloadQueue.evict``."""
         self._queue.evict(rom_id)
 
     def clear(self) -> None:
-        """Remove all entries from the download queue."""
+        """``DownloadQueue.clear``."""
         self._queue.clear()

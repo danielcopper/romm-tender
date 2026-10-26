@@ -1396,7 +1396,7 @@ class TestDiskSpaceMultiFile:
         downloads.loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro, _name):
-            # Consume the spawned _do_download coroutine so it isn't left
+            # Consume the spawned transfer coroutine so it isn't left
             # un-awaited (RuntimeWarning); this unit only exercises the disk-space
             # gate, not the download itself.
             coro.close()
@@ -1707,7 +1707,7 @@ class TestMaybeHealPs3Sfb:
 
 
 class TestDoDownloadSingleFile:
-    """Tests for _do_download happy path — single file."""
+    """Tests for DownloadTransfer.run happy path — single file."""
 
     @pytest.mark.asyncio
     async def test_single_file_happy_path(self, make_downloads, tmp_path, emit):
@@ -2012,7 +2012,7 @@ class TestDoDownloadOverrideRebake:
     """``download_complete`` re-bakes a per-game ``emulator_override`` into launch_options.
 
     This is the load-bearing site (B2): the override lives on ``roms`` precisely so
-    it survives uninstall → reinstall, and reinstall flows through ``_do_download``.
+    it survives uninstall → reinstall, and reinstall flows through ``DownloadTransfer.run``.
     """
 
     @staticmethod
@@ -2107,7 +2107,7 @@ class TestDoDownloadOverrideRebake:
 
 
 class TestDoDownloadMultiFile:
-    """Tests for _do_download happy path — multi-file (ZIP)."""
+    """Tests for DownloadTransfer.run happy path — multi-file (ZIP)."""
 
     @pytest.mark.asyncio
     async def test_multi_file_happy_path(self, make_downloads, tmp_path, emit):
@@ -2480,7 +2480,7 @@ class TestDoDownloadMultiFile:
         lands regardless of the fake clock. Every executor hop settles behind the
         ticks it queued, the order 3.12 keeps: from 3.13 a hop that finished
         before it was chained settles at once, and its ticks are then dropped as
-        the comment at ``DownloadService._live_entry`` says.
+        the comment at ``DownloadQueue._live_entry`` says.
         """
         from unittest.mock import patch
 
@@ -3608,7 +3608,7 @@ class TestAPlatformWithNoSystemDownloadsNothing:
 
 
 class TestCleanupPartialDownload:
-    """Tests for _cleanup_partial_download — all paths."""
+    """Tests for DownloadUnpacker.remove_partial_download — all paths."""
 
     def test_cleans_tmp_file_single(self, downloads, tmp_path):
         target = str(tmp_path / "game.z64")
@@ -3699,7 +3699,7 @@ class TestResolveSafeExtractDirName:
 
 
 class TestDoDownloadCancelled:
-    """Tests for _do_download — cancelled mid-download."""
+    """Tests for DownloadTransfer.run — cancelled mid-download."""
 
     @pytest.mark.asyncio
     async def test_cancelled_sets_status_and_cleans_up(self, make_downloads, tmp_path):
@@ -3747,7 +3747,7 @@ class TestDoDownloadCancelled:
 
 
 class TestDoDownloadZipFailure:
-    """Tests for _do_download — ZIP extraction failure."""
+    """Tests for DownloadTransfer.run — ZIP extraction failure."""
 
     @pytest.mark.asyncio
     async def test_zip_failure_sets_failed_and_cleans_up(self, make_downloads, tmp_path):
@@ -3924,7 +3924,7 @@ class TestDoDownloadPostDecodeTraversal:
 
 
 class TestDoDownloadFailureEmit:
-    """Tests for _do_download — ``download_failed`` event emission."""
+    """Tests for DownloadTransfer.run — ``download_failed`` event emission."""
 
     @pytest.mark.asyncio
     async def test_failure_emits_download_failed(self, make_downloads, tmp_path, emit):
@@ -3977,7 +3977,7 @@ class TestDoDownloadFailureEmit:
 
 
 class TestDoDownloadInvariantFailure:
-    """Tests for _do_download — RomInstall invariant rejects the ROM data.
+    """Tests for DownloadTransfer.run — RomInstall invariant rejects the ROM data.
 
     A non-positive ``rom_id`` fails ``RomInstall.mark_installed``. The worker
     catches the ValueError, removes the just-installed artifact, persists no
@@ -4459,7 +4459,7 @@ class TestStartDownloadSpawnFailure:
         downloads.loop.run_in_executor = _hops_answering(rom_detail)
 
         def _raise_after_closing(coro, _name):
-            # Close the spawned _do_download coroutine before raising so it
+            # Close the spawned transfer coroutine before raising so it
             # isn't left un-awaited (RuntimeWarning); the raise still drives the
             # spawn-failure branch under test.
             coro.close()
@@ -4597,7 +4597,7 @@ class TestShutdownWaitsForTheDownloads:
 
 
 class TestMakeProgressCallback:
-    """Tests for _make_progress_callback — throttling, logging, emission."""
+    """Tests for DownloadQueue.make_progress_callback — throttling, logging, emission."""
 
     def test_progress_callback_updates_queue_and_dispatches_emit(self, make_downloads):
         # Pre-populate the queue entry the callback updates in place.
@@ -4682,8 +4682,8 @@ class TestMakeProgressCallback:
             "bytes_downloaded": 0,
             "total_bytes": 0,
         }
-        # The queue mutation now happens inside the function marshaled onto the
-        # loop thread via call_soon_threadsafe (#973), so run it eagerly to
+        # The queue mutation happens inside the function marshaled onto the
+        # loop thread via call_soon_threadsafe, so run it eagerly to
         # observe the in-place update; spawn just consumes the coroutine.
         downloads.loop.call_soon_threadsafe = lambda fn, *args, **kwargs: fn(*args, **kwargs)
         downloads.queue._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
@@ -4839,7 +4839,7 @@ class TestProgressPhase:
 
 
 class TestCleanupPartialDownloadFailureInjection:
-    """Tests for _cleanup_partial_download — adapter raises mid-cleanup.
+    """Tests for DownloadUnpacker.remove_partial_download — adapter raises mid-cleanup.
 
     The cleanup loop must swallow per-path OSError so one failing
     remove never blocks the others, AND the multi-file remove_tree
@@ -4902,12 +4902,12 @@ class TestCleanupPartialDownloadFailureInjection:
 class TestStartDownloadInProgressLeak:
     """An early exception in start_download must release the in-progress flag.
 
-    A raise between ``_download_in_progress.add`` and the task's creation — an
-    OSError from make_dirs or disk_free (SD card unmounted), refused with
-    ``download_start_failed``; a TypeError from a bug in the folder lookup; a
-    cancelled call — fails the call and leaves the ROM free to
-    be downloaded again, not stuck "Already downloading" until the backend
-    restarts.
+    A raise between taking the claim (``DownloadsStateBox.claim``) and the
+    task's creation — an OSError from make_dirs or disk_free (SD card
+    unmounted), refused with ``download_start_failed``; a TypeError from a bug
+    in the folder lookup; a cancelled call — fails the call and leaves the ROM
+    free to be downloaded again, not stuck "Already downloading" until the
+    backend restarts.
     """
 
     @staticmethod
@@ -5085,8 +5085,7 @@ class TestProgressCallbackEvictionSafe:
         fake_clock.advance(60)  # clear both throttles
 
         # No queue entry for rom_id 99 — the callback's _apply_progress
-        # hits the ``.get`` guard. Before the #973 fix this was ``self._download_queue[99]
-        # .update(...)`` on the worker thread → KeyError.
+        # hits the ``.get`` guard instead of a KeyError.
         cb = downloads.queue.make_progress_callback(99, "Ghost", "N64", "ghost.z64")
         cb(256, 512)  # must NOT raise
 
@@ -5838,7 +5837,7 @@ class TestCooperativeCancel:
         captured: list[int] = []
 
         def fake_transfer(_rom_id, _filename, _dest, progress_callback=None, *, resume=False, on_meta=None):
-            assert progress_callback is not None  # _do_download always threads a real callback
+            assert progress_callback is not None  # the transfer always threads a real callback
             for i in range(1, 500):
                 captured.append(i)
                 if i == 3:
@@ -6171,7 +6170,7 @@ class TestPauseResume:
         assert downloads.state.entries[42]["resumable"] is True
 
     @pytest.mark.asyncio
-    async def test_resume_threads_resume_true_into_do_download(self, make_downloads, tmp_path, emit):
+    async def test_resume_threads_resume_true_into_the_transfer(self, make_downloads, tmp_path, emit):
         """End-to-end: the resumed transfer reaches download_rom_content with resume=True."""
         from unittest.mock import patch
 

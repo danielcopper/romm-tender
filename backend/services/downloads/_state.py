@@ -2,14 +2,17 @@
 
 Built once by the composition root and handed to the façade, the queue and the
 transfer, which coordinate through it instead of through each other's fields.
-A start takes the ROM's in-progress claim (:meth:`DownloadsStateBox.claim`), and
-an admitted download then holds four registrations here — its queue entry, its
-task, its byte reservation and its control token
-(:meth:`DownloadsStateBox.admit`). Its task gives back the claim and every
+A start takes the ROM's in-progress claim (:meth:`DownloadsStateBox.claim`) and
+drops it again if it ends without a download (:meth:`DownloadsStateBox.drop_claim`).
+Once its pre-flights pass, the start registers four things here — the queue
+entry, the task, the byte reservation and the control token
+(:meth:`DownloadsStateBox.admit`). The task gives back the claim and every
 registration but the entry, which outlives it (:meth:`DownloadsStateBox.release`),
 so the rule that only the attempt which registered a download releases it lives
-in one place. The claim, the task, the reservation and the token change only
-through the box's verbs; the entries are the queue's to change once admitted.
+in one place; the shutdown forgets the tasks it has ended
+(:meth:`DownloadsStateBox.forget_tasks`). The claim, the tasks, the
+reservations and the tokens change only through these verbs; the entries are
+the queue's to change once admitted.
 """
 
 from __future__ import annotations

@@ -5,8 +5,8 @@ until it is cleared; a ``download_progress`` frame is how it hears that an entry
 changed. The entries themselves live in the package's state box
 (``_state.py``), because an admitted download registers its entry there with
 its task, its reservation and its control token; every later change to an
-entry, what an entry becomes on the wire, and how often a running download
-reports, is decided here.
+entry, and when and how often a frame reports it, is decided here. What a frame
+carries is ``domain/download_frames.py``'s.
 """
 
 from __future__ import annotations
@@ -239,7 +239,7 @@ class DownloadQueue:
         self._tasks.spawn(self._emit("download_progress", frame), "download_progress")
 
     async def report_queued(self, rom_id, rom_name, platform_name, file_name, *, total_bytes) -> None:
-        """Mark *rom_id*'s entry queued and report it: its download waits for a transfer slot (#1053)."""
+        """Mark *rom_id*'s entry queued and report it: its download waits for a transfer slot."""
         entry = self._state.entries[rom_id]
         entry["status"] = "queued"
         await self._emit(
@@ -283,7 +283,7 @@ class DownloadQueue:
         """Send *rom_id*'s terminal ``cancelled`` frame, then evict its entry.
 
         A cancel is an explicit discard, so no "cancelled" row lingers in the
-        queue view or the Quick Access summary (#149 downloads-round); the store
+        queue view or the Quick Access summary; the store
         listener drops it on the frame. The frame goes BEFORE the evict so it
         carries the entry's final progress values.
         """

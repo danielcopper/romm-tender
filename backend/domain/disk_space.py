@@ -1,10 +1,11 @@
 """Whether what a download needs still fits in what the card has left.
 
 Pure arithmetic over numbers the caller measures — the size the server states,
-the free space it read, the bytes sibling downloads have already claimed, and
-the bytes a resumable transfer already wrote. Reading them is the download
-service's concern; what they add up to, and the two figures a refusal shows the
-user, are decided here.
+the free space it read, what other downloads have reserved and written since
+they were admitted, and the bytes a resumable transfer already wrote. Reading
+them is the download package's concern; what they add up to — how much of the
+other downloads' claims is still to be written, and whether this download fits
+beside it — and the two figures a refusal shows the user are decided here.
 """
 
 from __future__ import annotations
@@ -58,7 +59,7 @@ def disk_space_verdict(
     A multi-file ROM is counted **twice**: it arrives as a ZIP and is extracted
     beside it, so both exist at once. A single zip that will be unpacked is
     counted as itself plus *unpacked_size*, the sum of the member sizes RomM
-    lists, for the same reason. *reserved_bytes* is what sibling downloads
+    lists, for the same reason. *reserved_bytes* is what other downloads
     have claimed but not yet written — without it two concurrent pre-flights
     could each pass on space only one of them fits (#1053). *already_on_disk* is
     what a resumable transfer already wrote, which is not needed a second time,
