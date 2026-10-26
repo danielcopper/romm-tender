@@ -135,7 +135,6 @@ GENERIC_VALUES: dict[str, str] = {
     "empty": "the artwork and update-output words for nothing there",
     "file": "the word for a file, in adoption, deletion and the panel",
     "igdb": "a metadata database RomM keys platforms and collections by",
-    "libretro": "the kind of Tender's own emulator option, a RetroArch core",
     "list": "the panel's id for a page's list pane",
     "missing": "the word for a file or folder not there, in adoption, migration and the panel",
     "none": "the word for nothing chosen, across artwork, saves, prune and the panel",
@@ -150,7 +149,6 @@ GENERIC_VALUES: dict[str, str] = {
     "saves": "the saves folder and tab, by name",
     "settings": "the settings page, by name",
     "slug": "a platform's slug, RomM's key for it",
-    "standalone": "the panel bundle that carries its own copy, and Tender's own emulator option kind",
     "title": "the title of a page, a toast or an achievement",
     "unchecked": "the save-stranding and launch-prompt words for a check not made",
     "unknown": "the word for anything not known, in a dozen modules and the panel",
@@ -219,6 +217,7 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "unmet",
         }
     ),
+    "domain/emulator_commands.py": frozenset({"libretro", "standalone"}),
     "domain/firmware_groups.py": frozenset({"ntsc-j", "ntsc-u", "pal", "satisfied"}),
     "domain/firmware_rows.py": frozenset({"present"}),
     "domain/firmware_wants.py": frozenset(
@@ -242,7 +241,7 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "verified",
         }
     ),
-    "domain/platform_system.py": frozenset({"declared", "disabled", "screenscraper", "thegamesdb"}),
+    "domain/platform_system.py": frozenset({"declared", "disabled", "libretro", "screenscraper", "thegamesdb"}),
     "domain/save_answer.py": frozenset(
         {
             "caveats",
@@ -270,6 +269,7 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "sorted-dir-missing",
         }
     ),
+    "domain/shortcut_data.py": frozenset({"libretro", "standalone"}),
     "domain/source_roots.py": frozenset(
         {
             "assumed",
@@ -285,6 +285,7 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "saves-root-missing",
         }
     ),
+    "services/active_core_resolver.py": frozenset({"standalone"}),
     "services/firmware/downloads.py": frozenset({"satisfied"}),
     "services/firmware/emulator_answers.py": frozenset(
         {
@@ -323,6 +324,9 @@ NOT_THE_RESOLVERS: dict[str, dict[str, str]] = {
     },
     "domain/save_answer.py": {
         "unestablished": "the save answer's own state for a save nothing established",
+    },
+    "host/inject/bundles.py": {
+        "standalone": "the panel bundle's own kind",
     },
     "host/server.py": {
         "refused": "the admission verdict on a connection to the backend",

@@ -80,6 +80,7 @@ const RESOLVER_READERS_TODAY = {
     "declared",
     "declared_kind",
     "known_as",
+    "libretro",
     "locating",
     "mismatch",
     "not-comparable",
@@ -87,6 +88,7 @@ const RESOLVER_READERS_TODAY = {
     "refused",
     "requirements_met",
     "satisfied",
+    "standalone",
     "supplied_by",
     "unestablished",
     "unrecognised",
@@ -157,6 +159,9 @@ const NOT_THE_RESOLVERS = {
   "src/bigpicture/ArtworkTab.tsx": ["refused"],
   // How many of the start-up check's searches into Steam's interface ran.
   "src/boot/steamModules.ts": ["checked"],
+  // The panel bundle's own kind.
+  "src/boot/searchingCopy.ts": ["standalone"],
+  "src/types/virtual-bundle-kind.d.ts": ["standalone"],
   // Whether the launch gate could ask which emulator source starts the game.
   "src/utils/launchGate.ts": ["checked"],
   "src/utils/startingSource.ts": ["checked"],
