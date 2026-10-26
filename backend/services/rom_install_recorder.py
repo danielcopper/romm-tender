@@ -112,13 +112,13 @@ class RomInstallRecorder:
 
         with self._uow_factory() as uow:
             uow.rom_installs.save(install)
-            # Download write-back (#1395): top up the ROM's size from the detail
-            # we already fetched, so the game-detail UI shows it without waiting
-            # for the next sync. Guarded on truthiness — a missing/zero size must
-            # never overwrite a good persisted value.
+            # A size RomM did not state never replaces one already recorded.
             size = rom_detail.get("fs_size_bytes")
-            if size:
-                uow.roms.set_fs_size_bytes(int(rom_id), size)
+            if size and size > 0:
+                rom = uow.roms.get(int(rom_id))
+                if rom is not None:
+                    rom.record_fs_size_bytes(size)
+                    uow.roms.set_fs_size_bytes(rom.rom_id, rom.fs_size_bytes)
         return file_path, None
 
     def do_resolve_launch_bake(self, rom_id: int, rom_detail: dict[str, Any], file_path: str) -> tuple[int | None, str]:

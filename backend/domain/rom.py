@@ -158,8 +158,8 @@ class Rom:
     def record_fs_size_bytes(self, size: int) -> None:
         """Record the ROM size RomM stated, in bytes.
 
-        A size of zero or less states nothing and raises ``ValueError``; a size
-        RomM did not state is not recorded at all.
+        A size of zero or less states nothing and raises ``ValueError``.
+        Persisted through ``set_fs_size_bytes``.
         """
         if size <= 0:
             raise ValueError("fs_size_bytes must be positive")

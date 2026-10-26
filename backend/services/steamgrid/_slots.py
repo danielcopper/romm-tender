@@ -532,7 +532,8 @@ class ArtworkSlots:
             if held is None or held.chosen_sgdb_id != chosen_id:
                 return set()
             _forget_discarded_choices(uow, rom_id, chosen, keep_cover=keep_cover)
-            uow.roms.set_chosen_sgdb_id(rom_id, None)
+            held.supersede_chosen_sgdb_game()
+            uow.roms.set_chosen_sgdb_id(rom_id, held.chosen_sgdb_id)
         discarded = chosen - {ArtworkSlot.COVER}
         for slot in discarded | ({ArtworkSlot.COVER} if steamgriddb_cover else set()):
             self._files.drop(rom_id, slot.value)
