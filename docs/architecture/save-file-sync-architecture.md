@@ -263,8 +263,11 @@ a failure answer, `pending_uploads` names the changed files in `files`, and a Ro
    overwrites through the same save backup.
 4. The flipped slot + tracking are persisted once, **regardless of partial download failure**: a failed leg still
    persists this coherent state and answers the partial failure `SlotSwitchIncomplete` (`reason="switch_incomplete"`) so
-   the caller can retry — the completed targets are already correct, and a failed target re-resolves as `Download` on
-   the next sync. Saves are never carried between slots; the switch only downloads or backs up, never uploads.
+   the caller can retry — the completed targets are already correct. A failed target with a baseline, or with no local
+   file, re-resolves as `Download` on the next sync; a never-synced local file at a target's name has no baseline, so
+   the next sync answers a conflict (row 11b), or adopts the head when the file is byte-identical to it (row 11a) —
+   [row 11](#why-row-11-splits-into-adopt-11a-vs-conflict-11b) gives why. Saves are never carried between slots; the
+   switch only downloads or backs up, never uploads.
 
 A backup that fails in step 1 ends the switch there, with the previous slot still active and nothing downloaded. Where
 nothing was moved yet it refuses, and the state is not written: with `backup_folder_unusable`

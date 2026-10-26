@@ -239,7 +239,7 @@ export function createSlotFailureMessage(reason: WireReason): string {
  */
 export function partialSlotSwitchMessage(reason: WireReason, setAside: readonly string[]): string | null {
   if (reason === "switch_incomplete") {
-    return "Switched slots, but not every save of the new slot downloaded. Sync this game to download the rest.";
+    return "Switched slots, but not every save of the new slot downloaded. Sync Save Files to finish.";
   }
   if (reason === "switch_stopped") {
     return (

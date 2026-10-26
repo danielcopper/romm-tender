@@ -678,7 +678,7 @@ describe("SlotPanel", () => {
           reason: "switch_incomplete" as const,
           message: "Switched to slot but 1 save(s) failed to download — retry",
         },
-        shown: "Switched slots, but not every save of the new slot downloaded. Sync this game to download the rest.",
+        shown: "Switched slots, but not every save of the new slot downloaded. Sync Save Files to finish.",
       },
     ])("toasts its own sentence for $answer.reason and reloads the SAVES tab", async ({ answer, shown }) => {
       vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });

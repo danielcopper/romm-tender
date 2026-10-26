@@ -473,7 +473,7 @@ describe("a slot switch whose backup failed", () => {
 
   it("says a switch that downloaded only part of the new slot switched", () => {
     expect(partialSlotSwitchMessage("switch_incomplete", [])).toBe(
-      "Switched slots, but not every save of the new slot downloaded. Sync this game to download the rest.",
+      "Switched slots, but not every save of the new slot downloaded. Sync Save Files to finish.",
     );
   });
 

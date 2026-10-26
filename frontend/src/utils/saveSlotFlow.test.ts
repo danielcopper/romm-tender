@@ -451,8 +451,7 @@ describe("executeSlotSwitch on a switch that stopped partway", () => {
         await expect(executeSlotSwitch(7, "main", purpose)).resolves.toEqual({
           ok: false,
           reason: "switch_incomplete",
-          message:
-            "Switched slots, but not every save of the new slot downloaded. Sync this game to download the rest.",
+          message: "Switched slots, but not every save of the new slot downloaded. Sync Save Files to finish.",
           partial: true,
         });
       } finally {
