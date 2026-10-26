@@ -70,6 +70,9 @@ const RESOLVER_VOCABULARY = { codes: [...codes, ...values], names };
 // written.
 const RESOLVER_READERS_TODAY = {
   "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
+  "src/bigpicture/GameInfoTab.tsx": ["launchable"],
+  "src/types/api.ts": ["launchable"],
+  "src/utils/launchTarget.ts": ["launchable"],
   "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "mismatch", "satisfied"],
   "src/types/firmware.ts": [
     "by-name",
@@ -177,11 +180,8 @@ const NOT_THE_RESOLVERS = {
   // Whether the launch gate could ask which emulator source starts the game.
   "src/utils/launchGate.ts": ["checked"],
   "src/utils/startingSource.ts": ["checked"],
-  // A React key, and whether an install's own file can be started.
-  "src/bigpicture/GameInfoTab.tsx": ["launchable", "rom-name"],
-  // Whether an install's own file can be started.
-  "src/types/api.ts": ["launchable"],
-  "src/utils/launchTarget.ts": ["launchable"],
+  // A React key.
+  "src/bigpicture/GameInfoTab.tsx": ["rom-name"],
   // An outcome of the adoption's own content check against RomM's checksums.
   "src/bigpicture/AdoptExistingModal.tsx": ["mismatch"],
   "src/types/downloads.ts": ["mismatch"],

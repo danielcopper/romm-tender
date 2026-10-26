@@ -207,6 +207,7 @@ WATCHED_NAMES = frozenset(
 # Module -> the codes and names it reads today, outside a reading module. Only shrinks.
 READERS_TODAY: dict[str, frozenset[str]] = {
     "adapters/es_find_rules.py": frozenset({"staticpath"}),
+    "adapters/repositories/rom_install.py": frozenset({"launchable"}),
     "domain/bios_status.py": frozenset(
         {
             "caveats",
@@ -291,6 +292,7 @@ READERS_TODAY: dict[str, frozenset[str]] = {
         }
     ),
     "services/active_core_resolver.py": frozenset({"standalone"}),
+    "services/downloads/service.py": frozenset({"launchable"}),
     "services/firmware/downloads.py": frozenset({"satisfied"}),
     "services/firmware/emulator_answers.py": frozenset(
         {
@@ -320,9 +322,6 @@ NOT_THE_RESOLVERS: dict[str, dict[str, str]] = {
         "native": "the folder the compiled save-sync core ships in",
         "size_fixed": "a field of the save-sync core's own input, which states its own contract",
     },
-    "adapters/repositories/rom_install.py": {
-        "launchable": "the column recording whether an install's own file can be started",
-    },
     "domain/rom_adoption.py": {
         "mismatch": "an outcome of the adoption's own content check against RomM's checksums",
     },
@@ -334,9 +333,6 @@ NOT_THE_RESOLVERS: dict[str, dict[str, str]] = {
     },
     "host/server.py": {
         "refused": "the admission verdict on a connection to the backend",
-    },
-    "services/downloads/service.py": {
-        "launchable": "whether an install's own file can be started",
     },
     "services/emulator_sources.py": {
         "catalogue": "the key of a source report's own catalogue state",

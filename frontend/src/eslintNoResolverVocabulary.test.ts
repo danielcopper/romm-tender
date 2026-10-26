@@ -53,6 +53,9 @@ const FIXTURE = "src/utils/__eslint_fixtures__/answer.ts";
 // edit of this test.
 const READERS_WHEN_WRITTEN: ByFile = {
   "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
+  "src/bigpicture/GameInfoTab.tsx": ["launchable"],
+  "src/types/api.ts": ["launchable"],
+  "src/utils/launchTarget.ts": ["launchable"],
   "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "mismatch", "satisfied"],
   "src/types/firmware.ts": [
     "by-name",
@@ -139,10 +142,9 @@ const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
   "src/bigpicture/AdoptExistingModal.tsx": ["mismatch"],
   "src/bigpicture/AdoptUnusableModal.tsx": ["unusable"],
   "src/bigpicture/ArtworkTab.tsx": ["refused"],
-  "src/bigpicture/GameInfoTab.tsx": ["launchable", "rom-name"],
+  "src/bigpicture/GameInfoTab.tsx": ["rom-name"],
   "src/boot/searchingCopy.ts": ["standalone"],
   "src/boot/steamModules.ts": ["checked"],
-  "src/types/api.ts": ["launchable"],
   "src/types/downloads.ts": ["mismatch"],
   "src/types/emulatorSources.ts": ["catalogue"],
   "src/types/firmware.ts": ["setting"],
@@ -150,7 +152,6 @@ const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
   "src/utils/emulatorSourceWording.ts": ["catalogue"],
   "src/utils/failedUpdateToast.ts": ["unmet"],
   "src/utils/launchGate.ts": ["checked"],
-  "src/utils/launchTarget.ts": ["launchable"],
   "src/utils/startingSource.ts": ["checked"],
   "src/utils/steamReadyForToasts.ts": ["unmet"],
   "src/utils/updateDot.ts": ["card"],

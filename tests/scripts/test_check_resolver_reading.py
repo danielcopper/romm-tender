@@ -45,6 +45,7 @@ _EXPORTS = check.resolver_exports()
 # never added to a list, and a new homonym is an edit of this test.
 _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
     "adapters/es_find_rules.py": frozenset({"staticpath"}),
+    "adapters/repositories/rom_install.py": frozenset({"launchable"}),
     "domain/bios_status.py": frozenset(
         {
             "caveats",
@@ -129,6 +130,7 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
         }
     ),
     "services/active_core_resolver.py": frozenset({"standalone"}),
+    "services/downloads/service.py": frozenset({"launchable"}),
     "services/firmware/downloads.py": frozenset({"satisfied"}),
     "services/firmware/emulator_answers.py": frozenset(
         {
@@ -192,12 +194,10 @@ _INTERNALS_WHEN_WRITTEN = frozenset(
 _NOT_THE_RESOLVERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
     "adapters/flatpak_install.py": frozenset({"flatpak"}),
     "adapters/gavel_native.py": frozenset({"native", "size_fixed"}),
-    "adapters/repositories/rom_install.py": frozenset({"launchable"}),
     "domain/rom_adoption.py": frozenset({"mismatch"}),
     "domain/save_answer.py": frozenset({"unestablished"}),
     "host/inject/bundles.py": frozenset({"standalone"}),
     "host/server.py": frozenset({"refused"}),
-    "services/downloads/service.py": frozenset({"launchable"}),
     "services/emulator_sources.py": frozenset({"catalogue"}),
     "services/firmware/emulator_answers.py": frozenset({"setting"}),
     "services/rom_adoption/service.py": frozenset({"mismatch", "unread"}),
