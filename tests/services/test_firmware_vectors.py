@@ -1,6 +1,6 @@
 """A conformance sweep of Tender's BIOS level against the resolver's verdict, over the resolver's recorded machines.
 
-Every firmware vector in ``tests/adapters/atlas_vectors/`` is a whole machine.
+Each firmware vector in ``tests/adapters/atlas_vectors/`` is a whole machine.
 On each, the installation the vector names — else the first one detected — is
 asked Tender's own question, ``firmware_for_system(<system>, verify=True)``,
 for every system it lists and for the vector's own system (#2585 D2). Every
@@ -8,9 +8,16 @@ emulator that answer names is then taken as the launching one in turn (D3),
 the platform page's read, :meth:`FirmwareService.get_platform_firmware_status`,
 is run for it (D6, D7), and its ``bios_level`` is held against that emulator's
 ``requirements_met``: ``ok`` for met, ``missing`` for not met, ``unknown`` for
-not established. Any other pairing is a mismatch — a yellow ``partial`` against
+not established. Any other pairing is a mismatch — an amber ``partial`` against
 a verdict not established (D4), and a verdict Tender withholds because the
 catalogue is sealed (D5), among them.
+
+Not every firmware vector yields a pair: where the installation lists no
+system there is no platform to ask about, and where every answer names no
+emulator there is none to judge by. How many vectors compare nothing either way,
+and how many pairs are compared in all, are held, so a vector that stops
+yielding pairs fails rather than passing on nothing. Only the firmware vectors
+are run; the other files of the copy are not.
 
 Only the level is compared. The rows, the counts, the one-of groups' payload
 and whether a file is present are not, so a level that matches says nothing
@@ -18,9 +25,13 @@ about any of those.
 
 Today's mismatches are :data:`KNOWN_MISMATCHES`, a list that only shrinks: a new
 mismatch fails, and so does a listed one that now matches or now reads another
-pair. Where a vector asks exactly Tender's question, the live answer is also
-held equal to the one the vector recorded, so a sweep over a resolver that no
-longer answers as recorded cannot pass on the strength of agreeing with itself.
+pair. An entry goes when the fix that removes its mismatch lands, in the same
+change, and a new mismatch is a finding, never an entry.
+
+The target is the resolver asked live, not the answers the vectors recorded.
+Where a vector asks exactly Tender's question, the live answer is also held
+equal to the recorded one; for every other vector the level is held only
+against what the resolver answers today.
 
 The service is the real one over the real resolver adapter, which reads the
 vector's machine through the emulator sources adapter; only the edges are
@@ -82,7 +93,7 @@ _LEVEL_OF_VERDICT: dict[bool | None, str] = {
 
 # (file stem, vector name, system, emulator) -> (Tender's level, the resolver's verdict)
 KNOWN_MISMATCHES: dict[tuple[str, str, str, str], tuple[str, bool | None]] = {
-    # D4: yellow where the resolver could not establish a verdict — #2580 removes these.
+    # D4: amber where the resolver could not establish a verdict — #2580 removes these.
     (
         "disc-region",
         "beetle-psx-a-chd-extracted-into-a-cache-directory-atlas-cannot-place",
@@ -229,6 +240,12 @@ KNOWN_MISMATCHES: dict[tuple[str, str, str, str], tuple[str, bool | None]] = {
 # question to put to it: core and inventory questions on such a machine.
 VECTORS_WITHOUT_A_SYSTEM = 33
 
+# Firmware vectors with a system to ask about whose answers name no emulator.
+VECTORS_WITHOUT_AN_EMULATOR = 5
+
+# (system, emulator) pairs compared over every firmware vector.
+PAIRS_COMPARED = 289
+
 # Firmware vectors that ask exactly Tender's question, so their recorded answer
 # is the live one's to equal.
 VECTORS_ASKING_TENDERS_QUESTION = 25
@@ -248,7 +265,8 @@ _VECTORS = _firmware_vectors()
 def fixture_machine(inp: dict[str, Any]) -> FixtureMachine:
     """The vector's machine, built as upstream's runner builds it.
 
-    emu-atlas ``tests/test_machine_vectors.py`` at ``v0.28.0``, lines 68-83.
+    emu-atlas ``tests/test_machine_vectors.py`` at the release the copy's README
+    names, lines 68-83.
     """
     return FixtureMachine(
         inp["files"],
@@ -270,7 +288,7 @@ def fixture_machine(inp: dict[str, Any]) -> FixtureMachine:
 def _target(inp: dict[str, Any]) -> tuple[Any, tuple[str, ...]]:
     """The installation the vector's question names, else the first detected; and every kind detected.
 
-    The selection is upstream's ``_select``, the same file, lines 86-92.
+    The selection is upstream's ``_select``, the same file, lines 86-93.
     """
     installs = atlas.detect(inp["home"], fixture_machine(inp))
     selector = inp["firmware_query"].get("installation")
@@ -433,6 +451,14 @@ def test_the_vectors_without_a_system_are_counted() -> None:
     """A machine whose installation lists no system has no platform to ask about, so it is not compared."""
     without = sum(1 for _, v in _VECTORS if not _systems(v["input"], _target(v["input"])[0]))
     assert without == VECTORS_WITHOUT_A_SYSTEM
+
+
+async def test_the_pairs_compared_are_counted() -> None:
+    """A vector with a system whose answers name no emulator compares nothing, and passes its own case on that."""
+    sweeps = [(v, await _sweep(stem, v)) for stem, v in _VECTORS]
+    with_a_system = [sweep for v, sweep in sweeps if _systems(v["input"], _target(v["input"])[0])]
+    assert sum(1 for sweep in with_a_system if not sweep.compared) == VECTORS_WITHOUT_AN_EMULATOR
+    assert sum(sweep.compared for _, sweep in sweeps) == PAIRS_COMPARED
 
 
 def test_every_listed_mismatch_names_a_recorded_vector() -> None:
