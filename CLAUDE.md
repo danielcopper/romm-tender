@@ -524,11 +524,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `active_core`
   / `disc_resolver` / `emulator_sources` by `shortcut_launch_resolver.py`, `renderer_rss` / `renderer_gc` by
   `session_budget.py`, and `artwork` by `cover_preparer.py` **and** `reporter.py`, the one confinement with two owners,
-  never a third. The `service.py` façade may **pass** a seam on (as a call's keyword-argument value, or as a
-  seam-annotated field declared on `LibraryServiceConfig`) and may not **use** one; reading that field in the façade is
-  a finding** — check — `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed positionally into
-  a helper slips past it); unchecked: `shortcut_launch_resolver`'s install-path read UoW is never held across the
-  `active_core` seam's calls (`check_uow_seam_nesting.py` catches only the inline form)
+  never a third. No module of the package passes a seam on — `bootstrap/library.py` hands each to its owner's config, so
+  a seam named anywhere else in the package, the façade included, is a finding** — check — `scripts/check_seam_owner.py`
+  (an aliased seam, a `getattr`, or a seam passed positionally into a helper slips past it); unchecked:
+  `shortcut_launch_resolver`'s install-path read UoW is never held across the `active_core` seam's calls
+  (`check_uow_seam_nesting.py` catches only the inline form)
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
   `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
   resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the

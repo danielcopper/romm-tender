@@ -37,8 +37,9 @@ Neither answers for a service that touches its loop from a **worker thread** (an
 `call_soon_threadsafe`, as the download progress does): off the loop thread there is no running loop to resolve against,
 so that service needs the real loop object. Take it in an **async** fixture — at construction, the way
 `tests/contract/_harness.py` builds the real services and the async `make_downloads` fixture in
-`tests/services/test_downloads.py` hands it to every download part its factory builds, or afterwards through an autouse
-fixture that rebinds the service's `_loop`, the way `tests/services/test_rom_removal.py` does.
+`tests/services/test_downloads.py` hands it to every download part its factory builds (as `make_library` in
+`tests/services/library/conftest.py` does through `wire_library`), or afterwards through an autouse fixture that rebinds
+the service's `_loop`, the way `tests/services/test_rom_removal.py` does.
 
 Neither shape is available where the test **body** builds the service: no fixture does the constructing, and at fixture
 time there is no service yet to rebind. Then capture the running loop in an async autouse fixture, into a module-level

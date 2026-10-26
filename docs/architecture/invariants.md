@@ -297,23 +297,22 @@ Format: **invariant** — tier — enforced by.
   `services/library/session_budget.py`, and `artwork` by `services/library/cover_preparer.py` (the apply path's covers)
   **and** `services/library/reporter.py` (commit-time cover-path finalisation) — the one confinement with two owners,
   because those are two different questions a unit asks at two different points; two owners is a named pair, not a
-  licence for a third, and no other module of the package holds an `ArtworkManager`. The `service.py` façade is not a
-  co-owner — it may **pass** a seam on and may not **use** one, which the check reads structurally: a seam attribute
-  standing as a call's keyword-argument value, and a seam annotation on a field of `LibraryServiceConfig`, are wiring;
-  anything else in the façade is a finding** — check — `scripts/check_seam_owner.py` (AST over attributes named after a
-  seam and over annotations naming its Protocol, resolved per seam rather than per module — owning one grants nothing
-  about another. It sees the injection, not every later use: a seam aliased to a differently-named attribute or local,
-  one reached through `getattr`, one passed positionally into a helper that holds it, a quoted string annotation, and a
-  Protocol imported under an alias all slip past it — the last two only on the annotation half, because the constructor
-  read that unpacks the config is flagged whatever the field is called). What the confinement buys is that each module's
-  transactions stay separable: `shortcut_launch_resolver` holds a read UoW across its install-path scan while the
-  `active_core` seam opens its own `BEGIN IMMEDIATE` per ROM, so folding the two into one pass deadlocks — on a real
-  device only, since `FakeUnitOfWork` shares no connection. **Nothing mechanical stands behind that half.**
-  `check_uow_seam_nesting.py` catches the fold only in its inline form (the seam method named inside the `with` block);
-  the peer-call form — `do_build_core_overrides` invoked from inside the install-path readers' own UoW, which is what
-  putting the three methods on one class makes cheapest — is that gate's documented blind spot and passes green. On the
-  budget side the confinement holds `session_budget`'s stated promise that no renderer-RSS reading is taken anywhere
-  else in the package
+  licence for a third, and no other module of the package holds an `ArtworkManager`. No module of the package passes a
+  seam on: `bootstrap/library.py` builds every part and hands each seam to its owner's config, so inside the package a
+  seam is named only where its owner receives it, and anywhere else — the `service.py` façade included — it is a
+  finding** — check — `scripts/check_seam_owner.py` (AST over attributes named after a seam and over annotations naming
+  its Protocol, resolved per seam rather than per module — owning one grants nothing about another. It sees the
+  injection, not every later use: a seam aliased to a differently-named attribute or local, one reached through
+  `getattr`, one passed positionally into a helper that holds it, a quoted string annotation, and a Protocol imported
+  under an alias all slip past it — the last two only on the annotation half, because the constructor read that unpacks
+  the config is flagged whatever the field is called). What the confinement buys is that each module's transactions stay
+  separable: `shortcut_launch_resolver` holds a read UoW across its install-path scan while the `active_core` seam opens
+  its own `BEGIN IMMEDIATE` per ROM, so folding the two into one pass deadlocks — on a real device only, since
+  `FakeUnitOfWork` shares no connection. **Nothing mechanical stands behind that half.** `check_uow_seam_nesting.py`
+  catches the fold only in its inline form (the seam method named inside the `with` block); the peer-call form —
+  `do_build_core_overrides` invoked from inside the install-path readers' own UoW, which is what putting the three
+  methods on one class makes cheapest — is that gate's documented blind spot and passes green. On the budget side the
+  confinement holds `session_budget`'s stated promise that no renderer-RSS reading is taken anywhere else in the package
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
   `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
   resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the

@@ -222,15 +222,14 @@ dependencies live in the config: Protocol-typed adapters, infrastructure seams (
 `Sleeper`), persistence callbacks, and settings-derived values. There are no bare-param or mixed constructors.
 
 ```python
-sync_service = LibraryService(
-    config=LibraryServiceConfig(
-        romm_api=...,           # Protocol-typed adapter
+shortcut_artwork_service = ShortcutArtworkService(
+    config=ShortcutArtworkServiceConfig(
         steam_config=...,       # Protocol-typed adapter
-        clock=...,              # Clock Protocol
-        uuid_gen=...,           # UuidGen Protocol
+        source=...,             # cross-service Protocol-typed peer
+        uow_factory=...,        # UnitOfWorkFactory Protocol (roms / artwork_slot_outcomes)
+        emit=...,               # EventEmitter Protocol
         sleeper=...,            # Sleeper Protocol
-        uow_factory=...,        # UnitOfWorkFactory Protocol (roms / sync_runs / kv_config / rom_metadata)
-        artwork=...,            # cross-service Protocol-typed peer
+        clock=...,              # Clock Protocol
         # ...
     ),
 )
@@ -438,11 +437,12 @@ groups.
 #### LibraryService decomposition (`services/library/`)
 
 The library sync subsystem is a façade over thirteen sub-services that coordinate through a shared
-`LibrarySyncStateBox`:
+`LibrarySyncStateBox`. `bootstrap/library.py` builds the box and every sub-service and hands the façade the ones it
+calls (`wire_library`, which answers the service and its parts as `LibraryParts`), so the façade builds none of them:
 
 | Module                        | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `service.py`                  | `LibraryService` façade — public use cases; wires the sub-services and delegates                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `service.py`                  | `LibraryService` façade — public use cases; checks their conflict rules and delegates to the parts it is handed                                                                                                                                                                                                                                                                                                                                                                     |
 | `fetcher.py`                  | `LibraryFetcher` — read-only RomM roundtrips: list platforms/collections, per-unit work-queue construction (a collection unit carries its listed `rom_ids`), a platform unit's incremental/full pagination loop. The outward half of the read pair below                                                                                                                                                                                                                            |
 | `collection_fetcher.py`       | `CollectionFetcher` — one collection unit's ROMs, for all three kinds: the collection incremental skip against its `CollectionSyncState` stamp, the registry rebuild of a skipped collection's members, and otherwise the walk narrowed to the platforms the sync leaves off (a foreign smart collection walked whole); see "Incremental skip" below                                                                                                                                |
 | `local_library_reader.py`     | `LocalLibraryReader` — the inward pair of `fetcher.py`: what THIS DEVICE recorded about the library, read back out of SQLite (the `Rom` rows and their bindings, the completion stamps, the persisted sibling keys, the last finished run), shaped into the projections a run decides against and the reachable set the collections listing counts against. Declared read-only (`scripts/check_read_only_module.py`)                                                                |
@@ -3330,7 +3330,10 @@ write `from bootstrap import …` and never deep-import a submodule:
 2. **`services.py`** — owns `WiringConfig` and `wire_services()`, which takes the four bundles plus
    `min_required_version`, `directories`, `launcher` and `update_source`, and constructs every service, injecting each
    one's `*ServiceConfig`. Returns a frozen `ServicesBundle` holding every service and the prune conflicts as typed
-   fields.
+   fields. The library service's wiring is a module of its own, **`library.py`**: `wire_library()` takes a
+   `LibraryWiring` (the adapters, runtime seams and peer services the parts are built from), builds the state box and
+   every part, and answers them with the service as `LibraryParts`; `wire_services()` keeps the service, and the library
+   tests call `wire_library()` with fakes.
 
 3. **`application.py`** — owns `Application` and `build_application()`. `build_application()` is synchronous: it calls
    `bootstrap()`, composes the runtime bundle from the loop, the event sink's emit and the host's reading of Steam the
@@ -3557,7 +3560,7 @@ Protocol-typed (services never import each other's concrete classes). Selected w
 
 | Service                     | Key injected dependencies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **LibraryService**          | `RommLibraryApi`, `SteamConfigStore`, `ArtworkManager`, `Clock`/`UuidGen`/`Sleeper`, `SettingsPersister`, `UnitOfWorkFactory` (roms / sync_runs / kv_config / rom_metadata), `ConflictRules` (the rules its use cases check at their entry, and the leases `sync_complete` and `sync_stale` carry), `ShortcutArtworkJob` (the placeholder icon's path, and a run requested at each sync's end)                                                                                                                                                                                                                                                                                                 |
+| **LibraryService**          | the parts it calls (`LibrarySyncStateBox`, `LibraryFetcher`, `SyncProgress`, `SessionBudgetMonitor`, `SyncReporter`, `SyncPreview`, `SyncOrchestrator`), `ConflictRules` (the rules its use cases check at their entry), the live settings; its parts, built by `bootstrap/library.py`, take `RommLibraryApi`, `SteamConfigStore`, `ArtworkManager`, `Clock`/`UuidGen`/`Sleeper`, `SettingsPersister`, `UnitOfWorkFactory` (roms / sync_runs / kv_config / rom_metadata), `ConflictRules` (the leases `sync_complete` and `sync_stale` carry), `ShortcutArtworkJob` (the placeholder icon's path, and a run requested at each sync's end)                                                      |
 | **MetadataService**         | `UnitOfWorkFactory` (reads `rom_metadata` / `roms`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **SaveService**             | `RommApi`, `RetryStrategy`, `SaveFileStore`, `UnitOfWorkFactory` (`rom_save_sync_states` / `rom_save_files` / `answered_save_directories`), `Clock`, `RetroDeckFolders`, `SaveLocationReader`, `PlatformSystems`, `ActiveCoreReader`, `UpdateInProgressFn` and `MigrationPendingFn` (the sync engine's own update and RetroDECK migration backstops), `ConflictRules` (the rules its use cases check at their entry)                                                                                                                                                                                                                                                                           |
 | **DownloadService**         | its parts (`DownloadsStateBox`, `DownloadQueue`, `DownloadTransfer`, `DownloadUnpacker`), `RommApi`, `DownloadFileStore`, `RetroDeckFolders`, `PlatformSystems`, `UnitOfWorkFactory`, `DownloadTargetGateFn` + `RomRemoverProvider` cross-service seams (the queue takes `Clock`; the transfer and the unpacker take `RomInstallRecorder`), `ConflictRules` (the rules a start and a resume check at their entry and the operation a download's task holds; the transfer takes the lease a bound ROM's `download_complete` carries)                                                                                                                                                            |
