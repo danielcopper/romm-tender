@@ -43,6 +43,7 @@ _EXPORTS = check.resolver_exports()
 # never gain one: a new reader is built into the reading module of its kind,
 # never added to a list, and a new homonym is an edit of this test.
 _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
+    "adapters/es_find_rules.py": frozenset({"staticpath"}),
     "domain/bios_status.py": frozenset(
         {
             "caveats",
@@ -58,10 +59,11 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "unmet",
         }
     ),
-    "domain/firmware_groups.py": frozenset({"satisfied"}),
+    "domain/firmware_groups.py": frozenset({"ntsc-j", "ntsc-u", "pal", "satisfied"}),
     "domain/firmware_rows.py": frozenset({"present"}),
     "domain/firmware_wants.py": frozenset(
         {
+            "archive",
             "by-name",
             "by-name-then-content",
             "cannot-run-without-firmware",
@@ -75,15 +77,19 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "refused",
             "runs-without-firmware",
             "system_firmware",
+            "unestablished",
             "unrecognised",
             "verified",
         }
     ),
+    "domain/platform_system.py": frozenset({"declared", "disabled", "screenscraper", "thegamesdb"}),
     "domain/save_answer.py": frozenset(
         {
             "caveats",
             "companion-config-missing",
             "config-unreadable",
+            "content_directory",
+            "cwd",
             "emulator-config-missing",
             "emulator-config-unreadable",
             "file-names-unestablished",
@@ -93,6 +99,7 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "marker-unreadable",
             "needs",
             "not-set-up",
+            "notes",
             "root_kind",
             "save-inside-content",
             "save-inside-image",
@@ -108,6 +115,7 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "assumed",
             "bios-root-missing",
             "frontend-default",
+            "installation",
             "marker-invalid",
             "marker-missing",
             "marker-unreadable",
@@ -119,7 +127,14 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
     ),
     "services/firmware/downloads.py": frozenset({"satisfied"}),
     "services/firmware/emulator_answers.py": frozenset(
-        {"declaration", "declared", "locating", "refused", "requirements_met"}
+        {
+            "declaration",
+            "declared",
+            "locating",
+            "refused",
+            "requirements_met",
+            "setting",
+        }
     ),
     "services/firmware/replacement.py": frozenset({"present", "satisfied"}),
     "services/firmware/rows.py": frozenset({"caveats", "checked", "declared_kind", "present", "satisfied"}),
@@ -131,6 +146,40 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
     "services/saves/sync_engine/matrix.py": frozenset({"size_fixed"}),
 }
 
+_GENERIC_WHEN_WRITTEN = frozenset(
+    {
+        "absent",
+        "answered",
+        "bios",
+        "directory",
+        "empty",
+        "file",
+        "igdb",
+        "libretro",
+        "list",
+        "missing",
+        "none",
+        "ok",
+        "open",
+        "optional",
+        "read",
+        "refused",
+        "region",
+        "required",
+        "roms",
+        "saves",
+        "settings",
+        "slug",
+        "standalone",
+        "title",
+        "unchecked",
+        "unknown",
+        "unread",
+        "unreadable",
+        "unsupported",
+    }
+)
+
 _INTERNALS_WHEN_WRITTEN = frozenset(
     {
         ("adapters/atlas_firmware.py", "_vendor.atlas.firmware.core_short_name"),
@@ -140,11 +189,16 @@ _INTERNALS_WHEN_WRITTEN = frozenset(
 )
 
 _NOT_THE_RESOLVERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
-    "adapters/gavel_native.py": frozenset({"size_fixed"}),
-    "host/server.py": frozenset({"refused"}),
+    "adapters/flatpak_install.py": frozenset({"flatpak"}),
+    "adapters/gavel_native.py": frozenset({"native", "size_fixed"}),
+    "adapters/repositories/rom_install.py": frozenset({"launchable"}),
     "domain/rom_adoption.py": frozenset({"mismatch"}),
+    "domain/save_answer.py": frozenset({"unestablished"}),
+    "host/server.py": frozenset({"refused"}),
+    "services/downloads/service.py": frozenset({"launchable"}),
+    "services/emulator_sources.py": frozenset({"catalogue"}),
     "services/rom_adoption/service.py": frozenset({"mismatch", "unread"}),
-    "services/saves/status/service.py": frozenset({"checked"}),
+    "services/saves/status/service.py": frozenset({"checked", "unestablished"}),
 }
 
 _READING = "adapters/atlas_firmware.py"
@@ -176,6 +230,7 @@ class TestTheRealTree:
     def test_nothing_reads_the_resolver_outside_the_lists(self):
         assert check.import_findings(check.BACKEND, _EXPORTS) == []
         assert check.vocabulary_findings(check.BACKEND, _WATCHED) == []
+        assert check.generic_findings(check.BACKEND, check.FRONTEND_SRC, check.resolver_vocabulary_values()) == []
 
     def test_the_panels_copy_is_what_the_check_writes_today(self):
         assert check.frontend_findings(_CODES, _VALUES) == []
@@ -192,6 +247,9 @@ class TestTheRealTree:
 
     def test_the_internals_list_only_shrinks(self):
         assert check.INTERNALS_TO_REMOVE <= _INTERNALS_WHEN_WRITTEN
+
+    def test_the_generic_list_only_shrinks(self):
+        assert set(check.GENERIC_VALUES) <= _GENERIC_WHEN_WRITTEN
 
     def test_the_homonym_list_only_shrinks(self):
         added = {
@@ -226,31 +284,74 @@ class TestTheVocabulary:
         assert "ROLE_SETTINGS" not in codes
         assert "GRANULARITY_SHARED_CARD" not in codes
 
-    def test_the_values_are_the_six_vocabularies_less_the_generic_words(self):
+    def test_the_values_are_every_closed_vocabulary_less_the_generic_words(self):
         assert {
             "cannot-run-without-firmware",
             "shared-card",
             "per-game-files",
             "assumed",
-            "frontend-default",
             "by-name-then-content",
+            "unestablished",
             "packaged",
             "mismatch",
-            "not-comparable",
+            "not-installed",
+            "startable",
+            "memory-card",
+            "staticpath",
+            "game-id",
         } <= _VALUES
-        assert {"read", "unknown", "none", "open", "unsupported"}.isdisjoint(_VALUES)
-        # A role is no value watched here: its words are Tender's own too.
-        assert "settings" not in _VALUES
+        assert {"read", "unknown", "none", "open", "unsupported", "file", "directory", "required"}.isdisjoint(_VALUES)
+        # A code is no value: the codes are watched as codes.
+        assert "marker-missing" not in check.resolver_vocabulary_values()
 
-    def test_every_generic_word_is_a_value_of_one_of_the_vocabularies(self):
-        atlas = check._vendored_atlas()
-        values = {
-            value
-            for name in atlas.__all__
-            if name.startswith(check.VALUE_FAMILIES) and isinstance(value := getattr(atlas, name), str)
-        }
+    def test_a_generic_word_the_resolver_no_longer_states_fails(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(check, "GENERIC_VALUES", {"not-a-value": "a reason"})
+        backend = _tree(tmp_path, {_SERVICE: "x = 'not-a-value'\n"})
 
-        assert set(check.GENERIC_VALUES) - values == set()
+        assert check.generic_findings(backend, tmp_path / "src", check.resolver_vocabulary_values()) == [
+            "GENERIC_VALUES lists 'not-a-value', which the resolver no longer states: take it off."
+        ]
+
+    def test_a_generic_word_tenders_own_code_no_longer_speaks_fails(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(check, "READING_MODULES", frozenset({_READING}))
+        monkeypatch.setattr(check, "GENERIC_VALUES", {"per-game-file": "a reason"})
+        # A docstring and a reading module do not speak it for Tender's own code.
+        backend = _tree(tmp_path, {_SERVICE: '"""per-game-file"""\n', _READING: "x = 'per-game-file'\n"})
+
+        assert check.generic_findings(backend, tmp_path / "src", check.resolver_vocabulary_values()) == [
+            "GENERIC_VALUES lists 'per-game-file', which Tender's own code no longer speaks: take it off."
+        ]
+
+    @pytest.mark.parametrize(
+        ("files", "panel"),
+        [
+            ({_SERVICE: "x = 'per-game-file'\n"}, {}),
+            ({}, {"utils/words.ts": 'export const w = "per-game-file";\n'}),
+        ],
+    )
+    def test_a_generic_word_is_needed_where_the_backend_or_the_panel_speaks_it(
+        self, tmp_path, monkeypatch, files, panel
+    ):
+        monkeypatch.setattr(check, "GENERIC_VALUES", {"per-game-file": "a reason"})
+        backend = _tree(tmp_path, files)
+        backend.mkdir(exist_ok=True)
+        for name, source in panel.items():
+            path = tmp_path / "src" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(source, encoding="utf-8")
+
+        assert check.generic_findings(backend, tmp_path / "src", check.resolver_vocabulary_values()) == []
+
+    def test_a_generic_word_in_a_panel_test_or_comment_is_not_spoken(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(check, "GENERIC_VALUES", {"per-game-file": "a reason"})
+        (tmp_path / "backend").mkdir()
+        (tmp_path / "src" / "utils").mkdir(parents=True)
+        (tmp_path / "src" / "utils" / "words.test.ts").write_text('const w = "per-game-file";\n', encoding="utf-8")
+        (tmp_path / "src" / "utils" / "words.ts").write_text('// "per-game-file"\n', encoding="utf-8")
+
+        assert check.generic_findings(tmp_path / "backend", tmp_path / "src", check.resolver_vocabulary_values()) == [
+            "GENERIC_VALUES lists 'per-game-file', which Tender's own code no longer speaks: take it off."
+        ]
 
     def test_every_watched_name_is_a_field_of_some_answer(self):
         # A field, or a property the answer computes (``requirements_met``).
@@ -375,6 +476,10 @@ class TestVocabulary:
             ("x = granularity in ('shared-card',)\n", "shared-card"),
             ("x = provenance == 'assumed'\n", "assumed"),
             ("x = locating == 'by-name-then-content'\n", "by-name-then-content"),
+            ("x = locating == 'unestablished'\n", "unestablished"),
+            ("x = availability != 'not-installed'\n", "not-installed"),
+            ("x = role == 'memory-card'\n", "memory-card"),
+            ("x = rule == 'staticpath'\n", "staticpath"),
             ("x = declaration == 'packaged'\n", "packaged"),
             ("x = checked == 'not-comparable'\n", "not-comparable"),
         ],

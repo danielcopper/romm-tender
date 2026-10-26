@@ -17,24 +17,31 @@ answer for display.
 * **Vocabulary.** Outside the reading modules, no string literal equals one of
   the resolver's codes (every string constant in ``atlas.__all__`` whose name
   starts with one of :data:`CODE_FAMILIES`) or one of the values of its other
-  closed vocabularies (:data:`VALUE_FAMILIES`, less :data:`GENERIC_VALUES`,
-  the words Tender's own code speaks too) — both taken from the vendored
-  resolver when the check runs — and no code reads one of :data:`WATCHED_NAMES`, the
+  closed vocabularies (every other string constant ``atlas.__all__`` holds, and
+  every string in a tuple, a frozenset or a ``Literal`` it exports, less
+  :data:`GENERIC_VALUES`) — both taken from the vendored resolver when the
+  check runs — and no code reads one of :data:`WATCHED_NAMES`, the
   answer's distinctive field names — as an attribute, a keyword argument, a
   ``getattr`` constant, a subscript or ``.get`` constant, or a dict literal's
   key. Docstrings are not read. :data:`READERS_TODAY` lists what each module
   reads today; :data:`NOT_THE_RESOLVERS` the names that mean something else in
   a module, with the reason.
 
-An entry nothing needs any more fails, on every list here.
-:data:`READERS_TODAY`, :data:`INTERNALS_TO_REMOVE` and :data:`NOT_THE_RESOLVERS`
-only shrink, and ``tests/scripts/test_check_resolver_reading.py`` fails on an
-entry one of them did not hold when it was written; it holds
-:data:`READING_MODULES`, :data:`IMPORT_GRANTS` and :data:`INTERNALS_GRANTED` to
-exactly what they are.
+An entry nothing needs any more fails on every list but
+:data:`READING_MODULES`: a reader that reads nothing, a grant or internal no
+module holds, a homonym no module speaks, and a generic word Tender's own code
+no longer speaks or the resolver no longer states. A word is spoken where a
+backend module outside the reading modules holds it as a string constant, or
+a code line of a panel source file quotes it. :data:`READERS_TODAY`,
+:data:`INTERNALS_TO_REMOVE`, :data:`NOT_THE_RESOLVERS` and
+:data:`GENERIC_VALUES` only shrink, and
+``tests/scripts/test_check_resolver_reading.py`` fails on an entry one of them
+did not hold when it was written; it holds :data:`READING_MODULES`,
+:data:`IMPORT_GRANTS` and :data:`INTERNALS_GRANTED` to exactly what was
+decided.
 
 The panel is held by ESLint (``tender/no-resolver-vocabulary`` in
-``frontend/eslint.config.js``), over the codes and names this script writes to
+``frontend/eslint.config.js``), over the codes, values and names this script writes to
 :data:`FRONTEND_VOCABULARY`; the check fails when that file is not what
 ``--write`` would write today.
 
@@ -46,10 +53,11 @@ What it does not see:
   test (``"satisfied" in row``), a ``match`` class or mapping pattern,
   ``setdefault`` or ``pop``, ``dataclasses.asdict``, ``vars`` or ``**``
   unpacking, or written as an attribute (``x.satisfied = …``);
-* a value on :data:`GENERIC_VALUES`, and a word of Tender's own that it
+* a value on :data:`GENERIC_VALUES`, nor whether a generic word is still
+  spoken with a meaning of Tender's own rather than read from an answer; and a word of Tender's own that it
   speaks inside one of the resolver's vocabularies (``CHECKED_REJECTED =
-  "rejected"`` in ``domain/firmware_wants.py``), which the resolver does not
-  export;
+  "rejected"`` in ``domain/firmware_wants.py``), which the resolver never
+  states;
 * a watched value handed on through a parameter or a field of Tender's own
   name, which a later layer may still judge again;
 * an import through ``importlib`` or ``__import__`` whose module name is not a
@@ -66,12 +74,15 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import sys
+import typing
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKEND = REPO_ROOT / "backend"
 FRONTEND_VOCABULARY = REPO_ROOT / "frontend" / "resolver-vocabulary.json"
+FRONTEND_SRC = REPO_ROOT / "frontend" / "src"
 
 RESOLVER = "_vendor.atlas"
 
@@ -113,21 +124,35 @@ INTERNALS_TO_REMOVE = frozenset(
 
 CODE_FAMILIES = ("CAVEAT_", "HEALTH_ISSUE_", "UNRESOLVED_", "REASON_")
 
-# The resolver's other closed vocabularies: the console's own firmware, a save's
-# granularity, a root's provenance, how a file is located, a declaration's state
-# and a file's ``checked`` verdict. Their values are watched like the codes.
-VALUE_FAMILIES = ("SYSTEM_FIRMWARE_", "GRANULARITY_", "PROVENANCE_", "LOCATING_", "DECLARATION_", "CHECKED_")
-
-# Values of those vocabularies that are generic words in Tender's own code too,
-# and so are not watched: where else each is spoken.
+# Values of the resolver's closed vocabularies that Tender's own code also
+# speaks with a meaning of its own, too widely to except module by module, and
+# so are not watched: where else each is spoken. Only shrinks.
 GENERIC_VALUES: dict[str, str] = {
     "absent": "the running-apps reader's word for an app Steam does not list",
-    "none": "the word for nothing chosen across artwork, saves, prune and the panel",
+    "answered": "the panel's word for a read that came back",
+    "bios": "the BIOS folder and tab, by name",
+    "directory": "the word for a folder, in adoption, saves and the panel",
+    "empty": "the artwork and update-output words for nothing there",
+    "file": "the word for a file, in adoption, deletion and the panel",
+    "igdb": "a metadata database RomM keys platforms and collections by",
+    "libretro": "the kind of Tender's own emulator option, a RetroArch core",
+    "list": "the panel's id for a page's list pane",
+    "missing": "the word for a file or folder not there, in adoption, migration and the panel",
+    "none": "the word for nothing chosen, across artwork, saves, prune and the panel",
+    "ok": "the word for a step that worked, in saves, the host and the panel",
     "open": "the crash watchdog's word for an unresolved injection",
+    "optional": "the kind of Tender's own firmware wanted mark",
     "read": "the shortcut file reader's word for a file it read",
     "refused": "an artwork slot's outcome, and the endpoint answers' refusals",
+    "region": "an ARIA role, and a game's region in RomM's vocabulary",
+    "required": "the kind of Tender's own firmware wanted mark",
+    "roms": "the ROM folder, by name, in recovery bundles and the library",
+    "saves": "the saves folder and tab, by name",
+    "settings": "the settings page, by name",
+    "slug": "a platform's slug, RomM's key for it",
+    "standalone": "the panel bundle that carries its own copy, and Tender's own emulator option kind",
+    "title": "the title of a page, a toast or an achievement",
     "unchecked": "the save-stranding and launch-prompt words for a check not made",
-    "unestablished": "the save answer's own state for a save nothing established",
     "unknown": "the word for anything not known, in a dozen modules and the panel",
     "unread": "the adoption content check's and the artwork tab's word for a file not read",
     "unreadable": "the shortcut file reader's and the Steam Input writer's word for a file they could not read",
@@ -178,6 +203,7 @@ WATCHED_NAMES = frozenset(
 
 # Module -> the codes and names it reads today, outside a reading module. Only shrinks.
 READERS_TODAY: dict[str, frozenset[str]] = {
+    "adapters/es_find_rules.py": frozenset({"staticpath"}),
     "domain/bios_status.py": frozenset(
         {
             "caveats",
@@ -193,10 +219,11 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "unmet",
         }
     ),
-    "domain/firmware_groups.py": frozenset({"satisfied"}),
+    "domain/firmware_groups.py": frozenset({"ntsc-j", "ntsc-u", "pal", "satisfied"}),
     "domain/firmware_rows.py": frozenset({"present"}),
     "domain/firmware_wants.py": frozenset(
         {
+            "archive",
             "by-name",
             "by-name-then-content",
             "cannot-run-without-firmware",
@@ -210,15 +237,19 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "refused",
             "runs-without-firmware",
             "system_firmware",
+            "unestablished",
             "unrecognised",
             "verified",
         }
     ),
+    "domain/platform_system.py": frozenset({"declared", "disabled", "screenscraper", "thegamesdb"}),
     "domain/save_answer.py": frozenset(
         {
             "caveats",
             "companion-config-missing",
             "config-unreadable",
+            "content_directory",
+            "cwd",
             "emulator-config-missing",
             "emulator-config-unreadable",
             "file-names-unestablished",
@@ -228,6 +259,7 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "marker-unreadable",
             "needs",
             "not-set-up",
+            "notes",
             "root_kind",
             "save-inside-content",
             "save-inside-image",
@@ -243,6 +275,7 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "assumed",
             "bios-root-missing",
             "frontend-default",
+            "installation",
             "marker-invalid",
             "marker-missing",
             "marker-unreadable",
@@ -260,6 +293,7 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "locating",
             "refused",
             "requirements_met",
+            "setting",
         }
     ),
     "services/firmware/replacement.py": frozenset({"present", "satisfied"}),
@@ -274,14 +308,30 @@ READERS_TODAY: dict[str, frozenset[str]] = {
 
 # Module -> {name: why it is not the resolver's there}.
 NOT_THE_RESOLVERS: dict[str, dict[str, str]] = {
+    "adapters/flatpak_install.py": {
+        "flatpak": "a folder of Flatpak's own per-user install tree",
+    },
     "adapters/gavel_native.py": {
+        "native": "the folder the compiled save-sync core ships in",
         "size_fixed": "a field of the save-sync core's own input, which states its own contract",
+    },
+    "adapters/repositories/rom_install.py": {
+        "launchable": "the column recording whether an install's own file can be started",
+    },
+    "domain/rom_adoption.py": {
+        "mismatch": "an outcome of the adoption's own content check against RomM's checksums",
+    },
+    "domain/save_answer.py": {
+        "unestablished": "the save answer's own state for a save nothing established",
     },
     "host/server.py": {
         "refused": "the admission verdict on a connection to the backend",
     },
-    "domain/rom_adoption.py": {
-        "mismatch": "an outcome of the adoption's own content check against RomM's checksums",
+    "services/downloads/service.py": {
+        "launchable": "whether an install's own file can be started",
+    },
+    "services/emulator_sources.py": {
+        "catalogue": "the key of a source report's own catalogue state",
     },
     "services/rom_adoption/service.py": {
         "mismatch": "an outcome of the adoption's own content check, keying its wording",
@@ -289,6 +339,7 @@ NOT_THE_RESOLVERS: dict[str, dict[str, str]] = {
     },
     "services/saves/status/service.py": {
         "checked": "whether Tender's own local-save check ran",
+        "unestablished": "the key of the save answer's own unestablished state",
     },
 }
 
@@ -304,14 +355,30 @@ def resolver_codes() -> dict[str, str]:
     return codes
 
 
-def resolver_values() -> frozenset[str]:
-    """The values of the resolver's other closed vocabularies that are watched."""
+def resolver_vocabulary_values() -> frozenset[str]:
+    """Every value of the resolver's closed vocabularies that is no code.
+
+    A string constant ``atlas.__all__`` holds, and a string in a tuple, a
+    frozenset or a ``Literal`` it exports.
+    """
     atlas = _vendored_atlas()
-    return frozenset(
-        value
-        for name in atlas.__all__
-        if name.startswith(VALUE_FAMILIES) and isinstance(value := getattr(atlas, name), str)
-    ) - set(GENERIC_VALUES)
+    found: set[str] = set()
+    for name in atlas.__all__:
+        value = getattr(atlas, name)
+        if name.startswith("__"):
+            continue
+        if isinstance(value, str):
+            found.add(value)
+        elif isinstance(value, tuple | frozenset):
+            found.update(member for member in value if isinstance(member, str))
+        elif typing.get_origin(value) is typing.Literal:
+            found.update(member for member in typing.get_args(value) if isinstance(member, str))
+    return frozenset(found) - frozenset(resolver_codes().values())
+
+
+def resolver_values() -> frozenset[str]:
+    """The values of the resolver's closed vocabularies that are watched."""
+    return resolver_vocabulary_values() - set(GENERIC_VALUES)
 
 
 def resolver_exports() -> frozenset[str]:
@@ -524,6 +591,55 @@ def vocabulary_findings(backend: Path, codes: frozenset[str]) -> list[str]:
     return findings
 
 
+# --- The generic words ---------------------------------------------------
+
+_QUOTED = re.compile(r"""["'`]([^"'`\s]+)["'`]""")
+
+
+def _panel_sources(src: Path) -> list[Path]:
+    """The panel's source files the ESLint rule reads: no test, no test utility."""
+    return sorted(
+        path
+        for path in src.rglob("*.ts*")
+        if path.suffix in {".ts", ".tsx"}
+        and not path.name.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"))
+        and path.name != "test-setup.ts"
+        and "test-utils" not in path.relative_to(src).parts
+    )
+
+
+def _spoken(backend: Path, src: Path) -> set[str]:
+    """Every string Tender's own code speaks: a constant outside the reading modules, a quoted word in the panel."""
+    words: set[str] = set()
+    for path in scanned_modules(backend):
+        if path.relative_to(backend).as_posix() in READING_MODULES:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        docstrings = _docstrings(tree)
+        words.update(
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings
+        )
+    for path in _panel_sources(src):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.lstrip().startswith(("//", "*", "/*")):
+                words.update(_QUOTED.findall(line))
+    return words
+
+
+def generic_findings(backend: Path, src: Path, vocabulary: frozenset[str]) -> list[str]:
+    """A generic word the resolver no longer states, or Tender's own code no longer speaks."""
+    spoken = _spoken(backend, src)
+    findings: list[str] = []
+    for word in sorted(GENERIC_VALUES):
+        if word not in vocabulary:
+            findings.append(f"GENERIC_VALUES lists {word!r}, which the resolver no longer states: take it off.")
+        elif word not in spoken:
+            findings.append(f"GENERIC_VALUES lists {word!r}, which Tender's own code no longer speaks: take it off.")
+    return findings
+
+
 # --- The panel's copy ------------------------------------------------------
 
 
@@ -559,7 +675,8 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 0
     codes = frozenset(resolver_codes().values())
-    values = resolver_values()
+    vocabulary = resolver_vocabulary_values()
+    values = vocabulary - set(GENERIC_VALUES)
     if "--write" in argv:
         FRONTEND_VOCABULARY.write_text(frontend_vocabulary(codes, values), encoding="utf-8")
         print(f"Wrote {FRONTEND_VOCABULARY.relative_to(REPO_ROOT)}.")
@@ -567,6 +684,7 @@ def main(argv: list[str]) -> int:
     findings = [
         *import_findings(BACKEND, resolver_exports()),
         *vocabulary_findings(BACKEND, codes | values),
+        *generic_findings(BACKEND, FRONTEND_SRC, vocabulary),
         *frontend_findings(codes, values),
     ]
     if findings:

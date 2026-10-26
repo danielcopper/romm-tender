@@ -88,6 +88,7 @@ const RESOLVER_READERS_TODAY = {
     "requirements_met",
     "satisfied",
     "supplied_by",
+    "unestablished",
     "unrecognised",
     "verified",
   ],
@@ -113,7 +114,7 @@ const RESOLVER_READERS_TODAY = {
     "unrecognised",
     "verified",
   ],
-  "src/utils/biosGroup.ts": ["mismatch", "satisfied"],
+  "src/utils/biosGroup.ts": ["mismatch", "ntsc-j", "ntsc-u", "satisfied"],
   "src/utils/biosPlaceWords.ts": ["declared_kind", "satisfied"],
   "src/utils/biosSummary.ts": [
     "by-name",
@@ -126,6 +127,7 @@ const RESOLVER_READERS_TODAY = {
     "locating",
     "refused",
     "satisfied",
+    "unestablished",
   ],
   "src/utils/emulatorSourceWording.ts": [
     "bios-root-missing",
@@ -135,6 +137,7 @@ const RESOLVER_READERS_TODAY = {
     "content-tree-unwired",
     "emulator-config-missing",
     "emulator-config-unreadable",
+    "installation",
     "marker-invalid",
     "marker-missing",
     "marker-unreadable",
@@ -157,6 +160,8 @@ const NOT_THE_RESOLVERS = {
   // Whether the launch gate could ask which emulator source starts the game.
   "src/utils/launchGate.ts": ["checked"],
   "src/utils/startingSource.ts": ["checked"],
+  // A React key.
+  "src/bigpicture/GameInfoTab.tsx": ["rom-name"],
   // An outcome of the adoption's own content check against RomM's checksums.
   "src/types/downloads.ts": ["mismatch"],
   // The conditions in Steam a toast still waits on.

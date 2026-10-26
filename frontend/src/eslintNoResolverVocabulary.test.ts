@@ -65,6 +65,7 @@ const READERS_WHEN_WRITTEN: ByFile = {
     "requirements_met",
     "satisfied",
     "supplied_by",
+    "unestablished",
     "unrecognised",
     "verified",
   ],
@@ -90,7 +91,7 @@ const READERS_WHEN_WRITTEN: ByFile = {
     "unrecognised",
     "verified",
   ],
-  "src/utils/biosGroup.ts": ["mismatch", "satisfied"],
+  "src/utils/biosGroup.ts": ["mismatch", "ntsc-j", "ntsc-u", "satisfied"],
   "src/utils/biosPlaceWords.ts": ["declared_kind", "satisfied"],
   "src/utils/biosSummary.ts": [
     "by-name",
@@ -103,6 +104,7 @@ const READERS_WHEN_WRITTEN: ByFile = {
     "locating",
     "refused",
     "satisfied",
+    "unestablished",
   ],
   "src/utils/emulatorSourceWording.ts": [
     "bios-root-missing",
@@ -112,6 +114,7 @@ const READERS_WHEN_WRITTEN: ByFile = {
     "content-tree-unwired",
     "emulator-config-missing",
     "emulator-config-unreadable",
+    "installation",
     "marker-invalid",
     "marker-missing",
     "marker-unreadable",
@@ -126,6 +129,7 @@ const READERS_WHEN_WRITTEN: ByFile = {
 
 const NOT_THE_RESOLVERS_WHEN_WRITTEN: ByFile = {
   "src/bigpicture/ArtworkTab.tsx": ["refused"],
+  "src/bigpicture/GameInfoTab.tsx": ["rom-name"],
   "src/boot/steamModules.ts": ["checked"],
   "src/types/downloads.ts": ["mismatch"],
   "src/utils/launchGate.ts": ["checked"],
@@ -163,6 +167,9 @@ describe("no panel code reads the resolver's vocabulary", () => {
     ["how a file is located", 'export const v = "by-name";\n', ["by-name"]],
     ["a declaration's state", 'export const v = "packaged";\n', ["packaged"]],
     ["a checked verdict", 'export type V = "verified" | "mismatch";\n', ["verified", "mismatch"]],
+    ["an availability", 'export const v = "not-installed";\n', ["not-installed"]],
+    ["a save file's role", 'export const v = "memory-card";\n', ["memory-card"]],
+    ["a locating word Tender also speaks", 'export const v = "unestablished";\n', ["unestablished"]],
   ])("reports %s", async (_kind, source, tokens) => {
     expect(await reported(FIXTURE, source)).toEqual(tokens);
   });
