@@ -38,8 +38,9 @@ class Rom:
     (region/language/revision variants), how large it is, and whether there is
     anything to download. They are set at construction from the fetch and
     refreshed on every sync (they ride the sync UPSERT, unlike the user-pin
-    ``emulator_override`` / ``selected_disc``); no mutation verbs, as no local
-    flow changes them independently of a sync.
+    ``emulator_override`` / ``selected_disc``). Only ``fs_size_bytes`` has a
+    verb, :meth:`record_fs_size_bytes`: an install records the size RomM stated
+    between syncs.
     """
 
     rom_id: int
@@ -154,6 +155,16 @@ class Rom:
         """Drop the mark once RomM answered this ROM's exact id with the ROM itself."""
         self.gone_from_romm = None
 
+    def record_fs_size_bytes(self, size: int) -> None:
+        """Record the ROM size RomM stated, in bytes.
+
+        A size of zero or less states nothing and raises ``ValueError``; a size
+        RomM did not state is not recorded at all.
+        """
+        if size <= 0:
+            raise ValueError("fs_size_bytes must be positive")
+        self.fs_size_bytes = size
+
     def update_cover_path(self, path: str) -> None:
         """Record the local cover-art path once artwork has been written."""
         self.cover_path = path
@@ -211,6 +222,14 @@ class Rom:
         ``set_chosen_sgdb_id``.
         """
         self.chosen_sgdb_id = sgdb_id
+
+    def supersede_chosen_sgdb_game(self) -> None:
+        """Drop the SteamGridDB game the user chose, now that RomM's id has replaced it.
+
+        Whether RomM's id differs from the choice is the caller's to establish:
+        it may come from a pending sync rather than from ``sgdb_id``.
+        """
+        self.chosen_sgdb_id = None
 
     def begin_artwork_check(self, at: float) -> None:
         """Record that a check of this ROM's automatic artwork against SteamGridDB started at *at* (epoch seconds).

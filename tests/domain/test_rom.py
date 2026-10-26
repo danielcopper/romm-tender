@@ -218,6 +218,42 @@ class TestChooseSgdbGame:
         assert (rom.sgdb_id, rom.chosen_sgdb_id) == (7, 9)
 
 
+class TestSupersedeChosenSgdbGame:
+    def test_drops_the_choice_and_keeps_romms_id(self):
+        rom = _make_rom()
+        rom.choose_sgdb_game(9)
+        rom.assign_sgdb_id(7)
+
+        rom.supersede_chosen_sgdb_game()
+
+        assert (rom.sgdb_id, rom.chosen_sgdb_id) == (7, None)
+
+
+class TestRecordFsSizeBytes:
+    def test_records_the_size(self):
+        rom = _make_rom()
+
+        rom.record_fs_size_bytes(3_145_728)
+
+        assert rom.fs_size_bytes == 3_145_728
+
+    @pytest.mark.parametrize("size", [0, -1])
+    def test_a_size_of_zero_or_less_is_refused(self, size):
+        rom = Rom.synced(
+            rom_id=1,
+            platform_slug="n64",
+            name="Game",
+            fs_name="game.z64",
+            shortcut_app_id=None,
+            synced_at="2026-01-01T00:00:00+00:00",
+            fs_size_bytes=999_000,
+        )
+
+        with pytest.raises(ValueError, match="fs_size_bytes must be positive"):
+            rom.record_fs_size_bytes(size)
+        assert rom.fs_size_bytes == 999_000
+
+
 class TestArtworkCheck:
     def test_a_check_records_when_it_started(self):
         rom = _make_rom()
