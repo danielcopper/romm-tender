@@ -2,12 +2,14 @@
 
 Built once by the composition root and handed to the façade, the queue and the
 transfer, which coordinate through it instead of through each other's fields.
-Each admitted download holds four registrations here — its task, its byte
-reservation, its control token and its queue entry — beside the in-progress
-claim its start took. Registering them is :meth:`DownloadsStateBox.admit`, and
-giving them back, all but the entry, which outlives its task, is
-:meth:`DownloadsStateBox.release`, so the rule that only the task which
-registered a download releases it lives in one place.
+A start takes the ROM's in-progress claim (:meth:`DownloadsStateBox.claim`), and
+an admitted download then holds four registrations here — its queue entry, its
+task, its byte reservation and its control token
+(:meth:`DownloadsStateBox.admit`). Its task gives back the claim and every
+registration but the entry, which outlives it (:meth:`DownloadsStateBox.release`),
+so the rule that only the attempt which registered a download releases it lives
+in one place. The claim, the task, the reservation and the token change only
+through the box's verbs; the entries are the queue's to change once admitted.
 """
 
 from __future__ import annotations
@@ -53,9 +55,9 @@ class DownloadsStateBox:
 
     ``entries`` is the queue the frontend is shown, by rom id. ``in_progress``
     holds every rom id whose download has started and not ended — a paused one
-    is not in it. ``tasks``, ``reserved_bytes`` and ``control_tokens`` are the
-    registrations of an admitted download; ``semaphore`` bounds how many
-    transfer at once.
+    is not in it. ``entries``, ``tasks``, ``reserved_bytes`` and
+    ``control_tokens`` hold the registrations of an admitted download;
+    ``semaphore`` bounds how many transfer at once.
     """
 
     entries: dict[int, dict[str, Any]] = field(default_factory=dict)
@@ -64,6 +66,14 @@ class DownloadsStateBox:
     reserved_bytes: dict[int, int] = field(default_factory=dict)
     control_tokens: dict[int, DownloadControl] = field(default_factory=dict)
     semaphore: asyncio.Semaphore = field(default_factory=_download_slots)
+
+    def claim(self, rom_id: int) -> None:
+        """Take *rom_id*'s in-progress claim: its start has begun."""
+        self.in_progress.add(rom_id)
+
+    def drop_claim(self, rom_id: int) -> None:
+        """Give back *rom_id*'s in-progress claim: its start ended without admitting a download."""
+        self.in_progress.discard(rom_id)
 
     def admit(
         self,
@@ -81,18 +91,22 @@ class DownloadsStateBox:
         self.control_tokens[rom_id] = control
 
     def release(self, rom_id: int, control: DownloadControl) -> None:
-        """Give back what *rom_id*'s download registered, when *control* is still the token registered for it.
+        """Give back *rom_id*'s in-progress claim and its registrations, when *control* is still the token registered.
 
         A re-download or a resume can register a fresh attempt before an older,
         superseded task ends; gating every release on the token's identity keeps
         that task from releasing the newer attempt's task, claim, reservation or
-        token (#144). The queue entry is not released here: it outlives its task.
+        token. The queue entry is not released here: it outlives its task.
         """
         if self.control_tokens.get(rom_id) is control:
             self.tasks.pop(rom_id, None)
             self.in_progress.discard(rom_id)
             self.reserved_bytes.pop(rom_id, None)
             del self.control_tokens[rom_id]
+
+    def forget_tasks(self) -> None:
+        """Forget every download's task: the shutdown has cancelled them and waited until each ended."""
+        self.tasks.clear()
 
     def bytes_reserved_by_others(self, rom_id: int) -> int:
         """What other downloads have claimed and not yet written. Read on the loop, where both change."""

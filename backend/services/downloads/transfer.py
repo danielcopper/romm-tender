@@ -19,7 +19,6 @@ from domain.disk_space import NotEnoughSpaceToUnpack
 from domain.download_frames import failed_frame
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT, is_multi_file_download
 from services.downloads._names import extract_dir_name_for
-from services.downloads._state import DownloadControl
 
 if TYPE_CHECKING:
     import logging
@@ -178,7 +177,7 @@ class DownloadTransfer:
             return (final_path, True)
         return (None, False)
 
-    async def run(self, rom_id, rom_detail, target_path, system, file_name, control=None, *, resume=False):
+    async def run(self, rom_id, rom_detail, target_path, system, file_name, control, *, resume=False):
         """Run one admitted download to its end, and give back what its admission registered.
 
         *control* is the token the admission registered for this attempt; the
@@ -186,12 +185,6 @@ class DownloadTransfer:
         (:meth:`DownloadsStateBox.release`). On *resume* the transfer appends to
         the partial file instead of restarting it.
         """
-        if control is None:
-            # Direct invocation (no admission): own + register a control so the
-            # ``finally``'s identity-gated release gives back this task's
-            # registrations like the real path does.
-            control = DownloadControl()
-            self._state.control_tokens[rom_id] = control
         rom_name = rom_detail.get("name", file_name)
         platform_name = rom_detail.get("platform_name", rom_detail.get("platform_slug", ""))
         has_multiple = is_multi_file_download(rom_detail)

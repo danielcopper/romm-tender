@@ -122,7 +122,7 @@ class DownloadService:
         """
         await self._tasks.shutdown()
         await self._queue.shutdown()
-        self._state.tasks.clear()
+        self._state.forget_tasks()
 
     async def start_download(
         self,
@@ -240,13 +240,13 @@ class DownloadService:
         disk that cannot be read or prepared) is refused here with ``download_start_failed``; a RomM error and a
         refusal pass on unchanged (which: ``docs/architecture/backend-architecture.md``), and anything else is a bug.
         """
-        self._state.in_progress.add(rom_id)
+        self._state.claim(rom_id)
         try:
             return await self._start_claimed_download(
                 rom_id, resume=resume, replace_existing=replace_existing, **answer
             )
         except BaseException:
-            self._state.in_progress.discard(rom_id)
+            self._state.drop_claim(rom_id)
             raise
 
     def _download_platform_io(self, platform_slug: str) -> PlatformSystem:
@@ -301,7 +301,7 @@ class DownloadService:
             self._logger.error(f"Failed to prepare download for ROM {rom_id}: {e}")
             raise Refused("download_start_failed", _START_FAILED_MESSAGE) from e
         if gated is not None:
-            self._state.in_progress.discard(rom_id)
+            self._state.drop_claim(rom_id)
             return gated
 
         # At most one downloaded version per shortcut binding (#1298): strip a
