@@ -1962,6 +1962,14 @@ describe("BiosTab", () => {
       ],
       ...over,
     });
+    /** {@link psx} with a file only the RomM library holds, so the right column has a table. */
+    const withLibraryFile = (): BiosStatus =>
+      psx({
+        files: [
+          ...(psx().files ?? []),
+          psxFile("scph7001.bin", { declared_by: null, wanted: "not_needed", required_by_active: false }),
+        ],
+      });
     const renderPsx = (status = psx()) =>
       render(
         <BiosTabWithState
@@ -2122,7 +2130,7 @@ describe("BiosTab", () => {
       // declares. How Steam steps by them: docs/architecture/qam-panel.md, "The
       // game page's BIOS tab stands in two columns".
       const focusable = vi.spyOn(deckyUi, "Focusable");
-      const { container, getByTestId } = renderPsx();
+      const { container, getByTestId } = renderPsx(withLibraryFile());
       const flows = new Set(
         focusable.mock.calls
           .map(([props]) => props as { className?: string; "flow-children"?: string })
@@ -2140,6 +2148,37 @@ describe("BiosTab", () => {
       expect(main?.textContent).toBe(getByTestId("bios-main-column").textContent);
       expect(library?.textContent).toBe(getByTestId("bios-library-column").textContent);
       expect(library?.textContent).not.toBe("");
+    });
+
+    it("puts the legend in the left column below the bulk buttons, and none in the library column", () => {
+      const { container, getByTestId } = renderPsx(withLibraryFile());
+      const legend = getByTestId("bios-legend");
+      expect(getByTestId("bios-main-column").contains(legend)).toBe(true);
+      expect(getByTestId("bios-library-column").querySelector('[data-testid="bios-legend"]')).toBeNull();
+      const lastBulk = button(container, "Delete downloads (2)") as HTMLElement;
+      expect(lastBulk.compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("dims the legend's row and sets it apart from the buttons above", () => {
+      const { getByTestId } = renderPsx();
+      const row = getByTestId("bios-legend-row");
+      expect(row.contains(getByTestId("bios-legend"))).toBe(true);
+      expect(row.style.opacity).toBe("0.6");
+      expect(row.style.marginTop).toBe("12px");
+    });
+
+    it("sets the legend's lines side by side, wrapping where the column runs out", () => {
+      // happy-dom lays nothing out, so the flex rule is the observable.
+      const legend = renderPsx().getByTestId("bios-legend");
+      expect(legend.style.flexDirection).toBe("row");
+      expect(legend.style.flexWrap).toBe("wrap");
+      expect(legend.style.columnGap).toBe("24px");
+    });
+
+    it("leaves the legend's row empty where neither table has a row", () => {
+      const { getByTestId } = renderPsx(psx({ files: [] }));
+      expect(getByTestId("bios-legend-row").textContent).toBe("");
+      expect(getByTestId("bios-legend-row").querySelector('[data-testid="bios-legend"]')).toBeNull();
     });
 
     it("stretches both columns, and their focus groups, to the row's height", () => {

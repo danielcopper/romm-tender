@@ -298,7 +298,7 @@ function declaredFolder(file: BiosTableRow): string | null {
  * The entries carry the same strings the rows' tooltips do, and match on them:
  * see the `MARK_*` block for why the glyph and colour cannot be the identity.
  */
-const BiosLegend: FC<{ files: readonly BiosTableRow[] }> = ({ files }) => {
+const BiosLegend: FC<{ files: readonly BiosTableRow[]; inline?: boolean }> = ({ files, inline = false }) => {
   const marks = files.map((file) => diskMark(file));
   const shown = [
     ...UNMET_WORDS.map((word) => ({ glyph: "✗", color: RED, text: markRequiredUnmet(word) })),
@@ -320,7 +320,9 @@ const BiosLegend: FC<{ files: readonly BiosTableRow[] }> = ({ files }) => {
       data-testid="bios-legend"
       style={{
         display: "flex",
-        flexDirection: "column",
+        flexDirection: inline ? "row" : "column",
+        flexWrap: "wrap",
+        columnGap: "24px",
         padding: "2px 16px 6px",
         fontSize: SECONDARY_FONT,
         lineHeight: 1.3,
@@ -924,8 +926,8 @@ export const BiosLibraryTable: FC<{ part: BiosPart }> = ({ part }) => {
   );
 };
 
-/** What the marks mean, over both tables' rows. */
-export const BiosPartLegend: FC<{ part: BiosPart }> = ({ part }) =>
+/** What the marks mean, over both tables' rows; `inline` sets its lines side by side. */
+export const BiosPartLegend: FC<{ part: BiosPart; inline?: boolean }> = ({ part, inline = false }) =>
   part.shownRows.length + part.libraryRows.length > 0 ? (
-    <BiosLegend files={[...part.shownRows, ...part.libraryRows]} />
+    <BiosLegend files={[...part.shownRows, ...part.libraryRows]} inline={inline} />
   ) : null;

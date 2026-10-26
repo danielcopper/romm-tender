@@ -363,12 +363,14 @@ export const BiosTab: FC<BiosTabProps> = ({
             <BiosEmulatorSelector part={part} padding={`4px ${PANE_GUTTER} 6px`} />
             <BiosShownTable part={part} />
             <BiosButtons part={part} status={status && { key: status.slug, scope: status.scope, text: status.text }} />
+            <div data-testid="bios-legend-row" style={{ opacity: 0.6, marginTop: "12px" }}>
+              <BiosPartLegend part={part} inline />
+            </div>
           </Focusable>
         </div>
         <div data-testid="bios-library-column" style={{ ...COLUMN_BOX, flex: `1 1 ${SIDE_COLUMN}` }}>
           <Focusable className="romm-bios-column" flow-children="column" style={COLUMN_FILL}>
             <BiosLibraryTable part={part} />
-            <BiosPartLegend part={part} />
           </Focusable>
         </div>
       </div>

@@ -1721,19 +1721,20 @@ it, for the focused platform:
   game's region" where it stands (`groupBlock` in `frontend/src/utils/biosGroup.ts`).
 
   **The game page's BIOS tab stands in two columns** (#2429 D1). The left one is 760 CSS px wide and holds, top to
-  bottom, the sentence and the group block, the emulator selector, the shown emulator's files and the buttons; the right
-  one takes the rest of the width (at least 400 CSS px) and holds the library section and the legend. Where the page is
-  narrower than both need — the Deck's game page, where Big Picture's desktop one is not — the right column wraps below
-  the left; nothing measures, the wrap is CSS's (`BiosTab.tsx`). Everything under the sentence and the group block is
-  the platform page's part, drawn from the same module (`frontend/src/bigpicture/bios/`): the selector in the left
+  bottom, the sentence and the group block, the emulator selector, the shown emulator's files, the buttons and the
+  legend; the right one takes the rest of the width (at least 400 CSS px) and holds the library section. Where the page
+  is narrower than both need — the Deck's game page, where Big Picture's desktop one is not — the right column wraps
+  below the left; nothing measures, the wrap is CSS's (`BiosTab.tsx`). Everything under the sentence and the group block
+  is the platform page's part, drawn from the same module (`frontend/src/bigpicture/bios/`): the selector in the left
   column's gutter, aligned with the sentence and the table; the table with every row the shown emulator lists (#2429
   D3), its marks, `Contents` and one button per row — Download, Replace… or Delete — under the same rules, confirmations
   and lines; `Download required for <emulator> (N)`, which on the game page sends the shown entry's identity for the
   launching emulator too, since a game can launch with another emulator than its platform's pick; under
   `For all of <platform>`, `Download all` and `Delete downloads (N)`; the status line under them; the library section;
-  one legend for both columns. Every download and Replace… on the game page sends the game's ROM id, so the requirement
-  it reads, the place it replaces at and the links it places follow the system the game's install record holds — the
-  system the tab's rows were read for (`platform_system(slug, rom_id)` in `backend/services/firmware/downloads.py`); the
+  one legend for both columns — under the left column's buttons, dimmed, its entries side by side where the platform
+  page's stand one per line. Every download and Replace… on the game page sends the game's ROM id, so the requirement it
+  reads, the place it replaces at and the links it places follow the system the game's install record holds — the system
+  the tab's rows were read for (`platform_system(slug, rom_id)` in `backend/services/firmware/downloads.py`); the
   platform page sends none and acts for the platform's main system. The game's BIOS answer carries what those buttons
   stand on, as the platform's does, the answer that nothing could be established included: the emulator entries, the
   delete counts (`deletable_count`, `delete_name`) and `server_offline`, which withdraws the downloads while RomM's
