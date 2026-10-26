@@ -38,6 +38,11 @@ if TYPE_CHECKING:
     from domain.sync_run_kind import SyncRunKind
 
 
+# The messages a run's two refusals carry: a cancelled run or fetch, and a run
+# admission the box refused because another run holds the slot.
+SYNC_CANCELLED = "Sync cancelled"
+SYNC_IN_PROGRESS = "Sync already in progress"
+
 PREVIEW_MAX_AGE_SECONDS = 1800  # 30 minutes — preview snapshots stale beyond this
 
 

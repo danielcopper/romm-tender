@@ -33,12 +33,12 @@ from domain.sync_state import SyncCancelled
 from lib.errors import Refused, classify_error
 from services.library._preview_union import collapse_counting_platform_rebinds
 from services.library._stale_rows import preview_group_keys, settle_stale_rows, stale_rows_of, with_kept_platform_names
+from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
 from services.library._unit_roms import (
     collection_membership_key,
     record_collection_membership,
     stamp_component_group_keys,
 )
-from services.library.sync_orchestrator import SYNC_CANCELLED, SYNC_IN_PROGRESS
 
 if TYPE_CHECKING:
     import asyncio

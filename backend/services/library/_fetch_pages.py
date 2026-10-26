@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled, SyncState
+from services.library._state import SYNC_CANCELLED
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -20,8 +21,6 @@ if TYPE_CHECKING:
     # positional, every other field by keyword. Sub-services consume this
     # through the Config seam.
     EmitProgressFn = Callable[..., Awaitable[None]]
-
-_SYNC_CANCELLED = "Sync cancelled"
 
 # Emit a ``fetching`` progress frame on the first page and every Nth page of a
 # paginated unit fetch. At the 500-ROM page size a large platform paginates in
@@ -34,7 +33,7 @@ FETCH_PROGRESS_PAGE_INTERVAL = 1
 def raise_if_cancelling(box: LibrarySyncStateBox) -> None:
     """Raise :class:`SyncCancelled` if the sync is being cancelled."""
     if box.sync_state == SyncState.CANCELLING:
-        raise SyncCancelled(_SYNC_CANCELLED)
+        raise SyncCancelled(SYNC_CANCELLED)
 
 
 async def emit_fetch_page_progress(

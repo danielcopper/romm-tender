@@ -39,6 +39,7 @@ from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
 from services.library._stale_rows import settle_stale_rows
+from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
 if TYPE_CHECKING:
@@ -61,8 +62,6 @@ if TYPE_CHECKING:
     )
 
 
-SYNC_CANCELLED = "Sync cancelled"
-SYNC_IN_PROGRESS = "Sync already in progress"
 # Terminal reason when the run died externally (heartbeat timeout — the
 # frontend crashed or reloaded) rather than by the user's Cancel. Stored in
 # ``sync_runs.error`` via ``mark_interrupted``; the status split lets the UI
