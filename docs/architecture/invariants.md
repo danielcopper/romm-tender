@@ -1016,8 +1016,11 @@ Format: **invariant** — tier — enforced by.
   another name, at the price of a pragma on a value that only shares a field name (e.g. the ctypes struct in
   `adapters/gavel_native.py`). Bare `self` is exempt in every class, because an aggregate's own methods write through it
   and other classes' own fields share the names freely. `tests/` is not scanned: tests and fakes build state by writing
-  fields on purpose. The repository's column writers change a stored aggregate in SQL without going through the
-  aggregate at all, which is why they are outside the check and named in the entry. Detail:
+  fields on purpose. The repository's column writers are outside the check because they write a column in SQL and assign
+  no field. Most of them are their column's only write path because the sync's upsert never touches that column (their
+  docstrings in `services/protocols/repositories.py`): the aggregate's verb sets the value and the writer persists that
+  one column. The writes the entry names as having no verb change the stored aggregate without its invariants being
+  asked at all, which is why each is named, with what sanctions it where something does. Detail:
   [Database Design](database-design.md) → AST field-assignment check
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
   UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py` (the first of the **two** rules that
