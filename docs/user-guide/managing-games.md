@@ -19,7 +19,8 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
   so many days ago within a week, and otherwise the date in your Steam client's language
 - **Space required** — for a game that isn't downloaded yet, a "Space Required" cell next to the Play button shows how
   much disk space the download needs. It disappears once the game is installed (mirroring how Steam hides it for
-  installed games); it's also omitted when RomM doesn't report the size.
+  installed games); it's also omitted when RomM doesn't report the size or reports 0 bytes, as it does for a game it
+  holds no file for.
 - **Action buttons** — Download, Pause/Resume, Uninstall, Cancel, or Refresh Metadata depending on state
 
 Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on

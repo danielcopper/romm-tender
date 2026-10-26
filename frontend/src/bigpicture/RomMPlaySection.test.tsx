@@ -5370,6 +5370,34 @@ describe("RomMPlaySection", () => {
       expect(container.textContent).not.toContain("SPACE REQUIRED");
     });
 
+    it("hidden when size zero: an uninstalled ROM RomM states 0 bytes for does NOT render the cell", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 1395,
+        installed: false,
+        fs_size_bytes: 0,
+      });
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+
+      expect(container.textContent).not.toContain("SPACE REQUIRED");
+      expect(container.textContent).not.toContain("0bytes");
+    });
+
+    it("shown at the smallest positive size: an uninstalled ROM of 1 byte renders the cell", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 1395,
+        installed: false,
+        fs_size_bytes: 1,
+      });
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("SPACE REQUIRED");
+      expect(container.textContent).toContain("1bytes");
+    });
+
     it("hidden when size absent: an uninstalled ROM with no fs_size_bytes field does NOT render the cell", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,

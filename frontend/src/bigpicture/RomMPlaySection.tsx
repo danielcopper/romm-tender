@@ -813,12 +813,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   }
 
   // Space Required (#1395) — the download footprint, shown only for an
-  // uninstalled ROM whose size is known. Placed FIRST to match Steam's native
-  // game detail: an uninstalled title leads with "Space Required" ahead of Last
-  // Played / Playtime, and the cell disappears once the ROM is on disk. Being
-  // first also keeps it clear of the romm-info-items nowrap + overflow:hidden
-  // clip, which drops cells from the right edge.
-  if (!detail.installed && detail.fsSizeBytes != null) {
+  // uninstalled ROM whose size is above 0: RomM states 0 for a ROM it holds no
+  // file for, and a size of 0 requires nothing. Placed FIRST to match Steam's
+  // native game detail: an uninstalled title leads with "Space Required" ahead
+  // of Last Played / Playtime, and the cell disappears once the ROM is on disk.
+  // Being first also keeps it clear of the romm-info-items nowrap +
+  // overflow:hidden clip, which drops cells from the right edge.
+  if (!detail.installed && detail.fsSizeBytes != null && detail.fsSizeBytes > 0) {
     infoItems.push(infoItem("space-required", "SPACE REQUIRED", formatBytes(detail.fsSizeBytes)));
   }
 
