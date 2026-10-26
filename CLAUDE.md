@@ -532,19 +532,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
   `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
   resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the
-  resolver's codes, a distinctive value of its other closed vocabularies (the console's own firmware, granularity, root
-  provenance, locating, declaration, `checked`) or one of its distinctive answer field names; and every caveat,
-  health-issue, unresolved and reason code the vendored resolver states is classified by one of them or stands on the
-  list of codes nothing classifies today. Only infrastructure and homonyms are excepted: by name, each with its reason,
-  `adapters/atlas_zstd.py` imports the resolver to hand it the zstd codec and `adapters/emulator_sources.py` holds
-  `RealMachine` (`IMPORT_GRANTS`, `INTERNALS_GRANTED`); `tests/` is excepted as a whole, because tests build the
-  resolver's machines and answers rather than read an answer for display; and a name that means something else in a
-  module stands on `NOT_THE_RESOLVERS`, in the backend's check and in the panel's rule. The modules that read the answer
-  today (`READERS_TODAY`, `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three private imports
-  (`INTERNALS_TO_REMOVE`), the homonyms and the codes nothing classifies (`_UNCLASSIFIED`) stand on lists that only
-  shrink** — check + test + prompt-only — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and
-  that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring),
-  the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
+  resolver's codes, a distinctive value of any other closed vocabulary it exports or one of its distinctive answer field
+  names; and every caveat, health-issue, unresolved and reason code the vendored resolver states is classified by one of
+  them or stands on the list of codes nothing classifies today. Only infrastructure and homonyms are excepted: by name,
+  each with its reason, `adapters/atlas_zstd.py` imports the resolver to hand it the zstd codec and
+  `adapters/emulator_sources.py` holds `RealMachine` (`IMPORT_GRANTS`, `INTERNALS_GRANTED`); `tests/` is excepted as a
+  whole, because tests build the resolver's machines and answers rather than read an answer for display; and a name that
+  means something else in a module stands on `NOT_THE_RESOLVERS`, in the backend's check and in the panel's rule. The
+  modules that read the answer today (`READERS_TODAY`, `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three private
+  imports (`INTERNALS_TO_REMOVE`), the homonyms, the generic words left unwatched (`GENERIC_VALUES`) and the codes
+  nothing classifies (`_UNCLASSIFIED`) stand on lists that only shrink** — check + test + prompt-only —
+  `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and that
+  `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring), the
+  ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
   `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
   once a reading module imports its constant). Unseen by the ESLint rule: a second site in a listed or excepted file
   reading the name it stands there for; a name as a plain string (`"satisfied" in row`, `Pick<T, "satisfied">`,

@@ -3528,10 +3528,10 @@ reads that view. This is the adapter of ports and adapters as Cosmic Python has 
 outside model, and nothing past it judges a fact the resolver states. `scripts/check_resolver_reading.py` (also bundled
 into `mise run lint`) fails on a backend module outside those adapters that imports the resolver, on an import of a name
 `atlas.__all__` does not export, and, outside the adapters, on a string equal to one of the resolver's codes or to a
-distinctive value of its other closed vocabularies, or a read of one of its distinctive answer field names. The panel is
-held by the ESLint rule `tender/no-resolver-vocabulary` over the same codes, values and names, which the script writes
-to `frontend/resolver-vocabulary.json`. `tests/adapters/test_resolver_codes.py` fails at an update of the vendored
-resolver on a code it adds that no adapter classifies. The rule and its lists are the invariant register's
+distinctive value of any other closed vocabulary it exports, or a read of one of its distinctive answer field names. The
+panel is held by the ESLint rule `tender/no-resolver-vocabulary` over the same codes, values and names, which the script
+writes to `frontend/resolver-vocabulary.json`. `tests/adapters/test_resolver_codes.py` fails at an update of the
+vendored resolver on a code it adds that no adapter classifies. The rule and its lists are the invariant register's
 ([invariants](invariants.md)), and what the script does not see is listed in its docstring.
 
 ### 7. Enforced: underscore prefix
