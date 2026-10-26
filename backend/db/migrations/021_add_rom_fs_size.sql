@@ -24,9 +24,8 @@
 -- no confirmed-else-preserved merge — and every applying sync re-writes the
 -- authoritative server value onto each row it touches. Between syncs a completed
 -- download also tops the value up (the download write-back reads the ROM detail
--- it already fetched), so a freshly downloaded ROM shows its size without waiting
--- for the next sync. The two paths never conflict: both write the same
--- server-reported number.
+-- it already fetched). Why the two writes agree, and what reads the install's
+-- write: Database Design, the ``roms`` table row.
 --
 -- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
 -- BEGIN/COMMIT and stamps PRAGMA user_version = 21.
