@@ -2805,8 +2805,9 @@ vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) copy in `backend
 `defaults/bios_registry.json`, a frozen snapshot that no longer exists upstream and could never be refreshed again.
 
 - **The seam exists because of a contract, not a preference.** `domain/` may not import `_vendor` (the
-  `domain-stdlib-only` import-linter contract), so the answer has to arrive through an adapter and `domain/` keeps only
-  the vocabulary — `domain/firmware_wants.py`, the same split `domain/sync_action.py` makes for the gavel core.
+  `domain-stdlib-only` import-linter contract), so the answer has to arrive through an adapter. That adapter is the one
+  module that reads it ("Resolver-reading gate" under Boundary Enforcement): what `domain/firmware_wants.py` and the
+  modules after it still read of the resolver's vocabulary stands on that gate's list, which only shrinks.
 - **Never cached.** A firmware answer is about files the user is actively downloading and deleting, so it is read per
   query.
 - **Failure is "unknown", never "nothing needed".** The resolver raises on its own invariant violations and promises
@@ -3518,7 +3519,20 @@ says. The script's docstring names what it cannot see, a computed `success` firs
 long form ([invariants](invariants.md)); what the shutdown does with the tasks is the shutdown paragraph above; what the
 check does not see is listed in its docstring.
 
-### 6. Enforced: underscore prefix
+### 6. Resolver-reading gate
+
+Each kind of answer the resolver gives — firmware, saves, the catalogue, the folders and the sources — is read in one
+module, the adapter that asks for it, which turns it into Tender's own view; every later layer, the panel included,
+reads that view. This is the adapter of ports and adapters as Cosmic Python has it (chapters 2 and 3): it translates the
+outside model, and nothing past it judges a fact the resolver states. `scripts/check_resolver_reading.py` (also bundled
+into `mise run lint`) fails on a backend module outside those adapters that imports the resolver, on an import of a name
+`atlas.__all__` does not export, and, outside the adapters, on a string equal to one of the resolver's codes or a read
+of one of its distinctive answer field names. The panel is held by the ESLint rule `tender/no-resolver-vocabulary` over
+the same codes and names, which the script writes to `frontend/resolver-vocabulary.json`.
+`tests/adapters/test_resolver_codes.py` fails at an update of the vendored resolver on a code no adapter classifies. The
+rule, its lists and what each check does not see are the invariant register's ([invariants](invariants.md)).
+
+### 7. Enforced: underscore prefix
 
 All internal methods use a `_` prefix; public ones — the endpoints on `Endpoints` and the use cases on a service — have
 none. The endpoints in `main.py` delegate directly to the corresponding service method. An endpoint is reachable because

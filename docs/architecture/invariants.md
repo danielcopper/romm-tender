@@ -314,6 +314,33 @@ Format: **invariant** — tier — enforced by.
   own UoW, which is what putting the three methods on one class makes cheapest — is that gate's documented blind spot
   and passes green. On the budget side the confinement holds `session_budget`'s stated promise that no renderer-RSS
   reading is taken anywhere else in the package
+- **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
+  `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
+  resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the
+  resolver's codes or distinctive answer field names; and every caveat, health-issue and unresolved code the vendored
+  resolver states is classified by one of them. Excepted by name: `adapters/atlas_zstd.py` imports the resolver to hand
+  it the zstd codec, `adapters/emulator_sources.py` holds `RealMachine`, and `tests/` is not scanned. The modules that
+  read the answer today, `atlas_firmware.py`'s three private imports and the codes nothing classifies stand on lists
+  that only shrink** — check + test — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and
+  that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring),
+  the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
+  `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
+  once a reading module imports its constant). The readers' and the imports' lists fail on an entry nothing needs any
+  more, and their tests on an entry the list did not hold when it was written; the codes nothing classifies are that
+  test's own list, which fails on a code a reading module classifies or the resolver no longer states, so a code added
+  to it is an edit of the test. Unseen by the ESLint rule: test files and `src/test-utils/`, a code or name built at run
+  time, a name in a type operator (`Pick<T, "satisfied">`), and a field reached through a spread or `Object.entries`.
+  Unseen by the classification test: whether a reading module that names a code reads it rightly. Without it, every
+  layer after the adapter decides a fact of its own from the raw answer, and the layers disagree: whether a file is
+  required, whether a one-of group is met, whether a file is there, which file a requirement means (one image under two
+  spellings became two rows), and what a caveat code means, copied into the backend and into the panel. The adapter
+  turns the answer into Tender's own view, joined on the resolver's keys; the panel receives Tender's own closed set of
+  marks per row, group and emulator and words them; and a Tender field that carries one of the watched names is renamed
+  when the reading module of its kind is built ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D1–D3).
+  Which names are watched and why the others are not is `WATCHED_NAMES` in the script. What no check sees stays
+  ADR-0042's first decision and its amendment: no Tender table for anything the resolver answers, a join on the
+  resolver's keys and never on a file name alone, and where the resolver gives no answer, the view says so with the
+  resolver's reason rather than filling the gap with a rule of Tender's
 - **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
   `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
   `domain/emulator_sources.py::answering_source` names** — test + prompt-only —

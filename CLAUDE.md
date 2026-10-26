@@ -281,21 +281,6 @@ locally with `mise run docs`.
   to render as a row's headline. Nothing mechanical carries any of this; the vocabulary overlaps ours almost exactly
   (`satisfied`, `required`, `present`, `cores`, `description` all exist on both sides and name different types), which
   is what makes a wrong reading look like a correct one.
-- **Tender works out no new fact the resolver states — not in code and not by decision.** The target, open in #2579, is
-  one reading module per kind of resolver answer, with every later layer reading only its view; today the firmware
-  answer alone is read in the adapter, in `domain/`, in `services/firmware/` and in the frontend. Until #2579's check is
-  in CI this is prompt-only, and each of these is a finding, never "no rule violated": a new site that decides something
-  from one of the resolver's verdicts, causes or caveat codes (`requirements_met`, `satisfied`, `checked`, a group's
-  verdict, a granularity), whether it reads them off the resolver's answer or off a Tender type that passes them on
-  under the same name, instead of going through the reader that already decides that fact; a join on `file_name` where
-  the resolver states `declared`; an import from anywhere but the top-level `atlas` namespace (`atlas.__all__`), the one
-  exception being `RealMachine`, which `adapters/emulator_sources.py` holds; a new Tender table for something the
-  resolver answers (find rules, launch command patterns, launch-file types, RomM regions). The derivations and imports
-  that exist today, some of them pinned by entries in the register below, stand until #2195 and #2580 remove them:
-  fixing one is not a finding, extending one or copying it to a new page is. Where the resolver gives no answer, Tender
-  says it could not be established and an emu-atlas issue asks for the answer; a decision that lets Tender work out a
-  resolver fact — because the resolver is slow, cannot answer yet, or another page already does it — is not proposed.
-  Once #2579's check is in CI, this entry shrinks to that check's one-line statement in the register.
 
 ## Current State
 
@@ -544,6 +529,23 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   a finding** — check — `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed positionally into
   a helper slips past it); unchecked: `shortcut_launch_resolver`'s install-path read UoW is never held across the
   `active_core` seam's calls (`check_uow_seam_nesting.py` catches only the inline form)
+- **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
+  `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
+  resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the
+  resolver's codes or distinctive answer field names; and every caveat, health-issue and unresolved code the vendored
+  resolver states is classified by one of them. Excepted by name: `adapters/atlas_zstd.py` imports the resolver to hand
+  it the zstd codec, `adapters/emulator_sources.py` holds `RealMachine`, and `tests/` is not scanned. The modules that
+  read the answer today, `atlas_firmware.py`'s three private imports and the codes nothing classifies stand on lists
+  that only shrink** — check + test — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and
+  that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring),
+  the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
+  `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
+  once a reading module imports its constant). The readers' and the imports' lists fail on an entry nothing needs any
+  more, and their tests on an entry the list did not hold when it was written; the codes nothing classifies are that
+  test's own list, which fails on a code a reading module classifies or the resolver no longer states, so a code added
+  to it is an edit of the test. Unseen by the ESLint rule: test files and `src/test-utils/`, a code or name built at run
+  time, a name in a type operator (`Pick<T, "satisfied">`), and a field reached through a spread or `Object.entries`.
+  Unseen by the classification test: whether a reading module that names a code reads it rightly
 - **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
   `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
   `domain/emulator_sources.py::answering_source` names** — test + prompt-only —
