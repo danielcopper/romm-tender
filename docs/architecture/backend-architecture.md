@@ -1724,15 +1724,16 @@ outside that folder stays and its record goes. The answer names each file it lef
 **The package is split along its jobs**, as `services/library/` is, and `bootstrap/` builds every part and hands it in,
 so the façade builds none of them:
 
-- `DownloadsStateBox` (`_state.py`) holds what the façade, the queue and the transfer share: the queue's entries, the
-  in-progress claims, each admitted download's task, byte reservation and control token, and the semaphore. The claims,
-  tasks, reservations and tokens change only through its verbs: a start takes its claim and drops it when it ends
-  without a download (`claim`, `drop_claim`); once its pre-flights pass it registers four things — the entry, the task,
-  the reservation and the token (`admit`); the task gives back the claim and all of them but the entry (`release`), and
-  only while its token is still the one registered, so a superseded task never releases a newer attempt's; the shutdown
-  forgets the tasks it has ended (`forget_tasks`). The entries are the queue's to change once admitted.
-- `DownloadQueue` (`queue.py`) owns the entries' changes and every `download_progress` frame that reports one, and sends
-  the frames nobody awaits as tasks of its own `BackgroundTasks`, which `DownloadService.shutdown` awaits after the
+- `DownloadsStateBox` (`_state.py`) holds what the façade and the transfer share: each download's in-progress claim, its
+  task, byte reservation and control token, and the semaphore. They change only through its verbs: a start takes its
+  claim and drops it when it ends without a download (`claim`, `drop_claim`); once its pre-flights pass it registers the
+  task, the reservation and the token (`admit`); the task gives back the claim and all three (`release`), and only while
+  its token is still the one registered, so a superseded task never releases a newer attempt's; the shutdown forgets the
+  tasks it has ended (`forget_tasks`).
+- `DownloadQueue` (`queue.py`) holds the entries and changes them — an admitted download's entry joins it (`enqueue`) in
+  the same synchronous step as the box's `admit`, and `prune`, `clear_completed_downloads`, `evict` and `clear` take
+  entries out; the others read the entries and never change them. It sends every `download_progress` frame that reports
+  one, the frames nobody awaits as tasks of its own `BackgroundTasks`, which `DownloadService.shutdown` awaits after the
   façade's own.
 - `DownloadTransfer` (`transfer.py`) is an admitted download's task: the transfer, what the finished transfer becomes
   (through `DownloadUnpacker`), the extracting progress, and how the download ended — completed, paused, cancelled or
