@@ -857,6 +857,8 @@ The **Downloads** page (accessible from the main QAM panel) shows all active and
 
 - Active downloads with progress bars, plus pause/resume and cancel buttons (pause/resume only where the download is
   resumable — see [Pausing and Resuming a Download](#pausing-and-resuming-a-download))
+- Each entry names the game and its platform: the platform's name in RomM's platform list, never a custom name set on it
+  in RomM, and its short name (such as `n64`) only where Tender has not learned the name yet
 - Completed, failed, and cancelled downloads with status details
 - **Clear Completed** button to clean up the list
 

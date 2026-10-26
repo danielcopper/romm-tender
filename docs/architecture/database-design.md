@@ -303,11 +303,13 @@ the token the playtime read needs, cleared by a later read that succeeds or a fr
 toast already raised — `update_available_toasted_version` (the release told about), `update_failure_toasted_at` (the
 installer's record of a failed update) and `update_stopped_toasted_at` (an installer found stopped) — the truly
 miscellaneous singleton scalars. The `platform_names` cache is a single JSON blob the library sync refreshes every run
-so four reads need no RomM: the game-detail platform name, a platform removal's answer, whose name the frontend finds
+so five reads need no RomM: the game-detail platform name, a platform removal's answer, whose name the frontend finds
 that platform's Steam collection by, the next sync's name, in its preview as in its apply, for the Steam collection of a
-platform RomM no longer lists, whose kept games stay in it, and a BIOS row a link of Tender's into another platform's
-store folder serves. Each refresh writes the name of every platform the run's own platform listing names, its sync on in
-Tender or not — RomM's `name`, never a custom name set in RomM
+platform RomM no longer lists, whose kept games stay in it, a BIOS row a link of Tender's into another platform's store
+folder serves, and the platform answer a download is admitted with (`PlatformSystemService`), whose name the download
+queue's entry, its progress frames and its completion event carry
+([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). Each refresh writes the name of every platform
+the run's own platform listing names, its sync on in Tender or not — RomM's `name`, never a custom name set in RomM
 ([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1, D2) — and keeps the cached name of every other
 platform a bound game is still on, a stopped run's refresh included. The schema version is **not** a `kv_config` key —
 it is tracked in `PRAGMA user_version` by the [migration runner](#the-migration-framework)
@@ -361,7 +363,8 @@ removal), so foreign keys are deliberately sparse:
   [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md)
   dropped the `Platform` aggregate — so it is just a string. The platform's name is not stored on the row: it lives in
   the `kv_config` `platform_names` cache ([One table per aggregate](#one-table-per-aggregate) says what writes and reads
-  it), and a reader with no name cached for a slug takes the bare slug.
+  it), and a reader with no name cached for a slug takes the bare slug — except the platform answer, which takes the
+  name kept with the platform's ids first.
 
 The split moved the FK policy from the epic's "one FK only" (written for the mega-table world) to "CASCADE for the
 per-ROM ownership relationships the split introduced; no FK for cross-aggregate references" — same intent, applied to
