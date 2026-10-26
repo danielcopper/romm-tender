@@ -145,7 +145,7 @@ GENERIC_VALUES: dict[str, str] = {
     "read": "the shortcut file reader's word for a file it read",
     "refused": "an artwork slot's outcome, and the endpoint answers' refusals",
     "region": "an ARIA role, and a game's region in RomM's vocabulary",
-    "required": "the kind of Tender's own firmware wanted mark",
+    "required": "the panel's need word, and a key of Tender's own firmware payloads",
     "roms": "the ROM folder, by name, in recovery bundles and the library",
     "saves": "the saves folder and tab, by name",
     "settings": "the settings page, by name",
