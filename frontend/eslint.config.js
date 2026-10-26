@@ -7,7 +7,16 @@ import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import noResolverVocabulary from "./eslint-rules/no-resolver-vocabulary.js";
 import qamFocusableRow from "./eslint-rules/qam-focusable-row.js";
+
+// One plugin object for every block that turns on one of its rules: ESLint
+// refuses a second definition of the same plugin name for a file.
+const tender = {
+  rules: { "no-resolver-vocabulary": noResolverVocabulary, "qam-focusable-row": qamFocusableRow },
+};
 
 // Names that carry "plugin" because they name someone else's plugin, and must
 // keep the word. Each lets through its whole name, wherever it appears, and
@@ -44,6 +53,97 @@ const NO_CLASS_HASHES = [
   message:
     'This looks like one of Steam\'s minified class hashes, which a Steam update changes. Find the element through the selector ladder instead (docs/architecture/desktop-dom-architecture.md, "The selector ladder").',
 }));
+
+// The resolver's codes and answer field names, written from the vendored
+// resolver by `scripts/check_resolver_reading.py --write`, which also fails
+// when the file is not what it would write today.
+const { codes, names } = JSON.parse(readFileSync(path.join(import.meta.dirname, "resolver-vocabulary.json"), "utf8"));
+const RESOLVER_VOCABULARY = { codes, names };
+
+// The files that read the resolver's vocabulary today, and what each reads.
+// The list only shrinks: src/eslintNoResolverVocabulary.test.ts fails on an
+// entry the file no longer needs and on one this list did not hold when it was
+// written.
+const RESOLVER_READERS_TODAY = {
+  "src/bigpicture/EmulatorSelector.tsx": ["requirements_met"],
+  "src/bigpicture/bios/BiosFiles.tsx": ["checked", "declared_kind", "satisfied"],
+  "src/types/firmware.ts": [
+    "caveats",
+    "checked",
+    "declaration",
+    "declared",
+    "declared_kind",
+    "known_as",
+    "locating",
+    "refused",
+    "requirements_met",
+    "satisfied",
+    "supplied_by",
+  ],
+  "src/utils/biosFetchable.ts": ["caveats", "declared_kind", "firmware-path-inaccessible"],
+  "src/utils/biosFileNote.ts": [
+    "caveats",
+    "checked",
+    "declaration",
+    "declared_kind",
+    "firmware-directory-holds-no-candidate",
+    "firmware-directory-holds-no-image",
+    "firmware-image-contradicted",
+    "firmware-image-identified",
+    "firmware-image-unlisted",
+    "firmware-path-not-a-directory",
+    "firmware-path-obstructed",
+    "firmware-scan-incomplete",
+    "firmware-unreadable",
+    "satisfied",
+    "supplied_by",
+  ],
+  "src/utils/biosGroup.ts": ["satisfied"],
+  "src/utils/biosPlaceWords.ts": ["declared_kind", "satisfied"],
+  "src/utils/biosSummary.ts": [
+    "caveats",
+    "checked",
+    "declared",
+    "firmware-path-escapes-root",
+    "firmware-path-names-no-file",
+    "firmware-path-unresolvable",
+    "locating",
+    "refused",
+    "satisfied",
+  ],
+  "src/utils/emulatorSourceWording.ts": [
+    "bios-root-missing",
+    "catalogue-invalid",
+    "companion-config-missing",
+    "config-unreadable",
+    "content-tree-unwired",
+    "emulator-config-missing",
+    "emulator-config-unreadable",
+    "marker-invalid",
+    "marker-missing",
+    "marker-unreadable",
+    "not-set-up",
+    "roms-root-missing",
+    "roms-root-not-absolute",
+    "root-missing",
+    "saves-root-missing",
+  ],
+  "src/utils/firmwareIdentifications.ts": ["known_as"],
+};
+
+// Names that mean something else in a file, each with what it means there.
+const NOT_THE_RESOLVERS = {
+  // An artwork slot's outcome: Steam did not take the image.
+  "src/bigpicture/ArtworkTab.tsx": ["refused"],
+  // How many of the start-up check's searches into Steam's interface ran.
+  "src/boot/steamModules.ts": ["checked"],
+  // Whether the launch gate could ask which emulator source starts the game.
+  "src/utils/launchGate.ts": ["checked"],
+  "src/utils/startingSource.ts": ["checked"],
+  // The conditions in Steam a toast still waits on.
+  "src/utils/steamReadyForToasts.ts": ["unmet"],
+  "src/utils/failedUpdateToast.ts": ["unmet"],
+};
 
 export default tseslint.config(
   // ESLint's root is this package, so the only gitignored trees it can reach are
@@ -201,11 +301,7 @@ export default tseslint.config(
     // Neither exemption is load-bearing today: with both removed the rule still
     // reports nothing across `src/**/*.tsx`.
     ignores: ["src/**/*.test.tsx", "src/bigpicture/**/*Modal.tsx"],
-    plugins: {
-      tender: {
-        rules: { "qam-focusable-row": qamFocusableRow },
-      },
-    },
+    plugins: { tender },
     rules: {
       "tender/qam-focusable-row": "error",
     },
@@ -293,6 +389,20 @@ export default tseslint.config(
     ignores: ["src/**/*.{test,spec}.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": ["error", ...NAMES_THAT_MISNAME_TENDER, ...NO_CLASS_HASHES],
+    },
+  },
+  // No code in the panel reads the resolver's codes or answer field names: the
+  // backend's reading module turns the answer into Tender's own marks, and the
+  // panel words those.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.{test,spec}.{ts,tsx}", "src/test-setup.ts", "src/test-utils/**"],
+    plugins: { tender },
+    rules: {
+      "tender/no-resolver-vocabulary": [
+        "error",
+        { ...RESOLVER_VOCABULARY, readers: RESOLVER_READERS_TODAY, notTheResolvers: NOT_THE_RESOLVERS },
+      ],
     },
   },
   // Must stay LAST: turns off ESLint rules that conflict with Prettier formatting
