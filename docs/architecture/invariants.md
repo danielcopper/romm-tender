@@ -297,23 +297,23 @@ Format: **invariant** — tier — enforced by.
   `services/library/session_budget.py`, and `artwork` by `services/library/cover_preparer.py` (the apply path's covers)
   **and** `services/library/reporter.py` (commit-time cover-path finalisation) — the one confinement with two owners,
   because those are two different questions a unit asks at two different points; two owners is a named pair, not a
-  licence for a third, and the orchestrator that used to be the third holds no `ArtworkManager` at all. The `service.py`
-  façade is not a co-owner — it may **pass** a seam on and may not **use** one, which the check reads structurally: a
-  seam attribute standing as a call's keyword-argument value, and a seam annotation on a field of
-  `LibraryServiceConfig`, are wiring; anything else in the façade is a finding** — check — `scripts/check_seam_owner.py`
-  (AST over attributes named after a seam and over annotations naming its Protocol, resolved per seam rather than per
-  module — owning one grants nothing about another. It sees the injection, not every later use: a seam aliased to a
-  differently-named attribute or local, one reached through `getattr`, one passed positionally into a helper that holds
-  it, a quoted string annotation, and a Protocol imported under an alias all slip past it — the last two only on the
-  annotation half, because the constructor read that unpacks the config is flagged whatever the field is called). What
-  the confinement buys is that each module's transactions stay separable: `shortcut_launch_resolver` holds a read UoW
-  across its install-path scan while the `active_core` seam opens its own `BEGIN IMMEDIATE` per ROM, so folding the two
-  into one pass deadlocks — on a real device only, since `FakeUnitOfWork` shares no connection. **Nothing mechanical
-  stands behind that half.** `check_uow_seam_nesting.py` catches the fold only in its inline form (the seam method named
-  inside the `with` block); the peer-call form — `do_build_core_overrides` invoked from inside the install-path readers'
-  own UoW, which is what putting the three methods on one class makes cheapest — is that gate's documented blind spot
-  and passes green. On the budget side the confinement holds `session_budget`'s stated promise that no renderer-RSS
-  reading is taken anywhere else in the package
+  licence for a third, and no other module of the package holds an `ArtworkManager`. The `service.py` façade is not a
+  co-owner — it may **pass** a seam on and may not **use** one, which the check reads structurally: a seam attribute
+  standing as a call's keyword-argument value, and a seam annotation on a field of `LibraryServiceConfig`, are wiring;
+  anything else in the façade is a finding** — check — `scripts/check_seam_owner.py` (AST over attributes named after a
+  seam and over annotations naming its Protocol, resolved per seam rather than per module — owning one grants nothing
+  about another. It sees the injection, not every later use: a seam aliased to a differently-named attribute or local,
+  one reached through `getattr`, one passed positionally into a helper that holds it, a quoted string annotation, and a
+  Protocol imported under an alias all slip past it — the last two only on the annotation half, because the constructor
+  read that unpacks the config is flagged whatever the field is called). What the confinement buys is that each module's
+  transactions stay separable: `shortcut_launch_resolver` holds a read UoW across its install-path scan while the
+  `active_core` seam opens its own `BEGIN IMMEDIATE` per ROM, so folding the two into one pass deadlocks — on a real
+  device only, since `FakeUnitOfWork` shares no connection. **Nothing mechanical stands behind that half.**
+  `check_uow_seam_nesting.py` catches the fold only in its inline form (the seam method named inside the `with` block);
+  the peer-call form — `do_build_core_overrides` invoked from inside the install-path readers' own UoW, which is what
+  putting the three methods on one class makes cheapest — is that gate's documented blind spot and passes green. On the
+  budget side the confinement holds `session_budget`'s stated promise that no renderer-RSS reading is taken anywhere
+  else in the package
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
   `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
   resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the
@@ -464,17 +464,18 @@ Format: **invariant** — tier — enforced by.
   `LibrarySyncStateBox` holds it with the slot, three separate backend frame builders carry it (`emit_progress`, the
   CANCELLED terminal `emit_cancelled` and the ERROR terminal `write_error_frame`, all three in `sync_progress.py`),
   three frontend start paths stamp it themselves on the optimistic frame they show before the first real one arrives
-  (`useSyncPage`'s `computePreview` as `preview`, its `applyPreview` and `startRunDirectly` as `apply`),
-  `SyncProgress.runKind` and `useSyncRunView` pass it through, `MainPage` both seeds it from the `get_sync_status`
-  snapshot onto the store at mount and maps it to the slot's label, and two readers announce an apply run's failure off
-  it — the `sync_progress` listener's toast in `index.tsx` and `useSyncPage`'s status line. **Nothing mechanical stands
-  behind the seam between them**: a fourth frame builder that omits the key, a fourth start path that stamps the kind it
-  is not, or a reader that spends the absent case on one of the two answers — a `runKind ?? "preview"`, a
-  `=== "preview"` where the neutral branch was — goes green, because each test above pins one half and none of them pins
-  the join. The failure is silent and worst exactly where the frontend cannot help itself: after a JS-context rebuild
-  mid-run the store starts empty, the snapshot is the only thing that can say what the run is doing, and Main then tells
-  the reader a real apply run is merely checking for changes. Why the kind cannot be derived at all is stated at
-  `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s Main section; do not restate it here
+  (`useSyncPage`'s `computePreview` as `preview`, its `applyPreview` and `startRunDirectly` as `apply`), the frontend's
+  `SyncProgress.runKind` (`frontend/src/types/sync.ts`) and `useSyncRunView` pass it through, `MainPage` both seeds it
+  from the `get_sync_status` snapshot onto the store at mount and maps it to the slot's label, and two readers announce
+  an apply run's failure off it — the `sync_progress` listener's toast in `index.tsx` and `useSyncPage`'s status line.
+  **Nothing mechanical stands behind the seam between them**: a fourth frame builder that omits the key, a fourth start
+  path that stamps the kind it is not, or a reader that spends the absent case on one of the two answers — a
+  `runKind ?? "preview"`, a `=== "preview"` where the neutral branch was — goes green, because each test above pins one
+  half and none of them pins the join. The failure is silent and worst exactly where the frontend cannot help itself:
+  after a JS-context rebuild mid-run the store starts empty, the snapshot is the only thing that can say what the run is
+  doing, and Main then tells the reader a real apply run is merely checking for changes. Why the kind cannot be derived
+  at all is stated at `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s Main section; do not restate
+  it here
 - **A press that starts a run clears the previous run's per-unit rows — unless that press is a RESUME, the one start
   they are still true for** — test + prompt-only — `frontend/src/bigpicture/SyncPage.test.tsx`'s "a previous run's rows
   at the next press" pins all three start paths in both directions, and `frontend/src/utils/runUnitsStore.test.ts` pins

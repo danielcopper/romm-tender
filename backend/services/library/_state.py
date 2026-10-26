@@ -19,7 +19,7 @@ a half-reset run id (#1202). Enforced by ``scripts/check_sync_lifecycle_owner.py
 preview snapshot is written only through ``stage_preview`` /
 ``read_fresh_preview`` / ``discard_preview``, so its whole lifetime — when it
 appears, when it ages out, when it is consumed — is readable in one place
-rather than inferred from assignments scattered across the orchestrator. The
+rather than inferred from assignments scattered across the sub-services. The
 TTL lives here with it.
 """
 

@@ -15,9 +15,11 @@ cover fingerprints).
 reporter.SyncReporter` holds the same seam for a different question — turning a
 staged cover path into the published grid name at each chunk's commit
 (``finalize_cover_path``) — so the package's ``artwork`` confinement names two
-owners, and ``scripts/check_seam_owner.py`` enforces exactly that pair. What the
-cut settled is narrower and complete: :class:`~services.library.
-sync_orchestrator.SyncOrchestrator` holds no ``ArtworkManager`` at all.
+owners, and ``scripts/check_seam_owner.py`` enforces exactly that pair. No other
+part of the run holds an ``ArtworkManager``: :class:`~services.library.
+sync_preview.SyncPreview` and :class:`~services.library.unit_apply.UnitApplier`
+ask this module for covers, and :class:`~services.library.sync_orchestrator.
+SyncOrchestrator` has no cover question.
 
 **The direction of that split is the reason this is not part of the artwork
 service.** The delta vocabulary a cover decision is made in here —

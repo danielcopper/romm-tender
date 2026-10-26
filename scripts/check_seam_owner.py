@@ -24,9 +24,8 @@ docstring already makes:
   a unit's covers on the apply path, the reporter asks it to finalise a cover
   path at each chunk's commit, and those are the only two moments a sync run has
   an artwork question. A **two**-owner entry is weaker than a one-owner entry and
-  is not a licence to add a third — the seam was held in three modules until the
-  orchestrator's cover work moved out, and this entry is what stops it drifting
-  back (:mod:`services.library.cover_preparer`).
+  is not a licence to add a third, and this entry is what keeps a third holder
+  out (:mod:`services.library.cover_preparer`).
 
 The scan is AST-shaped and covers the two ways a module takes hold of a seam:
 

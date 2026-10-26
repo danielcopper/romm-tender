@@ -1,9 +1,7 @@
 """UnitApplier — one work unit's apply, from its fetch to its last chunk.
 
-Fetches the unit's ROMs, keys and builds their shortcuts, collapses the sibling
-groups, splits the delta from what is already applied, prepares the covers and
-hands the delta to :class:`ChunkDispatcher`. Which units run, and what the run
-makes of their outcomes, is :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s.
+Which units run, and what the run makes of their outcomes, is
+:class:`~services.library.sync_orchestrator.SyncOrchestrator`'s.
 
 One write is this module's deliberately: the platform stamp's DELETE, a step of
 the apply rather than a question a run weighs, which
@@ -80,8 +78,6 @@ class UnitApplierConfig:
 
 
 class UnitApplier:
-    """Applies one work unit: fetch, build, collapse, delta, covers, chunks."""
-
     def __init__(self, *, config: UnitApplierConfig) -> None:
         self._settings = config.settings
         self._loop = config.loop

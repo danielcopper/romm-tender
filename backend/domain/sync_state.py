@@ -13,11 +13,13 @@ class SyncCancelled(Exception):
     """Cooperative cancel signal for the library sync subsystem.
 
     Raised by ``services/library/_fetch_pages.raise_if_cancelling`` (mid
-    per-unit pagination) and the ``SyncPreview.sync_preview`` per-unit
-    checkpoint once a user cancel has flipped ``sync_state`` to
-    ``CANCELLING``. Caught only by the cooperative handlers (the
-    orchestrator's unit-loop and ``sync_preview`` ``except
-    SyncCancelled``), which route it into the graceful finalize. It is a
+    per-unit pagination) and by ``SyncPreview.sync_preview``'s two
+    checkpoints (before each unit, and once more before the preview is
+    staged) once a user cancel has flipped ``sync_state`` to
+    ``CANCELLING``. Caught only by the cooperative handlers: the
+    orchestrator's unit loop routes it into the graceful finalize, and
+    ``sync_preview``'s ``except SyncCancelled`` answers it with the
+    ``cancelled`` refusal. It is a
     DISTINCT type from ``asyncio.CancelledError`` so a cooperative sync
     cancel is never conflated with a real ``asyncio`` task cancellation
     (the sync task is never ``task.cancel()``'d — ``cancel_sync`` only

@@ -1,8 +1,8 @@
 """The sync run's lifecycle and control, its loop over the work units, and its finalize.
 
-Owns every path that starts or stops a run — starting a sync, applying a staged
-preview, cancelling, the heartbeat route, shutdown — and the run itself: the
-plan, the loop that hands each unit to :class:`UnitApplier`, the stale removal
+Owns the paths that start an apply run or stop one from outside — starting a
+sync, applying a staged preview, the user's Cancel, the heartbeat route,
+shutdown — and the apply run itself: the plan, the loop that hands each unit to :class:`UnitApplier`, the stale removal
 and the Steam collections at its end, and its terminal status. It is the one
 part of the sync that starts a task. Of the heartbeat clock this module holds
 the stamp taken when a run is admitted (as :class:`SyncPreview` does for a
@@ -132,8 +132,6 @@ class FinalizeOutcome:
 
 
 class SyncOrchestrator:
-    """The sync run's lifecycle and control, its unit loop and its finalize, with cancellation + heartbeat safety."""
-
     def __init__(self, *, config: SyncOrchestratorConfig) -> None:
         self._loop = config.loop
         self._logger = config.logger

@@ -8,9 +8,12 @@ caller offloads it through its own executor.
 
 **A row is not a run.** The in-flight run — admitted, cancelled, released — is
 :class:`~services.library._state.LibrarySyncStateBox`'s, mutated only through its
-verbs (``try_begin_run`` / ``request_cancel`` / ``finish_run``), and calling those
-is :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s, and
-:class:`~services.library.sync_preview.SyncPreview`'s for a preview, alone. The two
+verbs (``try_begin_run`` / ``request_cancel`` / ``finish_run``). Admitting and
+releasing a run is :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s,
+and :class:`~services.library.sync_preview.SyncPreview`'s for a preview, alone; a
+cancel is also requested by :class:`~services.library.chunk_dispatcher.ChunkDispatcher`
+on a heartbeat timeout and by
+:class:`~services.library.session_budget.SessionBudgetMonitor` on a budget pause. The two
 vocabularies sit close enough to be mistaken for each other, so: ``finish_run``
 releases the slot the next Sync press needs, while :meth:`SyncRunRecorder.do_complete_run`
 writes the row the next preview reads its baseline out of. Nothing here can begin

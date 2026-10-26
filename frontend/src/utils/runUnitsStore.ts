@@ -27,7 +27,7 @@
  * plan carried, and a frame moves nothing unless it names that same run. Nothing
  * weaker will do: `sync_preview` emits no plan but does emit a FETCHING frame per
  * unit, over the same work queue, carrying a running flag, a 1-based `step`, the
- * unit count and the unit's name (`services/library/sync_orchestrator.py`), so a
+ * unit count and the unit's name (`services/library/sync_preview.py`), so a
  * preview started after a completed run would otherwise walk that run's rows
  * forward a second time. Its own run id — minted per run and claimed through
  * `try_begin_run`, like every run's — is what tells the two apart. `totalSteps` is still checked against the
@@ -46,7 +46,7 @@
  *
  * **There is no `skipped` state**, because no frame carries one. A wholesale
  * incremental skip emits nothing at all between the unit's own fetch anchor and
- * the next unit's (`services/library/sync_orchestrator.py` logs the skip and
+ * the next unit's (`services/library/unit_apply.py` logs the skip and
  * returns), so a skipped unit reads `done` the moment the run moves past it. The
  * plan's own `predictedSkip` rides the row and is what a reader can say
  * something about — it is a plan-time prediction, never the run's verdict

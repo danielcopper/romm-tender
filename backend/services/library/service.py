@@ -157,8 +157,8 @@ class LibraryService:
         self._local_library_reader = LocalLibraryReader(config=LocalLibraryReaderConfig(uow_factory=config.uow_factory))
 
         # Sub-service: progress — the run's ``sync_progress`` frames. Constructed
-        # before every part that narrates a run, each of which is handed its
-        # ``emit_progress``.
+        # before every part that narrates a run, each of which is handed it, or
+        # its ``emit_progress``.
         self._progress = SyncProgress(
             config=SyncProgressConfig(emit=config.emit, logger=config.logger, sync_state_box=self._box)
         )

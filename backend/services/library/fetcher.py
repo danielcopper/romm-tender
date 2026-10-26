@@ -873,8 +873,9 @@ class LibraryFetcher:
                 )
             except SyncCancelled:
                 # A cooperative cancel signalled mid-pagination is NOT a fetch
-                # failure — let it reach the orchestrator's ``except SyncCancelled``
-                # untouched, never logged as an error. (In production the signal
+                # failure — let it reach the caller's ``except SyncCancelled`` (the
+                # orchestrator's unit loop, or the preview's) untouched, never
+                # logged as an error. (In production the signal
                 # is raised by ``_check_cancelling`` above, outside this ``try``;
                 # this guard also covers a cancel raised from within ``list_roms``.)
                 raise

@@ -3,7 +3,7 @@
 A platform/collection apply unit can emit thousands of shortcuts; sending them
 all in one ``sync_apply_unit`` round-trip means a mid-unit CEF crash loses the
 whole unit. This module slices a unit's emitted entries into bounded chunks the
-orchestrator emits and commits one at a time, so a crash only forfeits the chunk
+chunk dispatcher emits and commits one at a time, so a crash only forfeits the chunk
 in flight — every already-committed chunk survives. Pure compute, no I/O, stdlib
 only (``domain`` may not import adapters/services/_vendor).
 

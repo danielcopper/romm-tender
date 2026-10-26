@@ -3,7 +3,7 @@
 Every frame is written to the state box before it is emitted, so
 :meth:`SyncProgress.get_sync_status` answers the latest one to a panel that
 missed the event. Every part of the sync that narrates a run is handed
-:meth:`SyncProgress.emit_progress`; the run's CANCELLED and ERROR frames are
+:class:`SyncProgress`, or its :meth:`SyncProgress.emit_progress`; the run's CANCELLED and ERROR frames are
 built by their own methods, because they carry no ``subStage`` and take their
 counters from the run's last frame (CANCELLED) or from nowhere (ERROR) rather
 than from a caller.
@@ -39,8 +39,6 @@ class SyncProgressConfig:
 
 
 class SyncProgress:
-    """The run's ``sync_progress`` frames and the status read a remounted panel re-seeds from."""
-
     def __init__(self, *, config: SyncProgressConfig) -> None:
         self._emit = config.emit
         self._logger = config.logger
@@ -139,8 +137,9 @@ class SyncProgress:
     def write_error_frame(self, message: str) -> Coroutine[Any, Any, bool]:
         """Write the run's terminal ERROR frame to the box now, and answer its emit for the caller to run.
 
-        The write and the emit are apart because the run loop sends this frame
-        as a task of its own, and only the run loop starts tasks.
+        The write and the emit are apart because the orchestrator sends this
+        frame as a task of its own, and it is the one part of the sync that
+        starts tasks.
         """
         box = self._sync_state
         box.sync_progress = {

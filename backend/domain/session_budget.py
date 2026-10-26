@@ -14,7 +14,8 @@ chunk boundary. It takes plain integers and returns plain values — no I/O, no
 clock, no ``None`` handling (the caller supplies a real reading or skips the gate
 entirely when measurement is unavailable). The reader that samples ``/proc`` and
 the CDP garbage-collect trigger that settles the heap before a reading live in
-``adapters/``; the chunk-loop integration lives in the sync orchestrator.
+``adapters/``; the chunk-boundary integration lives in
+``services/library/session_budget.py``, which the chunk dispatcher asks.
 
 Constants carry their measurement provenance inline — all figures measured
 on-device (Steam Deck, RetroDECK) on 2026-07-10/11.
@@ -53,7 +54,7 @@ EFFECTIVE_CEILING_KB = CLIFF_KB - SAFETY_MARGIN_KB
 # is the shortcut's own permanent cost; a created shortcut also applies a cover
 # through Steam's artwork API, whose transient cost (``COVER_TRANSIENT_KB``) the
 # caller adds on top — so ``per_item_kb`` defaults to the bare create rate and the
-# orchestrator passes create + cover for a run that applies artwork.
+# session-budget monitor prices create + cover for a run that applies artwork.
 WORST_CASE_CREATE_KB = 1_500
 
 # Worst-case TRANSIENT RSS cost of applying one cover through Steam's native
@@ -76,7 +77,7 @@ UPDATE_TOUCH_KB = 1_000
 
 # Worst-case RSS cost of applying one FULL apply chunk — 200 fresh creates, each
 # priced at the worst-case create rate PLUS its transient cover term. 200 is the
-# apply chunk size (``_APPLY_CHUNK_SIZE`` in the sync orchestrator), kept as a literal
+# apply chunk size (``_APPLY_CHUNK_SIZE`` in the chunk dispatcher), kept as a literal
 # here so the domain kernel stays service-free. This is the predictive gate's own
 # per-chunk projection for a maxed chunk of cover-applying creates, reused by
 # ``resume_would_proceed`` to decide whether a paused run could resume and make at

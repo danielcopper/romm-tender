@@ -1,7 +1,7 @@
 """Sync result reporter and registry-query sub-service.
 
 Owns the post-apply path: the ``report_unit_results`` ack the frontend
-sends (event signal only) and the orchestrator-driven
+sends (event signal only) and the chunk-dispatcher-driven
 ``commit_unit_results`` that finalises artwork file names and upserts
 each acked ROM into the ``roms`` aggregate, stamping its cached
 ``rom_metadata`` in the same write UoW (Rom row first, then metadata —
@@ -14,7 +14,8 @@ run-history-derived query methods (``get_registry_platforms``,
 reset.
 Anything that mutates the ``roms`` registry as a side-effect of a
 finished sync run belongs here; anything that decides "what should
-this sync do?" belongs in the orchestrator.
+this sync do?" belongs in the orchestrator, the preview or the unit
+applier.
 """
 
 from __future__ import annotations

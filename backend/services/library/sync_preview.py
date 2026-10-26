@@ -2,11 +2,11 @@
 
 The preview reads every unit into one union, collapses and classifies it as the
 apply's units would, and stages the answer in the state box for
-:meth:`SyncOrchestrator.sync_apply_delta` to consume. It claims and releases
-the run slot itself, through the box's verbs, so a preview and a run are never
-in flight at once. It writes nothing to the database: the reads go through
-:class:`LocalLibraryReader`, and cached ``rom_metadata`` is written by the
-reporter's per-unit commit on the apply path.
+:meth:`SyncOrchestrator.sync_apply_delta` to admit an apply against. It claims
+and releases the run slot itself, through the box's verbs, so a preview and a
+run are never in flight at once. It writes nothing to the database: what it
+knows comes from the fetchers, the :class:`ShortcutLaunchResolver` and
+:class:`LocalLibraryReader`.
 """
 
 from __future__ import annotations
@@ -92,8 +92,6 @@ class SyncPreviewConfig:
 
 
 class SyncPreview:
-    """The preview of a sync, the snapshot it stages, and the cancel that drops it."""
-
     def __init__(self, *, config: SyncPreviewConfig) -> None:
         self._settings = config.settings
         self._loop = config.loop

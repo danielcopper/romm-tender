@@ -18,7 +18,7 @@ started doing something other than dispatching.
 **The run's lifecycle stays with the orchestrator.** A chunk is a step inside a
 run, never its beginning or its end: this module may *request* a cancel (a
 heartbeat timeout does, so the loop above it stops), but ``try_begin_run`` and
-``finish_run`` are the orchestrator's, and the preview's for its own run, alone.
+``finish_run`` belong to the orchestrator, and to the preview for a preview.
 
 The per-platform completion stamp is built here, on a platform unit's final
 chunk, so "platform fully synced" ⟺ "stamp exists" is atomic on a crash. Its

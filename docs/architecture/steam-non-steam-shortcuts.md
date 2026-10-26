@@ -1181,9 +1181,9 @@ re-creates them as **duplicates** (an unmapped exe-detected shortcut takes the `
 
 So a heartbeat **timeout** is handled differently from a **user cancel** (#1052 / #1367):
 
-- **User cancel** — the in-flight chunk is intentionally discarded. The orchestrator clears the staging and nulls
+- **User cancel** — the in-flight chunk is intentionally discarded. The chunk dispatcher clears the staging and nulls
   `unit_complete_event`, so a stray late ack can't commit a cancelled chunk.
-- **Heartbeat timeout** — the orchestrator moves the abandoned chunk into an `abandoned_chunk` stash on
+- **Heartbeat timeout** — the chunk dispatcher moves the abandoned chunk into an `abandoned_chunk` stash on
   `LibrarySyncStateBox` (`stash_abandoned_chunk`): its run/unit/chunk identity plus **this chunk's** ROMs (only the
   abandoned chunk), while keeping the whole-unit staging live for the commit to read and clearing the dispatch identity.
   The stash lives **outside** the run-lifecycle state and deliberately survives the run's teardown (`finish_run` nulls
