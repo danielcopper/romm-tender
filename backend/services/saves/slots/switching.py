@@ -305,8 +305,9 @@ class SlotSwitcher:
         :class:`SlotSwitchBackupFailed` when it cannot take backups. The first
         backup that fails stops the loop, and only the files moved before it
         are untracked; when every backup went through, tracked files with no
-        local file left are untracked too. Mutates *save_state* in memory; the caller owns the
-        write Unit of Work. Runs synchronously — call via ``run_in_executor``.
+        local file left are untracked too. Mutates *save_state* in memory; the
+        caller owns the write Unit of Work. Runs synchronously — call via
+        ``run_in_executor``.
         """
         local_now = self._rom_info.find_save_files(rom_id, save_answer=save_answer)
         to_move = [lf["filename"] for lf in local_now if lf["filename"] not in target_names]
