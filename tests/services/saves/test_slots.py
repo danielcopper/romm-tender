@@ -2367,6 +2367,57 @@ class TestASwitchWhoseBackupFails:
         assert _require_save_state(svc, 42) == before
 
     @pytest.mark.asyncio
+    async def test_a_backup_folder_that_cannot_take_the_backup_of_an_overwritten_save_refuses_before_any_download(
+        self, tmp_path
+    ):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _install_rom(svc, tmp_path)
+        srm = _create_save(tmp_path, ext=".srm", content=b"srm bytes")
+        _seed_save_state(
+            svc,
+            42,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                files={"pokemon.srm": FileSyncState(last_sync_hash=_file_md5(str(srm)), tracked_save_id=100)},
+            ),
+        )
+        before = _require_save_state(svc, 42)
+        # The new slot provides pokemon.srm, so nothing is set aside; its
+        # download would back the local file up before overwriting it.
+        fake.saves[700] = _server_save(save_id=700, slot="target")
+        fake.set_server_save_content(700, b"server bytes")
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (srm.parent / BACKUP_DIR_NAME).symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(SlotSwitchBackupFailed, match="Nothing was moved"):
+            await svc.switch_slot(42, "target")
+
+        assert [c for c in fake.call_log if c[0] == "download_save_content"] == []
+        assert srm.read_bytes() == b"srm bytes"
+        assert list(outside.iterdir()) == []
+        assert _require_save_state(svc, 42) == before
+
+    @pytest.mark.asyncio
+    async def test_a_switch_that_moves_nothing_creates_no_backup_folder(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _install_rom(svc, tmp_path)
+        saves_dir = tmp_path / "saves" / "gba"
+        saves_dir.mkdir(parents=True)
+        fake.saves[700] = _server_save(save_id=700, slot="target")
+        fake.set_server_save_content(700, b"server bytes")
+
+        result = await svc.switch_slot(42, "target")
+
+        assert isinstance(result, dict)
+        assert result["success"] is True
+        assert (saves_dir / "pokemon.srm").read_bytes() == b"server bytes"
+        assert not (saves_dir / BACKUP_DIR_NAME).exists()
+
+    @pytest.mark.asyncio
     async def test_a_backup_whose_retention_removal_fails_is_answered_as_backed_up(self, tmp_path, monkeypatch):
         svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True

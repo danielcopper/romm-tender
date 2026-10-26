@@ -249,11 +249,12 @@ a failure answer, `pending_uploads` names the changed files in `files`, and a Ro
 1. Every local save file the target slot does **not** provide is backed up into `.romm-backup` (never deleted outright)
    and dropped from tracking — so no stale extension (e.g. a `.rtc` left behind when the new slot holds only `.srm`)
    lingers to upload into the new slot, and a never-synced local save is always recoverable (#965, #1058). Before the
-   first move the save backup checks that the folder can take backups (`SaveBackup.prepare_save_backup_folder`: not a
-   link, inside the saves directory, created if missing, listable). A file loses its tracking only once it was moved;
-   once every backup went through, a tracked file with no local file left loses its tracking too. The local files are
-   those of the save answer the switch took at its start, as for the pending-changes check: one switch never reads two
-   save answers.
+   switch's first move — a backup in this step, or a download in step 3 that backs up the local file it overwrites — the
+   save backup checks that the folder can take backups (`SaveBackup.prepare_save_backup_folder`: not a link, inside the
+   saves directory, created if missing, listable); a switch that will move nothing neither checks nor creates it. A file
+   loses its tracking only once it was moved; once every backup went through, a tracked file with no local file left
+   loses its tracking too. The local files are those of the save answer the switch took at its start, as for the
+   pending-changes check: one switch never reads two save answers.
 2. Only then is the active slot flipped in memory — a file the backup could not move would otherwise sit under the new
    slot, and the next sync would upload the previous slot's save into it.
 3. For each canonical local target the new slot **does** provide, the **newest** server save by `updated_at` is

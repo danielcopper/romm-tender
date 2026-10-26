@@ -300,21 +300,25 @@ class SlotSwitcher:
 
         No stale file is left to upload into the new slot, and no never-synced
         save is destroyed without a backup. The backup folder is made ready
-        before the first move; this raises :class:`SlotSwitchBackupFailed` when
-        the folder cannot take backups. The first backup that fails stops the
-        loop, and only the files moved before it are untracked; when every backup went through, tracked files with no
-        local file left are untracked too. Mutates *save_state* in memory; the
-        caller owns the write Unit of Work. Runs synchronously — call via
-        ``run_in_executor``.
+        before the switch's first move — a backup here, or a download that
+        will back up the local file it overwrites — and this raises
+        :class:`SlotSwitchBackupFailed` when the folder cannot take backups;
+        where nothing will be moved, the folder is neither checked nor
+        created. The first backup that fails stops the loop, and only the
+        files moved before it are untracked; when every backup went through,
+        tracked files with no local file left are untracked too. Mutates
+        *save_state* in memory; the caller owns the write Unit of Work. Runs
+        synchronously — call via ``run_in_executor``.
         """
         local_now = self._rom_info.find_save_files(rom_id, save_answer=save_answer)
         to_move = [lf["filename"] for lf in local_now if lf["filename"] not in target_names]
+        to_overwrite = [lf["filename"] for lf in local_now if lf["filename"] in target_names]
         self._log_debug(
             f"switch_slot: apply rom={rom_id} targets={list(target_names)} "
             f"local_files={[lf['filename'] for lf in local_now]} tracked={list(save_state.files)}"
         )
 
-        if to_move:
+        if to_move or to_overwrite:
             try:
                 self._save_backup.prepare_save_backup_folder(saves_dir)
             except (OSError, ValueError) as e:
