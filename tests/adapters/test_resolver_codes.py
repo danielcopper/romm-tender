@@ -6,9 +6,9 @@ ignores or cannot reach, with the reason beside that set. An update of the
 resolver that adds a code fails here until a reading module classifies it, and
 one that drops a code a reading module names fails here too.
 
-The codes are the caveat, health-issue and unresolved families, taken from
-``atlas.__all__`` by their constant's prefix. Which modules read the answer is
-``READING_MODULES`` in ``scripts/check_resolver_reading.py``.
+The codes are the caveat, health-issue, unresolved and reason families, taken
+from ``atlas.__all__`` by their constant's prefix. Which modules read the answer
+is ``READING_MODULES`` in ``scripts/check_resolver_reading.py``.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 from _vendor import atlas
 
 _REPO = Path(__file__).resolve().parents[2]
-_FAMILIES = ("CAVEAT_", "HEALTH_ISSUE_", "UNRESOLVED_")
+_FAMILIES = ("CAVEAT_", "HEALTH_ISSUE_", "UNRESOLVED_", "REASON_")
 
 
 def _reading_modules() -> frozenset[str]:
@@ -219,6 +219,56 @@ _UNCLASSIFIED = frozenset(
         "HEALTH_ISSUE_ROMS_ROOT_MISSING",
         "HEALTH_ISSUE_ROMS_ROOT_NOT_ABSOLUTE",
         "HEALTH_ISSUE_SAVES_ROOT_MISSING",
+        "REASON_ACTIVE_USER_UNRECORDED",
+        "REASON_ARCHIVE_CONTENT_AMBIGUOUS",
+        "REASON_ARCHIVE_CONTENT_MIXED",
+        "REASON_ARCHIVE_CONTENT_UNRECOGNISED",
+        "REASON_ARCHIVE_FORMAT_UNREAD",
+        "REASON_ARCHIVE_MEMBER_PINNED",
+        "REASON_ARCHIVE_UNREAD",
+        "REASON_CARD_INDEX_OUTSIDE_RECORDED_NAMES",
+        "REASON_CONFIGURED_USER_HAS_NO_TREE",
+        "REASON_CONFIGURED_USER_ID_UNREAD",
+        "REASON_CONFIGURED_USER_NOT_SET_UP",
+        "REASON_CONFIGURED_USER_REACH_UNESTABLISHED",
+        "REASON_CONFIGURED_USER_SETUP_UNESTABLISHED",
+        "REASON_CONFIGURED_USER_TREE_NAMED",
+        "REASON_CONTENT_CLASS_UNNAMED",
+        "REASON_CONTENT_CLASS_UNRECORDED",
+        "REASON_CONTENT_UNOPENABLE",
+        "REASON_DATA_ROOT_DECIDED_BY_LAUNCH",
+        "REASON_DISC_FORMAT_UNREAD",
+        "REASON_DISC_UNREAD",
+        "REASON_EMULATED_MODEL_UNRECORDED",
+        "REASON_EMULATOR_BUILD_UNESTABLISHED",
+        "REASON_FIRST_LISTED_USER_OPENED",
+        "REASON_FIRST_USER_CREATED",
+        "REASON_HDD_PATH_UNSET",
+        "REASON_HD_BOOT_ABSENT",
+        "REASON_HD_IMAGE_UNREAD",
+        "REASON_INI_OUTRANKED_BY_CASCADE",
+        "REASON_INI_PRESENCE_UNESTABLISHED",
+        "REASON_INI_SEARCH_PATH_UNLISTABLE",
+        "REASON_KEY_REPEATED",
+        "REASON_KEY_UNREAD",
+        "REASON_LISTED_USER_ACCOUNT_UNESTABLISHED",
+        "REASON_MLC_LAUNCH_FLAG_OUTRANKS_CONFIG",
+        "REASON_NO_LISTED_USER_ACCOUNT",
+        "REASON_NO_USER_DIRECTORY",
+        "REASON_NO_USER_PRESELECTED",
+        "REASON_REGION_PROPERTY_UNREAD",
+        "REASON_SAVEPATH_CONFIG_UNREADABLE",
+        "REASON_SAVEPATH_UNTRANSLATABLE",
+        "REASON_SESSION_OVERRIDE_SET",
+        "REASON_SLOT_DEVICE_UNINTERPRETED",
+        "REASON_SLOT_HOLDS_AGP_DEVICE",
+        "REASON_UNPARSEABLE",
+        "REASON_UNSET_USER_ID_IS_LISTED",
+        "REASON_USER_LISTING_UNESTABLISHED",
+        "REASON_VIRTUAL_SD_DISABLED",
+        "REASON_VOLUME_BOOTS_ITSELF",
+        "REASON_WHDLOAD_PREFS_UNREAD",
+        "REASON_WHDLOAD_SAVEPATH_UNRECORDED",
         "UNRESOLVED_APPENDED_CONFIG_UNREACHABLE",
         "UNRESOLVED_CORE_FILE_FOREIGN",
         "UNRESOLVED_CORE_NOT_INSTALLED",
