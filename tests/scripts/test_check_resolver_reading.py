@@ -314,8 +314,8 @@ class TestVocabulary:
     @pytest.mark.parametrize(
         "source",
         [
-            '"""A docstring may name marker-missing."""\n',
-            "def f():\n    '''Or marker-missing here.'''\n",
+            '"""marker-missing"""\n',
+            "def f():\n    '''marker-missing'''\n",
             "x = row.path + row.label + row.regions\n",
             "x = 'marker'\n",
             "row.satisfied = True\n",
