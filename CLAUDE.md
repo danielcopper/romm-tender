@@ -923,12 +923,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `scripts/check_romm_min_version.py`, over the statements its `CLAIMS` list names; unchecked: a restatement not yet
   added there, and the examples above the floor (`5.3.1-beta`, `5.4.0-alpha.1`) beside those statements. ADRs are out of
   scope: frozen history
-- **Every tree under `backend/_vendor/` is pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under
-  `<pkg>/` matches the vendored file's digest, the vendored file set EQUALS the manifest's set restricted to that
-  prefix, and a package directory with NO manifest is a failure** — check — `scripts/check_vendored_trees.py`;
-  unchecked: the manifest itself, regenerated only as the last step of a deliberate re-copy and never to answer a
-  failing gate; unseen by the check: a single-module file under `_vendor/` and files below a symlinked directory.
-  `backend/native/` is pinned by its own `sha256sum -c`
+- **Every tree under `backend/_vendor/`, and the resolver's recorded machines under `tests/adapters/atlas_vectors/`, is
+  pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under `<pkg>/` matches the vendored file's digest,
+  the vendored file set EQUALS the manifest's set restricted to that prefix, and a package directory with NO manifest is
+  a failure** — check — `scripts/check_vendored_trees.py`; unchecked: the manifest itself, regenerated only as the last
+  step of a deliberate re-copy and never to answer a failing gate; unseen by the check: a single-module file under
+  `_vendor/` and files below a symlinked directory. `backend/native/` is pinned by its own `sha256sum -c`
 - **The release tarball is what the installer expects — one top-level `romm-tender/`, the files an install starts from
   plus the version file, the installer an installed tree rolls back with and the licence texts a distributed copy
   carries, nothing the packager prunes, a sidecar `sha256sum -c` accepts** — check — `scripts/check_release_tarball.py`,
@@ -973,15 +973,16 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `TestTheRegionDecides`), `tests/services/test_firmware.py` (`TestTheRegionRuleOnThePlatform`,
   `TestTheGamePageReadsItsOwnRegion`, `TestTheConsolesOwnFirmwareDemand`),
   `tests/contract/test_bios_search_found_nothing_read.py` (a not-met verdict with no row is sent to both reads),
-  `frontend/src/utils/playSection.test.ts`, `frontend/src/bigpicture/BiosTab.test.tsx` and
-  `frontend/src/bigpicture/library/PlatformsTab.test.tsx`. Prompt-only: no surface computes a colour —
-  `domain/bios_status.py::compute_bios_level` is the one place a level is made, and `region_decides` counts nothing of
-  its own; the console's need for an image reaches a surface only as words under a red verdict (`console_needs_image`,
-  from the resolver's `system_firmware` and its world-knowledge mark), whether its image is shown absent only from the
-  resolver's `system_firmware_met`, and which image is in place only from the row verdicts; every surface words the
-  states through `frontend/src/utils/biosSummary.ts`, sole holder of their order; the play-row badge
-  (`frontend/src/utils/playSection.ts::extractBiosInfo`) rises on `bios_level` `missing` alone; a new wording, or one in
-  a `.ts` helper (`frontend/src/bigpicture/panelState.ts`), escapes the wording locks
+  `tests/services/test_firmware_vectors.py` (the platform page's level against each emulator's verdict on every machine
+  the resolver recorded, today's mismatches on a list that only shrinks), `frontend/src/utils/playSection.test.ts`,
+  `frontend/src/bigpicture/BiosTab.test.tsx` and `frontend/src/bigpicture/library/PlatformsTab.test.tsx`. Prompt-only:
+  no surface computes a colour — `domain/bios_status.py::compute_bios_level` is the one place a level is made, and
+  `region_decides` counts nothing of its own; the console's need for an image reaches a surface only as words under a
+  red verdict (`console_needs_image`, from the resolver's `system_firmware` and its world-knowledge mark), whether its
+  image is shown absent only from the resolver's `system_firmware_met`, and which image is in place only from the row
+  verdicts; every surface words the states through `frontend/src/utils/biosSummary.ts`, sole holder of their order; the
+  play-row badge (`frontend/src/utils/playSection.ts::extractBiosInfo`) rises on `bios_level` `missing` alone; a new
+  wording, or one in a `.ts` helper (`frontend/src/bigpicture/panelState.ts`), escapes the wording locks
   (`frontend/src/utils/biosSummary.test.ts` over `frontend/src/test-utils/componentSources.ts`)
 - **A one-of group is ONE requirement, judged by the regions its options serve — and an option never makes its row
   required** — test + prompt-only — `tests/domain/test_firmware_groups.py` (with an invented console in

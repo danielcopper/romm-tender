@@ -114,3 +114,17 @@ only ever confirms our own reading of the contract.
 They earn it in practice, not just in principle: deliberately breaking the marshalling (reading a 0-byte size as "no
 size", swapping the two recorded hashes, taking `is_current` from key presence rather than value, dropping the
 adopt-baseline flag) turns this tier red, and for one of those breakages it is the only tier that notices.
+
+## emu-atlas recorded machines — vendored conformance sweep
+
+`tests/adapters/atlas_vectors/` holds emu-atlas's `vectors/` folder, copied verbatim from the release whose resolver is
+vendored at `backend/_vendor/atlas/`, pinned by a manifest `scripts/check_vendored_trees.py` checks and by the release
+line in that folder's `README.md`, which also holds the re-copy procedure. **Never edit a vector, and never list a
+mismatch to make the sweep pass** — the copy changes only by a re-copy with the resolver it belongs to.
+
+`tests/services/test_firmware_vectors.py` runs every firmware vector through the platform page's BIOS read — the real
+service over the real resolver adapter on the vector's machine — and holds the level against each emulator's
+`requirements_met`. It compares the level and nothing else. Today's mismatches stand in its `KNOWN_MISMATCHES`, a list
+that only shrinks: an entry goes when the fix that removes the mismatch lands, in the same change, and a new mismatch is
+a finding, never an entry. Where a vector asks exactly Tender's question, the live answer is also held equal to the
+recorded one.

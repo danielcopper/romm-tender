@@ -91,7 +91,10 @@ and not merely to hash correctly even if all three adapters ever stop importing 
    `/tmp/atlas/u/emu_atlas-<version>.dist-info/licenses/LICENSE` to `backend/_vendor/atlas.LICENSE` and
    `/tmp/atlas/SHA256SUMS` to `backend/_vendor/atlas.SHA256SUMS`.
 4. Bump the **Version** bullet above and the pinned version in `tests/test_vendored_atlas.py`.
-5. Re-run the gate: `python scripts/check_vendored_trees.py`.
+5. Re-copy the resolver's recorded machines from the same release, as
+   [`tests/adapters/atlas_vectors/README.md`](../../tests/adapters/atlas_vectors/README.md) describes:
+   `tests/services/test_firmware_vectors.py` fails while they are another release's.
+6. Re-run the gate: `python scripts/check_vendored_trees.py`.
 
 The gate runs in `mise run lint` and in CI (`.github/workflows/ci.yml`), so both a tampered copy and a dropped one fail
 the pipeline.

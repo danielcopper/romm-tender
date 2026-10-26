@@ -1315,29 +1315,34 @@ Format: **invariant** — tier — enforced by.
   [backend-architecture.md](backend-architecture.md) is not listed, because it stays true whatever the floor is. ADRs
   are out of scope: they record the floor as it stood when the decision was taken, so the numbers in them are history
   and must not be rewritten
-- **Every tree under `backend/_vendor/` is pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under
-  `<pkg>/` matches the vendored file's digest, the vendored file set EQUALS the manifest's set restricted to that
-  prefix, and a package directory with NO manifest is a failure** — check — `scripts/check_vendored_trees.py` (the
-  manifest is discovered, never named in the script, so the next vendored package is guarded by default rather than when
-  someone remembers — the hole this closed was a second tree, `vdf`, sitting unpinned beside a pinned `atlas` while the
-  gate reported OK. The set-equality half is the part `sha256sum -c` cannot do at all: the plain form fails on a correct
-  copy, because a wheel's manifest lists release artifacts and dist-info files we never vendor, and `--ignore-missing` —
-  the flag that makes it green again — exits 0 after a vendored file is deleted). **What the check cannot see is the
-  manifest itself.** For `atlas` it is upstream's own release manifest, so the digests additionally prove identity with
-  the tagged release; for a patched copy like `vdf` it is our own digest of the tree we ship, so a manifest regenerated
-  to bless a hand-edit passes green and only review catches it — which is why regenerating one is the last step of a
-  deliberate re-copy and never the answer to a failing gate. The licence assertion is data-driven, not package-driven:
-  the sibling `<pkg>.LICENSE` is checked exactly where the manifest carries a dist-info licence entry, and a sibling the
-  manifest carries no entry for is reported as pinned by nothing — otherwise regenerating a wheel's manifest from its
-  own tree would delete the licence check in the same step, silently, while the file stayed. Deliberately outside it:
-  `backend/native/` is pinned by its own `sha256sum -c` over one `.so`, and `__pycache__` is ignored wherever it
-  appears, on both sides of the comparison. **Two things are outside it by accident of shape, and neither is loud.** The
-  gate sees **directories only** (`package_dirs` filters on `entry.is_dir()`), so a single-module dependency dropped in
-  as `_vendor/six.py` is never asked for a manifest — and there is no shape here that could pin one: dropping a
-  `six.SHA256SUMS` beside it makes the gate fail with "it pins no vendored tree", so the guarded-by-default half is a
-  property of package DIRECTORIES alone. And `rglob` does not descend into a symlinked directory, so every file below
-  one is invisible to the set comparison whatever the per-file symlink guard does; git records the link itself as mode
-  120000, which is what makes it a review question rather than a silent one
+- **Every tree under `backend/_vendor/`, and the resolver's recorded machines under `tests/adapters/atlas_vectors/`, is
+  pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under `<pkg>/` matches the vendored file's digest,
+  the vendored file set EQUALS the manifest's set restricted to that prefix, and a package directory with NO manifest is
+  a failure** — check — `scripts/check_vendored_trees.py` (the manifest is discovered, never named in the script, so the
+  next vendored package is guarded by default rather than when someone remembers — the hole this closed was a second
+  tree, `vdf`, sitting unpinned beside a pinned `atlas` while the gate reported OK. The set-equality half is the part
+  `sha256sum -c` cannot do at all: the plain form fails on a correct copy, because a wheel's manifest lists release
+  artifacts and dist-info files we never vendor, and `--ignore-missing` — the flag that makes it green again — exits 0
+  after a vendored file is deleted). **What the check cannot see is the manifest itself.** For `atlas` it is upstream's
+  own release manifest, so the digests additionally prove identity with the tagged release; for a patched copy like
+  `vdf` it is our own digest of the tree we ship, so a manifest regenerated to bless a hand-edit passes green and only
+  review catches it — which is why regenerating one is the last step of a deliberate re-copy and never the answer to a
+  failing gate. The licence assertion is data-driven, not package-driven: the sibling `<pkg>.LICENSE` is checked exactly
+  where the manifest carries a dist-info licence entry, and a sibling the manifest carries no entry for is reported as
+  pinned by nothing — otherwise regenerating a wheel's manifest from its own tree would delete the licence check in the
+  same step, silently, while the file stayed. Deliberately outside it: `backend/native/` is pinned by its own
+  `sha256sum -c` over one `.so`, and `__pycache__` is ignored wherever it appears, on both sides of the comparison. The
+  resolver's recorded machines under `tests/adapters/atlas_vectors/` are the second root, kept out of `backend/` because
+  everything there ships to users; their manifest is generated here, upstream publishing a digest of the release asset
+  only, so what ties the copy to the release is the release line in that folder's README, which
+  `tests/services/test_firmware_vectors.py` holds against the vendored resolver's version and upstream's manifest
+  ([#2585](https://github.com/danielcopper/romm-tender/issues/2585) D1). **Two things are outside it by accident of
+  shape, and neither is loud.** The gate sees **directories only** (`package_dirs` filters on `entry.is_dir()`), so a
+  single-module dependency dropped in as `_vendor/six.py` is never asked for a manifest — and there is no shape here
+  that could pin one: dropping a `six.SHA256SUMS` beside it makes the gate fail with "it pins no vendored tree", so the
+  guarded-by-default half is a property of package DIRECTORIES alone. And `rglob` does not descend into a symlinked
+  directory, so every file below one is invisible to the set comparison whatever the per-file symlink guard does; git
+  records the link itself as mode 120000, which is what makes it a review question rather than a silent one
 - **The release tarball is what the installer expects — one top-level `romm-tender/`, the files an install starts from
   plus the version file, the installer an installed tree rolls back with and the licence texts a distributed copy
   carries, nothing the packager prunes, a sidecar `sha256sum -c` accepts** — check — `scripts/check_release_tarball.py`,
@@ -1422,20 +1427,25 @@ Format: **invariant** — tier — enforced by.
   `tests/contract/test_bios_search_found_nothing_read.py` a not-met verdict with no row to show — DuckStation over an
   empty BIOS folder, read by the real resolver — reaching both reads as red; `frontend/src/utils/playSection.test.ts`
   pins the badge to the red verdict and `frontend/src/bigpicture/BiosTab.test.tsx` / `library/PlatformsTab.test.tsx` the
-  wording per surface. Recorded in [#2190](https://github.com/danielcopper/romm-tender/issues/2190) D1, D10 and D13,
-  under ADR-0042 §1. **The rule spans the adapter, the domain, the service and every surface, and nothing joins them**:
-  `adapters/atlas_firmware.py` carries `requirements_met`, the console's `system_firmware` and its world-knowledge mark,
-  whether that console's image is shown absent (`system_firmware_met`, which the game page reads as red before narrowing
-  to the game's region), the plain required files it could not judge, its refused declarations and its region note per
-  emulator; `domain/bios_status.py::compute_bios_level` is the one place a platform's level is made and
-  `game_region_level` a game's, `region_decides` the one place the exception is read — every part of it the resolver's:
-  its verdict open, its note that the disc's region decides it, a group with an image met and one not met and none not
-  established, every other group met, nothing else open — and `services/firmware/status.py` carries the level and the
-  resolver's words beside it. **What no count may do is decide a colour.** A count is what a sentence says about how
-  much is there — "2 of 3 files … are in place" under a red verdict — and the colour is the resolver's answer over the
-  whole declaration, which also weighs what no row can carry: the console's own demand. A `.info` marks a file required
-  or optional and nothing else, so SwanStation marks all five of its PlayStation images optional while the console does
-  not boot without one; the resolver weighs its packaged table of world knowledge in (`system_firmware`, marked
+  wording per surface. `tests/services/test_firmware_vectors.py` runs the platform page's read over every machine the
+  resolver recorded for its firmware answers, takes each emulator the resolver's answer names as the launching one, and
+  holds the level against that emulator's verdict; where the two differ today — the amber against a verdict not
+  established, and a verdict Tender withholds beside EmuDeck's sealed catalogue — the pair stands on a list that only
+  shrinks ([#2585](https://github.com/danielcopper/romm-tender/issues/2585) D4, D5). Recorded in
+  [#2190](https://github.com/danielcopper/romm-tender/issues/2190) D1, D10 and D13, under ADR-0042 §1. **The rule spans
+  the adapter, the domain, the service and every surface, and nothing joins them**: `adapters/atlas_firmware.py` carries
+  `requirements_met`, the console's `system_firmware` and its world-knowledge mark, whether that console's image is
+  shown absent (`system_firmware_met`, which the game page reads as red before narrowing to the game's region), the
+  plain required files it could not judge, its refused declarations and its region note per emulator;
+  `domain/bios_status.py::compute_bios_level` is the one place a platform's level is made and `game_region_level` a
+  game's, `region_decides` the one place the exception is read — every part of it the resolver's: its verdict open, its
+  note that the disc's region decides it, a group with an image met and one not met and none not established, every
+  other group met, nothing else open — and `services/firmware/status.py` carries the level and the resolver's words
+  beside it. **What no count may do is decide a colour.** A count is what a sentence says about how much is there — "2
+  of 3 files … are in place" under a red verdict — and the colour is the resolver's answer over the whole declaration,
+  which also weighs what no row can carry: the console's own demand. A `.info` marks a file required or optional and
+  nothing else, so SwanStation marks all five of its PlayStation images optional while the console does not boot without
+  one; the resolver weighs its packaged table of world knowledge in (`system_firmware`, marked
   `system-firmware-world-knowledge`) and answers not met. That need reaches a surface only as words, under a red verdict
   (`console_needs_image`), and which image is in place only from the row verdicts, never from a reading of Tender's own
   beside the verdict. A system the table records nothing about is an unasked question and never "this console needs no
