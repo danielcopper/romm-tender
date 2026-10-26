@@ -1761,7 +1761,9 @@ class TestDoDownloadSingleFile:
         downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="Nintendo 64"
+            )
 
         # File ends up at target_path (not .tmp)
         assert os.path.exists(target_path)
@@ -1839,7 +1841,9 @@ class TestDoDownloadSingleFile:
         downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(7, rom_detail, target_path, "n64", "metroid.z64", _admitted(downloads, 7))
+            await downloads.transfer.run(
+                7, rom_detail, target_path, "n64", "metroid.z64", _admitted(downloads, 7), platform_name="Nintendo 64"
+            )
 
         emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(emit_calls) == 1
@@ -1872,7 +1876,9 @@ class TestDoDownloadSingleFile:
         downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="N64"
+            )
 
         payload = next(c[0][1] for c in emit.call_args_list if c[0][0] == "download_complete")
         with downloads.uow as uow:
@@ -1923,7 +1929,9 @@ class TestDoDownloadSingleFile:
         downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(7, rom_detail, target_path, "n64", "metroid.z64", _admitted(downloads, 7))
+            await downloads.transfer.run(
+                7, rom_detail, target_path, "n64", "metroid.z64", _admitted(downloads, 7), platform_name="N64"
+            )
 
         with downloads.uow as uow:
             rom = uow.roms.get(7)
@@ -1970,7 +1978,9 @@ class TestASystemFolderLinkedToAnotherDrive:
         _seed_rom(downloads.uow, 42)
         downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="Nintendo 64"
+            )
 
         assert os.path.exists(target_path)
         result = await downloads.removal.remove_rom(42)
@@ -2012,7 +2022,9 @@ class TestASystemFolderLinkedToAnotherDrive:
         _seed_rom(downloads.uow, 55, platform_slug="psx")
         downloads.queue.enqueue(55, {"rom_id": 55, "status": "downloading", "progress": 0})
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
+            await downloads.transfer.run(
+                55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55), platform_name="PlayStation"
+            )
 
         installed = downloads.uow.rom_installs.get(55)
         assert installed is not None
@@ -2069,7 +2081,13 @@ class TestDoDownloadOverrideRebake:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
-                rom_id, rom_detail, target_path, "psx", "game.chd", _admitted(downloads, rom_id)
+                rom_id,
+                rom_detail,
+                target_path,
+                "psx",
+                "game.chd",
+                _admitted(downloads, rom_id),
+                platform_name="PlayStation",
             )
 
         emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
@@ -2172,7 +2190,9 @@ class TestDoDownloadMultiFile:
         downloads.queue.enqueue(55, {"rom_id": 55, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
+            await downloads.transfer.run(
+                55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55), platform_name="PlayStation"
+            )
 
         # ES-DE collapse: the extract dir is renamed after the auto-generated
         # M3U (incl. extension) so ES-DE shows one game entry, not a folder.
@@ -2262,7 +2282,15 @@ class TestDoDownloadMultiFile:
         downloads.queue.enqueue(99, {"rom_id": 99, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(99, rom_detail, target_path, "switch", "Zelda.nsp", _admitted(downloads, 99))
+            await downloads.transfer.run(
+                99,
+                rom_detail,
+                target_path,
+                "switch",
+                "Zelda.nsp",
+                _admitted(downloads, 99),
+                platform_name="Nintendo Switch",
+            )
 
         # ZIP is extracted into a per-game folder (not written verbatim into one
         # .nsp). ES-DE collapse renames the dir after the launch file (the root
@@ -2339,7 +2367,15 @@ class TestDoDownloadMultiFile:
         downloads.queue.enqueue(99, {"rom_id": 99, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(99, rom_detail, target_path, "switch", "Zelda.nsp", _admitted(downloads, 99))
+            await downloads.transfer.run(
+                99,
+                rom_detail,
+                target_path,
+                "switch",
+                "Zelda.nsp",
+                _admitted(downloads, 99),
+                platform_name="Nintendo Switch",
+            )
 
         # Failure path keyed on the multi-file gate → extract dir torn down.
         assert not extract_dir.exists()
@@ -2409,7 +2445,13 @@ class TestDoDownloadMultiFile:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
-                4778, rom_detail, target_path, "ps3", "AttackoftheDwarfGekko.dbm", _admitted(downloads, 4778)
+                4778,
+                rom_detail,
+                target_path,
+                "ps3",
+                "AttackoftheDwarfGekko.dbm",
+                _admitted(downloads, 4778),
+                platform_name="PlayStation 3",
             )
 
         # The extract dir carries the ROM identity, NOT the files[0] asset name.
@@ -2478,7 +2520,13 @@ class TestDoDownloadMultiFile:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
-                4778, rom_detail, target_path, "ps3", "AttackoftheDwarfGekko.dbm", _admitted(downloads, 4778)
+                4778,
+                rom_detail,
+                target_path,
+                "ps3",
+                "AttackoftheDwarfGekko.dbm",
+                _admitted(downloads, 4778),
+                platform_name="PlayStation 3",
             )
 
         # The identity-named dir is torn down; the files[0]-derived name was never
@@ -2572,7 +2620,9 @@ class TestDoDownloadMultiFile:
         )
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
+            await downloads.transfer.run(
+                55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55), platform_name="PlayStation"
+            )
 
         # Drain the spawned emits marshaled onto the loop.
         await asyncio.sleep(0)
@@ -2642,7 +2692,9 @@ class TestADownloadUnderWay:
             },
         )
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
+            await downloads.transfer.run(
+                55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55), platform_name="PlayStation"
+            )
         await asyncio.sleep(0)
         return downloads.queue.entries[55]["status"]
 
@@ -2721,7 +2773,15 @@ class TestDoDownloadBundledM3uPlatformGate:
         downloads.queue.enqueue(111, {"rom_id": 111, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(111, rom_detail, target_path, "switch", "Zelda.nsp", _admitted(downloads, 111))
+            await downloads.transfer.run(
+                111,
+                rom_detail,
+                target_path,
+                "switch",
+                "Zelda.nsp",
+                _admitted(downloads, 111),
+                platform_name="Nintendo Switch",
+            )
 
         # Collapse dir is named after the real launch file, not the bundled m3u.
         nsp_dir = roms_dir / "Zelda.nsp"
@@ -2785,7 +2845,9 @@ class TestDoDownloadBundledM3uPlatformGate:
         downloads.queue.enqueue(112, {"rom_id": 112, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(112, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 112))
+            await downloads.transfer.run(
+                112, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 112), platform_name="PlayStation"
+            )
 
         m3u_dir = roms_dir / "FF7.m3u"
         assert m3u_dir.is_dir()
@@ -2834,7 +2896,13 @@ class TestEsDeCollapseRename:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
-                rom_id, rom_detail, target_path, platform, archive_name, _admitted(downloads, rom_id)
+                rom_id,
+                rom_detail,
+                target_path,
+                platform,
+                archive_name,
+                _admitted(downloads, rom_id),
+                platform_name=rom_detail["platform_name"],
             )
         return downloads, roms_dir
 
@@ -3007,7 +3075,15 @@ class TestEsDeCollapseRename:
         downloads.queue.enqueue(73, {"rom_id": 73, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(73, rom_detail, target_path, "gba", "Game.gba", _admitted(downloads, 73))
+            await downloads.transfer.run(
+                73,
+                rom_detail,
+                target_path,
+                "gba",
+                "Game.gba",
+                _admitted(downloads, 73),
+                platform_name="Game Boy Advance",
+            )
 
         installed = downloads.uow.rom_installs.get(73)
         assert installed is not None
@@ -3061,7 +3137,9 @@ class TestEsDeCollapseRename:
             caplog.at_level(logging.WARNING),
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download),
         ):
-            await downloads.transfer.run(74, rom_detail, target_path, "psx", "FF8.zip", _admitted(downloads, 74))
+            await downloads.transfer.run(
+                74, rom_detail, target_path, "psx", "FF8.zip", _admitted(downloads, 74), platform_name="PlayStation"
+            )
 
         # The pre-existing dir is untouched — never clobbered or merged.
         assert (collision_dir / "PREEXISTING.txt").read_text() == "do not clobber"
@@ -3123,7 +3201,9 @@ class TestDoDownloadNestedSingleFile:
         downloads.queue.enqueue(1, {"rom_id": 1, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(1, rom_detail, target_path, "gba", "Game.gba", _admitted(downloads, 1))
+            await downloads.transfer.run(
+                1, rom_detail, target_path, "gba", "Game.gba", _admitted(downloads, 1), platform_name="Game Boy Advance"
+            )
 
         assert os.path.exists(target_path)
         installed = downloads.uow.rom_installs.get(1)
@@ -3169,7 +3249,9 @@ class TestDoDownloadNestedSingleFile:
         downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(7, rom_detail, target_path, "dc", "My Game.chd", _admitted(downloads, 7))
+            await downloads.transfer.run(
+                7, rom_detail, target_path, "dc", "My Game.chd", _admitted(downloads, 7), platform_name="Dreamcast"
+            )
 
         assert os.path.exists(target_path)
         installed = downloads.uow.rom_installs.get(7)
@@ -3761,7 +3843,9 @@ class TestDoDownloadCancelled:
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download_cancel),
             pytest.raises(asyncio.CancelledError),
         ):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", control)
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", control, platform_name="Nintendo 64"
+            )
 
         # A cancel is an explicit discard: the entry is evicted, not left as a
         # lingering "cancelled" row (#149 downloads-round).
@@ -3808,7 +3892,9 @@ class TestDoDownloadZipFailure:
         downloads.queue.enqueue(66, {"rom_id": 66, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(66, rom_detail, target_path, "psx", "game.zip", _admitted(downloads, 66))
+            await downloads.transfer.run(
+                66, rom_detail, target_path, "psx", "game.zip", _admitted(downloads, 66), platform_name="PlayStation"
+            )
 
         assert downloads.queue.entries[66]["status"] == "failed"
         # .zip.tmp should be cleaned up
@@ -3865,7 +3951,9 @@ class TestDoDownloadPostDecodeTraversal:
         downloads.queue.enqueue(88, {"rom_id": 88, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(88, rom_detail, target_path, "psx", "Evil.zip", _admitted(downloads, 88))
+            await downloads.transfer.run(
+                88, rom_detail, target_path, "psx", "Evil.zip", _admitted(downloads, 88), platform_name="PlayStation"
+            )
 
         # The traversal target must NOT exist anywhere outside the extraction dir.
         assert not (roms_dir / "evil.sh").exists()
@@ -3933,7 +4021,15 @@ class TestDoDownloadPostDecodeTraversal:
         downloads.queue.enqueue(91, {"rom_id": 91, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(91, rom_detail, target_path, "switch", "Game.nsp", _admitted(downloads, 91))
+            await downloads.transfer.run(
+                91,
+                rom_detail,
+                target_path,
+                "switch",
+                "Game.nsp",
+                _admitted(downloads, 91),
+                platform_name="Nintendo Switch",
+            )
 
         # The encoded names decoded correctly (per-basename) and the install
         # succeeded — the legit nested ROM is intact.
@@ -3983,7 +4079,9 @@ class TestDoDownloadFailureEmit:
         downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="Nintendo 64"
+            )
 
         # download_failed event emitted with the expected payload shape
         emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
@@ -4040,7 +4138,9 @@ class TestDoDownloadInvariantFailure:
         downloads.queue.enqueue(0, {"rom_id": 0, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(0, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 0))
+            await downloads.transfer.run(
+                0, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 0), platform_name="Nintendo 64"
+            )
 
         # Download reported as failed via the canonical failure path.
         assert downloads.queue.entries[0]["status"] == "failed"
@@ -4093,7 +4193,9 @@ class TestDoDownloadInvariantFailure:
         downloads.queue.enqueue(0, {"rom_id": 0, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(0, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 0))
+            await downloads.transfer.run(
+                0, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 0), platform_name="PlayStation"
+            )
 
         assert downloads.queue.entries[0]["status"] == "failed"
         assert "Invalid install metadata" in downloads.queue.entries[0]["error"]
@@ -4316,7 +4418,13 @@ class TestUrlEncodedFilenameRename:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.transfer.run(
-                99, rom_detail, target_path, "psx", "Vagrant Story (USA).zip", _admitted(downloads, 99)
+                99,
+                rom_detail,
+                target_path,
+                "psx",
+                "Vagrant Story (USA).zip",
+                _admitted(downloads, 99),
+                platform_name="PlayStation",
             )
 
         # ES-DE collapse renames the dir after the decoded .m3u launch file.
@@ -4373,7 +4481,9 @@ class TestUrlEncodedFilenameRename:
         downloads.queue.enqueue(55, {"rom_id": 55, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55))
+            await downloads.transfer.run(
+                55, rom_detail, target_path, "psx", "FF7.zip", _admitted(downloads, 55), platform_name="PlayStation"
+            )
 
         # ES-DE collapse renames the dir after the auto-generated FF7.m3u.
         extract_dir = roms_dir / "FF7.m3u"
@@ -5264,7 +5374,9 @@ class TestAProgressTickAfterTheDownloadEnded:
         downloads.queue.enqueue(75, {"rom_id": 75, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(75, rom_detail, target_path, "psx", "FF9.zip", _admitted(downloads, 75))
+            await downloads.transfer.run(
+                75, rom_detail, target_path, "psx", "FF9.zip", _admitted(downloads, 75), platform_name="PlayStation"
+            )
         finished_workers.release()
         await self._drain()
 
@@ -5297,7 +5409,9 @@ class TestAProgressTickAfterTheDownloadEnded:
         downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="Nintendo 64"
+            )
         finished_workers.release()
         await self._drain()
 
@@ -5341,7 +5455,15 @@ class TestAProgressTickAfterTheDownloadEnded:
         )
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(73, rom_detail, target_path, "gba", "Game.gba", _admitted(downloads, 73))
+            await downloads.transfer.run(
+                73,
+                rom_detail,
+                target_path,
+                "gba",
+                "Game.gba",
+                _admitted(downloads, 73),
+                platform_name="Game Boy Advance",
+            )
         finished_workers.release()
         await self._drain()
 
@@ -5401,7 +5523,9 @@ class TestDoDownloadRedownloadPreservesExisting:
         downloads.queue.enqueue(42, {"rom_id": 42, "status": "downloading", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="Nintendo 64"
+            )
 
         # The pre-existing install must SURVIVE — this was the data-loss bug.
         assert os.path.exists(target_path)
@@ -5480,7 +5604,15 @@ class TestDoDownloadCancelReconcile:
             patch.object(downloads.transfer, "_post_download_single_io", side_effect=blocking_post_io),
         ):
             task = asyncio.ensure_future(
-                downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+                downloads.transfer.run(
+                    42,
+                    rom_detail,
+                    target_path,
+                    "n64",
+                    "zelda.z64",
+                    _admitted(downloads, 42),
+                    platform_name="Nintendo 64",
+                )
             )
             while not started.is_set():
                 await asyncio.sleep(0.01)
@@ -5577,7 +5709,9 @@ class TestDoDownloadCancelReconcile:
             patch.object(downloads.transfer, "_post_download_multi_io", side_effect=blocking_post_io_multi),
         ):
             task = asyncio.ensure_future(
-                downloads.transfer.run(77, rom_detail, target_path, "psx", file_name, _admitted(downloads, 77))
+                downloads.transfer.run(
+                    77, rom_detail, target_path, "psx", file_name, _admitted(downloads, 77), platform_name="PlayStation"
+                )
             )
             while not started.is_set():
                 await asyncio.sleep(0.01)
@@ -5642,7 +5776,9 @@ class TestDoDownloadCancelEmitsEvent:
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download_cancel),
             pytest.raises(asyncio.CancelledError),
         ):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", control)
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", control, platform_name="Nintendo 64"
+            )
 
         # A terminal cancelled frame reached the frontend (was silent before #1017).
         cancelled = [
@@ -5746,7 +5882,9 @@ class TestConcurrencyReservation:
         downloads.queue.enqueue(42, {"rom_id": 42, "status": "queued", "progress": 0})
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="Nintendo 64"
+            )
 
         assert downloads.queue.entries[42]["status"] == "completed"
         # The reservation is released in the finally.
@@ -5795,7 +5933,9 @@ class TestConcurrencyReservation:
         # the semaphore (which we hold).
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             task = asyncio.ensure_future(
-                downloads.transfer.run(3, rom_detail, target_path, "n64", "third.z64", _admitted(downloads, 3))
+                downloads.transfer.run(
+                    3, rom_detail, target_path, "n64", "third.z64", _admitted(downloads, 3), platform_name="Nintendo 64"
+                )
             )
             # Let it reach the semaphore wait.
             await asyncio.sleep(0)
@@ -5913,7 +6053,9 @@ class TestCooperativeCancel:
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_transfer),
             pytest.raises(asyncio.CancelledError),
         ):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", token)
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", token, platform_name="Nintendo 64"
+            )
 
         # The loop stopped near tick 3/4 — nowhere near 500. The transfer
         # really halted instead of running to completion.
@@ -6045,7 +6187,9 @@ class TestPauseResume:
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_pause),
             pytest.raises(asyncio.CancelledError),
         ):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", control)
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", control, platform_name="Nintendo 64"
+            )
 
         # Status flips to "paused" and the partial .tmp is KEPT for resume.
         assert downloads.queue.entries[42]["status"] == "paused"
@@ -6091,7 +6235,9 @@ class TestPauseResume:
             patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_cancel),
             pytest.raises(asyncio.CancelledError),
         ):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", control)
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", control, platform_name="Nintendo 64"
+            )
 
         # Cancel evicts its entry (#149 downloads-round) and deletes the partial
         # .tmp — the contrast with pause, which keeps both for resume.
@@ -6138,7 +6284,9 @@ class TestPauseResume:
         )
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="Nintendo 64"
+            )
 
         # on_meta flipped the queue entry's resumable flag...
         assert downloads.queue.entries[42]["resumable"] is True
@@ -6188,7 +6336,9 @@ class TestPauseResume:
         )
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42))
+            await downloads.transfer.run(
+                42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="Nintendo 64"
+            )
 
         assert downloads.queue.entries[42]["resumable"] is False
 
@@ -7083,7 +7233,15 @@ class TestASingleZipHoldingADisc:
                 f.write(payload)
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=transfer) as fetched:
-            await downloads.transfer.run(rom_id, detail, target, system, "Game.zip", _admitted(downloads, rom_id))
+            await downloads.transfer.run(
+                rom_id,
+                detail,
+                target,
+                system,
+                "Game.zip",
+                _admitted(downloads, rom_id),
+                platform_name=detail["platform_name"],
+            )
         return target, detail, fetched
 
     async def test_a_cue_with_its_tracks_is_unpacked_into_its_own_folder(self, downloads, roms):
@@ -7165,7 +7323,15 @@ class TestASingleZipHoldingADisc:
                 f.write(b"not a zip at all")
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=transfer):
-            await downloads.transfer.run(77, detail, target, "saturn", "Game.zip", _admitted(downloads, 77))
+            await downloads.transfer.run(
+                77,
+                detail,
+                target,
+                "saturn",
+                "Game.zip",
+                _admitted(downloads, 77),
+                platform_name=detail["platform_name"],
+            )
 
         installed = downloads.uow.rom_installs.get(77)
         assert installed is not None
@@ -7334,7 +7500,13 @@ class TestTooLittleSpaceToUnpack:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=transfer) as fetched:
             await downloads.transfer.run(
-                detail["id"], detail, target, "saturn", os.path.basename(target), _admitted(downloads, detail["id"])
+                detail["id"],
+                detail,
+                target,
+                "saturn",
+                os.path.basename(target),
+                _admitted(downloads, detail["id"]),
+                platform_name=detail["platform_name"],
             )
         failures = [c.args[1] for c in emit.call_args_list if c.args[0] == "download_failed"]
         return fetched, failures
@@ -7501,7 +7673,14 @@ class TestTooLittleSpaceToUnpack:
 
         with patch.object(downloads.romm_api, "download_rom_content") as fetched:
             await downloads.transfer.run(
-                77, detail, target, "saturn", "Game.zip", _admitted(downloads, 77), resume=True
+                77,
+                detail,
+                target,
+                "saturn",
+                "Game.zip",
+                _admitted(downloads, 77),
+                resume=True,
+                platform_name=detail["platform_name"],
             )
 
         fetched.assert_not_called()
@@ -7639,7 +7818,15 @@ class TestABadChecksumFailsTheUnpack:
                 f.write(payload)
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=transfer):
-            await downloads.transfer.run(77, detail, target, "saturn", "Game.zip", _admitted(downloads, 77))
+            await downloads.transfer.run(
+                77,
+                detail,
+                target,
+                "saturn",
+                "Game.zip",
+                _admitted(downloads, 77),
+                platform_name=detail["platform_name"],
+            )
 
         (failure,) = [c.args[1] for c in emit.call_args_list if c.args[0] == "download_failed"]
         assert "Bad CRC-32" in failure["error_message"]

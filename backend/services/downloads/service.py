@@ -346,7 +346,7 @@ class DownloadService:
             )
 
         rom_name = rom_detail.get("name", file_name)
-        platform_name = rom_detail.get("platform_name", platform_slug)
+        platform_name = platform.platform_name
         # Carry the prior resumability verdict across a resume so the UI keeps
         # showing Pause before the resumed transfer's headers re-confirm it.
         resumable = bool(self._queue.entries.get(rom_id, {}).get("resumable", False))
@@ -357,7 +357,9 @@ class DownloadService:
         # to the cancelled one (#144).
         control = DownloadControl()
         task = self._tasks.spawn(
-            self._transfer.run(rom_id, rom_detail, target_path, system, file_name, control, resume=resume),
+            self._transfer.run(
+                rom_id, rom_detail, target_path, system, file_name, control, platform_name=platform_name, resume=resume
+            ),
             f"download of rom {rom_id}",
         )
 

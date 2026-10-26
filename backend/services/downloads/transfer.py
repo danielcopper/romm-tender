@@ -65,14 +65,8 @@ class DownloadTransfer:
         self._emit = config.emit
         self._logger = config.logger
 
-    def _extract_progress(self, rom_id, rom_detail, file_name):
-        """The ``extracting`` phase's progress callback for this download."""
-        rom_name = rom_detail.get("name", file_name)
-        platform_name = rom_detail.get("platform_name", rom_detail.get("platform_slug", ""))
-        return self._queue.make_progress_callback(rom_id, rom_name, platform_name, file_name, phase="extracting")
-
     def _post_download_multi_io(
-        self, rom_id, rom_detail, target_path, file_name, system, extract_dir_name, reserved_bytes=0
+        self, rom_id, rom_detail, target_path, extract_progress, system, extract_dir_name, reserved_bytes=0
     ):
         """Sync helper for :meth:`run` multi-file — extraction + renames in executor.
 
@@ -87,25 +81,26 @@ class DownloadTransfer:
             target_path,
             os.path.join(os.path.dirname(target_path), extract_dir_name),
             system,
-            progress_callback=self._extract_progress(rom_id, rom_detail, file_name),
+            progress_callback=extract_progress,
             reserved_bytes=reserved_bytes,
         )
 
-    def _post_download_single_io(self, rom_id, rom_detail, target_path, system, extract_dir_name="", reserved_bytes=0):
+    def _post_download_single_io(
+        self, rom_id, rom_detail, target_path, extract_progress, system, extract_dir_name="", reserved_bytes=0
+    ):
         """Sync helper for :meth:`run` single-file — rename or unpack, then DB persist, in executor.
 
         Returns ``(path, error)`` as ``DownloadUnpacker.finish_single`` does; a
         zip holding a disc image is unpacked into *extract_dir_name* beside
         *target_path*.
         """
-        file_name = os.path.basename(target_path)
         return self._unpacker.finish_single(
             rom_id,
             rom_detail,
             target_path,
             os.path.join(os.path.dirname(target_path), extract_dir_name) if extract_dir_name else None,
             system,
-            progress_callback=self._extract_progress(rom_id, rom_detail, file_name),
+            progress_callback=extract_progress,
             reserved_bytes=reserved_bytes,
         )
 
@@ -177,16 +172,20 @@ class DownloadTransfer:
             return (final_path, True)
         return (None, False)
 
-    async def run(self, rom_id, rom_detail, target_path, system, file_name, control, *, resume=False):
+    async def run(
+        self, rom_id, rom_detail, target_path, system, file_name, control, *, platform_name: str, resume=False
+    ):
         """Run one admitted download to its end, and give back what its admission registered.
 
         *control* is the token the admission registered for this attempt; the
         progress callback polls it, and the release at the end is gated on it
-        (:meth:`DownloadsStateBox.release`). On *resume* the transfer appends to
-        the partial file instead of restarting it.
+        (:meth:`DownloadsStateBox.release`). *platform_name* is the name the
+        admission's platform answer carries; every frame and event of this
+        download names the platform by it, because RomM's ROM answer carries no
+        such name. On *resume* the transfer appends to the partial file instead
+        of restarting it.
         """
         rom_name = rom_detail.get("name", file_name)
-        platform_name = rom_detail.get("platform_name", rom_detail.get("platform_slug", ""))
         has_multiple = is_multi_file_download(rom_detail)
         # Name the extract dir from the ROM's identity, not files[0] (which may be
         # an arbitrary inner asset for a nested-single folder game). Computed once
@@ -195,6 +194,9 @@ class DownloadTransfer:
         extract_dir_name = extract_dir_name_for(rom_detail, target_path, self._logger)
         progress_callback = self._queue.make_progress_callback(rom_id, rom_name, platform_name, file_name, control)
         on_meta = self._queue.make_on_meta(rom_id, rom_name, platform_name, file_name)
+        extract_progress = self._queue.make_progress_callback(
+            rom_id, rom_name, platform_name, file_name, phase="extracting"
+        )
         # Tracks the resolved launch path once extraction returns it, so a
         # failure AFTER the ES-DE collapse rename cleans up the *renamed* dir
         # (``os.path.dirname(final_path)``) — not just the staging name.
@@ -228,7 +230,7 @@ class DownloadTransfer:
                         rom_id,
                         rom_detail,
                         target_path,
-                        file_name,
+                        extract_progress,
                         system,
                         extract_dir_name,
                         self._state.bytes_reserved_by_others(rom_id, self._queue.entries),
@@ -249,6 +251,7 @@ class DownloadTransfer:
                         rom_id,
                         rom_detail,
                         target_path,
+                        extract_progress,
                         system,
                         extract_dir_name,
                         self._state.bytes_reserved_by_others(rom_id, self._queue.entries),
