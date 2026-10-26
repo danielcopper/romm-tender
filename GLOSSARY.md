@@ -19,7 +19,8 @@ A cluster of domain objects treated as a single unit for data consistency. Per C
 - Has exactly one **identity**. Other aggregates reference it by ID only, never by holding a Python reference to its
   internals.
 - Mutation is **only via methods on the root**, named after the domain event that occurred (`adopt_baseline(...)`,
-  `confirm_slot(...)`, `mark_installed(...)`). Direct field assignment from services is forbidden.
+  `confirm_slot(...)`, `mark_installed(...)`). Direct field assignment from outside the aggregate's own methods is
+  forbidden.
 - Has exactly **one Repository** Protocol. The Repository's job is "give me this aggregate by ID, save this aggregate" —
   it may touch multiple tables under the hood.
 

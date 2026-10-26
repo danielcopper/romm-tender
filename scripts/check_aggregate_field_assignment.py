@@ -30,24 +30,8 @@ flagged line::
 
     saves[index].id = save_id  # pragma: no aggregate-check
 
-Unseen by it:
-
-- a container field, or a mutable value inside one, bound to another name
-  first or handed to a helper that mutates it
-  (``files = state.files; files[k] = v``), or reached through a call
-  (``state.slots.get(k).update(...)``, ``getattr(state, "files")[k] = v``);
-- a container mutated through one of its dunder methods
-  (``state.files.__setitem__(k, v)``);
-- a ``setattr`` / ``delattr`` whose name is not a string literal;
-- a field the decorated class body does not annotate, an aggregate declared
-  outside ``backend/domain/``, and a container field annotated with a type
-  alias or an abstract type (``Mapping``, ``Sequence``);
-- a store through bare ``self`` in any class, an aggregate's own methods and
-  every other class alike;
-- ``tests/`` and ``scripts/``, which are not scanned;
-- a repository method that writes a column in SQL (``RomRepository.set_*``,
-  ``PlatformSyncStateRepository.revoke_skip``): no field is assigned;
-- a file it cannot read or parse, which it skips without a word.
+What it does not see is listed in the invariant register's entry for this
+rule (``CLAUDE.md``), the one home of that list.
 
 Exit 0 on no findings, exit 1 if any findings (one line per finding).
 """

@@ -28,8 +28,8 @@ The aggregate roots, their tables, and the enforcement layers are canonical in
 SQLite. Rules for the relational state that _does_ live in SQLite:
 
 - `[CP]` One Repository Protocol per aggregate root, not per table.
-- `[CP]` Aggregate methods are the **only** mutation API for the aggregate's state. No external field assignment from
-  services. Field access for reads is fine.
+- `[CP]` Aggregate methods are the **only** mutation API for the aggregate's state. No field assignment from outside the
+  aggregate's own methods. Field access for reads is fine.
 - `[ours]` **Mutation methods are verb-named after the domain event they represent.** `adopt_baseline(filename, hash)`
   not `update_baseline(...)`; `mark_installed(path)` not `set_installed(...)`; `promote_slot(slot, source)` not
   `update_slot_source(...)`. The method name becomes the implicit event name if events are added later.

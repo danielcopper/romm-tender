@@ -833,12 +833,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `scripts/check_aggregate_field_assignment.py`, by field name: the fields the class body of every `@cosmic_aggregate`
   class in `domain/` annotates, written on any receiver but bare `self` anywhere in `backend/` but `_vendor/` and
   `native/`; a value that only shares a field name takes `# pragma: no aggregate-check`. Unseen by it: a container
-  field, or a value inside one, bound to another name, handed to a helper, or reached through a call or `getattr`; a
-  mutation through a dunder method; a `setattr` whose name is not a literal; a field the class body does not annotate,
-  an aggregate outside `domain/`, and a container field typed by an alias or an abstract type; `tests/` and `scripts/`.
-  Prompt-only: those shapes; and the repository's column writers (`RomRepository.set_*`,
-  `PlatformSyncStateRepository.revoke_skip`) change a stored aggregate's row in SQL without a verb and assign no field,
-  so the check cannot see them, and whether they are sanctioned is not decided
+  field, or a value inside one, bound to another name, handed to a helper, or reached through a call, `getattr`, `or` or
+  `and` (`(state.files or {})[k] = v`); a container mutated through one of its dunder methods
+  (`state.files.__setitem__`); a `setattr` whose name is not a literal; a field the class body does not annotate, an
+  aggregate outside `domain/`, and the in-place mutation of a container field typed by an alias or an abstract type; a
+  store through bare `self` in any class, a subclass of an aggregate and an aggregate bound to `self` included; `tests/`
+  and `scripts/`; a file it cannot read or parse, which it skips without a word. This list is the one home of what the
+  check misses; the script's docstring and Database Design point here. Prompt-only: those shapes; and the repository's
+  column writers (`RomRepository.set_*`, `PlatformSyncStateRepository.revoke_skip`) change a stored aggregate's row in
+  SQL without a verb and assign no field, so the check cannot see them, and whether they are sanctioned is not decided
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
   UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a
   bound method, through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory
