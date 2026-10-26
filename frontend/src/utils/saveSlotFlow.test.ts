@@ -238,7 +238,7 @@ describe("executeSlotSwitch", () => {
     await expect(executeSlotSwitch(7, "new", "create")).resolves.toEqual({
       ok: false,
       reason: "server_unreachable",
-      message: "Can't switch — RomM server is not reachable",
+      message: "Can't create a slot — RomM server is not reachable",
     });
     expect(connectionState.reportServerReachable).toHaveBeenCalledExactlyOnceWith(false);
   });

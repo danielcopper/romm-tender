@@ -257,11 +257,14 @@ describe("switchSlotFailureMessage", () => {
 });
 
 describe("createSlotFailureMessage", () => {
-  it("words pending_uploads and server_unreachable as a switch does", () => {
+  it("words pending_uploads as a switch does", () => {
     expect(createSlotFailureMessage("pending_uploads")).toBe(
       "Sync your saves first — local changes haven't been uploaded",
     );
-    expect(createSlotFailureMessage("server_unreachable")).toBe("Can't switch — RomM server is not reachable");
+  });
+
+  it("says a slot can't be created where RomM is not reachable", () => {
+    expect(createSlotFailureMessage("server_unreachable")).toBe("Can't create a slot — RomM server is not reachable");
   });
 
   it("tells the reader to download the game first where it is not installed", () => {

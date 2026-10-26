@@ -13,7 +13,7 @@ import type { SaveStatus, SaveSlotSummary, SaveFileStatus, LastKnownSlots } from
 // captured-prop assertions stay in sync as SlotPanel evolves.
 import type { SlotPanel } from "./saves/SlotPanel";
 import { installDomEventListenerSpy, uninstallDomEventListenerSpy } from "../test-utils/dom-event-listener-spy";
-import { switchSlotFailureMessage } from "../utils/saveSlotWording";
+import { createSlotFailureMessage, switchSlotFailureMessage } from "../utils/saveSlotWording";
 import { LOCAL_CALL_LIMIT_MS } from "../utils/launchGate";
 
 // showModal from the global @decky/ui mock receives the <NewSlotModal> element.
@@ -739,8 +739,8 @@ describe("SavesTab", () => {
           await newSlotModalSubmit()?.("offline");
           await vi.advanceTimersByTimeAsync(0);
         });
-        expect(container.textContent).toContain("Can't switch — RomM server is not reachable");
-        expect(container.textContent).toContain(switchSlotFailureMessage("server_unreachable"));
+        expect(container.textContent).toContain("Can't create a slot — RomM server is not reachable");
+        expect(container.textContent).toContain(createSlotFailureMessage("server_unreachable"));
       } finally {
         vi.useRealTimers();
       }

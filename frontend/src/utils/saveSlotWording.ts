@@ -216,8 +216,11 @@ export function switchSlotFailureMessage(
  * its own here, since that names an action New Slot's reader did not take.
  */
 export function createSlotFailureMessage(reason: WireReason): string {
-  if (reason === "pending_uploads" || reason === "server_unreachable") {
+  if (reason === "pending_uploads") {
     return switchSlotFailureMessage(reason);
+  }
+  if (reason === "server_unreachable") {
+    return "Can't create a slot — RomM server is not reachable";
   }
   if (reason === "not_installed") {
     return "Can't create a slot — download the game first";
