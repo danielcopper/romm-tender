@@ -1006,8 +1006,18 @@ Format: **invariant** — tier — enforced by.
   Stop Game in a menu opened before the strand says at once that it cannot stop the game; a Play press on a game already
   running passes the interceptor, whose running-game guard comes before the cancel. Detail:
   `docs/architecture/loading-the-panel.md` → What the stranded panel is told
-- **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
-  `scripts/check_aggregate_field_assignment.py`
+- **Aggregate state mutated only via verb-named methods (no field assignment, no in-place container mutation)** —
+  check + prompt-only — `scripts/check_aggregate_field_assignment.py`. An aggregate's verb-named methods are where it
+  keeps its invariants, so a field written from outside them leaves a state no method would have produced, and the
+  repository persists it as it finds it. The check cannot know what a receiver holds, so it matches by field name rather
+  than by variable or type: a variable list misses every aggregate held under a new name, and reading the annotations
+  would re-implement the type checker with less recall. Matching by name means no aggregate escapes for being held under
+  another name, at the price of a pragma on a value that only shares a field name (the ctypes struct in
+  `adapters/gavel_native.py` carries one). Bare `self` is exempt in every class, because an aggregate's own methods
+  write through it and other classes' own fields share the names freely. `tests/` is not scanned: tests and fakes build
+  state by writing fields on purpose. The repository's column writers change a stored aggregate in SQL without going
+  through the aggregate at all, which is why they are outside the check and named in the entry. Detail:
+  [Database Design](database-design.md) → AST field-assignment check
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
   UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py` (the first of the **two** rules that
   script carries, over one shared matcher; the file-I/O rule below is a different hazard with its own seam list and its

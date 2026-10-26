@@ -828,8 +828,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   outside these shells — another element injected into Steam's game page, another hook on Steam's launch — gates itself
   on `useStrandedAnswer()` / `strandedAnswer()`; a Tender dialog or menu already open at the strand stays open and fails
   as before (#2275 D6)
-- **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
-  `scripts/check_aggregate_field_assignment.py`
+- **Aggregate state mutated only via verb-named methods: outside them no code assigns, deletes or `setattr`s an
+  aggregate's field, or mutates one of its list, dict or set fields in place** — check + prompt-only —
+  `scripts/check_aggregate_field_assignment.py`, by field name: the fields the class body of every `@cosmic_aggregate`
+  class in `domain/` annotates, written on any receiver but bare `self` anywhere in `backend/` but `_vendor/` and
+  `native/`; a value that only shares a field name takes `# pragma: no aggregate-check`. Unseen by it: a container
+  field, or a value inside one, bound to another name, handed to a helper, or reached through a call or `getattr`; a
+  mutation through a dunder method; a `setattr` whose name is not a literal; a field the class body does not annotate,
+  an aggregate outside `domain/`, and a container field typed by an alias or an abstract type; `tests/` and `scripts/`.
+  Prompt-only: those shapes; and the repository's column writers (`RomRepository.set_*`,
+  `PlatformSyncStateRepository.revoke_skip`) change a stored aggregate's row in SQL without a verb and assign no field,
+  so the check cannot see them, and whether they are sanctioned is not decided
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
   UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a
   bound method, through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory

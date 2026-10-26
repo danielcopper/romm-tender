@@ -8,10 +8,10 @@ SQLite database whose tables back a set of Cosmic Python aggregates.
 
 The migration **and its teardown are complete**. The **enforcement infrastructure** (the decorator, the linters, and the
 type-check rule that keep aggregates honest, [#788](https://github.com/danielcopper/romm-tender/issues/788)), the full
-**aggregate set** (the 14 aggregate roots, their fields, and their mutation methods — 8 from #788 plus
+**aggregate set** (the 16 aggregate roots, their fields, and their mutation methods — 8 from #788 plus
 `PlatformSyncState` (ADR-0023), `CollectionSyncState` (#742), `AnsweredSaveDirectory` (ADR-0041), `ArtworkSlotOutcome`
-(#2295), `ArtworkSlotChoice` and `ArtworkSlotHandover` (#2381)), the **SQLite schema** (the migration framework +
-`001_initial.sql`,
+(#2295), `ArtworkSlotChoice` and `ArtworkSlotHandover` (#2381), `StoredFirmware` and `FirmwareLink` (#2191)), the
+**SQLite schema** (the migration framework + `001_initial.sql`,
 [#780](https://github.com/danielcopper/romm-tender/issues/780)/[#781](https://github.com/danielcopper/romm-tender/issues/781)),
 the per-aggregate **Repository Protocols** ([#782](https://github.com/danielcopper/romm-tender/issues/782)), and the
 runtime **Unit of Work** + concrete `sqlite3` repository adapters
@@ -87,14 +87,14 @@ Every aggregate in this codebase follows the same rules, so the enforcement laye
 ## CP enforcement layers
 
 Four mechanisms keep the aggregate rules from drifting. They are layered — each catches a different class of violation,
-and together they make "mutate an aggregate's fields from a service" fail before it merges.
+and together they make "mutate an aggregate's fields from outside its own methods" fail before it merges.
 
-| Layer | Mechanism                         | What it catches                                                        |
-| ----- | --------------------------------- | ---------------------------------------------------------------------- |
-| 1     | `@cosmic_aggregate` decorator     | Declares the root; gives it `__slots__` so unknown fields can't be set |
-| 2     | AST field-assignment check        | `aggregate.field = value` in `services/`                               |
-| 3     | import-linter domain contracts    | Non-stdlib / non-self imports into `domain/`                           |
-| 4     | basedpyright `reportPrivateUsage` | Access to `_`-prefixed internals from production code                  |
+| Layer | Mechanism                         | What it catches                                                            |
+| ----- | --------------------------------- | -------------------------------------------------------------------------- |
+| 1     | `@cosmic_aggregate` decorator     | Declares the root; gives it `__slots__` so unknown fields can't be set     |
+| 2     | AST field-assignment check        | A write to an aggregate's field, on any receiver but `self`, in `backend/` |
+| 3     | import-linter domain contracts    | Non-stdlib / non-self imports into `domain/`                               |
+| 4     | basedpyright `reportPrivateUsage` | Access to `_`-prefixed internals from production code                      |
 
 ### 1. The `@cosmic_aggregate` decorator
 
@@ -126,22 +126,23 @@ enforces the **mutation-only-via-methods** rule that a type checker cannot expre
 
 How it works:
 
-1. It walks `backend/domain/`, parses every file, and collects the class names decorated with `@cosmic_aggregate`.
-2. It walks `backend/services/` and flags every assignment whose target is `<receiver>.<field> = ...` where the
-   receiver's variable name matches an aggregate class name (exact snake_case identifier match — variable `rom` matches
-   aggregate `Rom`, `rom_state` does not). It skips `self.x = ...` (method-body internals) and subscript receivers
-   (`d["k"].x = ...`).
+1. It walks `backend/domain/`, parses every file, and collects the classes decorated with `@cosmic_aggregate` with the
+   field names their class bodies annotate. A field annotated `list`, `dict` or `set` is a container field.
+2. It walks every file under `backend/` but `_vendor/` and `native/`, `domain/` included, and flags, on any receiver but
+   bare `self`: a store or `del` on `<receiver>.<field>`; a `setattr` or `delattr` whose field name is a string literal;
+   and an item store, item `del`, attribute store or mutating call (`append`, `update`, `pop`, …) reached through
+   `<receiver>.<container field>`. Bare `self` is how an aggregate's own methods write, in every class alike.
 
-The heuristic is conservative by design — a guardrail, not a prover. It can false-positive (a variable named `rom`
-holding something else) and false-negative (assignment through a complex expression). The escape hatch is a trailing
-comment on the offending line:
+It matches by field name, not by type: it cannot know what a receiver holds, so `rom.name = …`, `rows[0].name = …` and
+`ctx.save_state.files[k] = …` are all caught whatever the variable is called, and a finding names the aggregates that
+declare the field. A value that only shares a field name is flagged too; the escape hatch is a trailing comment on the
+offending line:
 
 ```python
-rom.cover_path = path  # pragma: no aggregate-check
+saves[index].id = save_id  # pragma: no aggregate-check
 ```
 
-**The check is active.** The 13 aggregate roots all carry `@cosmic_aggregate`, so the aggregate-name set is populated
-and any `aggregate.field = ...` assignment in a service fails CI. The escape hatch above is the only way past it.
+What it does not see, and what stays prompt-only, is the register entry's (`CLAUDE.md` → Invariant register).
 
 ### 3. import-linter — domain is stdlib + self only
 
@@ -202,10 +203,11 @@ ones.
 
 ## The aggregate set
 
-Fourteen aggregate roots model the persisted domain (eight from #788, plus `PlatformSyncState` added by ADR-0023,
-`CollectionSyncState` added by #742, `AnsweredSaveDirectory` added by ADR-0041, `ArtworkSlotOutcome` added by #2295, and
-`ArtworkSlotChoice` and `ArtworkSlotHandover` added by #2381). Each lives in its own `domain/<name>.py` module, is
-declared with `@cosmic_aggregate`, and mutates only through verb-named methods. Per
+Sixteen aggregate roots model the persisted domain (eight from #788, plus `PlatformSyncState` added by ADR-0023,
+`CollectionSyncState` added by #742, `AnsweredSaveDirectory` added by ADR-0041, `ArtworkSlotOutcome` added by #2295,
+`ArtworkSlotChoice` and `ArtworkSlotHandover` added by #2381, and `StoredFirmware` and `FirmwareLink` added by #2191).
+Each lives in its own `domain/<name>.py` module, is declared with `@cosmic_aggregate`, and mutates only through
+verb-named methods. Per
 [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md) the
 former `SyncSettings` knobs and `device_name` move to `settings.json`
 ([#822](https://github.com/danielcopper/romm-tender/issues/822)) and `device_id` becomes a `kv_config` row
