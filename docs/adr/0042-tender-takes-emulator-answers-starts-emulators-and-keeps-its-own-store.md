@@ -116,8 +116,9 @@ answer and disagreed. Its reading half is now held by checks; the rest stays pro
   and words them itself; it reads no resolver code and no answer field name. The alternative, a panel that words the
   resolver's codes itself, is the copy that drifted.
 - **A check in CI fails on a second reader**: an import of the resolver outside the reading modules, an import of a name
-  the resolver does not export, and a resolver code or distinctive answer field name named in any other backend module
-  or in the panel. At every update of the vendored resolver a test fails on a code no reading module classifies.
+  the resolver does not export, and a resolver code, a distinctive value of its closed vocabularies or a distinctive
+  answer field name named in any other backend module or in the panel. At every update of the vendored resolver a test
+  fails on a code no reading module classifies.
 - **No exception for a derivation.** The modules that read the answer today stand on the check's lists, which only
   shrink; the issues that build each reading module remove them. Only infrastructure and homonyms are excepted: by name
   and with its reason, the one machine the sources holder keeps and the zstd codec handed to the resolver; the tests as

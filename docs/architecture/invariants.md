@@ -317,18 +317,19 @@ Format: **invariant** — tier — enforced by.
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
   `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
   resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the
-  resolver's codes or distinctive answer field names; and every caveat, health-issue, unresolved and reason code the
-  vendored resolver states is classified by one of them or stands on the list of codes nothing classifies today. Only
-  infrastructure and homonyms are excepted: by name, each with its reason, `adapters/atlas_zstd.py` imports the resolver
-  to hand it the zstd codec and `adapters/emulator_sources.py` holds `RealMachine` (`IMPORT_GRANTS`,
-  `INTERNALS_GRANTED`); `tests/` is excepted as a whole, because tests build the resolver's machines and answers rather
-  than read an answer for display; and a name that means something else in a module stands on `NOT_THE_RESOLVERS`, in
-  the backend's check and in the panel's rule. The modules that read the answer today (`READERS_TODAY`,
-  `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three private imports (`INTERNALS_TO_REMOVE`), the homonyms and the
-  codes nothing classifies (`_UNCLASSIFIED`) stand on lists that only shrink** — check + test + prompt-only —
-  `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and that
-  `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring), the
-  ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
+  resolver's codes, a distinctive value of its other closed vocabularies (the console's own firmware, granularity, root
+  provenance, locating, declaration, `checked`) or one of its distinctive answer field names; and every caveat,
+  health-issue, unresolved and reason code the vendored resolver states is classified by one of them or stands on the
+  list of codes nothing classifies today. Only infrastructure and homonyms are excepted: by name, each with its reason,
+  `adapters/atlas_zstd.py` imports the resolver to hand it the zstd codec and `adapters/emulator_sources.py` holds
+  `RealMachine` (`IMPORT_GRANTS`, `INTERNALS_GRANTED`); `tests/` is excepted as a whole, because tests build the
+  resolver's machines and answers rather than read an answer for display; and a name that means something else in a
+  module stands on `NOT_THE_RESOLVERS`, in the backend's check and in the panel's rule. The modules that read the answer
+  today (`READERS_TODAY`, `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three private imports
+  (`INTERNALS_TO_REMOVE`), the homonyms and the codes nothing classifies (`_UNCLASSIFIED`) stand on lists that only
+  shrink** — check + test + prompt-only — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and
+  that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring),
+  the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
   `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
   once a reading module imports its constant). Every list fails on an entry nothing needs any more; the readers',
   internals' and homonyms' lists fail their tests on an entry they did not hold when they were written, and the reading
@@ -337,26 +338,27 @@ Format: **invariant** — tier — enforced by.
   to it is an edit of that test. Unseen by the ESLint rule: a second site in a listed or excepted file reading the name
   it stands there for; a name as a plain string (`"satisfied" in row`, `Pick<T, "satisfied">`, `T["satisfied"]`); a
   class field, a JSX attribute or an enum member; test files, `src/test-setup.ts` and `src/test-utils/`; a code or name
-  built at run time; a field reached through a spread or `Object.entries`; the values of the resolver's other closed
-  vocabularies; and a watched value handed on through a parameter or a field of Tender's own name. Unseen by the
-  classification test: whether a reading module that names a code reads it rightly. Prompt-only: an entry on
-  `NOT_THE_RESOLVERS` is a name that means something else in its module, never a read of the resolver's answer; a code
-  the resolver adds is classified by a reading module rather than added to the list; Tender keeps no table of its own
-  for anything the resolver answers (find rules, launch command patterns, launch-file types, RomM regions); a join is on
-  the resolver's keys (`declared`, `(emulator, declared_index)`), never on `file_name` alone or a label; where the
-  resolver gives no answer, Tender says it could not be established and an emu-atlas issue asks for it; no decision is
-  proposed that lets Tender work out a fact the resolver states — because the resolver is slow, cannot answer yet, or
-  another page already does it; and the derivations and imports on today's lists stand until the issue that builds their
-  kind's reading module removes them ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D5): fixing one
-  is not a finding, extending one or copying it to a new page is. Without the rule, every layer after the adapter
-  decides a fact of its own from the raw answer, and the layers disagree: whether a file is required, whether a one-of
-  group is met, whether a file is there, which file a requirement means (one image under two spellings became two rows),
-  and what a caveat code means, copied into the backend and into the panel. The adapter turns the answer into Tender's
-  own view, joined on the resolver's keys; the panel receives Tender's own closed set of marks per row, group and
-  emulator and words them; and a Tender field that carries one of the watched names is renamed when the reading module
-  of its kind is built ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D1–D3). Which names are watched
-  and why the others are not is `WATCHED_NAMES` in the script. The checks hold the reading half of ADR-0042's first
-  decision; the rest of it stays prose, the prompt-only part above
+  built at run time; a field reached through a spread or `Object.entries`; a generic word of those vocabularies, which
+  the check leaves out (`GENERIC_VALUES`), and a word of Tender's own spoken inside one (`"rejected"`); and a watched
+  value handed on through a parameter or a field of Tender's own name. Unseen by the classification test: whether a
+  reading module that names a code reads it rightly. Prompt-only: an entry on `NOT_THE_RESOLVERS` is a name that means
+  something else in its module, never a read of the resolver's answer; a code the resolver adds is classified by a
+  reading module rather than added to the list; Tender keeps no table of its own for anything the resolver answers (find
+  rules, launch command patterns, launch-file types, RomM regions); a join is on the resolver's keys (`declared`,
+  `(emulator, declared_index)`), never on `file_name` alone or a label; where the resolver gives no answer, Tender says
+  it could not be established and an emu-atlas issue asks for it; no decision is proposed that lets Tender work out a
+  fact the resolver states — because the resolver is slow, cannot answer yet, or another page already does it; and the
+  derivations and imports on today's lists stand until the issue that builds their kind's reading module removes them
+  ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D5): fixing one is not a finding, extending one or
+  copying it to a new page is. Without the rule, every layer after the adapter decides a fact of its own from the raw
+  answer, and the layers disagree: whether a file is required, whether a one-of group is met, whether a file is there,
+  which file a requirement means (one image under two spellings became two rows), and what a caveat code means, copied
+  into the backend and into the panel. The adapter turns the answer into Tender's own view, joined on the resolver's
+  keys; the panel receives Tender's own closed set of marks per row, group and emulator and words them; and a Tender
+  field that carries one of the watched names is renamed when the reading module of its kind is built
+  ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D1–D3). Which names and values are watched, and why
+  the others are not, is `WATCHED_NAMES` and `GENERIC_VALUES` in the script. The checks hold the reading half of
+  ADR-0042's first decision; the rest of it stays prose, the prompt-only part above
 - **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
   `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
   `domain/emulator_sources.py::answering_source` names** — test + prompt-only —
