@@ -106,12 +106,13 @@ byte-identical to that server save?" — is answered by a two-route disjunction,
 
 The baseline pair is written together at the recorded-baseline writer sites (`RomSaveSyncState.record_transfer` on
 upload/download; `RomSaveSyncState.adopt_head` for the adopt of an identical head — in the sync, the status read and
-keep_local's adopt without an upload; and copy to slot's `upload_failed` baseline in `SaveCopyService`) with honest
-provenance per flow — the upload response's `content_hash` (RomM hashed the bytes it received), the adopted server
-save's `content_hash` on download or adopt — recording `None` when a response/save carries none rather than fabricating
-one from a local recomputation, so a stored server hash always truthfully pairs with its `last_sync_hash`. The negotiate
-inventory (`build_save_inventory`) still sends the locally-computed `content_hash`: echoing the stored hash buys nothing
-while the computed hash already is RomM's scheme (#1457), and it stays the client's own statement of local content.
+keep_local's adopt without an upload; and `RomSaveSyncState.adopt_head_with_local_change` for copy to slot's
+`upload_failed` baseline) with honest provenance per flow — the upload response's `content_hash` (RomM hashed the bytes
+it received), the adopted server save's `content_hash` on download or adopt — recording `None` when a response/save
+carries none rather than fabricating one from a local recomputation, so a stored server hash always truthfully pairs
+with its `last_sync_hash`. The negotiate inventory (`build_save_inventory`) still sends the locally-computed
+`content_hash`: echoing the stored hash buys nothing while the computed hash already is RomM's scheme (#1457), and it
+stays the client's own statement of local content.
 
 Every local hash that reaches this comparison — the matrix's `local_hash`, the post-op baseline (`last_sync_hash`), the
 drift check, the slot-switch pending-changes check, and the keep_local adopt-without-upload probe — is computed with
