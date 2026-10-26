@@ -41,7 +41,9 @@ What it does not see:
 * an import through ``importlib`` or ``__import__`` whose module name is not a
   string constant;
 * which of a module's sites reads a listed name: once a module is listed for a
-  name, a second site in it reading that name passes.
+  name, a second site in it reading that name passes;
+* a fact the reading module passes on under a name of Tender's own, which a
+  later layer may still judge again.
 
 Exit 0 when nothing outside the lists reads the resolver, 1 (one line per
 finding) otherwise. ``--write`` rewrites :data:`FRONTEND_VOCABULARY` and exits 0.

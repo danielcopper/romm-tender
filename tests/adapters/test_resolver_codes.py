@@ -3,10 +3,8 @@
 A code is classified once a reading module names it: it imports the code's
 constant from the resolver, to read it or to hold it in a set it deliberately
 ignores or cannot reach, with the reason beside that set. An update of the
-resolver that adds a code fails here until a reading module classifies it,
-and a reading module cannot name a code the resolver does not state — its
-import would fail, and so does this test where it names a constant of these
-families the resolver does not export.
+resolver that adds a code fails here until a reading module classifies it, and
+one that drops a code a reading module names fails here too.
 
 The codes are the caveat, health-issue and unresolved families, taken from
 ``atlas.__all__`` by their constant's prefix. Which modules read the answer is

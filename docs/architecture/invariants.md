@@ -330,10 +330,10 @@ Format: **invariant** — tier — enforced by.
   test's own list, which fails on a code a reading module classifies or the resolver no longer states, so a code added
   to it is an edit of the test. Unseen by the ESLint rule: test files and `src/test-utils/`, a code or name built at run
   time, a name in a type operator (`Pick<T, "satisfied">`), and a field reached through a spread or `Object.entries`.
-  Unseen by the classification test: whether a reading module that names a code reads it rightly. Without it, every
-  layer after the adapter decides a fact of its own from the raw answer, and the layers disagree: whether a file is
-  required, whether a one-of group is met, whether a file is there, which file a requirement means (one image under two
-  spellings became two rows), and what a caveat code means, copied into the backend and into the panel. The adapter
+  Unseen by the classification test: whether a reading module that names a code reads it rightly. Without the rule,
+  every layer after the adapter decides a fact of its own from the raw answer, and the layers disagree: whether a file
+  is required, whether a one-of group is met, whether a file is there, which file a requirement means (one image under
+  two spellings became two rows), and what a caveat code means, copied into the backend and into the panel. The adapter
   turns the answer into Tender's own view, joined on the resolver's keys; the panel receives Tender's own closed set of
   marks per row, group and emulator and words them; and a Tender field that carries one of the watched names is renamed
   when the reading module of its kind is built ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D1–D3).
