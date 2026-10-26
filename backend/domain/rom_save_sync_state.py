@@ -247,6 +247,45 @@ class RomSaveSyncState:
             last_sync_content_size=local.content_size,
         )
 
+    def adopt_head_with_local_change(self, filename: str, head: dict[str, Any]) -> bool:
+        """Record *head* as *filename*'s baseline, so the next sync reads the local file as a change against it.
+
+        The adopt after a copy's upload failed: the local file holds the copy
+        and was not measured. Both hashes are the head's ``content_hash``, its
+        id is the tracked and the last-synced save, its ``file_size_bytes`` the
+        server and the local size, and its ``updated_at`` the server time
+        (empty where the head states none); ``last_sync_at`` stays what
+        *filename*'s previous baseline recorded, and, recorded from the
+        server's size alone, it carries no mtime and no content size.
+
+        A head without a ``content_hash`` or an id drops *filename*'s tracking
+        instead and answers ``False`` — unlike :meth:`record_transfer`, which
+        changes nothing where it records nothing. Without both there is no
+        baseline to record, a hash made up to differ from the copy would claim
+        a sync that never happened, and the previous baseline would let a next
+        sync on a head this device is not current on download it over the
+        copy; with no baseline beside a head it cannot prove the copy identical
+        to, the next sync surfaces a conflict.
+        """
+        head_hash = head.get("content_hash")
+        head_id = head.get("id")
+        if not head_hash or not head_id:
+            self.delete_file_tracking(filename)
+            return False
+        previous = self.files.get(filename)
+        self.adopt_baseline(
+            filename,
+            tracked_save_id=int(head_id),
+            last_sync_hash=head_hash,
+            last_sync_server_hash=head_hash,
+            last_sync_at=previous.last_sync_at if previous else "",
+            last_sync_server_updated_at=head.get("updated_at") or "",
+            last_sync_server_save_id=int(head_id),
+            last_sync_server_size=head.get("file_size_bytes"),
+            last_sync_local_size=head.get("file_size_bytes"),
+        )
+        return True
+
     def backfill_content_size(self, filename: str, *, local_hash: str, content_size: int) -> None:
         """Record the content size of ``filename``'s baseline, taken from the file still holding it.
 

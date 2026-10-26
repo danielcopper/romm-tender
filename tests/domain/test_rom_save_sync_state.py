@@ -521,6 +521,64 @@ class TestAdoptHead:
         assert state.files["game.srm"].last_sync_server_updated_at == ""
 
 
+class TestAdoptHeadWithLocalChange:
+    def test_the_baseline_is_composed_from_the_head_alone(self):
+        previous = FileSyncState(
+            tracked_save_id=5,
+            last_sync_hash="copy-hash",
+            last_sync_at="2026-03-01T00:00:00Z",
+            last_sync_local_mtime=1700000000.5,
+            last_sync_content_size=32768,
+        )
+        state = RomSaveSyncState(files={"game.srm": previous})
+
+        adopted = state.adopt_head_with_local_change("game.srm", _HEAD)
+
+        assert adopted is True
+        assert state.files["game.srm"] == FileSyncState(
+            tracked_save_id=77,
+            last_sync_hash="server-hash",
+            last_sync_server_hash="server-hash",
+            last_sync_at="2026-03-01T00:00:00Z",
+            last_sync_server_updated_at="2026-02-17T06:00:00Z",
+            last_sync_server_save_id=77,
+            last_sync_server_size=131072,
+            last_sync_local_mtime=None,
+            last_sync_local_size=131072,
+            last_sync_content_size=None,
+        )
+
+    def test_a_file_without_a_previous_baseline_records_no_sync_time(self):
+        state = RomSaveSyncState()
+        assert state.adopt_head_with_local_change("game.srm", _HEAD) is True
+        assert state.files["game.srm"].last_sync_at == ""
+
+    def test_a_head_without_updated_at_records_none_known(self):
+        state = RomSaveSyncState()
+        head = {k: v for k, v in _HEAD.items() if k != "updated_at"}
+        state.adopt_head_with_local_change("game.srm", head)
+        assert state.files["game.srm"].last_sync_server_updated_at == ""
+
+    @pytest.mark.parametrize(
+        "head",
+        [
+            {k: v for k, v in _HEAD.items() if k != "content_hash"},
+            {**_HEAD, "content_hash": ""},
+            {k: v for k, v in _HEAD.items() if k != "id"},
+            {**_HEAD, "id": None},
+        ],
+        ids=["no-content-hash", "empty-content-hash", "no-id", "id-none"],
+    )
+    def test_a_head_without_a_content_hash_or_an_id_drops_the_tracking(self, head):
+        other = FileSyncState(tracked_save_id=6, last_sync_hash="other")
+        state = RomSaveSyncState(
+            files={"game.srm": FileSyncState(tracked_save_id=5, last_sync_hash="earlier"), "game.rtc": other}
+        )
+
+        assert state.adopt_head_with_local_change("game.srm", head) is False
+        assert state.files == {"game.rtc": other}
+
+
 class TestUploadSlot:
     def test_upload_slot_branches(self):
         """``upload_slot`` maps each (active_slot, slots) case correctly.

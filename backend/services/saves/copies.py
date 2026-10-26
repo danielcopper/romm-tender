@@ -143,44 +143,22 @@ class SaveCopyService:
         on disk as a change against the save the target slot holds; what that
         sync then does is the copy section of
         ``docs/architecture/save-file-sync-architecture.md``. A slot with no such
-        save keeps the baseline the download recorded. A head without a
-        ``content_hash`` or an id drops the file's tracking instead: without both
-        there is no baseline to record, a hash made up to differ from the copy
-        would claim a sync that never happened, and the download's baseline
-        would let a next sync on a head this device is not current on download
-        it over the copy. With no baseline beside a head it cannot prove the
-        copy identical to, the next sync surfaces a conflict.
-
-        This baseline is recorded from the server's size alone, so it carries
-        no content size.
+        save keeps the baseline the download recorded. The baseline, and the
+        dropped tracking of a head without a ``content_hash`` or an id, are
+        :meth:`RomSaveSyncState.adopt_head_with_local_change`'s.
         """
         in_slot = [s for s in server_saves if save_in_slot(s, target_slot)]
         head = newest_server_saves_by_target(in_slot, rom_name, known_names=save_names).get(canonical)
         if head is None:
             return
-        head_hash = head.get("content_hash")
-        if not head_hash or not head.get("id"):
+        if not save_state.adopt_head_with_local_change(canonical, head):
             self._logger.warning(
                 "_copy_save_to_slot_io: newest save %r in slot %r carries no content_hash or id; "
-                "dropping the tracking of %r",
+                "dropped the tracking of %r",
                 head.get("id"),
                 target_slot,
                 canonical,
             )
-            save_state.delete_file_tracking(canonical)
-            return
-        previous = save_state.files.get(canonical)
-        save_state.adopt_baseline(
-            canonical,
-            tracked_save_id=int(head["id"]),
-            last_sync_hash=head_hash,
-            last_sync_server_hash=head_hash,
-            last_sync_at=previous.last_sync_at if previous else "",
-            last_sync_server_updated_at=head.get("updated_at") or "",
-            last_sync_server_save_id=int(head["id"]),
-            last_sync_server_size=head.get("file_size_bytes"),
-            last_sync_local_size=head.get("file_size_bytes"),
-        )
 
     # ------------------------------------------------------------------
     # Copy-to-slot API
