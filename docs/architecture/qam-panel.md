@@ -1722,31 +1722,33 @@ it, for the focused platform:
 
   **The game page's BIOS tab stands in two columns** (#2429 D1). The left one is 760 CSS px wide and holds, top to
   bottom, the sentence and the group block, the emulator selector, the shown emulator's files, the buttons and the
-  legend; the right one takes the rest of the width (at least 400 CSS px) and holds the library section. Where the page
-  is narrower than both need — the Deck's game page, where Big Picture's desktop one is not — the right column wraps
-  below the left; nothing measures, the wrap is CSS's (`BiosTab.tsx`). Everything under the sentence and the group block
-  is the platform page's part, drawn from the same module (`frontend/src/bigpicture/bios/`): the selector in the left
-  column's gutter, aligned with the sentence and the table; the table with every row the shown emulator lists (#2429
-  D3), its marks, `Contents` and one button per row — Download, Replace… or Delete — under the same rules, confirmations
-  and lines; `Download required for <emulator> (N)`, which on the game page sends the shown entry's identity for the
-  launching emulator too, since a game can launch with another emulator than its platform's pick; under
-  `For all of <platform>`, `Download all` and `Delete downloads (N)`; the status line under them; the library section;
-  one legend for both columns — under the left column's buttons, dimmed, its entries side by side where the platform
-  page's stand one per line. Every download and Replace… on the game page sends the game's ROM id, so the requirement it
-  reads, the place it replaces at and the links it places follow the system the game's install record holds — the system
-  the tab's rows were read for (`platform_system(slug, rom_id)` in `backend/services/firmware/downloads.py`); the
-  platform page sends none and acts for the platform's main system. The game's BIOS answer carries what those buttons
-  stand on, as the platform's does, the answer that nothing could be established included: the emulator entries, the
-  delete counts (`deletable_count`, `delete_name`) and `server_offline`, which withdraws the downloads while RomM's
-  listing cannot be read (`check_platform_bios` in `backend/services/firmware/status.py`); that answer still holds no
-  row and no count. **Every row is a focus stop** (#2429 D6): a row with a button is reached as that button, and a row
-  without one is a `DialogButton` around the row that does nothing when pressed — on the game page a `Focusable` around
-  content that is not a control registers no gamepad stop (`utils/scrollHelpers.ts`), which is why that page's rows are
-  not the table's own `Focusable`. Such a row keeps its own text colours while it holds focus, where Steam would paint
-  them for a focused button, and shows focus with the fill and edge marker a pane's table row draws while its control
-  holds focus (`FOCUSED_ROW`, `layout/pane.tsx`), through the `.romm-bios-row-stop.gpfocus` rule of the game page's
-  injected stylesheet (`utils/styleInjector.ts`, which names the rule of Steam's it overrides). Each column is a
-  `Focusable` with `flow-children="column"`, so up and down move within it until its end, and the two stand in one with
+  legend; the right one takes the rest of the width (at least 400 CSS px) and holds the library section. The right
+  column is drawn only where the library section has a row; without one, the left column takes the full width instead of
+  standing beside an empty column. Where the page is narrower than both need — the Deck's game page, where Big Picture's
+  desktop one is not — the right column wraps below the left; nothing measures, the wrap is CSS's (`BiosTab.tsx`).
+  Everything under the sentence and the group block is the platform page's part, drawn from the same module
+  (`frontend/src/bigpicture/bios/`): the selector in the left column's gutter, aligned with the sentence and the table;
+  the table with every row the shown emulator lists (#2429 D3), its marks, `Contents` and one button per row — Download,
+  Replace… or Delete — under the same rules, confirmations and lines; `Download required for <emulator> (N)`, which on
+  the game page sends the shown entry's identity for the launching emulator too, since a game can launch with another
+  emulator than its platform's pick; under `For all of <platform>`, `Download all` and `Delete downloads (N)`; the
+  status line under them; the library section; one legend for both columns — under the left column's buttons, dimmed,
+  its entries side by side where the platform page's stand one per line. Every download and Replace… on the game page
+  sends the game's ROM id, so the requirement it reads, the place it replaces at and the links it places follow the
+  system the game's install record holds — the system the tab's rows were read for (`platform_system(slug, rom_id)` in
+  `backend/services/firmware/downloads.py`); the platform page sends none and acts for the platform's main system. The
+  game's BIOS answer carries what those buttons stand on, as the platform's does, the answer that nothing could be
+  established included: the emulator entries, the delete counts (`deletable_count`, `delete_name`) and `server_offline`,
+  which withdraws the downloads while RomM's listing cannot be read (`check_platform_bios` in
+  `backend/services/firmware/status.py`); that answer still holds no row and no count. **Every row is a focus stop**
+  (#2429 D6): a row with a button is reached as that button, and a row without one is a `DialogButton` around the row
+  that does nothing when pressed — on the game page a `Focusable` around content that is not a control registers no
+  gamepad stop (`utils/scrollHelpers.ts`), which is why that page's rows are not the table's own `Focusable`. Such a row
+  keeps its own text colours while it holds focus, where Steam would paint them for a focused button, and shows focus
+  with the fill and edge marker a pane's table row draws while its control holds focus (`FOCUSED_ROW`,
+  `layout/pane.tsx`), through the `.romm-bios-row-stop.gpfocus` rule of the game page's injected stylesheet
+  (`utils/styleInjector.ts`, which names the rule of Steam's it overrides). Each column is a `Focusable` with
+  `flow-children="column"`, so up and down move within it until its end, and the two stand in one with
   `flow-children="grid"`: Steam steps left and right to the column beside, and down past the left column's end to the
   one that has wrapped below it, and nothing of ours measures which. Left and right enter a column on the stop it last
   had focus on, because grid flow enters a column sideways without a position to match, where geometric flow would hand

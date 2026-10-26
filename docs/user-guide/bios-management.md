@@ -132,18 +132,19 @@ those of the emulator you launch with.
 
 The tab stands in two columns. The left one holds this line, the emulator selector, the chosen emulator's files as a
 table, the buttons under it and, dimmed below them, what the marks on either column mean; the right one holds the files
-in your RomM library that no emulator was found to ask for. On the Steam Deck, where the page is too narrow for both,
-the right column stands below the left one. The table and its buttons are the ones **Library › Platforms** shows for the
-platform (steps 8 to 12 there): the same columns, marks and words, a **Download**, **Replace…** or **Delete** button on
-every row that has one, **Download required for _emulator_**, and under **For all of _platform_** **Download all** and
-**Delete downloads**, all acting on the game's platform, for the system the game was downloaded under. Where nothing
-could be established about what the emulator needs, the tab still offers the deletes and the emulator selector, as the
-platform's page does. Every row is a stop the controller lands on, so you can scroll to each one; a row without a button
-does nothing when you press it. Up and down move within a column, and left and right move between the two, back to where
-you last were in the other one; on the Steam Deck, where the right column stands below, moving down past the left
-column's last button reaches it. What a press did to a row — a link it could not place, a download that arrived damaged,
-a file it replaced — is said on that row; what else it could not do, or what it moved out of the way, is said in a line
-under the buttons.
+in your RomM library that no emulator was found to ask for, and is there only when your library holds such a file —
+without one, the left column takes the whole width. On the Steam Deck, where the page is too narrow for both, the right
+column stands below the left one. The table and its buttons are the ones **Library › Platforms** shows for the platform
+(steps 8 to 12 there): the same columns, marks and words, a **Download**, **Replace…** or **Delete** button on every row
+that has one, **Download required for _emulator_**, and under **For all of _platform_** **Download all** and **Delete
+downloads**, all acting on the game's platform, for the system the game was downloaded under. Where nothing could be
+established about what the emulator needs, the tab still offers the deletes and the emulator selector, as the platform's
+page does. Every row is a stop the controller lands on, so you can scroll to each one; a row without a button does
+nothing when you press it. Up and down move within a column, and left and right move between the two, back to where you
+last were in the other one; on the Steam Deck, where the right column stands below, moving down past the left column's
+last button reaches it. What a press did to a row — a link it could not place, a download that arrived damaged, a file
+it replaced — is said on that row; what else it could not do, or what it moved out of the way, is said in a line under
+the buttons.
 
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. It follows the red
 verdict and nothing else: the resolver says the emulator you launch with does not have what it needs — a required file

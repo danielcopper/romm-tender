@@ -2118,11 +2118,26 @@ describe("BiosTab", () => {
       // happy-dom lays nothing out, so what is pinned is the rule the browser
       // wraps by: a left column of a fixed 760 CSS px, a right one of at least
       // 400, and a row that wraps.
-      const { getByTestId } = renderPsx();
+      const { getByTestId } = renderPsx(withLibraryFile());
       expect(getByTestId("bios-columns").style.flexWrap).toBe("wrap");
       expect(getByTestId("bios-main-column").style.flex).toBe("0 0 760px");
       expect(getByTestId("bios-library-column").style.flex).toBe("1 1 400px");
       expect(getByTestId("bios-main-column").nextElementSibling).toBe(getByTestId("bios-library-column"));
+    });
+
+    it("draws no library column, and lets the left one take the full width, where the library holds nothing else", () => {
+      const { container, getByTestId, queryByTestId } = renderPsx();
+      expect(queryByTestId("bios-library-column")).toBeNull();
+      expect(container.querySelectorAll(".romm-bios-column")).toHaveLength(1);
+      expect(getByTestId("bios-main-column").style.flex).toBe("1 1 100%");
+      expect(getByTestId("bios-main-column").style.maxWidth).toBe("100%");
+    });
+
+    it("draws the library column beside the left one where the library holds a file no emulator asks for", () => {
+      const { getByTestId } = renderPsx(withLibraryFile());
+      const library = getByTestId("bios-library-column");
+      expect(getByTestId("bios-main-column").nextElementSibling).toBe(library);
+      expect(library.textContent).toContain("scph7001.bin");
     });
 
     it("moves between the two columns by where they stand, and up and down inside each", () => {
@@ -2185,7 +2200,7 @@ describe("BiosTab", () => {
       // Why grid flow needs the columns to overlap from top to bottom:
       // docs/architecture/qam-panel.md, "The game page's BIOS tab stands in two
       // columns".
-      const { getByTestId } = renderPsx();
+      const { getByTestId } = renderPsx(withLibraryFile());
       expect(getByTestId("bios-columns").style.alignItems).toBe("stretch");
       for (const id of ["bios-main-column", "bios-library-column"]) {
         const column = getByTestId(id);
