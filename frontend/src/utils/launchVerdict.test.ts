@@ -183,6 +183,19 @@ describe("actOnGateVerdict", () => {
     expect(hooks.launch).toHaveBeenCalledWith({ skipReconfirm: true });
   });
 
+  it.each([
+    [false, { skipReconfirm: false }],
+    [true, { skipReconfirm: true }],
+  ])(
+    "play anyway launches, re-confirming the launch options unless Tender did not answer (no answer: %s)",
+    async (noAnswer, options) => {
+      expect(await actOnGateVerdict({ decision: "play_anyway", noAnswer }, ROM_ID, hooks)).toBe("done");
+      expectOnly(hooks, ["launch"]);
+      expect(hooks.launch).toHaveBeenCalledWith(options);
+      expect(hooks.prompts.confirmFallbackLaunch).not.toHaveBeenCalled();
+    },
+  );
+
   it("sync failed: a no is a decline", async () => {
     hooks.prompts.confirmFallbackLaunch.mockResolvedValue(false);
     expect(await actOnGateVerdict({ decision: "sync_failed", message: "" }, ROM_ID, hooks)).toBe("done");

@@ -8,6 +8,7 @@ import { showCoreChangeModal } from "./CoreChangeModal";
 import { showFallbackLaunchModal } from "./FallbackLaunchModal";
 import { showOfflineDriftModal } from "./OfflineDriftModal";
 import { handleConflicts } from "./SyncConflictModal";
+import { showSyncWaitModal } from "./SyncWaitModal";
 import { showUncheckedSourceModal } from "./UncheckedSourceModal";
 
 export const gamepadLaunchPrompts: LaunchPrompts = {
@@ -16,4 +17,5 @@ export const gamepadLaunchPrompts: LaunchPrompts = {
   askOfflineDrift: () => showOfflineDriftModal(),
   confirmFallbackLaunch: (message) => showFallbackLaunchModal(message),
   confirmUncheckedSource: () => showUncheckedSourceModal(),
+  askSyncWait: (reason, finished) => showSyncWaitModal(reason, finished),
 };

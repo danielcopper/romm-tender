@@ -5,7 +5,14 @@
  * game, and what its trigger shows when a start ends without one.
  */
 
-import { runLaunchGate, type GateVerdict, type LaunchGateOps } from "./launchGate";
+import {
+  runLaunchGate,
+  type GateVerdict,
+  type LaunchGateOps,
+  type SyncFinish,
+  type SyncWaitChoice,
+  type SyncWaitReason,
+} from "./launchGate";
 import { startingSourceOffSentence } from "./emulatorSourceWording";
 import { NO_LAUNCH_TARGET_TOAST_BODY } from "./launchTarget";
 import { announceSaveSync } from "./saveSyncEvents";
@@ -13,13 +20,13 @@ import { showToast } from "./toast";
 import type { SyncConflict } from "../types";
 
 /**
- * The five decisions a game start may have to put to the user, as questions
+ * The six decisions a game start may have to put to the user, as questions
  * rather than widgets. `utils/` owns no UI, so a launch path declares what it
  * needs to ask and its surface supplies the answering dialogs.
  *
  * Asking directly would mean reaching from here into the modal modules, which
  * puts the launch funnel's control flow and its presentation in one knot: every
- * test of a gate branch then has to stand up five modal modules to get at it.
+ * test of a gate branch then has to stand up six modal modules to get at it.
  */
 export interface LaunchPrompts {
   /** Core changed since the last session — proceed with the new core? */
@@ -32,6 +39,12 @@ export interface LaunchPrompts {
   confirmFallbackLaunch(message?: string): Promise<boolean>;
   /** Whether the source that would start the game is switched off could not be checked — start anyway? */
   confirmUncheckedSource(): Promise<boolean>;
+  /**
+   * The pre-launch sync has run past the check's limit — wait longer, give up the start, or play on the local
+   * saves? `finished` settles if the sync answers while the question is open: `ready` turns it into "your saves
+   * are ready" (Play / Cancel), `answered` closes it with `answered`.
+   */
+  askSyncWait(reason: SyncWaitReason, finished: Promise<SyncFinish>): Promise<SyncWaitChoice>;
 }
 
 /**
@@ -122,6 +135,9 @@ export async function actOnGateVerdict(
       hooks.onDeclined();
       return "done";
     }
+    case "play_anyway":
+      await hooks.launch({ skipReconfirm: verdict.noAnswer });
+      return "done";
   }
 }
 

@@ -164,6 +164,7 @@ async function runWatcherGate(start: CancelledStart, romId: number, prompts: Lau
     },
     confirmCoreChange: prompts.confirmCoreChange,
     confirmUncheckedStartingSource: prompts.confirmUncheckedSource,
+    askSyncWait: prompts.askSyncWait,
   });
   await runGateLoop(start.appId, romId, ops, {
     prompts,

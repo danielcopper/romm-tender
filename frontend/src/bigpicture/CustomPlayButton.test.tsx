@@ -114,6 +114,9 @@ vi.mock("../shared/UncheckedSourceModal", () => ({
 vi.mock("../shared/SyncConflictModal", () => ({
   handleConflicts: vi.fn(),
 }));
+vi.mock("../shared/SyncWaitModal", () => ({
+  showSyncWaitModal: vi.fn(),
+}));
 vi.mock("../shared/CoreChangeModal", () => ({
   showCoreChangeModal: vi.fn(),
 }));
@@ -153,6 +156,7 @@ import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { showUncheckedSourceModal } from "../shared/UncheckedSourceModal";
 import { handleConflicts } from "../shared/SyncConflictModal";
 import { showCoreChangeModal } from "../shared/CoreChangeModal";
+import { showSyncWaitModal } from "../shared/SyncWaitModal";
 import { HostTransportError } from "../api/hostSocket";
 import { showStopGameModal } from "../bigpicture/StopGameModal";
 import { showAdoptExistingModal } from "../bigpicture/AdoptExistingModal";
@@ -3187,11 +3191,6 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
         vi.mocked(backend.checkLocalDrift).mockReturnValue(never());
       },
     },
-    {
-      wait: "pre_launch_sync",
-      limit: 15000,
-      arrange: () => vi.mocked(backend.preLaunchSync).mockReturnValue(never()),
-    },
   ])("$wait without an answer ends in the fallback dialog at $limit ms", async ({ limit, arrange }) => {
     arrange();
 
@@ -3446,6 +3445,191 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       expect(showFallbackLaunchModal).toHaveBeenCalledTimes(1);
       await launchAfterAnswering(() => dialog.answer(true));
       expect(showFallbackLaunchModal).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe("a pre-launch sync that runs past the check's limit", () => {
+    /** A promise the test settles when it says so. */
+    function held<T>(): { promise: Promise<T>; settle: (value: T) => void } {
+      let settle!: (value: T) => void;
+      const promise = new Promise<T>((resolve) => (settle = resolve));
+      return { promise, settle };
+    }
+
+    const SYNCED = { success: true, message: "", synced: 0, conflicts: [] };
+
+    beforeEach(() => {
+      vi.mocked(backend.preLaunchSync).mockReturnValue(never());
+      vi.mocked(backend.preLaunchSyncState).mockResolvedValue({ state: "waiting_for_sync", holder: "sync_all" });
+      vi.mocked(backend.stopPreLaunchSync).mockResolvedValue({ success: true, stopped: true });
+      vi.mocked(showSyncWaitModal).mockReturnValue(never());
+    });
+
+    it("asks at 15 s why the start waits, and starts nothing", async () => {
+      await pressPlay();
+      await advance(14999);
+      expect(showSyncWaitModal).not.toHaveBeenCalled();
+
+      await advance(1);
+
+      expect(backend.preLaunchSyncState).toHaveBeenCalledWith(42);
+      expect(showSyncWaitModal).toHaveBeenCalledWith({ kind: "another_sync", holder: "sync_all" }, expect.any(Promise));
+      expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+      expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+    });
+
+    it("Wait waits 15 s more, then asks again with the reason read again", async () => {
+      vi.mocked(showSyncWaitModal).mockResolvedValueOnce("wait");
+      vi.mocked(backend.preLaunchSyncState)
+        .mockResolvedValueOnce({ state: "waiting_for_sync", holder: "sync_all" })
+        .mockResolvedValueOnce({ state: "syncing" });
+
+      await pressPlay();
+      await advance(15000);
+      expect(showSyncWaitModal).toHaveBeenCalledTimes(1);
+      await advance(14999);
+      expect(showSyncWaitModal).toHaveBeenCalledTimes(1);
+
+      await advance(1);
+
+      expect(showSyncWaitModal).toHaveBeenCalledTimes(2);
+      expect(showSyncWaitModal).toHaveBeenLastCalledWith({ kind: "syncing" }, expect.any(Promise));
+      expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+    });
+
+    it("a sync that answers during Wait starts the game as any answer would", async () => {
+      const sync = held<typeof SYNCED>();
+      vi.mocked(backend.preLaunchSync).mockReturnValue(sync.promise);
+      vi.mocked(showSyncWaitModal).mockResolvedValueOnce("wait");
+
+      await pressPlay();
+      await advance(15000);
+      await advance(10000);
+      expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+      await act(async () => {
+        sync.settle(SYNCED);
+      });
+      await advance(0);
+
+      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
+    });
+
+    it("Play Anyway stops this game's sync, then re-confirms the launch options and starts", async () => {
+      vi.mocked(showSyncWaitModal).mockResolvedValueOnce("play_anyway");
+      const order: string[] = [];
+      vi.mocked(backend.stopPreLaunchSync).mockImplementation(async () => {
+        order.push("stop");
+        return { success: true, stopped: true };
+      });
+      vi.mocked(SteamClient.Apps.RunGame).mockImplementation(() => order.push("start"));
+
+      await pressPlay();
+      await advance(15000);
+
+      expect(backend.stopPreLaunchSync).toHaveBeenCalledWith(42);
+      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(order).toEqual(["stop", "start"]);
+    });
+
+    it("Play Anyway after Tender did not answer starts without waiting for the stop or re-confirming", async () => {
+      vi.mocked(backend.preLaunchSyncState).mockReturnValue(never());
+      vi.mocked(backend.stopPreLaunchSync).mockReturnValue(never());
+      vi.mocked(showSyncWaitModal).mockResolvedValueOnce("play_anyway");
+
+      await pressPlay();
+      await advance(15000 + 4999);
+      expect(showSyncWaitModal).not.toHaveBeenCalled();
+      await advance(1);
+
+      expect(showSyncWaitModal).toHaveBeenCalledWith({ kind: "not_answering" }, expect.any(Promise));
+      expect(backend.stopPreLaunchSync).toHaveBeenCalledWith(42);
+      expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
+      expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
+    });
+
+    it("a sync that finishes while the question is open is ready, and the game starts only on Play", async () => {
+      const sync = held<typeof SYNCED>();
+      vi.mocked(backend.preLaunchSync).mockReturnValue(sync.promise);
+      const question = held<"answered">();
+      let finished: Promise<string> | undefined;
+      vi.mocked(showSyncWaitModal).mockImplementation((_reason, f) => {
+        finished = f;
+        return question.promise;
+      });
+
+      await pressPlay();
+      await advance(15000);
+      await act(async () => {
+        sync.settle(SYNCED);
+      });
+      expect(await finished).toBe("ready");
+      await advance(20000);
+      expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+
+      await act(async () => {
+        question.settle("answered");
+      });
+      await advance(0);
+
+      expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
+    });
+
+    it("a sync that answers a conflict while the question is open closes it and asks about the conflict", async () => {
+      const sync = held<Awaited<ReturnType<typeof backend.preLaunchSync>>>();
+      vi.mocked(backend.preLaunchSync).mockReturnValue(sync.promise);
+      vi.mocked(showSyncWaitModal).mockImplementation(async (_reason, finished) => {
+        expect(await finished).toBe("answered");
+        return "answered";
+      });
+      vi.mocked(handleConflicts).mockReturnValue(never());
+      const conflict = {
+        type: "sync_conflict",
+        rom_id: 42,
+        filename: "pokemon.srm",
+        server_save_id: 7,
+        server_updated_at: "2026-01-01T00:00:00Z",
+        server_size: 1024,
+        local_path: "/saves/pokemon.srm",
+        local_hash: "abc",
+        local_mtime: "2026-01-01T00:00:00Z",
+        local_size: 1024,
+        created_at: "2026-01-01T00:00:00Z",
+      } as const;
+
+      await pressPlay();
+      await advance(15000);
+      await act(async () => {
+        sync.settle({ success: true, message: "", synced: 0, conflicts: [conflict] });
+      });
+      await advance(0);
+
+      expect(handleConflicts).toHaveBeenCalledWith([conflict]);
+      expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+    });
+
+    it("Cancel starts nothing, stops nothing, and the late answer tells the page to re-read its saves", async () => {
+      const sync = held<typeof SYNCED>();
+      vi.mocked(backend.preLaunchSync).mockReturnValue(sync.promise);
+      vi.mocked(showSyncWaitModal).mockResolvedValueOnce("cancel");
+      const announced = vi.fn();
+      globalThis.addEventListener("romm_data_changed", announced);
+
+      try {
+        const { getByText } = await pressPlay();
+        await advance(15000);
+        expect(getByText("Play")).toBeInTheDocument();
+
+        await act(async () => {
+          sync.settle(SYNCED);
+        });
+        await advance(0);
+
+        expect(backend.stopPreLaunchSync).not.toHaveBeenCalled();
+        expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+        expect(announced).toHaveBeenCalledWith(expect.objectContaining({ detail: { type: "save_sync", rom_id: 42 } }));
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", announced);
+      }
     });
   });
 });

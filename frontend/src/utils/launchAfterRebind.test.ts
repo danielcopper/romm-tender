@@ -58,6 +58,7 @@ const prompts: LaunchPrompts = {
   askOfflineDrift: vi.fn(),
   confirmFallbackLaunch: vi.fn(),
   confirmUncheckedSource: vi.fn(),
+  askSyncWait: vi.fn(),
 };
 
 const APP_ID = 3000000001;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fallbackLaunchDescription, unsyncedSavesDescription } from "./launchPromptWording";
+import { fallbackLaunchDescription, syncWaitDescription, unsyncedSavesDescription } from "./launchPromptWording";
 
 describe("fallbackLaunchDescription", () => {
   it("asks over the failed sync's own message", () => {
@@ -44,5 +44,32 @@ describe("unsyncedSavesDescription", () => {
       '"USA" has saves that haven\'t been synced to RomM. "USA" is no longer available on RomM, so its saves ' +
         "can't be uploaded. They stay on disk.",
     );
+  });
+});
+
+describe("syncWaitDescription", () => {
+  const choices = " Wait a little longer, or play with the saves on this device?";
+
+  it.each([
+    ["sync_all", "Another save sync is still running (Sync All)."],
+    ["post_exit", "The save sync after the last game is still running."],
+    ["rom_sync", "A manual save sync is still running."],
+    ["pre_launch", "The save sync of another start is still running."],
+  ] as const)("names the %s run the start waits for", (holder, why) => {
+    expect(syncWaitDescription({ kind: "another_sync", holder })).toBe(why + choices);
+  });
+
+  it("says this game's saves are busy while something else holds them", () => {
+    expect(syncWaitDescription({ kind: "this_game_busy" })).toBe(
+      "Tender is still busy with this game's saves." + choices,
+    );
+  });
+
+  it("says this game's saves are still syncing", () => {
+    expect(syncWaitDescription({ kind: "syncing" })).toBe("This game's saves are still syncing with RomM." + choices);
+  });
+
+  it("says Tender is not answering where it did not say what the sync is doing", () => {
+    expect(syncWaitDescription({ kind: "not_answering" })).toBe("Tender is not answering." + choices);
   });
 });

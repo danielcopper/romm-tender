@@ -13,26 +13,116 @@ import {
   isSaveTrackingConfigured,
   logError,
   preLaunchSync,
+  preLaunchSyncState,
   probeReachability,
+  stopPreLaunchSync,
 } from "../api/backend";
 import { reportServerReachable } from "./connectionState";
 import { detach } from "./detach";
-import { BENIGN_SYNC_SKIP_REASONS, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
-import type { LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
+import { BENIGN_SYNC_SKIP_REASONS, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS, SYNC_WAIT_MORE_MS } from "./launchGate";
+import type { LaunchGateOps, PreLaunchSyncAnswer, PreLaunchSyncOutcome, SyncWaitReason } from "./launchGate";
+import type { LaunchPrompts } from "./launchVerdict";
 import { romHasLaunchTarget } from "./launchTarget";
 import { confirmCoreChangeIfNeeded } from "./coreChange";
 import { getMigrationState } from "./migrationStore";
 import { readStartingSource } from "./startingSource";
+import { announceSaveSync } from "./saveSyncEvents";
 import { saveSyncToastBody } from "./saveSyncToast";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
 import { showToast } from "./toast";
-import { boundedOr, withTimeout } from "./withTimeout";
+import { TimeoutError, boundedOr, withTimeout } from "./withTimeout";
 
 interface PreLaunchSyncOptions {
   /** Prefixes every log line, naming the launch path. */
   tag: string;
   /** Whether a successful sync that moved saves is toasted (`saveSyncToastBody`). */
   toastSyncResult: boolean;
+  /** The question put to the user once the sync has run past its limit. */
+  askSyncWait: LaunchPrompts["askSyncWait"];
+}
+
+type PreLaunchSyncResult = Awaited<ReturnType<typeof preLaunchSync>>;
+
+/** How the call settled: its answer, or why it failed. */
+type PreLaunchSyncSettled = { result: PreLaunchSyncResult } | { failure: unknown };
+
+/** How the call settled within `ms`, `undefined` past it. */
+async function settledWithin(
+  call: Promise<PreLaunchSyncSettled>,
+  ms: number,
+): Promise<PreLaunchSyncSettled | undefined> {
+  try {
+    return await withTimeout(call, ms);
+  } catch (e) {
+    if (e instanceof TimeoutError) return undefined;
+    throw e;
+  }
+}
+
+function isBenignSkip(result: PreLaunchSyncResult): boolean {
+  return result.reason !== undefined && BENIGN_SYNC_SKIP_REASONS.includes(result.reason);
+}
+
+/** Whether a start may go ahead on how the call settled with nothing more to ask. */
+function startsOn(settled: PreLaunchSyncSettled): boolean {
+  if (!("result" in settled)) return false;
+  const { result } = settled;
+  return isBenignSkip(result) || (result.success && !result.conflicts?.length);
+}
+
+/**
+ * Why the start still waits, read from the backend; a read that fails or gets
+ * no answer within {@link LOCAL_CALL_LIMIT_MS} is Tender not answering. A sync
+ * that just ended is still answered as syncing: its own answer is on its way.
+ */
+async function readSyncWaitReason(romId: number, tag: string): Promise<SyncWaitReason> {
+  try {
+    const state = await withTimeout(preLaunchSyncState(romId), LOCAL_CALL_LIMIT_MS);
+    if (state.state === "waiting_for_sync") return { kind: "another_sync", holder: state.holder };
+    if (state.state === "waiting_for_rom") return { kind: "this_game_busy" };
+    return { kind: "syncing" };
+  } catch (e) {
+    logError(`${tag}: what the pre-launch sync is doing could not be read: ${e}`);
+    return { kind: "not_answering" };
+  }
+}
+
+/**
+ * Stop the pre-launch sync before the game starts. Where Tender did not answer
+ * what it is doing, the stop is sent without waiting for it: the start must not
+ * hang on the backend that did not answer.
+ */
+async function stopTheSync(romId: number, tag: string, reason: SyncWaitReason): Promise<void> {
+  const stop = withTimeout(stopPreLaunchSync(romId), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
+    logError(`${tag}: the pre-launch sync could not be stopped: ${e}`);
+  });
+  if (reason.kind !== "not_answering") await stop;
+}
+
+/**
+ * Let the call given up run to its end: its answer only tells the game's page
+ * to re-read its saves, and is toasted as an answered one would be.
+ */
+function finishInBackground(call: Promise<PreLaunchSyncSettled>, romId: number, options: PreLaunchSyncOptions) {
+  detach(
+    call.then((settled) => {
+      announceSaveSync(romId);
+      if (!("result" in settled)) {
+        logError(`${options.tag}: the pre-launch sync of a start given up failed: ${settled.failure}`);
+        return;
+      }
+      const { result } = settled;
+      detach(
+        debugLog(
+          `${options.tag}: the pre-launch sync of a start given up answered: success=${result.success} reason=${result.reason ?? ""}`,
+        ),
+      );
+      if (result.success && options.toastSyncResult) {
+        const toastBody = saveSyncToastBody(result.uploaded, result.downloaded);
+        if (toastBody) showToast(toastBody);
+      }
+    }),
+  );
 }
 
 /**
@@ -49,16 +139,46 @@ interface PreLaunchSyncOptions {
  * - A throw is `{ success: false, message: "" }`. It must not propagate: the
  *   gate fails open on a throw, which would launch silently on stale saves. The
  *   empty message leaves the fallback prompt its own default sentence.
- * - A sync that gets no answer within {@link SERVER_CALL_LIMIT_MS} is let
- *   through as a `TimeoutError`: the gate answers it.
+ * - A sync that has not answered within {@link SERVER_CALL_LIMIT_MS} is never
+ *   given up: the user is asked why it waits (`askSyncWait`). Wait waits
+ *   {@link SYNC_WAIT_MORE_MS} more and asks again; Play anyway stops the sync
+ *   and answers `play_anyway`; Cancel answers `cancel` and leaves the sync to
+ *   finish in the background.
  */
 export async function runPreLaunchSync(romId: number, options: PreLaunchSyncOptions): Promise<PreLaunchSyncOutcome> {
   const { tag } = options;
-  const result = await boundedOr(preLaunchSync(romId), SERVER_CALL_LIMIT_MS, (e) => {
-    logError(`${tag}: pre-launch sync failed (surfacing fallback confirm): ${e}`);
-    return null;
-  });
-  if (result === null) return { success: false, message: "" };
+  const call: Promise<PreLaunchSyncSettled> = preLaunchSync(romId).then(
+    (result) => ({ result }),
+    (failure: unknown) => ({ failure }),
+  );
+  let settled = await settledWithin(call, SERVER_CALL_LIMIT_MS);
+  while (settled === undefined) {
+    const reason = await readSyncWaitReason(romId, tag);
+    const choice = await options.askSyncWait(
+      reason,
+      call.then((s) => (startsOn(s) ? "ready" : "answered")),
+    );
+    if (choice === "cancel") {
+      finishInBackground(call, romId, options);
+      return { chose: "cancel" };
+    }
+    if (choice === "play_anyway") {
+      await stopTheSync(romId, tag, reason);
+      finishInBackground(call, romId, options);
+      return { chose: "play_anyway", noAnswer: reason.kind === "not_answering" };
+    }
+    settled = choice === "answered" ? await call : await settledWithin(call, SYNC_WAIT_MORE_MS);
+  }
+  return shapePreLaunchAnswer(settled, options);
+}
+
+function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchSyncOptions): PreLaunchSyncAnswer {
+  const { tag } = options;
+  if (!("result" in settled)) {
+    logError(`${tag}: pre-launch sync failed (surfacing fallback confirm): ${settled.failure}`);
+    return { success: false, message: "" };
+  }
+  const { result } = settled;
 
   detach(
     debugLog(
@@ -66,7 +186,7 @@ export async function runPreLaunchSync(romId: number, options: PreLaunchSyncOpti
     ),
   );
 
-  if (result.reason !== undefined && BENIGN_SYNC_SKIP_REASONS.includes(result.reason)) {
+  if (isBenignSkip(result)) {
     detach(debugLog(`${tag}: pre-launch sync skipped (${result.reason}) — launching`));
     return { success: true, message: result.message };
   }

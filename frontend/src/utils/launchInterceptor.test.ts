@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { recheckStranded, toaster } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as backend from "../api/backend";
@@ -24,6 +24,8 @@ vi.mock("../api/backend", () => ({
   checkCoreChange: vi.fn(),
   probeReachability: vi.fn(),
   preLaunchSync: vi.fn(),
+  preLaunchSyncState: vi.fn(),
+  stopPreLaunchSync: vi.fn(),
   checkLocalDrift: vi.fn(),
   getVersionList: vi.fn(),
   // The shared reconcile helper (real module) pulls the single-ROM command here
@@ -93,6 +95,7 @@ const prompts = {
   askOfflineDrift: vi.fn<LaunchPrompts["askOfflineDrift"]>(),
   confirmFallbackLaunch: vi.fn<LaunchPrompts["confirmFallbackLaunch"]>(),
   confirmUncheckedSource: vi.fn<LaunchPrompts["confirmUncheckedSource"]>(),
+  askSyncWait: vi.fn<LaunchPrompts["askSyncWait"]>(),
 };
 
 /** Register with the stub prompts — every test drives the interceptor through this. */
@@ -692,6 +695,103 @@ describe("launchInterceptor — full funnel watcher", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe("a pre-launch sync that runs past the check's limit", () => {
+    const never = <T>(): Promise<T> => new Promise<T>(() => {});
+
+    beforeEach(async () => {
+      const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
+      vi.mocked(launchGate.runLaunchGate).mockImplementation(actual.runLaunchGate);
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+      vi.mocked(backend.preLaunchSync).mockReturnValue(never());
+      vi.mocked(backend.preLaunchSyncState).mockResolvedValue({ state: "waiting_for_sync", holder: "sync_all" });
+      vi.mocked(backend.stopPreLaunchSync).mockResolvedValue({ success: true, stopped: true });
+      prompts.askSyncWait.mockReturnValue(never());
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function startPastTheLimit(): Promise<void> {
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await vi.advanceTimersByTimeAsync(15000);
+    }
+
+    it("asks at 15 s why the start waits, and leaves the start cancelled meanwhile", async () => {
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await vi.advanceTimersByTimeAsync(14999);
+      expect(prompts.askSyncWait).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(prompts.askSyncWait).toHaveBeenCalledWith(
+        { kind: "another_sync", holder: "sync_all" },
+        expect.any(Promise),
+      );
+      expect(prompts.confirmFallbackLaunch).not.toHaveBeenCalled();
+      expect(runGameMock()).not.toHaveBeenCalled();
+    });
+
+    it("Play Anyway stops the sync and relaunches after re-confirming the launch options", async () => {
+      prompts.askSyncWait.mockResolvedValueOnce("play_anyway");
+
+      await startPastTheLimit();
+
+      expect(backend.stopPreLaunchSync).toHaveBeenCalledWith(42);
+      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+    });
+
+    it("Play Anyway after Tender did not answer relaunches without the re-confirm", async () => {
+      vi.mocked(backend.preLaunchSyncState).mockReturnValue(never());
+      vi.mocked(backend.stopPreLaunchSync).mockReturnValue(never());
+      prompts.askSyncWait.mockResolvedValueOnce("play_anyway");
+
+      await startPastTheLimit();
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(prompts.askSyncWait).toHaveBeenCalledWith({ kind: "not_answering" }, expect.any(Promise));
+      expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
+      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+    });
+
+    it("Cancel leaves the start cancelled and the sync running", async () => {
+      prompts.askSyncWait.mockResolvedValueOnce("cancel");
+
+      await startPastTheLimit();
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(backend.stopPreLaunchSync).not.toHaveBeenCalled();
+      expect(runGameMock()).not.toHaveBeenCalled();
+    });
+
+    it("a sync that finishes while the question is open relaunches only on Play", async () => {
+      let answer!: (result: { success: boolean; message: string }) => void;
+      vi.mocked(backend.preLaunchSync).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      let play!: (choice: "answered") => void;
+      let finished: Promise<string> | undefined;
+      prompts.askSyncWait.mockImplementationOnce((_reason, f) => {
+        finished = f;
+        return new Promise((resolve) => (play = resolve));
+      });
+
+      await startPastTheLimit();
+      answer({ success: true, message: "" });
+      expect(await finished).toBe("ready");
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(runGameMock()).not.toHaveBeenCalled();
+
+      play("answered");
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
     });
   });
 
@@ -1654,12 +1754,6 @@ describe("launchInterceptor — full funnel watcher", () => {
           limit: 5000,
           op: "checkReachability",
           arrange: () => vi.mocked(backend.probeReachability).mockReturnValue(never()),
-        },
-        {
-          call: "pre_launch_sync",
-          limit: 15000,
-          op: "preLaunchSync",
-          arrange: () => vi.mocked(backend.preLaunchSync).mockReturnValue(never()),
         },
         {
           call: "check_local_drift",

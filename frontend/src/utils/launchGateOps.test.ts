@@ -4,10 +4,13 @@ import * as backend from "../api/backend";
 import { reportServerReachable } from "./connectionState";
 import { getMigrationState } from "./migrationStore";
 import { SERVER_UNREACHABLE_TOAST_BODY } from "./saveSetup";
-import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
+import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS, SYNC_WAIT_MORE_MS } from "./launchGate";
 import { ensureTrackingConfiguredBigPicture, makeLaunchGateOps, runPreLaunchSync } from "./launchGateOps";
 import { TimeoutError } from "./withTimeout";
+import type { LaunchPrompts } from "./launchVerdict";
 import type { SaveSetupInfo, SyncConflict } from "../types";
+
+type AskSyncWait = LaunchPrompts["askSyncWait"];
 
 vi.mock("../api/backend", () => ({
   checkCoreChange: vi.fn(),
@@ -20,7 +23,9 @@ vi.mock("../api/backend", () => ({
   isSaveTrackingConfigured: vi.fn(),
   logError: vi.fn(),
   preLaunchSync: vi.fn(),
+  preLaunchSyncState: vi.fn(),
   probeReachability: vi.fn(),
+  stopPreLaunchSync: vi.fn(),
 }));
 
 vi.mock("./connectionState", () => ({
@@ -59,6 +64,13 @@ const setupInfo = (overrides: Partial<SaveSetupInfo> = {}): SaveSetupInfo => ({
   ...overrides,
 });
 
+/** The options of a pre-launch sync on a path that toasts (or not); `askSyncWait` is asked past the limit. */
+const syncOptions = (toastSyncResult: boolean, askSyncWait: AskSyncWait = vi.fn()) => ({
+  tag: TAG,
+  toastSyncResult,
+  askSyncWait,
+});
+
 const toastBodies = (): string[] => vi.mocked(toaster.toast).mock.calls.map(([arg]) => (arg as { body: string }).body);
 
 beforeEach(() => {
@@ -74,7 +86,7 @@ describe("runPreLaunchSync", () => {
       uploaded: 1,
     });
 
-    expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
+    expect(await runPreLaunchSync(ROM_ID, syncOptions(true))).toEqual({
       success: true,
       message: "skip",
     });
@@ -92,7 +104,7 @@ describe("runPreLaunchSync", () => {
       uploaded: 1,
     });
 
-    expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
+    expect(await runPreLaunchSync(ROM_ID, syncOptions(true))).toEqual({
       success: false,
       message: "c",
       conflicts: [conflict],
@@ -103,7 +115,7 @@ describe("runPreLaunchSync", () => {
   it("an empty conflict list is not a conflict: a successful sync stays a success", async () => {
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "ok", conflicts: [] });
 
-    expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: false })).toEqual({
+    expect(await runPreLaunchSync(ROM_ID, syncOptions(false))).toEqual({
       success: true,
       message: "ok",
     });
@@ -118,7 +130,7 @@ describe("runPreLaunchSync", () => {
       uploaded: 1,
     });
 
-    expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
+    expect(await runPreLaunchSync(ROM_ID, syncOptions(true))).toEqual({
       success: false,
       message: "Server offline",
     });
@@ -131,7 +143,7 @@ describe("runPreLaunchSync", () => {
   it("a failure with no reason and no errors still fails", async () => {
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: false, message: "Device not registered" });
 
-    expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
+    expect(await runPreLaunchSync(ROM_ID, syncOptions(true))).toEqual({
       success: false,
       message: "Device not registered",
     });
@@ -143,7 +155,7 @@ describe("runPreLaunchSync", () => {
   it("a throw is a failure with an empty message, logged with the tag", async () => {
     vi.mocked(backend.preLaunchSync).mockRejectedValue(new Error("boom"));
 
-    expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
+    expect(await runPreLaunchSync(ROM_ID, syncOptions(true))).toEqual({
       success: false,
       message: "",
     });
@@ -160,15 +172,24 @@ describe("runPreLaunchSync", () => {
       vi.useRealTimers();
     });
 
-    it("a sync that never answers is let through as a TimeoutError, for the gate to answer", async () => {
+    it("a sync that never answers is not given up: at the limit the user is asked why it waits", async () => {
       vi.mocked(backend.preLaunchSync).mockReturnValue(new Promise(() => {}));
-
-      const outcome = expect(runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).rejects.toBeInstanceOf(
-        TimeoutError,
+      vi.mocked(backend.preLaunchSyncState).mockResolvedValue({ state: "waiting_for_rom" });
+      const askSyncWait = vi.fn<AskSyncWait>(() => new Promise(() => {}));
+      let outcome: unknown = "pending";
+      runPreLaunchSync(ROM_ID, syncOptions(true, askSyncWait)).then(
+        (value) => (outcome = value),
+        (e: unknown) => (outcome = e),
       );
-      await vi.advanceTimersByTimeAsync(SERVER_CALL_LIMIT_MS);
 
-      await outcome;
+      await vi.advanceTimersByTimeAsync(SERVER_CALL_LIMIT_MS - 1);
+      expect(askSyncWait).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(backend.preLaunchSyncState).toHaveBeenCalledWith(ROM_ID);
+      expect(askSyncWait).toHaveBeenCalledWith({ kind: "this_game_busy" }, expect.any(Promise));
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(outcome).toBe("pending");
       expect(backend.logError).not.toHaveBeenCalled();
     });
 
@@ -176,7 +197,7 @@ describe("runPreLaunchSync", () => {
       let answer!: (v: { success: boolean; message: string }) => void;
       vi.mocked(backend.preLaunchSync).mockReturnValue(new Promise((resolve) => (answer = resolve)));
 
-      const outcome = runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: false });
+      const outcome = runPreLaunchSync(ROM_ID, syncOptions(false));
       await vi.advanceTimersByTimeAsync(SERVER_CALL_LIMIT_MS - 1);
       answer({ success: true, message: "late but in time" });
 
@@ -184,10 +205,199 @@ describe("runPreLaunchSync", () => {
     });
   });
 
+  describe("past the limit", () => {
+    type SyncResult = Awaited<ReturnType<typeof backend.preLaunchSync>>;
+
+    function held<T>(): { promise: Promise<T>; settle: (value: T) => void; fail: (e: unknown) => void } {
+      let settle!: (value: T) => void;
+      let fail!: (e: unknown) => void;
+      const promise = new Promise<T>((resolve, reject) => {
+        settle = resolve;
+        fail = reject;
+      });
+      return { promise, settle, fail };
+    }
+
+    /** Start the sync, let it run past the limit, and answer the question with `choices` in turn. */
+    async function pastTheLimit(choices: Awaited<ReturnType<AskSyncWait>>[], toastSyncResult = true) {
+      const sync = held<SyncResult>();
+      vi.mocked(backend.preLaunchSync).mockReturnValue(sync.promise);
+      const finishes: Promise<string>[] = [];
+      const askSyncWait = vi.fn<AskSyncWait>((_reason, finished) => {
+        finishes.push(finished);
+        const choice = choices.shift();
+        return choice === undefined ? new Promise(() => {}) : Promise.resolve(choice);
+      });
+      let outcome: unknown = "pending";
+      void runPreLaunchSync(ROM_ID, syncOptions(toastSyncResult, askSyncWait)).then((value) => (outcome = value));
+      await vi.advanceTimersByTimeAsync(SERVER_CALL_LIMIT_MS);
+      return { sync, askSyncWait, finishes, outcome: () => outcome };
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.mocked(backend.preLaunchSyncState).mockResolvedValue({ state: "waiting_for_sync", holder: "post_exit" });
+      vi.mocked(backend.stopPreLaunchSync).mockResolvedValue({ success: true, stopped: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each([
+      [{ state: "waiting_for_sync", holder: "sync_all" } as const, { kind: "another_sync", holder: "sync_all" }],
+      [{ state: "waiting_for_rom" } as const, { kind: "this_game_busy" }],
+      [{ state: "syncing" } as const, { kind: "syncing" }],
+      [{ state: "idle" } as const, { kind: "syncing" }],
+    ])("names the reason the backend answers (%o)", async (state, reason) => {
+      vi.mocked(backend.preLaunchSyncState).mockResolvedValue(state);
+
+      const { askSyncWait } = await pastTheLimit([]);
+
+      expect(askSyncWait).toHaveBeenCalledWith(reason, expect.any(Promise));
+    });
+
+    it("a state read that fails is Tender not answering, logged with the tag", async () => {
+      vi.mocked(backend.preLaunchSyncState).mockRejectedValue(new Error("gone"));
+
+      const { askSyncWait } = await pastTheLimit([]);
+
+      expect(askSyncWait).toHaveBeenCalledWith({ kind: "not_answering" }, expect.any(Promise));
+      expect(backend.logError).toHaveBeenCalledWith(
+        `${TAG}: what the pre-launch sync is doing could not be read: Error: gone`,
+      );
+    });
+
+    it("a state read with no answer within the local limit is Tender not answering", async () => {
+      vi.mocked(backend.preLaunchSyncState).mockReturnValue(new Promise(() => {}));
+
+      const { askSyncWait } = await pastTheLimit([]);
+      await vi.advanceTimersByTimeAsync(LOCAL_CALL_LIMIT_MS - 1);
+      expect(askSyncWait).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(askSyncWait).toHaveBeenCalledWith({ kind: "not_answering" }, expect.any(Promise));
+    });
+
+    it("Wait takes an answer that comes within 15 s more as it would any answer", async () => {
+      const { sync, outcome } = await pastTheLimit(["wait"]);
+      await vi.advanceTimersByTimeAsync(SYNC_WAIT_MORE_MS - 1);
+      sync.settle({ success: false, message: "c", conflicts: [conflict] });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(outcome()).toEqual({ success: false, message: "c", conflicts: [conflict] });
+    });
+
+    it("Wait asks again when 15 s more bring no answer", async () => {
+      const { askSyncWait } = await pastTheLimit(["wait"]);
+      await vi.advanceTimersByTimeAsync(SYNC_WAIT_MORE_MS - 1);
+      expect(askSyncWait).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(askSyncWait).toHaveBeenCalledTimes(2);
+      expect(backend.preLaunchSyncState).toHaveBeenCalledTimes(2);
+    });
+
+    it("Play Anyway stops the sync, waits for the stop, and answers play_anyway", async () => {
+      const stop = held<{ success: true; stopped: boolean }>();
+      vi.mocked(backend.stopPreLaunchSync).mockReturnValue(stop.promise);
+
+      const { outcome } = await pastTheLimit(["play_anyway"]);
+      expect(backend.stopPreLaunchSync).toHaveBeenCalledWith(ROM_ID);
+      expect(outcome()).toBe("pending");
+      stop.settle({ success: true, stopped: true });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(outcome()).toEqual({ chose: "play_anyway", noAnswer: false });
+    });
+
+    it("Play Anyway after Tender did not answer sends the stop without waiting for it", async () => {
+      vi.mocked(backend.preLaunchSyncState).mockRejectedValue(new Error("gone"));
+      vi.mocked(backend.stopPreLaunchSync).mockReturnValue(new Promise(() => {}));
+
+      const { outcome } = await pastTheLimit(["play_anyway"]);
+
+      expect(backend.stopPreLaunchSync).toHaveBeenCalledWith(ROM_ID);
+      expect(outcome()).toEqual({ chose: "play_anyway", noAnswer: true });
+    });
+
+    it("a stop that fails is logged, and the start still goes ahead", async () => {
+      vi.mocked(backend.stopPreLaunchSync).mockRejectedValue(new Error("refused"));
+
+      const { outcome } = await pastTheLimit(["play_anyway"]);
+
+      expect(outcome()).toEqual({ chose: "play_anyway", noAnswer: false });
+      expect(backend.logError).toHaveBeenCalledWith(`${TAG}: the pre-launch sync could not be stopped: Error: refused`);
+    });
+
+    it("Cancel answers cancel and stops nothing; the late answer is toasted and re-read", async () => {
+      const announced = vi.fn();
+      globalThis.addEventListener("romm_data_changed", announced);
+      try {
+        const { sync, outcome } = await pastTheLimit(["cancel"]);
+        expect(outcome()).toEqual({ chose: "cancel" });
+
+        sync.settle({ success: true, message: "", uploaded: 0, downloaded: 1 });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(backend.stopPreLaunchSync).not.toHaveBeenCalled();
+        expect(toastBodies()).toEqual(["Saves downloaded from RomM"]);
+        expect(announced).toHaveBeenCalledTimes(1);
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", announced);
+      }
+    });
+
+    it("a late answer on a path that does not toast is only re-read", async () => {
+      const { sync } = await pastTheLimit(["cancel"], false);
+      sync.settle({ success: true, message: "", uploaded: 0, downloaded: 1 });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(toaster.toast).not.toHaveBeenCalled();
+    });
+
+    it("a late failure after Cancel is logged", async () => {
+      const { sync } = await pastTheLimit(["cancel"]);
+      sync.fail(new Error("boom"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(backend.logError).toHaveBeenCalledWith(
+        `${TAG}: the pre-launch sync of a start given up failed: Error: boom`,
+      );
+      expect(toaster.toast).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["a success", { success: true, message: "" }, "ready"],
+      ["a benign skip", { success: false, message: "", reason: "save_shape_unsupported" as const }, "ready"],
+      ["a conflict", { success: true, message: "", conflicts: [conflict] }, "answered"],
+      ["a failure", { success: false, message: "Server offline" }, "answered"],
+    ])("the question learns that %s is %s", async (_what, result, finish) => {
+      const { sync, finishes } = await pastTheLimit([]);
+      sync.settle(result);
+
+      expect(await finishes[0]).toBe(finish);
+    });
+
+    it("the question learns that a sync that threw needs acting on", async () => {
+      const { sync, finishes } = await pastTheLimit([]);
+      sync.fail(new Error("boom"));
+
+      expect(await finishes[0]).toBe("answered");
+    });
+
+    it("answered goes on with the sync's own answer", async () => {
+      const { sync, outcome } = await pastTheLimit(["answered"]);
+      sync.settle({ success: false, message: "Server offline" });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(outcome()).toEqual({ success: false, message: "Server offline" });
+    });
+  });
+
   it("a successful sync that moved saves toasts what it moved where the path toasts", async () => {
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", uploaded: 1, downloaded: 0 });
 
-    expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
+    expect(await runPreLaunchSync(ROM_ID, syncOptions(true))).toEqual({
       success: true,
       message: "",
     });
@@ -197,7 +407,7 @@ describe("runPreLaunchSync", () => {
   it("a successful sync that moved saves toasts nothing where the path does not toast", async () => {
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", uploaded: 1, downloaded: 0 });
 
-    expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: false })).toEqual({
+    expect(await runPreLaunchSync(ROM_ID, syncOptions(false))).toEqual({
       success: true,
       message: "",
     });
@@ -207,7 +417,7 @@ describe("runPreLaunchSync", () => {
   it("a successful sync that moved nothing toasts nothing", async () => {
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", uploaded: 0, downloaded: 0 });
 
-    await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true });
+    await runPreLaunchSync(ROM_ID, syncOptions(true));
     expect(toaster.toast).not.toHaveBeenCalled();
   });
 });
@@ -305,6 +515,7 @@ describe("makeLaunchGateOps", () => {
     ensureTrackingConfigured: vi.fn(() => Promise.resolve("proceed" as const)),
     confirmCoreChange: vi.fn(() => Promise.resolve(true)),
     confirmUncheckedStartingSource: vi.fn(() => Promise.resolve(true)),
+    askSyncWait: vi.fn(),
     ...overrides,
   });
 
@@ -458,7 +669,7 @@ describe("makeLaunchGateOps", () => {
 
     const outcome = await ops.preLaunchSync();
 
-    expect(outcome.success).toBe(true);
+    expect("success" in outcome && outcome.success).toBe(true);
     expect(backend.logError).toHaveBeenCalledWith(`${TAG}: onSyncStart threw: Error: hook boom`);
     expect(backend.preLaunchSync).toHaveBeenCalledWith(ROM_ID);
   });

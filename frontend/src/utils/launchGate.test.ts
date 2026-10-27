@@ -191,6 +191,25 @@ describe("runLaunchGate — verdict branches", () => {
     expect(ops.checkLocalDrift).not.toHaveBeenCalled();
   });
 
+  it("aborts when the user cancelled the start while the pre-launch sync ran past its limit", async () => {
+    const ops = makeOps({
+      checkReachability: vi.fn(async () => true),
+      preLaunchSync: vi.fn(async () => ({ chose: "cancel" as const })),
+    });
+    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "abort" });
+  });
+
+  it.each([true, false])(
+    "plays anyway when the user chose to while the pre-launch sync ran past its limit (no answer: %s)",
+    async (noAnswer) => {
+      const ops = makeOps({
+        checkReachability: vi.fn(async () => true),
+        preLaunchSync: vi.fn(async () => ({ chose: "play_anyway" as const, noAnswer })),
+      });
+      await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "play_anyway", noAnswer });
+    },
+  );
+
   it("returns offline_drift when offline and the local save has drifted", async () => {
     const ops = makeOps({
       checkReachability: vi.fn(async () => false),
@@ -329,6 +348,7 @@ describe("runLaunchGate — offline, over the local-save check's answer", () => 
       ensureTrackingConfigured: vi.fn(async (): Promise<"proceed" | "abort"> => "proceed"),
       confirmCoreChange: vi.fn(async () => true),
       confirmUncheckedStartingSource: vi.fn(async () => true),
+      askSyncWait: vi.fn(),
     });
     return makeOps({ checkReachability: vi.fn(async () => false), checkLocalDrift: real.checkLocalDrift });
   }

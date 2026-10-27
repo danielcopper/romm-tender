@@ -17,7 +17,7 @@
  */
 
 import type { SyncConflict } from "../types";
-import { logError } from "../api/backend";
+import { logError, type PreLaunchSyncHolder } from "../api/backend";
 import { TimeoutError } from "./withTimeout";
 
 /**
@@ -29,9 +29,13 @@ export const LOCAL_CALL_LIMIT_MS = 5000;
 
 /**
  * The limit on a launch-check call that reads or syncs the server's saves: the
- * save-setup read and the pre-launch sync.
+ * save-setup read, and how long the pre-launch sync is waited for before the
+ * user is asked whether to wait longer.
  */
 export const SERVER_CALL_LIMIT_MS = 15000;
+
+/** How much longer the start waits for the pre-launch sync each time the user chooses Wait. */
+export const SYNC_WAIT_MORE_MS = 15000;
 
 /** What the fallback dialog says when a step of the check got no answer in time. */
 export const NO_ANSWER_MESSAGE = "Couldn't check your saves in time";
@@ -63,18 +67,55 @@ export const BENIGN_SYNC_SKIP_REASONS: readonly string[] = [
 ];
 
 /**
- * Outcome of the injected pre-launch sync, shaped after the
- * `pre_launch_sync` endpoint result the caller already consumes
- * (`{ success, message, conflicts? }`). The gate maps it onto the verdict:
- *   - `conflicts` non-empty            -> `{ decision: "conflict", conflicts }`
- *   - `success === false` (no conflict)-> `{ decision: "sync_failed", message }`
- *   - otherwise                        -> `{ decision: "allow" }`
+ * The pre-launch sync's answer, shaped after the `pre_launch_sync` endpoint
+ * result the caller already consumes (`{ success, message, conflicts? }`).
  */
-export interface PreLaunchSyncOutcome {
+export interface PreLaunchSyncAnswer {
   success: boolean;
   message: string;
   conflicts?: SyncConflict[];
 }
+
+/**
+ * Outcome of the injected pre-launch sync. The gate maps it onto the verdict:
+ *   - `conflicts` non-empty            -> `{ decision: "conflict", conflicts }`
+ *   - `success === false` (no conflict)-> `{ decision: "sync_failed", message }`
+ *   - `chose: "cancel"`                -> `{ decision: "abort" }`
+ *   - `chose: "play_anyway"`           -> `{ decision: "play_anyway", noAnswer }`
+ *   - otherwise                        -> `{ decision: "allow" }`
+ *
+ * `chose` is the user's answer to the question the sync raises once it has run
+ * past {@link SERVER_CALL_LIMIT_MS} ({@link SyncWaitReason}); `noAnswer` says
+ * Tender did not answer what the sync was doing.
+ */
+export type PreLaunchSyncOutcome =
+  PreLaunchSyncAnswer | { chose: "cancel" } | { chose: "play_anyway"; noAnswer: boolean };
+
+/**
+ * Why a start still waits for its pre-launch sync, as the question to the user
+ * names it: another save sync holds the device (`holder` says which), something
+ * else is busy with this game's saves, this game's sync itself is running, or
+ * Tender did not answer what it is doing.
+ */
+export type SyncWaitReason =
+  | { kind: "another_sync"; holder: PreLaunchSyncHolder }
+  | { kind: "this_game_busy" }
+  | { kind: "syncing" }
+  | { kind: "not_answering" };
+
+/**
+ * How the pre-launch sync ended while the question was open: `ready` when the
+ * start can go ahead on its answer, `answered` when that answer needs acting on
+ * first (a conflict, a failure).
+ */
+export type SyncFinish = "ready" | "answered";
+
+/**
+ * The user's answer to the question: wait {@link SYNC_WAIT_MORE_MS} more, give
+ * up the start, play on the local saves, or go on with the sync's answer — the
+ * ready question's Play, or the question closing itself on an answer to act on.
+ */
+export type SyncWaitChoice = "wait" | "cancel" | "play_anyway" | "answered";
 
 /**
  * What the launch check learned of the source that would start the game:
@@ -106,6 +147,10 @@ export type StartingSourceAnswer = { checked: true; switchedOff: string | null }
  *                          With `noAnswer`, a step got no answer within its
  *                          limit instead, and `message` is
  *                          {@link NO_ANSWER_MESSAGE}.
+ *   - `play_anyway`      — the pre-launch sync ran past its limit and the user
+ *                          chose to play on the local saves; it was asked to
+ *                          stop. `noAnswer` when Tender did not answer what the
+ *                          sync was doing.
  */
 export type GateVerdict =
   | { decision: "allow" }
@@ -114,7 +159,8 @@ export type GateVerdict =
   | { decision: "abort" }
   | { decision: "conflict"; conflicts: SyncConflict[] }
   | { decision: "offline_drift" }
-  | { decision: "sync_failed"; message: string; noAnswer?: true };
+  | { decision: "sync_failed"; message: string; noAnswer?: true }
+  | { decision: "play_anyway"; noAnswer: boolean };
 
 /**
  * Injected operations for {@link runLaunchGate}. Every side effect the gate
@@ -124,8 +170,10 @@ export type GateVerdict =
  * An op bounds each backend call it makes ({@link LOCAL_CALL_LIMIT_MS},
  * {@link SERVER_CALL_LIMIT_MS}) and lets an expired limit's
  * {@link TimeoutError} through: its own fallback answers a call that failed,
- * the gate answers one that got no answer. A dialog an op shows is never
- * bounded — the user's answer is worth waiting for.
+ * the gate answers one that got no answer. The pre-launch sync is the
+ * exception: past its limit its op asks the user, and the call is never given
+ * up. A dialog an op shows is never bounded — the user's answer is worth
+ * waiting for.
  */
 export interface LaunchGateOps {
   /**
@@ -181,7 +229,8 @@ export interface LaunchGateOps {
 
   /**
    * Online branch: run pre-launch save sync. The gate maps its outcome onto
-   * `conflict` / `sync_failed` / `allow` (see {@link PreLaunchSyncOutcome}).
+   * `conflict` / `sync_failed` / `abort` / `play_anyway` / `allow` (see
+   * {@link PreLaunchSyncOutcome}).
    */
   preLaunchSync: () => Promise<PreLaunchSyncOutcome>;
 
@@ -221,7 +270,7 @@ async function startingSourceVerdict(ops: LaunchGateOps): Promise<GateVerdict | 
  *   4. ensureTrackingConfigured -> "abort" => abort
  *   5. checkCoreChange        -> cancel => abort
  *   6. checkReachability      -> online vs offline split
- *   7a. online:  preLaunchSync -> conflict | sync_failed | allow
+ *   7a. online:  preLaunchSync -> conflict | sync_failed | abort | play_anyway | allow
  *   7b. offline: checkLocalDrift -> offline_drift | allow
  *
  * The gate NEVER throws and NEVER blocks the user on an internal error: the
@@ -275,6 +324,9 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
     if (online) {
       // 7a. Online — run pre-launch sync and map its outcome.
       const sync = await ops.preLaunchSync();
+      if ("chose" in sync) {
+        return sync.chose === "cancel" ? { decision: "abort" } : { decision: "play_anyway", noAnswer: sync.noAnswer };
+      }
       if (sync.conflicts && sync.conflicts.length > 0) {
         return { decision: "conflict", conflicts: sync.conflicts };
       }

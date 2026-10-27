@@ -639,6 +639,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         ensureTrackingConfigured: () => ensureTrackingConfiguredBigPicture(romId),
         confirmCoreChange: gamepadLaunchPrompts.confirmCoreChange,
         confirmUncheckedStartingSource: gamepadLaunchPrompts.confirmUncheckedSource,
+        askSyncWait: gamepadLaunchPrompts.askSyncWait,
       });
       // `dispatchLaunch` marks the skip-set, so no launch from here is gated
       // again by the watcher. A migration block needs no message: the page
