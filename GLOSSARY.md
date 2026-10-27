@@ -601,6 +601,22 @@ and nothing of it is downloaded. An installed game keeps the system its install 
 [core-emulator-selection.md](docs/architecture/core-emulator-selection.md#a-platforms-system). _Avoid_: platform map,
 mapped system — there is no map.
 
+### Core / program / foreign core (what an emulator entry launches)
+
+What a catalogue entry launches, as the resolver states it (its `kind`), in Tender's words — `EmulatorOption.kind` and
+the picker payload's `kind`. Tender reads none of it off the command text.
+
+- **Core** — RetroArch loads a core of this machine. `core_so` names it (bare, no `.so`), and `core_path` is the file
+  ES-DE's own core lookup finds, which the bake writes in where the command names the core. A command that passes
+  RetroArch more than its core (FinalBurn Neo's `--subsystem neocd` on Neo Geo CD) is a core all the same.
+- **Program** — an emulator program of its own (PCSX2, RPCS3, Dolphin); no `core_so`.
+- **Foreign core** — a RetroArch launch naming a core file this machine cannot load (EmuDeck's `n3ds` overlay names
+  Windows `.dll` cores). Marked and nothing more (#2195 D17).
+
+_Avoid_: `libretro` and `standalone` as values of this — they are the resolver's words, read only where its answer is
+read, and standalone is also the panel bundle's name (**standalone bundle**). Not **entry kind**, which is a filesystem
+entry's `file` / `dir` / `link`.
+
 ### Emulator override vs default core vs launching emulator
 
 Three distinct notions in core selection, kept separate because they have different owners and lifetimes:
@@ -613,29 +629,28 @@ Three distinct notions in core selection, kept separate because they have differ
   default." A core the user picks inside ES-DE's own UI is _not_ an emulator override in this sense — it is ES-DE's
   state, which Tender does not own.
 - **Launching emulator** — the one emulator a ROM actually launches with: the per-game **emulator override** when one
-  exists, else the **platform pick**, else the **default core** — and **whatever kind it is**, a RetroArch core or a
-  standalone emulator, which is why it is not named after either. One resolver answers it for both the launch and every
-  read consumer (BIOS requirement, save path, game-detail badge), so the launched emulator never diverges from what
-  those reads assume. On the wire the pair is still spelled `active_core` / `active_core_label`, and `active_core` there
-  is the **emulator identity** rather than a core file: `core_so` is absent for every standalone emulator, so a reader
-  reaching for it answers `None` for one and treats a standalone pick as an emulator nothing identified — the
-  degradation the identity work removed. A launch with no identity is answered as not established (#2190 D26). _Avoid_:
-  **active core** for this, and "required by active core" for the row axis, which is **required by the launching
-  emulator** — the field it expands is spelled `required_by_active` and carries no "core" at all, so the expansion added
-  the one word that is wrong over a standalone pick. The identifiers `active_core`, `active_core_label` and
-  `required_by_active` keep their spellings; the prose around them does not expand them into a core.
+  exists, else the **platform pick**, else the **default core** — and **whatever kind it is**, a core entry or a
+  program, which is why it is not named after either. One resolver answers it for both the launch and every read
+  consumer (BIOS requirement, save path, game-detail badge), so the launched emulator never diverges from what those
+  reads assume. On the wire the pair is still spelled `active_core` / `active_core_label`, and `active_core` there is
+  the **emulator identity** rather than a core file: `core_so` is absent for every program, so a reader reaching for it
+  answers `None` for one and treats a program pick as an emulator nothing identified — the degradation the identity work
+  removed. A launch with no identity is answered as not established (#2190 D26). _Avoid_: **active core** for this, and
+  "required by active core" for the row axis, which is **required by the launching emulator** — the field it expands is
+  spelled `required_by_active` and carries no "core" at all, so the expansion added the one word that is wrong over a
+  program pick. The identifiers `active_core`, `active_core_label` and `required_by_active` keep their spellings; the
+  prose around them does not expand them into a core.
 - **Platform pick** — the same resolution asked of a PLATFORM rather than a ROM, so with no per-game layer to apply: the
   per-platform override when its label still names a bakeable emulator, else the default emulator. A platform's BIOS
   answers go one rung further: where nothing is bakeable they are about the emulator RetroDECK declares first, installed
   or not (#2190 D26). It is one pick with two projections — the name a surface displays, and the **emulator identity**
   its BIOS answers key on — and resolving those separately is what let one pane name an emulator and judge by another.
-- **Emulator identity** — which emulator an answer is about, in the spelling its own launch command uses: a libretro
-  entry's core file basename (`dolphin_libretro.so`), a standalone entry's own command name (`DUCKSTATION`, `PCSX2`).
-  The resolver states it on both the emulator catalogue and the firmware answer, which is what lets a pick be matched
-  against the firmware answer it should be judged by. It is not the **label** — ES-DE lists one `pcsx2_libretro.so` as
-  both `LRPS2` and `PCSX2`, so a label names a launch row and two rows can be one emulator — and it is not `core_so`,
-  which no standalone emulator has. Absent where the resolver could not identify the emulator behind a row, and nothing
-  may be scoped to it then.
+- **Emulator identity** — which emulator an answer is about, in the spelling its own launch command uses: a core entry's
+  core file basename (`dolphin_libretro.so`), a program's own command name (`DUCKSTATION`, `PCSX2`). The resolver states
+  it on both the emulator catalogue and the firmware answer, which is what lets a pick be matched against the firmware
+  answer it should be judged by. It is not the **label** — ES-DE lists one `pcsx2_libretro.so` as both `LRPS2` and
+  `PCSX2`, so a label names a launch row and two rows can be one emulator — and it is not `core_so`, which no program
+  has. Absent where the resolver could not identify the emulator behind a row, and nothing may be scoped to it then.
 
 ### Emulator source
 
@@ -878,12 +893,16 @@ file).
 
 ### Safely-bakeable
 
-An ES-DE `<command>` Tender can bake into a Steam shortcut's `-e` override: a real emulator invocation that **ends in
-`%ROM%`** and carries none of the forms the bake can't carry — no `%INJECT%` form (that is _needs-setup_: the command
-injects a file's contents, and Tender cannot start it), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script
-form, no embedded quoting (`"` or `\;`), no `%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no
-placeholder outside the known whitelist. The classifier `domain/emulator_commands.py` decides this per command; anything
-not safely-bakeable is surfaced in the picker as **disabled** with a reason, never silently offered
+An ES-DE `<command>` Tender can bake into a Steam shortcut's `-e` override, where RetroDECK's `run_game.sh` starts it —
+the rule follows that script's handling of a command rather than ES-DE's (#2195 D1). It must not be refused by what the
+resolver states — an emulator it states not installed (`not_installed`), one it states `run_game.sh` would run nothing
+for (`start_script_runs_nothing`), a **core** it states no core path for (`core_unlocated`) — and, judged with a core's
+core path written in, must be a real emulator invocation that **ends in `%ROM%`** and carries none of the forms the bake
+can't carry — no `%INJECT%` form (that is _needs-setup_: the command injects a file's contents, and Tender cannot start
+it), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script form, no embedded quoting (`"` or `\;`), no
+`%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no placeholder outside the known whitelist. The
+classifier `domain/emulator_commands.py` decides this per command; anything not safely-bakeable is surfaced in the
+picker as **disabled** with a reason, never silently offered
 ([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). The foil to **default emulator** (the first
 safely-bakeable command a system falls back to).
 

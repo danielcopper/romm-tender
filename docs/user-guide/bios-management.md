@@ -904,11 +904,12 @@ picked another. It opens a menu listing every emulator ES-DE offers for that pla
 **standalone emulators** (e.g. PCSX2, RPCS3, Dolphin, PPSSPP). Some entries appear **disabled** with a short reason (for
 example "script/shortcut form" or "Tender can't start this entry") when Tender can't launch them directly from Steam;
 those can't be picked. An emulator RetroDECK does not have — a standalone emulator or a RetroArch core — reads "emulator
-not installed". Where Tender cannot tell whether it is installed, it carries "installation not established" and, where
-it is known, why: you can still pick it, and a pick you made stays, but Tender never makes it the default by itself or
-reports it missing; a page whose games launch with it says so under its header. Picking an enabled emulator sets it as
-the default for all games on that platform. A "Switching cores may affect save compatibility" note is the first line of
-the menu.
+not installed". Where Tender cannot tell whether a standalone emulator is installed, it carries "installation not
+established" and, where it is known, why: you can still pick it, and a pick you made stays, but Tender never makes it
+the default by itself or reports it missing; a page whose games launch with it says so under its header. A RetroArch
+core whose installation cannot be established has no known core file to start, so it reads "core location not
+established" and cannot be picked. Picking an enabled emulator sets it as the default for all games on that platform. A
+"Switching cores may affect save compatibility" note is the first line of the menu.
 
 Names that start exactly the same thing are one entry, named by all of them in RetroDECK's order: RetroDECK lists the
 same RetroArch core for PlayStation 2 as LRPS2 and as PCSX2, so the menu offers **LRPS2 / PCSX2** once, and the header,
