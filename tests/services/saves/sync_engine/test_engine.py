@@ -7,10 +7,12 @@ conflict rollback in tests/services/saves/sync_engine/test_rollback.py.
 """
 
 import asyncio
+import gc
 import hashlib
 import io
 import threading
 import time
+import warnings
 import zipfile
 from typing import TYPE_CHECKING, Any, cast
 
@@ -1918,6 +1920,34 @@ class TestStoppingTheSyncBeforeAStart:
         assert not any(c[0] in ("list_saves", "download_save_content", "heartbeat") for c in fake.call_log)
         assert _get_save_state(svc, 42) is None
         assert not (tmp_path / "saves" / "gba" / "pokemon.srm").exists()
+
+    @pytest.mark.asyncio
+    async def test_a_stop_as_the_gate_frees_ends_the_call_without_leaving_its_next_wait_unawaited(self, tmp_path):
+        """The gate is handed over, and the stop lands before the call resumes to take the game's lock."""
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        fake.saves[100] = _server_save()
+        gate = svc._sync_engine._device_gate
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            async with gate.held_by(GateHolder.SYNC_ALL, max_wait=1):
+                start = asyncio.ensure_future(svc.pre_launch_sync(42))
+                await asyncio.sleep(0.02)
+            svc.stop_pre_launch_sync(42)
+
+            answers = await asyncio.wait_for(asyncio.gather(start, return_exceptions=True), 1)
+            stopped = isinstance(answers[0], PreLaunchSyncStopped)
+            # The task and the refusal's traceback hold the call's frames; a
+            # coroutine left unawaited there is reported only once they go.
+            del answers, start
+            gc.collect()
+
+        assert stopped
+        assert [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)] == []
+        assert gate.is_in_flight() is False
+        assert not any(c[0] == "download_save_content" for c in fake.call_log)
 
     @pytest.mark.asyncio
     async def test_a_stop_while_it_waits_for_the_games_lock_ends_the_wait_and_gives_the_gate_back(self, tmp_path):

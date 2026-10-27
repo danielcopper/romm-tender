@@ -22,6 +22,8 @@ from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.save_answer import SaveGroup, build_save_answer
 from domain.sync_action import Conflict, Skip
 from lib.errors import RommApiError, classify_error
+from services.saves._save_state import read_save_state_or_new
+from services.saves._sync_stop import SyncStop
 from services.saves.sync_engine.matrix import (
     DispatchSink,
     RomDispatchContext,
@@ -1776,6 +1778,50 @@ class TestSyncRomSavesDispatch:
         assert file_state.tracked_save_id == 200
         assert file_state.last_sync_server_save_id == 200
         assert file_state.last_sync_hash == hashlib.md5(b"head B content").hexdigest()
+
+    def test_a_409_fallback_download_of_a_stoppable_sync_is_acknowledged_only_once_placed(self, tmp_path):
+        """#2184 D8: the fallback download is the stoppable sync's own download, unmarked at the GET."""
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"in-sync local")
+        _seed_save_state_dict(
+            svc,
+            42,
+            {
+                "active_slot": "default",
+                "slot_confirmed": True,
+                "files": {"pokemon.srm": {"last_sync_hash": _file_md5(str(save_path))}},
+            },
+        )
+        foreign: dict[str, Any] = {}
+        upload_save = fake.upload_save
+
+        def upload_after_another_device(*args, **kwargs):
+            if not foreign:
+                foreign.update(
+                    fake.seed_foreign_save(
+                        42,
+                        uploaded_by="device-B",
+                        slot="default",
+                        updated_at="2026-03-01T00:00:00Z",
+                        content=b"newer from device B",
+                    )
+                )
+            return upload_save(*args, **kwargs)
+
+        fake.upload_save = upload_after_another_device
+        engine = svc._sync_engine
+        state = read_save_state_or_new(engine._uow_factory, 42)
+
+        uploaded, downloaded, errors, conflicts = engine.do_sync_rom_saves(
+            42, state, LiveDeviceId("device-1"), None, "default", stop=SyncStop()
+        )
+
+        assert (uploaded, downloaded, errors, conflicts) == (0, 1, [], [])
+        downloads = [c for c in fake.call_log if c[0] == "download_save_content"]
+        assert [c[2]["optimistic"] for c in downloads] == [False]
+        assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(foreign["id"], "device-1")]
 
     def test_handle_upload_409_empty_regroup_records_error(self, tmp_path):
         """A 409 whose re-fetch finds no server save in the file's canonical group

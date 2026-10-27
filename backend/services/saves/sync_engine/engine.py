@@ -738,7 +738,7 @@ class SyncEngine:
             self._log_debug(f"complete_sync_session({session_id}) failed (non-fatal): {e}")
 
     async def pre_launch_sync(self, rom_id: int) -> dict[str, Any]:
-        """Download newer saves from server before game launch.
+        """Sync this ROM's saves with the server before the game starts.
 
         Waits for the device gate and the ROM's lock without a limit of its
         own: :meth:`pre_launch_sync_state` answers what it waits for, and
@@ -756,8 +756,10 @@ class SyncEngine:
             try:
                 async with AsyncExitStack() as held:
                     gate = self._device_gate.held_by(GateHolder.PRE_LAUNCH, max_wait=None)
-                    await run.wait(PreLaunchState.WAITING_FOR_SYNC, held.enter_async_context(gate))
-                    await run.wait(PreLaunchState.WAITING_FOR_ROM, held.enter_async_context(self.rom_lock(rom_id)))
+                    await run.wait(PreLaunchState.WAITING_FOR_SYNC, lambda: held.enter_async_context(gate))
+                    await run.wait(
+                        PreLaunchState.WAITING_FOR_ROM, lambda: held.enter_async_context(self.rom_lock(rom_id))
+                    )
                     run.state = PreLaunchState.SYNCING
                     # Defense in depth: SaveService.pre_launch_sync checks the migration
                     # rule before this call waits for the device gate and the ROM lock,

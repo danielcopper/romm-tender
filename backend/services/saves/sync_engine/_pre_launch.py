@@ -1,9 +1,4 @@
-"""What the sync before a start is doing, and the stop the panel can ask of it.
-
-The sync before a start has no time limit of its own: the panel asks what it
-is doing when the start has waited long enough, and the user decides whether
-to wait, give up the start, or play on the local saves — which stops it.
-"""
+"""What the sync before a start is doing, and the stop the panel can ask of it."""
 
 from __future__ import annotations
 
@@ -16,7 +11,7 @@ from lib.errors import NamedRefused
 from services.saves._sync_stop import SyncStop, SyncStopped
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Iterator
+    from collections.abc import Awaitable, Callable, Iterator
 
     from services.saves.sync_engine._gate import GateHolder
 
@@ -53,13 +48,14 @@ class PreLaunchRun:
         self.state = PreLaunchState.WAITING_FOR_SYNC
         self._waiting: asyncio.Timeout | None = None
 
-    async def wait[T](self, state: PreLaunchState, acquire: Awaitable[T]) -> T:
-        """Await *acquire* while answering *state*; a stop asked before or during it raises :class:`SyncStopped`.
+    async def wait[T](self, state: PreLaunchState, acquire: Callable[[], Awaitable[T]]) -> T:
+        """Await what *acquire* starts while answering *state*; a stop before or during it raises :class:`SyncStopped`.
 
-        The wait sits in a timeout with no deadline of its own, which the stop
-        expires at once — the one way to end a wait from outside without the
-        bookkeeping of a cancellation that could reach the run after it got
-        what it waited for.
+        *acquire* is called only once the stop has been checked, so a call
+        stopped before its wait starts leaves nothing unawaited. The wait sits
+        in a timeout with no deadline of its own, which the stop expires at
+        once — one way to end a wait from outside without the bookkeeping of a
+        cancellation that could reach the run after it got what it waited for.
         """
         if self.stop.stops_here():
             raise SyncStopped
@@ -68,7 +64,7 @@ class PreLaunchRun:
             async with asyncio.timeout(None) as waiting:
                 self._waiting = waiting
                 try:
-                    return await acquire
+                    return await acquire()
                 finally:
                     self._waiting = None
         except TimeoutError as exc:
@@ -80,7 +76,9 @@ class PreLaunchRun:
     def request_stop(self) -> None:
         """Ask this call to stop: at once while it waits, at its next check while it syncs."""
         self.stop.request()
-        if self._waiting is not None:
+        # A second stop before the expired wait has resumed finds it expiring,
+        # which asyncio refuses to reschedule; the first already ends it.
+        if self._waiting is not None and not self._waiting.expired():
             self._waiting.reschedule(0)
 
 

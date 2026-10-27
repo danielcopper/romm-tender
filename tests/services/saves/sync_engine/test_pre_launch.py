@@ -47,7 +47,7 @@ class TestTheWait:
     async def test_a_stop_ends_the_wait(self):
         run = PreLaunchRun()
         never = asyncio.Event()
-        waiting = asyncio.ensure_future(run.wait(PreLaunchState.WAITING_FOR_SYNC, never.wait()))
+        waiting = asyncio.ensure_future(run.wait(PreLaunchState.WAITING_FOR_SYNC, never.wait))
         await asyncio.sleep(0.01)
 
         run.request_stop()
@@ -55,6 +55,20 @@ class TestTheWait:
         with pytest.raises(SyncStopped):
             await asyncio.wait_for(waiting, 1)
         assert run.stop.stopped_the_sync() is True
+
+    @pytest.mark.asyncio
+    async def test_a_second_stop_before_the_ended_wait_resumes_is_no_error(self):
+        run = PreLaunchRun()
+        never = asyncio.Event()
+        waiting = asyncio.ensure_future(run.wait(PreLaunchState.WAITING_FOR_SYNC, never.wait))
+        await asyncio.sleep(0.01)
+
+        run.request_stop()
+        await asyncio.sleep(0)
+        run.request_stop()
+
+        with pytest.raises(SyncStopped):
+            await asyncio.wait_for(waiting, 1)
 
     @pytest.mark.asyncio
     async def test_a_stop_asked_before_the_wait_starts_none(self):
@@ -65,10 +79,8 @@ class TestTheWait:
         async def acquire() -> None:
             started.append(True)
 
-        waited = acquire()
         with pytest.raises(SyncStopped):
-            await run.wait(PreLaunchState.WAITING_FOR_ROM, waited)
-        waited.close()
+            await run.wait(PreLaunchState.WAITING_FOR_ROM, acquire)
         assert started == []
 
     @pytest.mark.asyncio
@@ -78,7 +90,7 @@ class TestTheWait:
         async def acquire() -> str:
             return "held"
 
-        assert await run.wait(PreLaunchState.WAITING_FOR_ROM, acquire()) == "held"
+        assert await run.wait(PreLaunchState.WAITING_FOR_ROM, acquire) == "held"
         assert run.state is PreLaunchState.WAITING_FOR_ROM
 
         run.request_stop()
@@ -93,5 +105,5 @@ class TestTheWait:
             raise TimeoutError
 
         with pytest.raises(TimeoutError):
-            await run.wait(PreLaunchState.WAITING_FOR_SYNC, acquire())
+            await run.wait(PreLaunchState.WAITING_FOR_SYNC, acquire)
         assert run.stop.stopped_the_sync() is False
