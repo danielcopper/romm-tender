@@ -117,3 +117,18 @@ adding a synthetic edge would diverge from the server for no observed benefit.
 See also: [ADR-0021](0021-sibling-group-one-shortcut-binding-active-version.md) (the binding model this re-keys),
 [ADR-0007](0007-rom-retention-identity-anchor.md) (the `roms` identity row the key lives on),
 [Database Design](../architecture/database-design.md) (the `roms.sibling_group_key` column and the migration list).
+
+## Amendment — the apply keys a group against every stored key, as the preview does
+
+The paragraph "Sync-unit granularity" calls a platform unit's view of a group authoritative, and the apply's
+`resident_keys` the bound-row registry the collapse diffs against. That view misses a version hidden in RomM: RomM names
+it in its siblings' `sibling_roms` but leaves it out of the platform listing. Where such a version's row is unbound and
+a new version's only sibling edge goes to it, the bound-row registry holds no key for it. The apply then keyed the new
+version as a group of its own and minted a second shortcut for the game, while the preview, which seeds from every
+stored key, keyed it into its group and counted nothing to do
+([#2617](https://github.com/danielcopper/romm-tender/issues/2617)). The apply's `resident_keys` are therefore every
+persisted non-null key, the preview's reading (`LocalLibraryReader.do_read_resident_group_keys`): for collection units
+since [#2543](https://github.com/danielcopper/romm-tender/issues/2543), for platform units since
+[#2617](https://github.com/danielcopper/romm-tender/issues/2617), so the apply keys a group as the preview does. The
+collapse still diffs against the bound-row registry. A second shortcut this made before takes its group's key again and
+keeps its binding beside the other, a grandfathered duplicate under ADR-0021 §5.
