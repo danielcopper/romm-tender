@@ -68,9 +68,8 @@ DISPLAY_STATUSES_THAT_HOLD = {"Launching": 1, "Running": 4, "Terminating": 36}
 # behind". Unlike the panel's reader, every shape it cannot read answers
 # ``null`` rather than an empty list, because here an empty list is the
 # go-ahead — and for the same reason an entry whose status cannot be read still
-# holds, named with ``statusRead: false``. ``appid`` is the listed app's id —
-# a Tender shortcut's is the one ``roms.shortcut_app_id`` records — and ``null``
-# where it is not a number.
+# holds, named with ``statusRead: false``. Who reads each entry's ``appid``:
+# ``docs/architecture/save-file-sync-architecture.md``, "Is the game running".
 RUNNING_APPS_EXPRESSION = (
     "(() => {"
     ' if (typeof SteamUIStore === "undefined" || SteamUIStore === null) { return null; }'

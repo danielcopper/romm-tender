@@ -486,10 +486,9 @@ class RunningRomIdsFn(Protocol):
 
     The composition root satisfies this with ``RunningGames.running_rom_ids``.
     Each call is one fresh reading of ``SteamInterfaceReader.running_apps``,
-    matched to ROMs by ``roms.shortcut_app_id``: an app counts as its reading
-    rules — Launching, Running or Terminating, or a status that could not be
-    read. Where no reading could be taken, nothing counts as running and the
-    answer is empty. Never raises.
+    matched to ROMs by ``roms.shortcut_app_id``; what counts as running is
+    ``docs/architecture/save-file-sync-architecture.md``'s, "Is the game
+    running". Where no reading could be taken, the answer is empty. Never raises.
     """
 
     async def __call__(self) -> frozenset[int]: ...

@@ -339,8 +339,8 @@ class SetupWizard:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"success": True, "needs_conflict_resolution": False, "message": "Slot confirmed"}
 
-            # A migration writes the game's saves, which nothing does while it
-            # runs; the slot is not confirmed either, so the wizard stays open.
+            # A migration writes the game's saves, so it is refused while the
+            # game runs; the slot is not confirmed either, so the wizard stays open.
             await self._sync_engine.refuse_while_running(rom_id)
             # The emulator writes this game's save beside its content, which the
             # sync leaves alone, so the migration's writes could not take effect.

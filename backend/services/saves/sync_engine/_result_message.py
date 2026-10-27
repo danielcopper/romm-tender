@@ -1,8 +1,4 @@
-"""How a sync's answer words what it moved and what failed.
-
-It lives beside the engine rather than inside it, which keeps the engine's own
-module under the module-size ceiling.
-"""
+"""How a sync's answer words what it moved and what failed."""
 
 from __future__ import annotations
 

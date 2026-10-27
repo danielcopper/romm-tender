@@ -402,10 +402,13 @@ class SaveService:
         filename: str,
         server_save_id: int,
         action: str,
+        before_start: bool = False,
     ) -> dict[str, Any]:
-        """Resolve a pending sync conflict (true two-sided divergence)."""
+        """Resolve a pending sync conflict (true two-sided divergence); *before_start* from the launch check only."""
         async with self._rules.hold("resolve_sync_conflict", update=True, migration=True, prune=True):
-            return await self._sync_engine.resolve_sync_conflict(rom_id, filename, server_save_id, action)
+            return await self._sync_engine.resolve_sync_conflict(
+                rom_id, filename, server_save_id, action, before_start=before_start
+            )
 
     # ------------------------------------------------------------------
     # Slots (delegated to SlotsService)
@@ -726,9 +729,9 @@ class SaveService:
         save files — so the number a button offers is the number the delete would
         remove, but for a game running when the delete reaches it, whose saves
         the delete leaves alone and names. It deletes nothing, but it is not a
-        pure read: like the delete, it
-        follows each ROM's moved save directory first, which can move files,
-        back up a collision and write the ROM's answered-directory record.
+        pure read: like the delete, it follows each ROM's moved save directory
+        first — but a running game's — which can move files, back up a
+        collision and write the ROM's answered-directory record.
 
         The Library page's platform detail asks it once per selected platform,
         beside the core read, and puts the count on Delete _N_ save files. That

@@ -69,14 +69,24 @@ export type ConflictResolveOutcome = { ok: true; toast: string } | { ok: false; 
  *
  * - Keep Local → the backend POSTs the local save to the server (overwrite=true)
  * - Use Server → the backend downloads the server save over the local one
+ *
+ * `beforeStart` is true only for a conflict the launch check found, before the
+ * game starts: anywhere else the backend refuses a game that is running.
  */
 export async function resolveOneConflict(
   conflict: SyncConflict,
   action: SyncConflictAction,
+  beforeStart = false,
 ): Promise<ConflictResolveOutcome> {
   const call = `resolveSyncConflict(${conflict.rom_id}, ${conflict.filename}, ${action})`;
   try {
-    const result = await resolveSyncConflict(conflict.rom_id, conflict.filename, conflict.server_save_id, action);
+    const result = await resolveSyncConflict(
+      conflict.rom_id,
+      conflict.filename,
+      conflict.server_save_id,
+      action,
+      beforeStart,
+    );
     if (!result.success) {
       if (result.reason === "stale_conflict") {
         logError(`${call} stale: ${result.message ?? ""}`);

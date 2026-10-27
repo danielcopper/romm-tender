@@ -183,8 +183,7 @@ class ListedRunningApp(Protocol):
 
     ``status_read`` is false for an app that counts only because its status
     could not be read, which is never the same as one whose status was read
-    and holds the wait. ``app_id`` is the id Steam lists the app under — a
-    Tender shortcut's is the one ``roms.shortcut_app_id`` records — and
+    and holds the wait. ``app_id`` is the id Steam lists the app under, and
     ``None`` where Steam's entry carried none.
     """
 

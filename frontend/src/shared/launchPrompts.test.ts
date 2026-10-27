@@ -21,7 +21,7 @@ describe("gamepadLaunchPrompts", () => {
     expect(showCoreChangeModal).toHaveBeenCalledWith("Old", "New");
 
     expect(await gamepadLaunchPrompts.resolveConflicts(conflicts)).toBe("cancel");
-    expect(handleConflicts).toHaveBeenCalledWith(conflicts);
+    expect(handleConflicts).toHaveBeenCalledWith(conflicts, { beforeStart: true });
 
     expect(await gamepadLaunchPrompts.askOfflineDrift()).toBe("retry");
     expect(showOfflineDriftModal).toHaveBeenCalledTimes(1);

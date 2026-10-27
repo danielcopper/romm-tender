@@ -145,6 +145,7 @@ const SyncConflictModal: FC<SyncConflictModalProps> = ({
 
 interface SyncConflictModalHostProps {
   conflict: SyncConflict;
+  beforeStart: boolean;
   closeModal?: () => void;
   onDone: (resolution: SyncConflictResolution) => void;
 }
@@ -154,14 +155,14 @@ interface SyncConflictModalHostProps {
  * the open dialog, or the toast once it closes — and times the close. Used by
  * `showSyncConflictModal`.
  */
-const SyncConflictModalHost: FC<SyncConflictModalHostProps> = ({ conflict, closeModal, onDone }) => {
+const SyncConflictModalHost: FC<SyncConflictModalHostProps> = ({ conflict, beforeStart, closeModal, onDone }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleResolve = async (action: SyncConflictAction): Promise<void> => {
     setIsLoading(true);
     setErrorMessage(null);
-    const outcome = await resolveOneConflict(conflict, action);
+    const outcome = await resolveOneConflict(conflict, action, beforeStart);
     if (!outcome.ok) {
       setErrorMessage(outcome.message);
       setIsLoading(false);
@@ -189,21 +190,33 @@ const SyncConflictModalHost: FC<SyncConflictModalHostProps> = ({ conflict, close
   );
 };
 
+/** Where a conflict is resolved: `beforeStart` only from the launch check (`resolveOneConflict`). */
+export interface ConflictResolutionPlace {
+  beforeStart?: boolean;
+}
+
 /**
  * Show the sync-conflict modal and return a Promise that resolves once the
  * user picks an action (or cancels).
  */
-export function showSyncConflictModal(conflict: SyncConflict): Promise<SyncConflictResolution> {
+export function showSyncConflictModal(
+  conflict: SyncConflict,
+  place: ConflictResolutionPlace = {},
+): Promise<SyncConflictResolution> {
   return new Promise<SyncConflictResolution>((resolve) => {
-    showModal(<SyncConflictModalHost conflict={conflict} onDone={resolve} />);
+    showModal(<SyncConflictModalHost conflict={conflict} beforeStart={place.beforeStart === true} onDone={resolve} />);
   });
 }
 
 /**
  * Walk a list of conflicts through the resolution modal — the walk's contract is
  * `resolveConflictsSequentially`'s. Called by the Play button's Resolve, and by a
- * launch's gate verdict as `gamepadLaunchPrompts.resolveConflicts`.
+ * launch's gate verdict as `gamepadLaunchPrompts.resolveConflicts`, which passes
+ * `beforeStart`.
  */
-export function handleConflicts(conflicts: SyncConflict[]): Promise<"cancel" | "resolved"> {
-  return resolveConflictsSequentially(conflicts, showSyncConflictModal);
+export function handleConflicts(
+  conflicts: SyncConflict[],
+  place: ConflictResolutionPlace = {},
+): Promise<"cancel" | "resolved"> {
+  return resolveConflictsSequentially(conflicts, (conflict) => showSyncConflictModal(conflict, place));
 }

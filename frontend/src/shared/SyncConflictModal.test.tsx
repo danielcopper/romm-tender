@@ -162,6 +162,28 @@ describe("SyncConflictModal", () => {
   // ---------------------------------------------------------------------------
   // Layer C — SyncConflictModalHost stateful wrapper.
   // ---------------------------------------------------------------------------
+  describe("SyncConflictModalHost — where the conflict is resolved", () => {
+    it("tells the backend a conflict resolved from the launch check is resolved before the start", async () => {
+      vi.mocked(backend.resolveSyncConflict).mockResolvedValue({ success: true });
+      const conflict = makeConflict();
+      detach(showSyncConflictModal(conflict, { beforeStart: true }));
+      const { container } = render(lastShownElement());
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Use Server"));
+      });
+      await flushAsync();
+
+      expect(backend.resolveSyncConflict).toHaveBeenCalledWith(
+        conflict.rom_id,
+        conflict.filename,
+        conflict.server_save_id,
+        "use_server",
+        true,
+      );
+    });
+  });
+
   describe("SyncConflictModalHost — handleResolve success branch", () => {
     it("Keep Local: success → resolves promise with 'keep_local'", async () => {
       vi.mocked(backend.resolveSyncConflict).mockResolvedValue({ success: true });
@@ -179,6 +201,7 @@ describe("SyncConflictModal", () => {
         conflict.filename,
         conflict.server_save_id,
         "keep_local",
+        false,
       );
       await expect(promise).resolves.toBe("keep_local");
     });
@@ -199,6 +222,7 @@ describe("SyncConflictModal", () => {
         conflict.filename,
         conflict.server_save_id,
         "use_server",
+        false,
       );
       await expect(promise).resolves.toBe("use_server");
     });

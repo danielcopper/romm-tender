@@ -108,7 +108,7 @@ class TestTheSweepPassesARunningGameOver:
         assert result["synced"] == 1
         assert result["skipped_running"] == [{"rom_id": 1, "name": "rom-1"}]
         assert result["message"] == (
-            "Synced 1 save(s) across 2 ROM(s). rom-1 was skipped because it is running; its saves sync when you quit it"
+            "Synced 1 save(s) across 2 ROM(s); rom-1 was skipped because it is running; its saves sync when you quit it"
         )
 
     @pytest.mark.asyncio
@@ -135,6 +135,16 @@ class TestTheSweepPassesARunningGameOver:
         assert result["skipped_running"] == [{"rom_id": 2, "name": "rom-2"}]
 
     @pytest.mark.asyncio
+    async def test_it_reads_steam_once_for_each_rom_it_syncs(self, tmp_path):
+        svc, _fake, games = _service(tmp_path)
+        _confirmed_rom(svc, tmp_path, 1)
+        _confirmed_rom(svc, tmp_path, 2)
+
+        await svc.sync_all_saves()
+
+        assert games.readings == 2
+
+    @pytest.mark.asyncio
     async def test_two_running_games_are_named_in_one_sentence(self, tmp_path):
         svc, _fake, _games = _service(tmp_path, 1, 2)
         _confirmed_rom(svc, tmp_path, 1)
@@ -144,7 +154,7 @@ class TestTheSweepPassesARunningGameOver:
 
         assert isinstance(result, dict)
         assert result["message"].endswith(
-            ". rom-1 and rom-2 were skipped because they are running; their saves sync when you quit them"
+            "; rom-1 and rom-2 were skipped because they are running; their saves sync when you quit them"
         )
 
     @pytest.mark.asyncio
@@ -209,6 +219,17 @@ class TestEveryPressOnARunningGamesPageIsRefused:
 
         assert not isinstance(outcome, GameRunning)
         assert games.readings >= 1
+
+    @pytest.mark.asyncio
+    async def test_a_conflict_the_launch_check_resolves_before_the_start_is_not_refused(self, tmp_path):
+        svc, fake, _games = _service(tmp_path, _ROM)
+        _confirmed_rom(svc, tmp_path, _ROM)
+        fake.saves[100] = _server_save(save_id=100, rom_id=_ROM, filename="game42.srm", slot="default")
+
+        outcome = await _outcome(svc.resolve_sync_conflict(_ROM, "game42.srm", 100, "use_server", before_start=True))
+
+        assert not isinstance(outcome, GameRunning)
+        assert any(name == "list_saves" for name, _args, _kwargs in fake.call_log)
 
     @pytest.mark.asyncio
     async def test_confirming_a_slot_without_a_migration_writes_no_save_and_is_not_refused(self, tmp_path):
@@ -356,7 +377,7 @@ class TestAPlatformsDeleteLeavesARunningGameAlone:
         assert not (tmp_path / "saves" / "gba" / "game3.srm").exists()
         assert result["deleted_count"] == 2
         assert result["skipped_running"] == [{"rom_id": 1, "name": "rom-1"}]
-        assert result["message"] == "Deleted 2 save file(s) from 2 ROM(s). rom-1 was skipped because it is running"
+        assert result["message"] == "Deleted 2 save file(s) from 2 ROM(s); rom-1 was skipped because it is running"
 
     @pytest.mark.asyncio
     async def test_with_no_game_running_the_answer_names_none(self, tmp_path):

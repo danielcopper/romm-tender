@@ -13,7 +13,8 @@ import { showUncheckedSourceModal } from "./UncheckedSourceModal";
 
 export const gamepadLaunchPrompts: LaunchPrompts = {
   confirmCoreChange: (oldLabel, newLabel) => showCoreChangeModal(oldLabel, newLabel),
-  resolveConflicts: (conflicts) => handleConflicts(conflicts),
+  // The launch check resolves before the game starts, while Steam may still list a start it cancelled.
+  resolveConflicts: (conflicts) => handleConflicts(conflicts, { beforeStart: true }),
   askOfflineDrift: () => showOfflineDriftModal(),
   confirmFallbackLaunch: (message) => showFallbackLaunchModal(message),
   confirmUncheckedSource: () => showUncheckedSourceModal(),

@@ -720,8 +720,10 @@ class Endpoints:
         return await self._services.save_sync_service.sync_all_saves()
 
     @route
-    async def resolve_sync_conflict(self, rom_id, filename, server_save_id, action):
-        return await self._services.save_sync_service.resolve_sync_conflict(rom_id, filename, server_save_id, action)
+    async def resolve_sync_conflict(self, rom_id, filename, server_save_id, action, before_start=None):
+        return await self._services.save_sync_service.resolve_sync_conflict(
+            rom_id, filename, server_save_id, action, before_start is True
+        )
 
     @route
     def get_save_sync_settings(self):

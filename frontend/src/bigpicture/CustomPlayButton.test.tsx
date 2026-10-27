@@ -2630,7 +2630,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
 
     await clickPlay();
 
-    await waitFor(() => expect(vi.mocked(handleConflicts)).toHaveBeenCalledWith([conflict()]));
+    await waitFor(() => expect(vi.mocked(handleConflicts)).toHaveBeenCalledWith([conflict()], { beforeStart: true }));
     expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
   });
 
@@ -2668,7 +2668,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
 
     // The SHARED handleConflicts (from SyncConflictModal) handled the conflicts,
     // not a Play-button-local duplicate.
-    expect(vi.mocked(handleConflicts)).toHaveBeenCalledWith([conflict()]);
+    expect(vi.mocked(handleConflicts)).toHaveBeenCalledWith([conflict()], { beforeStart: true });
     // Resolved → sibling refresh dispatched, then launch.
     expect(dataChanged).toHaveBeenCalled();
     await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
@@ -3603,7 +3603,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       });
       await advance(0);
 
-      expect(handleConflicts).toHaveBeenCalledWith([conflict]);
+      expect(handleConflicts).toHaveBeenCalledWith([conflict], { beforeStart: true });
       expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
     });
 

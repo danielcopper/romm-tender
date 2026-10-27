@@ -50,7 +50,7 @@ async def test_sync_all_saves_leaves_the_running_game_alone_and_names_it(harness
     assert os.path.exists(other_save)
     assert result["success"] is True
     assert result["skipped_running"] == [{"rom_id": _RUNNING, "name": "rom-42"}]
-    assert result["message"].endswith(". rom-42 was skipped because it is running; its saves sync when you quit it")
+    assert result["message"].endswith("; rom-42 was skipped because it is running; its saves sync when you quit it")
 
 
 async def test_sync_saves_on_the_running_game_answers_game_running_naming_it(harness):
@@ -82,7 +82,7 @@ async def test_a_platforms_delete_keeps_the_running_game_s_saves_and_names_it(ha
     assert not os.path.exists(other_save)
     assert result["success"] is True
     assert result["skipped_running"] == [{"rom_id": _RUNNING, "name": "rom-42"}]
-    assert result["message"] == "Deleted 1 save file(s) from 1 ROM(s). rom-42 was skipped because it is running"
+    assert result["message"] == "Deleted 1 save file(s) from 1 ROM(s); rom-42 was skipped because it is running"
 
 
 async def test_with_no_steam_reading_nothing_counts_as_running(harness):
@@ -93,3 +93,14 @@ async def test_with_no_steam_reading_nothing_counts_as_running(harness):
     result = await harness.endpoints.sync_rom_saves(_RUNNING)
 
     assert result["success"] is True
+
+
+async def test_a_conflict_resolved_from_the_game_page_is_refused_and_one_from_the_launch_check_is_not(harness):
+    _two_games(harness)
+    seed_server_save(harness, save_id=100, rom_id=_RUNNING, file_name="game.srm")
+
+    from_the_page = await harness.endpoints.resolve_sync_conflict(_RUNNING, "game.srm", 100, "keep_local", None)
+    before_the_start = await harness.endpoints.resolve_sync_conflict(_RUNNING, "game.srm", 100, "keep_local", True)
+
+    assert from_the_page["reason"] == "game_running"
+    assert before_the_start.get("reason") != "game_running"

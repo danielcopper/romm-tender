@@ -437,8 +437,9 @@ class SyncEngine:
         so here. It does nothing while
         save sync is off, an update is being installed, a RetroDECK home
         migration is pending or still running, or the ROM's game is running —
-        unless *while_running*, which the sync before a start and the one after
-        a game pass — why is
+        unless *while_running*: the sync before a start, the one after a game
+        and a conflict resolved before a start follow while the game is listed,
+        and the sweep asked under the same lock a moment before — why is
         ``docs/architecture/save-file-sync-architecture.md``'s. A failure is
         logged and leaves the record as it was, so the next caller tries again.
         """
@@ -626,7 +627,8 @@ class SyncEngine:
             save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
             if stop is not None and stop.stops_here():
                 raise SyncStopped
-            await self.follow_save_directory(rom_id, save_answer)
+            # Asked just above, under this lock; a start since then is the stop's.
+            await self.follow_save_directory(rom_id, save_answer, while_running=True)
             if content_dir_tally is not None:
                 content_dir_tally.count(save_answer)
         core_so = await self._loop.run_in_executor(None, self.resolve_core, rom_id)
@@ -1170,6 +1172,8 @@ class SyncEngine:
         filename: str,
         server_save_id: int,
         action: str,
+        *,
+        before_start: bool = False,
     ) -> dict[str, Any]:
         """Resolve a pending sync conflict (true two-sided divergence).
 
@@ -1191,18 +1195,22 @@ class SyncEngine:
           server's content hash we adopt it silently without re-uploading.
         - ``"use_server"`` — download the current server save, replacing local.
 
-        Refused with ``game_running`` while the game runs.
+        Refused with ``game_running`` while the game runs, unless
+        *before_start*: the launch check resolves a conflict its sync before a
+        start found, before the game starts — while Steam may still list a
+        start it cancelled for that check.
         """
         rom_id_int = int(rom_id)
         async with self.rom_lock(rom_id_int):
-            await self._running.refuse_if_running(rom_id_int)
+            if not before_start:
+                await self._running.refuse_if_running(rom_id_int)
             # The emulator writes this game's save beside its content — both
             # keep_local (POST after reading the local file) and use_server
             # (download into the save directory) act on a directory the sync
             # leaves alone. Refuse before the orchestrator does any server fetch
             # or file write.
             save_answer = await self.read_save_answer(rom_id_int)
-            await self.follow_save_directory(rom_id_int, save_answer)
+            await self.follow_save_directory(rom_id_int, save_answer, while_running=before_start)
             if self.content_dir_blocked(rom_id_int, save_answer, "resolve_sync_conflict"):
                 raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR)
             return await self._rollback.resolve(

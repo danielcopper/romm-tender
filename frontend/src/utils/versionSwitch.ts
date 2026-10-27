@@ -202,7 +202,6 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
       const sync = await syncRomSaves(unsyncedRomId);
       if (!isPruneLeaseAdmissionCurrent(admission)) return;
       if (!sync.success) {
-        // A running game's refusal names the game; any other failure is a retry.
         abort(sync.reason === "game_running" ? sync.message : "Couldn't sync saves — try again");
         return;
       }

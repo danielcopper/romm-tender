@@ -81,13 +81,21 @@ describe("conflict wording", () => {
 });
 
 describe("resolveOneConflict", () => {
+  it("passes on that the conflict is resolved before a start only where it is", async () => {
+    vi.mocked(backend.resolveSyncConflict).mockResolvedValue({ success: true });
+
+    await resolveOneConflict(makeConflict(), "use_server", true);
+
+    expect(vi.mocked(backend.resolveSyncConflict)).toHaveBeenCalledWith(42, "savefile.srm", 9, "use_server", true);
+  });
+
   it("sends the chosen side and confirms keeping the local save", async () => {
     vi.mocked(backend.resolveSyncConflict).mockResolvedValue({ success: true });
     const conflict = makeConflict();
 
     const outcome = await resolveOneConflict(conflict, "keep_local");
 
-    expect(vi.mocked(backend.resolveSyncConflict)).toHaveBeenCalledWith(42, "savefile.srm", 9, "keep_local");
+    expect(vi.mocked(backend.resolveSyncConflict)).toHaveBeenCalledWith(42, "savefile.srm", 9, "keep_local", false);
     expect(outcome).toEqual({ ok: true, toast: "Conflict resolved — kept your local save (uploaded to server)." });
   });
 

@@ -1348,7 +1348,7 @@ export type PreLaunchSyncState =
 export const preLaunchSyncState = endpoint<[number], PreLaunchSyncState>("pre_launch_sync_state");
 
 /**
- * Stop every sync before a start of the ROM, and a Sync All's or a Sync Saves' sync of it, but no sync of
+ * Stop every sync before a start of the ROM, and a Sync All Saves Now's or a Sync Saves' sync of it, but no sync of
  * another ROM; `stopped` says whether a sync before a start was under way.
  */
 export const stopPreLaunchSync = endpoint<[number], { success: true; stopped: boolean }>("stop_pre_launch_sync");
@@ -1381,8 +1381,10 @@ export const syncAllSaves = endpoint<
     skipped_running?: SkippedRunningGame[];
   }
 >("sync_all_saves");
+/** The last argument is true only from the launch check, before the game starts; the backend then lets a
+ *  game Steam still lists through, as it does the sync before a start. */
 export const resolveSyncConflict = endpoint<
-  [number, string, number, "keep_local" | "use_server"],
+  [number, string, number, "keep_local" | "use_server", boolean],
   {
     success: boolean;
     message?: string;

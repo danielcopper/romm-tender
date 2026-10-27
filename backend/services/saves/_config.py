@@ -112,8 +112,7 @@ class SaveServiceConfig:
         detached work ends.
     running_rom_ids:
         ``RunningRomIdsFn`` seam — the ROMs whose game Steam lists as running,
-        read afresh on every call; no save path but the sync before a start and
-        the one after a game changes such a game's saves.
+        read afresh on every call.
     log_debug:
         ``DebugLogger`` Protocol seam — routes through the user's QAM
         log-level filter. Injected directly into each sub-service that

@@ -1,13 +1,7 @@
-"""What the save sync does about a game that is running.
+"""The save sync's parts for a game Steam lists as running: asking, naming, the per-ROM stops, and a run's skips.
 
-No sync but the one before a start and the one after a game changes the save of
-a game Steam lists as running: a per-ROM press is refused, a sweep and a
-platform's delete pass the game over and name it, and the follow of a moved save
-directory does nothing. Why, and what counts as running, is
-``docs/architecture/save-file-sync-architecture.md``'s, "Is the game running".
-
-It lives beside the engine rather than inside it because nothing is added to the
-engine's own module.
+What the save paths do with a running game is
+``docs/architecture/save-file-sync-architecture.md``'s, "A game that is running".
 """
 
 from __future__ import annotations
@@ -63,7 +57,7 @@ class RunningGameGuard:
 
 
 class RomSyncStops:
-    """The stops of the syncs under way that are neither the one before a start nor the one after a game, by ROM.
+    """The stops of the syncs that register here — a sweep's sync of a ROM and a Sync Saves — by ROM.
 
     A start's stop reaches them too, so the sync of a game that is about to
     start ends at its next check rather than writing under it.
@@ -127,4 +121,4 @@ class RunningSkips:
         else:
             sentence = f"{', '.join(names[:-1])} and {names[-1]} were skipped because they are running"
             note = "; their saves sync when you quit them"
-        return f"{message}. {sentence}{note if syncs_on_quit else ''}"
+        return f"{message}; {sentence}{note if syncs_on_quit else ''}"
