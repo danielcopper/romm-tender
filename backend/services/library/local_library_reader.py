@@ -169,16 +169,18 @@ class LocalLibraryReader:
         """Read the bound-row registry the per-unit group collapse diffs against.
 
         Platform units scope to their own platform's rows (a sibling group is
-        per-platform, so a vanished bound sibling shares the platform); collection
-        units read the whole registry since their ROMs span platforms. A platform
-        unit's fetch is therefore a COMPLETE view of every group it touches (the
-        collapse may rebind); a collection unit's fetch is a PARTIAL view — the
-        whole registry surfaces bindings for groups the unit only partly fetched,
-        so the collapse must not treat those as vanished (it passes
-        ``complete_group_view=False`` and only grandfathers). Only bound rows (a
-        live ``shortcut_app_id``) are returned — an unbound sibling is not a
-        shortcut the collapse can grandfather or rebind. Each entry also carries
-        the persisted ``cover_source`` fingerprint, so the cover-cache
+        per-platform, so a vanished bound sibling shares the platform);
+        collection units read the whole registry since their ROMs span
+        platforms. A platform unit's fetch is therefore a COMPLETE view, every
+        member of a group its platform listing returns (the collapse may
+        rebind); a bound version hidden in RomM is not among them and is
+        collapsed as one gone from RomM. A collection unit's fetch is a PARTIAL
+        view — the whole registry surfaces bindings for groups the unit only
+        partly fetched, so the collapse must not treat those as vanished (it
+        passes ``complete_group_view=False`` and only grandfathers). Only bound
+        rows (a live ``shortcut_app_id``) are returned — an unbound sibling is
+        not a shortcut the collapse can grandfather or rebind. Each entry also
+        carries the persisted ``cover_source`` fingerprint, so the cover-cache
         invalidation pass (#1386) scans against this same projection instead of
         per-ROM DB lookups. The apply path did not read the registry before
         group-aware sync (ADR-0021).
@@ -207,10 +209,10 @@ class LocalLibraryReader:
         The preview builds one shortcut set over every enabled platform, so it
         needs the DB's canonical summaries for a fresh member that edges into a
         sibling on a skipped (incremental) platform, which the preview reconstructs
-        only its bound rows of. The apply keys every platform unit and every
-        collection unit's delivery with the same summaries, so its groups are the
-        preview's. The stale removal looks up here the group keys of the ROMs
-        the run synced. One short read UoW.
+        only its bound rows of. The apply keys every platform unit it fetches
+        and every collection unit's delivery with the same summaries, so its
+        groups are the preview's. The stale removal looks up here the group keys
+        of the ROMs the run synced. One short read UoW.
         """
         with self._uow_factory() as uow:
             return {

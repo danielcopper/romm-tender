@@ -223,7 +223,9 @@ def collapse_sibling_groups(
     membership of a group a bound row belongs to — the load-bearing safety
     input: ``True`` for every group, ``False`` for none, or the set of group keys
     it holds whole. A sibling group is per-platform, so a **platform** unit fetch
-    is a complete view; a **collection** unit is a PARTIAL view (it spans
+    is a complete view: it holds every member its platform listing returns, and
+    a bound version hidden in RomM, which that listing leaves out, is collapsed
+    as one gone from RomM; a **collection** unit is a PARTIAL view (it spans
     platforms and may fetch just one unbound sibling of a group whose other
     members — including the bound one — were never in this fetch); the
     whole-library **preview** union holds some groups whole and others not, so

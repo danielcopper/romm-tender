@@ -824,10 +824,10 @@ These share a **sibling group** (same `roms.sibling_group_key`, derived client-s
 connected component over RomM's `sibling_roms` edges, keyed by the highest-priority metadata source the component agrees
 on — `compute_component_group_keys`, stamped onto the raw dicts before the shortcut build: once over the preview's
 union, per platform unit, and once over every collection unit's delivery, ADR-0022). Each stamp reads the key every
-stored row holds, unbound rows' included (`LocalLibraryReader.do_read_resident_group_keys`): RomM names a version hidden
-in it among its siblings' `sibling_roms` but leaves it out of the platform listing, so a new version whose only sibling
-is hidden joins its game only through that row's key (#2617). The sync pipeline treats a group as one game = at most one
-**new** Steam shortcut; the sibling row holding `shortcut_app_id` is the group's **active version**.
+stored row holds, unbound rows' included (`LocalLibraryReader.do_read_resident_group_keys`): RomM lists a version the
+user hid among its siblings' `sibling_roms` but leaves it out of the platform listing, so a new version whose only
+sibling is hidden joins its game only through that row's key (#2617). The sync pipeline treats a group as one game = at
+most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is the group's **active version**.
 
 - **Persist all siblings, emit one shortcut per group.** The reporter's per-unit commit upserts a `roms` row (identity +
   version metadata, via the sync UPSERT) for **every** fetched ROM of the unit, but only the group's representative
@@ -839,7 +839,8 @@ is hidden joins its game only through that row's key (#2617). The sync pipeline 
   collapse it to one entry per group against the bound-row registry (preview reads
   `LocalLibraryReader.do_read_preview_baseline`, apply reads `LocalLibraryReader.do_read_apply_registry` per unit). The
   collapse takes an explicit `complete_group_view`: a sibling group is per-platform, so each **platform** apply unit
-  sees a group's whole membership (`complete_group_view=True`). A **collection** apply unit spans platforms and may
+  sees every member of a group its platform listing returns (`complete_group_view=True`); a version hidden in RomM is
+  not among them, so a bound one is collapsed as one gone from RomM. A **collection** apply unit spans platforms and may
   fetch only one unbound sibling of a group whose bound member it never fetched, so it is a **partial** view
   (`complete_group_view=False`): a group that already holds a binding anywhere is grandfathered untouched — never
   rebound onto the partial member, never given a second shortcut. The whole-library **preview** passes the set of group

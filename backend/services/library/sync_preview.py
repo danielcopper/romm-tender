@@ -171,10 +171,10 @@ class SyncPreview:
             core_overrides = await self._loop.run_in_executor(
                 None, self._shortcut_launch_resolver.do_build_core_overrides, all_roms, sources
             )
-            # Stamp each fresh ROM's component sibling-group key before the build so
-            # the collapse below groups games, not dumps. The preview union is a
-            # complete view of every enabled platform's groups; the DB's persisted
-            # keys seed a member edging into a resident sibling on a skipped platform.
+            # Stamp each fresh ROM's component sibling-group key before the build so the
+            # collapse below groups games, not dumps. The preview union holds every member
+            # each enabled platform's listing returns; the DB's persisted keys seed a member
+            # edging into a resident sibling on a skipped platform.
             resident_keys = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_resident_group_keys
             )

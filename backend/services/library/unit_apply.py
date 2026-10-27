@@ -246,13 +246,14 @@ class UnitApplier:
         # Collapse to one Steam shortcut per sibling group (ADR-0021): only the
         # representative (plus any grandfathered bound siblings) is emitted; a
         # rebinding group's entry is keyed to its vanished sibling so the
-        # frontend reuses that shortcut. A PLATFORM unit fetches a group's whole
-        # membership (a group is per-platform), so it is a complete view and may
-        # rebind; a COLLECTION unit is a partial view (it holds what it delivered
-        # and every member of a group no binding holds, but not a group's bound
-        # sibling on another/skipped platform) — the collapse then only
-        # grandfathers, never rebinds a live binding onto an uninstalled sibling
-        # (#1296).
+        # frontend reuses that shortcut. A PLATFORM unit holds every member of a
+        # group its platform listing returns (a group is per-platform), so it is
+        # a complete view and may rebind; a version hidden in RomM is not among
+        # them, so a bound one is collapsed as one gone from RomM. A COLLECTION
+        # unit is a partial view (it holds what it delivered and every member of
+        # a group no binding holds, but not a group's bound sibling on
+        # another/skipped platform) — the collapse then only grandfathers, never
+        # rebinds a live binding onto an uninstalled sibling (#1296).
         emitted = collapse_sibling_groups(
             shortcuts_data,
             registry,
