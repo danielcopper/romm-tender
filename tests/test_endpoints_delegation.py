@@ -651,6 +651,7 @@ class TestSavesEndpointDelegation:
             "save.srm",
             99,
             "keep_local",
+            False,
         )
         assert result == {"ok": True}
 
