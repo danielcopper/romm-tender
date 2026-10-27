@@ -109,7 +109,7 @@ export async function executeSlotSwitch(
     }
     const message =
       purpose === "create"
-        ? createSlotFailureMessage(result.reason)
+        ? createSlotFailureMessage(result.reason, result.message)
         : switchSlotFailureMessage(result.reason, result.message);
     return { ok: false, reason: result.reason, message };
   } catch (e) {

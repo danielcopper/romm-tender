@@ -179,7 +179,8 @@ export function strandedVersionNotice({ name, stranding }: StrandedVersion): str
 
 /**
  * Error message for a switchSlot failure: a known reason's own wording, the
- * backend's explanation for `save_shape_unsupported`, and `fallback` otherwise.
+ * backend's explanation for `save_shape_unsupported` and `game_running`, and
+ * `fallback` otherwise.
  */
 export function switchSlotFailureMessage(
   reason: string | undefined,
@@ -204,7 +205,7 @@ export function switchSlotFailureMessage(
   if (reason === "backup_folder_unusable") {
     return "Can't switch — the .romm-backup folder can't take backups, nothing was moved";
   }
-  if (reason === "save_shape_unsupported" && message) {
+  if ((reason === "save_shape_unsupported" || reason === "game_running") && message) {
     return message;
   }
   return fallback;
@@ -213,11 +214,15 @@ export function switchSlotFailureMessage(
 /**
  * Error message for a failed switch into a new slot. A reason whose
  * {@link switchSlotFailureMessage} sentence starts "Can't switch" gets one of
- * its own here, since that names an action New Slot's reader did not take.
+ * its own here, since that names an action New Slot's reader did not take; a
+ * running game is worded by the backend's `message`.
  */
-export function createSlotFailureMessage(reason: WireReason): string {
+export function createSlotFailureMessage(reason: WireReason, message?: string): string {
   if (reason === "pending_uploads") {
     return switchSlotFailureMessage(reason);
+  }
+  if (reason === "game_running" && message) {
+    return message;
   }
   if (reason === "server_unreachable") {
     return "Can't create a slot — RomM server is not reachable";

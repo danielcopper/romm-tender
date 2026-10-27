@@ -249,6 +249,11 @@ describe("switchSlotFailureMessage", () => {
     expect(switchSlotFailureMessage("save_shape_unsupported", "custom shape msg")).toBe("custom shape msg");
   });
 
+  it("words a running game by the backend's message, which names the game", () => {
+    const running = "Celeste is running. Quit it first; its saves sync when you quit it.";
+    expect(switchSlotFailureMessage("game_running", running)).toBe(running);
+  });
+
   it("answers an unknown reason with the fallback, even when the backend sent a message", () => {
     expect(switchSlotFailureMessage("unknown", "Specific backend error")).toBe("Failed to switch slot");
     expect(switchSlotFailureMessage("unknown", "Specific backend error", "Failed custom")).toBe("Failed custom");
@@ -269,6 +274,11 @@ describe("createSlotFailureMessage", () => {
 
   it("tells the reader to download the game first where it is not installed", () => {
     expect(createSlotFailureMessage("not_installed")).toBe("Can't create a slot — download the game first");
+  });
+
+  it("words a running game by the backend's message, which names the game", () => {
+    const running = "Celeste is running. Quit it first; its saves sync when you quit it.";
+    expect(createSlotFailureMessage("game_running", running)).toBe(running);
   });
 
   it("says the slot could not be created for every other reason, the ones a switch words included", () => {

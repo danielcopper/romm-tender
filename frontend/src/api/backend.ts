@@ -1347,7 +1347,10 @@ export type PreLaunchSyncState =
   | { state: "syncing" };
 export const preLaunchSyncState = endpoint<[number], PreLaunchSyncState>("pre_launch_sync_state");
 
-/** Stop every sync before a start of the ROM, and no other sync; `stopped` says whether one was under way. */
+/**
+ * Stop every sync before a start of the ROM, and a Sync All's or a Sync Saves' sync of it, but no sync of
+ * another ROM; `stopped` says whether a sync before a start was under way.
+ */
 export const stopPreLaunchSync = endpoint<[number], { success: true; stopped: boolean }>("stop_pre_launch_sync");
 export const syncRomSaves = endpoint<
   [number],
@@ -1362,9 +1365,21 @@ export const syncRomSaves = endpoint<
     reason?: WireReason;
   }
 >("sync_rom_saves");
+/** A game a sweep or a platform's delete passed over because it was running. */
+export interface SkippedRunningGame {
+  rom_id: number;
+  name: string;
+}
 export const syncAllSaves = endpoint<
   [],
-  { success: boolean; message: string; synced: number; conflicts: number; reason?: WireReason }
+  {
+    success: boolean;
+    message: string;
+    synced: number;
+    conflicts: number;
+    reason?: WireReason;
+    skipped_running?: SkippedRunningGame[];
+  }
 >("sync_all_saves");
 export const resolveSyncConflict = endpoint<
   [number, string, number, "keep_local" | "use_server"],
@@ -1833,9 +1848,10 @@ export const finalizeGameSession = endpoint<[number], SessionFinalizeResult | En
 export const deleteLocalSaves = endpoint<[number], { success: boolean; deleted_count: number; message: string }>(
   "delete_local_saves",
 );
-export const deletePlatformSaves = endpoint<[string], { success: boolean; deleted_count: number; message: string }>(
-  "delete_platform_saves",
-);
+export const deletePlatformSaves = endpoint<
+  [string],
+  { success: boolean; deleted_count: number; message: string; skipped_running?: SkippedRunningGame[] }
+>("delete_platform_saves");
 /** How many local save files a platform holds — the read half of
  *  `deletePlatformSaves`, walking the same path without deleting. The Library
  *  page's platform detail asks it once per selection, beside the core read. */

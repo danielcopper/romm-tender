@@ -348,6 +348,37 @@ describe("executeVersionSwitch", () => {
     expect(setSwitching).toHaveBeenCalledWith(false);
   });
 
+  it("names the running game where the sync before the switch is refused because it runs", async () => {
+    vi.mocked(backend.switchVersion).mockResolvedValueOnce({
+      success: false,
+      reason: "unsynced_saves",
+      message: "Unsynced saves",
+      stranding: "unsynced",
+      unsynced_rom_id: 1,
+      unsynced_version_name: "Game (USA)",
+      server_reachable: true,
+    });
+    askUnsyncedSaves.mockResolvedValueOnce("sync_and_switch");
+    const running = "Game (USA) is running. Quit it first; its saves sync when you quit it.";
+    vi.mocked(backend.syncRomSaves).mockResolvedValueOnce({
+      success: false,
+      reason: "game_running",
+      message: running,
+      synced: 0,
+    });
+
+    await executeVersionSwitch({
+      appId: 100,
+      target: mockTarget,
+      leaseOwner,
+      askUnsyncedSaves,
+      setSwitching,
+    });
+    expect(toast.showToast).toHaveBeenCalledWith(running);
+    expect(backend.switchVersion).toHaveBeenCalledTimes(1);
+    expect(setSwitching).toHaveBeenCalledWith(false);
+  });
+
   it("handles soft-block sync_and_switch when conflicts exist", async () => {
     vi.mocked(backend.switchVersion).mockResolvedValueOnce({
       success: false,
