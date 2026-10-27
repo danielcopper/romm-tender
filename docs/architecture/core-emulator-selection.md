@@ -296,23 +296,26 @@ standalone invocation. The kind is `libretro` when the command matches the stric
 **Whether an entry is installed is the resolver's answer.** RetroDECK lists more emulators in `es_systems.xml` than it
 bundles, so a system's bakeable default could name one that is not on disk (Ryubing on `switch`) — baking it produces a
 shortcut that dies in ~0.4 s. Each catalogue entry carries the resolver's `availability`, from ES-DE's own lookup over
-its find rules, for libretro cores and standalone emulators alike, and `adapters/atlas_catalogue.py` reads it into the
-option's reason:
+its find rules, for libretro cores and standalone emulators alike, and `adapters/atlas_catalogue.py` reads it:
 
-- **startable** — the entry keeps its bake verdict above;
+- **startable** — the entry keeps its bake verdict above.
 - **not installed** — reason `not_installed`, whichever of the resolver's causes it states (no find rule matched, the
-  program or its launcher script is missing, or the core is);
-- **not established** — the resolver cannot tell. The reason names the cause where the reading knows it: `no_find_rule`
-  (ES-DE has no rule for the emulator or the core), `find_rules_unread`, `lookup_unsupported` (the resolver does not
-  evaluate this arrangement's lookup yet) or `path_unseen` (ES-DE would look where the resolver cannot see, such as the
-  sandbox's own `PATH`); `not_established` where it does not.
+  program or its launcher script is missing, or the core is). It takes the place of the bake verdict, whatever the
+  command: the entry is `needs_setup`, drops out of `select_default_option`, a pin to it no longer resolves, and the
+  picker shows it disabled as "emulator not installed" (`reasonCopy`, `frontend/src/utils/emulatorMenu.tsx`).
+- **not established** — the resolver cannot tell. The entry keeps the bake verdict its command earns and carries a note
+  (`EmulatorOption.not_established`, sent as a bakeable entry's `reason`) naming the cause where the reading knows it:
+  `no_find_rule` (ES-DE has no rule for the emulator or the core), `find_rules_unread`, `lookup_unsupported` (the
+  resolver does not follow this lookup yet — the arrangement's, or this one command's shape) or `path_unseen` (ES-DE
+  would look where the resolver cannot see: the sandbox's own `/etc`, `/tmp`, `/dev`, `/proc` or `/sys`, or a path it
+  cannot stat); `not_established` where it does not. Such an entry stays a pick a user may make, and a pin to it stays,
+  but `select_default_option` never takes it, so it is never the default by itself (#2195 D9). The picker offers it with
+  "installation not established" and the cause, and a page whose emulator it is says so under it
+  (`frontend/src/utils/emulatorInstallation.ts`); it is never called missing.
 
-Either reason takes the place of the bake verdict, whatever the command: the entry is `needs_setup`, drops out of
-`select_default_option`, a pin to it no longer resolves, and the picker shows it disabled with its reason — "emulator
-not installed", or "installation not established" with the cause (`frontend/src/utils/emulatorInstallation.ts`). An
-entry that is not established is never offered as working and never called missing. The notes the resolver states beside
-a verdict change nothing here; one of them, `run-game-differs`, says RetroDECK's `run_game.sh` would run something else
-for the token, and is not acted on.
+The notes the resolver states beside a verdict change nothing here. One of them, `run-game-differs`, says RetroDECK's
+`run_game.sh` would find something else, or nothing, for the command's `%EMULATOR_X%` token — the lookup Tender's `-e`
+bake goes through — and what Tender does about it is open under #2195.
 
 `get_emulator_options(system)` returns `{"available": bool, "options": [EmulatorOption, ...], "reason", "source"}`.
 **`available` is `False` whenever nothing could be established**: no emulator source answers (`reason` `no_source`, or
