@@ -42,5 +42,6 @@ export function activeEmulatorNote(emulators: readonly EmulatorOption[], activeL
   const entry = entryForLabel(emulators, activeLabel);
   if (entry === undefined || !isNotEstablished(entry.reason)) return null;
   const cause = notEstablishedCause(entry.reason);
-  return `Whether ${entry.name} is installed could not be established${cause === null ? "" : `: ${cause}`}.`;
+  const why = cause === null ? "" : `: ${cause}`;
+  return `Whether ${entry.name} is installed could not be established${why}.`;
 }

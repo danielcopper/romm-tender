@@ -137,6 +137,50 @@ const HeaderFacts: FC<{ parts: { text: string; color?: string }[] }> = ({ parts 
 type CoreOffer =
   { kind: "pick"; core: SystemCoreInfo; notice?: string } | { kind: "blocked"; reason: string; notice?: string };
 
+/**
+ * The offer where nothing is the default (`active_core_label` is null).
+ *
+ * What the fallback then DOES splits the state in two, and the payload can
+ * tell them apart. `run_game.sh` takes `command[1]` for the system when no
+ * alternate emulator is set, and `options` keeps ES-DE's document order, so
+ * `emulators[0]` IS that command. If its emulator is the one RetroDECK has
+ * not installed, the fallback names a binary that is not there and the games
+ * do not start; if whether it is installed could not be established, that is
+ * said, with the cause, and nothing more. Every other reason leaves the muted
+ * branch, which is where Apple I lands: run through this repo's own
+ * `classify_command` over the shipped `es_systems.xml`, its two commands come
+ * back `no_rom_target` and `quoting`, both `kind: "standalone"` with a null
+ * `core_so`. The first is unbakeable because its whole MAME invocation is one
+ * quoted argument, so it does not end in `%ROM%` — a different reason from
+ * the second's, and neither is `not_installed`.
+ *
+ * Any of the three may still sit beside a bakeable entry whose installation
+ * could not be established — no default only because Tender never makes it
+ * one — and then the picker stays open for a user who wants to pin it.
+ */
+function noDefaultOffer(core: SystemCoreInfo): CoreOffer {
+  const fallback = core.emulators[0];
+  const pinnable = core.emulators.some((entry) => entry.bakeable);
+  const pick = (notice: string): CoreOffer => ({ kind: "pick", core, notice });
+  if (fallback?.reason === "not_installed") {
+    const sentence = `RetroDECK would launch these with ${fallback.name}, which is not installed`;
+    if (pinnable) return pick(`${sentence}.`);
+    const blocked = `${sentence} — and nothing here can pin a different one.`;
+    return { kind: "blocked", reason: blocked, notice: blocked };
+  }
+  if (fallback && isNotEstablished(fallback.reason)) {
+    const cause = notEstablishedCause(fallback.reason);
+    const why = cause === null ? "" : ` (${cause})`;
+    return pick(
+      `RetroDECK would launch these with ${fallback.name}, whose installation could not be established${why}.`,
+    );
+  }
+  const none =
+    "None of this platform's emulators can be pinned from here, so RetroDECK picks one when a game launches.";
+  if (pinnable) return pick("No emulator here is the default, so RetroDECK picks one when a game launches.");
+  return { kind: "blocked", reason: none, notice: none };
+}
+
 function coreOffer(core: CoreAnswer): CoreOffer {
   if (core === undefined) return { kind: "blocked", reason: "Reading the emulators for this platform…" };
   if (core === null) {
@@ -165,46 +209,7 @@ function coreOffer(core: CoreAnswer): CoreOffer {
   // lands here with one option, and one with two uninstalled ones lands here
   // with two — where a count-shaped branch would have said "offers one
   // emulator" or nothing at all.
-  //
-  // What the fallback then DOES splits the state in two, and the payload can
-  // tell them apart. `run_game.sh` takes `command[1]` for the system when no
-  // alternate emulator is set, and `options` keeps ES-DE's document order, so
-  // `emulators[0]` IS that command. If its emulator is the one RetroDECK has
-  // not installed, the fallback names a binary that is not there and the games
-  // do not start; if whether it is installed could not be established, that is
-  // said, with the cause, and nothing more. Every other reason leaves the muted
-  // branch, which is where Apple I lands: run through this repo's own
-  // `classify_command` over the shipped `es_systems.xml`, its two commands come
-  // back `no_rom_target` and `quoting`, both `kind: "standalone"` with a null
-  // `core_so`. The first is unbakeable because its whole MAME invocation is one
-  // quoted argument, so it does not end in `%ROM%` — a different reason from
-  // the second's, and neither is `not_installed`.
-  //
-  // Any of the three may still sit beside a bakeable entry whose installation
-  // could not be established — no default only because Tender never makes it
-  // one — and then the picker stays open for a user who wants to pin it.
-  if (core.active_core_label === null) {
-    const fallback = core.emulators[0];
-    const pinnable = core.emulators.some((entry) => entry.bakeable);
-    const pick = (notice: string): CoreOffer => ({ kind: "pick", core, notice });
-    if (fallback?.reason === "not_installed") {
-      const sentence = `RetroDECK would launch these with ${fallback.name}, which is not installed`;
-      if (pinnable) return pick(`${sentence}.`);
-      const blocked = `${sentence} — and nothing here can pin a different one.`;
-      return { kind: "blocked", reason: blocked, notice: blocked };
-    }
-    if (fallback && isNotEstablished(fallback.reason)) {
-      const cause = notEstablishedCause(fallback.reason);
-      const why = cause === null ? "" : ` (${cause})`;
-      return pick(
-        `RetroDECK would launch these with ${fallback.name}, whose installation could not be established${why}.`,
-      );
-    }
-    const none =
-      "None of this platform's emulators can be pinned from here, so RetroDECK picks one when a game launches.";
-    if (pinnable) return pick("No emulator here is the default, so RetroDECK picks one when a game launches.");
-    return { kind: "blocked", reason: none, notice: none };
-  }
+  if (core.active_core_label === null) return noDefaultOffer(core);
   // One count branch, and it is exactly true: an empty menu was answered two
   // branches up and a not-bakeable one the branch after it, so a single option
   // here is a single BAKEABLE one — there really is nothing to switch to.

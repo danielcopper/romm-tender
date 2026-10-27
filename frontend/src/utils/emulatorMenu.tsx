@@ -128,9 +128,10 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     const isActive = activeIsDefault ? e.is_default : e.labels.includes(activeLabel);
     const isPlatformCore = platformCore === e;
     const note = notEstablishedNote(e.reason);
+    const noteSuffix = note === null ? "" : ` — ${note}`;
     children.push(
       <MenuItem key={key} onClick={() => onPick(e.label)}>
-        {`${emulatorEntryLabel(e, isActive, isPlatformCore)}${note === null ? "" : ` — ${note}`}`}
+        {`${emulatorEntryLabel(e, isActive, isPlatformCore)}${noteSuffix}`}
       </MenuItem>,
     );
   }
