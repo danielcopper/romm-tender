@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         RetroDeckFolders,
         RetryStrategy,
         RommSyncApi,
+        RunningRomIdsFn,
         SaveFileStore,
         SaveLocationReader,
         SettingsPersister,
@@ -109,6 +110,10 @@ class SaveServiceConfig:
         ``ConflictRules`` seam — the rules a save use case checks at its
         entry under its endpoint's name, and the operation it holds until
         detached work ends.
+    running_rom_ids:
+        ``RunningRomIdsFn`` seam — the ROMs whose game Steam lists as running,
+        read afresh on every call; no save path but the sync before a start and
+        the one after a game changes such a game's saves.
     log_debug:
         ``DebugLogger`` Protocol seam — routes through the user's QAM
         log-level filter. Injected directly into each sub-service that
@@ -142,4 +147,5 @@ class SaveServiceConfig:
     is_update_in_progress: UpdateInProgressFn
     is_retrodeck_migration_pending: MigrationPendingFn
     conflict_rules: ConflictRules
+    running_rom_ids: RunningRomIdsFn
     uow_factory: UnitOfWorkFactory

@@ -11,6 +11,7 @@ from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
+from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
@@ -79,6 +80,7 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "is_update_in_progress": lambda: False,
         "is_retrodeck_migration_pending": lambda: False,
         "conflict_rules": _make_conflict_rules(),
+        "running_rom_ids": FakeRunningRomIds(),
         "uow_factory": FakeUnitOfWorkFactory(),
     }
     config_kwargs.update(overrides)

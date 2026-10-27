@@ -23,6 +23,7 @@ from domain.rom_save_sync_state import RomSaveSyncState
 from lib.background_tasks import BackgroundTasks
 from lib.partial_failure import PartialFailure
 from services.saves._config import SaveServiceConfig
+from services.saves._refusals import game_running
 from services.saves._settings import (
     ALLOWED_SETTINGS_KEYS,
     sanitize_setting,
@@ -37,6 +38,7 @@ from services.saves.slots import SlotsService, SlotsServiceConfig
 from services.saves.slots.switching import SlotSwitchBackupFailed, SlotSwitchBackupFolderUnusable, SlotSwitchStopped
 from services.saves.status import StatusService, StatusServiceConfig
 from services.saves.sync_engine import SaveSweepIncomplete, SyncEngine, SyncEngineConfig
+from services.saves.sync_engine._running_game import RunningSkips
 from services.saves.sync_engine.devices import DeviceRegistry
 from services.saves.versions import VersionsService, VersionsServiceConfig
 
@@ -158,6 +160,7 @@ class SaveService:
                 is_update_in_progress=config.is_update_in_progress,
                 is_retrodeck_migration_pending=config.is_retrodeck_migration_pending,
                 build_inventory=self.build_save_inventory,
+                running_rom_ids=config.running_rom_ids,
                 save_backup=self._save_backup,
                 save_transfer=self._save_transfer,
             ),
@@ -629,16 +632,18 @@ class SaveService:
         await self._sync_engine.follow_save_directory(rom_id, answer)
         return answer
 
-    async def _delete_saves_for_roms(self, rom_ids: list[int]) -> tuple[int, list[str]]:
+    async def _delete_saves_for_roms(self, rom_ids: list[int], skips: RunningSkips) -> tuple[int, list[str]]:
         """Delete local save files for the given ROM IDs and clear file tracking state.
 
-        For each ROM ID, under its ``rom_lock``, follows a moved save directory
-        first and then removes the files the answer names on disk (counting
-        successes and collecting per-file error strings), and clears the ROM's
-        per-file tracking dict via the aggregate's ``clear_baselines`` verb.
-        Slot config (``active_slot``, ``slot_confirmed``, ``emulator``,
-        ``last_synced_core``, ``own_upload_ids``, ``slots``, ``system``) is
-        preserved. Each ROM's state is persisted in its own short write UoW.
+        For each ROM ID, under its ``rom_lock``, passes a ROM whose game is
+        running over into *skips*, touching nothing of it; otherwise follows a
+        moved save directory first and then removes the files the answer names
+        on disk (counting successes and collecting per-file error strings), and
+        clears the ROM's per-file tracking dict via the aggregate's
+        ``clear_baselines`` verb. Slot config (``active_slot``,
+        ``slot_confirmed``, ``emulator``, ``last_synced_core``,
+        ``own_upload_ids``, ``slots``, ``system``) is preserved. Each ROM's
+        state is persisted in its own short write UoW.
 
         Returns a ``(total_deleted, errors)`` tuple.
         """
@@ -646,6 +651,9 @@ class SaveService:
         errors: list[str] = []
         for rom_id in rom_ids:
             async with self._sync_engine.rom_lock(rom_id):
+                if await self._sync_engine.is_game_running(rom_id):
+                    skips.skip(rom_id, await self._sync_engine.game_name(rom_id))
+                    continue
                 answer = await self._read_and_follow(rom_id)
                 deleted, rom_errors = await self._loop.run_in_executor(
                     None, self._delete_saves_for_rom_io, rom_id, answer
@@ -681,10 +689,14 @@ class SaveService:
         """Delete this ROM's local save files.
 
         A deletion that could not remove every file it found answers
-        :class:`SaveDeletionIncomplete`.
+        :class:`SaveDeletionIncomplete`; one whose game is running is refused
+        with ``game_running``.
         """
+        skips = RunningSkips()
         async with self._rules.hold("delete_local_saves", update=True, migration=True, prune=True):
-            deleted, errors = await self._delete_saves_for_roms([int(rom_id)])
+            deleted, errors = await self._delete_saves_for_roms([int(rom_id)], skips)
+        if skips.skipped:
+            raise game_running(skips.skipped[0][1])
 
         if deleted == 0 and not errors:
             return {"success": True, "deleted_count": 0, "message": "No local save files found"}
@@ -712,7 +724,9 @@ class SaveService:
         The read half of :meth:`delete_platform_saves`, over the same two steps
         in the same order — the platform's installed ROM ids, then each one's
         save files — so the number a button offers is the number the delete would
-        remove. It deletes nothing, but it is not a pure read: like the delete, it
+        remove, but for a game running when the delete reaches it, whose saves
+        the delete leaves alone and names. It deletes nothing, but it is not a
+        pure read: like the delete, it
         follows each ROM's moved save directory first, which can move files,
         back up a collision and write the ROM's answered-directory record.
 
@@ -748,24 +762,29 @@ class SaveService:
         """Delete the local save files of every installed ROM on this platform.
 
         A deletion that could not remove every file it found answers
-        :class:`SaveDeletionIncomplete`.
+        :class:`SaveDeletionIncomplete`. A game that is running keeps its saves,
+        and the answer names it.
         """
+        skips = RunningSkips()
         async with self._rules.hold("delete_platform_saves", update=True, migration=True, prune=True):
             rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
-            total_deleted, total_errors = await self._delete_saves_for_roms(rom_ids)
+            total_deleted, total_errors = await self._delete_saves_for_roms(rom_ids, skips)
 
-        rom_count = len(rom_ids)
+        rom_count = len(rom_ids) - len(skips.skipped)
 
         if total_errors:
             return SaveDeletionIncomplete(
                 reason="delete_incomplete",
-                message=f"Deleted {total_deleted} file(s) from {rom_count} ROM(s), {len(total_errors)} error(s)",
+                message=skips.annotate(
+                    f"Deleted {total_deleted} file(s) from {rom_count} ROM(s), {len(total_errors)} error(s)"
+                ),
                 deleted_count=total_deleted,
             )
         return {
             "success": True,
             "deleted_count": total_deleted,
-            "message": f"Deleted {total_deleted} save file(s) from {rom_count} ROM(s)",
+            "message": skips.annotate(f"Deleted {total_deleted} save file(s) from {rom_count} ROM(s)"),
+            "skipped_running": skips.as_list(),
         }
 
 

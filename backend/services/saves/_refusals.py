@@ -37,3 +37,14 @@ class SavefilesInContentDir(NamedRefused):
     """The emulator writes this game's save beside the game's content, where the sync does not reach."""
 
     reason = "savefiles_in_content_dir"
+
+
+class GameRunning(NamedRefused):
+    """The game is running, so nothing may change its saves until it is quit."""
+
+    reason = "game_running"
+
+
+def game_running(name: str, **details: Any) -> GameRunning:
+    """The refusal of a press that would change the saves of *name*, which is running."""
+    return GameRunning(f"{name} is running. Quit it first; its saves sync when you quit it.", **details)

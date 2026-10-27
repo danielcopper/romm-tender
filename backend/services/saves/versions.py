@@ -364,6 +364,8 @@ class VersionsService:
         - The refusal of ``SyncEngine.live_device_id``
           (``device_not_registered`` or ``server_unreachable``) is raised, after
           the guards above and before the pre-flight.
+        - ``game_running`` is raised before anything else is looked at, while
+          the game runs.
         - ``{"status": "conflict_blocked", "conflicts": [...]}`` if the
           pre-flight surfaced a conflict on the currently-tracked save.
           The frontend resolves it via the standard conflict modal.
@@ -382,6 +384,7 @@ class VersionsService:
         save_id = int(save_id)
 
         async with self._sync_engine.rom_lock(rom_id):
+            await self._sync_engine.refuse_while_running(rom_id)
             info = await self._loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
             if not info:
                 return {"status": "rom_not_installed"}

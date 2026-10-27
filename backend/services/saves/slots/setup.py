@@ -307,12 +307,12 @@ class SetupWizard:
         metadata flip — is still persisted before the refusal is raised. The
         non-migration path is never gated (no file write).
 
-        Before anything is confirmed, a migration refuses with ``NotInstalled``,
-        or, once the local checks have passed, as ``SyncEngine.live_device_id``
-        does. A RomM error before the apply phase propagates, and a save on this
-        device that cannot be read or written, or a saves folder that cannot be
-        created, refuses with ``migration_failed``; either way nothing is
-        confirmed.
+        Before anything is confirmed, a migration refuses with ``game_running``
+        while the game runs, with ``NotInstalled``, or, once the local checks
+        have passed, as ``SyncEngine.live_device_id`` does. A RomM error before
+        the apply phase propagates, and a save on this device that cannot be
+        read or written, or a saves folder that cannot be created, refuses with
+        ``migration_failed``; either way nothing is confirmed.
         """
         rom_id = int(rom_id)
         # Legacy ``slot:null`` confirmation is retired (#1276): a slot must carry
@@ -339,6 +339,9 @@ class SetupWizard:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"success": True, "needs_conflict_resolution": False, "message": "Slot confirmed"}
 
+            # A migration writes the game's saves, which nothing does while it
+            # runs; the slot is not confirmed either, so the wizard stays open.
+            await self._sync_engine.refuse_while_running(rom_id)
             # The emulator writes this game's save beside its content, which the
             # sync leaves alone, so the migration's writes could not take effect.
             # Refuse before any download; the slot itself is still confirmed (a

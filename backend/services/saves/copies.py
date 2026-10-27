@@ -286,7 +286,7 @@ class SaveCopyService:
         1. Validate ``target_slot`` (strip; empty/whitespace/None →
            ``invalid_slot_name``).
         2. Acquire ``rom_lock`` — every ``RomSaveSyncState`` read-mutate-write
-           runs under it.
+           runs under it — and raise ``game_running`` while the game runs.
         3. Refuse an unconfigured ROM (``active_slot`` None / slot not confirmed)
            with ``not_configured``. The Copy action is only reachable on a
            configured ROM; this is the defensive backstop, not a UI-gate reliance.
@@ -327,6 +327,7 @@ class SaveCopyService:
             return {"status": "invalid_slot_name"}
 
         async with self._sync_engine.rom_lock(rom_id):
+            await self._sync_engine.refuse_while_running(rom_id)
             save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
 
             # Configured ROMs only: the current slot must be a confirmed named

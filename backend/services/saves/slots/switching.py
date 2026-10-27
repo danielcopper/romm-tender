@@ -169,9 +169,10 @@ class SlotSwitcher:
            (``SavefilesInContentDir``). Any other answer a sync would not carry
            — a save inside the game file, a shared card, nothing established —
            raises ``SaveShapeUnsupported`` with that answer's own message.
-        5. No local files with pending changes (changed since last sync to
+        5. The game must not be running (else ``game_running``).
+        6. No local files with pending changes (changed since last sync to
            current slot), else ``PendingUploads`` naming them.
-        6. The device id comes from ``SyncEngine.live_device_id``, whose refusal
+        7. The device id comes from ``SyncEngine.live_device_id``, whose refusal
            is raised; a RomM error fetching the new slot's saves propagates.
 
         On success the local saves dir and per-file tracking are made coherent
@@ -231,12 +232,13 @@ class SlotSwitcher:
         # critical section — never around the tail ``get_save_status`` below,
         # which re-acquires the same non-reentrant lock (see SyncEngine.rom_lock).
         async with self._sync_engine.rom_lock(rom_id):
+            await self._sync_engine.refuse_while_running(rom_id)
             # A moved save directory is followed before the pending-changes
             # check, or that check would look where the files no longer are.
             await self._sync_engine.follow_save_directory(rom_id, save_answer)
             save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
 
-            # 5. Check for pending local changes (hashing — run in executor)
+            # 6. Check for pending local changes (hashing — run in executor)
             pending = await self._loop.run_in_executor(
                 None, self._pending_local_changes, rom_id, save_answer, save_state
             )

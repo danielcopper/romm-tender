@@ -162,7 +162,8 @@ class SlotDeleter:
         app and must never be torn down from here.
         It is refused up front with ``invalid_slot_name`` — before any lock
         acquisition, server I/O, or state change — mirroring the switch-target
-        refusal in :class:`SlotSwitcher` (#1276). The active slot refuses with
+        refusal in :class:`SlotSwitcher` (#1276). A running game refuses with
+        ``game_running`` before anything is read. The active slot refuses with
         ``active_slot``; otherwise it refuses as :meth:`_validate_slot_operation`
         does, and for a server slot as ``SyncEngine.live_device_id`` does, and a
         RomM error deleting the server saves propagates with the slot left as it
@@ -183,6 +184,7 @@ class SlotDeleter:
         # inside the held lock is safe (no re-entry). There is no tail status
         # call, so no deadlock risk.
         async with self._sync_engine.rom_lock(rom_id):
+            await self._sync_engine.refuse_while_running(rom_id)
             save_state, slots_dict = await self._loop.run_in_executor(None, self._validate_slot_operation, rom_id, slot)
 
             effective_active = save_state.active_slot or ""

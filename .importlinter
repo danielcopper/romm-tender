@@ -175,6 +175,7 @@ modules =
     services.rom_adoption
     services.rom_install_recorder
     services.rom_removal
+    services.running_games
     services.saves
     services.session_lifecycle
     services.settings

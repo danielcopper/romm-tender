@@ -44,8 +44,10 @@ from services.saves._messages import DEVICE_NOT_REGISTERED, DEVICE_SYNC_DISABLED
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.saves.sync_engine import PreLaunchSyncStopped, SaveSweepIncomplete
 from services.saves.sync_engine._gate import GateHolder
+from services.saves.sync_engine._result_message import first_error_reason as _first_error_reason
+from services.saves.sync_engine._result_message import summarize_sync_result as _summarize_sync_result
 from services.saves.sync_engine._shape_refusal import live_save_answer
-from services.saves.sync_engine.engine import NEGOTIATE_ROM_IDS_CAP, _first_error_reason, _summarize_sync_result
+from services.saves.sync_engine.engine import NEGOTIATE_ROM_IDS_CAP
 from tests.services.saves._helpers import (
     _create_save,
     _do_sync,
@@ -2046,14 +2048,14 @@ class TestStoppingTheSyncBeforeAStart:
         assert not any(c[0] in ("heartbeat", "list_saves") for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_a_stop_of_one_rom_stops_no_other_rom_and_no_other_sync(self, tmp_path):
+    async def test_a_stop_of_one_rom_stops_no_sync_of_another_rom(self, tmp_path):
         svc, _fake = make_service(tmp_path)
         _enable_sync_with_device(svc, "test-device")
         _install_rom(svc, tmp_path)
         _install_rom(svc, tmp_path, rom_id=7, system="snes", file_name="mario.sfc")
         release = _hold_at_device_registration(svc)
 
-        manual = asyncio.ensure_future(svc.sync_rom_saves(42))
+        manual = asyncio.ensure_future(svc.sync_rom_saves(7))
         await _until(lambda: svc._sync_engine._device_gate.holder() is GateHolder.ROM_SYNC)
         start = asyncio.ensure_future(svc.pre_launch_sync(7))
         await asyncio.sleep(0.02)
@@ -2101,7 +2103,7 @@ class TestTheSyncBeforeAStartAcknowledgesOnlyWhatItPlaced:
         assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
 
     @pytest.mark.asyncio
-    async def test_a_manual_sync_still_downloads_with_the_optimistic_mark(self, tmp_path):
+    async def test_a_manual_sync_downloads_without_the_optimistic_mark_and_acknowledges_once_placed(self, tmp_path):
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -2109,9 +2111,9 @@ class TestTheSyncBeforeAStartAcknowledgesOnlyWhatItPlaced:
 
         await svc.sync_rom_saves(42)
 
-        downloads = [c for c in fake.call_log if c[0] == "download_save_content"]
-        assert [c[2]["optimistic"] for c in downloads] == [True]
-        assert not any(c[0] == "confirm_download" for c in fake.call_log)
+        calls = [c for c in fake.call_log if c[0] in ("download_save_content", "confirm_download")]
+        assert [c[0] for c in calls] == ["download_save_content", "confirm_download"]
+        assert calls[0][2]["optimistic"] is False
 
     @pytest.mark.asyncio
     async def test_a_placed_file_whose_acknowledgement_failed_is_adopted_and_acknowledged_by_the_next_sync(
