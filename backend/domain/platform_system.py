@@ -162,19 +162,18 @@ class SystemPick:
 def pick_system(answers: Iterable[IdAnswer], platform_slug: str) -> SystemPick:
     """The system a platform is in the source, from its ids' answers in the order they are asked.
 
-    Tender's own rule, not a statement of the resolver's: where a platform
-    matches several systems, the resolver names them all and prefers none.
     The first id that gives a switched-on system decides. An answer naming
     several platforms speaks only for the one that is RomM's slug with its
     hyphens dropped, and an answer naming several without that one is passed
     over: another platform is never taken in its place. Among several systems
     of the platform an answer stands for, with the same status, the first
-    named like that platform is taken, else the first the resolver lists — an
-    order that states no preference, alphabetical within each status. Where no
-    id gives a switched-on system, the first switched-off one is named; where
-    none gives any, there is no system. Which of several regional systems a
-    platform stands for is a statement the resolver does not make yet; once
-    emu-atlas#583 makes it, it replaces this rule's choice among them.
+    named like that platform is taken, else the first the resolver lists —
+    Tender's own choice, since the resolver names every match and prefers
+    none (its order is alphabetical within each status). Where no id gives a
+    switched-on system, the first switched-off one is named; where none gives
+    any, there is no system. Which region each of several regional systems
+    stands for is a statement the resolver does not make yet; once it does
+    (emu-atlas#583), that statement replaces this rule's choice among them.
 
     *answers* is consumed lazily, so an id after the deciding one is never asked.
     """
@@ -201,7 +200,7 @@ def _platform_of(answer: IdAnswer, wanted: str) -> str | None:
 
 
 def _choose(answer: IdAnswer, platform: str | None, status: SystemStatus) -> str | None:
-    """Among *answer*'s systems of *platform* with *status*, the main one; ``None`` where there is none."""
+    """Among *answer*'s systems of *platform* with *status*, the one Tender's rule takes, or ``None``."""
     candidates = [
         match.system
         for match in answer.matches

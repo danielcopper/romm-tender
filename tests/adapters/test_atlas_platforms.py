@@ -1,12 +1,13 @@
 """Tests for the atlas platforms adapter — a RomM platform's system, asked of one source at a time.
 
-Two halves. The first drives the REAL resolver over a fabricated RetroDECK
-deploy under ``tmp_path``, whose catalogue declares the systems and their
-platform tags, so what is checked is the resolver's own answer read through
-the adapter: the main system among regional ones, a system switched off only
-in the catalogue's comments, and an id nothing maps. The second uses stand-in
-installations, which is the only way to have two sources answer differently
-for one platform.
+Three parts. The first drives the REAL resolver over a fabricated
+RetroDECK deploy under ``tmp_path``, whose catalogue declares the
+systems and their platform tags, so what is checked is the resolver's own
+answer read through the adapter: the system named like the platform among
+regional ones, a system switched off only in the catalogue's comments, and an
+id nothing maps. The second uses stand-in installations, which is the only way
+to have two sources answer differently for one platform. The third holds the
+adapter's vocabulary and status tables to what the resolver exports.
 """
 
 from __future__ import annotations

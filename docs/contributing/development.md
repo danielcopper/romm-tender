@@ -633,7 +633,8 @@ backend/
     repositories/                    # SqliteUnitOfWork (unit_of_work.py) + one repo per aggregate root, plus kv_config
     sqlite_migrations.py / machine_id.py  # schema migration runner (PRAGMA user_version) + machine-id reader
     download_file.py / firmware_file.py / migration_file.py / rom_files.py / save_file.py
-    emulator_sources.py / retrodeck_folders.py / atlas_catalogue.py / atlas_firmware.py / atlas_saves.py
+    emulator_sources.py / retrodeck_folders.py / atlas_catalogue.py / atlas_firmware.py / atlas_platforms.py
+    atlas_saves.py / atlas_zstd.py
                                      # the adapters over the vendored emu-atlas resolver
     system_clock.py / system_uuid_gen.py / asyncio_sleeper.py / hostname.py / path_probe.py / debug_logger.py
   db/

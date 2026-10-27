@@ -2,12 +2,12 @@
 """The resolver's answer is read only in the module that asks for it.
 
 Each kind of answer emu-atlas gives — firmware, saves, the catalogue, the
-folders and the sources — is read in one module, the adapter that asks the
-resolver for it (:data:`READING_MODULES`). That module turns the answer into
-Tender's own view, and every later layer reads the view. Two scans hold it,
-both over ``backend/`` less ``_vendor/`` and ``native/``. ``tests/`` is not
-scanned: tests build the resolver's machines and answers rather than read an
-answer for display.
+platforms, the folders and the sources — is read in one module, the adapter
+that asks the resolver for it (:data:`READING_MODULES`). That module turns the
+answer into Tender's own view, and every later layer reads the view. Two scans
+hold it, both over ``backend/`` less ``_vendor/`` and ``native/``. ``tests/``
+is not scanned: tests build the resolver's machines and answers rather than
+read an answer for display.
 
 * **Imports.** Only a reading module, or a module :data:`IMPORT_GRANTS` names,
   imports the resolver, and only names in ``atlas.__all__``. A name from a

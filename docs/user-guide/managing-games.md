@@ -341,8 +341,8 @@ games."**; where the platform's only systems are switched off in _source_, they 
 in _source_."** A platform's BIOS downloads are not refused: they land in Tender's firmware store and are linked once a
 source has a system for the platform ([Where downloads go](bios-management.md#where-downloads-go)). A game you already
 installed keeps the system it was downloaded under, and the buttons on its **BIOS** tab fetch and link the files for
-that system. Where several systems fit one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — the main one
-(`snes`) is taken; the platform's page names it.
+that system. Where several systems fit one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — Tender takes the
+one named like the platform (`snes`); the platform's page names it.
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need
