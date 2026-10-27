@@ -171,8 +171,8 @@ export type GateVerdict =
  * {@link SERVER_CALL_LIMIT_MS}) and lets an expired limit's
  * {@link TimeoutError} through: its own fallback answers a call that failed,
  * the gate answers one that got no answer. The pre-launch sync is the
- * exception: past its limit its op asks the user, and the call is never given
- * up. A dialog an op shows is never bounded — the user's answer is worth
+ * exception: past its limit the call goes on and its op asks the user. A
+ * dialog an op shows is never bounded — the user's answer is worth
  * waiting for.
  */
 export interface LaunchGateOps {

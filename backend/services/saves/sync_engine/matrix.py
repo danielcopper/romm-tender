@@ -667,9 +667,8 @@ class MatrixExecutor:
         *autocleanup_limit* caps server-retained versions on the POST (create)
         upload; the operation entry owns the surrounding read/write Unit of Work.
 
-        A *stop* asked before a file is dispatched, or during a download before
-        its content is placed, ends the run there: the counts are of what moved
-        before it.
+        A *stop* that a check of this run sees ends the run there: the counts
+        are of what moved before it.
         """
         t_total = self._clock.time()
         rom_id = int(rom_id)

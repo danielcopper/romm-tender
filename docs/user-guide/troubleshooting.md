@@ -406,21 +406,21 @@ To find the files, open the game's detail page — the **ROM File** section show
 
 ### Play asks whether to launch with local saves
 
-**Symptom**: You start a game — with **Play** on its detail page, where the button reads **Checking saves...** or
-**Syncing saves...**, or with Steam's own Play or a link — and after a wait a **Save Sync Unavailable** dialog asks
-"Couldn't check your saves in time — launch with local saves?".
+**Symptom**: You start a game — with **Play** on its detail page, where the button reads **Checking saves...**, or with
+Steam's own Play or a link — and after a wait a **Save Sync Unavailable** dialog asks "Couldn't check your saves in time
+— launch with local saves?".
 
-**What happened**: Before a game starts, Tender checks its saves, and every step of that check before the save sync
-itself has a time limit — about fifteen seconds for reading how the game's saves are set up on RomM, about five for
-every other step. A step that got no answer in time ends in this dialog, so a start never waits without end. Either
-Tender's backend is not answering, or RomM is slow. A save sync that takes long asks a different question — see
+**What happened**: Before a game starts, Tender checks its saves, and every step of that check but the save sync itself
+has a time limit — about fifteen seconds for reading how the game's saves are set up on RomM, about five for every other
+step. A step that got no answer in time ends in this dialog, so a start never waits without end. Either Tender's backend
+is not answering, or RomM is slow. A save sync that takes long asks a different question — see
 [Play asks whether to wait for your saves](#play-asks-whether-to-wait-for-your-saves).
 
 **Fix**: **Launch Anyway** starts the game on the save already on the device; the sync after the game compares that save
-with the server's, and asks you where both changed. **Cancel** starts nothing, and on the detail page the button returns
-to **Play**. If the dialog appears on every start, Tender's backend is not running or not answering, or RomM is too slow
-to answer in time. If it is the backend, start it with `systemctl --user restart romm-tender`; if the panel still does
-not answer, restart Steam.
+with the server's; where both changed, it tells you, and you choose which to keep before the next start. **Cancel**
+starts nothing, and on the detail page the button returns to **Play**. If the dialog appears on every start, Tender's
+backend is not running or not answering, or RomM is too slow to answer in time. If it is the backend, start it with
+`systemctl --user restart romm-tender`; if the panel still does not answer, restart Steam.
 
 ### Play asks whether to wait for your saves
 
@@ -429,20 +429,21 @@ Steam's own Play or a link — and after about fifteen seconds a **Saves Still S
 held up and offers **Wait**, **Play Anyway** and **Cancel**.
 
 **What happened**: The save sync before the start is not done yet. The dialog says why: another save sync is still
-running (**Sync All**, the sync after the last game, a manual sync, or the sync of another start), Tender is still busy
-with this game's saves, this game's saves are still syncing with RomM, or Tender is not answering.
+running (**Sync All Saves Now**, the sync after the last game, a manual sync, or the sync of another start), Tender is
+still busy with this game's saves, this game's saves are still syncing with RomM, or Tender is not answering.
 
 **Fix**:
 
-- **Wait** waits about fifteen seconds more. If the sync finishes in that time, the game starts; if not, the dialog
+- **Wait** waits about fifteen seconds more. If the sync finishes in that time, the start goes on; if not, the dialog
   comes back.
 - **Play Anyway** stops this game's sync and starts the game on the save already on the device. A save the sync had
-  already put in place stays; one it was still downloading is not put in place and stays on RomM. The sync after the
-  game compares the save with the server's, and asks you where both changed.
+  already put in place stays; one it was still downloading, or had not reached yet, stays on RomM, and the sync after
+  the game compares that save with the server's; where both changed, it tells you, and you choose which to keep before
+  the next start.
 - **Cancel** starts nothing, and this game's sync runs to its end.
 
-If the sync finishes while the dialog is open, it changes to **Saves Ready** with **Play** and **Cancel** — the game
-never starts by itself. If Tender is not answering on every start, restart its backend with
+If the sync finishes with nothing to ask while the dialog is open, it changes to **Saves Ready** with **Play** and
+**Cancel** — the game never starts by itself. If Tender is not answering on every start, restart its backend with
 `systemctl --user restart romm-tender`.
 
 ### Controller works in RetroArch's menu but not in the game
@@ -644,7 +645,7 @@ nothing to sync.
   already on the device — see
   [Play asks whether to launch with local saves](#play-asks-whether-to-launch-with-local-saves).
 - Whether you chose **Play Anyway** in the **Saves Still Syncing** dialog. It stops the sync before the start, so a
-  newer save that was still downloading stayed on RomM — see
+  newer save it was still downloading, or had not reached yet, stayed on RomM — see
   [Play asks whether to wait for your saves](#play-asks-whether-to-wait-for-your-saves).
 - Whether save sync covers the game at all —
   [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).

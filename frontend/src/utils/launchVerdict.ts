@@ -52,7 +52,7 @@ export interface LaunchPrompts {
  * at most once per verdict and only on a branch that starts nothing.
  */
 interface VerdictHooks {
-  /** The core-change and unchecked-source questions are asked inside the gate, not here. */
+  /** The core-change, unchecked-source and sync-wait questions are asked inside the gate, not here. */
   prompts: Pick<LaunchPrompts, "resolveConflicts" | "askOfflineDrift" | "confirmFallbackLaunch">;
   /**
    * Start the game. Every approving branch ends here; `skipReconfirm` is set

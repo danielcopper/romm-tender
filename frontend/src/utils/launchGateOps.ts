@@ -100,7 +100,7 @@ async function stopTheSync(romId: number, tag: string, reason: SyncWaitReason): 
 }
 
 /**
- * Let the call given up run to its end: its answer only tells the game's page
+ * Let the call the start no longer waits for run to its end: its answer only tells the game's page
  * to re-read its saves, and is toasted as an answered one would be.
  */
 function finishInBackground(call: Promise<PreLaunchSyncSettled>, romId: number, options: PreLaunchSyncOptions) {
@@ -108,13 +108,13 @@ function finishInBackground(call: Promise<PreLaunchSyncSettled>, romId: number, 
     call.then((settled) => {
       announceSaveSync(romId);
       if (!("result" in settled)) {
-        logError(`${options.tag}: the pre-launch sync of a start given up failed: ${settled.failure}`);
+        logError(`${options.tag}: the pre-launch sync the start no longer waits for failed: ${settled.failure}`);
         return;
       }
       const { result } = settled;
       detach(
         debugLog(
-          `${options.tag}: the pre-launch sync of a start given up answered: success=${result.success} reason=${result.reason ?? ""}`,
+          `${options.tag}: the pre-launch sync the start no longer waits for answered: success=${result.success} reason=${result.reason ?? ""}`,
         ),
       );
       if (result.success && options.toastSyncResult) {
@@ -139,8 +139,8 @@ function finishInBackground(call: Promise<PreLaunchSyncSettled>, romId: number, 
  * - A throw is `{ success: false, message: "" }`. It must not propagate: the
  *   gate fails open on a throw, which would launch silently on stale saves. The
  *   empty message leaves the fallback prompt its own default sentence.
- * - A sync that has not answered within {@link SERVER_CALL_LIMIT_MS} is never
- *   given up: the user is asked why it waits (`askSyncWait`). Wait waits
+ * - A sync that has not answered within {@link SERVER_CALL_LIMIT_MS} goes on,
+ *   and the user is asked why the start waits (`askSyncWait`). Wait waits
  *   {@link SYNC_WAIT_MORE_MS} more and asks again; Play anyway stops the sync
  *   and answers `play_anyway`; Cancel answers `cancel` and leaves the sync to
  *   finish in the background.

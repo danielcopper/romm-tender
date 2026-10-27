@@ -1,9 +1,7 @@
-"""A stop asked of one running sync: it places no further save file.
+"""A stop asked of one running sync: the sync ends at the first of its checks that sees it.
 
-The sync checks it at fixed points — before it follows a moved save directory,
-before each file, and between a finished download and putting that download in
-place — and stops at the first one it reaches after the stop was asked. What it
-placed before that point stays placed and is recorded.
+Where the sync checks it is ``docs/architecture/save-file-sync-architecture.md``'s,
+"Pre-launch sync".
 """
 
 from __future__ import annotations
@@ -14,12 +12,11 @@ class SyncStopped(Exception):
 
 
 class SyncStop:
-    """The stop of one sync: asked on the event-loop thread, checked on the worker thread its files move on.
+    """The stop of one sync: asked on the event-loop thread, checked there and on the worker thread its files move on.
 
     Plain bools — not ``threading.Event`` — because the import-linter
     ``no-stdlib-io-in-services`` contract forbids ``threading`` in services, and
-    under the GIL a one-way set-once flip needs no synchronisation. A file whose
-    placing began before the stop was asked is still placed; none begins after.
+    under the GIL a one-way set-once flip needs no synchronisation.
     """
 
     __slots__ = ("_honored", "_requested")

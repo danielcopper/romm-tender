@@ -1782,31 +1782,31 @@ Neither funnel waits for the backend without end. Every backend call the gate ma
 `is_save_tracking_configured`, `confirm_slot_choice`, `check_core_change` and `check_local_drift` — and for
 `probe_reachability`, whose single heartbeat to RomM gives up after about 3 s on its own; `SERVER_CALL_LIMIT_MS` (15 s)
 for the two that read or sync the server's saves, `get_save_setup_info` and `pre_launch_sync` — though the pre-launch
-sync is never given up at its limit (below). Both live in `frontend/src/utils/launchGate.ts`; the session manager bounds
-with them too the backend calls it waits for while handling Steam's start and stop notifications (see
-[Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a delay. A step's own fallback answers a call that
-**failed** — a launch-target read that throws lets the launch through, a probe that throws counts as offline — but never
-one that got **no answer**: that ends the check in the "Save Sync Unavailable" dialog, reading "Couldn't check your
-saves in time — launch with local saves?". The limit can expire on a slow RomM while Tender itself is fine, and
-`check_local_drift`'s while another holder keeps the game's `rom_lock` (step 8 below), which is why the dialog does not
-blame either. "Launch Anyway" starts the game on the local save without re-confirming the launch options, because that
-re-confirm asks the same backend and its own timeout stops a start; "Cancel" leaves the game unstarted — the Play button
-back on Play, the watcher's start still cancelled. An answer that arrives after the dialog appeared starts nothing more.
-The one exception is `check_start_source`, whose every unanswered case — no answer, a failed call, a failed detection —
-asks a question of its own instead of opening that dialog
+sync goes on past its limit, and the start does not without the user (below). Both live in
+`frontend/src/utils/launchGate.ts`; the session manager bounds with them too the backend calls it waits for while
+handling Steam's start and stop notifications (see [Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a
+delay. A step's own fallback answers a call that **failed** — a launch-target read that throws lets the launch through,
+a probe that throws counts as offline — but never one that got **no answer**: that ends the check in the "Save Sync
+Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can expire on a
+slow RomM while Tender itself is fine, and `check_local_drift`'s while another holder keeps the game's `rom_lock` (step
+8 below), which is why the dialog does not blame either. "Launch Anyway" starts the game on the local save without
+re-confirming the launch options, because that re-confirm asks the same backend and its own timeout stops a start;
+"Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start still cancelled. An answer that
+arrives after the dialog appeared starts nothing more. The one exception is `check_start_source`, whose every unanswered
+case — no answer, a failed call, a failed detection — asks a question of its own instead of opening that dialog
 ([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)). A wait on the user's answer
 in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits
 for `resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
 
-**The pre-launch sync is never given up, and never started past without the user.** The backend gives it no time limit
-of its own: `SyncEngine.pre_launch_sync` waits for the device gate and for the game's `rom_lock` until each is free
-([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D1). When it has not answered within
+**The pre-launch sync goes on past its limit, and no start goes past it without the user.** The backend gives it no time
+limit of its own: `SyncEngine.pre_launch_sync` waits for the device gate and for the game's `rom_lock` until each is
+free ([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D1). When it has not answered within
 `SERVER_CALL_LIMIT_MS`, `runPreLaunchSync` (`frontend/src/utils/launchGateOps.ts`) asks `pre_launch_sync_state` what it
 is doing — within `LOCAL_CALL_LIMIT_MS`, where no answer, like a failed read, is "Tender is not answering" — and puts
 the "Saves Still Syncing" question (`LaunchPrompts.askSyncWait`, drawn by `frontend/src/shared/SyncWaitModal.tsx`). It
-names the reason: another save sync holds the device (Sync All, the sync after a game, a manual sync, or the sync of
-another start; `GateHolder`, `services/saves/sync_engine/_gate.py`), something else is busy with this game's saves (its
-`rom_lock`), this game's own sync is running, or Tender is not answering. Its three answers:
+names the reason: another save sync holds the device (Sync All Saves Now, the sync after a game, a manual sync, or the
+sync of another start; `GateHolder`, `services/saves/sync_engine/_gate.py`), something else is busy with this game's
+saves (its `rom_lock`), this game's own sync is running, or Tender is not answering. Its three answers:
 
 - **Wait** waits `SYNC_WAIT_MORE_MS` (15 s) more. A sync that answers within it is acted on as one that answered within
   the first limit — the game starts, or the conflict or fallback dialog asks. One that does not brings the question
@@ -1822,7 +1822,7 @@ A sync that answers while the question is open and nothing was pressed turns it 
 Cancel: the game never starts by itself. One whose answer needs acting on first — a conflict, a failure — closes the
 question, and the answer is acted on as above.
 
-**The stop.** `stop_pre_launch_sync(rom_id)` stops every sync before a start of that ROM — a start given up leaves its
+**The stop.** `stop_pre_launch_sync(rom_id)` stops every sync before a start of that ROM — a cancelled start leaves its
 sync running, and the next start of the game calls again — and no other sync
 (`services/saves/sync_engine/_pre_launch.py`). A call still waiting for the gate or the lock stops at once and writes
 nothing. One that runs checks its stop (`SyncStop`, `services/saves/_sync_stop.py`) at three points: before it follows a
@@ -1837,8 +1837,8 @@ records nothing for it; the next sync finds the file identical to a head this de
 acknowledges it (rows 11a and 12a). A file whose placing began before the stop is still placed, and none begins after
 it; a transfer already under way in the executor runs to its end, which is why the stop is a check inside the sync
 rather than a cancellation message in the socket protocol, which could not reach that transfer either. The stopped call
-is refused with `pre_launch_sync_stopped`, its details carrying what it moved; the panel, which has started the game by
-then, only reads it as a late answer.
+is refused with `pre_launch_sync_stopped`, its details carrying what it moved; the panel, which has gone on to start the
+game, only reads it as a late answer.
 
 The romId comes from `sessionManager`'s appId → romId map, re-read at the moments
 [App ID to ROM ID mapping](#app-id-to-rom-id-mapping) lists, while `rommAppIds` learns a shortcut as soon as a sync

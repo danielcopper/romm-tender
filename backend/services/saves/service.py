@@ -312,7 +312,7 @@ class SaveService:
     # ------------------------------------------------------------------
 
     async def pre_launch_sync(self, rom_id: int) -> dict[str, Any]:
-        """Download newer saves from server before game launch."""
+        """Sync this ROM's saves with the server before the game starts."""
         async with self._rules.hold("pre_launch_sync", update=True, migration=True, prune=True):
             return await self._sync_engine.pre_launch_sync(rom_id)
 

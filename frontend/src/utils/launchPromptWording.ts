@@ -61,7 +61,7 @@ export const SYNC_WAIT_LABEL = "Wait";
 export const SYNC_WAIT_PLAY_ANYWAY_LABEL = "Play Anyway";
 
 const SYNC_WAIT_HOLDERS = {
-  sync_all: "Another save sync is still running (Sync All).",
+  sync_all: "Sync All Saves Now is still running.",
   post_exit: "The save sync after the last game is still running.",
   rom_sync: "A manual save sync is still running.",
   pre_launch: "The save sync of another start is still running.",

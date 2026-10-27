@@ -67,7 +67,7 @@ describe("SyncWaitModal — showSyncWaitModal", () => {
     expect(view.getByText("Saves Still Syncing")).toBeTruthy();
     expect(
       view.getByText(
-        "Another save sync is still running (Sync All). Wait a little longer, or play with the saves on this device?",
+        "Sync All Saves Now is still running. Wait a little longer, or play with the saves on this device?",
       ),
     ).toBeTruthy();
     expect(view.getAllByRole("button").map((b) => b.textContent)).toEqual(["Wait", "Play Anyway", "Cancel"]);

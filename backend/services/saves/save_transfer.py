@@ -152,8 +152,7 @@ class SaveTransfer:
         the content is complete raises :class:`SyncStopped` with nothing moved,
         nothing recorded and RomM's record of this device unchanged. An
         acknowledgement that fails raises its own failure with the file in
-        place, its backup kept and nothing recorded, and the next sync adopts
-        the file as the head and acknowledges it then.
+        place, its backup kept and nothing recorded.
         """
         local_path = os.path.join(saves_dir, filename)
         self._save_file_store.make_dirs(saves_dir)

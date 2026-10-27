@@ -51,7 +51,7 @@ describe("syncWaitDescription", () => {
   const choices = " Wait a little longer, or play with the saves on this device?";
 
   it.each([
-    ["sync_all", "Another save sync is still running (Sync All)."],
+    ["sync_all", "Sync All Saves Now is still running."],
     ["post_exit", "The save sync after the last game is still running."],
     ["rom_sync", "A manual save sync is still running."],
     ["pre_launch", "The save sync of another start is still running."],

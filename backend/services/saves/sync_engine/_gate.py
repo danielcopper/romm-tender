@@ -4,8 +4,7 @@ One in-flight save-sync run per device: a second trigger waits (queue
 semantics) for the in-flight run to finish rather than running alongside
 it. Every trigger but the sync before a start bounds that wait, and on
 expiry gets a timeout it can turn into its busy fallthrough; the sync
-before a start waits until the gate is free, because whether to keep
-waiting is the user's choice at the start. The :class:`asyncio.Lock` IS
+before a start waits until the gate is free. The :class:`asyncio.Lock` IS
 the serializer/queue; this module owns the acquire discipline around it
 and the record of which trigger holds it.
 
@@ -32,8 +31,8 @@ __all__ = [
     "SaveSyncTimeoutError",
 ]
 
-# Per-trigger bounded-wait budgets (seconds). The manual full-library sweep
-# gets the most slack because it legitimately runs longest.
+# Per-trigger bounded-wait budgets (seconds). The post-exit sync and the
+# manual full-library sweep get the most slack.
 POST_EXIT_GATE_TIMEOUT: float = 60.0
 SYNC_ROM_GATE_TIMEOUT: float = 15.0
 SYNC_ALL_GATE_TIMEOUT: float = 60.0

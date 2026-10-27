@@ -361,7 +361,7 @@ describe("runPreLaunchSync", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(backend.logError).toHaveBeenCalledWith(
-        `${TAG}: the pre-launch sync of a start given up failed: Error: boom`,
+        `${TAG}: the pre-launch sync the start no longer waits for failed: Error: boom`,
       );
       expect(toaster.toast).not.toHaveBeenCalled();
     });

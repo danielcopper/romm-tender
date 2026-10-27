@@ -12,11 +12,12 @@ checks if the server has a newer save and downloads it. When you stop playing, i
 > page, with Steam's own Play, or through a `steam://rungameid` link. If Tender does not answer within about five
 > seconds of a start with Steam's own Play or a link, the game starts without the sync before it, and a message says so.
 > If Tender answers that first time but a later step of the check before the start gets no answer in time — or, with
-> Tender's Play button, any step does — a **Save Sync Unavailable** dialog asks "Couldn't check your saves in time —
-> launch with local saves?". **Launch Anyway** starts the game on the save already on the device, and **Cancel** starts
-> nothing. A sync before the start that is not done after about fifteen seconds is never given up by itself: a **Saves
-> Still Syncing** dialog says why it is held up and lets you **Wait**, **Play Anyway** — which stops the sync — or
-> **Cancel** ([Play asks whether to wait for your saves](troubleshooting.md#play-asks-whether-to-wait-for-your-saves)).
+> Tender's Play button, any step before the save sync does — a **Save Sync Unavailable** dialog asks "Couldn't check
+> your saves in time — launch with local saves?". **Launch Anyway** starts the game on the save already on the device,
+> and **Cancel** starts nothing. When the sync before the start is not done after about fifteen seconds, the start does
+> not go ahead by itself: a **Saves Still Syncing** dialog says why it is held up and lets you **Wait**, **Play Anyway**
+> — which stops the sync — or **Cancel**
+> ([Play asks whether to wait for your saves](troubleshooting.md#play-asks-whether-to-wait-for-your-saves)).
 
 Sync uses a **newest-wins** model with a hash-divergence guard:
 
