@@ -10,7 +10,8 @@ listed platforms with no platform unit this run. An own smart collection walks
 those platforms even when nothing is left over, and a foreign smart collection
 is walked whole. Why, and what each kind's
 skip compares, is in docs/architecture/backend-architecture.md, "Incremental
-skip".
+skip". An apply fetches every collection unit of its run this way before the
+first one applies.
 """
 
 from __future__ import annotations
