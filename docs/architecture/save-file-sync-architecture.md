@@ -1695,7 +1695,12 @@ the upload.
 auto-upserts `device_save_sync` for the calling device with `last_synced_at = save.updated_at`. After a successful
 download our `is_current` evaluates `true` without an extra round-trip.
 
-`download_save_content` in `adapters/romm/romm_api.py` always passes `device_id` and `optimistic=true`. The
+`download_save_content` in `adapters/romm/romm_api.py` always passes `device_id`, and every download passes
+`optimistic=true` but the sync before a start's. That one can be stopped between a finished download and putting it in
+place, and RomM's mark at the GET would then record this device current on a save it never placed — the exit sync would
+read its changed local save as an edit on top of that head and upload over the other device's newer save without a 409.
+So it passes `optimistic=false` and acknowledges with `POST /api/saves/{id}/downloaded` only once the file is in place
+([Pre-launch sync](#pre-launch-sync), [#2184](https://github.com/danielcopper/romm-tender/issues/2184) D8). The
 non-optimistic legacy `download_save(save_id, dest_path)` is retained for use cases that must not touch sync state but
 is not used by the sync flow.
 
@@ -1776,21 +1781,64 @@ Neither funnel waits for the backend without end. Every backend call the gate ma
 (5 s) for the calls that stay on this machine — `get_installed_rom`, `check_start_source`,
 `is_save_tracking_configured`, `confirm_slot_choice`, `check_core_change` and `check_local_drift` — and for
 `probe_reachability`, whose single heartbeat to RomM gives up after about 3 s on its own; `SERVER_CALL_LIMIT_MS` (15 s)
-for the two that read or sync the server's saves, `get_save_setup_info` and `pre_launch_sync`. Both live in
-`frontend/src/utils/launchGate.ts`; the session manager bounds with them too the backend calls it waits for while
-handling Steam's start and stop notifications (see [Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a
-delay. A step's own fallback answers a call that **failed** — a launch-target read that throws lets the launch through,
-a probe that throws counts as offline — but never one that got **no answer**: that ends the check in the "Save Sync
-Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can expire on a
-slow RomM while Tender itself is fine, and `check_local_drift`'s while another holder keeps the game's `rom_lock` (step
-8 below), which is why the dialog does not blame either. "Launch Anyway" starts the game on the local save without
-re-confirming the launch options, because that re-confirm asks the same backend and its own timeout stops a start;
-"Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start still cancelled. An answer that
-arrives after the dialog appeared starts nothing more. The one exception is `check_start_source`, whose every unanswered
-case — no answer, a failed call, a failed detection — asks a question of its own instead of opening that dialog
+for the two that read or sync the server's saves, `get_save_setup_info` and `pre_launch_sync` — though the pre-launch
+sync is never given up at its limit (below). Both live in `frontend/src/utils/launchGate.ts`; the session manager bounds
+with them too the backend calls it waits for while handling Steam's start and stop notifications (see
+[Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a delay. A step's own fallback answers a call that
+**failed** — a launch-target read that throws lets the launch through, a probe that throws counts as offline — but never
+one that got **no answer**: that ends the check in the "Save Sync Unavailable" dialog, reading "Couldn't check your
+saves in time — launch with local saves?". The limit can expire on a slow RomM while Tender itself is fine, and
+`check_local_drift`'s while another holder keeps the game's `rom_lock` (step 8 below), which is why the dialog does not
+blame either. "Launch Anyway" starts the game on the local save without re-confirming the launch options, because that
+re-confirm asks the same backend and its own timeout stops a start; "Cancel" leaves the game unstarted — the Play button
+back on Play, the watcher's start still cancelled. An answer that arrives after the dialog appeared starts nothing more.
+The one exception is `check_start_source`, whose every unanswered case — no answer, a failed call, a failed detection —
+asks a question of its own instead of opening that dialog
 ([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)). A wait on the user's answer
 in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits
 for `resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
+
+**The pre-launch sync is never given up, and never started past without the user.** The backend gives it no time limit
+of its own: `SyncEngine.pre_launch_sync` waits for the device gate and for the game's `rom_lock` until each is free
+([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D1). When it has not answered within
+`SERVER_CALL_LIMIT_MS`, `runPreLaunchSync` (`frontend/src/utils/launchGateOps.ts`) asks `pre_launch_sync_state` what it
+is doing — within `LOCAL_CALL_LIMIT_MS`, where no answer, like a failed read, is "Tender is not answering" — and puts
+the "Saves Still Syncing" question (`LaunchPrompts.askSyncWait`, drawn by `frontend/src/shared/SyncWaitModal.tsx`). It
+names the reason: another save sync holds the device (Sync All, the sync after a game, a manual sync, or the sync of
+another start; `GateHolder`, `services/saves/sync_engine/_gate.py`), something else is busy with this game's saves (its
+`rom_lock`), this game's own sync is running, or Tender is not answering. Its three answers:
+
+- **Wait** waits `SYNC_WAIT_MORE_MS` (15 s) more. A sync that answers within it is acted on as one that answered within
+  the first limit — the game starts, or the conflict or fallback dialog asks. One that does not brings the question
+  back, with its reason read again.
+- **Play Anyway** calls `stop_pre_launch_sync`, waits for its answer within `LOCAL_CALL_LIMIT_MS`, and starts the game,
+  re-confirming the launch options. After "Tender is not answering" the stop is sent without waiting for it and the
+  start skips the re-confirm, as "Launch Anyway" does after a step that got no answer.
+- **Cancel** starts nothing — the Play button back on Play, the watcher's start still cancelled. The sync runs to its
+  end, since no game is running; its late answer tells the game's page to re-read its saves, and on the Play button a
+  sync that moved saves is toasted as an answered one is.
+
+A sync that answers while the question is open and nothing was pressed turns it into "Saves Ready", with Play and
+Cancel: the game never starts by itself. One whose answer needs acting on first — a conflict, a failure — closes the
+question, and the answer is acted on as above.
+
+**The stop.** `stop_pre_launch_sync(rom_id)` stops every sync before a start of that ROM — a start given up leaves its
+sync running, and the next start of the game calls again — and no other sync
+(`services/saves/sync_engine/_pre_launch.py`). A call still waiting for the gate or the lock stops at once and writes
+nothing. One that runs checks its stop (`SyncStop`, `services/saves/_sync_stop.py`) at three points: before it follows a
+moved save directory, before each file, and between a finished download and putting it in place. A download finished
+after the stop is discarded with its `.tmp`, and the local file is neither backed up nor replaced; what was placed
+before the stop stays placed and is recorded, since `write_save_state` still runs. Its downloads stream without RomM's
+optimistic sync mark and are acknowledged (`confirm_download`) only once in place, so a discarded download leaves RomM's
+record of this device unchanged and the exit sync still sees the conflict
+([GET `/content?optimistic=true` auto-upserts the sync row](#get-contentoptimistictrue-auto-upserts-the-sync-row)). An
+acknowledgement that fails leaves the file in place and its backup kept, reports the file as an error of the sync and
+records nothing for it; the next sync finds the file identical to a head this device is not current on, and adopts and
+acknowledges it (rows 11a and 12a). A file whose placing began before the stop is still placed, and none begins after
+it; a transfer already under way in the executor runs to its end, which is why the stop is a check inside the sync
+rather than a cancellation message in the socket protocol, which could not reach that transfer either. The stopped call
+is refused with `pre_launch_sync_stopped`, its details carrying what it moved; the panel, which has started the game by
+then, only reads it as a late answer.
 
 The romId comes from `sessionManager`'s appId → romId map, re-read at the moments
 [App ID to ROM ID mapping](#app-id-to-rom-id-mapping) lists, while `rommAppIds` learns a shortcut as soon as a sync
@@ -1813,15 +1861,15 @@ The Play button's path:
    automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press.
 5. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
-7. Online: `pre_launch_sync`, with the button on "Syncing saves...". The backend fetches server saves and runs
-   `do_sync_rom_saves`, which iterates files and dispatches every `compute_sync_action` outcome. If a `Conflict` was
-   returned for any file, the result includes a `conflicts` list, and `actOnGateVerdict` puts each conflict through
-   `LaunchPrompts.resolveConflicts` in turn — `handleConflicts` (see [The modal](#the-modal)): once all are resolved it
-   notifies siblings and goes on; on the first Cancel the button switches to `conflict` and nothing launches. A sync
-   that fails never launches unconditionally: the "Save Sync Unavailable" dialog asks first, and Cancel returns the
-   button to Play. The benign skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently; a missing
-   saves folder (`saves_root_missing`) is a failure, so the dialog asks with the sentence Main's notice shows for the
-   folder — when it asks, and when the exit's toast says so, is
+7. Online: `pre_launch_sync`, with the button on "Syncing saves..." — past its limit, the "Saves Still Syncing" question
+   above. The backend fetches server saves and runs `do_sync_rom_saves`, which iterates files and dispatches every
+   `compute_sync_action` outcome. If a `Conflict` was returned for any file, the result includes a `conflicts` list, and
+   `actOnGateVerdict` puts each conflict through `LaunchPrompts.resolveConflicts` in turn — `handleConflicts` (see
+   [The modal](#the-modal)): once all are resolved it notifies siblings and goes on; on the first Cancel the button
+   switches to `conflict` and nothing launches. A sync that fails never launches unconditionally: the "Save Sync
+   Unavailable" dialog asks first, and Cancel returns the button to Play. The benign skips (`savefiles_in_content_dir`,
+   `save_shape_unsupported`) proceed silently; a missing saves folder (`saves_root_missing`) is a failure, so the dialog
+   asks with the sentence Main's notice shows for the folder — when it asks, and when the exit's toast says so, is
    [The seven save states](save-sync-coverage.md#the-seven-save-states). With "Sync before launch" off the sync answers
    that before it raises the save answer's refusal, so the dialog never asks about a sync that was switched off. When
    the sync moved something, the per-direction completion toast above reports it (uploaded / downloaded / both); a
@@ -1833,11 +1881,13 @@ The Play button's path:
    gets the "Save Sync Unavailable" dialog ("Couldn't check your saves in time", Launch Anyway offered) instead of
    starting at once.
 9. Re-confirm: `get_rom_relaunch_options`, bounded at 3 s, heals the shortcut's launch options. A timeout stops the
-   launch and the button returns to Play. A start chosen in the dialog after a check that got no answer skips this step.
+   launch and the button returns to Play. A start chosen in the dialog after a check that got no answer skips this step,
+   and so does Play Anyway after "Tender is not answering".
 10. `SteamClient.Apps.RunGame`, with the button on "Launching...".
 
 Every backend call in steps 3–8 has the limit stated above, and one that expires ends in the "Save Sync Unavailable"
-dialog — except the conflict dialog's `resolve_sync_conflict`, which has none (above).
+dialog — except the pre-launch sync, whose limit opens the "Saves Still Syncing" question, and the conflict dialog's
+`resolve_sync_conflict`, which has none (above).
 
 ### Post-exit sync
 
@@ -2066,14 +2116,13 @@ the second is skipped and retried at its next sync. Playtime is unaffected eithe
 runs. Per-app sync chains are a non-goal, not an oversight.
 
 The skip says what it is (#1625). A gate timeout carries `reason: "sync_busy"` — never `server_unreachable` — and no
-additive `offline` flag, on the pre-launch side as much as the post-exit one: nothing on either path ever contacted the
-server, so neither may claim it is down. The session-end toast keys on the reason and reads "Another save sync was still
-running — saves will sync next time" instead of the old "Server offline", which sent the user debugging a network that
-was fine. Pre-launch, the busy answer would come only after the gate's 30 s budget, and the launch check stops waiting
-at 15 s (`SERVER_CALL_LIMIT_MS`), so a busy gate ends the check in the fallback dialog's no-answer case instead; either
-way it never traps the Play button. The gate's offline drift warning is not involved on that path and never was: it is
-reachable only when the gate's own reachability probe says the server is down, and a busy gate means that probe already
-succeeded.
+additive `offline` flag: nothing on the path ever contacted the server, so it may not claim it is down. The session-end
+toast keys on the reason and reads "Another save sync was still running — saves will sync next time" instead of the old
+"Server offline", which sent the user debugging a network that was fine. The sync before a start has no gate timeout: it
+waits for the gate, and past the launch check's limit the user is told which sync it waits for and decides
+([Pre-launch sync](#pre-launch-sync)). The gate's offline drift warning is not involved on that path and never was: it
+is reachable only when the gate's own reachability probe says the server is down, and a sync waiting for the gate means
+that probe already succeeded.
 
 A skipped run is **not** re-queued on a delay. It is picked up by the next pre-launch or manual sync, which is why the
 copy promises exactly that. Retry-on-a-timer would need scheduling and backoff machinery around a gate that must not be

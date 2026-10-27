@@ -1622,19 +1622,21 @@ rounded-up countdown) keeps it an estimate, never a guarantee.
 Every save-sync run on the device passes through a single **device-level serialization gate** (`SaveSyncGate`, in
 `services/saves/sync_engine/_gate.py`). Only **one** save-sync run is in flight at a time per device: when a second
 trigger fires while one is running, it **queues** — it waits for the in-flight run to finish rather than running
-alongside it. An `asyncio.Lock` is the serializer/queue; the gate owns only the bounded-acquire discipline around it (no
-run-lifecycle state, no run ids, no cancellation — those are out of scope here).
+alongside it. An `asyncio.Lock` is the serializer/queue; the gate owns the acquire discipline around it and the record
+of which trigger holds it (`held_by`, `holder()`, a `GateHolder`) — no run ids, no cancellation.
 
-The wait is **bounded** so a stuck run never traps the launch path. Each of the four trigger methods on `SyncEngine`
-wraps its run body in `bounded_run(max_wait=…)` with a per-trigger budget — `pre_launch_sync` (30 s), `post_exit_sync`
-(60 s), `sync_rom_saves` (15 s), `sync_all_saves` (60 s). If the gate can't be acquired within the budget the call
-refuses instead of blocking, and all four raise the **same** busy refusal, `SyncBusy`: `reason: "sync_busy"`, no
-`offline` detail. A busy gate is a local wait — nothing on that path observed the server — so it never borrows a
-server-reachability slug and never sets the offline flag (#1625); the session-end toast would otherwise announce "Server
-offline" about a reachable server. Each caller routes the skip on `success: False` alone, and the session-end toast keys
-on the reason. The launch check never sees the skip: it stops waiting at 15 s, before the pre-launch budget runs out, so
-a busy gate reaches the user as the fallback dialog's no-answer case (Play is never trapped). The lock is never leaked
+Three of the four trigger methods on `SyncEngine` bound their wait — `post_exit_sync` (60 s), `sync_rom_saves` (15 s),
+`sync_all_saves` (60 s). If the gate can't be acquired within the budget the call refuses instead of blocking, and all
+three raise the **same** busy refusal, `SyncBusy`: `reason: "sync_busy"`, no `offline` detail. A busy gate is a local
+wait — nothing on that path observed the server — so it never borrows a server-reachability slug and never sets the
+offline flag (#1625); the session-end toast would otherwise announce "Server offline" about a reachable server. Each
+caller routes the skip on `success: False` alone, and the session-end toast keys on the reason. The lock is never leaked
 on timeout — a timed-out acquire releases any photo-finish hold before raising.
+
+`pre_launch_sync` gives the gate no budget of its own: it waits until the gate is free, as it waits for the ROM's lock,
+because whether to keep waiting is the user's choice at the start. While it waits, `pre_launch_sync_state` answers whom
+for (the holder's `GateHolder`), and `stop_pre_launch_sync` ends the wait without a write; both, and the checks the sync
+makes for its stop once it runs, are [Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync)'s.
 
 The gate sits **outside** the per-ROM lock (`SyncEngine.rom_lock(rom_id)`): the device gate admits one run at a time
 across the whole device, then each ROM still takes its own `rom_lock` for the read-mutate-write of its
