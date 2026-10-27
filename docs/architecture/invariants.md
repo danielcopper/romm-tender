@@ -552,18 +552,20 @@ Format: **invariant** — tier — enforced by.
 - **A collection's completion stamp records what the collection skip compares RomM's answers with, and the preview's
   re-stamp count is that skip's own refusal: the checksum is over exactly the `rom_ids` the collection listing carried
   (`WorkUnit.member_rom_ids`, in `ChunkDispatcher._build_final_collection_stamp`), never the stamp's `member_rom_ids`;
-  `fetch_started_at` is Tender's clock read before the unit's skip check (`UnitApplier`), for a collection unit as for a
-  platform one; the margin is the platform skip's, applied when the stamp is read
-  (`domain/platform_skip.py::skip_reference`); no `rom_count` is compared; and a collection is counted in
-  `restamp_collection_count` exactly when the preview's gate refused it for a reason a fresh stamp settles
-  (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for a probe that raised or could not be read) and
-  the apply will stamp it — it has members, and `recorded_updated_at` answers, which
-  `domain/collection_skip.py::apply_stamps` decides for the count and for the final chunk's stamp alike** — test +
-  prompt-only — the fetch start by
+  `fetch_started_at` is Tender's clock read before the unit's own skip check, for a collection unit as for a platform
+  one (`CollectionFetcher.fetch_collection_units`, which fetches every collection unit before the first applies); the
+  margin is the platform skip's, applied when the stamp is read (`domain/platform_skip.py::skip_reference`); no
+  `rom_count` is compared; and a collection is counted in `restamp_collection_count` exactly when the preview's gate
+  refused it for a reason a fresh stamp settles (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for
+  a probe that raised or could not be read) and the apply will stamp it — it has members, and `recorded_updated_at`
+  answers, which `domain/collection_skip.py::apply_stamps` decides for the count and for the final chunk's stamp alike**
+  — test + prompt-only — the fetch start by
   `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshCollectionStampRestoresTheSkip::test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync`
   (an edit between the fetch's start and the run's end is seen next sync) and
-  `tests/services/library/test_collection_fetcher.py::TestTryCollectionIncrementalSkip::test_the_probe_s_reference_is_the_fetch_start_less_the_margin`;
-  the listing's checksum by
+  `tests/services/library/test_collection_fetcher.py::TestTryCollectionIncrementalSkip::test_the_probe_s_reference_is_the_fetch_start_less_the_margin`,
+  and that each unit's start is read before its own probe by
+  `tests/services/library/test_collection_fetcher.py::TestFetchingEveryCollectionUnit::test_each_unit_s_fetch_start_is_the_clock_read_before_its_own_skip_check`
+  (a clock each request moves); the listing's checksum by
   `tests/services/library/test_chunk_dispatcher.py::TestFinalChunkCollectionStamp::test_the_final_chunk_s_stamp_records_the_fetch_start_and_the_listing_s_checksum`,
   over a unit applied in more than one chunk, and end to end by
   `TestOnlyAFreshCollectionStampRestoresTheSkip::test_an_own_smart_collection_whose_walk_returns_more_than_its_listing_is_skipped_once_stamped`;
@@ -576,10 +578,10 @@ Format: **invariant** — tier — enforced by.
   `tests/domain/test_collection_skip.py::TestWhetherAFreshStampSettlesTheRefusal`; and that a stamp the apply writes
   matches the listing it was written from by
   `TestFinalChunkCollectionStamp::test_the_stamp_it_writes_matches_the_listing_it_was_written_from`, and that the writer
-  refuses what `apply_stamps` refuses by `::test_a_collection_handed_no_members_is_not_stamped`. The rule spans six
-  modules: the unit applier reads the clock, the preview counts, the dispatcher writes the stamp, the collection fetcher
-  judges, and `domain/collection_skip.py` with `domain/platform_skip.py` hold the comparisons and the margin. Why the
-  checksum covers the listing rather than the visible id set the platform's covers is in
+  refuses what `apply_stamps` refuses by `::test_a_collection_handed_no_members_is_not_stamped`. The rule spans five
+  modules: the collection fetcher reads the clock and judges, the preview counts, the dispatcher writes the stamp, and
+  `domain/collection_skip.py` with `domain/platform_skip.py` hold the comparisons and the margin. Why the checksum
+  covers the listing rather than the visible id set the platform's covers is in
   [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"; do
   not restate it here. **Each wrong turn is silent.** A checksum over the stamp's `member_rom_ids` holds the ids a walk
   answered beyond the listing, so an own smart collection whose walk answers more never matches and is fetched in full,
@@ -590,8 +592,7 @@ Format: **invariant** — tier — enforced by.
   does not settle, so a probe that keeps failing offers it on every sync. A count and a stamp writer that stop sharing
   `apply_stamps` disagree in one of two directions: a writer looser than the count stamps a collection the count never
   asked for, and a writer stricter than the count leaves the Apply offered with nothing written, so the offer comes back
-  on every sync. **What nothing checks**: the test clock does not move across the probe, so a clock read after it passes
-  every test above; and nothing but review keeps the count on the gate's own answer
+  on every sync. **What nothing checks**: nothing but review keeps the count on the gate's own answer
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is

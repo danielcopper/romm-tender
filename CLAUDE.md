@@ -667,14 +667,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **A collection's completion stamp records what the collection skip compares RomM's answers with, and the preview's
   re-stamp count is that skip's own refusal: the checksum is over exactly the `rom_ids` the collection listing carried
   (`WorkUnit.member_rom_ids`, in `ChunkDispatcher._build_final_collection_stamp`), never the stamp's `member_rom_ids`;
-  `fetch_started_at` is Tender's clock read before the unit's skip check (`UnitApplier`), for a collection unit as for a
-  platform one; the margin is the platform skip's, applied when the stamp is read
-  (`domain/platform_skip.py::skip_reference`); no `rom_count` is compared; and a collection is counted in
-  `restamp_collection_count` exactly when the preview's gate refused it for a reason a fresh stamp settles
-  (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for a probe that raised or could not be read) and
-  the apply will stamp it — it has members, and `recorded_updated_at` answers, which
-  `domain/collection_skip.py::apply_stamps` decides for the count and for the final chunk's stamp alike** — test +
-  prompt-only — `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshCollectionStampRestoresTheSkip`
+  `fetch_started_at` is Tender's clock read before the unit's own skip check, for a collection unit as for a platform
+  one (`CollectionFetcher.fetch_collection_units`, which fetches every collection unit before the first applies); the
+  margin is the platform skip's, applied when the stamp is read (`domain/platform_skip.py::skip_reference`); no
+  `rom_count` is compared; and a collection is counted in `restamp_collection_count` exactly when the preview's gate
+  refused it for a reason a fresh stamp settles (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for
+  a probe that raised or could not be read) and the apply will stamp it — it has members, and `recorded_updated_at`
+  answers, which `domain/collection_skip.py::apply_stamps` decides for the count and for the final chunk's stamp alike**
+  — test + prompt-only —
+  `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshCollectionStampRestoresTheSkip`
   (`test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync`: the stamp stores the fetch's start, not
   the run's end; `test_a_stamp_without_a_fetch_start_is_fetched_in_full_once_then_skipped`: counted, re-stamped, then
   skipped; `test_an_empty_collection_and_one_without_updated_at_are_not_counted`;
@@ -684,9 +685,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   checksum on a unit applied in more than one chunk, and a stamp it writes matching the listing it was written from),
   `tests/services/library/test_collection_fetcher.py::TestTryCollectionIncrementalSkip`
   (`test_the_probe_s_reference_is_the_fetch_start_less_the_margin`, `test_the_listing_s_rom_count_is_not_compared`),
-  `TestWhetherAFreshStampSettlesTheRefusal` there and in `tests/domain/test_collection_skip.py`. Prompt-only: the clock
-  read before the probe rather than after it (the test clock does not move across it), and the count reading the gate's
-  `restamp_settles` answer from the preview's own fetch rather than judging the stamp a second time
+  `TestFetchingEveryCollectionUnit::test_each_unit_s_fetch_start_is_the_clock_read_before_its_own_skip_check` there (a
+  clock each request moves: every unit's start is read before its own probe), `TestWhetherAFreshStampSettlesTheRefusal`
+  there and in `tests/domain/test_collection_skip.py`. Prompt-only: the count reading the gate's `restamp_settles`
+  answer from the preview's own fetch rather than judging the stamp a second time
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is

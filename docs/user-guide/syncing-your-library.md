@@ -61,13 +61,15 @@ over.
 
 **While a sync runs**, the left of the page becomes the run itself: one bar for the whole run, and under it every
 platform and collection the run plans to touch. A finished one shows what it added and updated, the one being worked
-shows what it is doing and how far in it is, and the rest show what is waiting for them. That list scrolls on its own,
-and the platform being worked is kept in the middle of it, so a run over sixteen platforms does not walk out of sight.
-**Cancel Sync** sits just under the bar, above that list, so stopping a run is never more than a press or two away
-however many platforms it covers. While Tender is working out a preview there are no rows to show yet, so the line names
-what it is fetching instead. If Steam reloads its interface mid-run the plan is gone for the rest of that run: the bar,
-the counter and that line stand, and only if there is no line either does the page tell you the per-platform detail is
-not available for the run.
+shows what it is doing and how far in it is, and the rest show what is waiting for them. When the run reaches your
+collections, it reads all of them before it creates any of their shortcuts: the first collection's row shows the
+fetching meanwhile, its bar filling as each collection is read, and the line under the bar names the collection being
+read. That list scrolls on its own, and the platform being worked is kept in the middle of it, so a run over sixteen
+platforms does not walk out of sight. **Cancel Sync** sits just under the bar, above that list, so stopping a run is
+never more than a press or two away however many platforms it covers. While Tender is working out a preview there are no
+rows to show yet, so the line names what it is fetching instead. If Steam reloads its interface mid-run the plan is gone
+for the rest of that run: the bar, the counter and that line stand, and only if there is no line either does the page
+tell you the per-platform detail is not available for the run.
 
 **On the right** are **Skip preview** (now remembered between sessions), **Force Full Sync** behind a confirmation,
 Steam's memory now and how much the last run added to it, and your last ten sync runs with when each started, what it
@@ -131,14 +133,14 @@ ready** row disappears, and **Refresh** works out a fresh preview in place of th
 That starting estimate is **skip-aware**: when the run is planned, Tender already knows which platforms haven't changed
 since their last sync and expects to skip them wholesale, so they don't inflate the number — an incremental re-sync of
 an unchanged library reads seconds, not the minutes a full first import would take. The prediction is only an estimate
-(the actual skip is decided per platform, and per collection, as the run reaches it), so a wrong guess can make the
-readout run long or short for a moment, but it never changes what the sync actually does. Collections are skipped by the
-same rules as a platform: if RomM still lists the same games in a collection and none of them changed since shortly
-before the last sync started reading it, Tender skips it without re-listing its contents — so a large, collection-heavy
-library re-syncs quickly. That holds for **Franchises** and **IGDB collections** too. When Tender does not skip a
-collection, it asks RomM only for the collection's games on platforms you don't sync, since your enabled platforms
-already brought in the rest. Another user's shared smart collection is the exception and is read in full, because which
-games it holds can depend on who is asking.
+(the actual skip is decided per platform as the run reaches it, and for every collection together once the run reaches
+the first one), so a wrong guess can make the readout run long or short for a moment, but it never changes what the sync
+actually does. Collections are skipped by the same rules as a platform: if RomM still lists the same games in a
+collection and none of them changed since shortly before the last sync started reading it, Tender skips it without
+re-listing its contents — so a large, collection-heavy library re-syncs quickly. That holds for **Franchises** and
+**IGDB collections** too. When Tender does not skip a collection, it asks RomM only for the collection's games on
+platforms you don't sync, since your enabled platforms already brought in the rest. Another user's shared smart
+collection is the exception and is read in full, because which games it holds can depend on who is asking.
 
 The estimate also knows the **difference between adding a game and updating one**. Creating a shortcut is roughly three
 times the work of refreshing one that already exists, and it also has to pull down a cover; updating an existing
@@ -279,7 +281,10 @@ counts (in the preview and the completion toast) count **games**, not individual
 The version the shortcut points at (the **active version**) is chosen automatically: a version you have already
 installed wins, otherwise the shortcut follows the default version you chose in RomM, otherwise Tender picks the best
 dump for you (see below). You can change it yourself from the game's page — see
-[Managing Games → Versions](managing-games.md#versions).
+[Managing Games → Versions](managing-games.md#versions). When a game's platform isn't synced and its versions sit in
+different collections, Tender reads every collection before it creates the shortcut and picks among all of those
+versions, so the version does not depend on which collection happens to be synced first. A shortcut that already exists
+keeps its version: pick another on the game's page if it isn't the one you want.
 
 **How Tender picks the best dump, and how the shortcut is named.** When nothing is installed and you haven't set a
 default in RomM, Tender ranks the dumps like a 1G1R (one-game-one-ROM) tool. A **finished release always beats a

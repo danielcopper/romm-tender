@@ -257,3 +257,16 @@ See also: [ADR-0007](0007-rom-retention-identity-anchor.md) (the `roms` identity
 [ADR-0011](0011-per-game-core-override-in-db-applied-via-e-flag.md) /
 [ADR-0014](0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md) (the per-game deviation
 template the switch UI reuses), [Database Design](../architecture/database-design.md) (the roms table this extends).
+
+## Amendment — a group only collections deliver is gathered over every collection first
+
+The sentence in the canonical-naming amendment that a partial (collection) view names among its fetched members only,
+since the group's real representative rides its own platform unit in the same run, holds only where the group's platform
+is synced. Where it is not, only collections deliver the group, and each collection unit fetched and collapsed alone
+would mint it over its own members: the first collection in queue order would decide the version and the name, while the
+preview, collapsing every unit's members at once, would name another
+([#2543](https://github.com/danielcopper/romm-tender/issues/2543)). The apply therefore fetches every collection unit of
+the run when it reaches the first one, and every member of a group no bound row holds moves into the first collection
+unit delivering one of its members, which mints it over all of them; the resolution chain and the canonical name then
+pick over every member the run delivers, as the preview does. A group that already holds a binding is still
+grandfathered untouched, so a shortcut minted before keeps its version and its name.
