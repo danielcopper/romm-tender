@@ -4389,10 +4389,11 @@ class TestApplyUnitCollectionAndCancel:
         """A collection unit applies only from what the fetch of every collection unit delivered (#2543 D3)."""
         unit = WorkUnit(type="collection", id="7", name="Faves", slug="faves", rom_count=1, collection_kind="standard")
 
+        sources = library.emulator_sources.read()
         with pytest.raises(ValueError, match="collection unit Faves applied without its delivery"):
             await library.unit_applier.apply_unit(
                 unit,
-                sources=library.emulator_sources.read(),
+                sources=sources,
                 unit_index=0,
                 total_units=1,
                 synced_rom_ids=set(),

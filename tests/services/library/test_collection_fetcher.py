@@ -1086,9 +1086,10 @@ class TestFetchingEveryCollectionUnit:
 
         monkeypatch.setattr(fake_romm_api, "list_roms_by_collection", cancel_once_walked)
 
+        units = [_queued("7", "Faves", member_rom_ids=(2,)), _queued("8", "More", member_rom_ids=(4,))]
         with pytest.raises(SyncCancelled):
             await library.collection_fetcher.fetch_collection_units(
-                [_queued("7", "Faves", member_rom_ids=(2,)), _queued("8", "More", member_rom_ids=(4,))],
+                units,
                 set(),
                 progress_step=1,
                 progress_total_steps=2,
