@@ -823,9 +823,11 @@ A game frequently exists in a RomM library as several dumps of the same title (r
 These share a **sibling group** (same `roms.sibling_group_key`, derived client-side by `domain/sibling_group.py`: a
 connected component over RomM's `sibling_roms` edges, keyed by the highest-priority metadata source the component agrees
 on — `compute_component_group_keys`, stamped onto the raw dicts before the shortcut build: once over the preview's
-union, per platform unit, and once over every collection unit's delivery, ADR-0022). The sync pipeline treats a group as
-one game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is the group's **active
-version**.
+union, per platform unit, and once over every collection unit's delivery, ADR-0022). Each stamp reads the key every
+stored row holds, unbound rows' included (`LocalLibraryReader.do_read_resident_group_keys`): RomM names a version hidden
+in it among its siblings' `sibling_roms` but leaves it out of the platform listing, so a new version whose only sibling
+is hidden joins its game only through that row's key (#2617). The sync pipeline treats a group as one game = at most one
+**new** Steam shortcut; the sibling row holding `shortcut_app_id` is the group's **active version**.
 
 - **Persist all siblings, emit one shortcut per group.** The reporter's per-unit commit upserts a `roms` row (identity +
   version metadata, via the sync UPSERT) for **every** fetched ROM of the unit, but only the group's representative

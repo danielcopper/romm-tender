@@ -207,10 +207,10 @@ class LocalLibraryReader:
         The preview builds one shortcut set over every enabled platform, so it
         needs the DB's canonical summaries for a fresh member that edges into a
         sibling on a skipped (incremental) platform, which the preview reconstructs
-        only its bound rows of. The apply keys every collection unit's delivery
-        with the same summaries, so its groups are the preview's. The stale
-        removal looks up here the group keys of the ROMs the run synced. One
-        short read UoW.
+        only its bound rows of. The apply keys every platform unit and every
+        collection unit's delivery with the same summaries, so its groups are the
+        preview's. The stale removal looks up here the group keys of the ROMs
+        the run synced. One short read UoW.
         """
         with self._uow_factory() as uow:
             return {

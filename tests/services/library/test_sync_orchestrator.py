@@ -7769,6 +7769,137 @@ class TestComponentGroupKeyStamping:
         assert fresh_vs_db["sibling_group_key"] == "igdb:777:57"
 
 
+class TestAPlatformUnitIsKeyedAsThePreviewKeysIt:
+    """A platform unit's ROMs are keyed against the resident keys the preview reads (#2617 D1, D2, D3).
+
+    Golf's USA version (30) is bound; its European version (31) is an unbound
+    sibling holding the group's key. RomM then hides 31, which leaves it out of
+    the platform listing but not out of its siblings' ``sibling_roms``, and adds
+    a Japanese version (32) whose only sibling edge goes to 31.
+    """
+
+    @staticmethod
+    def _golf(rom_id, region, sibling_ids, **ids):
+        stem = f"Golf ({region})"
+        return {
+            "id": rom_id,
+            "name": stem,
+            "fs_name": f"{stem}.zip",
+            "fs_name_no_ext": stem,
+            "sibling_roms": [{"id": sibling} for sibling in sibling_ids],
+            **ids,
+        }
+
+    @classmethod
+    async def _bind_usa_then_hide_europe(cls, library, fake_romm_api, emit):
+        _seed_platform(
+            fake_romm_api,
+            platform_id=2,
+            name="GBA",
+            slug="gba",
+            roms=[
+                cls._golf(30, "USA", [31], igdb_id=300, rom_user={"is_main_sibling": True}),
+                cls._golf(31, "Europe", [30], igdb_id=300, ss_id=7),
+            ],
+        )
+        library.settings["enabled_platforms"] = {"2": True}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(_unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        await cls._apply(library, emit, "run-1")
+        assert cls._rows(library) == {30: (6030, "igdb:300:2"), 31: (None, "igdb:300:2")}
+
+        fake_romm_api.hidden_rom_ids = {31}
+        fake_romm_api.roms[31]["sibling_roms"] = [{"id": 30}, {"id": 32}]
+        _seed_platform(
+            fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[cls._golf(32, "Japan", [31], ss_id=7)]
+        )
+
+    @staticmethod
+    async def _apply(library, emit, run_id):
+        """Run an apply; answer the rom ids it sent and the ones its stale removal removed."""
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
+        start = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        frames = [call.args for call in emit.call_args_list[start:] if call.args]
+        sent = [
+            shortcut["rom_id"]
+            for name, *payload in frames
+            if name == "sync_apply_unit"
+            for shortcut in payload[0]["shortcuts"]
+        ]
+        removed = [row["rom_id"] for name, *payload in frames if name == "sync_stale" for row in payload[0]["remove"]]
+        return sent, removed
+
+    @staticmethod
+    def _rows(library):
+        with library.uow as uow:
+            return {rom.rom_id: (rom.shortcut_app_id, rom.sibling_group_key) for rom in uow.roms.iter_all()}
+
+    @pytest.mark.asyncio
+    async def test_a_new_version_whose_only_sibling_is_hidden_joins_its_game_as_in_the_preview(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind_usa_then_hide_europe(library, fake_romm_api, emit)
+
+        summary = (await library.sync.sync_preview())["summary"]
+        sent, removed = await self._apply(library, emit, "run-2")
+
+        assert (summary["new_count"], summary["changed_count"], summary["remove_count"]) == (0, 0, 0)
+        assert (sent, removed) == ([], [])
+        assert self._rows(library) == {
+            30: (6030, "igdb:300:2"),
+            31: (None, "igdb:300:2"),
+            32: (None, "igdb:300:2"),
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("installed", [(), (32,), (30, 32)], ids=["none", "the-duplicate", "both"])
+    async def test_a_duplicate_made_before_takes_its_game_s_key_and_both_shortcuts_stay(
+        self, make_library, fake_romm_api, emit, tmp_path, installed
+    ):
+        """D2: the apply used to key 32 as a game of its own and bind it; it is rekeyed, nothing removed."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind_usa_then_hide_europe(library, fake_romm_api, emit)
+        _seed_rom_row(library, 32, app_id=6032, platform_slug="gba", name="Golf (Japan)", sibling_group_key="ss:7:2")
+        for rom_id in installed:
+            path = tmp_path / f"golf-{rom_id}.zip"
+            path.write_bytes(b"rom")
+            with library.uow:
+                library.uow.rom_installs.save(
+                    RomInstall.mark_installed(
+                        rom_id=rom_id,
+                        file_path=str(path),
+                        rom_dir=None,
+                        platform_slug="gba",
+                        system="gba",
+                        installed_at="2025-01-01T00:00:00",
+                    )
+                )
+
+        _sent, removed = await self._apply(library, emit, "run-2")
+
+        assert removed == []
+        assert self._rows(library) == {
+            30: (6030, "igdb:300:2"),
+            31: (None, "igdb:300:2"),
+            32: (6032, "igdb:300:2"),
+        }
+        with library.uow as uow:
+            installs = {rom_id: uow.rom_installs.get(rom_id) for rom_id in installed}
+        assert {rom_id: install and install.file_path for rom_id, install in installs.items()} == {
+            rom_id: str(tmp_path / f"golf-{rom_id}.zip") for rom_id in installed
+        }
+
+
 class TestDeltaRestrictedApply:
     """Delta-restricted apply (#1383): classify in the apply path, emit only new +
     changed, skip content-unchanged shortcuts while still committing every row."""

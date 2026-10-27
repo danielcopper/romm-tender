@@ -233,16 +233,13 @@ class UnitApplier:
         )
 
         # Read the bound-row registry once, before the build: it drives the group
-        # collapse below, and for a platform unit its persisted keys seed the
-        # component keying (a fresh member edging into a DB-resident sibling
-        # adopts its canonical summary). A delivered unit's ROMs already carry
-        # the keys stamped over every delivery, which the keying leaves alone.
+        # collapse below. The component keying reads the preview's resident keys,
+        # unbound rows' included, not the registry's (why:
+        # docs/architecture/backend-architecture.md, "Group-aware sync"). A
+        # delivered unit's ROMs already carry the keys stamped over every
+        # delivery, which the keying leaves alone.
         registry = await self._loop.run_in_executor(None, self._local_library_reader.do_read_apply_registry, unit)
-        resident_keys = {
-            int(rom_id): entry["sibling_group_key"]
-            for rom_id, entry in registry.items()
-            if entry["sibling_group_key"] is not None
-        }
+        resident_keys = await self._loop.run_in_executor(None, self._local_library_reader.do_read_resident_group_keys)
         stamp_component_group_keys(unit_roms, resident_keys)
         shortcuts_data = build_shortcuts_data(unit_roms, self._launcher_exe, installed_paths, core_overrides)
 
