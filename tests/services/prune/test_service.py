@@ -14,6 +14,7 @@ import pytest
 import pytest_asyncio
 from _factories import _make_conflict_rules
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
+from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeUuidGen
@@ -374,6 +375,7 @@ async def harness() -> Harness:
             save_coordinator=saves,
             active_downloads=lambda: set(active),
             drift_probe=drift,
+            running_rom_ids=FakeRunningRomIds(),
             remove_installed_files=installed_remover,
             settings={"preferred_region": "USA"},
             run_claim=conflicts,
@@ -3108,3 +3110,30 @@ class TestTheShortcutArtworkJob:
 
         assert harness.conflicts.cleanup_running is False
         assert harness.artwork_job.resumes == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("starts_at_reading", [1, 2], ids=["running-at-planning", "started-before-the-steam-action"])
+async def test_a_running_removed_game_is_left_as_it_is_and_offered_again(harness, monkeypatch, starts_at_reading):
+    """#2620 D5: a group whose game runs is skipped whole before anything of it is touched."""
+    app_id = 0x80000001
+    _seed(harness.uow, _rom(1, fetch="old", app_id=app_id))
+    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
+    running = FakeRunningRomIds()
+    running.on_read = lambda reading: running.running.add(1) if reading == starts_at_reading else None
+    executor = harness.service._executor
+    monkeypatch.setattr(executor, "_running_rom_ids", running)
+    monkeypatch.setattr(executor._planner, "_running_rom_ids", running)
+
+    preview = await _preview(harness)
+    await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+    complete = await _finish(harness)
+
+    assert complete["results"][0]["reason"] == "game_running"
+    assert not any(name == "prune_action_required" for name, _payload in harness.events.events)
+    with harness.uow:
+        row = harness.uow.roms.get(1)
+    assert row is not None
+    assert row.shortcut_app_id == app_id
+    assert harness.installed_remover.removed == []
+    assert (await _preview(harness))["candidate_total"] == 1

@@ -14,6 +14,7 @@ import logging
 from typing import Any, cast
 
 import pytest
+from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -97,6 +98,7 @@ def _executor(rows: list[Rom], settings: dict[str, Any], emitted: list[tuple[str
             save_coordinator=cast("Any", _Unusable()),
             active_downloads=set,
             drift_probe=drift_probe,
+            running_rom_ids=FakeRunningRomIds(),
             remove_installed_files=cast("Any", _Unusable()),
             settings=settings,
             recovery=cast("Any", _Unusable()),

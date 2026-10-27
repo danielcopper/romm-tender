@@ -889,3 +889,42 @@ async def test_where_asking_for_one_system_s_folder_raises_the_cleanup_keeps_tha
     with harness.uow_factory() as uow:
         assert uow.rom_installs.get(41) is not None
         assert uow.rom_installs.get(43) is None
+
+
+async def test_a_removed_game_steam_lists_as_running_is_left_as_it_is_over_the_real_wire(harness):
+    """#2620 D5: Steam's reading names the shortcut's app id, and the cleanup keeps the whole game."""
+    app_id = 0x80000041
+    _seed_bulk_candidate(harness)
+    with harness.uow_factory() as uow:
+        row = uow.roms.get(41)
+        assert row is not None
+        row.bind_shortcut(app_id)
+        uow.roms.save(row)
+    harness.steam.listed_app_ids = (app_id,)
+    harness.romm.get_rom_once_side_effect_by_id[41] = RommNotFoundError("gone")
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+
+    await harness.endpoints.start_prune(
+        {
+            "preview_id": preview["preview_id"],
+            "confirmed": True,
+            "remove_rows": True,
+            "remove_fully_vanished": True,
+            "create_recovery_bundle": False,
+            "include_installed_rom_ids": [],
+        }
+    )
+    task = harness.app.services.prune_service._task
+    assert task is not None
+    await task
+
+    with harness.uow_factory() as uow:
+        kept = uow.roms.get(41)
+    assert kept is not None
+    assert kept.shortcut_app_id == app_id
+    complete_calls = [item for item in harness.emit.await_args_list if item.args[0] == "prune_complete"]
+    payload = complete_calls[-1].args[1]
+    assert payload["removed_rom_ids"] == []
+    assert payload["results"][0]["reason"] == "game_running"
+    assert payload["results"][0]["name"] == "Removed Game"
+    assert not any(item.args[0] == "prune_action_required" for item in harness.emit.await_args_list)

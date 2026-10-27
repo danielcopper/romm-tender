@@ -851,6 +851,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             save_coordinator=save_sync_service.prune_support,
             active_downloads=download_service.active_download_rom_ids,
             drift_probe=save_sync_service.check_local_drift,
+            running_rom_ids=running_games.running_rom_ids,
             remove_installed_files=rom_removal_service.delete_rom_files,
             settings=cfg.stores.settings,
             run_claim=prune_conflicts,

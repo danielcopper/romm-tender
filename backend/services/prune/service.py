@@ -40,6 +40,7 @@ if TYPE_CHECKING:
         RecoveryBundleStore,
         RetroDeckFolders,
         RommLivenessApi,
+        RunningRomIdsFn,
         SaveDriftProbeFn,
         ShortcutArtworkJob,
         SteamRecoveryStore,
@@ -77,7 +78,8 @@ class PruneServiceConfig:
     — the start through its exclusive reservation — and what the final
     completion frame is leased through; ``run_claim`` is where a started run
     holds its claim. The ``artwork_job`` is stopped before a start reserves it and
-    resumed once no run holds a claim.
+    resumed once no run holds a claim. ``running_rom_ids`` names the games a
+    run leaves out because they are running.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -95,6 +97,7 @@ class PruneServiceConfig:
     save_coordinator: PruneSaveCoordinator
     active_downloads: ActiveDownloadRomIdsFn
     drift_probe: SaveDriftProbeFn
+    running_rom_ids: RunningRomIdsFn
     remove_installed_files: InstalledRomFilesRemoverFn
     settings: dict[str, Any]
     run_claim: PruneRunClaim
@@ -181,6 +184,7 @@ class PruneService:
                 save_coordinator=config.save_coordinator,
                 active_downloads=config.active_downloads,
                 drift_probe=config.drift_probe,
+                running_rom_ids=config.running_rom_ids,
                 remove_installed_files=config.remove_installed_files,
                 settings=config.settings,
                 recovery=recovery,

@@ -28,7 +28,7 @@ from services.prune._models import (
 )
 from services.prune.finalize import GroupFinalizer, GroupFinalizerConfig
 from services.prune.liveness import LivenessProber, LivenessProberConfig
-from services.prune.planning import GroupPlan, GroupPlanner, GroupPlannerConfig
+from services.prune.planning import GAME_RUNNING_MESSAGE, GroupPlan, GroupPlanner, GroupPlannerConfig
 from services.prune.results import GroupOutcome, MutationLedger, PruneResultReporter, PruneResultReporterConfig
 from services.prune.save_locks import SaveLockCoordinator, SaveLockCoordinatorConfig
 from services.prune.steam_actions import SteamActionRunner, SteamActionRunnerConfig
@@ -45,6 +45,7 @@ if TYPE_CHECKING:
         PruneSaveCoordinator,
         RecoveryBundleStore,
         RommLivenessApi,
+        RunningRomIdsFn,
         SaveDriftProbeFn,
         SteamRecoveryStore,
     )
@@ -72,6 +73,7 @@ class PruneExecutorConfig:
     save_coordinator: PruneSaveCoordinator
     active_downloads: ActiveDownloadRomIdsFn
     drift_probe: SaveDriftProbeFn
+    running_rom_ids: RunningRomIdsFn
     remove_installed_files: InstalledRomFilesRemoverFn
     settings: dict[str, Any]
     recovery: RecoveryCoordinator
@@ -89,6 +91,7 @@ class PruneExecutor:
         self._recovery_store = config.recovery_store
         self._steam_recovery = config.steam_recovery
         self._active_downloads = config.active_downloads
+        self._running_rom_ids = config.running_rom_ids
         self._settings = config.settings
         self._recovery = config.recovery
         self._registry = config.registry
@@ -114,6 +117,7 @@ class PruneExecutor:
                 liveness=self._liveness,
                 active_downloads=config.active_downloads,
                 drift_probe=config.drift_probe,
+                running_rom_ids=config.running_rom_ids,
             ),
         )
         self._steam = SteamActionRunner(
@@ -432,14 +436,22 @@ class PruneExecutor:
         """Re-prove everything the Steam action depends on, or refuse the group.
 
         Runs after the bundle is sealed and before anything irreversible: a
-        download that started meanwhile, liveness that no longer holds, and — when
-        a Steam action is actually planned — a sealed recovery state that no
-        longer matches. Returns the terminal result that refuses the group, or
-        ``None`` when it may proceed.
+        download that started meanwhile, a game that started meanwhile, liveness
+        that no longer holds, and — when a Steam action is actually planned — a
+        sealed recovery state that no longer matches. Returns the terminal result
+        that refuses the group, or ``None`` when it may proceed.
         """
         if self._active_downloads() & plan.delete_ids:
             return self._results.group_result(
                 plan.rows, "skipped", "download_in_progress", "Cancel active downloads first."
+            )
+        if plan.bound_row is not None and plan.bound_row.rom_id in await self._running_rom_ids():
+            return self._results.group_result(
+                plan.rows,
+                "skipped",
+                "game_running",
+                GAME_RUNNING_MESSAGE,
+                GroupOutcome(bundle_path=handle.bundle_path if handle else None),
             )
         guard = await self._reprove_liveness(plan)
         if guard is not None:

@@ -56,6 +56,7 @@ from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 from fakes.fake_romm_api import FakeRommApi
+from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_save_backup import FakeSaveBackup
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
@@ -1341,6 +1342,7 @@ def _dispatcher_over_cleanup(uow_factory: Any, events: FakeEventSink) -> tuple[C
             save_coordinator=MagicMock(),
             active_downloads=set,
             drift_probe=MagicMock(),
+            running_rom_ids=FakeRunningRomIds(),
             remove_installed_files=MagicMock(),
             settings={},
             run_claim=prune_conflicts,

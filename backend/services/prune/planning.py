@@ -1,11 +1,11 @@
 """Decide what one group's cleanup would do, before anything can be changed.
 
-Reads the group as it stands right now — local rows, active downloads, fresh
-liveness, unsynced saves — and either refuses it with a terminal result or
-freezes the decision as a :class:`GroupPlan`. Every later phase re-proves what it
-is about to touch, so nothing decided here is trusted as still true; the plan
-carries only the choices that cannot be re-derived, which is what keeps the
-phases separable.
+Reads the group as it stands right now — local rows, active downloads, whether
+its game is running, fresh liveness, unsynced saves — and either refuses it with
+a terminal result or freezes the decision as a :class:`GroupPlan`. Every later
+phase re-proves what it is about to touch, so nothing decided here is trusted as
+still true; the plan carries only the choices that cannot be re-derived, which
+is what keeps the phases separable.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     import logging
 
     from domain.rom import Rom
-    from services.protocols import ActiveDownloadRomIdsFn, SaveDriftProbeFn
+    from services.protocols import ActiveDownloadRomIdsFn, RunningRomIdsFn, SaveDriftProbeFn
     from services.prune._models import PruneOptions
     from services.prune.liveness import LivenessProber
     from services.prune.registry import PruneRegistry
@@ -86,6 +86,11 @@ class GroupPlannerConfig:
     liveness: LivenessProber
     active_downloads: ActiveDownloadRomIdsFn
     drift_probe: SaveDriftProbeFn
+    running_rom_ids: RunningRomIdsFn
+
+
+# The result names the group's game beside its message (``results.group_result``).
+GAME_RUNNING_MESSAGE = "This game is running, so it was left as it is. Quit it and scan again to remove it."
 
 
 def _unproven_refusal(reasons: set[str], unproven_count: int) -> tuple[str, str]:
@@ -132,6 +137,7 @@ class GroupPlanner:
         self._liveness = config.liveness
         self._active_downloads = config.active_downloads
         self._drift_probe = config.drift_probe
+        self._running_rom_ids = config.running_rom_ids
 
     async def plan(
         self,
@@ -155,6 +161,9 @@ class GroupPlanner:
         bound_row, unstable = self._admit_group(rows, group_ids)
         if unstable is not None:
             return unstable
+        if bound_row is not None and bound_row.rom_id in await self._running_rom_ids():
+            # Its shortcut, files and saves all stay; the next scan offers it again.
+            return self._results.group_result(rows, "skipped", "game_running", GAME_RUNNING_MESSAGE)
 
         verdicts = await self._liveness.probe_many(group_ids)
         proof = _GroupLiveness.of(group_ids, verdicts)
@@ -285,4 +294,4 @@ class GroupPlanner:
         )
 
 
-__all__ = ["GroupPlan", "GroupPlanner", "GroupPlannerConfig"]
+__all__ = ["GAME_RUNNING_MESSAGE", "GroupPlan", "GroupPlanner", "GroupPlannerConfig"]

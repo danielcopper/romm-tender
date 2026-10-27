@@ -7,6 +7,7 @@ import logging
 from typing import Any, cast
 
 import pytest
+from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -68,6 +69,7 @@ def _planner(
     active_downloads: set[int] | None = None,
     drifted: bool = False,
     drift_answer: dict[str, Any] | None = None,
+    running: set[int] | None = None,
 ) -> tuple[GroupPlanner, _FakeLiveness]:
     uow = FakeUnitOfWork()
     with uow:
@@ -94,6 +96,7 @@ def _planner(
             liveness=cast("Any", liveness),
             active_downloads=lambda: active_downloads or set(),
             drift_probe=drift_probe,
+            running_rom_ids=FakeRunningRomIds(running or ()),
         )
     )
     return planner, liveness
@@ -318,3 +321,34 @@ async def test_only_a_404_ever_reaches_delete_ids(status):
     result, _ = await _plan(rows, {1: status, 2: "live"})
     if isinstance(result, GroupPlan):
         assert result.delete_ids == set()
+
+
+class TestARunningGameIsLeftOut:
+    """#2620 D5: a removed game whose shortcut's game is running is skipped whole, named, and offered again later."""
+
+    async def test_the_group_is_skipped_before_any_probe_under_the_game_s_name(self):
+        rows = [_rom(1, app_id=0x8001), _rom(2)]
+        planner, liveness = _planner(rows, {1: "vanished", 2: "vanished"}, running={1})
+
+        result = await planner.plan("run-1", rows, {1, 2}, _options(), 1, 1, MutationLedger(rows))
+
+        assert not isinstance(result, GroupPlan)
+        assert result["status"] == "skipped"
+        assert result["reason"] == "game_running"
+        assert result["name"] == "Game 1"
+        assert result["message"] == (
+            "This game is running, so it was left as it is. Quit it and scan again to remove it."
+        )
+        assert liveness.probed == [], "a skipped group must not be probed"
+
+    async def test_a_game_that_is_not_running_is_planned(self):
+        rows = [_rom(1, app_id=0x8001)]
+        result, _ = await _plan(rows, {1: "vanished"}, running={7})
+
+        assert isinstance(result, GroupPlan)
+
+    async def test_a_group_with_no_shortcut_cannot_be_running(self):
+        rows = [_rom(1)]
+        result, _ = await _plan(rows, {1: "vanished"}, running={1})
+
+        assert isinstance(result, GroupPlan)
