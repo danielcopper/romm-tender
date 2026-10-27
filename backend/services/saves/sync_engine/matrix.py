@@ -24,6 +24,7 @@ from domain.save_slot import filter_saves_to_slot
 from domain.sync_action import Conflict, Download, Skip, SyncAction, Upload
 from lib.errors import RommApiError, RommConflictError, classify_error
 from services.saves._helpers import local_save_target
+from services.saves._sync_stop import SyncStopped
 
 if TYPE_CHECKING:
     import logging
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
         RommSyncApi,
         SaveFileStore,
     )
+    from services.saves._sync_stop import SyncStop
     from services.saves.rom_info import RomInfoService
     from services.saves.save_transfer import SaveTransfer
 
@@ -120,7 +122,8 @@ class RomDispatchContext:
     Built once per ``do_sync_rom_saves`` run and passed to
     ``_dispatch_sync_action`` and its sub-dispatchers, so the remaining
     per-call args stay to the values that actually vary per file (mirrors
-    ``DispatchSink`` / ``SyncRunOptions``).
+    ``DispatchSink`` / ``SyncRunOptions``). ``stop`` is the run's own stop,
+    where it can be stopped.
     """
 
     rom_id: int
@@ -131,6 +134,7 @@ class RomDispatchContext:
     saves_dir: str
     system: str
     core_so: str | None
+    stop: SyncStop | None = None
 
 
 class MatrixExecutor:
@@ -399,7 +403,14 @@ class MatrixExecutor:
             == "download"
         ):
             self._transfer.download_save_file(
-                fresh, ctx.saves_dir, filename, ctx.save_state, ctx.device_id, ctx.system, options.default_slot
+                fresh,
+                ctx.saves_dir,
+                filename,
+                ctx.save_state,
+                ctx.device_id,
+                ctx.system,
+                options.default_slot,
+                stop=ctx.stop,
             )
             return TransferDirection.DOWNLOAD
         sink.conflicts.append(self.build_sync_conflict_entry(ctx.rom_id, filename, fresh, local_path, local_hash))
@@ -430,7 +441,7 @@ class MatrixExecutor:
         guard) are threaded through for the upload 409 backstop (canonical-target
         regroup + hash re-decision). Returns the :class:`TransferDirection` a
         transfer moved, or ``None`` for a skip, a surfaced conflict, or a failed
-        transfer.
+        transfer. A download its stop ended raises :class:`SyncStopped`.
         """
         try:
             if isinstance(action, Skip):
@@ -464,6 +475,7 @@ class MatrixExecutor:
                     ctx.device_id,
                     ctx.system,
                     options.default_slot,
+                    stop=ctx.stop,
                 )
                 return TransferDirection.DOWNLOAD
             if isinstance(action, Conflict):
@@ -471,6 +483,8 @@ class MatrixExecutor:
                     self.build_sync_conflict_entry(ctx.rom_id, filename, action.server_save, local_path, local_hash)
                 )
                 return None
+        except SyncStopped:
+            raise
         except RommApiError as e:
             _code, _msg = classify_error(e)
             self._logger.warning(f"_dispatch_sync_action({ctx.rom_id}): {filename} failed: {_msg}")
@@ -630,6 +644,7 @@ class MatrixExecutor:
         default_slot: str | None = None,
         autocleanup_limit: int | None = None,
         save_answer: SaveAnswer | None = None,
+        stop: SyncStop | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Sync saves for a single ROM, mutating *save_state* in memory.
 
@@ -651,6 +666,10 @@ class MatrixExecutor:
         seeds the active slot when a brand-new ROM's first sync lands;
         *autocleanup_limit* caps server-retained versions on the POST (create)
         upload; the operation entry owns the surrounding read/write Unit of Work.
+
+        A *stop* asked before a file is dispatched, or during a download before
+        its content is placed, ends the run there: the counts are of what moved
+        before it.
         """
         t_total = self._clock.time()
         rom_id = int(rom_id)
@@ -707,6 +726,7 @@ class MatrixExecutor:
             saves_dir=saves_dir,
             system=system,
             core_so=core_so,
+            stop=stop,
         )
         uploaded = 0
         downloaded = 0
@@ -725,22 +745,29 @@ class MatrixExecutor:
                 save_state.backfill_content_size(
                     outcome.filename, local_hash=outcome.local_hash, content_size=outcome.local_content_size
                 )
+            if stop is not None and stop.stops_here():
+                self._log_debug(f"do_sync_rom_saves({rom_id}): stopped before {outcome.filename}")
+                break
             origin = "local" if outcome.local_path is not None else "server-only"
             self._log_debug(
                 f"do_sync_rom_saves({rom_id}): {origin} {outcome.filename} -> {type(outcome.action).__name__}"
             )
-            direction = self._dispatch_sync_action(
-                outcome.action,
-                ctx=ctx,
-                filename=outcome.filename,
-                local_path=outcome.local_path,
-                local_hash=outcome.local_hash,
-                last_sync_hash=outcome.file_state.last_sync_hash,
-                last_sync_server_hash=outcome.file_state.last_sync_server_hash,
-                server_candidates=outcome.server_candidates,
-                options=options,
-                sink=sink,
-            )
+            try:
+                direction = self._dispatch_sync_action(
+                    outcome.action,
+                    ctx=ctx,
+                    filename=outcome.filename,
+                    local_path=outcome.local_path,
+                    local_hash=outcome.local_hash,
+                    last_sync_hash=outcome.file_state.last_sync_hash,
+                    last_sync_server_hash=outcome.file_state.last_sync_server_hash,
+                    server_candidates=outcome.server_candidates,
+                    options=options,
+                    sink=sink,
+                )
+            except SyncStopped:
+                self._log_debug(f"do_sync_rom_saves({rom_id}): stopped before placing {outcome.filename}")
+                break
             if direction is TransferDirection.UPLOAD:
                 uploaded += 1
             elif direction is TransferDirection.DOWNLOAD:

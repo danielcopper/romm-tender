@@ -1,9 +1,9 @@
 """Tests for SaveSyncGate — the device-level single-owner serialization gate.
 
-Covers the bounded-acquire discipline around the gate's lock: in-flight
+Covers the acquire discipline around the gate's lock: in-flight and holder
 reporting, queue serialization across overlapping runs, the bounded-wait
-timeout, release-on-body-exception, and the no-lock-leak invariant that
-guards the acquire/timeout race.
+timeout and the wait without one, release-on-body-exception, and the
+no-lock-leak invariant that guards the acquire/timeout race.
 """
 
 import asyncio
@@ -11,6 +11,7 @@ import asyncio
 import pytest
 
 from services.saves.sync_engine import SaveSyncGate, SaveSyncTimeoutError
+from services.saves.sync_engine._gate import GateHolder
 
 
 class TestBoundedRunHappyPath:
@@ -174,3 +175,49 @@ class TestBoundedRunNoLockLeak:
         async with gate.bounded_run(max_wait=1.0):
             assert gate.is_in_flight() is True
         assert gate.is_in_flight() is False
+
+
+class TestWhoHoldsTheGate:
+    @pytest.mark.asyncio
+    async def test_the_holder_is_named_while_it_holds_the_gate_and_gone_after(self):
+        gate = SaveSyncGate()
+        assert gate.holder() is None
+        async with gate.held_by(GateHolder.POST_EXIT, max_wait=5.0):
+            assert gate.holder() is GateHolder.POST_EXIT
+        assert gate.holder() is None
+
+    @pytest.mark.asyncio
+    async def test_a_caller_still_waiting_is_not_named(self):
+        gate = SaveSyncGate()
+        async with gate.held_by(GateHolder.SYNC_ALL, max_wait=5.0):
+            with pytest.raises(SaveSyncTimeoutError):
+                async with gate.held_by(GateHolder.ROM_SYNC, max_wait=0.01):
+                    pass
+            assert gate.holder() is GateHolder.SYNC_ALL
+
+    @pytest.mark.asyncio
+    async def test_the_holder_is_gone_when_the_body_raises(self):
+        gate = SaveSyncGate()
+        with pytest.raises(RuntimeError):
+            async with gate.held_by(GateHolder.PRE_LAUNCH, max_wait=5.0):
+                raise RuntimeError("boom")
+        assert gate.holder() is None
+        assert gate.is_in_flight() is False
+
+
+class TestAWaitWithoutALimit:
+    @pytest.mark.asyncio
+    async def test_it_waits_past_any_short_limit_and_acquires_once_the_gate_is_free(self):
+        gate = SaveSyncGate()
+        acquired = asyncio.Event()
+
+        async def second() -> None:
+            async with gate.bounded_run(max_wait=None):
+                acquired.set()
+
+        async with gate.bounded_run(max_wait=5.0):
+            waiter = asyncio.ensure_future(second())
+            await asyncio.sleep(0.05)
+            assert not acquired.is_set()
+        await asyncio.wait_for(waiter, 1)
+        assert acquired.is_set()

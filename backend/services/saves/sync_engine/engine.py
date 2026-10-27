@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -70,15 +71,17 @@ from services.saves._settings import (
     sync_after_exit,
     sync_before_launch,
 )
+from services.saves._sync_stop import SyncStopped
 from services.saves.save_directory import SaveDirectoryFollower
 from services.saves.sync_engine._gate import (
     POST_EXIT_GATE_TIMEOUT,
-    PRE_LAUNCH_GATE_TIMEOUT,
     SYNC_ALL_GATE_TIMEOUT,
     SYNC_ROM_GATE_TIMEOUT,
+    GateHolder,
     SaveSyncGate,
     SaveSyncTimeoutError,
 )
+from services.saves.sync_engine._pre_launch import PreLaunchRuns, PreLaunchState, stopped_refusal
 from services.saves.sync_engine._shape_refusal import ContentDirTally, live_save_answer, refuse_unsyncable
 from services.saves.sync_engine._sweep_stop import SaveSweepIncomplete
 from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
@@ -106,6 +109,7 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
         UpdateInProgressFn,
     )
+    from services.saves._sync_stop import SyncStop
     from services.saves.rom_info import RomInfoService
     from services.saves.save_backup import SaveBackup
     from services.saves.save_transfer import SaveTransfer
@@ -273,9 +277,10 @@ class SyncEngine:
         )
         # Device-level single-owner serialization gate: only one save-sync run
         # in flight at a time per device. A second trigger queues behind the
-        # in-flight one, bounded so a stuck run never traps the launch path.
-        # Sits OUTSIDE the per-ROM ``rom_lock`` — wraps the whole run body.
+        # in-flight one. Sits OUTSIDE the per-ROM ``rom_lock`` — wraps the whole
+        # run body.
         self._device_gate = SaveSyncGate()
+        self._pre_launch_runs = PreLaunchRuns()
         # Innermost: nothing is taken under it, so a holder of ``rom_lock`` or
         # the device gate may wait for it.
         self._registration_lock = asyncio.Lock()
@@ -351,16 +356,18 @@ class SyncEngine:
         default_slot: str | None = None,
         autocleanup_limit: int | None = None,
         save_answer: SaveAnswer | None = None,
+        stop: SyncStop | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Sync saves for a single ROM (delegate to :class:`MatrixExecutor`).
 
         Returns ``(uploaded, downloaded, errors, conflicts)`` — the per-direction
         transfer counts (#250). *save_answer* is this operation's own live
         reading, passed down so it is taken once rather than once per layer;
-        absent it, the matrix takes its own.
+        absent it, the matrix takes its own. *stop* is the run's own, where it
+        can be stopped.
         """
         return self._matrix.sync_rom_saves(
-            rom_id, save_state, device_id, core_so, default_slot, autocleanup_limit, save_answer=save_answer
+            rom_id, save_state, device_id, core_so, default_slot, autocleanup_limit, save_answer=save_answer, stop=stop
         )
 
     def iter_matrix_outcomes(
@@ -573,6 +580,7 @@ class SyncEngine:
         session_counts: list[int] | None = None,
         save_answer: SaveAnswer | None = None,
         content_dir_tally: ContentDirTally | None = None,
+        stop: SyncStop | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Read inputs → sync in executor → persist, for one ROM under its lock.
 
@@ -660,6 +668,7 @@ class SyncEngine:
                         default_slot,
                         cleanup_limit,
                         save_answer=save_answer,
+                        stop=stop,
                     ),
                 )
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
@@ -729,72 +738,105 @@ class SyncEngine:
             self._log_debug(f"complete_sync_session({session_id}) failed (non-fatal): {e}")
 
     async def pre_launch_sync(self, rom_id: int) -> dict[str, Any]:
-        """Download newer saves from server before game launch."""
+        """Download newer saves from server before game launch.
+
+        Waits for the device gate and the ROM's lock without a limit of its
+        own: :meth:`pre_launch_sync_state` answers what it waits for, and
+        :meth:`stop_pre_launch_sync` stops it, which this refuses with
+        ``PreLaunchSyncStopped`` — at once while it waits, and with what it
+        moved before the stop once it syncs.
+        """
         rom_id = int(rom_id)
         # Cheap stateless early-out before the device gate — never queue behind
         # an in-flight run just to report the feature is disabled.
         if not self.is_save_sync_enabled():
             return {"success": True, "message": SAVE_SYNC_DISABLED, "synced": 0}
 
+        with self._pre_launch_runs.track(rom_id) as run:
+            try:
+                async with AsyncExitStack() as held:
+                    gate = self._device_gate.held_by(GateHolder.PRE_LAUNCH, max_wait=None)
+                    await run.wait(PreLaunchState.WAITING_FOR_SYNC, held.enter_async_context(gate))
+                    await run.wait(PreLaunchState.WAITING_FOR_ROM, held.enter_async_context(self.rom_lock(rom_id)))
+                    run.state = PreLaunchState.SYNCING
+                    # Defense in depth: SaveService.pre_launch_sync checks the migration
+                    # rule before this call waits for the device gate and the ROM lock,
+                    # and a caller could reach the engine without it. saves_dir would
+                    # otherwise resolve under the new home and silently desync from
+                    # files still living at the old home. Every other path into
+                    # do_sync_rom_saves either checks the migration rule at its use
+                    # case's entry or carries a guard of its own; this one is
+                    # pre_launch_sync's. The update rule is backstopped the same way.
+                    if self._is_update_in_progress():
+                        raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0)
+                    if self._is_retrodeck_migration_pending():
+                        raise Refused("blocked_by_migration", MIGRATION_MESSAGE, synced=0)
+                    return await self._pre_launch_sync_held(rom_id, run.stop)
+            except SyncStopped as e:
+                raise stopped_refusal() from e
+            except RommSyncDisabledError:
+                # RomM has save sync disabled for this device server-side. Mirror the
+                # LOCAL toggle-off silent skip (a success-shaped result, no ``offline``
+                # and no failure ``reason``) so the launch proceeds and the result
+                # never routes into the offline/launch-gate flow (#1489).
+                return {"success": True, "message": DEVICE_SYNC_DISABLED, "synced": 0}
+
+    async def _pre_launch_sync_held(self, rom_id: int, stop: SyncStop) -> dict[str, Any]:
+        """The sync before a start, run while it holds the device gate and the ROM's lock."""
+        save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+        if stop.stops_here():
+            raise SyncStopped
+        await self.follow_save_directory(rom_id, save_answer)
+        # Before the refusal: a launch is never asked about a sync the
+        # user switched off, as the post-exit sync is never toasted for one.
+        if not sync_before_launch(self._settings):
+            return {"success": True, "message": "Pre-launch sync disabled", "synced": 0}
+        refuse_unsyncable(save_answer)
+
+        # Pre-probe reachability before any sync work — mirror post_exit_sync.
         try:
-            async with self._device_gate.bounded_run(max_wait=PRE_LAUNCH_GATE_TIMEOUT), self.rom_lock(rom_id):
-                # Defense in depth: SaveService.pre_launch_sync checks the migration
-                # rule before this call waits for the device gate and the ROM lock,
-                # and a caller could reach the engine without it. saves_dir would
-                # otherwise resolve under the new home and silently desync from
-                # files still living at the old home. Every other path into
-                # do_sync_rom_saves either checks the migration rule at its use
-                # case's entry or carries a guard of its own; this one is
-                # pre_launch_sync's. The update rule is backstopped the same way.
-                if self._is_update_in_progress():
-                    raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0)
-                if self._is_retrodeck_migration_pending():
-                    raise Refused("blocked_by_migration", MIGRATION_MESSAGE, synced=0)
+            await self._loop.run_in_executor(None, self._romm_api.heartbeat)
+        except (RommConnectionError, RommTimeoutError) as e:
+            raise self._server_offline("pre_launch_sync", e) from e
 
-                save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-                await self.follow_save_directory(rom_id, save_answer)
-                # Before the refusal: a launch is never asked about a sync the
-                # user switched off, as the post-exit sync is never toasted for one.
-                if not sync_before_launch(self._settings):
-                    return {"success": True, "message": "Pre-launch sync disabled", "synced": 0}
-                refuse_unsyncable(save_answer)
+        device_id = await self.live_device_id()
 
-                # Pre-probe reachability before any sync work — mirror post_exit_sync.
-                try:
-                    await self._loop.run_in_executor(None, self._romm_api.heartbeat)
-                except (RommConnectionError, RommTimeoutError) as e:
-                    raise self._server_offline("pre_launch_sync", e) from e
+        uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
+            rom_id, device_id=device_id, save_answer=save_answer, stop=stop
+        )
+        if stop.stopped_the_sync():
+            self._logger.info(
+                "pre_launch_sync of rom %d stopped: uploaded=%d, downloaded=%d", rom_id, uploaded, downloaded
+            )
+            raise stopped_refusal(uploaded=uploaded, downloaded=downloaded)
+        synced = uploaded + downloaded
 
-                device_id = await self.live_device_id()
+        msg = f"Downloaded {synced} save(s)"
+        if errors:
+            msg += f", {len(errors)} error(s)"
+        return {
+            "success": len(errors) == 0,
+            "message": msg,
+            "synced": synced,
+            "uploaded": uploaded,
+            "downloaded": downloaded,
+            "errors": errors,
+            "conflicts": list(conflicts),
+        }
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
-                    rom_id, device_id=device_id, save_answer=save_answer
-                )
-                synced = uploaded + downloaded
+    def pre_launch_sync_state(self, rom_id: int) -> dict[str, Any]:
+        """What the sync before a start of *rom_id* is doing (``PreLaunchState``), and whom it waits for."""
+        return self._pre_launch_runs.state(int(rom_id), self._device_gate.holder())
 
-                msg = f"Downloaded {synced} save(s)"
-                if errors:
-                    msg += f", {len(errors)} error(s)"
-                return {
-                    "success": len(errors) == 0,
-                    "message": msg,
-                    "synced": synced,
-                    "uploaded": uploaded,
-                    "downloaded": downloaded,
-                    "errors": errors,
-                    "conflicts": list(conflicts),
-                }
-        except SaveSyncTimeoutError as e:
-            # Device gate held past the bounded wait — the same LOCAL outcome the other three triggers
-            # report, so it carries the identical busy refusal: no reachability reason, no ``offline`` (#1625).
-            # The launch path routes on ``success: False`` alone (→ ``sync_failed``), so Play is not trapped.
-            raise SyncBusy(SAVE_SYNC_BUSY, synced=0) from e
-        except RommSyncDisabledError:
-            # RomM has save sync disabled for this device server-side. Mirror the
-            # LOCAL toggle-off silent skip (a success-shaped result, no ``offline``
-            # and no failure ``reason``) so the launch proceeds and the result
-            # never routes into the offline/launch-gate flow (#1489).
-            return {"success": True, "message": DEVICE_SYNC_DISABLED, "synced": 0}
+    def stop_pre_launch_sync(self, rom_id: int) -> dict[str, Any]:
+        """Stop every sync before a start of *rom_id*; ``stopped`` says whether one was under way.
+
+        No other sync is stopped.
+        """
+        rom_id = int(rom_id)
+        stopped = self._pre_launch_runs.stop(rom_id)
+        self._logger.info("pre_launch_sync of rom %d: stop asked (one under way: %s)", rom_id, stopped)
+        return {"success": True, "stopped": stopped}
 
     async def post_exit_sync(self, rom_id: int) -> dict[str, Any]:
         """Upload changed saves after game exit."""
@@ -808,7 +850,10 @@ class SyncEngine:
             return {"success": True, "message": SAVE_SYNC_DISABLED, "synced": 0}
 
         try:
-            async with self._device_gate.bounded_run(max_wait=POST_EXIT_GATE_TIMEOUT), self.rom_lock(rom_id):
+            async with (
+                self._device_gate.held_by(GateHolder.POST_EXIT, max_wait=POST_EXIT_GATE_TIMEOUT),
+                self.rom_lock(rom_id),
+            ):
                 # Defense in depth: post_exit_sync has no endpoint;
                 # SessionLifecycleService checks the migration before calling it,
                 # and this guard refuses a caller that reaches the engine without
@@ -886,7 +931,10 @@ class SyncEngine:
             raise Refused("sync_disabled", SAVE_SYNC_DISABLED, synced=0)
 
         try:
-            async with self._device_gate.bounded_run(max_wait=SYNC_ROM_GATE_TIMEOUT), self.rom_lock(rom_id):
+            async with (
+                self._device_gate.held_by(GateHolder.ROM_SYNC, max_wait=SYNC_ROM_GATE_TIMEOUT),
+                self.rom_lock(rom_id),
+            ):
                 # Defense in depth: the use case asked the update rule before
                 # this waited for the gate, and its operation on the prune
                 # conflicts makes a press wait from then on; a caller that
@@ -991,7 +1039,7 @@ class SyncEngine:
         try:
             # Device gate sits OUTSIDE the per-ROM locks — it wraps the whole
             # sweep; each ROM still takes its own rom_lock inside the loop.
-            async with self._device_gate.bounded_run(max_wait=SYNC_ALL_GATE_TIMEOUT):
+            async with self._device_gate.held_by(GateHolder.SYNC_ALL, max_wait=SYNC_ALL_GATE_TIMEOUT):
                 # Defense in depth, as in sync_rom_saves.
                 if self._is_update_in_progress():
                     raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0, conflicts=0)

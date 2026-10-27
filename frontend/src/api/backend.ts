@@ -1335,6 +1335,20 @@ export const preLaunchSync = endpoint<
     reason?: WireReason;
   }
 >("pre_launch_sync");
+
+/** Which save-sync run holds the device while a start's sync waits for it (`GateHolder`, backend `_gate.py`). */
+export type PreLaunchSyncHolder = "sync_all" | "post_exit" | "rom_sync" | "pre_launch";
+
+/** What a game's sync before a start is doing (`PreLaunchState`, backend `sync_engine/_pre_launch.py`). */
+export type PreLaunchSyncState =
+  | { state: "idle" }
+  | { state: "waiting_for_sync"; holder: PreLaunchSyncHolder }
+  | { state: "waiting_for_rom" }
+  | { state: "syncing" };
+export const preLaunchSyncState = endpoint<[number], PreLaunchSyncState>("pre_launch_sync_state");
+
+/** Stop every sync before a start of the ROM, and no other sync; `stopped` says whether one was under way. */
+export const stopPreLaunchSync = endpoint<[number], { success: true; stopped: boolean }>("stop_pre_launch_sync");
 export const syncRomSaves = endpoint<
   [number],
   {

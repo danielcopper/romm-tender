@@ -11,6 +11,7 @@ import pytest
 from domain.live_device_id import LiveDeviceId
 from domain.rom_save_sync_state import RomSaveSyncState
 from lib.errors import DeviceWriteError, RommApiError, RommConflictError, RommConnectionError, RommTimeoutError
+from services.saves._sync_stop import SyncStop, SyncStopped
 from tests.services.saves._helpers import (
     _create_save,
     _do_upload,
@@ -709,6 +710,52 @@ class TestADownloadThatFailsLeavesNoTmp:
 
         assert caught.value is failure
         assert removals == [str(saves_dir / "pokemon.srm.tmp")]
+
+
+class TestADownloadItsStopEnded:
+    """#2184 D4: a download whose stop was asked by the time it finished is never put in place."""
+
+    def test_the_finished_download_is_discarded_and_the_local_file_left_as_it_was(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        save_path = _create_save(tmp_path, content=b"local bytes")
+        fake.saves[100] = _server_save(save_id=100)
+        stop = SyncStop()
+        download = fake.download_save_content
+
+        def download_then_stop(save_id, dest_path, **kwargs):
+            download(save_id, dest_path, **kwargs)
+            stop.request()
+
+        monkeypatch.setattr(fake, "download_save_content", download_then_stop)
+        state = RomSaveSyncState()
+
+        with pytest.raises(SyncStopped):
+            svc._save_transfer.download_save_file(
+                fake.saves[100], str(save_path.parent), "pokemon.srm", state, LiveDeviceId("device-1"), "gba", stop=stop
+            )
+
+        assert not (save_path.parent / "pokemon.srm.tmp").exists()
+        assert save_path.read_bytes() == b"local bytes"
+        assert not (save_path.parent / ".romm-backup").exists()
+        assert state.files == {}
+        assert stop.stopped_the_sync() is True
+
+    def test_a_stop_not_asked_places_the_download(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        saves_dir = tmp_path / "saves" / "gba"
+        fake.saves[100] = _server_save(save_id=100)
+        stop = SyncStop()
+        state = RomSaveSyncState()
+
+        svc._save_transfer.download_save_file(
+            fake.saves[100], str(saves_dir), "pokemon.srm", state, LiveDeviceId("device-1"), "gba", stop=stop
+        )
+
+        assert (saves_dir / "pokemon.srm").exists()
+        assert set(state.files) == {"pokemon.srm"}
+        assert stop.stopped_the_sync() is False
 
 
 class TestRecordServerHead:

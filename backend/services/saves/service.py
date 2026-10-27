@@ -316,6 +316,14 @@ class SaveService:
         async with self._rules.hold("pre_launch_sync", update=True, migration=True, prune=True):
             return await self._sync_engine.pre_launch_sync(rom_id)
 
+    def pre_launch_sync_state(self, rom_id: int) -> dict[str, Any]:
+        """What the sync before a start of *rom_id* is doing, and whom it waits for."""
+        return self._sync_engine.pre_launch_sync_state(rom_id)
+
+    def stop_pre_launch_sync(self, rom_id: int) -> dict[str, Any]:
+        """Stop the sync before a start of *rom_id*, and no other sync."""
+        return self._sync_engine.stop_pre_launch_sync(rom_id)
+
     async def post_exit_sync(self, rom_id: int) -> dict[str, Any]:
         """Upload changed saves after game exit."""
         return await self._sync_engine.post_exit_sync(rom_id)

@@ -136,6 +136,7 @@ export type WireReason =
   | "place_not_absolute"
   | "place_not_writable"
   | "platform_system_off"
+  | "pre_launch_sync_stopped"
   | "prune_active"
   | "rate_limited"
   | "rename_collisions"

@@ -3,11 +3,13 @@ dispatches the decision, and the rom-level orchestration around it.
 """
 
 from services.saves.sync_engine._gate import SaveSyncGate, SaveSyncTimeoutError
+from services.saves.sync_engine._pre_launch import PreLaunchSyncStopped
 from services.saves.sync_engine._sweep_stop import SaveSweepIncomplete
 from services.saves.sync_engine.engine import MatrixOutcome, SyncEngine, SyncEngineConfig
 
 __all__ = [
     "MatrixOutcome",
+    "PreLaunchSyncStopped",
     "SaveSweepIncomplete",
     "SaveSyncGate",
     "SaveSyncTimeoutError",

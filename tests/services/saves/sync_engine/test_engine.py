@@ -41,13 +41,16 @@ from lib.list_result import ErrorCode
 from models.sync import ClientSaveState
 from services.saves._messages import DEVICE_NOT_REGISTERED, DEVICE_SYNC_DISABLED
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
-from services.saves.sync_engine import SaveSweepIncomplete
+from services.saves.sync_engine import PreLaunchSyncStopped, SaveSweepIncomplete
+from services.saves.sync_engine._gate import GateHolder
+from services.saves.sync_engine._shape_refusal import live_save_answer
 from services.saves.sync_engine.engine import NEGOTIATE_ROM_IDS_CAP, _first_error_reason, _summarize_sync_result
 from tests.services.saves._helpers import (
     _create_save,
     _do_sync,
     _enable_sync_with_device,
     _get_device_id,
+    _get_save_state,
     _install_rom,
     _require_save_state,
     _seed_save_state,
@@ -1626,25 +1629,38 @@ class TestSaveSyncDeviceGate:
         assert engine._device_gate.is_in_flight() is False
 
     @pytest.mark.asyncio
-    async def test_pre_launch_sync_times_out_to_busy_not_offline(self, tmp_path, monkeypatch):
-        """#1625: the busy shape is identical on every trigger — the reason names
-        the local wait and no ``offline`` flag rides along. The launch gate routes
-        this on ``success: False`` alone, so the Play button is still not trapped."""
+    async def test_pre_launch_sync_waits_for_a_busy_gate_without_a_limit_and_syncs_once_it_frees(
+        self, tmp_path, monkeypatch
+    ):
+        """#2184 D1: the sync before a start gives the gate no budget of its own.
+
+        It asks for the gate with no time limit, is still waiting while another
+        run holds it, and syncs as soon as that run lets go.
+        """
         svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
+        _enable_sync_with_device(svc, "test-device")
         _install_rom(svc, tmp_path)
         fake.saves[100] = _server_save()
+        gate = svc._sync_engine._device_gate
+        bounded_run = gate.bounded_run
+        asked_waits: list[float | None] = []
 
-        await self._assert_timeout_fallthrough(
-            svc,
-            monkeypatch,
-            "PRE_LAUNCH_GATE_TIMEOUT",
-            lambda: svc.pre_launch_sync(42),
-            {"synced": 0},
-        )
-        # The gate fired before any sync work — no transfer was attempted.
-        assert not any(c[0] in ("download_save", "list_saves", "heartbeat") for c in fake.call_log)
+        def recording_bounded_run(*, max_wait: float | None):
+            asked_waits.append(max_wait)
+            return bounded_run(max_wait=max_wait)
+
+        async with gate.held_by(GateHolder.SYNC_ALL, max_wait=1):
+            monkeypatch.setattr(gate, "bounded_run", recording_bounded_run)
+            sync = asyncio.ensure_future(svc.pre_launch_sync(42))
+            await asyncio.sleep(0.05)
+            assert not sync.done()
+            assert not any(c[0] == "list_saves" for c in fake.call_log)
+
+        result = await sync
+
+        assert asked_waits == [None]
+        assert result["success"] is True
+        assert result["downloaded"] == 1
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_times_out_to_busy_not_offline(self, tmp_path, monkeypatch):
@@ -1780,6 +1796,268 @@ class TestSaveSyncDeviceGate:
         # Serialized: the device gate never let both worker calls run at once.
         assert state["peak"] == 1
         assert svc._sync_engine._device_gate.is_in_flight() is False
+
+
+async def _until(condition: "Callable[[], bool]") -> None:
+    """Yield to the loop until *condition* holds, for at most a second."""
+    for _ in range(200):
+        if condition():
+            return
+        await asyncio.sleep(0.005)
+    raise AssertionError("the condition never held")
+
+
+def _hold_at_device_registration(svc) -> asyncio.Event:
+    """Make every save-sync run stop at its device registration until the returned event is set.
+
+    Every trigger registers the device once it holds the device gate, so a run
+    held here holds the gate.
+    """
+    release = asyncio.Event()
+    engine = svc._sync_engine
+
+    async def held_registration() -> LiveDeviceId:
+        await release.wait()
+        return LiveDeviceId("test-device")
+
+    engine.live_device_id = held_registration  # type: ignore[method-assign]
+    return release
+
+
+class TestTheSyncBeforeAStartSaysWhatItIsDoing:
+    """#2184 D7: what the sync before a start is doing, read by the panel when a start waits."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("holder", "run"),
+        [
+            ("sync_all", lambda svc: svc.sync_all_saves()),
+            ("post_exit", lambda svc: svc.post_exit_sync(7)),
+            ("rom_sync", lambda svc: svc.sync_rom_saves(7)),
+            ("pre_launch", lambda svc: svc.pre_launch_sync(7)),
+        ],
+    )
+    async def test_it_names_the_run_it_waits_for(self, tmp_path, holder, run):
+        svc, _fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        _install_rom(svc, tmp_path, rom_id=7, system="snes", file_name="mario.sfc")
+        release = _hold_at_device_registration(svc)
+        engine = svc._sync_engine
+
+        other = asyncio.ensure_future(run(svc))
+        await _until(lambda: engine._device_gate.holder() is not None)
+        start = asyncio.ensure_future(svc.pre_launch_sync(42))
+        await asyncio.sleep(0.02)
+
+        assert svc.pre_launch_sync_state(42) == {"state": "waiting_for_sync", "holder": holder}
+
+        release.set()
+        await other
+        assert (await start)["success"] is True
+        assert svc.pre_launch_sync_state(42) == {"state": "idle"}
+
+    @pytest.mark.asyncio
+    async def test_it_says_it_syncs_once_it_holds_the_gate_and_the_games_lock(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        release = _hold_at_device_registration(svc)
+
+        start = asyncio.ensure_future(svc.pre_launch_sync(42))
+        await _until(lambda: svc._sync_engine._device_gate.holder() is GateHolder.PRE_LAUNCH)
+
+        assert svc.pre_launch_sync_state(42) == {"state": "syncing"}
+
+        release.set()
+        await start
+
+    @pytest.mark.asyncio
+    async def test_it_says_it_waits_for_the_game_while_something_else_holds_the_games_lock(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+
+        async with svc._sync_engine.rom_lock(42):
+            start = asyncio.ensure_future(svc.pre_launch_sync(42))
+            await asyncio.sleep(0.02)
+            assert svc.pre_launch_sync_state(42) == {"state": "waiting_for_rom"}
+
+        assert (await start)["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_it_is_idle_where_no_sync_before_a_start_runs(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+
+        assert svc.pre_launch_sync_state(42) == {"state": "idle"}
+
+
+class TestStoppingTheSyncBeforeAStart:
+    """#2184 D4/D7: Play anyway stops the sync before a start; it places no file after the stop."""
+
+    @pytest.mark.asyncio
+    async def test_a_stop_while_it_waits_for_the_gate_ends_the_wait_and_writes_nothing(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        fake.saves[100] = _server_save()
+        gate = svc._sync_engine._device_gate
+
+        async with gate.held_by(GateHolder.SYNC_ALL, max_wait=1):
+            start = asyncio.ensure_future(svc.pre_launch_sync(42))
+            await asyncio.sleep(0.02)
+
+            assert svc.stop_pre_launch_sync(42) == {"success": True, "stopped": True}
+            with pytest.raises(PreLaunchSyncStopped) as refused:
+                await asyncio.wait_for(start, 1)
+
+        assert refused.value.reason == "pre_launch_sync_stopped"
+        assert refused.value.message == "Save sync stopped before the game started"
+        assert refused.value.details == {"synced": 0, "uploaded": 0, "downloaded": 0}
+        assert not any(c[0] in ("list_saves", "download_save_content", "heartbeat") for c in fake.call_log)
+        assert _get_save_state(svc, 42) is None
+        assert not (tmp_path / "saves" / "gba" / "pokemon.srm").exists()
+
+    @pytest.mark.asyncio
+    async def test_a_stop_while_it_waits_for_the_games_lock_ends_the_wait_and_gives_the_gate_back(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        fake.saves[100] = _server_save()
+        engine = svc._sync_engine
+
+        async with engine.rom_lock(42):
+            start = asyncio.ensure_future(svc.pre_launch_sync(42))
+            await asyncio.sleep(0.02)
+            assert engine._device_gate.holder() is GateHolder.PRE_LAUNCH
+
+            svc.stop_pre_launch_sync(42)
+            with pytest.raises(PreLaunchSyncStopped) as refused:
+                await asyncio.wait_for(start, 1)
+
+            assert engine.is_sync_in_flight() is False
+
+        assert refused.value.details["synced"] == 0
+        assert not any(c[0] in ("list_saves", "download_save_content") for c in fake.call_log)
+        assert _get_save_state(svc, 42) is None
+
+    @pytest.mark.asyncio
+    async def test_a_download_finished_after_the_stop_is_not_placed_and_what_was_placed_before_is_recorded(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        fake.saves[100] = _server_save(save_id=100, filename="pokemon.srm")
+        fake.saves[101] = {**_server_save(save_id=101, filename="pokemon.rtc"), "file_extension": "rtc"}
+        download = fake.download_save_content
+        downloads: list[int] = []
+
+        def download_then_stop_on_the_second(save_id, dest_path, **kwargs):
+            download(save_id, dest_path, **kwargs)
+            downloads.append(save_id)
+            if len(downloads) == 2:
+                svc.stop_pre_launch_sync(42)
+
+        monkeypatch.setattr(fake, "download_save_content", download_then_stop_on_the_second)
+
+        with pytest.raises(PreLaunchSyncStopped) as refused:
+            await svc.pre_launch_sync(42)
+
+        placed_id, stopped_id = downloads
+        placed, discarded = ("pokemon.srm", "pokemon.rtc") if placed_id == 100 else ("pokemon.rtc", "pokemon.srm")
+        saves_dir = tmp_path / "saves" / "gba"
+        assert (saves_dir / placed).exists()
+        assert not (saves_dir / discarded).exists()
+        assert not (saves_dir / f"{discarded}.tmp").exists()
+        assert set(_require_save_state(svc, 42).files) == {placed}
+        assert _require_save_state(svc, 42).files[placed].tracked_save_id == placed_id
+        assert stopped_id != placed_id
+        assert refused.value.details == {"synced": 1, "uploaded": 0, "downloaded": 1}
+
+    @pytest.mark.asyncio
+    async def test_a_stop_after_a_file_was_placed_starts_no_further_transfer(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        fake.saves[100] = _server_save(save_id=100, filename="pokemon.srm")
+        fake.saves[101] = {**_server_save(save_id=101, filename="pokemon.rtc"), "file_extension": "rtc"}
+        store = svc._save_file_store
+        rename = store.rename
+
+        def rename_then_stop(src: str, dst: str) -> None:
+            rename(src, dst)
+            svc.stop_pre_launch_sync(42)
+
+        monkeypatch.setattr(store, "rename", rename_then_stop)
+
+        with pytest.raises(PreLaunchSyncStopped) as refused:
+            await svc.pre_launch_sync(42)
+
+        assert [c[0] for c in fake.call_log].count("download_save_content") == 1
+        assert len(_require_save_state(svc, 42).files) == 1
+        assert refused.value.details["downloaded"] == 1
+
+    @pytest.mark.asyncio
+    async def test_a_stop_before_it_follows_a_moved_save_directory_follows_nothing(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        engine = svc._sync_engine
+        followed: list[int] = []
+
+        async def follow(rom_id: int, _answer: object) -> None:
+            followed.append(rom_id)
+
+        def answer_then_stop(rom_info, rom_id):
+            answer = live_save_answer(rom_info, rom_id)
+            svc.stop_pre_launch_sync(rom_id)
+            return answer
+
+        monkeypatch.setattr(engine, "follow_save_directory", follow)
+        monkeypatch.setattr("services.saves.sync_engine.engine.live_save_answer", answer_then_stop)
+
+        with pytest.raises(PreLaunchSyncStopped):
+            await svc.pre_launch_sync(42)
+
+        assert followed == []
+        assert not any(c[0] in ("heartbeat", "list_saves") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_stop_of_one_rom_stops_no_other_rom_and_no_other_sync(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        _install_rom(svc, tmp_path, rom_id=7, system="snes", file_name="mario.sfc")
+        release = _hold_at_device_registration(svc)
+
+        manual = asyncio.ensure_future(svc.sync_rom_saves(42))
+        await _until(lambda: svc._sync_engine._device_gate.holder() is GateHolder.ROM_SYNC)
+        start = asyncio.ensure_future(svc.pre_launch_sync(7))
+        await asyncio.sleep(0.02)
+
+        assert svc.stop_pre_launch_sync(42) == {"success": True, "stopped": False}
+
+        release.set()
+        assert (await manual)["success"] is True
+        assert (await start)["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_a_stop_stops_every_sync_before_a_start_of_the_rom(self, tmp_path):
+        """A start given up leaves its sync running; the next start of the same game calls again."""
+        svc, _fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        gate = svc._sync_engine._device_gate
+
+        async with gate.held_by(GateHolder.SYNC_ALL, max_wait=1):
+            first = asyncio.ensure_future(svc.pre_launch_sync(42))
+            second = asyncio.ensure_future(svc.pre_launch_sync(42))
+            await asyncio.sleep(0.02)
+            svc.stop_pre_launch_sync(42)
+            results = await asyncio.wait_for(asyncio.gather(first, second, return_exceptions=True), 1)
+
+        assert all(isinstance(r, PreLaunchSyncStopped) for r in results)
 
 
 class TestRunRomSyncSession:

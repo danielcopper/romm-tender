@@ -23,6 +23,7 @@ from domain.emulator_tag import build_emulator_tag
 from domain.save_backup import BACKUP_RETENTION
 from domain.upload_response import dedup_returned_non_head, upload_response_proves_current
 from lib.errors import DeviceWriteError, RommConflictError
+from services.saves._sync_stop import SyncStopped
 
 if TYPE_CHECKING:
     import logging
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from domain.rom_save_sync_state import RomSaveSyncState
     from domain.save_measure import SaveFileMeasure
     from services.protocols import Clock, DebugLogger, RetryStrategy, RommSaveApi, SaveFileStore
+    from services.saves._sync_stop import SyncStop
     from services.saves.save_backup import SaveBackup
 
 
@@ -131,6 +133,8 @@ class SaveTransfer:
         device_id: LiveDeviceId,
         system: str,
         default_slot: str | None = None,
+        *,
+        stop: SyncStop | None = None,
     ) -> None:
         """Download *server_save* onto *filename* in *saves_dir*, backing up the file it replaces.
 
@@ -138,7 +142,9 @@ class SaveTransfer:
         once complete, after :class:`SaveBackup` has moved the old one aside;
         any failure up to that replacement tries to remove the ``.tmp`` (a
         removal that fails is not reported) and raises the download's own
-        failure. Then records the sync boundary and *filename*'s baseline on
+        failure. A *stop* asked by the time the content is complete is such a
+        failure: :class:`SyncStopped` is raised, nothing is moved and nothing
+        recorded. Then records the sync boundary and *filename*'s baseline on
         *save_state*, in memory; the caller owns the write Unit of Work.
         """
         local_path = os.path.join(saves_dir, filename)
@@ -154,6 +160,8 @@ class SaveTransfer:
                     optimistic=True,
                 ),
             )
+            if stop is not None and stop.stops_here():
+                raise SyncStopped
             self._backup.back_up_save_file(saves_dir, filename, keep=BACKUP_RETENTION)
             self._save_file_store.rename(tmp_path, local_path)
         except Exception:

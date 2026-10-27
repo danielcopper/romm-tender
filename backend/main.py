@@ -668,6 +668,14 @@ class Endpoints:
         return await self._services.save_sync_service.pre_launch_sync(rom_id)
 
     @route
+    def pre_launch_sync_state(self, rom_id):
+        return self._services.save_sync_service.pre_launch_sync_state(rom_id)
+
+    @route
+    def stop_pre_launch_sync(self, rom_id):
+        return self._services.save_sync_service.stop_pre_launch_sync(rom_id)
+
+    @route
     async def sync_rom_saves(self, rom_id):
         return await self._services.save_sync_service.sync_rom_saves(rom_id)
 
