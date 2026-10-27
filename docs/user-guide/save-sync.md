@@ -15,9 +15,9 @@ checks if the server has a newer save and downloads it. When you stop playing, i
 > Tender's Play button, any step before the save sync does — a **Save Sync Unavailable** dialog asks "Couldn't check
 > your saves in time — launch with local saves?". **Launch Anyway** starts the game on the save already on the device,
 > and **Cancel** starts nothing. When the sync before the start is not done after about fifteen seconds, the start does
-> not go ahead by itself: a **Saves Still Syncing** dialog says why it is held up and lets you **Wait**, **Play Anyway**
-> — which stops the sync — or **Cancel**
-> ([Play asks whether to wait for your saves](troubleshooting.md#play-asks-whether-to-wait-for-your-saves)).
+> not go ahead by itself: a **Waiting for Save Sync** dialog says why it is held up and lets you **Wait**, **Play
+> Anyway** — which stops the sync — or **Cancel**
+> ([Play is waiting for a save sync](troubleshooting.md#play-is-waiting-for-a-save-sync)).
 
 Sync uses a **newest-wins** model with a hash-divergence guard:
 

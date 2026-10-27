@@ -64,7 +64,7 @@ describe("SyncWaitModal — showSyncWaitModal", () => {
   it("names why the start waits and offers Wait, Play Anyway and Cancel", () => {
     const { view } = openQuestion(heldSync().finished);
 
-    expect(view.getByText("Saves Still Syncing")).toBeTruthy();
+    expect(view.getByText("Waiting for Save Sync")).toBeTruthy();
     expect(
       view.getByText(
         "Sync All Saves Now is still running. Wait a little longer, or play with the saves on this device?",
@@ -96,7 +96,7 @@ describe("SyncWaitModal — showSyncWaitModal", () => {
     });
 
     expect(view.getByText("Saves Ready")).toBeTruthy();
-    expect(view.getByText("Your saves are ready.")).toBeTruthy();
+    expect(view.getByText("Your saves are ready. Play now?")).toBeTruthy();
     expect(view.getAllByRole("button").map((b) => b.textContent)).toEqual(["Play", "Cancel"]);
     expect(answered).toBe(false);
     expect(closeModal).not.toHaveBeenCalled();

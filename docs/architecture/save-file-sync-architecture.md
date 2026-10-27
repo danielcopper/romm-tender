@@ -1803,7 +1803,7 @@ limit of its own: `SyncEngine.pre_launch_sync` waits for the device gate and for
 free ([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D1). When it has not answered within
 `SERVER_CALL_LIMIT_MS`, `runPreLaunchSync` (`frontend/src/utils/launchGateOps.ts`) asks `pre_launch_sync_state` what it
 is doing — within `LOCAL_CALL_LIMIT_MS`, where no answer, like a failed read, is "Tender is not answering" — and puts
-the "Saves Still Syncing" question (`LaunchPrompts.askSyncWait`, drawn by `frontend/src/shared/SyncWaitModal.tsx`). It
+the "Waiting for Save Sync" question (`LaunchPrompts.askSyncWait`, drawn by `frontend/src/shared/SyncWaitModal.tsx`). It
 names the reason: another save sync holds the device (Sync All Saves Now, the sync after a game, a manual sync, or the
 sync of another start; `GateHolder`, `services/saves/sync_engine/_gate.py`), something else is busy with this game's
 saves (its `rom_lock`), this game's own sync is running, or Tender is not answering. Its three answers:
@@ -1861,11 +1861,11 @@ The Play button's path:
    automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press.
 5. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
-7. Online: `pre_launch_sync`, with the button on "Syncing saves..." — past its limit, the "Saves Still Syncing" question
-   above. The backend fetches server saves and runs `do_sync_rom_saves`, which iterates files and dispatches every
-   `compute_sync_action` outcome. If a `Conflict` was returned for any file, the result includes a `conflicts` list, and
-   `actOnGateVerdict` puts each conflict through `LaunchPrompts.resolveConflicts` in turn — `handleConflicts` (see
-   [The modal](#the-modal)): once all are resolved it notifies siblings and goes on; on the first Cancel the button
+7. Online: `pre_launch_sync`, with the button on "Syncing saves..." — past its limit, the "Waiting for Save Sync"
+   question above. The backend fetches server saves and runs `do_sync_rom_saves`, which iterates files and dispatches
+   every `compute_sync_action` outcome. If a `Conflict` was returned for any file, the result includes a `conflicts`
+   list, and `actOnGateVerdict` puts each conflict through `LaunchPrompts.resolveConflicts` in turn — `handleConflicts`
+   (see [The modal](#the-modal)): once all are resolved it notifies siblings and goes on; on the first Cancel the button
    switches to `conflict` and nothing launches. A sync that fails never launches unconditionally: the "Save Sync
    Unavailable" dialog asks first, and Cancel returns the button to Play. The benign skips (`savefiles_in_content_dir`,
    `save_shape_unsupported`) proceed silently; a missing saves folder (`saves_root_missing`) is a failure, so the dialog
@@ -1886,7 +1886,7 @@ The Play button's path:
 10. `SteamClient.Apps.RunGame`, with the button on "Launching...".
 
 Every backend call in steps 3–8 has the limit stated above, and one that expires ends in the "Save Sync Unavailable"
-dialog — except the pre-launch sync, whose limit opens the "Saves Still Syncing" question, and the conflict dialog's
+dialog — except the pre-launch sync, whose limit opens the "Waiting for Save Sync" question, and the conflict dialog's
 `resolve_sync_conflict`, which has none (above).
 
 ### Post-exit sync

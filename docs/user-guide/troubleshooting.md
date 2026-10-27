@@ -414,7 +414,7 @@ Steam's own Play or a link — and after a wait a **Save Sync Unavailable** dial
 has a time limit — about fifteen seconds for reading how the game's saves are set up on RomM, about five for every other
 step. A step that got no answer in time ends in this dialog, so a start never waits without end. Either Tender's backend
 is not answering, or RomM is slow. A save sync that takes long asks a different question — see
-[Play asks whether to wait for your saves](#play-asks-whether-to-wait-for-your-saves).
+[Play is waiting for a save sync](#play-is-waiting-for-a-save-sync).
 
 **Fix**: **Launch Anyway** starts the game on the save already on the device; the sync after the game compares that save
 with the server's; where both changed, it tells you, and you choose which to keep before the next start. **Cancel**
@@ -422,10 +422,10 @@ starts nothing, and on the detail page the button returns to **Play**. If the di
 backend is not running or not answering, or RomM is too slow to answer in time. If it is the backend, start it with
 `systemctl --user restart romm-tender`; if the panel still does not answer, restart Steam.
 
-### Play asks whether to wait for your saves
+### Play is waiting for a save sync
 
 **Symptom**: You start a game — with **Play** on its detail page, where the button reads **Syncing saves...**, or with
-Steam's own Play or a link — and after about fifteen seconds a **Saves Still Syncing** dialog names why the start is
+Steam's own Play or a link — and after about fifteen seconds a **Waiting for Save Sync** dialog names why the start is
 held up and offers **Wait**, **Play Anyway** and **Cancel**.
 
 **What happened**: The save sync before the start is not done yet. The dialog says why: another save sync is still
@@ -644,9 +644,9 @@ nothing to sync.
   failed, or when a step of the check before it got no answer in time, and Launch Anyway starts the game on the save
   already on the device — see
   [Play asks whether to launch with local saves](#play-asks-whether-to-launch-with-local-saves).
-- Whether you chose **Play Anyway** in the **Saves Still Syncing** dialog. It stops the sync before the start, so a
+- Whether you chose **Play Anyway** in the **Waiting for Save Sync** dialog. It stops the sync before the start, so a
   newer save it was still downloading, or had not reached yet, stayed on RomM — see
-  [Play asks whether to wait for your saves](#play-asks-whether-to-wait-for-your-saves).
+  [Play is waiting for a save sync](#play-is-waiting-for-a-save-sync).
 - Whether save sync covers the game at all —
   [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).
 

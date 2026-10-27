@@ -54,7 +54,7 @@ export function fallbackLaunchDescription(message?: string): string {
 
 // ── Saves still syncing: the pre-launch sync has run past the launch check's limit ──
 
-export const SYNC_WAIT_TITLE = "Saves Still Syncing";
+export const SYNC_WAIT_TITLE = "Waiting for Save Sync";
 
 export const SYNC_WAIT_LABEL = "Wait";
 
@@ -83,7 +83,7 @@ export function syncWaitDescription(reason: SyncWaitReason): string {
 /** What the question turns into when the sync finishes while it is open. */
 export const SYNC_READY_TITLE = "Saves Ready";
 
-export const SYNC_READY_DESCRIPTION = "Your saves are ready.";
+export const SYNC_READY_DESCRIPTION = "Your saves are ready. Play now?";
 
 export const SYNC_READY_PLAY_LABEL = "Play";
 
