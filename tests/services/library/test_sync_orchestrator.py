@@ -47,11 +47,13 @@ from domain.work_unit import WorkUnit
 from lib.errors import Refused, RommConnectionError, RommNotFoundError, classify_error
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._unit_roms import stamp_component_group_keys
+from services.library.collection_fetcher import CollectionDelivery
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from tests.services.library._helpers import (
     _fake_wait_set_event,
     _seed_collection_stamp,
     _seed_install,
+    _seed_persisted_rom,
     _seed_platform,
     _seed_rom_row,
 )
@@ -4351,10 +4353,9 @@ class TestApplyUnitCollectionAndCancel:
         assert len(complete) == 1
 
     @pytest.mark.asyncio
-    async def test_sync_collection_unit_threads_kind_and_virtual_type(self, library):
-        """_sync_collection_unit stamps the unit's kind + virtual_type onto the membership (#1539)."""
+    async def test_a_collection_unit_s_membership_threads_kind_and_virtual_type(self, library):
+        """A collection unit's apply stamps the unit's kind + virtual_type onto the membership (#1539)."""
         applier = library.unit_applier
-        applier._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1, 2], False, False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
             id="vc-1",
@@ -4366,7 +4367,16 @@ class TestApplyUnitCollectionAndCancel:
         )
         memberships: dict[tuple[str, str], Any] = {}
 
-        await applier._sync_collection_unit(unit, synced_rom_ids=set(), collection_memberships=memberships)
+        await applier.apply_unit(
+            unit,
+            sources=library.emulator_sources.read(),
+            unit_index=0,
+            total_units=1,
+            synced_rom_ids=set(),
+            collection_memberships=memberships,
+            platform_rom_ids=set(),
+            delivery=CollectionDelivery(unit, roms=[], member_rom_ids=[1, 2], skipped=True, fetch_started_at=""),
+        )
 
         membership = memberships[("virtual", "vc-1")]
         assert membership.name == "coll-fr"
@@ -4375,10 +4385,25 @@ class TestApplyUnitCollectionAndCancel:
         assert membership.virtual_type == "franchise"
 
     @pytest.mark.asyncio
-    async def test_sync_collection_unit_standard_has_no_virtual_type(self, library):
+    async def test_a_collection_unit_without_its_delivery_is_refused(self, library):
+        """A collection unit applies only from what the fetch of every collection unit delivered (#2543 D3)."""
+        unit = WorkUnit(type="collection", id="7", name="Faves", slug="faves", rom_count=1, collection_kind="standard")
+
+        with pytest.raises(ValueError, match="collection unit Faves applied without its delivery"):
+            await library.unit_applier.apply_unit(
+                unit,
+                sources=library.emulator_sources.read(),
+                unit_index=0,
+                total_units=1,
+                synced_rom_ids=set(),
+                collection_memberships={},
+                platform_rom_ids=set(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_a_standard_collection_s_membership_has_no_virtual_type(self, library):
         """A standard collection membership carries kind='standard' and virtual_type=None (#1539)."""
         applier = library.unit_applier
-        applier._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1], False, False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
             id="7",
@@ -4389,7 +4414,16 @@ class TestApplyUnitCollectionAndCancel:
         )
         memberships: dict[tuple[str, str], Any] = {}
 
-        await applier._sync_collection_unit(unit, synced_rom_ids=set(), collection_memberships=memberships)
+        await applier.apply_unit(
+            unit,
+            sources=library.emulator_sources.read(),
+            unit_index=0,
+            total_units=1,
+            synced_rom_ids=set(),
+            collection_memberships=memberships,
+            platform_rom_ids=set(),
+            delivery=CollectionDelivery(unit, roms=[], member_rom_ids=[1], skipped=True, fetch_started_at=""),
+        )
 
         membership = memberships[("standard", "7")]
         assert membership.kind == "standard"
@@ -5020,6 +5054,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="collection", id="7", name="Favs", slug="favs", rom_count=2, collection_kind="standard")
+        deliveries = await library.unit_applier.fetch_collection_units([unit], set(), unit_index=0, total_units=1)
         await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
@@ -5028,6 +5063,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            delivery=deliveries[("standard", "7")],
         )
 
         # The collection committed (non-vacuous) but never carried a platform stamp.
@@ -5127,6 +5163,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.current_sync_id = "run-abc"
 
         unit = WorkUnit(type="collection", id="7", name="Favs", slug="favs", rom_count=2, collection_kind="standard")
+        deliveries = await library.unit_applier.fetch_collection_units([unit], set(), unit_index=0, total_units=1)
         await library.unit_applier.apply_unit(
             unit,
             sources=library.emulator_sources.read(),
@@ -5135,6 +5172,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            delivery=deliveries[("standard", "7")],
         )
 
         # Non-vacuous: the collection did commit, and no commit carried a generation.
@@ -8654,3 +8692,258 @@ class TestTheShortcutArtworkJobAfterARun:
         await library.sync.sync_preview()
 
         assert library.artwork_job.requests == [False]
+
+
+class TestAGameSplitAcrossCollections:
+    """A game only collections deliver is minted over every version they deliver (#2543 D1, D3, D4).
+
+    Golf's Japanese (23) and European (22) versions sit on GBA, whose sync is
+    off; each collection lists one of them. The version rules rank Europe over
+    Japan, and the shortcut is named after the European version either way.
+    """
+
+    @staticmethod
+    def _golf(rom_id, region, **extra):
+        stem = f"Golf ({region})"
+        return {
+            "id": rom_id,
+            "name": stem,
+            "fs_name": f"{stem}.zip",
+            "fs_name_no_ext": stem,
+            "igdb_id": 300,
+            "regions": [region],
+            **extra,
+        }
+
+    @classmethod
+    def _seed(cls, library, fake_romm_api, collections, *, enabled=None, main=None):
+        """*collections* are ``(id, name, rom_ids)`` in queue order; *enabled* the ids synced (default all)."""
+        golf = [cls._golf(22, "Europe"), cls._golf(23, "Japan")]
+        for rom in golf:
+            if rom["id"] == main:
+                rom["rom_user"] = {"is_main_sibling": True}
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=golf)
+        library.settings["enabled_platforms"] = {**library.settings.get("enabled_platforms", {}), "2": False}
+        for cid, name, rom_ids in collections:
+            _seed_collection(fake_romm_api, collection_id=cid, name=name, rom_ids=rom_ids)
+            fake_romm_api.collections[-1]["updated_at"] = "2025-01-01T00:00:00"
+        enabled = [cid for cid, _, _ in collections] if enabled is None else enabled
+        library.settings["enabled_collections"] = {"standard": {str(cid): True for cid in enabled}}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(_unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+
+    @staticmethod
+    async def _apply(library, emit, run_id):
+        """Run an apply; answer ``(unit_name, rom_id, name)`` for every shortcut it sent."""
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
+        start = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        return [
+            (call.args[1]["unit_name"], shortcut["rom_id"], shortcut["name"])
+            for call in emit.call_args_list[start:]
+            if call.args and call.args[0] == "sync_apply_unit"
+            for shortcut in call.args[1]["shortcuts"]
+        ]
+
+    @staticmethod
+    def _bound(library):
+        with library.uow as uow:
+            return {rom.rom_id: rom.shortcut_app_id for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "collections",
+        [[(7, "First", [23]), (8, "Second", [22])], [(7, "First", [22]), (8, "Second", [23])]],
+        ids=["japan-first", "europe-first"],
+    )
+    async def test_the_apply_binds_the_best_ranked_version_the_preview_names(
+        self, make_library, fake_romm_api, emit, collections
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, collections)
+
+        answer = await library.sync.sync_preview()
+        sent = await self._apply(library, emit, "run-1")
+
+        assert answer["new_names"] == ["Golf (Europe)"]
+        assert [(rom_id, name) for _unit, rom_id, name in sent] == [(22, "Golf (Europe)")]
+        assert self._bound(library) == {22: 6022}
+
+    @pytest.mark.asyncio
+    async def test_versions_only_romm_s_sibling_list_links_are_one_game_across_collections(
+        self, make_library, fake_romm_api, emit
+    ):
+        """D4: the component keys are stamped over every collection's delivery at once, as the preview's union is."""
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, [(7, "First", [23]), (8, "Second", [22])])
+        fake_romm_api.roms[22]["sibling_roms"] = [{"id": 23}]
+        fake_romm_api.roms[23].update(igdb_id=None, sibling_roms=[{"id": 22}])
+
+        answer = await library.sync.sync_preview()
+        sent = await self._apply(library, emit, "run-1")
+
+        assert answer["summary"]["new_count"] == 1
+        assert [(rom_id, name) for _unit, rom_id, name in sent] == [(22, "Golf (Europe)")]
+        assert self._bound(library) == {22: 6022}
+
+    @pytest.mark.asyncio
+    async def test_a_version_linked_to_an_unbound_row_joins_its_game_as_in_the_preview(
+        self, make_library, fake_romm_api, emit
+    ):
+        """D4: the resident keys are the preview's, unbound rows' included."""
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, [(7, "First", [22]), (8, "Second", [23])])
+        _seed_persisted_rom(library.uow, 21, app_id=None, group_key="igdb:300:2", platform_slug="gba")
+        fake_romm_api.roms[23].update(igdb_id=None, sibling_roms=[{"id": 21}])
+
+        answer = await library.sync.sync_preview()
+        sent = await self._apply(library, emit, "run-1")
+
+        assert answer["summary"]["new_count"] == 1
+        assert [(rom_id, name) for _unit, rom_id, name in sent] == [(22, "Golf (Europe)")]
+        assert self._bound(library) == {22: 6022}
+
+    @pytest.mark.asyncio
+    async def test_an_installed_version_a_later_collection_delivers_is_bound(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, [(7, "First", [22]), (8, "Second", [23])])
+        _seed_install(library, 23, file_path="/roms/gba/Golf (Japan).zip", platform_slug="gba")
+
+        answer = await library.sync.sync_preview()
+        sent = await self._apply(library, emit, "run-1")
+
+        assert answer["new_names"] == ["Golf (Europe)"]
+        assert [(rom_id, name) for _unit, rom_id, name in sent] == [(23, "Golf (Europe)")]
+        assert self._bound(library) == {23: 6023}
+
+    @pytest.mark.asyncio
+    async def test_romm_s_default_version_a_later_collection_delivers_is_bound(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, [(7, "First", [22]), (8, "Second", [23])], main=23)
+
+        answer = await library.sync.sync_preview()
+        sent = await self._apply(library, emit, "run-1")
+
+        assert answer["new_names"] == ["Golf (Europe)"]
+        assert [(rom_id, name) for _unit, rom_id, name in sent] == [(23, "Golf (Europe)")]
+        assert self._bound(library) == {23: 6023}
+
+    @pytest.mark.asyncio
+    async def test_a_run_stopped_after_the_first_collection_has_bound_the_best_version(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, [(7, "First", [23]), (8, "Second", [22])])
+        box = library.sync._box
+
+        async def bind_then_cancel(_unit, event):
+            event.set()
+            box.request_cancel(None)
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_then_cancel
+
+        sent = await self._apply(library, emit, "run-1")
+
+        assert [unit for unit, _rom_id, _name in sent] == ["First"]
+        assert self._bound(library) == {22: 6022}
+
+    @pytest.mark.asyncio
+    async def test_a_binding_made_before_the_other_version_was_delivered_is_kept(
+        self, make_library, fake_romm_api, emit
+    ):
+        """D2: the group already holds a binding, so neither its preview nor its apply moves it."""
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, [(7, "First", [23]), (8, "Second", [22])], enabled=[7])
+        await self._apply(library, emit, "run-1")
+        assert self._bound(library) == {23: 6023}
+        library.settings["enabled_collections"] = {"standard": {"7": True, "8": True}}
+
+        answer = await library.sync.sync_preview()
+        sent = await self._apply(library, emit, "run-2")
+
+        assert (answer["summary"]["new_count"], answer["summary"]["changed_count"]) == (0, 0)
+        assert sent == []
+        assert self._bound(library) == {23: 6023}
+
+    @pytest.mark.asyncio
+    async def test_a_cancel_while_the_collections_are_fetched_applies_no_collection(
+        self, make_library, fake_romm_api, emit, monkeypatch
+    ):
+        """D3: cancelled during the second collection's fetch, no collection applies; the platform unit stays."""
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "Tennis"}])
+        library.settings["enabled_platforms"] = {"1": True}
+        self._seed(library, fake_romm_api, [(7, "First", [23]), (8, "Second", [22])])
+        box = library.sync._box
+        walk = fake_romm_api.list_roms_by_collection
+
+        def cancel_once_second_walked(collection_id, *args, **kwargs):
+            answer = walk(collection_id, *args, **kwargs)
+            if collection_id == 8:
+                box.sync_state = SyncState.CANCELLING
+            return answer
+
+        monkeypatch.setattr(fake_romm_api, "list_roms_by_collection", cancel_once_second_walked)
+
+        sent = await self._apply(library, emit, "run-1")
+
+        assert [unit for unit, _rom_id, _name in sent] == ["N64"]
+        assert self._bound(library) == {1: 6001}
+        complete = [call.args[1] for call in emit.call_args_list if call.args and call.args[0] == "sync_complete"]
+        assert [payload.get("cancelled") for payload in complete] == [True]
+
+    @pytest.mark.asyncio
+    async def test_the_first_collection_s_row_runs_while_every_collection_is_fetched(
+        self, make_library, fake_romm_api, emit, monkeypatch
+    ):
+        """D3: frames hold the first collection's step and never step back; it applies once both are fetched."""
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, [(7, "First", [23]), (8, "Second", [22])])
+        walk = fake_romm_api.list_roms_by_collection
+        applies_at_walk: list[int] = []
+
+        def count_applies_then_walk(*args, **kwargs):
+            applies_at_walk.append(sum(1 for c in emit.call_args_list if c.args and c.args[0] == "sync_apply_unit"))
+            return walk(*args, **kwargs)
+
+        monkeypatch.setattr(fake_romm_api, "list_roms_by_collection", count_applies_then_walk)
+
+        await self._apply(library, emit, "run-1")
+
+        names = [c.args[0] if c.args else None for c in emit.call_args_list]
+        first_apply = names.index("sync_apply_unit")
+        before = [
+            c.args[1]
+            for c in emit.call_args_list[:first_apply]
+            if c.args and c.args[0] == "sync_progress" and c.args[1].get("running")
+        ]
+        assert {frame["step"] for frame in before} == {1}
+        fills = [self._row_fill(frame) for frame in before]
+        assert fills == sorted(fills)
+        assert applies_at_walk == [0, 0]
+
+    @staticmethod
+    def _row_fill(frame):
+        """Where a frame puts its row's bar, in the order ``withinUnitFraction`` fills it.
+
+        That order is the frontend's (``frontend/src/utils/syncProgress.ts``):
+        the fetch slice, then the covers slice, then the apply slice; a
+        ``fetching`` frame with no sub-stage rests at the row's start.
+        """
+        part = frame["current"] / frame["total"] if frame.get("current") and frame.get("total") else 0
+        if frame["stage"] == "applying":
+            return 2 + part
+        if frame.get("subStage") == "covers":
+            return 1 + part
+        if frame.get("subStage") == "fetch":
+            return part
+        return 0

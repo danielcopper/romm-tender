@@ -985,7 +985,7 @@ def _queued(cid, name, *, member_rom_ids):
 
 
 class TestFetchingEveryCollectionUnit:
-    """fetch_collection_units(): every collection unit of a run, fetched in queue order before any applies (D3)."""
+    """fetch_collection_units(): a run's collection units, fetched in queue order before any applies (#2543 D3)."""
 
     @pytest.mark.asyncio
     async def test_a_rom_two_collections_list_is_delivered_by_the_first_in_queue_order(

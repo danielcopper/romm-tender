@@ -1,5 +1,8 @@
 """UnitApplier — one work unit's apply, from its fetch to its last chunk.
 
+A run's collection units are fetched together, before the first applies, and
+each then applies from what it delivered.
+
 Which units run, and what the run makes of their outcomes, is
 :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s.
 
@@ -11,12 +14,12 @@ its call site.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from domain.shortcut_data import build_shortcuts_data
 from domain.sibling_resolution import AUTO_REGION
-from domain.sync_diff import BIND_ROM_ID_KEY, classify_roms, collapse_sibling_groups
+from domain.sync_diff import BIND_ROM_ID_KEY, classify_roms, collapse_sibling_groups, gather_unbound_groups
 from domain.sync_stage import SyncStage
 from services.library._unit_roms import (
     collection_membership_key,
@@ -33,7 +36,7 @@ if TYPE_CHECKING:
     from domain.work_unit import WorkUnit
     from services.library._state import CollectionMembership, LibrarySyncStateBox
     from services.library.chunk_dispatcher import ChunkDispatcher
-    from services.library.collection_fetcher import CollectionFetcher
+    from services.library.collection_fetcher import CollectionDelivery, CollectionFetcher
     from services.library.cover_preparer import CoverPreparer
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
@@ -49,13 +52,14 @@ class UnitApplierConfig:
 
     Holds the live settings (the preferred region a collapse ranks by), the loop
     and logger, the launcher path every built shortcut's ``exe`` names, the
-    Clock a unit's fetch start is read from, the SQLite Unit-of-Work factory
+    Clock a platform unit's fetch start is read from, the SQLite Unit-of-Work factory
     (which opens exactly one transaction from this module: the platform stamp's
     DELETE at a unit's apply start), the shared :class:`LibrarySyncStateBox`, the
     :class:`LibraryFetcher` and :class:`CollectionFetcher` peers a platform and a
     collection unit are fetched through, the :class:`ShortcutLaunchResolver` that
     answers each bake's installed path and emulator, the
-    :class:`LocalLibraryReader` the unit's bound-row registry is read through,
+    :class:`LocalLibraryReader` the bound-row registry and the resident group
+    keys are read through,
     the :class:`CoverPreparer` that holds the unit's covers, the
     :class:`ChunkDispatcher` that takes the built delta the rest of the way, and
     the ``emit_progress`` callback the unit's coarse frame goes out through.
@@ -105,6 +109,34 @@ class UnitApplier:
         with self._uow_factory() as uow:
             uow.platform_sync_state.delete(platform_slug)
 
+    async def fetch_collection_units(
+        self, units: list[WorkUnit], synced_rom_ids: set[int], *, unit_index: int, total_units: int
+    ) -> dict[tuple[str, str], CollectionDelivery]:
+        """Fetch the run's collection *units* before the first applies; answer each one's delivery by membership key.
+
+        *units* are in queue order, the first at *unit_index*; they are fetched by
+        :meth:`CollectionFetcher.fetch_collection_units` against *synced_rom_ids*.
+        The component keys are then stamped once over every fetched delivery,
+        with the resident keys the preview reads, so the apply's groups are the
+        preview's; and :func:`gather_unbound_groups` moves every member of a
+        group no bound row holds into the first fetched delivery holding one, so
+        that unit mints it over every member the run delivers. A skipped
+        delivery takes part in neither: it holds bound rows only, and its unit
+        collapses nothing.
+        """
+        deliveries = await self._collection_fetcher.fetch_collection_units(
+            units, synced_rom_ids, progress_step=unit_index + 1, progress_total_steps=total_units
+        )
+        fetched = [delivery for delivery in deliveries if not delivery.skipped]
+        resident_keys = await self._loop.run_in_executor(None, self._local_library_reader.do_read_resident_group_keys)
+        stamp_component_group_keys([rom for delivery in fetched for rom in delivery.roms], resident_keys)
+        registry = await self._loop.run_in_executor(None, self._local_library_reader.do_read_apply_registry, units[0])
+        gathered = gather_unbound_groups([delivery.roms for delivery in fetched], registry)
+        by_key = {collection_membership_key(delivery.unit): delivery for delivery in deliveries}
+        for delivery, roms in zip(fetched, gathered, strict=True):
+            by_key[collection_membership_key(delivery.unit)] = replace(delivery, roms=roms)
+        return by_key
+
     async def apply_unit(
         self,
         unit: WorkUnit,
@@ -115,10 +147,13 @@ class UnitApplier:
         synced_rom_ids: set[int],
         collection_memberships: dict[tuple[str, str], CollectionMembership],
         platform_rom_ids: set[int],
+        delivery: CollectionDelivery | None = None,
     ) -> int:
         """Process one work unit start-to-finish; return its processed-ROM count.
 
-        The ROMs for the unit come from a live per-unit fetch. After the
+        A platform unit's ROMs come from a live per-unit fetch; a collection
+        unit's are its *delivery*, which :meth:`fetch_collection_units` fetched
+        before the run applied any collection unit. After the
         frontend acks the unit's shortcuts (via ``report_unit_results``),
         the reporter commits the unit: it upserts each acked ROM into the
         ``roms`` aggregate and stamps the ROM's cached ``rom_metadata`` in
@@ -141,21 +176,24 @@ class UnitApplier:
         # reads as "Fetching library". The label flips to "Applying shortcuts"
         # exactly once, when the chunk loop starts (frontend-driven), instead of
         # showing a frozen "Applying shortcuts" bar for the minutes-long fetch.
+        # A delivered unit was fetched already, so its anchor fills the fetch
+        # slice, where the fetch-ahead's last frame left the bar.
         await self._emit_progress(
             SyncStage.FETCHING,
             message=f"Fetching {unit.name}",
             step=unit_index + 1,
             total_steps=total_units,
+            **({} if delivery is None else {"current": 1, "total": 1, "sub_stage": "fetch"}),
         )
 
-        # Fetch this unit's ROMs; either kind may incremental-skip. The unit's
-        # coarse step/total is threaded so the fetcher's per-page ``fetching``
-        # frames keep the bar's position.
-        # The unit's fetch start, read before the skip check so it is never
-        # later than the walk's first page; the final chunk's stamp records it
-        # as the next skip's reference (#743 D1, #2477 D2).
-        fetch_started_at = self._clock.now().isoformat()
+        # Either kind may incremental-skip.
         if unit.type == "platform":
+            # The unit's fetch start, read before the skip check so it is never
+            # later than the walk's first page; the final chunk's stamp records
+            # it as the next skip's reference (#743 D1, #2477 D2). The unit's
+            # coarse step/total is threaded so the fetcher's per-page
+            # ``fetching`` frames keep the bar's position.
+            fetch_started_at = self._clock.now().isoformat()
             unit_roms, skipped = await self._sync_platform_unit(
                 unit,
                 synced_rom_ids=synced_rom_ids,
@@ -163,14 +201,11 @@ class UnitApplier:
                 progress_step=unit_index + 1,
                 progress_total_steps=total_units,
             )
+        elif delivery is None:
+            raise ValueError(f"collection unit {unit.name} applied without its delivery")
         else:
-            unit_roms, skipped = await self._sync_collection_unit(
-                unit,
-                synced_rom_ids=synced_rom_ids,
-                collection_memberships=collection_memberships,
-                progress_step=unit_index + 1,
-                progress_total_steps=total_units,
-            )
+            unit_roms, skipped, fetch_started_at = delivery.roms, delivery.skipped, delivery.fetch_started_at
+            record_collection_membership(collection_memberships, unit, delivery.member_rom_ids)
 
         if box.is_cancelling():
             return 0
@@ -361,28 +396,4 @@ class UnitApplier:
         )
         platform_rom_ids.update(r["id"] for r in unit_roms)
         synced_rom_ids.update(r["id"] for r in unit_roms)
-        return unit_roms, skipped
-
-    async def _sync_collection_unit(
-        self,
-        unit: WorkUnit,
-        *,
-        synced_rom_ids: set[int],
-        collection_memberships: dict[tuple[str, str], CollectionMembership],
-        progress_step: int = 0,
-        progress_total_steps: int = 0,
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """Resolve ROMs for a collection unit and record its membership.
-
-        Returns ``(unit_roms, skipped)`` — ``skipped`` is True when the
-        incremental-skip gate (#742) reconstructed the collection from its
-        completion stamp instead of paginating. ROMs come from a live per-unit
-        fetch (or, on a skip, the registry) that already dedups against
-        ``synced_rom_ids``. ``progress_step`` / ``progress_total_steps`` thread
-        the unit's coarse position into the fetcher's per-page ``fetching`` frames.
-        """
-        unit_roms, all_collection_rom_ids, skipped, _ = await self._collection_fetcher.fetch_collection_unit(
-            unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
-        )
-        record_collection_membership(collection_memberships, unit, all_collection_rom_ids)
         return unit_roms, skipped

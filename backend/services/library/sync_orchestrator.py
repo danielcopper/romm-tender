@@ -40,12 +40,14 @@ from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
 from services.library._stale_rows import settle_stale_rows
 from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
+from services.library._unit_roms import collection_membership_key
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
 if TYPE_CHECKING:
     import logging
 
     from services.library._state import CollectionMembership, LibrarySyncStateBox
+    from services.library.collection_fetcher import CollectionDelivery
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
     from services.library.reporter import SyncReporter
@@ -344,11 +346,26 @@ class SyncOrchestrator:
             # resolves its ROMs' emulators through it, and a change to the
             # sources during the run takes effect from the next one.
             sources = await self._loop.run_in_executor(None, self._shortcut_launch_resolver.do_read_sources)
+            deliveries: dict[tuple[str, str], CollectionDelivery] | None = None
             try:
                 for unit_index, unit in enumerate(work_queue):
                     if box.is_cancelling():
                         cancelled = True
                         break
+
+                    # Every collection unit is fetched before the first applies:
+                    # the first one delivering a member of a group no binding
+                    # holds mints it over every member the run delivers.
+                    delivery = None
+                    if unit.type == "collection":
+                        if deliveries is None:
+                            deliveries = await self._unit_applier.fetch_collection_units(
+                                [u for u in work_queue[unit_index:] if u.type == "collection"],
+                                synced_rom_ids,
+                                unit_index=unit_index,
+                                total_units=total_units,
+                            )
+                        delivery = deliveries.pop(collection_membership_key(unit))
 
                     applied = await self._unit_applier.apply_unit(
                         unit,
@@ -358,6 +375,7 @@ class SyncOrchestrator:
                         synced_rom_ids=synced_rom_ids,
                         collection_memberships=collection_memberships,
                         platform_rom_ids=platform_rom_ids,
+                        delivery=delivery,
                     )
                     total_games_applied += applied
 
@@ -365,8 +383,9 @@ class SyncOrchestrator:
                         cancelled = True
                         break
             except SyncCancelled:
-                # A cooperative cancel delivered mid-fetch (fetcher._check_cancelling
-                # raised SyncCancelled inside UnitApplier.apply_unit) bypasses the
+                # A cooperative cancel delivered mid-fetch (a fetcher raised
+                # SyncCancelled inside UnitApplier.apply_unit or
+                # UnitApplier.fetch_collection_units) bypasses the
                 # is_cancelling() checkpoints. Route it into the same graceful
                 # finalize the checkpoint break uses, so the SyncRun is marked
                 # cancelled and sync_state is restored to IDLE instead of wedging
