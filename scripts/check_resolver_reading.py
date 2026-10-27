@@ -96,6 +96,7 @@ READING_MODULES = frozenset(
     {
         "adapters/atlas_catalogue.py",
         "adapters/atlas_firmware.py",
+        "adapters/atlas_platforms.py",
         "adapters/atlas_saves.py",
         "adapters/emulator_sources.py",
         "adapters/retrodeck_folders.py",
@@ -245,7 +246,6 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "verified",
         }
     ),
-    "domain/platform_system.py": frozenset({"declared", "disabled", "libretro", "screenscraper", "thegamesdb"}),
     "domain/save_answer.py": frozenset(
         {
             "caveats",

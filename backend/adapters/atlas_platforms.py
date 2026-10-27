@@ -1,7 +1,10 @@
 """Which system a RomM platform is in an emulator source — the resolver's answer, asked through the source holder.
 
-The one place Tender puts ``systems_for_platform`` to the resolver. Each source
-is asked for itself: the answering source by default, or the source a caller
+The one place Tender puts ``systems_for_platform`` to the resolver, and the
+one that reads its platform vocabularies and statuses: each of RomM's ids is
+asked in the resolver's vocabulary for it, and each match's status is read
+into Tender's :class:`~domain.platform_system.SystemStatus`. Each source is
+asked for itself: the answering source by default, or the source a caller
 names — RetroDECK, for a download that lands in its folders. What the answers
 decide is :func:`domain.platform_system.pick_system`'s.
 """
@@ -10,8 +13,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from _vendor.atlas import PLATFORM_STATUS_ABSENT, PLATFORM_STATUS_DECLARED, PLATFORM_STATUS_DISABLED
+
 from domain.emulator_sources import CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED
-from domain.platform_system import UNASKED, IdAnswer, PlatformSystem, SystemMatch, pick_system
+from domain.platform_system import UNASKED, IdAnswer, PlatformSystem, SystemMatch, SystemStatus, pick_system
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -19,6 +24,22 @@ if TYPE_CHECKING:
     from adapters.emulator_sources import EmulatorSourcesAdapter
     from domain.emulator_sources import ArrangedSource, SourcesReading
     from domain.platform_system import PlatformIds
+
+
+# The resolver's vocabulary for each field of RomM's platform Tender asks about
+# (``KNOWN_PLATFORM_VOCABULARIES``, whose names it exports only as a tuple).
+_VOCABULARY_OF_FIELD = {
+    "igdb_id": "igdb",
+    "libretro_slug": "libretro",
+    "ss_id": "screenscraper",
+    "tgdb_id": "thegamesdb",
+}
+
+_STATUS_OF = {
+    PLATFORM_STATUS_DECLARED: SystemStatus.ON,
+    PLATFORM_STATUS_DISABLED: SystemStatus.OFF,
+    PLATFORM_STATUS_ABSENT: SystemStatus.NOT_HERE,
+}
 
 
 class _Unasked(Exception):
@@ -91,7 +112,8 @@ class AtlasPlatformSystemsAdapter:
         return None if any(s.kind == source for s in reading.sources) else NO_SOURCE_DETECTED
 
     def _answers(self, reading: SourcesReading, installation: Any, ids: PlatformIds) -> Iterator[IdAnswer]:
-        for vocabulary, value in ids.questions():
+        for field, value in ids.questions():
+            vocabulary = _VOCABULARY_OF_FIELD[field]
             yield reading.remember(
                 ("systems_for_platform", installation.kind, vocabulary, value),
                 lambda vocabulary=vocabulary, value=value: self._ask(installation, vocabulary, value),
@@ -108,7 +130,7 @@ class AtlasPlatformSystemsAdapter:
             platforms=tuple(answer.platforms),
             systems=tuple(answer.systems),
             matches=tuple(
-                SystemMatch(system=match.system, status=match.status, tags=tuple(match.platforms))
+                SystemMatch(system=match.system, status=_STATUS_OF[match.status], tags=tuple(match.platforms))
                 for match in answer.matches
             ),
         )

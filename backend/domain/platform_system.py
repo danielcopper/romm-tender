@@ -2,12 +2,11 @@
 
 RomM names a platform by its own slug, which only sometimes equals a system a
 source declares, and by the ids it holds for the platform in four public
-vocabularies. The source
-answers per id which of its systems belong to that platform
-(``systems_for_platform``); this module asks nothing itself and decides from
-those answers which system the platform is there, or why it is none. RomM's
-slug is never a system name: it only chooses among the platforms the resolver
-named.
+vocabularies. The source answers per id which of its systems belong to that
+platform; ``adapters/atlas_platforms.py`` asks and reads those answers into
+:class:`IdAnswer`, and this module decides from them which system the
+platform is there, or why it is none. RomM's slug is never a system name: it
+only chooses among the platforms the resolver named.
 
 The ids are kept offline beside the platform names (``kv_config``); decoding
 and encoding that value is here, reading and writing it is the caller's.
@@ -19,6 +18,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED, ArrangedSource
@@ -30,20 +30,19 @@ if TYPE_CHECKING:
 # Where the ids are kept in ``kv_config``, beside ``platform_names``.
 PLATFORM_IDS_KEY = "platform_ids"
 
-# The resolver's vocabularies, each beside the field RomM's platform carries it
-# in, in the order they are asked. RomM's other ids have no crosswalk in the
-# resolver and are not asked.
-_VOCABULARIES = (
-    ("igdb", "igdb_id"),
-    ("libretro", "libretro_slug"),
-    ("screenscraper", "ss_id"),
-    ("thegamesdb", "tgdb_id"),
-)
+# The fields of RomM's platform the resolver can be asked about, in the order
+# they are asked. RomM's other ids have no crosswalk in the resolver and are
+# not asked.
+ID_FIELDS = ("igdb_id", "libretro_slug", "ss_id", "tgdb_id")
 
-# How firmly a system is in the source, as the resolver states it: switched on,
-# present but switched off in the catalogue's own text, or not there at all.
-STATUS_DECLARED = "declared"
-STATUS_DISABLED = "disabled"
+
+class SystemStatus(StrEnum):
+    """How firmly a system is in the source: switched on, switched off, or not there at all."""
+
+    ON = "on"
+    OFF = "off"
+    NOT_HERE = "not_here"
+
 
 FOUND = "found"
 SWITCHED_OFF = "switched_off"
@@ -72,12 +71,8 @@ class PlatformIds:
     name: str | None = None
 
     def questions(self) -> tuple[tuple[str, str], ...]:
-        """``(vocabulary, value)`` for every id held, in the order they are asked; a numeric id as its digits."""
-        return tuple(
-            (vocabulary, str(value))
-            for vocabulary, field in _VOCABULARIES
-            if (value := getattr(self, field)) is not None
-        )
+        """``(field, value)`` for every id held, in the order they are asked; a numeric id as its digits."""
+        return tuple((field, str(value)) for field in ID_FIELDS if (value := getattr(self, field)) is not None)
 
 
 def platform_ids_of(platform: Mapping[str, Any]) -> PlatformIds:
@@ -100,7 +95,7 @@ def encode_platform_ids(ids: Mapping[str, PlatformIds]) -> str:
     """The value kept under :data:`PLATFORM_IDS_KEY`."""
     return json.dumps(
         {
-            slug: {**{field: getattr(entry, field) for _vocabulary, field in _VOCABULARIES}, "name": entry.name}
+            slug: {**{field: getattr(entry, field) for field in ID_FIELDS}, "name": entry.name}
             for slug, entry in ids.items()
         }
     )
@@ -138,7 +133,7 @@ class SystemMatch:
     """One system of the source answering to an id: its name, its status, and its platform tags."""
 
     system: str
-    status: str
+    status: SystemStatus
     tags: tuple[str, ...]
 
 
@@ -167,14 +162,19 @@ class SystemPick:
 def pick_system(answers: Iterable[IdAnswer], platform_slug: str) -> SystemPick:
     """The system a platform is in the source, from its ids' answers in the order they are asked.
 
+    Tender's own rule, not a statement of the resolver's: where a platform
+    matches several systems, the resolver names them all and prefers none.
     The first id that gives a switched-on system decides. An answer naming
     several platforms speaks only for the one that is RomM's slug with its
     hyphens dropped, and an answer naming several without that one is passed
     over: another platform is never taken in its place. Among several systems
-    of one platform, the one named like a platform the id was resolved to is
-    taken, else the first in the resolver's order. Where no id gives a
-    switched-on system, the first switched-off one is named; where none gives
-    any, there is no system.
+    of the platform an answer stands for, with the same status, the first
+    named like that platform is taken, else the first the resolver lists — an
+    order that states no preference, alphabetical within each status. Where no
+    id gives a switched-on system, the first switched-off one is named; where
+    none gives any, there is no system. Which of several regional systems a
+    platform stands for is a statement the resolver does not make yet; once
+    emu-atlas#583 makes it, it replaces this rule's choice among them.
 
     *answers* is consumed lazily, so an id after the deciding one is never asked.
     """
@@ -184,10 +184,10 @@ def pick_system(answers: Iterable[IdAnswer], platform_slug: str) -> SystemPick:
         platform = _platform_of(answer, wanted)
         if platform is None and answer.platforms:
             continue
-        on = _choose(answer, platform, STATUS_DECLARED)
+        on = _choose(answer, platform, SystemStatus.ON)
         if on is not None:
             return SystemPick(FOUND, on)
-        first_off = first_off or _choose(answer, platform, STATUS_DISABLED)
+        first_off = first_off or _choose(answer, platform, SystemStatus.OFF)
     if first_off is not None:
         return SystemPick(SWITCHED_OFF, first_off)
     return SystemPick(NO_SYSTEM)
@@ -200,7 +200,7 @@ def _platform_of(answer: IdAnswer, wanted: str) -> str | None:
     return wanted if wanted in answer.platforms else None
 
 
-def _choose(answer: IdAnswer, platform: str | None, status: str) -> str | None:
+def _choose(answer: IdAnswer, platform: str | None, status: SystemStatus) -> str | None:
     """Among *answer*'s systems of *platform* with *status*, the main one; ``None`` where there is none."""
     candidates = [
         match.system

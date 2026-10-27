@@ -17,6 +17,7 @@ from domain.platform_system import (
     PlatformSystem,
     SystemMatch,
     SystemPick,
+    SystemStatus,
     decode_platform_ids,
     encode_platform_ids,
     pick_system,
@@ -32,15 +33,15 @@ RETRODECK = ArrangedSource(kind="retrodeck", enabled=True, starts_games=True)
 
 
 def _on(system: str, *tags: str) -> SystemMatch:
-    return SystemMatch(system=system, status="declared", tags=tags or (system,))
+    return SystemMatch(system=system, status=SystemStatus.ON, tags=tags or (system,))
 
 
 def _off(system: str, *tags: str) -> SystemMatch:
-    return SystemMatch(system=system, status="disabled", tags=tags or (system,))
+    return SystemMatch(system=system, status=SystemStatus.OFF, tags=tags or (system,))
 
 
 def _absent(system: str, *tags: str) -> SystemMatch:
-    return SystemMatch(system=system, status="absent", tags=tags or (system,))
+    return SystemMatch(system=system, status=SystemStatus.NOT_HERE, tags=tags or (system,))
 
 
 def _answer(*matches: SystemMatch, platforms: tuple[str, ...] = (), systems: tuple[str, ...] = ()) -> IdAnswer:
@@ -55,14 +56,14 @@ class TestPlatformIds:
         ids = PlatformIds(igdb_id=19, libretro_slug="Nintendo - SNES", ss_id=4, tgdb_id=6)
 
         assert ids.questions() == (
-            ("igdb", "19"),
-            ("libretro", "Nintendo - SNES"),
-            ("screenscraper", "4"),
-            ("thegamesdb", "6"),
+            ("igdb_id", "19"),
+            ("libretro_slug", "Nintendo - SNES"),
+            ("ss_id", "4"),
+            ("tgdb_id", "6"),
         )
 
     def test_an_id_rom_m_does_not_hold_is_not_asked(self):
-        assert PlatformIds(ss_id=57).questions() == (("screenscraper", "57"),)
+        assert PlatformIds(ss_id=57).questions() == (("ss_id", "57"),)
         assert PlatformIds().questions() == ()
 
     def test_rom_ms_platform_is_read_for_the_four_ids_and_nothing_else(self):
@@ -84,7 +85,7 @@ class TestPlatformIds:
         ids = platform_ids_of({"name": "Super Nintendo", "igdb_id": 19})
 
         assert ids.name == "Super Nintendo"
-        assert ids.questions() == (("igdb", "19"),)
+        assert ids.questions() == (("igdb_id", "19"),)
         assert platform_ids_of({"display_name": "SNES"}).name == "SNES"
 
     @pytest.mark.parametrize("value", [None, True, "", "abc", "-4", 1.5, [19]])

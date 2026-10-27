@@ -314,21 +314,21 @@ Format: **invariant** — tier — enforced by.
   methods on one class makes cheapest — is that gate's documented blind spot and passes green. On the budget side the
   confinement holds `session_budget`'s stated promise that no renderer-RSS reading is taken anywhere else in the package
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
-  `atlas_firmware.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only they import the
-  resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names one of the
-  resolver's codes, a distinctive value of any other closed vocabulary it exports or one of its distinctive answer field
-  names; and every caveat, health-issue, unresolved and reason code the vendored resolver states is classified by one of
-  them or stands on the list of codes nothing classifies today. Only infrastructure and homonyms are excepted: by name,
-  each with its reason, `adapters/atlas_zstd.py` imports the resolver to hand it the zstd codec and
-  `adapters/emulator_sources.py` holds `RealMachine` (`IMPORT_GRANTS`, `INTERNALS_GRANTED`); `tests/` is excepted as a
-  whole, because tests build the resolver's machines and answers rather than read an answer for display; and a name that
-  means something else in a module stands on `NOT_THE_RESOLVERS`, in the backend's check and in the panel's rule. The
-  modules that read the answer today (`READERS_TODAY`, `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three private
-  imports (`INTERNALS_TO_REMOVE`), the homonyms, the generic words left unwatched (`GENERIC_VALUES`, and in the panel
-  alone `PANEL_GENERIC_VALUES`) and the codes nothing classifies (`_UNCLASSIFIED`) stand on lists that only shrink** —
-  check + test + prompt-only — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and that
-  `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring), the
-  ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
+  `atlas_firmware.py`, `atlas_platforms.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only
+  they import the resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names
+  one of the resolver's codes, a distinctive value of any other closed vocabulary it exports or one of its distinctive
+  answer field names; and every caveat, health-issue, unresolved and reason code the vendored resolver states is
+  classified by one of them or stands on the list of codes nothing classifies today. Only infrastructure and homonyms
+  are excepted: by name, each with its reason, `adapters/atlas_zstd.py` imports the resolver to hand it the zstd codec
+  and `adapters/emulator_sources.py` holds `RealMachine` (`IMPORT_GRANTS`, `INTERNALS_GRANTED`); `tests/` is excepted as
+  a whole, because tests build the resolver's machines and answers rather than read an answer for display; and a name
+  that means something else in a module stands on `NOT_THE_RESOLVERS`, in the backend's check and in the panel's rule.
+  The modules that read the answer today (`READERS_TODAY`, `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three
+  private imports (`INTERNALS_TO_REMOVE`), the homonyms, the generic words left unwatched (`GENERIC_VALUES`, and in the
+  panel alone `PANEL_GENERIC_VALUES`) and the codes nothing classifies (`_UNCLASSIFIED`) stand on lists that only
+  shrink** — check + test + prompt-only — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and
+  that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring),
+  the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
   `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
   once a reading module imports its constant). Every list but `READING_MODULES`, which is held to what was decided
   rather than to what reads, fails on an entry nothing needs any more — a generic word once Tender's own code no longer

@@ -213,19 +213,25 @@ RomM names a platform by a slug of its own, which only sometimes equals a system
 decimal string), in that order. RomM's other ids (MobyGames, LaunchBox, RetroAchievements, Hasheous, Flashpoint) have
 none and are not asked. The resolver reads the catalogue's own `<platform>` tags, so a system the user added to a
 catalogue by hand is answered as readily as a shipped one, and nothing in Tender holds a table of platforms.
-`adapters/atlas_platforms.py` asks; `domain/platform_system.py::pick_system` decides.
+`adapters/atlas_platforms.py` asks, and is the one module that reads the resolver's platform vocabularies and statuses:
+it asks each of RomM's ids in the resolver's vocabulary for it, and reads each matching system's status into Tender's
+own — switched on (declared), switched off (disabled) or not here (absent). `domain/platform_system.py::pick_system`
+decides over those.
 
 **Which answer is taken.** Only a **switched-on** system matches — one the catalogue declares; a system present only in
 the catalogue's comments is switched off, and one the source does not have at all is no match. The first id whose answer
 gives a switched-on system decides, and a later id is never asked. Where several systems match one platform (SNES gives
-`sfc`, `snes` and `snesna`), the one named like the platform the id was resolved to is taken — `snes` — else the first
-in the resolver's order; the regional systems differ in name and look only, and the user does not pick among them. Where
-one id's answer names several platforms (libretro's NES/Famicom entry gives `famicom` and `nes`), only the one equal to
-RomM's slug with its hyphens dropped decides (`nes`), and the slug chooses only among them — it never becomes a system
-or a folder name itself; where it equals none of them, the next id is asked. Another platform is never taken in its
-place: a Satellaview or Amiga CD32 game is not an SNES or Amiga game, and a wrong system would stay in its folder, its
-link and its saves. So where the slug's platform has only switched-off systems, one of them is named, and where no id
-gives the slug's platform, or it has no system here, the platform has none.
+`sfc`, `snes` and `snesna`), **Tender's own rule** picks one, because the resolver names every match and prefers none:
+its order — switched on, then switched off, then not here, alphabetical within each — states no preference. The one
+named like the platform the id was resolved to is taken — `snes` — else the first the resolver lists; the regional
+systems differ in name and look only, and the user does not pick among them. Which region a regional system stands for
+is not stated by the resolver yet; once it is (emu-atlas#583), that statement replaces this rule's choice among them.
+Where one id's answer names several platforms (libretro's NES/Famicom entry gives `famicom` and `nes`), only the one
+equal to RomM's slug with its hyphens dropped decides (`nes`), and the slug chooses only among them — it never becomes a
+system or a folder name itself; where it equals none of them, the next id is asked. Another platform is never taken in
+its place: a Satellaview or Amiga CD32 game is not an SNES or Amiga game, and a wrong system would stay in its folder,
+its link and its saves. So where the slug's platform has only switched-off systems, one of them is named, and where no
+id gives the slug's platform, or it has no system here, the platform has none.
 
 **Where there is none.** Where no id gives a switched-on system but some id gives a switched-off one, the platform's
 pages say **"System _system_ is switched off in _source_."**; where no id gives any, **"_source_ has no system for
