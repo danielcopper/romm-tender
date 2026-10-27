@@ -19,17 +19,20 @@ class _Listed:
 
 
 class _Steam:
-    """Answers one reading of the running apps, or raises it."""
+    """Answers one reading of the running apps, raises it, or never answers while ``hangs``."""
 
     def __init__(self, apps: tuple[_Listed, ...] | None = (), raises: Exception | None = None) -> None:
         self.apps = apps
         self.raises = raises
+        self.hangs = False
         self.readings = 0
 
     async def running_apps(self) -> tuple[_Listed, ...] | None:
         self.readings += 1
         if self.raises is not None:
             raise self.raises
+        if self.hangs:
+            await asyncio.Event().wait()
         return self.apps
 
     async def reload_frees_at(self) -> float | None:
@@ -103,3 +106,25 @@ class TestWhereNoReadingCouldBeTaken:
 
         assert await games.running_rom_ids() == frozenset()
         assert any("debugger gone" in line for line in debug)
+
+    async def test_a_reading_that_does_not_answer_in_time_is_nothing_running(self, monkeypatch):
+        monkeypatch.setattr("services.running_games.READING_TIMEOUT_SECONDS", 0.01)
+        steam = _Steam((_Listed("Game 7", app_id=3_000_000_007),))
+        steam.hangs = True
+        debug: list[str] = []
+        games = _games(steam, debug)
+
+        assert await asyncio.wait_for(games.running_rom_ids(), 1) == frozenset()
+        assert any("TimeoutError" in line for line in debug)
+
+    async def test_a_failed_read_of_the_roms_is_nothing_running_and_is_logged(self):
+        debug: list[str] = []
+        games = _games(_Steam((_Listed("Game 7", app_id=3_000_000_007),)), debug)
+
+        def broken_roms(_app_ids: set[int]) -> frozenset[int]:
+            raise RuntimeError("database is locked")
+
+        games._roms_of = broken_roms  # type: ignore[method-assign]
+
+        assert await games.running_rom_ids() == frozenset()
+        assert any("database is locked" in line for line in debug)
