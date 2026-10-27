@@ -1491,13 +1491,16 @@ it, for the focused platform:
     outcome. `run_game.sh` takes `command[1]` for the system when no alternate emulator is set and `options_to_payload`
     keeps ES-DE's document order, so `emulators[0]` **is** that command; when its own `reason` is `not_installed`, the
     fallback names a binary that is not there. The clause reads `no emulator installed` in **red** and the line names
-    the emulator RetroDECK would have used. Only `downgrade_if_not_installed` ever sets that reason, and only on an
-    otherwise-bakeable option, so the branch fires exactly where the first command's standalone emulator is missing. A
-    first command unbakeable for another reason (`quoting`) whose emulator is also missing keeps the muted sentence —
-    `macintosh` is that shape — because installedness is not established for an option that was never bakeable. **Apple
-    I is the muted case, not this one**: ES-DE gives it two live commands, both MAME, and the first is a _libretro_ one
-    whose core is installed, so it reads `RetroDECK decides` and its games start. The three standalone entries in that
-    block are commented out and are not commands at all.
+    the emulator RetroDECK would have used. The reason is the resolver's statement that what the entry launches is not
+    there, libretro core or standalone emulator, and it stands whatever the command is
+    ([core-emulator-selection.md](core-emulator-selection.md)), so the branch fires exactly where the first command's
+    emulator is missing. **Apple I is the muted case, not this one**: ES-DE gives it two live commands, both MAME, and
+    the first is a _libretro_ one whose core is installed, so it reads `RetroDECK decides` and its games start. The
+    three standalone entries in that block are commented out and are not commands at all.
+  - **Options exist, none bakeable, and whether the fallback is installed could not be established** — the resolver
+    cannot tell, and says why. The line names the emulator RetroDECK would use and says its installation could not be
+    established, with the cause where one is known (`frontend/src/utils/emulatorInstallation.ts`); it never says the
+    emulator is missing. The clause stays `RetroDECK decides` in the muted colour, since nothing says the games fail.
   - **No options at all** — `get_emulator_options` answers `available: true` with an empty list for a system whose
     catalogue entry lists no command. RetroDECK's own launch then reads `command[1]` for the system, finds nothing, and
     exits 1 (`libexec/run_game.sh`). A platform with no switched-on system in the answering source is not this case: its
@@ -2070,7 +2073,7 @@ per-game pin — with only the save resolver's reading of the machine faked. The
 (`SaveService._installed_rom_ids_on_platform`); then, per ROM and under its lock, the live reading opens three —
 `RomInfo.is_content_installed`'s install row, the save answer's own install row, and
 `ActiveCoreResolver.active_emulator_for_rom`'s read of the ROM and its install, after which it resolves through
-`get_emulator_options(system)` (the heavy read, which globs each option's emulator install through the find rules) and
+`get_emulator_options(system)` (the heavy read, in which the resolver looks up each entry's emulator on the machine) and
 the resolver reads the machine for the answer itself; the follow opens two — the pending-home-migration check and the
 record's read, plus the record's write at first sight; and `find_save_files` opens one more for the install row. On a
 128-ROM platform that is 769 lock acquisitions. That cost is deliberate and is not the read's to fix: it must walk

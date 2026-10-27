@@ -293,22 +293,26 @@ skips it and bakes the next command (the direct `--no-gui` launch): the shortcut
 standalone invocation. The kind is `libretro` when the command matches the strict RetroArch shape
 (`%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/<core>_libretro.so %ROM%`), else `standalone`.
 
-**Existence probe (a bakeable standalone whose emulator is not installed → `needs_setup` `not_installed`).** RetroDECK
-lists more standalone emulators in `es_systems.xml` than it bundles, so a system's bakeable default could name an
-emulator that is not on disk (Ryubing on `switch`, any un-installed external component) — baking it produces a shortcut
-that dies in ~0.4 s. To prevent that regression the catalogue adapter asks an injected probe backed by
-`es_find_rules.xml` (`adapters/es_find_rules.py` — the resolver answers the same question as each catalogue entry's
-`availability`, which Tender does not read; taking it from there is #2425's): it maps a standalone command's
-`%EMULATOR_<NAME>%` token to the find-rule entry, checks whether any of that entry's `staticpath` locations exist on
-disk (mapping the sandbox `/app` and `/var/{data,config}` prefixes to their host paths, glob-aware), and hands the
-verdict to the pure `downgrade_if_not_installed(option, installed)` rule — which turns a bakeable **standalone** whose
-emulator is absent into `needs_setup` with reason `not_installed`. It then drops out of `select_default_option` (the
-system plain-launches, as it did before #1210) and shows disabled in the picker. The probe is **absence-only** — it
-downgrades only on positive evidence that a RetroDECK component (`retrodeck/components/…` or
-`retrodeck/external_components/…`) is missing; a `systempath`-only emulator (binary on RetroDECK's sandbox `PATH`, not
-visible from outside), an emulator with no find rule, and the whole `es_find_rules.xml`-unreadable case are all assumed
-installed, so it never falsely downgrades. Libretro is always installed (RetroArch ships with RetroDECK), so libretro
-options are never downgraded. See [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md) §2.
+**Whether an entry is installed is the resolver's answer.** RetroDECK lists more emulators in `es_systems.xml` than it
+bundles, so a system's bakeable default could name one that is not on disk (Ryubing on `switch`) — baking it produces a
+shortcut that dies in ~0.4 s. Each catalogue entry carries the resolver's `availability`, from ES-DE's own lookup over
+its find rules, for libretro cores and standalone emulators alike, and `adapters/atlas_catalogue.py` reads it into the
+option's reason:
+
+- **startable** — the entry keeps its bake verdict above;
+- **not installed** — reason `not_installed`, whichever of the resolver's causes it states (no find rule matched, the
+  program or its launcher script is missing, or the core is);
+- **not established** — the resolver cannot tell. The reason names the cause where the reading knows it: `no_find_rule`
+  (ES-DE has no rule for the emulator or the core), `find_rules_unread`, `lookup_unsupported` (the resolver does not
+  evaluate this arrangement's lookup yet) or `path_unseen` (ES-DE would look where the resolver cannot see, such as the
+  sandbox's own `PATH`); `not_established` where it does not.
+
+Either reason takes the place of the bake verdict, whatever the command: the entry is `needs_setup`, drops out of
+`select_default_option`, a pin to it no longer resolves, and the picker shows it disabled with its reason — "emulator
+not installed", or "installation not established" with the cause (`frontend/src/utils/emulatorInstallation.ts`). An
+entry that is not established is never offered as working and never called missing. The notes the resolver states beside
+a verdict change nothing here; one of them, `run-game-differs`, says RetroDECK's `run_game.sh` would run something else
+for the token, and is not acted on.
 
 `get_emulator_options(system)` returns `{"available": bool, "options": [EmulatorOption, ...], "reason", "source"}`.
 **`available` is `False` whenever nothing could be established**: no emulator source answers (`reason` `no_source`, or
@@ -536,12 +540,13 @@ handed a folder points RPCS3 at a nonexistent `…/<Game>/<Game>` and never boot
 baked as a **direct sandbox invocation** that bypasses `run_game.sh`:
 `flatpak run --nosocket=wayland --command=<launcher> net.retrodeck.retrodeck <args> '<folder>'`, running the emulator's
 own launcher inside the sandbox. `ActiveCoreResolver.active_emulator_for_rom` makes this rewrite: when the resolved
-emulator is a standalone and the ROM's install is a folder-boot layout (same `folder_boot_root` fact), it resolves the
-emulator's sandbox launcher via the `SandboxLauncherFn` seam (`EsFindRulesAdapter.resolve_sandbox_launcher` → the
-`/app/retrodeck/components/<x>/…` component path) and returns an `EmulatorInvocation.direct`;
-`resolve_emulator_invocation` renders the `--command=` form, stripping `%EMULATOR_*%` + `%ROM%` down to the middle args
-(`--no-gui`). A libretro emulator, a non-folder install, or an unresolvable launcher leave the standard `run_game` `-e`
-form untouched.
+emulator is a standalone and the ROM's install is a folder-boot layout (same `folder_boot_root` fact), it takes the
+launcher the resolver states for the entry (its `launcher.path`, such as
+`/app/retrodeck/components/rpcs3/component_launcher.sh`, carried on the option and the invocation) and returns an
+`EmulatorInvocation.direct`; `resolve_emulator_invocation` renders the `--command=` form, stripping `%EMULATOR_*%` +
+`%ROM%` down to the middle args (`--no-gui`). The reading passes a launcher on only where the resolver spells it inside
+RetroDECK's sandbox and its rule entry carries no replacement command, since ES-DE would then run that command instead.
+A libretro emulator, a non-folder install, or no such launcher leave the standard `run_game` `-e` form untouched.
 
 `RomInstall.file_path` stays the EBOOT (the [ADR-0008](../adr/0008-rom-install-launch-file-and-rom-dir.md) anchor), so
 save-path, core, and displayed-filename derivations are untouched. Both overrides live in the two shared seams
