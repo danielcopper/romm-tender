@@ -198,9 +198,13 @@ class TestWhoHoldsTheGate:
     @pytest.mark.asyncio
     async def test_the_holder_is_gone_when_the_body_raises(self):
         gate = SaveSyncGate()
-        with pytest.raises(RuntimeError):
+
+        async def a_run_that_raises() -> None:
             async with gate.held_by(GateHolder.PRE_LAUNCH, max_wait=5.0):
                 raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            await a_run_that_raises()
         assert gate.holder() is None
         assert gate.is_in_flight() is False
 

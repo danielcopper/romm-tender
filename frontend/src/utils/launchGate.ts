@@ -258,6 +258,20 @@ async function startingSourceVerdict(ops: LaunchGateOps): Promise<GateVerdict | 
   return null;
 }
 
+/** Step 7a of {@link runLaunchGate}: the verdict on the pre-launch sync's outcome ({@link PreLaunchSyncOutcome}). */
+function preLaunchSyncVerdict(sync: PreLaunchSyncOutcome): GateVerdict {
+  if ("chose" in sync) {
+    return sync.chose === "cancel" ? { decision: "abort" } : { decision: "play_anyway", noAnswer: sync.noAnswer };
+  }
+  if (sync.conflicts && sync.conflicts.length > 0) {
+    return { decision: "conflict", conflicts: sync.conflicts };
+  }
+  if (!sync.success) {
+    return { decision: "sync_failed", message: sync.message };
+  }
+  return { decision: "allow" };
+}
+
 /**
  * Run the pre-launch gate for `appId` / `romId` and return a verdict. Shows no
  * UI — the caller acts on the verdict.
@@ -323,17 +337,7 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
 
     if (online) {
       // 7a. Online — run pre-launch sync and map its outcome.
-      const sync = await ops.preLaunchSync();
-      if ("chose" in sync) {
-        return sync.chose === "cancel" ? { decision: "abort" } : { decision: "play_anyway", noAnswer: sync.noAnswer };
-      }
-      if (sync.conflicts && sync.conflicts.length > 0) {
-        return { decision: "conflict", conflicts: sync.conflicts };
-      }
-      if (!sync.success) {
-        return { decision: "sync_failed", message: sync.message };
-      }
-      return { decision: "allow" };
+      return preLaunchSyncVerdict(await ops.preLaunchSync());
     }
 
     // 7b. Offline — block only when the local save has drifted; otherwise allow.

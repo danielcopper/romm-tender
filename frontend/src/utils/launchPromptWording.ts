@@ -67,17 +67,22 @@ const SYNC_WAIT_HOLDERS = {
   pre_launch: "The save sync of another start is still running.",
 } as const;
 
+function syncWaitWhy(reason: SyncWaitReason): string {
+  switch (reason.kind) {
+    case "another_sync":
+      return SYNC_WAIT_HOLDERS[reason.holder];
+    case "this_game_busy":
+      return "Tender is still busy with this game's saves.";
+    case "syncing":
+      return "This game's saves are still syncing with RomM.";
+    case "not_answering":
+      return "Tender is not answering.";
+  }
+}
+
 /** Why the start waits, then what the choices are. */
 export function syncWaitDescription(reason: SyncWaitReason): string {
-  const why =
-    reason.kind === "another_sync"
-      ? SYNC_WAIT_HOLDERS[reason.holder]
-      : reason.kind === "this_game_busy"
-        ? "Tender is still busy with this game's saves."
-        : reason.kind === "syncing"
-          ? "This game's saves are still syncing with RomM."
-          : "Tender is not answering.";
-  return `${why} Wait a little longer, or play with the saves on this device?`;
+  return `${syncWaitWhy(reason)} Wait a little longer, or play with the saves on this device?`;
 }
 
 /** What the question turns into when the sync finishes while it is open. */

@@ -730,10 +730,11 @@ class TestADownloadItsStopEnded:
         monkeypatch.setattr(fake, "download_save_content", download_then_stop)
         state = RomSaveSyncState()
 
+        download_file = svc._save_transfer.download_save_file
+        server_save, saves_dir, device_id = fake.saves[100], str(save_path.parent), LiveDeviceId("device-1")
+
         with pytest.raises(SyncStopped):
-            svc._save_transfer.download_save_file(
-                fake.saves[100], str(save_path.parent), "pokemon.srm", state, LiveDeviceId("device-1"), "gba", stop=stop
-            )
+            download_file(server_save, saves_dir, "pokemon.srm", state, device_id, "gba", stop=stop)
 
         assert not (save_path.parent / "pokemon.srm.tmp").exists()
         assert save_path.read_bytes() == b"local bytes"
@@ -794,16 +795,16 @@ class TestADownloadItsStopEnded:
         monkeypatch.setattr(fake, "confirm_download", failing_confirm)
         state = RomSaveSyncState()
 
+        download_file = svc._save_transfer.download_save_file
+        server_save, saves_dir, device_id, stop = (
+            fake.saves[100],
+            str(save_path.parent),
+            LiveDeviceId("device-1"),
+            SyncStop(),
+        )
+
         with pytest.raises(RommApiError) as caught:
-            svc._save_transfer.download_save_file(
-                fake.saves[100],
-                str(save_path.parent),
-                "pokemon.srm",
-                state,
-                LiveDeviceId("device-1"),
-                "gba",
-                stop=SyncStop(),
-            )
+            download_file(server_save, saves_dir, "pokemon.srm", state, device_id, "gba", stop=stop)
 
         assert caught.value is failure
         assert save_path.read_bytes() != b"local bytes"

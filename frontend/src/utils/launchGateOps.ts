@@ -146,30 +146,36 @@ function finishInBackground(call: Promise<PreLaunchSyncSettled>, romId: number, 
  *   finish in the background.
  */
 export async function runPreLaunchSync(romId: number, options: PreLaunchSyncOptions): Promise<PreLaunchSyncOutcome> {
-  const { tag } = options;
   const call: Promise<PreLaunchSyncSettled> = preLaunchSync(romId).then(
     (result) => ({ result }),
-    (failure: unknown) => ({ failure }),
+    (error_: unknown) => ({ failure: error_ }),
   );
-  let settled = await settledWithin(call, SERVER_CALL_LIMIT_MS);
-  while (settled === undefined) {
-    const reason = await readSyncWaitReason(romId, tag);
-    const choice = await options.askSyncWait(
-      reason,
-      call.then((s) => (startsOn(s) ? "ready" : "answered")),
-    );
-    if (choice === "cancel") {
-      finishInBackground(call, romId, options);
-      return { chose: "cancel" };
-    }
-    if (choice === "play_anyway") {
-      await stopTheSync(romId, tag, reason);
-      finishInBackground(call, romId, options);
-      return { chose: "play_anyway", noAnswer: reason.kind === "not_answering" };
-    }
-    settled = choice === "answered" ? await call : await settledWithin(call, SYNC_WAIT_MORE_MS);
+  const settled = await settledWithin(call, SERVER_CALL_LIMIT_MS);
+  return settled === undefined ? askPastTheLimit(call, romId, options) : shapePreLaunchAnswer(settled, options);
+}
+
+/** Ask why the start waits for `call`, act on the answer, and ask again after a Wait that brought no answer. */
+async function askPastTheLimit(
+  call: Promise<PreLaunchSyncSettled>,
+  romId: number,
+  options: PreLaunchSyncOptions,
+): Promise<PreLaunchSyncOutcome> {
+  const reason = await readSyncWaitReason(romId, options.tag);
+  const choice = await options.askSyncWait(
+    reason,
+    call.then((s) => (startsOn(s) ? "ready" : "answered")),
+  );
+  if (choice === "cancel") {
+    finishInBackground(call, romId, options);
+    return { chose: "cancel" };
   }
-  return shapePreLaunchAnswer(settled, options);
+  if (choice === "play_anyway") {
+    await stopTheSync(romId, options.tag, reason);
+    finishInBackground(call, romId, options);
+    return { chose: "play_anyway", noAnswer: reason.kind === "not_answering" };
+  }
+  const settled = choice === "answered" ? await call : await settledWithin(call, SYNC_WAIT_MORE_MS);
+  return settled === undefined ? askPastTheLimit(call, romId, options) : shapePreLaunchAnswer(settled, options);
 }
 
 function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchSyncOptions): PreLaunchSyncAnswer {

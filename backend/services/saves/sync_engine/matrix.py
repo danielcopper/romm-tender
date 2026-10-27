@@ -494,6 +494,48 @@ class MatrixExecutor:
             self._handle_unexpected_error(e, filename, sink.errors)
         return None
 
+    def _dispatch_outcome(
+        self,
+        outcome: MatrixOutcome,
+        *,
+        ctx: RomDispatchContext,
+        options: SyncRunOptions,
+        sink: DispatchSink,
+    ) -> TransferDirection | None:
+        """Dispatch one file's outcome of a sync run, backfilling its content size first.
+
+        Returns the :class:`TransferDirection` it moved, if any. Raises
+        :class:`SyncStopped` when the run's stop ends it before or during this
+        file.
+        """
+        if outcome.local_hash is not None and outcome.local_content_size is not None:
+            ctx.save_state.backfill_content_size(
+                outcome.filename, local_hash=outcome.local_hash, content_size=outcome.local_content_size
+            )
+        if ctx.stop is not None and ctx.stop.stops_here():
+            self._log_debug(f"do_sync_rom_saves({ctx.rom_id}): stopped before {outcome.filename}")
+            raise SyncStopped
+        origin = "local" if outcome.local_path is not None else "server-only"
+        self._log_debug(
+            f"do_sync_rom_saves({ctx.rom_id}): {origin} {outcome.filename} -> {type(outcome.action).__name__}"
+        )
+        try:
+            return self._dispatch_sync_action(
+                outcome.action,
+                ctx=ctx,
+                filename=outcome.filename,
+                local_path=outcome.local_path,
+                local_hash=outcome.local_hash,
+                last_sync_hash=outcome.file_state.last_sync_hash,
+                last_sync_server_hash=outcome.file_state.last_sync_server_hash,
+                server_candidates=outcome.server_candidates,
+                options=options,
+                sink=sink,
+            )
+        except SyncStopped:
+            self._log_debug(f"do_sync_rom_saves({ctx.rom_id}): stopped before placing {outcome.filename}")
+            raise
+
     def iter_matrix_outcomes(
         self,
         server_in_slot: list[dict[str, Any]],
@@ -740,32 +782,9 @@ class MatrixExecutor:
             # so the pairing that makes a refusal probe nothing survives here too.
             saves_dir=answer_dir,
         ):
-            if outcome.local_hash is not None and outcome.local_content_size is not None:
-                save_state.backfill_content_size(
-                    outcome.filename, local_hash=outcome.local_hash, content_size=outcome.local_content_size
-                )
-            if stop is not None and stop.stops_here():
-                self._log_debug(f"do_sync_rom_saves({rom_id}): stopped before {outcome.filename}")
-                break
-            origin = "local" if outcome.local_path is not None else "server-only"
-            self._log_debug(
-                f"do_sync_rom_saves({rom_id}): {origin} {outcome.filename} -> {type(outcome.action).__name__}"
-            )
             try:
-                direction = self._dispatch_sync_action(
-                    outcome.action,
-                    ctx=ctx,
-                    filename=outcome.filename,
-                    local_path=outcome.local_path,
-                    local_hash=outcome.local_hash,
-                    last_sync_hash=outcome.file_state.last_sync_hash,
-                    last_sync_server_hash=outcome.file_state.last_sync_server_hash,
-                    server_candidates=outcome.server_candidates,
-                    options=options,
-                    sink=sink,
-                )
+                direction = self._dispatch_outcome(outcome, ctx=ctx, options=options, sink=sink)
             except SyncStopped:
-                self._log_debug(f"do_sync_rom_saves({rom_id}): stopped before placing {outcome.filename}")
                 break
             if direction is TransferDirection.UPLOAD:
                 uploaded += 1
