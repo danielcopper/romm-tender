@@ -61,7 +61,6 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "unmet",
         }
     ),
-    "domain/emulator_commands.py": frozenset({"libretro", "standalone"}),
     "domain/firmware_groups.py": frozenset({"ntsc-j", "ntsc-u", "pal", "satisfied"}),
     "domain/firmware_rows.py": frozenset({"present"}),
     "domain/firmware_wants.py": frozenset(
@@ -113,7 +112,6 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "sorted-dir-missing",
         }
     ),
-    "domain/shortcut_data.py": frozenset({"libretro", "standalone"}),
     "domain/source_roots.py": frozenset(
         {
             "assumed",
@@ -129,7 +127,6 @@ _READERS_WHEN_WRITTEN: dict[str, frozenset[str]] = {
             "saves-root-missing",
         }
     ),
-    "services/active_core_resolver.py": frozenset({"standalone"}),
     "services/downloads/service.py": frozenset({"launchable"}),
     "services/firmware/downloads.py": frozenset({"satisfied"}),
     "services/firmware/emulator_answers.py": frozenset(

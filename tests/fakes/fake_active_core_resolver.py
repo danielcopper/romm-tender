@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from domain.shortcut_data import EmulatorInvocation
+from fakes.fake_core_info_provider import core_invocation
 
 if TYPE_CHECKING:
     from domain.emulator_sources import SourcesReading
+    from domain.shortcut_data import EmulatorInvocation
 
 
 class FakeActiveCoreResolver:
@@ -25,7 +26,7 @@ class FakeActiveCoreResolver:
     the reading each :meth:`active_emulator_for_rom` call was handed.
 
     :meth:`active_emulator_for_rom` is the launch-bake seam. By default it
-    projects the same ``(core_so, label)`` tuple config into a libretro
+    projects the same ``(core_so, label)`` tuple config into a core
     :class:`EmulatorInvocation` (or ``None`` when the core is ``None``), so the
     existing tuple-configured tests keep working unchanged. To exercise a
     **standalone** emulator (PCSX2, RPCS3, …), pass an explicit
@@ -69,5 +70,5 @@ class FakeActiveCoreResolver:
             # The identity a libretro entry carries is the core file's own
             # basename, which is what the resolver states for it — so a
             # tuple-configured test gets the identity its core would really have.
-            return EmulatorInvocation.libretro(core_so, label, f"{core_so}.so")
+            return core_invocation(core_so, label, f"{core_so}.so")
         return None

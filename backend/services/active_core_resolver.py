@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 from domain.emulator_commands import label_to_invocation
 from domain.rom_files import folder_boot_root
-from domain.shortcut_data import EmulatorInvocation
+from domain.shortcut_data import RUN_GAME, EmulatorInvocation
 
 if TYPE_CHECKING:
     import logging
@@ -95,16 +95,16 @@ class ActiveCoreResolver:
         per-game/per-platform label is never fatal — it degrades to the next
         layer with a WARNING.
 
-        Final step: a resolved **standalone** emulator whose install is a
-        folder-boot layout (PS3 — ``…/PS3_GAME/USRDIR/EBOOT.BIN``) is rewritten
+        Final step: a resolved emulator program (no RetroArch core) whose
+        install is a folder-boot layout (PS3 — ``…/PS3_GAME/USRDIR/EBOOT.BIN``) is rewritten
         to the ``direct`` sandbox form (ADR-0019). RetroDECK's ``run_game.sh``
         reinterprets a directory ``%ROM%`` as an ES-DE "directory as a file" and
         can never launch a bare game folder, so a folder-boot game must run its
         emulator launcher directly inside the sandbox instead. The rewrite keys
         off :func:`folder_boot_root` — the same fact the disc/bake-path seam uses
         to fold the target to the game folder — so the invocation form and the
-        baked path are always decided from one layout fact. A libretro emulator,
-        a non-folder install, or a standalone that carries no launcher (which
+        baked path are always decided from one layout fact. A RetroArch core,
+        a non-folder install, or a program that carries no launcher (which
         launchers the reading hands on is
         ``adapters/atlas_catalogue.py::_sandbox_launcher``'s rule) all leave the
         invocation unchanged.
@@ -166,24 +166,25 @@ class ActiveCoreResolver:
     def _maybe_folder_boot_direct(
         self, emulator: EmulatorInvocation | None, install: RomInstall | None, rom_id: int
     ) -> EmulatorInvocation | None:
-        """Rewrite a standalone *emulator* to the folder-boot ``direct`` form when warranted.
+        """Rewrite an emulator program to the folder-boot ``direct`` form when warranted.
 
-        Fires only for a **standalone** emulator whose *install* is a folder-boot
-        layout (:func:`folder_boot_root` returns a game root), and returns a
-        ``direct`` invocation through the launcher it carries. Leaves the
-        emulator unchanged for a libretro core, a non-folder install, a missing
-        install, or no launcher — the last is logged
+        Fires only for a ``run_game`` invocation that loads no RetroArch core and
+        whose *install* is a folder-boot layout (:func:`folder_boot_root` returns
+        a game root), and returns a ``direct`` invocation through the launcher it
+        carries. Leaves the emulator unchanged for a RetroArch core — its launcher
+        is RetroArch, which the command's middle args alone do not start — a
+        non-folder install, a missing install, or no launcher — the last is logged
         (the baked ``run_game`` form will fail to launch a folder until a later
         re-bake heals it).
         """
-        if emulator is None or emulator.kind != "standalone" or emulator.command is None:
+        if emulator is None or emulator.form != RUN_GAME or emulator.core_so is not None or emulator.command is None:
             return emulator
         if install is None or folder_boot_root(install.file_path, install.rom_dir) is None:
             return emulator
         launcher = emulator.launcher
         if launcher is None:
             self._logger.warning(
-                "active_core_resolver: folder-boot rom_id=%s resolves to standalone '%s' but it carries no sandbox "
+                "active_core_resolver: folder-boot rom_id=%s resolves to '%s' but it carries no sandbox "
                 "launcher to exec; keeping the run_game form (launch will fail until healed)",
                 rom_id,
                 emulator.label,
@@ -196,11 +197,11 @@ class ActiveCoreResolver:
 
         The read-path projection of :meth:`active_emulator_for_rom`, kept for the
         ``.so``-space consumers (BIOS status, per-core save dir, save-emulator
-        tag, core-change detection, the cores menu's active marker). A **libretro**
-        emulator yields its ``(core_so, label)``; a **standalone** emulator yields
-        ``(None, label)`` — those consumers already degrade on a ``None`` core
-        exactly as they did for the old ``(None, None)`` resolution, so the
-        read-path core never disagrees with the (now possibly standalone) launch.
+        tag, core-change detection, the cores menu's active marker). An emulator
+        that loads a RetroArch core yields its ``(core_so, label)``; any other
+        yields ``(None, label)`` — those consumers already degrade on a ``None``
+        core exactly as they did for the old ``(None, None)`` resolution, so the
+        read-path core never disagrees with the launch.
         """
         emulator = self.active_emulator_for_rom(rom_id)
         if emulator is None:

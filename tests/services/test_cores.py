@@ -254,7 +254,7 @@ class TestGetPlatformCoreInfo:
         # names a ROW and the resolver names an EMULATOR, and a payload that
         # projected one of them twice would pass an assertion over equal ones.
         _seed_rom(uow, rom_id=42, platform_slug="ps2", emulator_override="PCSX2 (Standalone)")
-        active_core.per_rom_emulator[42] = EmulatorInvocation.standalone(
+        active_core.per_rom_emulator[42] = EmulatorInvocation.run_game(
             "%EMULATOR_PCSX2% %ROM%", "PCSX2 (Standalone)", "PCSX2"
         )
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
@@ -266,7 +266,7 @@ class TestGetPlatformCoreInfo:
         # nothing may be keyed on it — the pane highlights nothing rather than
         # matching a row by accident.
         _seed_rom(uow, rom_id=42, platform_slug="n3ds")
-        active_core.per_rom_emulator[42] = EmulatorInvocation.standalone("%EMULATOR_X% %ROM%", "Citra", None)
+        active_core.per_rom_emulator[42] = EmulatorInvocation.run_game("%EMULATOR_X% %ROM%", "Citra", None)
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
         assert result["active_core"] is None
         assert result["active_core_label"] == "Citra"
@@ -731,7 +731,7 @@ class TestSetSystemCoreFanOut:
         # re-bake carries the full ES-DE command verbatim, not an -L core path.
         _seed_rom(uow, rom_id=1, platform_slug="ps2", shortcut_app_id=101)
         _seed_install(uow, rom_id=1, file_path="/roms/ps2/a.iso", platform_slug="ps2")
-        active_core.per_rom_emulator[1] = EmulatorInvocation.standalone(
+        active_core.per_rom_emulator[1] = EmulatorInvocation.run_game(
             "%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)"
         )
         result = event_loop.run_until_complete(service.set_system_core("ps2", "PCSX2 (Standalone)"))

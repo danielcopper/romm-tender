@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from domain.emulator_commands import EmulatorOption
+from domain.emulator_commands import CORE, PROGRAM, EmulatorOption
 from domain.shortcut_data import EmulatorInvocation
 
 if TYPE_CHECKING:
@@ -13,14 +13,25 @@ if TYPE_CHECKING:
 # The answering source every fake answer names unless a test says otherwise.
 RETRODECK_SOURCE: dict[str, Any] = {"kind": "retrodeck", "starts_games": True}
 
+# Where the resolver states RetroDECK keeps its RetroArch cores, spelled inside
+# its sandbox: the folder a seeded core's ``core_path`` lies in.
+RETRODECK_CORES = "/var/config/retroarch/cores"
+
+
+def core_invocation(core_so: str, label: str | None = None, emulator: str | None = None) -> EmulatorInvocation:
+    """The invocation a bakeable core entry renders to: its plain RetroArch command with the resolver's core path."""
+    return EmulatorInvocation.run_game(
+        f"%EMULATOR_RETROARCH% -L {RETRODECK_CORES}/{core_so}.so %ROM%", label, emulator, core_so=core_so
+    )
+
 
 def libretro_option(core_so: str, label: str, *, emulator: str | None = None) -> EmulatorOption:
-    """Build a bakeable libretro :class:`EmulatorOption` for a core.
+    """Build a bakeable core :class:`EmulatorOption`.
 
     Mirrors the real classifier's output for the RetroArch ``-L`` shape, so a
     test can seed the fake with ``options=[libretro_option("mgba_libretro",
     "mGBA"), ...]`` and have ``label_to_invocation`` resolve the label to the
-    same libretro invocation the adapter would.
+    same invocation the adapter would (:func:`core_invocation`).
 
     The identity defaults to the resolver's own spelling for a libretro entry —
     the core file's basename, ``<core_so>.so`` — so a test seeding a core gets
@@ -28,12 +39,13 @@ def libretro_option(core_so: str, label: str, *, emulator: str | None = None) ->
     """
     return EmulatorOption(
         label=label,
-        kind="libretro",
+        kind=CORE,
         core_so=core_so,
         command=f"%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/{core_so}.so %ROM%",
         status="bakeable",
         reason=None,
         emulator=f"{core_so}.so" if emulator is None else emulator,
+        core_path=f"{RETRODECK_CORES}/{core_so}.so",
     )
 
 
@@ -56,7 +68,7 @@ def standalone_option(
     """
     return EmulatorOption(
         label=label,
-        kind="standalone",
+        kind=PROGRAM,
         core_so=None,
         command=command,
         status=status,
@@ -88,8 +100,8 @@ class FakeCoreInfoProvider:
     ``standalone`` maps a system name to a standalone-emulator
     :class:`EmulatorInvocation`. When a system carries one,
     :meth:`get_default_emulator` returns it directly; otherwise it mirrors the
-    real adapter and projects :meth:`get_active_core` into a libretro invocation
-    (so ``get_active_core`` is still consulted — and recorded — for the libretro
+    real adapter and projects :meth:`get_active_core` into a core invocation
+    (so ``get_active_core`` is still consulted — and recorded — for the core
     path).
     """
 
@@ -146,7 +158,7 @@ class FakeCoreInfoProvider:
             return pref
         core_so, label = self.get_active_core(system_name)
         if core_so:
-            return EmulatorInvocation.libretro(core_so, label)
+            return core_invocation(core_so, label)
         return None
 
     def get_emulator_options(self, system_name: str, *, reading: SourcesReading | None = None) -> dict[str, Any]:

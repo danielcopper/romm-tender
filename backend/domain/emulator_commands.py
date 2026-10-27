@@ -2,14 +2,16 @@
 
 Given the label + command text of one ES-DE ``<command>``, decide whether
 Tender can bake it into a Steam shortcut's ``-e`` override — a real emulator
-invocation ending in ``%ROM%`` — and whether it is a RetroArch libretro core or
-a standalone emulator. The system-layer default is the first *safely-bakeable*
-command in document order; the emulator picker offers every command annotated
-with its bakeability and, when it cannot be baked, the reason.
+invocation ending in ``%ROM%`` that RetroDECK's ``run_game.sh`` starts. That is
+the one rule here that is Tender's own, and it follows the script's handling of
+a command rather than ES-DE's. The system-layer default is the first
+*safely-bakeable* command in document order; the emulator picker offers every
+command annotated with its bakeability and, when it cannot be baked, the reason.
 
-Whether what an entry launches is installed is not decided here: it is the
-resolver's answer, which :mod:`adapters.atlas_catalogue` reads and hands in as
-one of the reasons below.
+What an entry launches, the core it loads and where that core lies, whether it
+is installed, and whether ``run_game.sh`` would run anything for it are not
+decided here: they are the resolver's answer, which
+:mod:`adapters.atlas_catalogue` reads and hands in, in the words below.
 
 Pure compute only — takes the ``(label, text)`` pairs of one catalogue entry,
 which :mod:`adapters.atlas_catalogue` reads off ``es_systems.xml``, and returns
@@ -26,11 +28,6 @@ from typing import Any, Protocol
 
 from domain.shortcut_data import EmulatorInvocation
 
-# A RetroArch libretro command in the exact shape Tender bakes: the
-# RetroArch launcher, ``-L`` the core ``.so``, then ``%ROM%``. The captured
-# group is the bare libretro core name (no ``.so``).
-_LIBRETRO_RE = re.compile(r"^%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/([\w-]+_libretro)\.so %ROM%$")
-
 _PLACEHOLDER_RE = re.compile(r"%[^%]+%")
 
 # Placeholders ES-DE's ``run_game.sh`` resolves that a baked ``-e`` override can
@@ -39,6 +36,10 @@ _PLACEHOLDER_RE = re.compile(r"%[^%]+%")
 # is "known" (so it is not flagged as an unknown placeholder) but is rejected on
 # its own by the dedicated startdir rule — run_game.sh parses-but-drops it, so a
 # baked command that relies on it would launch from the wrong directory.
+# ``%CORE_RETROARCH%`` is known but never reaches a core entry's bake, because
+# run_game.sh writes it as an empty folder (docs/architecture/
+# core-emulator-selection.md, "Application"): the reference is written as the
+# resolver's core path instead (:func:`_with_core_path`).
 _KNOWN_PLACEHOLDERS = frozenset(
     {
         "%ROM%",
@@ -67,17 +68,37 @@ NOT_ESTABLISHED_FIND_RULES_UNREAD = "find_rules_unread"
 NOT_ESTABLISHED_LOOKUP_UNSUPPORTED = "lookup_unsupported"
 NOT_ESTABLISHED_PATH_UNSEEN = "path_unseen"
 
+# Why an entry the resolver describes cannot be baked, beside the reasons a
+# command's own text earns. ``CORE_UNLOCATED``: a core entry the resolver gives
+# no core path for, so there is nothing to write where the command names the
+# core. ``START_SCRIPT_RUNS_NOTHING``: the resolver states RetroDECK's
+# ``run_game.sh`` would run nothing for the entry's emulator. The panel words
+# both (``reasonCopy`` in ``frontend/src/utils/emulatorMenu.tsx``).
+CORE_UNLOCATED = "core_unlocated"
+START_SCRIPT_RUNS_NOTHING = "start_script_runs_nothing"
+
+# What an entry launches, as the resolver states it, in Tender's words: a core
+# RetroArch loads on this machine, an emulator program of its own, or a
+# RetroArch launch naming a core this machine cannot load.
+CORE = "core"
+PROGRAM = "program"
+FOREIGN_CORE = "foreign_core"
+
 
 @dataclass(frozen=True)
 class EmulatorOption:
     """One ES-DE ``<command>`` classified for launch-bakeability.
 
     ``label`` is ES-DE's display label — the pick key the per-game/per-platform
-    override stores. ``kind`` is ``"libretro"`` (a RetroArch core; ``core_so``
-    is its bare name) or ``"standalone"`` (``core_so`` is ``None``).
-    ``command`` is the raw ES-DE command text, retained so a standalone option
-    can be rendered into an ``EmulatorInvocation`` (a libretro option rebuilds
-    from ``core_so``); it is not exposed on the frontend payload.
+    override stores. ``kind`` is :data:`CORE`, :data:`PROGRAM` or
+    :data:`FOREIGN_CORE`, the resolver's statement of what the entry launches.
+    ``core_so`` is the core a :data:`CORE` entry loads, its bare name (no
+    ``.so``), and ``core_path`` the file the resolver states ES-DE loads it
+    from, spelled where RetroDECK runs it; both are ``None`` on every other
+    entry, and ``core_path`` also where the resolver found no core file.
+    ``command`` is the raw ES-DE command text, retained so the option can be
+    rendered into an ``EmulatorInvocation``; it is not exposed on the frontend
+    payload.
 
     ``status`` is the bake verdict:
 
@@ -91,7 +112,8 @@ class EmulatorOption:
     - ``"unbakeable"`` — cannot be baked; ``reason`` says why.
 
     ``reason`` is ``None`` when bakeable, else one of ``"inject"``,
-    ``"not_installed"``, ``"shortcut_script"``, ``"no_rom_target"``,
+    ``"not_installed"``, :data:`START_SCRIPT_RUNS_NOTHING`,
+    :data:`CORE_UNLOCATED`, ``"shortcut_script"``, ``"no_rom_target"``,
     ``"quoting"``, ``"startdir"``, ``"unknown_placeholder"``.
 
     ``not_established`` is the note an entry carries where the resolver could
@@ -122,6 +144,7 @@ class EmulatorOption:
     emulator: str | None
     launcher: str | None = None
     not_established: str | None = None
+    core_path: str | None = None
 
 
 class LaunchingEmulator(Protocol):
@@ -168,29 +191,45 @@ def classify_command(
     label: str,
     text: str,
     *,
+    kind: str,
+    core_so: str | None = None,
+    core_path: str | None = None,
     emulator: str | None = None,
     installation: str | None = None,
     launcher: str | None = None,
+    start_script_runs_nothing: bool = False,
 ) -> EmulatorOption:
     """Classify a single ES-DE ``<command>`` (``label`` + ``text``).
 
-    Applies the bake-verdict rules in order (the first that matches wins) and
-    determines the emulator kind, returning a fully-populated
-    :class:`EmulatorOption`. Pure — no I/O, deterministic in its inputs.
+    Applies the bake-verdict rules in order (the first that matches wins),
+    returning a fully-populated :class:`EmulatorOption`. Pure — no I/O,
+    deterministic in its inputs.
 
-    *emulator* and *launcher* are the resolver's identity and launcher for the
-    row, carried through unexamined: this function classifies what a command
-    DOES, and who the emulator is and what ES-DE runs for it are read off the
-    catalogue entry beside it rather than parsed out of the command text.
+    *kind*, *core_so*, *core_path*, *emulator* and *launcher* are the
+    resolver's statements about the row, carried through unexamined: this
+    function judges only whether the command can be baked, and what the entry
+    launches, which core it loads from where, who the emulator is and what
+    ES-DE runs for it are read off the catalogue entry beside it rather than
+    parsed out of the command text.
 
     *installation* is what the resolver states where it does not state the
     entry startable, ``None`` where it does. :data:`NOT_INSTALLED` takes the
     place of the bake verdict, so the entry is neither the default nor a pick
     that resolves, and the picker shows it disabled. Any other word is the
     entry's ``not_established`` note, beside the bake verdict its command earns.
+    After it, *start_script_runs_nothing* refuses the bake
+    (:data:`START_SCRIPT_RUNS_NOTHING`), and so does a :data:`CORE` entry
+    without a *core_path* (:data:`CORE_UNLOCATED`); every other entry is judged
+    by its command, a core entry's with its core path written in.
     """
-    status, reason = ("needs_setup", NOT_INSTALLED) if installation == NOT_INSTALLED else _bake_verdict(text)
-    kind, core_so = _emulator_kind(text)
+    if installation == NOT_INSTALLED:
+        status, reason = "needs_setup", NOT_INSTALLED
+    elif start_script_runs_nothing:
+        status, reason = "unbakeable", START_SCRIPT_RUNS_NOTHING
+    elif kind == CORE and core_path is None:
+        status, reason = "unbakeable", CORE_UNLOCATED
+    else:
+        status, reason = _bake_verdict(_with_core_path(text, kind, core_so, core_path))
     return EmulatorOption(
         label=label,
         kind=kind,
@@ -201,7 +240,19 @@ def classify_command(
         emulator=emulator,
         launcher=launcher,
         not_established=installation if installation not in (None, NOT_INSTALLED) else None,
+        core_path=core_path,
     )
+
+
+def _with_core_path(text: str, kind: str, core_so: str | None, core_path: str | None) -> str:
+    """*text* with a :data:`CORE` entry's ``%CORE_RETROARCH%/<core>.so`` written as *core_path*, else unchanged.
+
+    The path is the resolver's, so the bake loads the file ES-DE's own lookup
+    finds rather than one Tender places itself.
+    """
+    if kind != CORE or core_so is None or core_path is None:
+        return text.strip()
+    return text.strip().replace(f"%CORE_RETROARCH%/{core_so}.so", core_path)
 
 
 def _bake_verdict(text: str) -> tuple[str, str | None]:
@@ -230,19 +281,6 @@ def _bake_verdict(text: str) -> tuple[str, str | None]:
     return ("bakeable", None)
 
 
-def _emulator_kind(text: str) -> tuple[str, str | None]:
-    """Return ``("libretro", core_so)`` for the RetroArch shape, else ``("standalone", None)``.
-
-    A leading ``env VAR=val …`` prefix (the gc/wii Dolphin form) is a standalone
-    invocation — it does not match the strict libretro pattern — and is left as
-    ``standalone`` with no core.
-    """
-    match = _LIBRETRO_RE.match(text.strip())
-    if match:
-        return ("libretro", match.group(1))
-    return ("standalone", None)
-
-
 def select_default_option(options: list[EmulatorOption]) -> EmulatorOption | None:
     """Return the first *bakeable* option in document order, or ``None``.
 
@@ -263,18 +301,24 @@ def select_default_option(options: list[EmulatorOption]) -> EmulatorOption | Non
 def option_to_invocation(option: EmulatorOption | None) -> EmulatorInvocation | None:
     """Render a *bakeable* option into an :class:`EmulatorInvocation`, else ``None``.
 
-    A libretro option yields a libretro invocation keyed on its ``core_so``; a
-    standalone option bakes its full command text verbatim and carries its
-    ``launcher`` for the folder-boot fold. A ``None`` option, or one that is not
-    bakeable, resolves to ``None`` (the plain-launch signal).
+    Every bakeable option is baked as its command, a core entry's with its core
+    path written in, through ``run_game.sh -e``: a core entry whose command
+    passes RetroArch more than its core — FinalBurn Neo's ``--subsystem neocd``
+    on Neo Geo CD — keeps all of it. The invocation carries the option's
+    ``core_so``, and an emulator program's ``launcher`` for the folder-boot
+    fold; any other entry's launcher is RetroArch, which the fold cannot start
+    a core through. A ``None`` option, or one that is not bakeable, resolves to
+    ``None`` (the plain-launch signal).
     """
-    if option is None or option.status != "bakeable":
+    if option is None or option.status != "bakeable" or not option.command:
         return None
-    if option.kind == "libretro" and option.core_so:
-        return EmulatorInvocation.libretro(option.core_so, option.label, option.emulator)
-    if option.kind == "standalone" and option.command:
-        return EmulatorInvocation.standalone(option.command, option.label, option.emulator, launcher=option.launcher)
-    return None
+    return EmulatorInvocation.run_game(
+        _with_core_path(option.command, option.kind, option.core_so, option.core_path),
+        option.label,
+        option.emulator,
+        core_so=option.core_so,
+        launcher=option.launcher if option.kind == PROGRAM else None,
+    )
 
 
 def _pinned_option(options: list[EmulatorOption], label: str) -> EmulatorOption | None:
@@ -387,14 +431,15 @@ def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
     cannot. The raw ``command`` text is intentionally dropped from the wire
     payload.
 
-    ``emulator`` is the identity, and it travels beside ``core_so`` rather than
-    replacing it because the two answer different questions: ``core_so`` is the
-    libretro core a surface may still need to name, the identity is what a
-    firmware row's per-emulator entries are keyed on. Without it on the wire a
-    surface holding both answers has nothing to join them by for a standalone
-    emulator. It is not what entries are grouped by: one emulator can be
-    launched several ways (RPCS3 by game serial, or by its folder or ISO), and
-    each way is its own choice.
+    ``kind`` is Tender's word for what the entry launches (:data:`CORE`,
+    :data:`PROGRAM`, :data:`FOREIGN_CORE`). ``emulator`` is the identity, and it
+    travels beside ``core_so`` rather than replacing it because the two answer
+    different questions: ``core_so`` is the libretro core a surface may still
+    need to name, the identity is what a firmware row's per-emulator entries
+    are keyed on. Without it on the wire a surface holding both answers has
+    nothing to join them by for a standalone emulator. It is not what entries
+    are grouped by: one emulator can be launched several ways (RPCS3 by game
+    serial, or by its folder or ISO), and each way is its own choice.
     """
     default = select_default_option(options)
     payload: list[dict[str, Any]] = []

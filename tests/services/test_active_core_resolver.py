@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from fakes.fake_core_info_provider import (
     FakeCoreInfoProvider,
+    core_invocation,
     libretro_option,
     standalone_option,
 )
@@ -347,7 +348,7 @@ def test_standalone_system_default_resolves_to_standalone_emulator() -> None:
     standalone :class:`EmulatorInvocation`, not a libretro core."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=50, platform_slug="ps3", emulator_override=None)
-    rpcs3 = EmulatorInvocation.standalone("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
+    rpcs3 = EmulatorInvocation.run_game("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
     core_info = FakeCoreInfoProvider(standalone={"ps3": rpcs3})
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
@@ -364,13 +365,11 @@ def test_per_game_pin_beats_standalone_system_default() -> None:
     _seed_rom(uow, rom_id=51, platform_slug="ps2", emulator_override="LRPS2")
     core_info = FakeCoreInfoProvider(
         available_cores=[{"core_so": "pcsx2_libretro", "label": "LRPS2", "is_default": False}],
-        standalone={"ps2": EmulatorInvocation.standalone("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)")},
+        standalone={"ps2": EmulatorInvocation.run_game("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)")},
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(51) == EmulatorInvocation.libretro(
-        "pcsx2_libretro", "LRPS2", "pcsx2_libretro.so"
-    )
+    assert resolver.active_emulator_for_rom(51) == core_invocation("pcsx2_libretro", "LRPS2", "pcsx2_libretro.so")
 
 
 def test_per_platform_core_beats_standalone_system_default() -> None:
@@ -379,14 +378,12 @@ def test_per_platform_core_beats_standalone_system_default() -> None:
     _seed_rom(uow, rom_id=52, platform_slug="ps2", emulator_override=None)
     core_info = FakeCoreInfoProvider(
         available_cores=[{"core_so": "pcsx2_libretro", "label": "LRPS2", "is_default": False}],
-        standalone={"ps2": EmulatorInvocation.standalone("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)")},
+        standalone={"ps2": EmulatorInvocation.run_game("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)")},
     )
     platform_reader = FakePlatformCoreReader(mapping={"ps2": "LRPS2"})
     resolver, _ = _make_resolver(uow=uow, core_info=core_info, platform_core_reader=platform_reader)
 
-    assert resolver.active_emulator_for_rom(52) == EmulatorInvocation.libretro(
-        "pcsx2_libretro", "LRPS2", "pcsx2_libretro.so"
-    )
+    assert resolver.active_emulator_for_rom(52) == core_invocation("pcsx2_libretro", "LRPS2", "pcsx2_libretro.so")
 
 
 def test_resolvable_pin_returns_libretro_invocation() -> None:
@@ -398,9 +395,7 @@ def test_resolvable_pin_returns_libretro_invocation() -> None:
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(53) == EmulatorInvocation.libretro(
-        "mgba_libretro", "mGBA", "mgba_libretro.so"
-    )
+    assert resolver.active_emulator_for_rom(53) == core_invocation("mgba_libretro", "mGBA", "mgba_libretro.so")
 
 
 def test_unresolvable_platform_returns_none() -> None:
@@ -418,7 +413,7 @@ def test_unresolvable_platform_returns_none() -> None:
 
 _RPCS3_COMMAND = "%EMULATOR_RPCS3% --no-gui %ROM%"
 _RPCS3_LABEL = "RPCS3 Directory (Standalone)"
-_RPCS3 = EmulatorInvocation.standalone(_RPCS3_COMMAND, _RPCS3_LABEL)
+_RPCS3 = EmulatorInvocation.run_game(_RPCS3_COMMAND, _RPCS3_LABEL)
 
 
 def test_per_game_pin_to_standalone_label_resolves_standalone() -> None:
@@ -477,7 +472,7 @@ def test_stale_standalone_pin_degrades_to_default(caplog: pytest.LogCaptureFixtu
 _PS3_EBOOT = "/roms/ps3/MyGame/PS3_GAME/USRDIR/EBOOT.BIN"
 _PS3_ROM_DIR = "/roms/ps3/MyGame"
 _RPCS3_LAUNCHER = "/app/retrodeck/components/rpcs3/component_launcher.sh"
-_RPCS3_WITH_LAUNCHER = EmulatorInvocation.standalone(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)
+_RPCS3_WITH_LAUNCHER = EmulatorInvocation.run_game(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)
 
 
 def test_folder_boot_standalone_rewrites_to_direct() -> None:
@@ -549,9 +544,23 @@ def test_libretro_over_folder_boot_install_is_never_rewritten() -> None:
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(74) == EmulatorInvocation.libretro(
-        "lrps3_libretro", "LRPS3", "lrps3_libretro.so"
+    assert resolver.active_emulator_for_rom(74) == core_invocation("lrps3_libretro", "LRPS3", "lrps3_libretro.so")
+
+
+def test_a_core_over_a_folder_boot_install_is_never_rewritten_whatever_launcher_it_carries() -> None:
+    """A RetroArch core is started only through its command: the fold execs a program, never RetroArch with a core."""
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=76, platform_slug="ps3", emulator_override=None)
+    _seed_install(uow, rom_id=76, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
+    lrps3 = EmulatorInvocation.run_game(
+        "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/lrps3_libretro.so %ROM%",
+        "LRPS3",
+        core_so="lrps3_libretro",
+        launcher=_RPCS3_LAUNCHER,
     )
+    resolver, _ = _make_resolver(uow=uow, core_info=FakeCoreInfoProvider(standalone={"ps3": lrps3}))
+
+    assert resolver.active_emulator_for_rom(76) == lrps3
 
 
 def test_folder_boot_standalone_unresolvable_launcher_keeps_run_game_and_warns(

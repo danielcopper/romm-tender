@@ -13,15 +13,20 @@ from __future__ import annotations
 import dataclasses
 import re
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 
 from domain import emulator_commands
 from domain.emulator_commands import (
+    CORE,
+    CORE_UNLOCATED,
+    FOREIGN_CORE,
     NOT_ESTABLISHED,
     NOT_ESTABLISHED_PATH_UNSEEN,
     NOT_INSTALLED,
+    PROGRAM,
+    START_SCRIPT_RUNS_NOTHING,
     EmulatorOption,
     classify_command,
     label_to_invocation,
@@ -65,6 +70,35 @@ BBCMICRO_MAME_QUOTED = (
 )
 PC98_NEKOP2_STARTDIR = "%STARTDIR%=%GAMEDIR% %EMULATOR_RETROARCH% -L %CORE_RETROARCH%/nekop2_libretro.so %ROM%"
 PICO8_STANDALONE = "%EMULATOR_PICO-8% -root_path %GAMEDIR% -run %ROM%"
+NEOGEOCD_FBNEO = "%EMULATOR_RETROARCH% --subsystem neocd -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%"
+
+# --- What the resolver states for the entries above ------------------------
+
+# Where the resolver states RetroDECK keeps its cores, spelled inside its sandbox.
+CORES = "/var/config/retroarch/cores"
+
+# The core the resolver states each core command loads; every other command is
+# an emulator program of its own.
+CORE_OF = {
+    PSX_SWANSTATION: "swanstation_libretro",
+    PS2_PCSX2_LIBRETRO: "pcsx2_libretro",
+    PS2_PCEE2_LIBRETRO: "pcee2_libretro",
+    APPLE2_MAME_LIBRETRO_QUOTED: "mame_libretro",
+    PC98_NEKOP2_STARTDIR: "nekop2_libretro",
+}
+
+
+def _classify(label: str, text: str, **resolver: Any) -> EmulatorOption:
+    """``classify_command`` handed what the resolver states for *text*'s entry: kind, core, core path."""
+    core_so = CORE_OF.get(text)
+    if core_so is None:
+        return classify_command(label, text, kind=PROGRAM, **resolver)
+    return classify_command(label, text, kind=CORE, core_so=core_so, core_path=f"{CORES}/{core_so}.so", **resolver)
+
+
+def _core_invocation(core_so: str, label: str) -> EmulatorInvocation:
+    return EmulatorInvocation.run_game(f"%EMULATOR_RETROARCH% -L {CORES}/{core_so}.so %ROM%", label, core_so=core_so)
+
 
 # --- Synthetic strings for branches the live es_systems does not hit ---------
 
@@ -79,27 +113,27 @@ class TestClassifyCommand:
     @pytest.mark.parametrize(
         ("label", "text", "status", "reason", "kind", "core_so"),
         [
-            ("SwanStation", PSX_SWANSTATION, "bakeable", None, "libretro", "swanstation_libretro"),
-            ("Dolphin (Standalone)", GC_DOLPHIN_STANDALONE, "bakeable", None, "standalone", None),
-            ("PCSX2 (Standalone)", PS2_PCSX2_BATCH, "bakeable", None, "standalone", None),
-            ("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, "bakeable", None, "standalone", None),
-            ("PICO-8 (Standalone)", PICO8_STANDALONE, "bakeable", None, "standalone", None),
-            ("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, "unbakeable", "shortcut_script", "standalone", None),
-            ("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL, "needs_setup", "inject", "standalone", None),
-            ("xemu (Standalone)", XEMU_INJECT_WITH_ROM, "needs_setup", "inject", "standalone", None),
-            ("Vita3K (Standalone)", VITA3K_INJECT_NO_ROM, "needs_setup", "inject", "standalone", None),
-            ("MAME (Standalone)", ARCADE_MAME_STANDALONE, "unbakeable", "no_rom_target", "standalone", None),
-            ("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED, "unbakeable", "no_rom_target", "standalone", None),
-            ("MAME [A440/1]", ARCHIMEDES_MAME_BACKSLASH_SEMI, "unbakeable", "quoting", "standalone", None),
-            ("MAME (Standalone)", BBCMICRO_MAME_QUOTED, "unbakeable", "quoting", "standalone", None),
-            ("Neko Project II", PC98_NEKOP2_STARTDIR, "unbakeable", "startdir", "standalone", None),
-            ("Foo", SYNTH_UNKNOWN_PLACEHOLDER, "unbakeable", "unknown_placeholder", "standalone", None),
-            ("Foo", SYNTH_LONE_QUOTE, "unbakeable", "quoting", "standalone", None),
-            ("DREAMM", SYNTH_TRAILING_DOT, "unbakeable", "no_rom_target", "standalone", None),
+            ("SwanStation", PSX_SWANSTATION, "bakeable", None, CORE, "swanstation_libretro"),
+            ("Dolphin (Standalone)", GC_DOLPHIN_STANDALONE, "bakeable", None, PROGRAM, None),
+            ("PCSX2 (Standalone)", PS2_PCSX2_BATCH, "bakeable", None, PROGRAM, None),
+            ("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, "bakeable", None, PROGRAM, None),
+            ("PICO-8 (Standalone)", PICO8_STANDALONE, "bakeable", None, PROGRAM, None),
+            ("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, "unbakeable", "shortcut_script", PROGRAM, None),
+            ("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL, "needs_setup", "inject", PROGRAM, None),
+            ("xemu (Standalone)", XEMU_INJECT_WITH_ROM, "needs_setup", "inject", PROGRAM, None),
+            ("Vita3K (Standalone)", VITA3K_INJECT_NO_ROM, "needs_setup", "inject", PROGRAM, None),
+            ("MAME (Standalone)", ARCADE_MAME_STANDALONE, "unbakeable", "no_rom_target", PROGRAM, None),
+            ("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED, "unbakeable", "no_rom_target", CORE, "mame_libretro"),
+            ("MAME [A440/1]", ARCHIMEDES_MAME_BACKSLASH_SEMI, "unbakeable", "quoting", PROGRAM, None),
+            ("MAME (Standalone)", BBCMICRO_MAME_QUOTED, "unbakeable", "quoting", PROGRAM, None),
+            ("Neko Project II", PC98_NEKOP2_STARTDIR, "unbakeable", "startdir", CORE, "nekop2_libretro"),
+            ("Foo", SYNTH_UNKNOWN_PLACEHOLDER, "unbakeable", "unknown_placeholder", PROGRAM, None),
+            ("Foo", SYNTH_LONE_QUOTE, "unbakeable", "quoting", PROGRAM, None),
+            ("DREAMM", SYNTH_TRAILING_DOT, "unbakeable", "no_rom_target", PROGRAM, None),
         ],
     )
     def test_classification(self, label, text, status, reason, kind, core_so):
-        option = classify_command(label, text)
+        option = _classify(label, text)
         assert option.label == label
         assert option.status == status
         assert option.reason == reason
@@ -109,54 +143,54 @@ class TestClassifyCommand:
 
     def test_inject_wins_over_missing_rom_target(self):
         """A ``%INJECT%`` command with no ``%ROM%`` is needs-setup, not no_rom_target."""
-        option = classify_command("Vita3K", VITA3K_INJECT_NO_ROM)
+        option = _classify("Vita3K", VITA3K_INJECT_NO_ROM)
         assert option.status == "needs_setup"
         assert option.reason == "inject"
 
     def test_startdir_beats_unknown_placeholder(self):
         """``%STARTDIR%`` is a known placeholder — it surfaces its own reason."""
-        option = classify_command("Neko Project II", PC98_NEKOP2_STARTDIR)
+        option = _classify("Neko Project II", PC98_NEKOP2_STARTDIR)
         assert option.reason == "startdir"
 
     def test_env_prefixed_command_is_bakeable_standalone(self):
-        option = classify_command("Dolphin (Standalone)", GC_DOLPHIN_STANDALONE)
+        option = _classify("Dolphin (Standalone)", GC_DOLPHIN_STANDALONE)
         assert option.status == "bakeable"
-        assert option.kind == "standalone"
+        assert option.kind == PROGRAM
 
 
 class TestAnEntryTheResolverStatesNotInstalled:
     """``NOT_INSTALLED`` takes the place of the bake verdict, whatever the command."""
 
     def test_a_missing_standalone_is_withheld_with_its_reason(self):
-        option = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
+        option = _classify("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
         assert option.status == "needs_setup"
         assert option.reason == "not_installed"
         # Identity fields survive.
         assert option.label == "Ryubing (Standalone)"
-        assert option.kind == "standalone"
+        assert option.kind == PROGRAM
         assert option.command == "%EMULATOR_RYUBING% %ROM%"
 
     def test_a_startable_entry_keeps_its_bake_verdict(self):
-        option = classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH, installation=None)
+        option = _classify("PCSX2 (Standalone)", PS2_PCSX2_BATCH, installation=None)
         assert (option.status, option.not_established) == ("bakeable", None)
 
     def test_a_libretro_core_the_resolver_states_missing_is_withheld(self):
-        option = classify_command("SwanStation", PSX_SWANSTATION, installation=NOT_INSTALLED)
+        option = _classify("SwanStation", PSX_SWANSTATION, installation=NOT_INSTALLED)
         assert (option.status, option.reason) == ("needs_setup", "not_installed")
-        assert option.kind == "libretro"
+        assert option.kind == CORE
         assert option.core_so == "swanstation_libretro"
 
     def test_the_installation_reason_stands_ahead_of_an_unbakeable_command(self):
-        option = classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, installation=NOT_INSTALLED)
+        option = _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, installation=NOT_INSTALLED)
         assert option.reason == "not_installed"
 
     def test_a_withheld_option_drops_out_of_default_selection_and_its_pin_no_longer_resolves(self):
-        withheld = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
+        withheld = _classify("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
         assert select_default_option([withheld]) is None
         assert label_to_invocation([withheld], "Ryubing (Standalone)") is None
 
     def test_a_withheld_option_reads_disabled_with_reason_in_payload(self):
-        withheld = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
+        withheld = _classify("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
         payload = options_to_payload([withheld])
         assert payload[0]["bakeable"] is False
         assert payload[0]["reason"] == "not_installed"
@@ -166,30 +200,30 @@ class TestAnEntryTheResolverStatesNotInstalled:
 class TestAnEntryTheResolverCouldNotEstablish:
     """A selectable pick with a note, never the default by itself (#2195 D9)."""
 
-    def _paprium(self) -> EmulatorOption:
-        return classify_command("Paprium", PSX_SWANSTATION, installation=NOT_ESTABLISHED_PATH_UNSEEN)
+    def _unseen(self) -> EmulatorOption:
+        return _classify("PCSX2 (Standalone)", PS2_PCSX2_BATCH, installation=NOT_ESTABLISHED_PATH_UNSEEN)
 
     def test_it_bakes_as_its_command_would_and_carries_the_note(self):
-        option = self._paprium()
+        option = self._unseen()
         assert (option.status, option.reason, option.not_established) == ("bakeable", None, "path_unseen")
 
     def test_it_is_never_the_default_by_itself(self):
-        swanstation = classify_command("SwanStation", PSX_SWANSTATION)
-        assert select_default_option([self._paprium()]) is None
-        assert select_default_option([self._paprium(), swanstation]) is swanstation
+        swanstation = _classify("SwanStation", PSX_SWANSTATION)
+        assert select_default_option([self._unseen()]) is None
+        assert select_default_option([self._unseen(), swanstation]) is swanstation
 
     def test_a_pick_of_it_stays(self):
-        assert label_to_invocation([self._paprium()], "Paprium") == EmulatorInvocation.libretro(
-            "swanstation_libretro", "Paprium"
+        assert label_to_invocation([self._unseen()], "PCSX2 (Standalone)") == EmulatorInvocation.run_game(
+            PS2_PCSX2_BATCH, "PCSX2 (Standalone)"
         )
-        assert resolve_platform_label([self._paprium()], "Paprium") == "Paprium"
+        assert resolve_platform_label([self._unseen()], "PCSX2 (Standalone)") == "PCSX2 (Standalone)"
 
     def test_it_reads_selectable_with_its_note_in_payload(self):
-        payload = options_to_payload([self._paprium()])
+        payload = options_to_payload([self._unseen()])
         assert (payload[0]["bakeable"], payload[0]["reason"], payload[0]["is_default"]) == (True, "path_unseen", False)
 
     def test_an_unbakeable_command_keeps_the_reason_it_cannot_bake(self):
-        option = classify_command("Shortcut", PS3_RPCS3_SHORTCUT, installation=NOT_ESTABLISHED)
+        option = _classify("Shortcut", PS3_RPCS3_SHORTCUT, installation=NOT_ESTABLISHED)
         assert options_to_payload([option])[0]["reason"] == "shortcut_script"
 
 
@@ -210,19 +244,102 @@ class TestThePanelWordsEveryNotEstablishedNote:
         assert panel == domain
 
 
+class TestThePanelWordsEveryRefusalOfTheResolvers:
+    """Each bake refusal the resolver's statements cause has its own words in the panel's ``reasonCopy``."""
+
+    _PANEL = Path(__file__).resolve().parents[2] / "frontend" / "src" / "utils" / "emulatorMenu.tsx"
+
+    @pytest.mark.parametrize("reason", [CORE_UNLOCATED, START_SCRIPT_RUNS_NOTHING])
+    def test_the_panel_has_a_case_for_it(self, reason):
+        source = self._PANEL.read_text(encoding="utf-8")
+        copy = source[source.index("export function reasonCopy") : source.index("default:", source.index("reasonCopy"))]
+        assert f'case "{reason}":' in copy
+
+
+class TestWhatTheResolverStatesDecidesTheBake:
+    """Kind, core and core path are the resolver's; Tender writes the core path in and bakes the rest as written."""
+
+    def _fbneo(self, **resolver: Any) -> EmulatorOption:
+        stated: dict[str, Any] = {"kind": CORE, "core_so": "fbneo_libretro", "core_path": f"{CORES}/fbneo_libretro.so"}
+        stated |= resolver
+        return classify_command("FinalBurn Neo", NEOGEOCD_FBNEO, **stated)
+
+    def test_finalburn_neo_on_neo_geo_cd_reads_as_its_core_and_keeps_its_subsystem(self):
+        option = self._fbneo()
+        assert (option.kind, option.core_so, option.status) == (CORE, "fbneo_libretro", "bakeable")
+        assert option_to_invocation(option) == EmulatorInvocation.run_game(
+            f"%EMULATOR_RETROARCH% --subsystem neocd -L {CORES}/fbneo_libretro.so %ROM%",
+            "FinalBurn Neo",
+            core_so="fbneo_libretro",
+        )
+
+    def test_the_core_path_baked_is_the_resolvers(self):
+        option = classify_command(
+            "mGBA",
+            "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%",
+            kind=CORE,
+            core_so="mgba_libretro",
+            core_path="/var/config/retroarch/cores-elsewhere/mgba_libretro.so",
+        )
+        invocation = option_to_invocation(option)
+        assert invocation is not None
+        assert invocation.command == (
+            "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores-elsewhere/mgba_libretro.so %ROM%"
+        )
+
+    def test_a_core_the_resolver_gives_no_path_for_is_not_bakeable(self):
+        option = self._fbneo(core_path=None, installation=NOT_ESTABLISHED_PATH_UNSEEN)
+        assert (option.status, option.reason, option.not_established) == (
+            "unbakeable",
+            CORE_UNLOCATED,
+            NOT_ESTABLISHED_PATH_UNSEEN,
+        )
+        assert option_to_invocation(option) is None
+        assert select_default_option([option]) is None
+        assert options_to_payload([option])[0]["reason"] == CORE_UNLOCATED
+
+    def test_an_entry_the_start_script_runs_nothing_for_is_not_bakeable(self):
+        option = classify_command("PICO-8 (Standalone)", PICO8_STANDALONE, kind=PROGRAM, start_script_runs_nothing=True)
+        assert (option.status, option.reason) == ("unbakeable", START_SCRIPT_RUNS_NOTHING)
+        assert label_to_invocation([option], "PICO-8 (Standalone)") is None
+
+    def test_not_installed_stands_ahead_of_the_start_script(self):
+        option = classify_command(
+            "PICO-8 (Standalone)",
+            PICO8_STANDALONE,
+            kind=PROGRAM,
+            installation=NOT_INSTALLED,
+            start_script_runs_nothing=True,
+        )
+        assert option.reason == NOT_INSTALLED
+
+    def test_a_program_carries_its_launcher_and_a_core_does_not(self):
+        launcher = "/app/retrodeck/components/retroarch/retroarch"
+        invocation = option_to_invocation(self._fbneo(launcher=launcher))
+        assert invocation is not None
+        assert invocation.launcher is None
+
+    def test_a_foreign_core_is_its_own_kind_and_bakes_as_its_command_earns(self):
+        option = classify_command(
+            "Citra", "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/citra_libretro.dll %ROM%", kind=FOREIGN_CORE
+        )
+        assert (option.kind, option.core_so, option.status) == (FOREIGN_CORE, None, "bakeable")
+        assert options_to_payload([option])[0]["kind"] == FOREIGN_CORE
+
+
 class TestTheLauncher:
     """The resolver's launcher rides on the option into a standalone invocation."""
 
     _LAUNCHER = "/app/retrodeck/components/rpcs3/component_launcher.sh"
 
     def test_a_standalone_invocation_carries_the_launcher(self):
-        option = classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, launcher=self._LAUNCHER)
+        option = _classify("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, launcher=self._LAUNCHER)
         invocation = option_to_invocation(option)
         assert invocation is not None
         assert invocation.launcher == self._LAUNCHER
 
     def test_a_withheld_entry_renders_no_invocation_whatever_its_launcher(self):
-        option = classify_command(
+        option = _classify(
             "RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, installation=NOT_INSTALLED, launcher=self._LAUNCHER
         )
         assert option_to_invocation(option) is None
@@ -232,25 +349,25 @@ class TestSelectDefaultOption:
     def test_first_bakeable_wins_over_earlier_unbakeable(self):
         """The ps3 chain: Shortcut (script) → Game Serial (inject) → Directory (bakeable)."""
         options = [
-            classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
-            classify_command("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL),
-            classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
-            classify_command("RPCS3 ISO (Standalone)", PS3_RPCS3_DIRECTORY),
+            _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
+            _classify("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL),
+            _classify("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
+            _classify("RPCS3 ISO (Standalone)", PS3_RPCS3_DIRECTORY),
         ]
         default = select_default_option(options)
         assert default is not None
         assert default.label == "RPCS3 Directory (Standalone)"
 
     def test_libretro_default_when_first_in_order(self):
-        options = [classify_command("SwanStation", PSX_SWANSTATION)]
+        options = [_classify("SwanStation", PSX_SWANSTATION)]
         default = select_default_option(options)
         assert default is not None
         assert default.core_so == "swanstation_libretro"
 
     def test_none_when_nothing_bakeable(self):
         options = [
-            classify_command("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED),
-            classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE),
+            _classify("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED),
+            _classify("MAME (Standalone)", ARCADE_MAME_STANDALONE),
         ]
         assert select_default_option(options) is None
 
@@ -260,19 +377,19 @@ class TestSelectDefaultOption:
 
 class TestOptionToInvocation:
     def test_libretro_option_renders_libretro_invocation(self):
-        option = classify_command("SwanStation", PSX_SWANSTATION)
-        assert option_to_invocation(option) == EmulatorInvocation.libretro("swanstation_libretro", "SwanStation")
+        option = _classify("SwanStation", PSX_SWANSTATION)
+        assert option_to_invocation(option) == _core_invocation("swanstation_libretro", "SwanStation")
 
     def test_standalone_option_bakes_command_verbatim(self):
-        option = classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH)
-        assert option_to_invocation(option) == EmulatorInvocation.standalone(PS2_PCSX2_BATCH, "PCSX2 (Standalone)")
+        option = _classify("PCSX2 (Standalone)", PS2_PCSX2_BATCH)
+        assert option_to_invocation(option) == EmulatorInvocation.run_game(PS2_PCSX2_BATCH, "PCSX2 (Standalone)")
 
     def test_unbakeable_option_returns_none(self):
-        option = classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT)
+        option = _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT)
         assert option_to_invocation(option) is None
 
     def test_needs_setup_option_returns_none(self):
-        option = classify_command("Vita3K", VITA3K_INJECT_NO_ROM)
+        option = _classify("Vita3K", VITA3K_INJECT_NO_ROM)
         assert option_to_invocation(option) is None
 
     def test_none_option_returns_none(self):
@@ -281,13 +398,13 @@ class TestOptionToInvocation:
 
 class TestLabelToInvocation:
     OPTIONS: ClassVar[list[EmulatorOption]] = [
-        classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
-        classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
+        _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
+        _classify("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
     ]
 
     def test_bakeable_label_resolves(self):
         result = label_to_invocation(self.OPTIONS, "RPCS3 Directory (Standalone)")
-        assert result == EmulatorInvocation.standalone(PS3_RPCS3_DIRECTORY, "RPCS3 Directory (Standalone)")
+        assert result == EmulatorInvocation.run_game(PS3_RPCS3_DIRECTORY, "RPCS3 Directory (Standalone)")
 
     def test_unbakeable_label_returns_none(self):
         assert label_to_invocation(self.OPTIONS, "RPCS3 Shortcut (Standalone)") is None
@@ -301,8 +418,8 @@ class TestResolveFirmwareOption:
 
     def test_the_pick_where_there_is_one(self):
         options = [
-            classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
-            classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
+            _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
+            _classify("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
         ]
         option = resolve_firmware_option(options, None)
         assert option is not None
@@ -310,8 +427,8 @@ class TestResolveFirmwareOption:
 
     def test_the_emulator_retrodeck_declares_first_where_nothing_bakes(self):
         """RetroDECK's plain launch starts its first declared emulator, installed or not."""
-        first = classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE, installation=NOT_INSTALLED)
-        options = [first, classify_command("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED)]
+        first = _classify("MAME (Standalone)", ARCADE_MAME_STANDALONE, installation=NOT_INSTALLED)
+        options = [first, _classify("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED)]
         assert resolve_firmware_option(options, "MAME - Current") is first
 
     def test_none_where_no_emulator_is_listed(self):
@@ -322,9 +439,9 @@ class TestResolvePlatformLabel:
     """The platform-layer label two services render — one rule, one place."""
 
     OPTIONS: ClassVar[list[EmulatorOption]] = [
-        classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
-        classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
-        classify_command("RPCS3 ISO (Standalone)", PS3_RPCS3_DIRECTORY),
+        _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
+        _classify("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
+        _classify("RPCS3 ISO (Standalone)", PS3_RPCS3_DIRECTORY),
     ]
 
     def test_no_override_falls_back_to_the_default(self):
@@ -342,7 +459,7 @@ class TestResolvePlatformLabel:
         assert resolve_platform_label(self.OPTIONS, "Uninstalled Emulator") == "RPCS3 Directory (Standalone)"
 
     def test_nothing_bakeable_answers_no_label(self):
-        options = [classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT)]
+        options = [_classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT)]
         assert resolve_platform_label(options, None) is None
         assert resolve_platform_label(options, "RPCS3 Shortcut (Standalone)") is None
 
@@ -353,9 +470,9 @@ class TestResolvePlatformLabel:
 class TestOptionsToPayload:
     def test_marks_single_default_and_bakeability(self):
         options = [
-            classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
-            classify_command("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL),
-            classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
+            _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
+            _classify("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL),
+            _classify("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
         ]
         payload = options_to_payload(options)
         assert payload == [
@@ -363,7 +480,7 @@ class TestOptionsToPayload:
                 "label": "RPCS3 Shortcut (Standalone)",
                 "labels": ["RPCS3 Shortcut (Standalone)"],
                 "name": "RPCS3 Shortcut (Standalone)",
-                "kind": "standalone",
+                "kind": PROGRAM,
                 "core_so": None,
                 "emulator": None,
                 "is_default": False,
@@ -374,7 +491,7 @@ class TestOptionsToPayload:
                 "label": "RPCS3 Game Serial (Standalone)",
                 "labels": ["RPCS3 Game Serial (Standalone)"],
                 "name": "RPCS3 Game Serial (Standalone)",
-                "kind": "standalone",
+                "kind": PROGRAM,
                 "core_so": None,
                 "emulator": None,
                 "is_default": False,
@@ -385,7 +502,7 @@ class TestOptionsToPayload:
                 "label": "RPCS3 Directory (Standalone)",
                 "labels": ["RPCS3 Directory (Standalone)"],
                 "name": "RPCS3 Directory (Standalone)",
-                "kind": "standalone",
+                "kind": PROGRAM,
                 "core_so": None,
                 "emulator": None,
                 "is_default": True,
@@ -395,8 +512,8 @@ class TestOptionsToPayload:
         ]
 
     def test_libretro_payload_carries_core_so(self):
-        payload = options_to_payload([classify_command("SwanStation", PSX_SWANSTATION)])
-        assert payload[0]["kind"] == "libretro"
+        payload = options_to_payload([_classify("SwanStation", PSX_SWANSTATION)])
+        assert payload[0]["kind"] == CORE
         assert payload[0]["core_so"] == "swanstation_libretro"
         assert payload[0]["is_default"] is True
 
@@ -409,8 +526,8 @@ class TestOptionsToPayload:
         """
         payload = options_to_payload(
             [
-                classify_command("SwanStation", PSX_SWANSTATION, emulator="swanstation_libretro.so"),
-                classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH, emulator="PCSX2"),
+                _classify("SwanStation", PSX_SWANSTATION, emulator="swanstation_libretro.so"),
+                _classify("PCSX2 (Standalone)", PS2_PCSX2_BATCH, emulator="PCSX2"),
             ]
         )
 
@@ -421,26 +538,26 @@ class TestOptionsToPayload:
 
     def test_an_unidentified_row_carries_no_identity(self):
         """The resolver could not name the emulator, and the payload says so rather than guessing."""
-        payload = options_to_payload([classify_command("Citra", PSX_SWANSTATION)])
+        payload = options_to_payload([_classify("Citra", PSX_SWANSTATION)])
 
         assert payload[0]["emulator"] is None
 
     def test_no_default_when_none_bakeable(self):
-        payload = options_to_payload([classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE)])
+        payload = options_to_payload([_classify("MAME (Standalone)", ARCADE_MAME_STANDALONE)])
         assert all(entry["is_default"] is False for entry in payload)
 
     def test_command_text_not_leaked(self):
-        payload = options_to_payload([classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH)])
+        payload = options_to_payload([_classify("PCSX2 (Standalone)", PS2_PCSX2_BATCH)])
         assert "command" not in payload[0]
 
     def test_labels_that_run_one_command_are_one_entry_named_by_every_label(self):
         """RetroDECK's PlayStation 2 list, in its own order: LRPS2 and PCSX2 start the same core."""
         payload = options_to_payload(
             [
-                classify_command("PCEE2", PS2_PCEE2_LIBRETRO, emulator="pcee2_libretro.so"),
-                classify_command("LRPS2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
-                classify_command("PCSX2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
-                classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH, emulator="PCSX2"),
+                _classify("PCEE2", PS2_PCEE2_LIBRETRO, emulator="pcee2_libretro.so"),
+                _classify("LRPS2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
+                _classify("PCSX2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
+                _classify("PCSX2 (Standalone)", PS2_PCSX2_BATCH, emulator="PCSX2"),
             ]
         )
 
@@ -453,8 +570,8 @@ class TestOptionsToPayload:
     def test_the_merged_entry_is_the_default_where_any_of_its_labels_is(self):
         payload = options_to_payload(
             [
-                classify_command("LRPS2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
-                classify_command("PCSX2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
+                _classify("LRPS2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
+                _classify("PCSX2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
             ]
         )
 
@@ -464,10 +581,10 @@ class TestOptionsToPayload:
         """RPCS3's four PS3 labels run three commands: only Directory and ISO are one choice."""
         payload = options_to_payload(
             [
-                classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, emulator="RPCS3"),
-                classify_command("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL, emulator="RPCS3"),
-                classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, emulator="RPCS3"),
-                classify_command("RPCS3 ISO (Standalone)", PS3_RPCS3_DIRECTORY, emulator="RPCS3"),
+                _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, emulator="RPCS3"),
+                _classify("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL, emulator="RPCS3"),
+                _classify("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, emulator="RPCS3"),
+                _classify("RPCS3 ISO (Standalone)", PS3_RPCS3_DIRECTORY, emulator="RPCS3"),
             ]
         )
 
@@ -485,7 +602,7 @@ class TestOptionsToPayload:
             ("EKA2L1 [Nokia N97] (Standalone)", SYMBIAN_EKA2L1_RM507),
             ("EKA2L1 [Custom device] (Standalone)", SYMBIAN_EKA2L1_CUSTOM),
         ]
-        payload = options_to_payload([classify_command(label, text, emulator="EKA2L1") for label, text in labels])
+        payload = options_to_payload([_classify(label, text, emulator="EKA2L1") for label, text in labels])
 
         assert [e["labels"] for e in payload] == [[label] for label, _ in labels]
 
@@ -526,7 +643,7 @@ class TestClassificationInvariants:
 
     @pytest.mark.parametrize("text", CORPUS)
     def test_exactly_one_valid_status_and_reason(self, text):
-        option = classify_command("L", text)
+        option = _classify("L", text)
         assert option.status in self._VALID_STATUSES
         assert option.reason in self._VALID_REASONS
         # A bakeable option never carries a reason; a non-bakeable one always does.
@@ -534,24 +651,24 @@ class TestClassificationInvariants:
 
     @pytest.mark.parametrize("text", CORPUS)
     def test_classification_is_deterministic(self, text):
-        first = classify_command("L", text)
-        second = classify_command("L", text)
+        first = _classify("L", text)
+        second = _classify("L", text)
         assert first == second
 
     def test_select_default_returns_none_or_bakeable(self):
-        options = [classify_command(f"L{i}", text) for i, text in enumerate(self.CORPUS)]
+        options = [_classify(f"L{i}", text) for i, text in enumerate(self.CORPUS)]
         default = select_default_option(options)
         assert default is None or default.status == "bakeable"
 
     def test_selected_default_renders_an_invocation(self):
-        options = [classify_command("SwanStation", PSX_SWANSTATION), classify_command("Q", SYNTH_LONE_QUOTE)]
+        options = [_classify("SwanStation", PSX_SWANSTATION), _classify("Q", SYNTH_LONE_QUOTE)]
         default = select_default_option(options)
         assert isinstance(option_to_invocation(default), EmulatorInvocation)
 
 
 def test_emulator_option_is_frozen():
     option = EmulatorOption(
-        label="x", kind="standalone", core_so=None, command="%ROM%", status="bakeable", reason=None, emulator="RPCS3"
+        label="x", kind=PROGRAM, core_so=None, command="%ROM%", status="bakeable", reason=None, emulator="RPCS3"
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
         option.label = "y"  # type: ignore[misc]

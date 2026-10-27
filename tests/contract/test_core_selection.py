@@ -52,7 +52,7 @@ _MGBA_ENTRY = {
     "label": "mGBA",
     "labels": ["mGBA"],
     "name": "mGBA",
-    "kind": "libretro",
+    "kind": "core",
     "core_so": "mgba_libretro",
     "emulator": "mgba_libretro.so",
     "is_default": True,
@@ -63,7 +63,7 @@ _VBA_NEXT_ENTRY = {
     "label": "VBA Next",
     "labels": ["VBA Next"],
     "name": "VBA Next",
-    "kind": "libretro",
+    "kind": "core",
     "core_so": "vba_next_libretro",
     "emulator": "vba_next_libretro.so",
     "is_default": False,
@@ -326,9 +326,15 @@ _SWITCH_ES_SYSTEMS_XML = """\
 </systemList>
 """
 
+# The bundled file carries RetroArch's rule as a shipped one does: RetroDECK's
+# run_game.sh reads only this layer, and without it the resolver states the
+# script would run nothing for a RetroArch entry.
 _SWITCH_ES_FIND_RULES_XML = """\
 <?xml version="1.0"?>
 <ruleList>
+  <emulator name="RETROARCH">
+    <rule type="staticpath"><entry>/app/retrodeck/components/retroarch/retroarch</entry></rule>
+  </emulator>
   <emulator name="RYUBING">
     <rule type="staticpath">
       <entry>/app/retrodeck/components/ryubing/component_launcher.sh</entry>
@@ -380,7 +386,7 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
             "label": "Ryubing (Standalone)",
             "labels": ["Ryubing (Standalone)"],
             "name": "Ryubing (Standalone)",
-            "kind": "standalone",
+            "kind": "program",
             "core_so": None,
             "emulator": "RYUBING",
             "is_default": False,
@@ -391,7 +397,7 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
             "label": "Yuzu",
             "labels": ["Yuzu"],
             "name": "Yuzu",
-            "kind": "libretro",
+            "kind": "core",
             "core_so": "yuzu_libretro",
             "emulator": "yuzu_libretro.so",
             "is_default": True,
@@ -415,3 +421,41 @@ async def test_the_same_standalone_is_the_default_once_its_component_is_there(ha
         ("Yuzu", True, False),
     ]
     assert result["active_core_label"] == "Ryubing (Standalone)"
+
+
+# Neo Geo CD as RetroDECK ships it, FinalBurn Neo first: a core whose command
+# passes RetroArch more than its core.
+_NEOGEOCD_ES_SYSTEMS_XML = """\
+<?xml version="1.0"?>
+<systemList>
+  <system>
+    <name>neogeocd</name>
+    <path>%ROMPATH%/neogeocd</path>
+    <command label="FinalBurn Neo">%EMULATOR_RETROARCH% --subsystem neocd -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%\
+</command>
+    <command label="NeoCD">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/neocd_libretro.so %ROM%</command>
+  </system>
+</systemList>
+"""
+
+
+async def test_finalburn_neo_on_neo_geo_cd_reads_as_its_core_and_starts_with_its_subsystem(harness):
+    """The resolver's kind and core path, end to end: FinalBurn Neo is a core, and its bake keeps its subsystem."""
+    seed_es_systems(harness, _NEOGEOCD_ES_SYSTEMS_XML)
+    seed_install(harness, 7, system="neogeocd", platform_slug="neogeocd", file_name="game.chd")
+
+    info = await harness.endpoints.get_system_core_info("neogeocd")
+    result = await harness.endpoints.clear_game_core(7)
+
+    fbneo = info["emulators"][0]
+    assert (fbneo["label"], fbneo["kind"], fbneo["core_so"], fbneo["is_default"]) == (
+        "FinalBurn Neo",
+        "core",
+        "fbneo_libretro",
+        True,
+    )
+    assert result["success"] is True
+    assert (
+        '-e "%EMULATOR_RETROARCH% --subsystem neocd -L /var/config/retroarch/cores/fbneo_libretro.so %ROM%"'
+        in result["launch_options"]
+    )

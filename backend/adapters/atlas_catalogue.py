@@ -70,16 +70,21 @@ from _vendor.atlas import (
     HEALTH_ISSUE_CATALOGUE_INVALID,
     HEALTH_ISSUE_NOT_SET_UP,
     KIND_LIBRETRO,
+    KIND_RETROARCH_FOREIGN_CORE,
+    KIND_STANDALONE,
 )
 
 from adapters.atlas_identity import emulator_identity
 from domain.emulator_commands import (
+    CORE,
+    FOREIGN_CORE,
     NOT_ESTABLISHED,
     NOT_ESTABLISHED_FIND_RULES_UNREAD,
     NOT_ESTABLISHED_LOOKUP_UNSUPPORTED,
     NOT_ESTABLISHED_NO_FIND_RULE,
     NOT_ESTABLISHED_PATH_UNSEEN,
     NOT_INSTALLED,
+    PROGRAM,
     classify_command,
     option_to_invocation,
     select_default_option,
@@ -96,6 +101,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
+    from domain.emulator_commands import EmulatorOption
     from domain.emulator_sources import SourcesReading
     from domain.shortcut_data import EmulatorInvocation
 
@@ -160,11 +166,10 @@ _NOT_INSTALLED_BECAUSE = frozenset(
 )
 
 # Notes beside a verdict, deliberately not acted on here. ``run-game-differs``
-# says RetroDECK's ``run_game.sh`` would find something else, or nothing, for
-# the command's ``%EMULATOR_X%`` token — the lookup Tender's ``-e`` bake goes
-# through too; what Tender does about it is open under #2195. The other three
-# state assumptions of a frontend on the host (EmuDeck's), which starts no game
-# through Tender.
+# naming a path says RetroDECK's ``run_game.sh`` would run that rather than
+# what ES-DE runs; only the same note naming nothing refuses the bake
+# (:func:`_start_script_runs_nothing`). The other three state assumptions of a
+# frontend on the host (EmuDeck's), which starts no game through Tender.
 _LAUNCH_NOTES = frozenset(
     {
         CAVEAT_RUN_GAME_DIFFERS,
@@ -175,6 +180,10 @@ _LAUNCH_NOTES = frozenset(
 )
 
 _CORE_SO_SUFFIX = ".so"
+
+# The resolver's word for what an entry launches, in Tender's. A word this map
+# does not hold reads as a program of its own.
+_KINDS = {KIND_LIBRETRO: CORE, KIND_STANDALONE: PROGRAM, KIND_RETROARCH_FOREIGN_CORE: FOREIGN_CORE}
 
 
 def _unavailable(reason: str, source: dict[str, Any] | None) -> dict[str, Any]:
@@ -238,6 +247,18 @@ def _installation(entry: Any) -> str | None:
     )
 
 
+def _start_script_runs_nothing(entry: Any) -> bool:
+    """Whether the resolver states RetroDECK's ``run_game.sh`` would run nothing for *entry*.
+
+    That is ``run-game-differs`` with an empty ``run_game_path``: the script's
+    own lookup of the command's ``%EMULATOR_X%`` token finds no program, so a
+    shortcut baked through its ``-e`` starts nothing.
+    """
+    return any(
+        caveat.code == CAVEAT_RUN_GAME_DIFFERS and caveat.data.get("run_game_path") == "" for caveat in entry.caveats
+    )
+
+
 def _sandbox_launcher(entry: Any) -> str | None:
     """The path inside RetroDECK's sandbox the resolver states ES-DE runs for *entry*, or ``None``.
 
@@ -250,6 +271,21 @@ def _sandbox_launcher(entry: Any) -> str | None:
     if launcher is None or launcher.app_id != RETRODECK_APP_ID or launcher.replacement_command is not None:
         return None
     return launcher.path
+
+
+def _classify_entry(entry: Any) -> EmulatorOption:
+    """*entry* classified for bakeability, with everything the resolver states about it in Tender's words."""
+    return classify_command(
+        entry.label,
+        entry.command,
+        kind=_KINDS.get(entry.kind, PROGRAM),
+        core_so=_own_core_so(entry.core_so) if entry.core_so else None,
+        core_path=entry.core_path,
+        emulator=emulator_identity(entry),
+        installation=_installation(entry),
+        launcher=_sandbox_launcher(entry),
+        start_script_runs_nothing=_start_script_runs_nothing(entry),
+    )
 
 
 def catalogue_refused(answer: Any) -> bool:
@@ -384,8 +420,11 @@ class AtlasCatalogueAdapter:
         "starts_games"}``, ``None`` where none answers.
 
         ``options`` is in DECLARED order, so the first bakeable entry is the
-        system default. Whether what an entry launches is there is the
-        resolver's ``availability``, libretro cores included: one it states not
+        system default. What an entry launches, the core it loads and that
+        core's path are the resolver's ``kind``, ``core_so`` and ``core_path``,
+        and an entry it states ``run_game.sh`` would run nothing for is not
+        bakeable. Whether what an entry launches is there is the resolver's
+        ``availability``, libretro cores included: one it states not
         installed is ``needs_setup`` with ``not_installed``, so it neither
         becomes the default nor bakes into a shortcut; one it could not
         establish carries a ``not_established`` note and is never the default
@@ -402,16 +441,7 @@ class AtlasCatalogueAdapter:
             return _unavailable(CATALOGUE_UNAVAILABLE, source)
         if catalogue_refused(answer):
             return _unavailable(_refusal_reason(answer), source)
-        options = [
-            classify_command(
-                entry.label,
-                entry.command,
-                emulator=emulator_identity(entry),
-                installation=_installation(entry),
-                launcher=_sandbox_launcher(entry),
-            )
-            for entry in _declared_order(answer.entries)
-        ]
+        options = [_classify_entry(entry) for entry in _declared_order(answer.entries)]
         return {"available": True, "options": options, "reason": None, "source": source}
 
     def system_supports_m3u(self, system_name: str) -> bool:

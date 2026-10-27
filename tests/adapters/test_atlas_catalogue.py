@@ -47,6 +47,7 @@ from _vendor.atlas import (
     HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_ROOT_MISSING,
     KIND_LIBRETRO,
+    KIND_RETROARCH_FOREIGN_CORE,
     KIND_STANDALONE,
     find_rules,
 )
@@ -58,12 +59,16 @@ from _vendor.atlas.placement import Caveat
 from adapters import atlas_catalogue
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
+from domain.emulator_commands import CORE, FOREIGN_CORE, PROGRAM, START_SCRIPT_RUNS_NOTHING
 from domain.shortcut_data import EmulatorInvocation
 
 if TYPE_CHECKING:
     from _vendor.atlas import Availability
 
 _RETROARCH = "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/{core}.so %ROM%"
+
+# Where the resolver states RetroDECK keeps its cores, spelled inside its sandbox.
+_CORES = "/var/config/retroarch/cores"
 
 # The answering source a catalogue answer names where RetroDECK answers.
 _RETRODECK = {"kind": "retrodeck", "starts_games": True}
@@ -138,8 +143,11 @@ def _libretro(
     core: str,
     declared_index: int | None,
     selection: str | None = None,
-    launch: LaunchResolution = _STARTABLE,
+    launch: LaunchResolution | None = None,
 ) -> EmulatorEntry:
+    """A core entry, started with its core file found in RetroDECK's cores folder unless *launch* says otherwise."""
+    if launch is None:
+        launch = LaunchResolution(AVAILABILITY_STARTABLE, _launcher(), f"{_CORES}/{core}.so")
     return _entry(
         label=label,
         command=_RETROARCH.format(core=core),
@@ -252,7 +260,7 @@ class TestDeclaredOrder:
         adapter = _adapter(installation, traces)
 
         assert _labels(adapter) == ["RPCS3", "RPCS3 Firmware", "RPCS3 Directory"]
-        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.standalone(
+        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.run_game(
             "%EMULATOR_RPCS3% %ROM%", "RPCS3", launcher=_LAUNCHER
         )
 
@@ -271,7 +279,7 @@ class TestDeclaredOrder:
         adapter = _adapter(installation, traces)
 
         assert _labels(adapter) == ["RPCS3", "RPCS3 Directory"]
-        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.standalone(
+        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.run_game(
             "%EMULATOR_RPCS3% %ROM%", "RPCS3", launcher=_LAUNCHER
         )
 
@@ -422,7 +430,7 @@ class TestCatalogueRefusals:
         adapter = _adapter(installation, traces)
 
         assert _labels(adapter) == ["My PCSX2"]
-        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.standalone(
+        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.run_game(
             "%EMULATOR_PCSX2% -batch %ROM%", "My PCSX2", launcher=_LAUNCHER
         )
 
@@ -582,8 +590,11 @@ class TestTheResolversAvailability:
 
         options = adapter.get_emulator_options("switch")["options"]
         assert (options[0].status, options[0].reason) == ("needs_setup", "not_installed")
-        assert adapter.get_default_emulator("switch") == EmulatorInvocation.libretro(
-            "yuzu_libretro", "Yuzu", "yuzu_libretro.so"
+        assert adapter.get_default_emulator("switch") == EmulatorInvocation.run_game(
+            f"%EMULATOR_RETROARCH% -L {_CORES}/yuzu_libretro.so %ROM%",
+            "Yuzu",
+            "yuzu_libretro.so",
+            core_so="yuzu_libretro",
         )
 
     def test_a_libretro_core_the_resolver_states_not_installed_is_withheld(self, traces):
@@ -618,9 +629,9 @@ class TestTheResolversAvailability:
     ):
         installation = _Installation(
             catalogue=_answer(
-                _libretro(
-                    label="Paprium",
-                    core="genesis_plus_gx_expanded_libretro",
+                _entry(
+                    label="BlastEm",
+                    command="%EMULATOR_BLASTEM% %ROM%",
                     declared_index=0,
                     launch=_launch(AVAILABILITY_UNESTABLISHED, code),
                 )
@@ -661,6 +672,71 @@ class TestTheResolversAvailability:
 
         option = _adapter(installation, traces).get_emulator_options("pico8")["options"][0]
         assert (option.status, option.reason) == ("bakeable", None)
+
+
+class TestWhatAnEntryIs:
+    """What an entry launches, its core and that core's path are read off the entry, never off its command."""
+
+    def test_each_of_the_resolvers_kinds_reads_as_tenders_own(self, traces):
+        installation = _Installation(
+            catalogue=_answer(
+                _libretro(label="mGBA", core="mgba_libretro", declared_index=0),
+                _entry(label="RPCS3", command="%EMULATOR_RPCS3% %ROM%", declared_index=1),
+                _entry(
+                    label="Citra",
+                    command="%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/citra_libretro.dll %ROM%",
+                    declared_index=2,
+                    kind=KIND_RETROARCH_FOREIGN_CORE,
+                ),
+            )
+        )
+
+        options = _adapter(installation, traces).get_emulator_options("gba")["options"]
+        assert [(o.kind, o.core_so, o.core_path) for o in options] == [
+            (CORE, "mgba_libretro", f"{_CORES}/mgba_libretro.so"),
+            (PROGRAM, None, None),
+            (FOREIGN_CORE, None, None),
+        ]
+
+    def test_a_core_whose_command_passes_more_than_its_core_is_still_a_core_and_bakes_as_written(self, traces):
+        installation = _Installation(
+            catalogue=_answer(
+                _entry(
+                    label="FinalBurn Neo",
+                    command="%EMULATOR_RETROARCH% --subsystem neocd -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%",
+                    declared_index=0,
+                    kind=KIND_LIBRETRO,
+                    core_so="fbneo_libretro.so",
+                    launch=LaunchResolution(AVAILABILITY_STARTABLE, _launcher(), f"{_CORES}/fbneo_libretro.so"),
+                )
+            )
+        )
+
+        assert _adapter(installation, traces).get_default_emulator("neogeocd") == EmulatorInvocation.run_game(
+            f"%EMULATOR_RETROARCH% --subsystem neocd -L {_CORES}/fbneo_libretro.so %ROM%",
+            "FinalBurn Neo",
+            "fbneo_libretro.so",
+            core_so="fbneo_libretro",
+        )
+
+    @pytest.mark.parametrize(("run_game_path", "bakes"), [("", False), ("/bin/sh", True)])
+    def test_only_a_start_script_that_runs_nothing_refuses_the_bake(self, traces, run_game_path, bakes):
+        differs = Caveat(code=CAVEAT_RUN_GAME_DIFFERS, message="stated", data={"run_game_path": run_game_path})
+        installation = _Installation(
+            catalogue=_answer(
+                _entry(
+                    label="PICO-8 (Standalone)",
+                    command="%EMULATOR_PICO-8% -run %ROM%",
+                    declared_index=0,
+                    launch=LaunchResolution(AVAILABILITY_STARTABLE, _launcher(), None, (differs,)),
+                )
+            )
+        )
+
+        option = _adapter(installation, traces).get_emulator_options("pico8")["options"][0]
+        assert (option.status == "bakeable", option.reason) == (
+            (True, None) if bakes else (False, START_SCRIPT_RUNS_NOTHING)
+        )
 
 
 class TestEveryLaunchLookupCodeIsClassified:

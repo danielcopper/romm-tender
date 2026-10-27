@@ -12,10 +12,10 @@ that belongs to this module rather than to the disc pin: neither of them may
 hold a Unit of Work open across the resolver's directory listing.
 """
 
+from fakes.fake_core_info_provider import core_invocation
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.uow_open_probe import record_uow_open
 
-from domain.shortcut_data import EmulatorInvocation
 from tests.services.library._helpers import _seed_install
 
 
@@ -40,9 +40,7 @@ class TestBuildCoreOverrides:
         roms = [{"id": 10, "platform_slug": "psx"}, {"id": 11, "platform_slug": "psx"}]
         result = library.shortcut_launch_resolver.do_build_core_overrides(roms, library.emulator_sources.read())
 
-        assert result == {
-            10: EmulatorInvocation.libretro("pcsx_rearmed_libretro", "PCSX ReARMed", "pcsx_rearmed_libretro.so")
-        }
+        assert result == {10: core_invocation("pcsx_rearmed_libretro", "PCSX ReARMed", "pcsx_rearmed_libretro.so")}
         assert 11 not in result
 
     def test_stale_override_omitted_with_warning(self, library, caplog):

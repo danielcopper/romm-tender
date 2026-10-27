@@ -14,6 +14,7 @@ from _factories import _make_conflict_rules, _refused_by_conflict_rule
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import (
     FakeCoreInfoProvider,
+    core_invocation,
     libretro_option,
     standalone_option,
 )
@@ -50,7 +51,7 @@ from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, finding_refusal, no_bios_root, switched_off
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.shortcut_data import EmulatorInvocation
+from domain.shortcut_data import RUN_GAME, EmulatorInvocation
 from lib.errors import Refused, RommConnectionError, ServerUnreachable
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.cores import CoreService, CoreServiceConfig
@@ -137,10 +138,10 @@ def _pick(emulator: str | None, label: str | None = None) -> EmulatorInvocation:
 
     The check takes the PICK rather than an identity beside a name, so a test
     asking it about an emulator hands it one value too. ``EmulatorInvocation`` is
-    what the ROM path really passes; its ``kind`` plays no part in a firmware
+    what the ROM path really passes; its ``form`` plays no part in a firmware
     answer, which is keyed on the identity alone.
     """
-    return EmulatorInvocation(kind="libretro", label=label, emulator=emulator)
+    return EmulatorInvocation(form=RUN_GAME, label=label, emulator=emulator)
 
 
 def _make_firmware_service(
@@ -1892,7 +1893,7 @@ class TestGetFirmwareStatus:
                 "label": "Flycast",
                 "labels": ["Flycast"],
                 "name": "Flycast",
-                "kind": "libretro",
+                "kind": "core",
                 "core_so": "flycast_libretro",
                 "emulator": _id("flycast_libretro"),
                 "is_default": True,
@@ -7437,7 +7438,7 @@ class TestEachEmulatorsOwnPlace:
         self, tmp_path, rom_picks_kronos
     ):
         """Whichever emulator the game resolves to, the file is linked wherever an emulator of the platform opens it."""
-        invocation = EmulatorInvocation.libretro(_KRONOS, "Kronos", f"{_KRONOS}.so") if rom_picks_kronos else None
+        invocation = core_invocation(_KRONOS, "Kronos", f"{_KRONOS}.so") if rom_picks_kronos else None
         game = FakeActiveCoreResolver(per_rom_emulator={42: invocation})
         fw, _ = self._service(tmp_path, "YabaSanshiro", active_core=game)
         (tmp_path / "bios" / "kronos" / "saturn_bios.bin").unlink()
