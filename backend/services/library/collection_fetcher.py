@@ -16,10 +16,11 @@ skip".
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from domain.collection_skip import CollectionSkip, membership_verdict, probe_verdict, recorded_updated_at
 from domain.platform_skip import skip_reference
+from domain.sync_stage import SyncStage
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
 
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
     from domain.work_unit import WorkUnit
     from services.library._fetch_pages import EmitProgressFn
     from services.library._state import LibrarySyncStateBox
-    from services.protocols import RommLibraryApi, UnitOfWorkFactory
+    from services.protocols import Clock, RommLibraryApi, UnitOfWorkFactory
 
 
 @dataclass(frozen=True)
@@ -40,8 +41,9 @@ class CollectionFetcherConfig:
 
     Holds the Protocol-typed RomM adapter, the loop and logger, the UoW factory
     the stamp read and the registry reconstruction open, the shared
-    ``LibrarySyncStateBox`` (read for the cancel signal), and the progress
-    emitter the per-page ``fetching`` frames go through.
+    ``LibrarySyncStateBox`` (read for the cancel signal), the progress
+    emitter the ``fetching`` frames go through, and the Clock each unit's fetch
+    start is read from.
     """
 
     romm_api: RommLibraryApi
@@ -50,6 +52,32 @@ class CollectionFetcherConfig:
     uow_factory: UnitOfWorkFactory
     sync_state_box: LibrarySyncStateBox
     emit_progress: EmitProgressFn
+    clock: Clock
+
+
+@dataclass(frozen=True)
+class CollectionDelivery:
+    """What one collection unit of a run delivers, fetched before the run applies any.
+
+    ``roms``, ``member_rom_ids`` and ``skipped`` are
+    :meth:`CollectionFetcher.fetch_collection_unit`'s answer for ``unit``;
+    ``fetch_started_at`` is the clock read before that unit's skip check, which
+    the unit's final chunk stamps as the next skip's reference.
+    """
+
+    unit: WorkUnit
+    roms: list[dict[str, Any]]
+    member_rom_ids: list[int]
+    skipped: bool
+    fetch_started_at: str
+
+
+class _WalkProgress(NamedTuple):
+    """What a walk's page frames carry: :func:`~services.library._fetch_pages.emit_fetch_page_progress`'s arguments."""
+
+    step: int
+    total_steps: int
+    units_fetched: tuple[int, int] | None
 
 
 class CollectionFetcher:
@@ -62,6 +90,7 @@ class CollectionFetcher:
         self._uow_factory = config.uow_factory
         self._sync_state = config.sync_state_box
         self._emit_progress = config.emit_progress
+        self._clock = config.clock
 
     def _read_collection_stamp(self, collection_id: str, collection_kind: str) -> CollectionSyncState | None:
         """Read one collection's completion stamp in a short read UoW."""
@@ -194,8 +223,57 @@ class CollectionFetcher:
             None, self._romm_api.list_roms_by_collection, int(unit.id), limit, offset, platform_ids
         )
 
+    async def fetch_collection_units(
+        self, units: list[WorkUnit], synced_rom_ids: set[int], *, progress_step: int, progress_total_steps: int
+    ) -> list[CollectionDelivery]:
+        """Fetch every collection unit of a run, in queue order, before the run applies the first.
+
+        Each unit is fetched by :meth:`fetch_collection_unit` against the one
+        *synced_rom_ids*, so a ROM two collections list is delivered by the
+        first of them, and each takes its own skip. Each unit's fetch start is
+        the clock read before its skip check, so it is never later than its
+        walk's first page (#743 D1, #2477 D2).
+
+        Every frame carries *progress_step* — the first collection unit's — so
+        no later unit's row reads done before it applies, and counts the units
+        fetched so far as its ``current`` of ``len(units)``, so the bar never
+        steps back when the next unit's walk starts again at page 1.
+
+        Raises :class:`SyncCancelled` once the run is cancelling, between two
+        units as during a walk.
+        """
+        deliveries: list[CollectionDelivery] = []
+        for fetched, unit in enumerate(units):
+            raise_if_cancelling(self._sync_state)
+            units_fetched = (fetched, len(units))
+            await self._emit_progress(
+                SyncStage.FETCHING,
+                current=fetched,
+                total=len(units),
+                message=f"Fetching {unit.name}",
+                step=progress_step,
+                total_steps=progress_total_steps,
+                sub_stage="fetch",
+            )
+            fetch_started_at = self._clock.now().isoformat()
+            roms, member_rom_ids, skipped, _ = await self.fetch_collection_unit(
+                unit,
+                synced_rom_ids,
+                progress_step=progress_step,
+                progress_total_steps=progress_total_steps,
+                units_fetched=units_fetched,
+            )
+            deliveries.append(CollectionDelivery(unit, roms, member_rom_ids, skipped, fetch_started_at))
+        return deliveries
+
     async def fetch_collection_unit(
-        self, unit: WorkUnit, synced_rom_ids: set[int], *, progress_step: int = 0, progress_total_steps: int = 0
+        self,
+        unit: WorkUnit,
+        synced_rom_ids: set[int],
+        *,
+        progress_step: int = 0,
+        progress_total_steps: int = 0,
+        units_fetched: tuple[int, int] | None = None,
     ) -> tuple[list[dict[str, Any]], list[int], bool, bool]:
         """Fetch ROMs for a single collection unit.
 
@@ -239,7 +317,8 @@ class CollectionFetcher:
         ``progress_step`` / ``progress_total_steps`` are the run's coarse unit
         index / total, threaded through to the throttled per-page ``fetching``
         frames so a large collection fetch narrates its progress like a
-        platform fetch does.
+        platform fetch does; ``units_fetched`` is
+        :func:`~services.library._fetch_pages.emit_fetch_page_progress`'s.
         """
         if unit.type != "collection":
             raise ValueError(f"fetch_collection_unit called with non-collection unit type={unit.type}")
@@ -257,7 +336,7 @@ class CollectionFetcher:
             synced_rom_ids.update(skip_member_ids)
             return reconstructed, list(skip_member_ids), True, False
 
-        progress = (progress_step, progress_total_steps)
+        progress = _WalkProgress(progress_step, progress_total_steps, units_fetched)
         if unit.collection_kind == "smart" and not unit.is_own:
             new_roms, walked_ids = await self._walk_collection(
                 unit, synced_rom_ids, platform_ids=None, expected_count=unit.rom_count, progress=progress
@@ -268,7 +347,7 @@ class CollectionFetcher:
         return new_roms, member_ids, False, skip.restamp_settles
 
     async def _fetch_collection_leftovers(
-        self, unit: WorkUnit, synced_rom_ids: set[int], *, progress: tuple[int, int]
+        self, unit: WorkUnit, synced_rom_ids: set[int], *, progress: _WalkProgress
     ) -> tuple[list[dict[str, Any]], list[int]]:
         """Fetch the listed members no unit delivered yet; answer ``(new_roms, member_ids)``.
 
@@ -317,7 +396,7 @@ class CollectionFetcher:
         *,
         platform_ids: tuple[int, ...] | None,
         expected_count: int,
-        progress: tuple[int, int],
+        progress: _WalkProgress,
     ) -> tuple[list[dict[str, Any]], list[int]]:
         """Page through the collection, narrowed to *platform_ids* when given; answer ``(new_roms, walked_ids)``.
 
@@ -339,8 +418,9 @@ class CollectionFetcher:
                 unit_name=unit.name,
                 page=page_num,
                 total_pages=total_pages,
-                progress_step=progress[0],
-                progress_total_steps=progress[1],
+                progress_step=progress.step,
+                progress_total_steps=progress.total_steps,
+                units_fetched=progress.units_fetched,
             )
             page = await self._fetch_collection_page(unit, limit, offset, platform_ids)
 

@@ -7,9 +7,11 @@ the collection fetcher returns and on the fake's call log.
 
 import logging
 from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 
+from domain.sync_state import SyncCancelled, SyncState
 from domain.work_unit import WorkUnit
 from lib.romm_paging import LIST_PAGE_SIZE
 from tests.services.library._helpers import (
@@ -971,3 +973,149 @@ class TestFetchProgressNarration:
         assert frames[0]["totalSteps"] == 8
         # A collection fetch narrates under the same ``fetch`` sub-stage (#1407).
         assert all(f["subStage"] == "fetch" for f in frames)
+
+
+def _queued(cid, name, *, member_rom_ids):
+    """A standard collection unit as the queue hands it over: one platform left off, no stamp read yet."""
+    return replace(
+        _user_collection_unit(cid, rom_count=len(member_rom_ids), member_rom_ids=member_rom_ids),
+        name=name,
+        unwalked_platform_ids=(2,),
+    )
+
+
+class TestFetchingEveryCollectionUnit:
+    """fetch_collection_units(): every collection unit of a run, fetched in queue order before any applies (D3)."""
+
+    @pytest.mark.asyncio
+    async def test_a_rom_two_collections_list_is_delivered_by_the_first_in_queue_order(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.roms = {
+            2: _member(2, 2, collection_ids=[7]),
+            3: _member(3, 2, collection_ids=[7, 8]),
+            4: _member(4, 2, collection_ids=[8]),
+        }
+        synced: set[int] = set()
+
+        deliveries = await library.collection_fetcher.fetch_collection_units(
+            [_queued("7", "Faves", member_rom_ids=(2, 3)), _queued("8", "More", member_rom_ids=(3, 4))],
+            synced,
+            progress_step=3,
+            progress_total_steps=4,
+        )
+
+        assert [(d.unit.name, [r["id"] for r in d.roms], d.member_rom_ids, d.skipped) for d in deliveries] == [
+            ("Faves", [2, 3], [2, 3], False),
+            ("More", [4], [3, 4], False),
+        ]
+        assert synced == {2, 3, 4}
+
+    @pytest.mark.asyncio
+    async def test_each_unit_takes_its_own_skip(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_stamp(library.uow, "7", member_rom_ids=(10,))
+        _seed_persisted_rom(library.uow, 10, app_id=1010, group_key="igdb:10:1", platform_slug="gba")
+        fake_romm_api.roms = {
+            10: {"id": 10, "collection_ids": [7], "updated_at": "2026-01-01T00:00:00"},
+            4: _member(4, 2, collection_ids=[8]),
+        }
+
+        deliveries = await library.collection_fetcher.fetch_collection_units(
+            [_queued("7", "Faves", member_rom_ids=(10,)), _queued("8", "More", member_rom_ids=(4,))],
+            set(),
+            progress_step=1,
+            progress_total_steps=2,
+        )
+
+        assert [(d.unit.name, d.skipped, [r["id"] for r in d.roms]) for d in deliveries] == [
+            ("Faves", True, [10]),
+            ("More", False, [4]),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_each_unit_s_fetch_start_is_the_clock_read_before_its_own_skip_check(
+        self, make_library, fake_romm_api, monkeypatch
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        clock = library.collection_fetcher._clock
+        started = clock.now()
+        # Both stamps match their listing, so each unit probes RomM before it
+        # walks; the probe finds an edited member, so each unit is walked.
+        _seed_stamp(library.uow, "7", member_rom_ids=(2,))
+        _seed_stamp(library.uow, "8", member_rom_ids=(4,))
+        fake_romm_api.roms = {
+            2: _member(2, 2, collection_ids=[7], updated_at="2030-01-01T00:00:00"),
+            4: _member(4, 2, collection_ids=[8], updated_at="2030-01-01T00:00:00"),
+        }
+        for name in ("list_collection_roms_updated_after", "list_roms_by_collection"):
+            answer = getattr(fake_romm_api, name)
+
+            def a_minute_per_request(*args, _answer=answer, **kwargs):
+                clock.advance(60)
+                return _answer(*args, **kwargs)
+
+            monkeypatch.setattr(fake_romm_api, name, a_minute_per_request)
+
+        deliveries = await library.collection_fetcher.fetch_collection_units(
+            [_queued("7", "Faves", member_rom_ids=(2,)), _queued("8", "More", member_rom_ids=(4,))],
+            set(),
+            progress_step=1,
+            progress_total_steps=2,
+        )
+
+        assert [d.fetch_started_at for d in deliveries] == [
+            started.isoformat(),
+            (started + timedelta(seconds=120)).isoformat(),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_cancel_after_one_unit_fetches_no_further_unit(self, make_library, fake_romm_api, monkeypatch):
+        library = make_library(romm_api=fake_romm_api)
+        # More's stamp matches its listing, so More would ask RomM's skip probe
+        # before any walk of its own.
+        _seed_stamp(library.uow, "8", member_rom_ids=(4,))
+        fake_romm_api.roms = {2: _member(2, 2, collection_ids=[7]), 4: _member(4, 2, collection_ids=[8])}
+        walk = fake_romm_api.list_roms_by_collection
+
+        def cancel_once_walked(*args, **kwargs):
+            answer = walk(*args, **kwargs)
+            library.sync._box.sync_state = SyncState.CANCELLING
+            return answer
+
+        monkeypatch.setattr(fake_romm_api, "list_roms_by_collection", cancel_once_walked)
+
+        with pytest.raises(SyncCancelled):
+            await library.collection_fetcher.fetch_collection_units(
+                [_queued("7", "Faves", member_rom_ids=(2,)), _queued("8", "More", member_rom_ids=(4,))],
+                set(),
+                progress_step=1,
+                progress_total_steps=2,
+            )
+
+        assert [(name, args[0]) for name, args, _kwargs in fake_romm_api.call_log] == [("list_roms_by_collection", 7)]
+
+    @pytest.mark.asyncio
+    async def test_the_frames_hold_the_first_unit_s_step_and_count_the_units_fetched(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.roms = {2: _member(2, 2, collection_ids=[7]), 4: _member(4, 2, collection_ids=[8])}
+
+        await library.collection_fetcher.fetch_collection_units(
+            [_queued("7", "Faves", member_rom_ids=(2,)), _queued("8", "More", member_rom_ids=(4,))],
+            set(),
+            progress_step=3,
+            progress_total_steps=4,
+        )
+
+        assert [
+            (f["message"], f["current"], f["total"], f["step"], f["totalSteps"], f["subStage"])
+            for f in _fetching_frames(emit)
+        ] == [
+            ("Fetching Faves", 0, 2, 3, 4, "fetch"),
+            ("Fetching Faves (page 1/1)", 0, 2, 3, 4, "fetch"),
+            ("Fetching More", 1, 2, 3, 4, "fetch"),
+            ("Fetching More (page 1/1)", 1, 2, 3, 4, "fetch"),
+        ]

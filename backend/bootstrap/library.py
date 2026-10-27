@@ -153,6 +153,7 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             uow_factory=wiring.uow_factory,
             sync_state_box=box,
             emit_progress=progress.emit_progress,
+            clock=wiring.clock,
         )
     )
 

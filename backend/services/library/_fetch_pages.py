@@ -44,6 +44,7 @@ async def emit_fetch_page_progress(
     total_pages: int,
     progress_step: int,
     progress_total_steps: int,
+    units_fetched: tuple[int, int] | None = None,
 ) -> None:
     """Emit a throttled ``fetching`` progress frame for a paginated fetch.
 
@@ -57,15 +58,19 @@ async def emit_fetch_page_progress(
     The frame carries the ``fetch`` sub-stage so the frontend fills the
     unit's fetch sub-slice of the bar (#1407). The displayed total is
     clamped to at least ``page`` so a server that grew since the listing
-    never shows ``page 63/62``.
+    never shows ``page 63/62``. *units_fetched* — ``(fetched, of)`` — replaces
+    the page count as the frame's ``current`` / ``total`` where one frame's bar
+    spans several units' fetches, which each start again at page 1; the page
+    count stays in the message.
     """
     if page != 1 and page % FETCH_PROGRESS_PAGE_INTERVAL != 0:
         return
     shown_total = max(total_pages, page)
+    current, total = units_fetched if units_fetched is not None else (page, shown_total)
     await emit_progress(
         SyncStage.FETCHING,
-        current=page,
-        total=shown_total,
+        current=current,
+        total=total,
         message=f"Fetching {unit_name} (page {page}/{shown_total})",
         step=progress_step,
         total_steps=progress_total_steps,
