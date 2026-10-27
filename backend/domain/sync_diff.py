@@ -20,7 +20,7 @@ from domain.rom_file import has_file_on_romm
 from domain.sibling_resolution import AUTO_REGION, canonical_group_name, fs_name_stem, resolve_group_representative
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterable, Mapping
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
     from domain.rom import DeliveryRoute, GoneEvidence
@@ -287,16 +287,10 @@ def collapse_sibling_groups(
     for sd in shortcuts_data:
         by_group.setdefault(sd.get("sibling_group_key"), []).append(sd)
 
-    fetched_key_by_id: dict[Any, str | None] = {sd["rom_id"]: sd.get("sibling_group_key") for sd in shortcuts_data}
-    bound_by_group: dict[str | None, list[tuple[int, dict[str, Any]]]] = {}
-    bound_rom_ids: set[int] = set()
-    for rid_str, reg in registry.items():
-        if not reg.get("app_id"):
-            continue
-        rid = int(rid_str)
-        bound_rom_ids.add(rid)
-        group_key = fetched_key_by_id.get(rid, reg.get("sibling_group_key"))
-        bound_by_group.setdefault(group_key, []).append((rid, reg))
+    bound_by_group = _bound_rows_by_group(
+        {sd["rom_id"]: sd.get("sibling_group_key") for sd in shortcuts_data}, registry
+    )
+    bound_rom_ids = {rid for rows in bound_by_group.values() for rid, _ in rows}
 
     emitted: list[dict[str, Any]] = []
     for group_key, members in by_group.items():
@@ -328,6 +322,57 @@ def collapse_sibling_groups(
             )
         )
     return emitted
+
+
+def gather_unbound_groups(
+    deliveries: Sequence[Sequence[dict[str, Any]]], registry: dict[str, dict[str, Any]]
+) -> list[list[dict[str, Any]]]:
+    """*deliveries* with every member of a group no bound row holds moved into the first delivery holding one.
+
+    *deliveries* is what the collection units of one run deliver, in queue order:
+    each a list of raw ROM dicts carrying their ``sibling_group_key``. *registry*
+    is the bound ``roms`` rows keyed by ``str(rom_id)``, as
+    :func:`collapse_sibling_groups` takes it, and a group counts as bound exactly
+    as that collapse groups it. The unit holding the first delivery of an unbound
+    group then mints it over every member the run delivers, as the preview's
+    union does, instead of over its own members alone. A bound group's members
+    stay where they were delivered. A moved member follows the delivery's own
+    ROMs, in delivery order.
+    """
+    bound_keys = set(
+        _bound_rows_by_group(
+            {rom["id"]: rom.get("sibling_group_key") for delivery in deliveries for rom in delivery}, registry
+        )
+    )
+    first_delivery: dict[str | None, int] = {}
+    for index, delivery in enumerate(deliveries):
+        for rom in delivery:
+            key = rom.get("sibling_group_key")
+            if key not in bound_keys:
+                first_delivery.setdefault(key, index)
+    gathered: list[list[dict[str, Any]]] = [[] for _ in deliveries]
+    for index, delivery in enumerate(deliveries):
+        for rom in delivery:
+            gathered[first_delivery.get(rom.get("sibling_group_key"), index)].append(rom)
+    return gathered
+
+
+def _bound_rows_by_group(
+    fetched_key_by_id: Mapping[int, str | None], registry: dict[str, dict[str, Any]]
+) -> dict[str | None, list[tuple[int, dict[str, Any]]]]:
+    """The bound rows of *registry*, as ``(rom_id, row)`` pairs grouped by sibling-group key.
+
+    A row in *fetched_key_by_id* is grouped by its fetched key, so a legacy row
+    whose stored key is still NULL lands in its real group; any other row by its
+    stored key.
+    """
+    bound_by_group: dict[str | None, list[tuple[int, dict[str, Any]]]] = {}
+    for rid_str, reg in registry.items():
+        if not reg.get("app_id"):
+            continue
+        rid = int(rid_str)
+        bound_by_group.setdefault(fetched_key_by_id.get(rid, reg.get("sibling_group_key")), []).append((rid, reg))
+    return bound_by_group
 
 
 def _holds_whole(complete_group_view: bool | AbstractSet[str | None], group_key: str | None) -> bool:

@@ -13,6 +13,7 @@ from domain.sync_diff import (
     collapse_sibling_groups,
     compute_collection_diff,
     compute_platform_collection_diff,
+    gather_unbound_groups,
     group_keys_of,
     platform_breakdown,
     platform_collection_name,
@@ -1121,6 +1122,56 @@ class TestCollapseSiblingGroupsViewPerGroup:
         by_set = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=whole)
         by_flag = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=flag)
         assert by_set == by_flag
+
+
+class TestGatherUnboundGroups:
+    """A group only collections deliver is gathered into the first delivery holding a member (#2543 D4)."""
+
+    @staticmethod
+    def _rom(rom_id, group_key="g1"):
+        return {"id": rom_id, "sibling_group_key": group_key}
+
+    @staticmethod
+    def _ids(deliveries):
+        return [[rom["id"] for rom in delivery] for delivery in deliveries]
+
+    @pytest.mark.parametrize(("first", "second"), [(23, 22), (22, 23)], ids=["jp-first", "eu-first"])
+    def test_an_unbound_group_moves_wholly_into_the_first_delivery_holding_a_member(self, first, second):
+        gathered = gather_unbound_groups([[self._rom(first)], [self._rom(second)]], registry={})
+        assert self._ids(gathered) == [[first, second], []]
+
+    def test_a_delivery_before_the_group_s_first_member_keeps_only_its_own(self):
+        deliveries = [[self._rom(1, "g0")], [self._rom(23)], [self._rom(22)]]
+        assert self._ids(gather_unbound_groups(deliveries, registry={})) == [[1], [23, 22], []]
+
+    def test_a_moved_member_follows_the_delivery_s_own_roms(self):
+        deliveries = [[self._rom(23), self._rom(5, "g5")], [self._rom(6, "g6"), self._rom(22)]]
+        assert self._ids(gather_unbound_groups(deliveries, registry={})) == [[23, 5, 22], [6]]
+
+    def test_a_group_whose_bound_row_is_delivered_stays_where_it_was_delivered(self):
+        deliveries = [[self._rom(23)], [self._rom(22)]]
+        registry = {"22": _greg(22, app_id=6022)}
+        assert self._ids(gather_unbound_groups(deliveries, registry)) == [[23], [22]]
+
+    def test_a_group_whose_bound_row_is_not_delivered_stays_where_it_was_delivered(self):
+        deliveries = [[self._rom(23)], [self._rom(22)]]
+        registry = {"21": _greg(21, app_id=6021)}
+        assert self._ids(gather_unbound_groups(deliveries, registry)) == [[23], [22]]
+
+    def test_a_delivered_bound_row_counts_under_its_delivered_key_not_its_stored_one(self):
+        # The stored key still names another group; the delivered key is the one
+        # the collapse groups the row by, so g1 is bound and g2 is not.
+        deliveries = [[self._rom(23), self._rom(30, "g2")], [self._rom(22), self._rom(31, "g2")]]
+        registry = {"22": _greg(22, app_id=6022, group_key="g2")}
+        assert self._ids(gather_unbound_groups(deliveries, registry)) == [[23, 30, 31], [22]]
+
+    def test_a_row_without_a_shortcut_binds_nothing(self):
+        deliveries = [[self._rom(23)], [self._rom(22)]]
+        registry = {"22": _greg(22, app_id=None)}
+        assert self._ids(gather_unbound_groups(deliveries, registry)) == [[23, 22], []]
+
+    def test_no_deliveries_gather_nothing(self):
+        assert gather_unbound_groups([], registry={}) == []
 
 
 class TestPlatformBreakdown:
