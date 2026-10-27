@@ -311,9 +311,9 @@ async def test_a_platforms_answer_flags_unavailable_emulator_data(harness):
     assert gba["emulators"] == []
 
 
-# A switch system whose only bakeable command names Ryubing — a RetroDECK
-# component that the seeded deploy does not carry, which is the shape ADR-0020's
-# existence probe exists for.
+# A switch system whose only bakeable standalone command names Ryubing — a
+# RetroDECK component that the seeded deploy does not carry, so the resolver's
+# launch lookup states it not installed.
 _SWITCH_ES_SYSTEMS_XML = """\
 <?xml version="1.0"?>
 <systemList>
@@ -361,13 +361,13 @@ async def test_a_detected_installation_without_a_catalogue_reads_nothing_off_the
 
 
 async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(harness):
-    """The not-installed downgrade, end to end over real files (ADR-0020 §2).
+    """An emulator the resolver states not installed is withheld, end to end over real files.
 
     Ryubing is declared first and is the only standalone; its component launcher
     is not in the seeded deploy, so the picker must show it ``needs_setup`` /
     ``not_installed`` and the default must fall through to the libretro entry
-    behind it. Drives the real catalogue read, the real find-rules parse and the
-    real on-disk probe.
+    behind it. Drives the real catalogue read and the resolver's own launch
+    lookup over the seeded find rules.
     """
     seed_es_systems(harness, _SWITCH_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)

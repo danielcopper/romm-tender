@@ -48,12 +48,14 @@ from _vendor.atlas import (
     HEALTH_ISSUE_ROOT_MISSING,
     KIND_LIBRETRO,
     KIND_STANDALONE,
+    find_rules,
 )
 from _vendor.atlas.esde import CatalogueKind, EmulatorSpec
 from _vendor.atlas.installations import CatalogueAnswer, EmulatorEntry, RomPlacement, SystemsAnswer
 from _vendor.atlas.launch import Launcher, LaunchResolution
 from _vendor.atlas.placement import Caveat
 
+from adapters import atlas_catalogue
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.shortcut_data import EmulatorInvocation
@@ -611,7 +613,7 @@ class TestTheResolversAvailability:
             (CAVEAT_LAUNCH_PATH_UNESTABLISHED, "path_unseen"),
         ],
     )
-    def test_an_entry_the_resolver_cannot_establish_says_why_and_is_neither_offered_nor_called_missing(
+    def test_an_entry_the_resolver_cannot_establish_stays_selectable_with_its_note_and_is_never_the_default(
         self, traces, code, reason
     ):
         installation = _Installation(
@@ -627,7 +629,7 @@ class TestTheResolversAvailability:
         adapter = _adapter(installation, traces)
 
         option = adapter.get_emulator_options("megadrive")["options"][0]
-        assert (option.status, option.reason) == ("needs_setup", reason)
+        assert (option.status, option.reason, option.not_established) == ("bakeable", None, reason)
         assert adapter.get_default_emulator("megadrive") is None
 
     def test_an_unestablished_entry_without_a_known_reason_is_plainly_not_established(self, traces):
@@ -643,7 +645,7 @@ class TestTheResolversAvailability:
         )
 
         option = _adapter(installation, traces).get_emulator_options("ps3")["options"][0]
-        assert (option.status, option.reason) == ("needs_setup", "not_established")
+        assert (option.status, option.not_established) == ("bakeable", "not_established")
 
     def test_a_note_beside_a_startable_entry_changes_nothing(self, traces):
         installation = _Installation(
@@ -659,6 +661,27 @@ class TestTheResolversAvailability:
 
         option = _adapter(installation, traces).get_emulator_options("pico8")["options"][0]
         assert (option.status, option.reason) == ("bakeable", None)
+
+
+class TestEveryLaunchLookupCodeIsClassified:
+    """Each code of the resolver's launch lookup is in exactly one of the reading's three sets."""
+
+    def test_each_code_has_one_place(self):
+        lookup = {
+            value
+            for name, value in vars(find_rules).items()
+            if name.startswith("CAVEAT_")
+            and not name.startswith("CAVEAT_LAUNCH_COMMAND_")
+            and name != "CAVEAT_FRONTEND_BUILD_UNPINNED"
+        } | {CAVEAT_CORE_NOT_INSTALLED}
+        places = [
+            set(atlas_catalogue._NOT_ESTABLISHED_BECAUSE),
+            set(atlas_catalogue._NOT_INSTALLED_BECAUSE),
+            set(atlas_catalogue._LAUNCH_NOTES),
+        ]
+        for code in lookup:
+            assert sum(code in place for place in places) == 1, code
+        assert set().union(*places) == lookup
 
 
 class TestTheLauncher:

@@ -11,11 +11,15 @@ does not exercise (an unknown ``%PLACEHOLDER%``, a lone double-quote).
 from __future__ import annotations
 
 import dataclasses
+import re
+from pathlib import Path
 from typing import ClassVar
 
 import pytest
 
+from domain import emulator_commands
 from domain.emulator_commands import (
+    NOT_ESTABLISHED,
     NOT_ESTABLISHED_PATH_UNSEEN,
     NOT_INSTALLED,
     EmulatorOption,
@@ -120,11 +124,11 @@ class TestClassifyCommand:
         assert option.kind == "standalone"
 
 
-class TestAnEntryTheResolverDoesNotStateStartable:
-    """An installation reason the reading hands in takes the place of the bake verdict."""
+class TestAnEntryTheResolverStatesNotInstalled:
+    """``NOT_INSTALLED`` takes the place of the bake verdict, whatever the command."""
 
     def test_a_missing_standalone_is_withheld_with_its_reason(self):
-        option = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", not_startable=NOT_INSTALLED)
+        option = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
         assert option.status == "needs_setup"
         assert option.reason == "not_installed"
         # Identity fields survive.
@@ -133,36 +137,77 @@ class TestAnEntryTheResolverDoesNotStateStartable:
         assert option.command == "%EMULATOR_RYUBING% %ROM%"
 
     def test_a_startable_entry_keeps_its_bake_verdict(self):
-        assert classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH, not_startable=None).status == "bakeable"
+        option = classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH, installation=None)
+        assert (option.status, option.not_established) == ("bakeable", None)
 
     def test_a_libretro_core_the_resolver_states_missing_is_withheld(self):
-        option = classify_command("SwanStation", PSX_SWANSTATION, not_startable=NOT_INSTALLED)
+        option = classify_command("SwanStation", PSX_SWANSTATION, installation=NOT_INSTALLED)
         assert (option.status, option.reason) == ("needs_setup", "not_installed")
         assert option.kind == "libretro"
         assert option.core_so == "swanstation_libretro"
 
     def test_the_installation_reason_stands_ahead_of_an_unbakeable_command(self):
-        option = classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, not_startable=NOT_INSTALLED)
+        option = classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, installation=NOT_INSTALLED)
         assert option.reason == "not_installed"
 
-    def test_a_not_established_entry_is_withheld_with_its_cause(self):
-        option = classify_command("MESS 2015", PSX_SWANSTATION, not_startable=NOT_ESTABLISHED_PATH_UNSEEN)
-        assert (option.status, option.reason) == ("needs_setup", "path_unseen")
-
-    def test_a_withheld_option_drops_out_of_default_selection(self):
-        # A system whose only bakeable command is withheld resolves to no
-        # default, so the caller plain-launches.
-        for reason in (NOT_INSTALLED, NOT_ESTABLISHED_PATH_UNSEEN):
-            withheld = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", not_startable=reason)
-            assert select_default_option([withheld]) is None
-            assert label_to_invocation([withheld], "Ryubing (Standalone)") is None
+    def test_a_withheld_option_drops_out_of_default_selection_and_its_pin_no_longer_resolves(self):
+        withheld = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
+        assert select_default_option([withheld]) is None
+        assert label_to_invocation([withheld], "Ryubing (Standalone)") is None
 
     def test_a_withheld_option_reads_disabled_with_reason_in_payload(self):
-        withheld = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", not_startable=NOT_INSTALLED)
+        withheld = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", installation=NOT_INSTALLED)
         payload = options_to_payload([withheld])
         assert payload[0]["bakeable"] is False
         assert payload[0]["reason"] == "not_installed"
         assert payload[0]["is_default"] is False
+
+
+class TestAnEntryTheResolverCouldNotEstablish:
+    """A selectable pick with a note, never the default by itself (#2195 D9)."""
+
+    def _paprium(self) -> EmulatorOption:
+        return classify_command("Paprium", PSX_SWANSTATION, installation=NOT_ESTABLISHED_PATH_UNSEEN)
+
+    def test_it_bakes_as_its_command_would_and_carries_the_note(self):
+        option = self._paprium()
+        assert (option.status, option.reason, option.not_established) == ("bakeable", None, "path_unseen")
+
+    def test_it_is_never_the_default_by_itself(self):
+        swanstation = classify_command("SwanStation", PSX_SWANSTATION)
+        assert select_default_option([self._paprium()]) is None
+        assert select_default_option([self._paprium(), swanstation]) is swanstation
+
+    def test_a_pick_of_it_stays(self):
+        assert label_to_invocation([self._paprium()], "Paprium") == EmulatorInvocation.libretro(
+            "swanstation_libretro", "Paprium"
+        )
+        assert resolve_platform_label([self._paprium()], "Paprium") == "Paprium"
+
+    def test_it_reads_selectable_with_its_note_in_payload(self):
+        payload = options_to_payload([self._paprium()])
+        assert (payload[0]["bakeable"], payload[0]["reason"], payload[0]["is_default"]) == (True, "path_unseen", False)
+
+    def test_an_unbakeable_command_keeps_the_reason_it_cannot_bake(self):
+        option = classify_command("Shortcut", PS3_RPCS3_SHORTCUT, installation=NOT_ESTABLISHED)
+        assert options_to_payload([option])[0]["reason"] == "shortcut_script"
+
+
+class TestThePanelWordsEveryNotEstablishedNote:
+    """The panel's map of not-established words is the domain's list, no more and no less."""
+
+    _PANEL = Path(__file__).resolve().parents[2] / "frontend" / "src" / "utils" / "emulatorInstallation.ts"
+
+    def test_the_two_lists_are_equal(self):
+        source = self._PANEL.read_text(encoding="utf-8")
+        causes = source[source.index("const CAUSES") : source.index("]);", source.index("const CAUSES"))]
+        panel = set(re.findall(r'^\s*\["(\w+)",', causes, flags=re.MULTILINE))
+        domain = {
+            value
+            for name, value in vars(emulator_commands).items()
+            if name == "NOT_ESTABLISHED" or name.startswith("NOT_ESTABLISHED_")
+        }
+        assert panel == domain
 
 
 class TestTheLauncher:
@@ -178,7 +223,7 @@ class TestTheLauncher:
 
     def test_a_withheld_entry_renders_no_invocation_whatever_its_launcher(self):
         option = classify_command(
-            "RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, not_startable=NOT_INSTALLED, launcher=self._LAUNCHER
+            "RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, installation=NOT_INSTALLED, launcher=self._LAUNCHER
         )
         assert option_to_invocation(option) is None
 
@@ -265,7 +310,7 @@ class TestResolveFirmwareOption:
 
     def test_the_emulator_retrodeck_declares_first_where_nothing_bakes(self):
         """RetroDECK's plain launch starts its first declared emulator, installed or not."""
-        first = classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE, not_startable=NOT_INSTALLED)
+        first = classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE, installation=NOT_INSTALLED)
         options = [first, classify_command("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED)]
         assert resolve_firmware_option(options, "MAME - Current") is first
 

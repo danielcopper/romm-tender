@@ -185,11 +185,9 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # reads. Each is answered by the vendored emu-atlas resolver, which reads
         # ES-DE's own catalogue off the flatpak install: every call from the
         # panel opens it again, and only a run's one reading of the emulator
-        # sources keeps a system's answer for the run.
-        # get_emulator_options also globs each BAKEABLE STANDALONE option's
-        # emulator install through the find rules, on every call — that probe is
-        # not cached, because a component the user installs mid-session has to be
-        # seen. Listing one of the three would be arbitrary: every consumer pairs
+        # sources keeps a system's answer for the run, and the answer carries the
+        # resolver's lookup of each entry's emulator on the machine. Listing one
+        # of the three would be arbitrary: every consumer pairs
         # two of them. FirmwareStatusReader._enrich_platform calls
         # get_active_core beside get_emulator_options for one platform, and
         # ActiveCoreResolver reaches get_emulator_options (active_emulator_for_rom)

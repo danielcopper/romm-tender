@@ -1448,22 +1448,61 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)!.title).toBe(sentence);
     });
 
-    it("says the fallback's installation could not be established, with its cause, never that it is missing", async () => {
+    it("says the fallback's installation could not be established, with its cause, and still offers the pick", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: false, reason: "lookup_unsupported" }],
+          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "lookup_unsupported" }],
           active_core_label: null,
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const sentence =
+      expect(container.textContent).toContain(
         "RetroDECK would launch these with LRPS2 / PCSX2, whose installation could not be established " +
-        "(this setup's emulator lookup cannot be checked yet) — and nothing here can pin a different one.";
-      expect(container.textContent).toContain(sentence);
-      expect(coreButton(container)!.title).toBe(sentence);
+          "(Tender cannot follow ES-DE's lookup for it yet).",
+      );
       expect(container.textContent).not.toContain("not installed");
+      expect(coreButton(container)).not.toBeDisabled();
+    });
+
+    it.each([
+      ["not installed", "not_installed", "RetroDECK would launch these with mGBA, which is not installed."],
+      ["unbakeable", "inject", "No emulator here is the default, so RetroDECK picks one when a game launches."],
+    ])(
+      "keeps the picker open where the fallback is %s but an entry not established can be pinned",
+      async (_shape, reason, sentence) => {
+        vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+          coreInfo({
+            emulators: [
+              { ...MGBA, is_default: false, bakeable: false, reason },
+              { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "no_find_rule" },
+            ],
+            active_core_label: null,
+          }),
+        );
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        expect(container.textContent).toContain(sentence);
+        expect(container.textContent).not.toContain("nothing here can pin");
+        expect(coreButton(container)).not.toBeDisabled();
+      },
+    );
+
+    it("says so under the header where the platform's own pick could not be established", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [MGBA, { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "path_unseen" }],
+          active_core_label: "LRPS2",
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "Whether LRPS2 / PCSX2 is installed could not be established: ES-DE looks for it where Tender cannot see.",
+      );
     });
 
     it("colours an overridden core gold, in the header clause and the icon alike", async () => {

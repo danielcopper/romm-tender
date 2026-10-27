@@ -104,8 +104,10 @@ class ActiveCoreResolver:
         off :func:`folder_boot_root` — the same fact the disc/bake-path seam uses
         to fold the target to the game folder — so the invocation form and the
         baked path are always decided from one layout fact. A libretro emulator,
-        a non-folder install, or a standalone the resolver states no sandbox
-        launcher for all leave the invocation unchanged.
+        a non-folder install, or a standalone that carries no launcher (which
+        launchers the reading hands on is
+        ``adapters/atlas_catalogue.py::_sandbox_launcher``'s rule) all leave the
+        invocation unchanged.
 
         *reading* is a run's one reading of the emulator sources, handed down so
         a run resolving many ROMs asks each catalogue question once; a call
@@ -168,9 +170,9 @@ class ActiveCoreResolver:
 
         Fires only for a **standalone** emulator whose *install* is a folder-boot
         layout (:func:`folder_boot_root` returns a game root), and returns a
-        ``direct`` invocation through the sandbox launcher the resolver states
-        for it. Leaves the emulator unchanged for a libretro core, a non-folder
-        install, a missing install, or no such launcher — the last is logged
+        ``direct`` invocation through the launcher it carries. Leaves the
+        emulator unchanged for a libretro core, a non-folder install, a missing
+        install, or no launcher — the last is logged
         (the baked ``run_game`` form will fail to launch a folder until a later
         re-bake heals it).
         """
@@ -181,8 +183,8 @@ class ActiveCoreResolver:
         launcher = emulator.launcher
         if launcher is None:
             self._logger.warning(
-                "active_core_resolver: folder-boot rom_id=%s resolves to standalone '%s' but the resolver states "
-                "no sandbox launcher for it; keeping the run_game form (launch will fail until healed)",
+                "active_core_resolver: folder-boot rom_id=%s resolves to standalone '%s' but it carries no sandbox "
+                "launcher to exec; keeping the run_game form (launch will fail until healed)",
                 rom_id,
                 emulator.label,
             )

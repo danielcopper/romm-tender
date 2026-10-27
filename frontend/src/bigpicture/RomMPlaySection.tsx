@@ -32,6 +32,8 @@ import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
+import { Muted } from "./layout/pane";
+import { activeEmulatorNote } from "../utils/emulatorInstallation";
 import { useTriggerHandler } from "./emulatorStepping";
 import { useBumperHandler, usePlayRowRef } from "./tabStepping";
 import { applyAutomaticArtwork, applyTabSlotImage, cancelArtworkApply } from "../utils/artwork";
@@ -1023,6 +1025,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // root whose element type changes makes React unmount the whole row — the play
   // button drops back to "loading" and re-runs its init (#1682). A Fragment adds
   // no DOM node, so the row stays a direct child of the injected panel either way.
+  const emulatorNote = activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
   return (
     <Fragment>
       {detail.savefilesInContentDir === true && detail.saveSyncEnabled ? (
@@ -1034,6 +1037,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       ) : null}
       <VanishedVersionBanner key="vanished-version-banner" appId={appId} installed={detail.installed} />
       {playSectionRow}
+      {emulatorNote === null ? null : <Muted key="emulator-installation-note">{emulatorNote}</Muted>}
     </Fragment>
   );
 };

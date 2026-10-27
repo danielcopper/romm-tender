@@ -5080,6 +5080,84 @@ describe("RomMPlaySection", () => {
   // G. savefiles_in_content_dir warning banner (#239)
   // ------------------------------------------------------------------
 
+  describe("an emulator whose installation could not be established", () => {
+    function coreWithActive(reason: string | null) {
+      return {
+        active_core: "genesis_plus_gx_expanded_libretro",
+        active_core_label: "Paprium",
+        platform_core_label: null,
+        has_game_override: true,
+        emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck" as const, starts_games: true },
+        platform_system: null,
+        emulators: [
+          {
+            label: "Genesis Plus GX",
+            labels: ["Genesis Plus GX"],
+            name: "Genesis Plus GX",
+            kind: "libretro" as const,
+            core_so: "genesis_plus_gx_libretro",
+            emulator: "genesis_plus_gx_libretro.so",
+            is_default: true,
+            bakeable: true,
+            reason: null,
+          },
+          {
+            label: "Paprium",
+            labels: ["Paprium"],
+            name: "Paprium",
+            kind: "libretro" as const,
+            core_so: "genesis_plus_gx_expanded_libretro",
+            emulator: "genesis_plus_gx_expanded_libretro.so",
+            is_default: false,
+            bakeable: true,
+            reason,
+          },
+        ],
+      };
+    }
+
+    async function mountWith(reason: string | null) {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 60,
+        platform_slug: "megadrive",
+        rom_file: "paprium.bin",
+      });
+      const core = coreWithActive(reason);
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(core);
+      vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue({
+        activeCoreLabel: core.active_core_label,
+        activeCoreIsDefault: false,
+        emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: core.emulator_source,
+        emulatorPlatformSystem: null,
+        emulators: core.emulators,
+        platformCoreLabel: null,
+        hasGameOverride: true,
+      });
+      const view = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      return view;
+    }
+
+    it("says so under the play row, with the cause, when the game launches with it", async () => {
+      const { container } = await mountWith("path_unseen");
+      expect(container.textContent).toContain(
+        "Whether Paprium is installed could not be established: ES-DE looks for it where Tender cannot see.",
+      );
+    });
+
+    it("says nothing where the emulator the game launches with is not one of those", async () => {
+      const { container } = await mountWith(null);
+      // The row is there, so the absence is the note's own.
+      expect(container.querySelector('[title="Emulator Core"]')).not.toBeNull();
+      expect(container.textContent).not.toContain("could not be established");
+    });
+  });
+
   describe("savefiles_in_content_dir warning banner (#239)", () => {
     // The flag reaches the section with the store's save-status fold, and the
     // backend derives it from a LOCAL retroarch.cfg read — so the banner must

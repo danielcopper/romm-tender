@@ -153,15 +153,18 @@ _NOT_ESTABLISHED_BECAUSE = {
 }
 
 # The reasons beside ``not-installed``, deliberately not told apart: each says
-# ES-DE refuses the launch, and the panel words that one way.
+# what the entry launches is not there to start it, and the panel words that
+# one way.
 _NOT_INSTALLED_BECAUSE = frozenset(
     {CAVEAT_EMULATOR_NOT_FOUND, CAVEAT_PROGRAM_NOT_FOUND, CAVEAT_LAUNCHER_SCRIPT_MISSING, CAVEAT_CORE_NOT_INSTALLED}
 )
 
-# Notes beside a verdict, deliberately not acted on here: ``run-game-differs``
-# is about RetroDECK's ``run_game.sh`` started without ``-e``, and the other
-# three state assumptions of a frontend on the host (EmuDeck's), which starts no
-# game through Tender.
+# Notes beside a verdict, deliberately not acted on here. ``run-game-differs``
+# says RetroDECK's ``run_game.sh`` would find something else, or nothing, for
+# the command's ``%EMULATOR_X%`` token — the lookup Tender's ``-e`` bake goes
+# through too; what Tender does about it is open under #2195. The other three
+# state assumptions of a frontend on the host (EmuDeck's), which starts no game
+# through Tender.
 _LAUNCH_NOTES = frozenset(
     {
         CAVEAT_RUN_GAME_DIFFERS,
@@ -219,8 +222,8 @@ def _caveat_codes(answer: Any) -> tuple[str, ...]:
     return tuple(caveat.code for caveat in answer.caveats)
 
 
-def _not_startable(entry: Any) -> str | None:
-    """Tender's installation reason for *entry*, ``None`` where the resolver states it startable.
+def _installation(entry: Any) -> str | None:
+    """Tender's word for what the resolver states about *entry*'s program, ``None`` where it states it startable.
 
     Anything but ``startable`` and ``not-installed`` reads as not established —
     the resolver's own rule for a value a client does not know.
@@ -382,10 +385,11 @@ class AtlasCatalogueAdapter:
 
         ``options`` is in DECLARED order, so the first bakeable entry is the
         system default. Whether what an entry launches is there is the
-        resolver's ``availability``, libretro cores included: an entry it does
-        not state startable is ``needs_setup`` with ``not_installed``, or with
-        a not-established reason, so it neither becomes the default nor bakes
-        into a shortcut, and its launcher is the one the resolver states. A
+        resolver's ``availability``, libretro cores included: one it states not
+        installed is ``needs_setup`` with ``not_installed``, so it neither
+        becomes the default nor bakes into a shortcut; one it could not
+        establish carries a ``not_established`` note and is never the default
+        by itself. Each entry's launcher is the one the resolver states. A
         system the catalogue does not declare yields ``available: True`` with
         an empty list.
         """
@@ -403,7 +407,7 @@ class AtlasCatalogueAdapter:
                 entry.label,
                 entry.command,
                 emulator=emulator_identity(entry),
-                not_startable=_not_startable(entry),
+                installation=_installation(entry),
                 launcher=_sandbox_launcher(entry),
             )
             for entry in _declared_order(answer.entries)

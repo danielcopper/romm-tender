@@ -370,10 +370,13 @@ interface FirmwareFile extends FirmwareVerdict {
  * One ES-DE `<command>` classified for launch-bakeability (#1210), the shape the
  * backend `get_emulator_options` / picker payloads carry. `kind` is `"libretro"`
  * (`core_so` set to the bare core name) or `"standalone"` (`core_so` null).
- * `bakeable` is false for the `needs_setup` (`reason: "inject"`, or an
- * emulator the resolver states is not installed or could not establish —
- * `utils/emulatorInstallation.ts`) and un-bakeable forms; `reason` names why
- * the frontend can't offer it as a clickable pick.
+ * `bakeable` is false for the `needs_setup` (`reason: "inject"`, or
+ * `"not_installed"` for an emulator the resolver states is not installed —
+ * worded by `reasonCopy` in `utils/emulatorMenu.tsx`) and un-bakeable forms;
+ * `reason` names why the frontend can't offer it as a clickable pick. A
+ * bakeable entry's `reason` is a note instead: where the resolver could not
+ * establish whether the emulator is installed, the cause, worded by
+ * `utils/emulatorInstallation.ts`, and `null` otherwise.
  *
  * `emulator` is the resolver's identity for the emulator behind the row and the
  * only field that names one for BOTH kinds — `dolphin_libretro.so` for a
@@ -448,8 +451,10 @@ export interface CoreInfo {
  * `active_core_label` is the platform-layer resolution — the per-platform
  * override when it still resolves to a bakeable emulator, else the es_systems
  * default — so in both ordinary cases it IS the emulator's name. `null` means
- * no option is BAKEABLE, which is not the same as there being none: a menu of
- * uninstalled standalone emulators answers `null` with `emulators.length >= 1`.
+ * nothing is pinned and no option can be the default, which is not the same as
+ * there being none: a menu of emulators that are not installed, standalone
+ * emulators or cores alike, answers `null` with `emulators.length >= 1`, and so
+ * does one whose only bakeable entries could not be established.
  * RetroDECK then resolves the emulator itself at launch, and the Library page
  * says that rather than printing a name or claiming a failure.
  *

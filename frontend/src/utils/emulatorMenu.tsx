@@ -19,14 +19,10 @@ import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
 import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 import { emulatorName, entryForLabel } from "./emulatorEntries";
-import { isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
+import { notEstablishedNote } from "./emulatorInstallation";
 
 /** Map a backend un-bakeable reason slug to short menu copy. */
 export function reasonCopy(reason: string | null): string {
-  if (isNotEstablished(reason)) {
-    const cause = notEstablishedCause(reason);
-    return cause === null ? "installation not established" : `installation not established: ${cause}`;
-  }
   switch (reason) {
     case "inject":
       return "Tender can't start this entry";
@@ -131,9 +127,10 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     // when nothing overrides, otherwise the one listing the active label.
     const isActive = activeIsDefault ? e.is_default : e.labels.includes(activeLabel);
     const isPlatformCore = platformCore === e;
+    const note = notEstablishedNote(e.reason);
     children.push(
       <MenuItem key={key} onClick={() => onPick(e.label)}>
-        {emulatorEntryLabel(e, isActive, isPlatformCore)}
+        {`${emulatorEntryLabel(e, isActive, isPlatformCore)}${note === null ? "" : ` — ${note}`}`}
       </MenuItem>,
     );
   }
