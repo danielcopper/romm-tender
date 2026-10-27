@@ -403,7 +403,7 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
 
 
 async def test_the_same_standalone_is_the_default_once_its_component_is_there(harness):
-    """The other half of the probe: seeding the component restores the declared first."""
+    """The other half of the resolver's lookup: seeding the component makes Ryubing startable, the declared first."""
     seed_es_systems(harness, _SWITCH_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)
     seed_component_launcher(harness, "ryubing")
