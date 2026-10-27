@@ -186,6 +186,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "sync_cancel_preview",
     "cancel_download",
     "pause_download",
+    "stop_pre_launch_sync",
     # Read-only content check: hashes files already on disk and compares them
     # against RomM's checksums. Writes nothing, so a pending migration has
     # nothing to protect from it — and the adopt dialog it answers for is
@@ -310,6 +311,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_save_setup_info",
     "get_save_sync_settings",
     "saves_list_file_versions",
+    "pre_launch_sync_state",
     # Playtime queries.
     "record_session_start",
     "get_all_playtime",
