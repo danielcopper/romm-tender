@@ -26,25 +26,31 @@ that file is the vendored emu-atlas resolver, through `adapters/atlas_catalogue.
 [ADR-0030](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0030-the-emulator-catalogue-is-read-by-the-vendored-resolver.md)
 (the resolver is what reads it; ES-DE's selections are ignored and its overlays honoured) for the decision records.
 
-### Two emulator kinds: libretro core and standalone
+### What an entry launches: a core, a program, or a core this machine cannot load
 
-The resolved emulator is a pure value object — `domain.shortcut_data.EmulatorInvocation` — that carries **exactly one**
-of two payloads:
+What a catalogue entry launches, the core it loads and where that core lies are the resolver's statements (`kind`,
+`core_so`, `core_path` on the catalogue entry), read in `adapters/atlas_catalogue.py` and carried in Tender's own words
+on `domain.emulator_commands.EmulatorOption.kind` and on the picker payload's `kind`:
 
-- **`kind == "libretro"`** — a RetroArch core, identified by its bare `.so` name (`core_so`). Rendered as the
-  `-e "%EMULATOR_RETROARCH% -L <coresdir>/<so>.so %ROM%"` form. This is the overwhelming-majority path.
-- **`kind == "standalone"`** — a standalone emulator, identified by its full ES-DE `<command>` text (already ending in
-  `%ROM%`, e.g. `%EMULATOR_RPCS3% --no-gui %ROM%`). Baked verbatim into `-e`. RetroDECK resolves `%EMULATOR_*%` and
-  substitutes `%ROM%` at launch, the same as the libretro form. This is the standalone-emulator seam
-  ([#129](https://github.com/danielcopper/romm-tender/issues/129)): a system whose working ES-DE default is a standalone
-  emulator (PS2 → PCSX2, PS3 → RPCS3, GameCube/Wii → Dolphin, PSP → PPSSPP, …) launches on that emulator instead of a
-  deprecated/absent libretro core.
+- **`core`** — RetroArch loads a core of this machine; `core_so` is its bare `.so` name. This is the
+  overwhelming-majority path, and it includes a command that passes RetroArch more than its core, such as FinalBurn
+  Neo's `--subsystem neocd` on Neo Geo CD.
+- **`program`** — an emulator program of its own (PS2 → PCSX2, PS3 → RPCS3, GameCube/Wii → Dolphin, PSP → PPSSPP, …);
+  `core_so` is `None`.
+- **`foreign_core`** — a RetroArch launch naming a core file this machine cannot load (EmuDeck's `n3ds` overlay names
+  Windows `.dll` cores). It is marked and nothing more: its bake verdict is the one its command earns.
 
-Both kinds are first-class throughout: the **system default** may be either (whichever ES-DE lists first that Tender can
-bake), and the per-game / per-platform picker lists both — so a pin may name a standalone emulator OR a libretro core
+Tender reads none of this off the command text. The resolved emulator is a pure value object —
+`domain.shortcut_data.EmulatorInvocation` — whose `form` says how it is baked: `run_game`, the ES-DE command handed to
+RetroDECK's `run_game.sh` through `-e` (a core entry's with the resolver's core path written in, see "Application"
+below), or `direct`, the [folder-boot form](#folder-boot-launch-target). It carries the `core_so` of a core entry for
+the `.so`-space consumers.
+
+Every kind is first-class throughout: the **system default** may be any of them (whichever ES-DE lists first that Tender
+can bake), and the per-game / per-platform picker lists them all — so a pin may name an emulator program OR a core
 (#1210). A pin is stored as the emulator **LABEL** and resolved through the same classified option list at use time.
 
-A standalone emulator has **no** libretro `.so`, so the read-path projection reports `core_so = None` and every
+An emulator program has **no** libretro `.so`, so the read-path projection reports `core_so = None` and every
 `.so`-space consumer degrades exactly as it does for an unconfigured platform (see
 [the single read seam](#the-single-read-seam-activecoreresolver)).
 
@@ -273,8 +279,14 @@ nor "index 0 exists" is assumed. An entry with **no** declared position sorts la
 enumeration for a catalogue-less arrangement, and such an entry carries an empty command, which rule 3 below reads as
 `no_rom_target`.
 
-A command is `bakeable` only when it is a real emulator invocation Tender can carry verbatim into a Steam shortcut's
-`-e`. `classify_command` applies these rules in order, first match wins:
+A command is `bakeable` only when it is a real emulator invocation Tender can carry into a Steam shortcut's `-e`, where
+RetroDECK's `run_game.sh` starts it. This is the one rule here that is Tender's own, and it follows that script's
+handling of a command rather than ES-DE's. Ahead of the rules below come three refusals the resolver's statements cause:
+an entry it states not installed (`not_installed`, below), one it states `run_game.sh` would run nothing for
+(`start_script_runs_nothing`, below), and a `core` entry it gives no core path for (`core_unlocated`), since there is
+then nothing to write where the command names its core; the panel words the last two as "RetroDECK's start script finds
+no emulator for it" and "where its core lies is not established". A `core` entry's command is judged with its core path
+written in. `classify_command` then applies these rules in order, first match wins:
 
 1. contains `%INJECT%` → `needs_setup` (`"inject"`) — the command injects a file's contents, and Tender cannot start a
    command in that form;
@@ -289,9 +301,8 @@ A command is `bakeable` only when it is a real emulator invocation Tender can ca
 
 This is why a system whose first command is a fragile shortcut form (`%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%`)
 skips it and bakes the next command (the direct `--no-gui` launch): the shortcut form is `unbakeable`, so
-`select_default_option` walks past it. A leading `env VAR=val …` prefix (the GameCube/Wii Dolphin form) is accepted as a
-standalone invocation. The kind is `libretro` when the command matches the strict RetroArch shape
-(`%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/<core>_libretro.so %ROM%`), else `standalone`.
+`select_default_option` walks past it. A leading `env VAR=val …` prefix (the GameCube/Wii Dolphin form) is accepted as
+an invocation like any other.
 
 **Whether an entry is installed is the resolver's answer.** RetroDECK lists more emulators in `es_systems.xml` than it
 bundles, so a system's bakeable default could name one that is not on disk (Ryubing on `switch`) — baking it produces a
@@ -311,11 +322,16 @@ its find rules, for libretro cores and standalone emulators alike, and `adapters
   cannot stat); `not_established` where it does not. Such an entry stays a pick a user may make, and a pin to it stays,
   but `select_default_option` never takes it, so it is never the default by itself (#2195 D9). The picker offers it with
   "installation not established" and the cause, and a page whose emulator it is says so under it
-  (`frontend/src/utils/emulatorInstallation.ts`); it is never called missing.
+  (`frontend/src/utils/emulatorInstallation.ts`); it is never called missing. A `core` entry the resolver cannot
+  establish comes with no core path, so it is `core_unlocated` instead and keeps the note beside that reason (#2195
+  D15).
 
-The notes the resolver states beside a verdict change nothing here. One of them, `run-game-differs`, says RetroDECK's
-`run_game.sh` would find something else, or nothing, for the command's `%EMULATOR_X%` token — the lookup Tender's `-e`
-bake goes through — and what Tender does about it is open under #2195.
+One note the resolver states beside a verdict decides the bake: `run-game-differs` says RetroDECK's `run_game.sh` reads
+only the shipped find rules, never expands `~` and takes no `|` entry, so its lookup of the command's `%EMULATOR_X%`
+token — the one Tender's `-e` bake goes through — finds something other than ES-DE does. Where it names nothing (an
+empty `run_game_path`; PICO-8's two entries, whose `%EMULATOR_PICO-8%` the script never resolves), a baked shortcut
+would start nothing, so the entry is `unbakeable` with `start_script_runs_nothing` (#2195 D16). Where it names a path,
+and every other note, changes nothing here.
 
 `get_emulator_options(system)` returns `{"available": bool, "options": [EmulatorOption, ...], "reason", "source"}`.
 **`available` is `False` whenever nothing could be established**: no emulator source answers (`reason` `no_source`, or
@@ -392,15 +408,12 @@ the launcher is a pure `exec "$@"` wrapper and the full launch command lives in 
 The pure seam `domain.shortcut_data.resolve_emulator_invocation(rom, emulator)` takes the resolved `EmulatorInvocation`
 and renders the invocation:
 
-- **libretro** invocation → the RetroArch `-e` form:
+- **`run_game`** invocation → the ES-DE command through `-e`, a core entry's with the resolver's core path in place of
+  `%CORE_RETROARCH%/<core>.so`:
 
   ```text
   flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/<core>.so %ROM%"
-  ```
-
-- **standalone** invocation → the emulator's full ES-DE command baked verbatim:
-
-  ```text
+  flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RETROARCH% --subsystem neocd -L /var/config/retroarch/cores/fbneo_libretro.so %ROM%"
   flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RPCS3% --no-gui %ROM%"
   ```
 
@@ -411,11 +424,14 @@ Every form, the [folder-boot one](#folder-boot-launch-target) included, starts t
 [RetroDECK runs through XWayland in Desktop Mode](../user-guide/troubleshooting.md#retrodeck-runs-through-xwayland-in-desktop-mode).
 
 `%EMULATOR_*%` and `%ROM%` stay as ES-DE placeholders — RetroDECK's `run_game.sh` resolves and single-quotes them at
-launch, so a ROM path with spaces or parens is handled. For the libretro form, only the in-sandbox cores directory
-(`/var/config/retroarch/cores`) is baked literally; ES-DE's `%CORE_RETROARCH%` variable is **not** expanded through
-`-e`, so Tender bakes the resolved path itself (a standalone command carries no `%CORE_RETROARCH%`, so it bakes as-is).
-The `-e` flag makes RetroDECK skip its gamelist lookup entirely, which is why a baked emulator applies for any filename
-(see [Why Tender always bakes the core, never the gamelist](#why-tender-always-bakes-the-core-never-the-gamelist)).
+launch, so a ROM path with spaces or parens is handled. `%CORE_RETROARCH%` is the exception: `run_game.sh` replaces it
+with `$ra_cores_path`, which RetroDECK has defined nowhere since 0.10.0, so it would load the core from `/`. Tender
+therefore writes in the core file the resolver states ES-DE's own core lookup finds (`core_path`, spelled where
+RetroDECK runs it, `/var/config/retroarch/cores/<core>.so` on a stock install) — for every core entry, the plain
+`-L <core> %ROM%` command and one carrying more alike (#2195 D15). An emulator program's command carries no
+`%CORE_RETROARCH%` and bakes as written. The `-e` flag makes RetroDECK skip its gamelist lookup entirely, which is why a
+baked emulator applies for any filename (see
+[Why Tender always bakes the core, never the gamelist](#why-tender-always-bakes-the-core-never-the-gamelist)).
 
 **Always `-e`.** Per
 [ADR-0012](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md),
@@ -736,16 +752,15 @@ externally-changed RetroDECK default carries this caveat.
 
 ## RetroDECK is the V1 target
 
-The `-e` flag, the `%EMULATOR_RETROARCH%` / `%ROM%` placeholders, and the `/var/config/retroarch/cores` path are
-**RetroDECK-adapter concerns**, isolated at the single seam `resolve_emulator_invocation`. RetroDECK is the supported
-launcher for V1 — this is the correct V1 shape, not a placeholder. The per-ROM **selection** (which emulator does this
-ROM resolve to?) is a service-layer read; the seam only **renders** the chosen `EmulatorInvocation` into a command
-string. Standalone-emulator support ([#129](https://github.com/danielcopper/romm-tender/issues/129)) is the first half
-of the multi-emulator lift: a standalone emulator is still launched **through RetroDECK's `-e`**, so the RetroDECK
-flatpak invocation remains the single seam — only the `-e` payload changed (a verbatim ES-DE command instead of the
-RetroArch `-L` form). The remaining lift ([#918](https://github.com/danielcopper/romm-tender/issues/918)) — a
-non-RetroDECK launcher behind a `Frontend`-style port — is net-new work and is not built until a second launcher is
-concrete.
+The `-e` flag, the `%EMULATOR_RETROARCH%` / `%ROM%` placeholders, and the core path written in are **RetroDECK-adapter
+concerns**, isolated at the single seam `resolve_emulator_invocation`. RetroDECK is the supported launcher for V1 — this
+is the correct V1 shape, not a placeholder. The per-ROM **selection** (which emulator does this ROM resolve to?) is a
+service-layer read; the seam only **renders** the chosen `EmulatorInvocation` into a command string. Standalone-emulator
+support ([#129](https://github.com/danielcopper/romm-tender/issues/129)) is the first half of the multi-emulator lift: a
+standalone emulator is still launched **through RetroDECK's `-e`**, so the RetroDECK flatpak invocation remains the
+single seam — only the `-e` payload changed (a verbatim ES-DE command instead of the RetroArch `-L` form). The remaining
+lift ([#918](https://github.com/danielcopper/romm-tender/issues/918)) — a non-RetroDECK launcher behind a
+`Frontend`-style port — is net-new work and is not built until a second launcher is concrete.
 
 The **core picker now lists standalone emulators alongside libretro cores** (#1210 / ADR-0020) — you _can_ choose
 standalone PCSX2 vs the LRPS2 libretro core in the UI, at both per-game and per-platform scope. **BIOS** is no longer
