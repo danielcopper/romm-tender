@@ -734,9 +734,8 @@ class TestWhatAnEntryIs:
         )
 
         option = _adapter(installation, traces).get_emulator_options("pico8")["options"][0]
-        assert (option.status == "bakeable", option.reason) == (
-            (True, None) if bakes else (False, START_SCRIPT_RUNS_NOTHING)
-        )
+        verdict = (option.status == "bakeable", option.reason)
+        assert verdict == ((True, None) if bakes else (False, START_SCRIPT_RUNS_NOTHING))
 
 
 class TestEveryLaunchLookupCodeIsClassified:
