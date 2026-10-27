@@ -332,3 +332,12 @@ class TestTheResolversVocabulariesAreReadHere:
         platform = _ask(adapter, _IDS, "genesis")
 
         assert (platform.state, platform.system) == (state, system)
+
+    def test_a_status_the_adapter_does_not_read_establishes_no_system(self, traces):
+        retrodeck = _Installation("retrodeck", {("igdb", "29"): _matched("igdb", "29", "genesis", "pending")})
+        adapter, _ = _adapter([retrodeck], traces)
+
+        platform = _ask(adapter, _IDS, "genesis")
+
+        assert (platform.state, platform.unasked, platform.system) == (UNASKED, CATALOGUE_UNAVAILABLE, None)
+        assert any("'pending'" in line for line in traces)

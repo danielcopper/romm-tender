@@ -126,6 +126,10 @@ class AtlasPlatformSystemsAdapter:
             # Deliberately broad, for the reason the holder's own ``_ask`` gives.
             self._log_debug(f"[platforms] {installation.kind}: resolver failed on {vocabulary} {value}: {exc!r}")
             raise _Unasked from exc
+        unread = sorted({match.status for match in answer.matches} - set(_STATUS_OF))
+        if unread:
+            self._log_debug(f"[platforms] {installation.kind}: status {unread[0]!r} unread on {vocabulary} {value}")
+            raise _Unasked
         return IdAnswer(
             platforms=tuple(answer.platforms),
             systems=tuple(answer.systems),

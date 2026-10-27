@@ -215,7 +215,9 @@ none and are not asked. The resolver reads the catalogue's own `<platform>` tags
 catalogue by hand is answered as readily as a shipped one, and nothing in Tender holds a table of platforms.
 `adapters/atlas_platforms.py` asks each of RomM's ids in the resolver's vocabulary for it and reads each matching
 system's status into Tender's own — switched on (declared), switched off (disabled) or not here (absent);
-`domain/platform_system.py::pick_system` decides over those.
+`domain/platform_system.py::pick_system` decides over those. An answer carrying a status the adapter does not read is
+never taken as absent: the platform's system is then not established (`unavailable`), as where the question raised
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D19).
 
 **Which answer is taken.** Only a **switched-on** system matches — one the catalogue declares; a system present only in
 the catalogue's comments is switched off, and one the source does not have at all is no match. The first id whose answer
