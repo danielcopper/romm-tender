@@ -370,8 +370,10 @@ interface FirmwareFile extends FirmwareVerdict {
  * One ES-DE `<command>` classified for launch-bakeability (#1210), the shape the
  * backend `get_emulator_options` / picker payloads carry. `kind` is `"libretro"`
  * (`core_so` set to the bare core name) or `"standalone"` (`core_so` null).
- * `bakeable` is false for the `needs_setup` (`reason: "inject"`) and un-bakeable
- * forms; `reason` names why the frontend can't offer it as a clickable pick.
+ * `bakeable` is false for the `needs_setup` (`reason: "inject"`, or an
+ * emulator the resolver states is not installed or could not establish —
+ * `utils/emulatorInstallation.ts`) and un-bakeable forms; `reason` names why
+ * the frontend can't offer it as a clickable pick.
  *
  * `emulator` is the resolver's identity for the emulator behind the row and the
  * only field that names one for BOTH kinds — `dolphin_libretro.so` for a

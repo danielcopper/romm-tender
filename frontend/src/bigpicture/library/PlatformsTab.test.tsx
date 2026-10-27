@@ -1448,6 +1448,24 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)!.title).toBe(sentence);
     });
 
+    it("says the fallback's installation could not be established, with its cause, never that it is missing", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: false, reason: "lookup_unsupported" }],
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const sentence =
+        "RetroDECK would launch these with LRPS2 / PCSX2, whose installation could not be established " +
+        "(this setup's emulator lookup cannot be checked yet) — and nothing here can pin a different one.";
+      expect(container.textContent).toContain(sentence);
+      expect(coreButton(container)!.title).toBe(sentence);
+      expect(container.textContent).not.toContain("not installed");
+    });
+
     it("colours an overridden core gold, in the header clause and the icon alike", async () => {
       // The same two colours the game page's core button uses, from the same
       // condition, so the label and the icon beside it can never disagree.

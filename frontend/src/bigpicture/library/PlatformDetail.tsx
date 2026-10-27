@@ -23,6 +23,7 @@ import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary, saysNoBiosChosen } from "../../utils/biosSummary";
 import { emulatorClause } from "../../utils/emulatorClause";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
+import { isNotEstablished, notEstablishedCause } from "../../utils/emulatorInstallation";
 import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { WaitingLine } from "../WaitingLine";
@@ -157,7 +158,7 @@ function coreOffer(core: CoreAnswer): CoreOffer {
   // Then the not-bakeable menu, ahead of the counts because it is not one:
   // `active_core_label` is null when nothing ES-DE lists is BAKEABLE, which says
   // nothing about how many entries there are. A platform whose only entry is a
-  // standalone emulator this RetroDECK has not installed lands here with one
+  // emulator this RetroDECK has not installed lands here with one
   // option, and one with two uninstalled ones lands here with two — where a
   // count-shaped branch would have said "offers one emulator" or nothing at all.
   //
@@ -166,10 +167,11 @@ function coreOffer(core: CoreAnswer): CoreOffer {
   // alternate emulator is set, and `options` keeps ES-DE's document order, so
   // `emulators[0]` IS that command. If its emulator is the one RetroDECK has
   // not installed, the fallback names a binary that is not there and the games
-  // do not start. Every other reason leaves the muted branch, which is where
-  // Apple I lands: run through this repo's own `classify_command` over the
-  // shipped `es_systems.xml`, its two commands come back
-  // `no_rom_target` and `quoting`, both `kind: "standalone"` with a null
+  // do not start; if whether it is installed could not be established, that is
+  // said, with the cause, and nothing more. Every other reason leaves the muted
+  // branch, which is where Apple I lands: run through this repo's own
+  // `classify_command` over the shipped `es_systems.xml`, its two commands come
+  // back `no_rom_target` and `quoting`, both `kind: "standalone"` with a null
   // `core_so`. The first is unbakeable because its whole MAME invocation is one
   // quoted argument, so it does not end in `%ROM%` — a different reason from
   // the second's, and neither is `not_installed`.
@@ -181,6 +183,12 @@ function coreOffer(core: CoreAnswer): CoreOffer {
         reason: `RetroDECK would launch these with ${fallback.name}, which is not installed — and nothing here can pin a different one.`,
         notice: `RetroDECK would launch these with ${fallback.name}, which is not installed — and nothing here can pin a different one.`,
       };
+    }
+    if (fallback && isNotEstablished(fallback.reason)) {
+      const cause = notEstablishedCause(fallback.reason);
+      const why = cause === null ? "" : ` (${cause})`;
+      const sentence = `RetroDECK would launch these with ${fallback.name}, whose installation could not be established${why} — and nothing here can pin a different one.`;
+      return { kind: "blocked", reason: sentence, notice: sentence };
     }
     return {
       kind: "blocked",

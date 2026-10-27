@@ -19,9 +19,14 @@ import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
 import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 import { emulatorName, entryForLabel } from "./emulatorEntries";
+import { isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
 
 /** Map a backend un-bakeable reason slug to short menu copy. */
 export function reasonCopy(reason: string | null): string {
+  if (isNotEstablished(reason)) {
+    const cause = notEstablishedCause(reason);
+    return cause === null ? "installation not established" : `installation not established: ${cause}`;
+  }
   switch (reason) {
     case "inject":
       return "Tender can't start this entry";

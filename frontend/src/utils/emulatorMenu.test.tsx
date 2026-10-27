@@ -54,6 +54,11 @@ describe("reasonCopy", () => {
     expect(reasonCopy("shortcut_script")).toBe("script/shortcut form");
   });
 
+  it("says an installation was not established, with the cause where one is named", () => {
+    expect(reasonCopy("no_find_rule")).toBe("installation not established: ES-DE has no rule for finding it");
+    expect(reasonCopy("not_established")).toBe("installation not established");
+  });
+
   it("falls back to a generic message for other slugs", () => {
     for (const r of ["no_rom_target", "quoting", "startdir", "unknown_placeholder", null]) {
       expect(reasonCopy(r)).toBe("not launchable from Steam");
@@ -144,6 +149,21 @@ describe("buildEmulatorMenu", () => {
     expect(ryubing.disabled).toBe(true);
     expect(ryubing.text).toBe("Ryubing (Standalone) — emulator not installed");
     expect(ryubing.onClick).toBeUndefined();
+  });
+
+  it("renders an entry whose installation could not be established as disabled, with its cause and never as missing", () => {
+    const menu = buildEmulatorMenu(
+      baseConfig({
+        emulators: [
+          libretroEmu("mgba_libretro", "mGBA", true),
+          { ...libretroEmu("genesis_plus_gx_expanded_libretro", "Paprium"), bakeable: false, reason: "path_unseen" },
+        ],
+      }),
+    );
+    const paprium = items(menu).find((i) => i.text.startsWith("Paprium"))!;
+    expect(paprium.disabled).toBe(true);
+    expect(paprium.text).toBe("Paprium — installation not established: ES-DE looks for it where Tender cannot see");
+    expect(paprium.onClick).toBeUndefined();
   });
 
   it("dispatches a bakeable standalone emulator's label on pick", () => {
