@@ -1136,11 +1136,12 @@ installed, since the installer stops the backend without waiting for a move, and
 nothing while a RetroDECK home migration is pending or still running, its re-record included: `follow_save_directory`
 checks that itself, so the gate holds for every caller — the status and count reads among them, which the migration rule
 does not otherwise stop — and the files stay the migration's to move until it has finished. And it does nothing while
-the ROM's game is running ([A game that is running](#a-game-that-is-running)), except in the sync before a start and the
-one after a game, which pass `while_running`: the first runs before the game starts and the second after it, while Steam
-may still list the game as exiting. The next caller after the game follows. (Other things move save files regardless of
-the setting: the RetroDECK home migration and the adoption rename.) A failure — a listing refused, the database busy —
-is logged and leaves the record as it was; the operation that called it goes on. Against the record:
+the ROM's game is running ([A game that is running](#a-game-that-is-running)), except where the caller passes
+`while_running`: the sync before a start and a conflict resolved before a start run before the game starts, and the sync
+after a game after it, while Steam may still list the game as starting or exiting; the sweep asked a moment before,
+under the same lock. The next caller after the game follows. (Other things move save files regardless of the setting:
+the RetroDECK home migration and the adoption rename.) A failure — a listing refused, the database busy — is logged and
+leaves the record as it was; the operation that called it goes on. Against the record:
 
 - an answer with no directory, one anchored in the content's own directory (beside the content file or inside it), one
   whose directory was not read from the emulator's own settings, or one whose directory still holds a hole (`<cwd>/…`,
@@ -1832,13 +1833,15 @@ question, and the answer is acted on as above.
 **The stop.** `stop_pre_launch_sync(rom_id)` stops every sync before a start of that ROM — a cancelled start leaves its
 sync running, and the next start of the game calls again (`services/saves/sync_engine/_pre_launch.py`) — and a Sync All
 Saves Now's or a Sync Saves' sync of the same ROM, since that game is about to start
-([A game that is running](#a-game-that-is-running)); no sync of another ROM. A call still waiting for the gate or the
-lock stops at once and writes nothing. One that runs checks its stop (`SyncStop`, `services/saves/_sync_stop.py`) at
-three points: before it follows a moved save directory, before each file, and between a finished download and putting it
-in place. A download finished after the stop is discarded with its `.tmp`, and the local file is neither backed up nor
-replaced; what was placed before the stop stays placed and is recorded, since `write_save_state` still runs. Its
-downloads stream without RomM's optimistic sync mark and are acknowledged (`confirm_download`) only once in place, so a
-discarded download leaves RomM's record of this device unchanged and the exit sync still sees the conflict
+([A game that is running](#a-game-that-is-running)); no sync of another ROM. A sync before a start still waiting for the
+gate or the lock stops at once and writes nothing; a Sync Saves still waiting ends at its first check once it holds
+them, before it follows a moved save directory. One that runs checks its stop (`SyncStop`,
+`services/saves/_sync_stop.py`) at three points: before it follows a moved save directory, before each file, and between
+a finished download and putting it in place. A download finished after the stop is discarded with its `.tmp`, and the
+local file is neither backed up nor replaced; what was placed before the stop stays placed and is recorded, since
+`write_save_state` still runs. Its downloads stream without RomM's optimistic sync mark and are acknowledged
+(`confirm_download`) only once in place, so a discarded download leaves RomM's record of this device unchanged and the
+exit sync still sees the conflict
 ([GET `/content?optimistic=true` auto-upserts the sync row](#get-contentoptimistictrue-auto-upserts-the-sync-row)). An
 acknowledgement that fails leaves the file in place and its backup kept, reports the file as an error of the sync and
 records nothing for it; the next sync finds the file identical to a head this device is not current on, and adopts and
@@ -1958,28 +1961,34 @@ User-initiated from the "Sync All Saves Now" button in Save Sync settings.
 
 ### A game that is running
 
-No save sync but the one before a start and the one after a game changes the save of a game Steam lists as running
+No save path but the sync before a start, the sync after a game and a conflict resolved before a start changes the save
+of a game Steam lists as running, the RetroDECK home migration excepted (below)
 ([#2620](https://github.com/danielcopper/romm-tender/issues/2620)). An emulator that rewrites its save by path writes
 over a save swapped under it, and the next sync then uploads that over the other device's newer save without a conflict;
 one that keeps the file open writes the session into the copy moved to `.romm-backup`. Whether a ROM's game runs is read
 afresh at each check, under the ROM's `rom_lock` (`RunningGameGuard`, `services/saves/sync_engine/_running_game.py`,
-over `RunningRomIdsFn`; what counts as running is under [Is the game running](#is-the-game-running)):
+over `RunningRomIdsFn`; what counts as running, and how long a reading may take, is under
+[Is the game running](#is-the-game-running)):
 
 - **Sync All Saves Now** asks for each confirmed ROM when it reaches it, before it follows a moved save directory, and
-  passes a running game over: nothing of it is listed, moved or written. The rest sync, `success` is decided by their
-  errors alone, and the answer names the games passed over — in `message`, "_\<game\>_ was skipped because it is
-  running; its saves sync when you quit it", and in `skipped_running` (`[{rom_id, name}]`). A ROM the sweep would not
-  sync anyway, one whose slot is not confirmed, is not named. The partial answer of a sweep the server stops partway
-  names them in its `message` only, since a partial failure's extras are what was done.
+  passes a running game over: nothing of it is listed, moved or written. Its follow takes no second reading
+  (`while_running`): it asked a moment before, under the same lock, and a start since is the stop's (below). The rest
+  sync, `success` is decided by their errors alone, and the answer names the games passed over — in `message`,
+  "_\<game\>_ was skipped because it is running; its saves sync when you quit it", and in `skipped_running`
+  (`[{rom_id, name}]`). A ROM the sweep would not sync anyway, one whose slot is not confirmed, is not named. The
+  partial answer of a sweep the server stops partway names them in its `message` only, since a partial failure's extras
+  are what was done.
 - **A press on the running game's page is refused** with `game_running`, whose message names the game ("_\<game\>_ is
   running. Quit it first; its saves sync when you quit it."): Sync Saves (with `synced=0`), a slot switch, a copy to a
   slot, a version restore, a slot delete, Delete Local Saves, a conflict resolution, and the setup wizard's migration of
-  legacy saves. Each asks before it follows or reads anything, so a refused press writes nothing. A slot confirmation
-  without a migration writes no save and is not refused. The conflict dialogs of the launch flows appear before a start
-  or after a game, so the refusal reaches only a conflict resolved while the game runs. A version switch's sync before
-  the switch is a Sync Saves and is refused the same way; the panel shows its message.
+  legacy saves. Each asks before it follows a moved save directory or touches a file, so a refused press writes nothing.
+  A slot confirmation without a migration writes no save and is not refused. The launch check's conflict dialog resolves
+  before the start and says so (`before_start`, from `gamepadLaunchPrompts.resolveConflicts`), so it is not refused
+  where Steam still lists a start the launch watcher cancelled for the check; a conflict resolved anywhere else — the
+  Play button's Resolve, a copy or a restore — is. A version switch's sync before the switch is a Sync Saves and is
+  refused the same way; the panel shows its message.
 - **Deleting all local saves of a platform** leaves a running game's saves and record alone, deletes the rest, and names
-  it in `message` and `skipped_running`; its `N ROM(s)` counts the ROMs it deleted for. `count_platform_saves` still
+  it in `message` and `skipped_running`; its `N ROM(s)` leaves the ROMs it passed over out. `count_platform_saves` still
   counts the running game's files, so the button's number is what the delete removes once the game has been quit.
 - **The removed-game cleanup** leaves a running removed game out:
   [A game that is running](removed-game-cleanup.md#a-game-that-is-running).
@@ -1987,17 +1996,18 @@ over `RunningRomIdsFn`; what counts as running is under [Is the game running](#i
   ([Following a Moved Save Directory](#following-a-moved-save-directory)) — on the game page's status read, the
   local-save check and the platform count among its callers.
 - **A start stops the other syncs of its game.** Play Anyway's `stop_pre_launch_sync` reaches a sweep's sync of that ROM
-  and a Sync Saves of it, through a `SyncStop` each registers per ROM (`RomSyncStops`). Each checks it before it follows
-  a moved save directory and wherever the sync before a start does (above). The sweep goes on with the next ROM and
-  names the stopped one as running; a stopped Sync Saves is refused with `game_running`, its details carrying what it
-  moved. So their downloads stream without RomM's optimistic mark and are acknowledged once placed, as the sync before a
-  start's are — one more request per download. Without it a game started with Play Anyway while a sweep was on it had
-  its save swapped seconds after its start.
+  and a Sync Saves of it under way at the press, through a `SyncStop` each registers per ROM (`RomSyncStops`). Each
+  checks it before it follows a moved save directory and wherever the sync before a start does (above). The sweep goes
+  on with the next ROM and names the stopped one as running; a stopped Sync Saves is refused with `game_running`, its
+  details carrying what it moved. So their downloads stream without RomM's optimistic mark and are acknowledged once
+  placed, as the sync before a start's are — one more request per download. Without it a game started with Play Anyway
+  while a sweep was on it could have its save swapped seconds after its start.
 
-The RetroDECK home migration does not wait for a running game:
-[#2226](https://github.com/danielcopper/romm-tender/issues/2226) removes it. A game Steam does not list yet — between a
-start and its listing, a window that has not been measured — counts as not running; for a start through Play Anyway the
-stop above covers it.
+The RetroDECK home migration does not wait for a running game;
+[#2226](https://github.com/danielcopper/romm-tender/issues/2226) decided to remove it. A game Steam does not list yet —
+between a start and its listing, a window that has not been measured — counts as not running. For a start through Play
+Anyway the stop above covers a sync of that game under way at the press, not a sweep that reaches the game after the
+press and before Steam lists it.
 
 ### Get save status (read-only)
 
@@ -2414,14 +2424,15 @@ it can also keep an app listed that has already exited: [Is the game running](#i
 
 ### Is the game running
 
-Six places ask whether a game is running. Five ask one predicate in the session manager,
-`readGameRunning(appId, romId)`: the launch watcher's already-running guard, and the Play button's launch guard, its
-Resume overlay at mount, Resume and Stop. The sixth asks differently: the stranded panel's card, in Quick Access and on
-a game page (`StrandedPanelCard.tsx`), takes every app the store lists as running or starting whose status was read,
-leaves out one whose stop was observed since its last start (`isStopObserved`, the session manager's stop record), with
-no ROM and so without rule 1, and lets its own last lifetime notification per app answer first, to tell whether ANY game
-runs. At the two launch guards a wrong "running" skips the whole launch gate — the migration block, the launch target,
-tracking setup, the core-change confirmation, the offline drift check, the pre-launch sync and conflict resolution.
+Six places in the panel ask whether a game is running; the backend's save paths and the removed-game cleanup ask its own
+reading, below. Five ask one predicate in the session manager, `readGameRunning(appId, romId)`: the launch watcher's
+already-running guard, and the Play button's launch guard, its Resume overlay at mount, Resume and Stop. The sixth asks
+differently: the stranded panel's card, in Quick Access and on a game page (`StrandedPanelCard.tsx`), takes every app
+the store lists as running or starting whose status was read, leaves out one whose stop was observed since its last
+start (`isStopObserved`, the session manager's stop record), with no ROM and so without rule 1, and lets its own last
+lifetime notification per app answer first, to tell whether ANY game runs. At the two launch guards a wrong "running"
+skips the whole launch gate — the migration block, the launch target, tracking setup, the core-change confirmation, the
+offline drift check, the pre-launch sync and conflict resolution.
 
 1. **An active session answers "running"**, whatever the store says: the store has been measured reporting nothing with
    the game still up ([Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session)).
@@ -2489,10 +2500,10 @@ closes Steam and any game with it, and a game on its way in or out is one it wou
 exit reads ReadyToLaunch and does not refuse the restart that would clear it. The backend reads the list the same way —
 Launching and Terminating hold as well as Running, written out under
 [the stranded panel's reload](loading-the-panel.md#a-panel-an-earlier-backend-left-behind) — and two waits share that
-reading: the reload and an update's install
-([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes)). Each side names the values once
-(`DISPLAY_STATUSES_THAT_HOLD`, in `utils/runningApps.ts` and `backend/host/inject/recovery.py`), and
-`tests/host/inject/test_recovery.py` holds the two equal.
+reading, the reload and an update's install
+([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes)), as do the save paths and the
+removed-game cleanup, below. Each side names the values once (`DISPLAY_STATUSES_THAT_HOLD`, in `utils/runningApps.ts`
+and `backend/host/inject/recovery.py`), and `tests/host/inject/test_recovery.py` holds the two equal.
 
 **The save sync reads the backend's list too, by app id.** Each entry of `RUNNING_APPS_EXPRESSION` names its `appid`
 beside its name, `null` where the entry carries no number for it. `RunningGames.running_rom_ids`
@@ -2501,8 +2512,12 @@ answers the ROMs whose shortcut has a listed app id (`roms.shortcut_app_id`, the
 a game counts as running for the save sync as it holds the backend's waits: Launching, Running or Terminating, or a
 status that cannot be read; an entry left behind after its exit, reading ReadyToLaunch, does not. A game on its way in
 or out is one whose save the emulator may be writing. Where no reading can be taken — no debugger attached, the panel
-not loaded, a reader that raised — nothing counts as running, so the save sync works as before rather than refusing
-every game; an entry without an app id matches no ROM. What the save sync does with a running game is
+not loaded, a reader that raised, or one that did not answer within `READING_TIMEOUT_SECONDS` (2 s) — nothing counts as
+running, so the save sync works as before rather than refusing every game; a failed read of the ROMs answers none too,
+and an entry without an app id matches no ROM. The limit is shorter than the host's 10 s per debugger command
+(`COMMAND_TIMEOUT_SECONDS`, `host/inject/injector.py`) because a renderer that is attached but does not answer would
+otherwise hold every save path that asks — under the game's `rom_lock`, and the sweep once per ROM while it holds the
+device gate — for that long. What the save sync does with a running game is
 [A game that is running](#a-game-that-is-running).
 
 An app that counts only because its status could not be read holds both waits, and only the user can tell whether it has

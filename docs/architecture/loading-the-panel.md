@@ -141,8 +141,8 @@ in Steam. The knock is answered, though — the panel is told, below.
    store it cannot read, a shape it does not know, or no renderer attached is no answer, and it keeps waiting. Then it
    asks the page whose panel it carries, rather than trusting the last reading, and acts only if it is still the earlier
    backend's. The same gate stands in front of the fallback. Each entry of the reading also names its `appid`, which the
-   reload does not read; the save sync matches it to a ROM, to leave a running game's saves alone
-   ([Is the game running](save-file-sync-architecture.md#is-the-game-running)).
+   reload does not read; the save sync and the removed-game cleanup match it to a ROM, to leave a running game's saves
+   and files alone ([Is the game running](save-file-sync-architecture.md#is-the-game-running)).
 2. **Asks Steam to rebuild its JS context** with `SteamClient.Browser.RestartJSContext()`, evaluated in
    `SharedJSContext`. Evaluated directly, the call answers "Cannot find default execution context" — the answer that led
    [ADR-0024](../adr/0024-session-budget-rss-gate.md) to rule the call out. Scheduled with `setTimeout`, as Decky Loader

@@ -377,13 +377,14 @@ each path refuses while a prune claim is active. The update, migration and sync 
 start, checked in the prune service; the start asks them only once its reservation is held.
 
 The executor processes sibling groups serially and catches ordinary exceptions per group. It rejects multiple shortcut
-bindings and active downloads, pins the preview's canonical RomM origin/token-origin/user namespace, probes every local
-group member with the single-attempt three-second `get_rom_once`, and treats only a typed `RommNotFoundError` from that
-same namespace as destructive authority. A connection/server/user change before, during, or after an exact-ID request is
-uncertain. Live, malformed, wrong-id, transport, authentication, timeout, server, and unknown outcomes retain data. Long
-recovery and frontend round trips are followed by another exact-ID proof before local source removal. The cleanup never
-moves a shortcut onto another version: a bound vanished version whose game still has a live version is kept with its
-shortcut and row.
+bindings, active downloads and a group whose game Steam lists as running
+([A game that is running](removed-game-cleanup.md#a-game-that-is-running)), pins the preview's canonical RomM
+origin/token-origin/user namespace, probes every local group member with the single-attempt three-second `get_rom_once`,
+and treats only a typed `RommNotFoundError` from that same namespace as destructive authority. A connection/server/user
+change before, during, or after an exact-ID request is uncertain. Live, malformed, wrong-id, transport, authentication,
+timeout, server, and unknown outcomes retain data. Long recovery and frontend round trips are followed by another
+exact-ID proof before local source removal. The cleanup never moves a shortcut onto another version: a bound vanished
+version whose game still has a live version is kept with its shortcut and row.
 
 Recovery is coordinated through ordered ROM save locks, acquired with no UoW open. The lock set is retried until shared
 save ownership is stable. Short read UoWs close before filesystem work, and no RomM request, event emission, or frontend

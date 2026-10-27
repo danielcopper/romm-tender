@@ -811,17 +811,20 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`TestTheStatusHomesAgree`, `TestWhichEntriesHold`, `TestEachEntryNamesItsApp`),
   `tests/services/test_running_games.py`, `frontend/src/utils/runningApps.test.ts`. Prompt-only: no new reader of
   `SteamUIStore.RunningApps`, and the stranded card's sentence follows what the backend waits on
-- **No save path but the sync before a start and the one after a game changes the saves of a game Steam lists as
-  running: Sync All Saves Now and a platform's delete pass it over and name it, every press on its page that writes its
-  saves is refused `game_running`, the removed-game cleanup skips its group, the follow of a moved save directory does
-  nothing, and a start's stop reaches a sweep's or a Sync Saves' sync of that game** — test + prompt-only —
+- **No save path but the sync before a start, the one after a game and a conflict resolved before a start changes the
+  saves of a game Steam lists as running, the RetroDECK home migration excepted, which
+  [#2226](https://github.com/danielcopper/romm-tender/issues/2226) decided to remove: Sync All Saves Now and a
+  platform's delete pass it over and name it, every press on its page that writes its saves is refused `game_running`,
+  the removed-game cleanup skips its group, the follow of a moved save directory does nothing, and a start's stop
+  reaches a sweep's or a Sync Saves' sync of that game** — test + prompt-only —
   `tests/services/saves/test_running_game.py`, `tests/services/prune/test_planning.py::TestARunningGameIsLeftOut`,
   `tests/services/prune/test_service.py::test_a_running_removed_game_is_left_as_it_is_and_offered_again`,
   `tests/contract/test_running_game.py` and
   `tests/contract/test_prune.py::test_a_removed_game_steam_lists_as_running_is_left_as_it_is_over_the_real_wire`.
   Prompt-only: a new path that writes, moves or deletes a game's saves asks `SyncEngine.refuse_while_running` or
-  `is_game_running` under the ROM's `rom_lock` before it looks at a file, and only `pre_launch_sync` and
-  `post_exit_sync` follow with `while_running`
+  `is_game_running` under the ROM's `rom_lock` before it looks at a file, and only `pre_launch_sync`, `post_exit_sync`,
+  a `resolve_sync_conflict` the launch check calls with `before_start` and the sweep, right after its own check, follow
+  with `while_running`
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts`; finding and patching the renderers is device-only. Prompt-only: marker
