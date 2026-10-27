@@ -76,7 +76,7 @@ class EmulatorInvocation:
     ES-DE display label (diagnostics only).
 
     ``emulator`` is the resolver's identity for this emulator, and it is the one
-    field that names it for BOTH kinds — the join a firmware answer is scoped
+    field that names it for every kind of entry — the join a firmware answer is scoped
     on. It is not a second spelling of ``label``: ES-DE lists one
     ``pcsx2_libretro.so`` under two labels, so a label identifies a launch row
     and not an emulator. ``None`` is an emulator the resolver could not identify,

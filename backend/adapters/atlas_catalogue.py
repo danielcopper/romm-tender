@@ -165,11 +165,11 @@ _NOT_INSTALLED_BECAUSE = frozenset(
     {CAVEAT_EMULATOR_NOT_FOUND, CAVEAT_PROGRAM_NOT_FOUND, CAVEAT_LAUNCHER_SCRIPT_MISSING, CAVEAT_CORE_NOT_INSTALLED}
 )
 
-# Notes beside a verdict, deliberately not acted on here. ``run-game-differs``
-# naming a path says RetroDECK's ``run_game.sh`` would run that rather than
-# what ES-DE runs; only the same note naming nothing refuses the bake
-# (:func:`_start_script_runs_nothing`). The other three state assumptions of a
-# frontend on the host (EmuDeck's), which starts no game through Tender.
+# Notes beside a verdict. Only ``run-game-differs`` naming nothing is acted on
+# (:func:`_start_script_runs_nothing`); naming a path, it says RetroDECK's
+# ``run_game.sh`` would run that rather than what ES-DE runs, which changes
+# nothing here. The other three state assumptions of a frontend on the host
+# (EmuDeck's), which starts no game through Tender.
 _LAUNCH_NOTES = frozenset(
     {
         CAVEAT_RUN_GAME_DIFFERS,
@@ -250,9 +250,9 @@ def _installation(entry: Any) -> str | None:
 def _start_script_runs_nothing(entry: Any) -> bool:
     """Whether the resolver states RetroDECK's ``run_game.sh`` would run nothing for *entry*.
 
-    That is ``run-game-differs`` with an empty ``run_game_path``: the script's
-    own lookup of the command's ``%EMULATOR_X%`` token finds no program, so a
-    shortcut baked through its ``-e`` starts nothing.
+    That is ``run-game-differs`` with an empty ``run_game_path``: the script
+    would run nothing for the command's ``%EMULATOR_X%`` token, so a shortcut
+    baked through its ``-e`` starts nothing.
     """
     return any(
         caveat.code == CAVEAT_RUN_GAME_DIFFERS and caveat.data.get("run_game_path") == "" for caveat in entry.caveats

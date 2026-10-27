@@ -382,11 +382,11 @@ interface FirmwareFile extends FirmwareVerdict {
  * `utils/emulatorInstallation.ts`, and `null` otherwise.
  *
  * `emulator` is the resolver's identity for the emulator behind the row and the
- * only field that names one for BOTH kinds — `dolphin_libretro.so` for a
- * libretro entry, `DUCKSTATION` for a standalone one. It is what a BIOS answer's
+ * only field that names one for every kind — `dolphin_libretro.so` for a core
+ * entry, `DUCKSTATION` for a program. It is what a BIOS answer's
  * entries and rows (`EmulatorTab.emulator`, `declared_by`) are keyed on, so it is the
  * join between a picker row and a BIOS answer; `core_so` carries no extension
- * and is null for every standalone emulator, and `label` identifies an entry
+ * and is null for every program, and `label` identifies an entry
  * rather than an emulator — RetroDECK lists RPCS3 as one entry by game serial
  * and another from a folder or an ISO. `null` is an emulator the resolver could
  * not identify, which nothing may be keyed on.

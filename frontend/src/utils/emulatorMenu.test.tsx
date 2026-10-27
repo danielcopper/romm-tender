@@ -55,7 +55,7 @@ describe("reasonCopy", () => {
   });
 
   it("words the two refusals the resolver's statements cause", () => {
-    expect(reasonCopy("core_unlocated")).toBe("where its core lies is not established");
+    expect(reasonCopy("core_unlocated")).toBe("core location not established");
     expect(reasonCopy("start_script_runs_nothing")).toBe("RetroDECK's start script finds no emulator for it");
   });
 

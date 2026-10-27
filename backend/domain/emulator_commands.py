@@ -2,9 +2,9 @@
 
 Given the label + command text of one ES-DE ``<command>``, decide whether
 Tender can bake it into a Steam shortcut's ``-e`` override — a real emulator
-invocation ending in ``%ROM%`` that RetroDECK's ``run_game.sh`` starts. That is
-the one rule here that is Tender's own, and it follows the script's handling of
-a command rather than ES-DE's. The system-layer default is the first
+invocation ending in ``%ROM%`` that RetroDECK's ``run_game.sh`` starts. That
+rule is Tender's own, and it follows the script's handling of a command rather
+than ES-DE's. The system-layer default is the first
 *safely-bakeable* command in document order; the emulator picker offers every
 command annotated with its bakeability and, when it cannot be baked, the reason.
 
@@ -306,9 +306,9 @@ def option_to_invocation(option: EmulatorOption | None) -> EmulatorInvocation | 
     passes RetroArch more than its core — FinalBurn Neo's ``--subsystem neocd``
     on Neo Geo CD — keeps all of it. The invocation carries the option's
     ``core_so``, and an emulator program's ``launcher`` for the folder-boot
-    fold; any other entry's launcher is RetroArch, which the fold cannot start
-    a core through. A ``None`` option, or one that is not bakeable, resolves to
-    ``None`` (the plain-launch signal).
+    fold, which execs a program and never RetroArch with a core. A ``None``
+    option, or one that is not bakeable, resolves to ``None`` (the plain-launch
+    signal).
     """
     if option is None or option.status != "bakeable" or not option.command:
         return None

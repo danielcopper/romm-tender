@@ -171,11 +171,11 @@ class ActiveCoreResolver:
         Fires only for a ``run_game`` invocation that loads no RetroArch core and
         whose *install* is a folder-boot layout (:func:`folder_boot_root` returns
         a game root), and returns a ``direct`` invocation through the launcher it
-        carries. Leaves the emulator unchanged for a RetroArch core — its launcher
-        is RetroArch, which the command's middle args alone do not start — a
-        non-folder install, a missing install, or no launcher — the last is logged
-        (the baked ``run_game`` form will fail to launch a folder until a later
-        re-bake heals it).
+        carries. The fold execs an emulator program, never RetroArch with a core,
+        so a core invocation is left unchanged whatever it carries. So is one on
+        a non-folder install or a missing install, and one with no launcher; the
+        last is logged, because the baked ``run_game`` form will fail to launch
+        a folder until a later re-bake heals it.
         """
         if emulator is None or emulator.form != RUN_GAME or emulator.core_so is not None or emulator.command is None:
             return emulator
