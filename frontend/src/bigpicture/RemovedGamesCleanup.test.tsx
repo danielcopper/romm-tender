@@ -1700,6 +1700,32 @@ describe("RemovedGamesCleanup", () => {
       expect(section.container.textContent).not.toContain("omitted");
     });
 
+    it("names each game whose result it shows, as the dialog does", () => {
+      const section = render(createElement(RemovedGamesCleanupSection));
+      act(() => {
+        beginPrunePreview("preview-1");
+        beginPruneRun("run-1", "preview-1");
+        setPruneComplete(
+          finishedRun({
+            results: [
+              {
+                group_id: "g-1",
+                name: "Celeste",
+                rom_ids: [1],
+                status: "skipped",
+                reason: "game_running",
+                message: "This game is running, so it was left as it is. Quit it and scan again to remove it.",
+              },
+            ],
+          }),
+        );
+      });
+
+      expect(section.container.textContent).toContain(
+        "Celeste: This game is running, so it was left as it is. Quit it and scan again to remove it.",
+      );
+    });
+
     it("counts omitted warnings on Data Management", () => {
       const section = render(createElement(RemovedGamesCleanupSection));
       act(() => {

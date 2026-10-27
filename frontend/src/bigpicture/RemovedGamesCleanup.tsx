@@ -174,13 +174,16 @@ function omittedWarnings(item: PruneGroupResult): number {
   return item.warnings_omitted ? Math.max(0, (item.warning_count ?? 0) - (item.warnings?.length ?? 0)) : 0;
 }
 
-/** The finished run's line on Data Management: what went wrong or warned, and how many warnings were left out. */
+/**
+ * The finished run's line on Data Management: what went wrong or warned, under the game's name as the dialog
+ * shows it, and how many warnings were left out.
+ */
 function completionDescription(complete: PruneComplete): string {
   const shown = complete.results.filter((item) => item.status !== "removed" || (item.warnings?.length ?? 0) > 0);
   return [
     complete.message,
     ...shown.flatMap((item) => [
-      item.message,
+      item.name ? `${item.name}: ${item.message}` : item.message,
       ...(item.warnings ?? []).map((warning) => `Warning: ${warning}`),
       omittedWarnings(item) > 0 ? `${omittedWarnings(item)} additional warning(s) omitted.` : "",
     ]),
