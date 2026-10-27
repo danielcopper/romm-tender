@@ -24,11 +24,11 @@ backend serves it as `<code_dir>/dist` and must not reach into the frontend's di
 gives the two builds of the panel one more transform (`insertDesktopSurfaceStart`,
 `frontend/scripts/start-desktop-surface.mjs`): it rewrites `src/index.tsx` as it is bundled to import `./desktop` and
 call `startDesktopSurface()` right after the panel's own `disownStrandedPruneLeases();`. That is the **only** way the
-desktop surface (`frontend/src/desktop/`) reaches a bundle — `pnpm build`, `build:dev`, CI, `mise run dev` and the
-release tarball all ship without it. The transform anchors on that one literal statement, and fails the build rather
-than finish it without the surface: when `index.tsx` holds the statement other than exactly once, and when a build of
-the panel never reaches `src/index.tsx` at all. Nothing stops the surface: a JS-context rebuild, not a teardown call, is
-what ends the panel, so the transform adds no stop call.
+desktop surface (`frontend/src/desktop/`) reaches a bundle — `pnpm build`, `build:dev`, CI, the `mise run` dev tasks
+without `--surface` and the release tarball all ship without it. The transform anchors on that one literal statement,
+and fails the build rather than finish it without the surface: when `index.tsx` holds the statement other than exactly
+once, and when a build of the panel never reaches `src/index.tsx` at all. Nothing stops the surface: a JS-context
+rebuild, not a teardown call, is what ends the panel, so the transform adds no stop call.
 
 ## Why two copies of the panel
 

@@ -7,13 +7,13 @@ involved.
 ## The loop
 
 ```bash
-mise run dev                           # build, restart Steam into the remembered window, run the backend
-mise run dev:bpm [display]             # the same into windowed Big Picture on <display>, and remember that
-mise run dev:desktop [display]         # the same into the desktop client on <display>, and remember that
-mise run dev:backend                   # build and run the backend against the Steam already running
-mise run dev:frontend [display]        # build and restart Steam; the running backend loads the panel
-mise run dev:bpm-reset [display]       # second terminal, wrong display: only the restart, into Big Picture
-mise run dev:desktop-reset [display]   # ...or into the desktop client
+mise run dev [--surface]                      # build, restart Steam into the remembered window, run the backend
+mise run dev:bpm [display] [--surface]        # the same into windowed Big Picture on <display>, and remember that
+mise run dev:desktop [display] [--surface]    # the same into the desktop client on <display>, and remember that
+mise run dev:backend [--surface]              # build and run the backend against the Steam already running
+mise run dev:frontend [display] [--surface]   # build and restart Steam; the running backend loads the panel
+mise run dev:bpm-reset [display]              # second terminal, wrong display: only the restart, into Big Picture
+mise run dev:desktop-reset [display]          # ...or into the desktop client
 ```
 
 `mise run dev` is the everyday command. It builds the three bundles, restarts Steam into the window and display you last
@@ -31,6 +31,9 @@ builds and runs the backend against the Steam that is already there and restarts
 reset, or beside a Steam that is up and carrying no panel. `dev:frontend` is the mirror: it builds and restarts Steam,
 and leaves the backend you already have running alone, so the rebuilt panel reaches a fresh context without a sync in
 flight being killed to get it there.
+
+`--surface`, on any of the five tasks that build, builds the desktop surface into the panel —
+[Desktop surface dev loop](#desktop-surface-dev-loop-dev-build-only).
 
 `dev:backend` is the wrong task beside a panel that is already loaded: the injector refuses a context that carries its
 marker, and the panel already in that context cannot reach the new backend, because every backend process mints its own
@@ -369,24 +372,22 @@ Validate a panel at 1.5 (the device) and at 2.4 (the worst case) before calling 
 ## Desktop surface dev loop (dev build only)
 
 The desktop surface (`frontend/src/desktop/`) adapts Steam's game page for a RomM shortcut in the desktop client's
-library window. No shipped bundle carries it, and neither does anything the loop above builds: `mise run dev` and its
-siblings build with `build:dev`, which leaves it out. It reaches Steam only through its own build
-([the desktop dev build](../architecture/frontend-bundles.md#the-desktop-dev-build-dev-build-only)), so the loop is the
-one above with that build put in place of theirs:
+library window. No shipped bundle carries it, and `build:dev`, which the tasks above build by default, leaves it out. It
+reaches Steam only through its own build
+([the desktop dev build](../architecture/frontend-bundles.md#the-desktop-dev-build-dev-build-only)), which every task
+above that builds runs in place of `build:dev` when given `--surface`. So the loop is one command:
 
-1. **Run a backend**: `mise run dev:desktop` starts one with Steam in the desktop client. `mise run dev`, `dev:bpm` and
-   `dev:backend` start one too; `dev:frontend` and the two resets do not.
-2. **Build the desktop dev bundle** over what that task built:
+```bash
+mise run dev:desktop [display] --surface
+```
 
-   ```bash
-   pnpm -C frontend build:desktop
-   ```
+It builds the desktop dev bundle, restarts Steam into the desktop client and runs the backend, which loads it. The flag
+is not remembered: **a task that builds, run without `--surface`, puts `build:dev`'s bundle back**, and with it Steam's
+own game page. The two resets build nothing, so they leave whichever bundle is in `dist/`.
 
-3. **Restart Steam into it** with `mise run dev:desktop-reset`. It builds nothing, so the running backend loads the
-   bundle step 2 left in `dist/`; a task that builds would replace it with `build:dev`'s.
-4. **Inspect it**: open a RomM shortcut in the desktop client's library, and select the desktop client window's target
-   in DevTools (below). What the watcher found and what failed is in the backend's log, on the lines starting
-   `desktop:`: its failures at any log level, the rest only with Tender's log level at Info or Debug.
+To inspect it, open a RomM shortcut in the desktop client's library, and select the desktop client window's target in
+DevTools (below). What the watcher found and what failed is in the backend's log, on the lines starting `desktop:`: its
+failures at any log level, the rest only with Tender's log level at Info or Debug.
 
 ## DevTools
 
