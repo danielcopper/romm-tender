@@ -7,12 +7,10 @@ conflict rollback in tests/services/saves/sync_engine/test_rollback.py.
 """
 
 import asyncio
-import gc
 import hashlib
 import io
 import threading
 import time
-import warnings
 import zipfile
 from typing import TYPE_CHECKING, Any, cast
 
@@ -1930,22 +1928,15 @@ class TestStoppingTheSyncBeforeAStart:
         fake.saves[100] = _server_save()
         gate = svc._sync_engine._device_gate
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            async with gate.held_by(GateHolder.SYNC_ALL, max_wait=1):
-                start = asyncio.ensure_future(svc.pre_launch_sync(42))
-                await asyncio.sleep(0.02)
-            svc.stop_pre_launch_sync(42)
+        # pytest.ini's error filters fail the run when a coroutine is left unawaited — reported
+        # against whichever test is running when it is finalized, not necessarily this one.
+        async with gate.held_by(GateHolder.SYNC_ALL, max_wait=1):
+            start = asyncio.ensure_future(svc.pre_launch_sync(42))
+            await asyncio.sleep(0.02)
+        svc.stop_pre_launch_sync(42)
 
-            answers = await asyncio.wait_for(asyncio.gather(start, return_exceptions=True), 1)
-            stopped = isinstance(answers[0], PreLaunchSyncStopped)
-            # The task and the refusal's traceback hold the call's frames; a
-            # coroutine left unawaited there is reported only once they go.
-            del answers, start
-            gc.collect()
-
-        assert stopped
-        assert [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)] == []
+        with pytest.raises(PreLaunchSyncStopped):
+            await asyncio.wait_for(start, 1)
         assert gate.is_in_flight() is False
         assert not any(c[0] == "download_save_content" for c in fake.call_log)
 
