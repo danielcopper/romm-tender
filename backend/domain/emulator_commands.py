@@ -118,9 +118,10 @@ class EmulatorOption:
 
     ``not_established`` is the note an entry carries where the resolver could
     not establish whether its program is there — :data:`NOT_ESTABLISHED` or a
-    named cause — and ``None`` otherwise. It leaves ``status`` to the command:
-    the entry stays a pick that resolves, and is never the default by itself
-    (:func:`select_default_option`).
+    named cause — and ``None`` otherwise. For a program it leaves ``status`` to
+    the command: the entry stays a pick that resolves, and is never the default
+    by itself (:func:`select_default_option`). A core entry with the note has no
+    core path and is :data:`CORE_UNLOCATED` (#2195 D15).
 
     ``emulator`` is the resolver's identity for the emulator behind this row, and
     it is what a firmware answer is joined and scoped on — the one field that
