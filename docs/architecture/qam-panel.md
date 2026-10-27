@@ -1480,8 +1480,9 @@ it, for the focused platform:
   page that opens the menu was the same sentence twice.
 
   **The clause names the core; "Default" is not one of the names it can take.** `resolve_platform_label` answers with
-  the real label in both ordinary cases. `null` means no option is **bakeable**, which is not the same as there being
-  none, and the two are different sentences:
+  the real label in both ordinary cases. `null` means nothing is pinned and no option can be the default — none is
+  **bakeable**, or the only bakeable ones are entries whose installation could not be established — which is not the
+  same as there being none, and the two are different sentences:
 
   - **Options exist, none bakeable, and the fallback can run** — the plain RetroDECK launch is baked and RetroDECK
     resolves the emulator itself. The clause reads `RetroDECK decides` in the muted colour and the line under it says
@@ -1531,16 +1532,17 @@ it, for the focused platform:
   States that report a PROBLEM keep their line, because a tooltip is a hover and the Deck's controller cannot perform
   one: the read failed, the answering source gives no emulator list (worded by why, § Notices and homes), **ES-DE lists
   no emulator at all**, nothing on its menu is bakeable, the fallback is not installed, and the fallback or the
-  platform's own pick is one whose installation could not be established. The first two of those are the split above and
-  they are checked in that order: an empty menu is the case where RetroDECK's own fallback fails too, so it is answered
-  before the not-bakeable one, and the surviving count branch then speaks only for a menu that really does hold one
-  bakeable option. A switch the backend refuses is reported in the same place, and the header keeps naming the old core,
-  which every shortcut following the platform's pick still launches with. A switch takes the page's busy hold from the
-  moment it is picked until it is over; an accepted one re-bakes the launch command of every bound shortcut, which is
-  why the hold has to cover the whole of it. The chip and the pane's buttons disable, another platform's pane says
-  `Working on X`, and the acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a
-  success takes that line back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back
-  too, because such a switch either committed or never ran and there is no pane left to report to either way.
+  platform's own pick is one whose installation could not be established. ES-DE listing no emulator and nothing on the
+  menu being bakeable are the split above, and they are checked in that order: an empty menu is the case where
+  RetroDECK's own fallback fails too, so it is answered before the not-bakeable one, and the surviving count branch then
+  speaks only for a menu that really does hold one bakeable option. A switch the backend refuses is reported in the same
+  place, and the header keeps naming the old core, which every shortcut following the platform's pick still launches
+  with. A switch takes the page's busy hold from the moment it is picked until it is over; an accepted one re-bakes the
+  launch command of every bound shortcut, which is why the hold has to cover the whole of it. The chip and the pane's
+  buttons disable, another platform's pane says `Working on X`, and the acting pane says `Switching to <emulator>…` in
+  the same status line the outcome lands in — a success takes that line back, a refusal replaces it, and a continuation
+  cancelled by leaving the page takes it back too, because such a switch either committed or never ran and there is no
+  pane left to report to either way.
 
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds every state and
   a one-of group's, and answers each in two lengths, and the pane takes both — the short `status` as the section's
