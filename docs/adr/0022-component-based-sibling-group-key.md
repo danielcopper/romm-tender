@@ -130,5 +130,6 @@ stored key, keyed it into its group and counted nothing to do
 persisted non-null key, the preview's reading (`LocalLibraryReader.do_read_resident_group_keys`): for collection units
 since [#2543](https://github.com/danielcopper/romm-tender/issues/2543), for platform units since
 [#2617](https://github.com/danielcopper/romm-tender/issues/2617), so the apply keys a group as the preview does. The
-collapse still diffs against the bound-row registry. A second shortcut this made before takes its group's key again and
-keeps its binding beside the other, a grandfathered duplicate under ADR-0021 §5.
+collapse still diffs against the bound-row registry. A second shortcut the apply minted this way before keeps its
+binding, and its row now takes the group's key, so the group holds two bound members: a grandfathered duplicate under
+ADR-0021 §5.
