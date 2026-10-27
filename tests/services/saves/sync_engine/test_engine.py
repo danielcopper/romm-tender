@@ -7,11 +7,12 @@ conflict rollback in tests/services/saves/sync_engine/test_rollback.py.
 """
 
 import asyncio
+import hashlib
 import io
 import threading
 import time
 import zipfile
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from _factories import _CONFLICT_REFUSAL_MESSAGES
@@ -2058,6 +2059,73 @@ class TestStoppingTheSyncBeforeAStart:
             results = await asyncio.wait_for(asyncio.gather(first, second, return_exceptions=True), 1)
 
         assert all(isinstance(r, PreLaunchSyncStopped) for r in results)
+
+
+class TestTheSyncBeforeAStartAcknowledgesOnlyWhatItPlaced:
+    """#2184 D8: the sync before a start marks this device current on a save only once the file is in place."""
+
+    @pytest.mark.asyncio
+    async def test_its_download_is_unmarked_at_the_get_and_acknowledged_after_it_is_placed(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        fake.saves[100] = _server_save()
+
+        result = await svc.pre_launch_sync(42)
+
+        assert result["downloaded"] == 1
+        calls = [c for c in fake.call_log if c[0] in ("download_save_content", "confirm_download")]
+        assert [c[0] for c in calls] == ["download_save_content", "confirm_download"]
+        assert calls[0][2]["optimistic"] is False
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
+
+    @pytest.mark.asyncio
+    async def test_a_manual_sync_still_downloads_with_the_optimistic_mark(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        fake.saves[100] = _server_save()
+
+        await svc.sync_rom_saves(42)
+
+        downloads = [c for c in fake.call_log if c[0] == "download_save_content"]
+        assert [c[2]["optimistic"] for c in downloads] == [True]
+        assert not any(c[0] == "confirm_download" for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_placed_file_whose_acknowledgement_failed_is_adopted_and_acknowledged_by_the_next_sync(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        content = b"the other device's progress"
+        fake.saves[100] = {**_server_save(), "content_hash": hashlib.md5(content).hexdigest()}
+        fake.set_server_save_content(100, content)
+        confirm = fake.confirm_download
+
+        def refused_confirm(_save_id: int, _device_id: str) -> dict[str, Any]:
+            raise RommApiError("acknowledgement refused")
+
+        monkeypatch.setattr(fake, "confirm_download", refused_confirm)
+        first = await svc.pre_launch_sync(42)
+
+        assert first["success"] is False
+        assert first["downloaded"] == 0
+        assert len(first["errors"]) == 1
+        assert first["errors"][0].startswith("pokemon.srm: ")
+        assert (tmp_path / "saves" / "gba" / "pokemon.srm").exists()
+        assert "pokemon.srm" not in (_get_save_state(svc, 42) or RomSaveSyncState()).files
+
+        monkeypatch.setattr(fake, "confirm_download", confirm)
+        fake.call_log.clear()
+        second = await svc.sync_rom_saves(42)
+
+        assert second["success"] is True
+        assert second["conflicts"] == []
+        assert not any(c[0] == "download_save_content" for c in fake.call_log)
+        assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(100, "test-device")]
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
 
 
 class TestRunRomSyncSession:

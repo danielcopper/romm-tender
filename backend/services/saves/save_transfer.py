@@ -142,10 +142,18 @@ class SaveTransfer:
         once complete, after :class:`SaveBackup` has moved the old one aside;
         any failure up to that replacement tries to remove the ``.tmp`` (a
         removal that fails is not reported) and raises the download's own
-        failure. A *stop* asked by the time the content is complete is such a
-        failure: :class:`SyncStopped` is raised, nothing is moved and nothing
-        recorded. Then records the sync boundary and *filename*'s baseline on
+        failure. Then records the sync boundary and *filename*'s baseline on
         *save_state*, in memory; the caller owns the write Unit of Work.
+
+        A download that can be stopped (*stop* given) streams without RomM's
+        optimistic sync mark, which would record this device current on the
+        save at the GET, and acknowledges it (``confirm_download``, under the
+        retry strategy) only once the file is in place: a stop asked by the time
+        the content is complete raises :class:`SyncStopped` with nothing moved,
+        nothing recorded and RomM's record of this device unchanged. An
+        acknowledgement that fails raises its own failure with the file in
+        place, its backup kept and nothing recorded, and the next sync adopts
+        the file as the head and acknowledges it then.
         """
         local_path = os.path.join(saves_dir, filename)
         self._save_file_store.make_dirs(saves_dir)
@@ -157,7 +165,7 @@ class SaveTransfer:
                     server_save["id"],
                     tmp_path,
                     device_id=device_id,
-                    optimistic=True,
+                    optimistic=stop is None,
                 ),
             )
             if stop is not None and stop.stops_here():
@@ -168,6 +176,8 @@ class SaveTransfer:
             with contextlib.suppress(OSError):
                 self._save_file_store.remove_file(tmp_path)
             raise
+        if stop is not None:
+            self._retry.with_retry(lambda: self._romm_api.confirm_download(int(server_save["id"]), device_id))
         self._record_transferred_file(save_state, filename, server_save, local_path, system, default_slot=default_slot)
         self._log_debug(f"Downloaded save: {filename}")
 
