@@ -59,7 +59,7 @@ async def emit_fetch_page_progress(
     unit's fetch sub-slice of the bar (#1407). The displayed total is
     clamped to at least ``page`` so a server that grew since the listing
     never shows ``page 63/62``. *units_fetched* — ``(fetched, of)`` — replaces
-    the page count as the frame's ``current`` / ``total`` where one frame's bar
+    the page count as the frame's ``current`` / ``total`` where one row's bar
     spans several units' fetches, which each start again at page 1; the page
     count stays in the message.
     """

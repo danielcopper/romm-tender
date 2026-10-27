@@ -1,8 +1,5 @@
 """UnitApplier — one work unit's apply, from its fetch to its last chunk.
 
-A run's collection units are fetched together, before the first applies, and
-each then applies from what it delivered.
-
 Which units run, and what the run makes of their outcomes, is
 :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s.
 
@@ -176,8 +173,8 @@ class UnitApplier:
         # reads as "Fetching library". The label flips to "Applying shortcuts"
         # exactly once, when the chunk loop starts (frontend-driven), instead of
         # showing a frozen "Applying shortcuts" bar for the minutes-long fetch.
-        # A delivered unit was fetched already, so its anchor fills the fetch
-        # slice, where the fetch-ahead's last frame left the bar.
+        # A delivered unit was fetched already, so its anchor fills its fetch
+        # slice whole.
         await self._emit_progress(
             SyncStage.FETCHING,
             message=f"Fetching {unit.name}",
@@ -235,9 +232,11 @@ class UnitApplier:
             None, self._shortcut_launch_resolver.do_build_core_overrides, unit_roms, sources
         )
 
-        # Read the bound-row registry once, before the build: its persisted keys
-        # seed the component keying (a fresh member edging into a DB-resident
-        # sibling adopts its canonical summary) AND drive the group collapse below.
+        # Read the bound-row registry once, before the build: it drives the group
+        # collapse below, and for a platform unit its persisted keys seed the
+        # component keying (a fresh member edging into a DB-resident sibling
+        # adopts its canonical summary). A delivered unit's ROMs already carry
+        # the keys stamped over every delivery, which the keying leaves alone.
         registry = await self._loop.run_in_executor(None, self._local_library_reader.do_read_apply_registry, unit)
         resident_keys = {
             int(rom_id): entry["sibling_group_key"]
@@ -252,10 +251,11 @@ class UnitApplier:
         # rebinding group's entry is keyed to its vanished sibling so the
         # frontend reuses that shortcut. A PLATFORM unit fetches a group's whole
         # membership (a group is per-platform), so it is a complete view and may
-        # rebind; a COLLECTION unit is a partial view (it fetches only its
-        # members, not a group's bound sibling on another/skipped platform) — the
-        # collapse then only grandfathers, never rebinds a live binding onto an
-        # uninstalled sibling (#1296).
+        # rebind; a COLLECTION unit is a partial view (it holds what it delivered
+        # and every member of a group no binding holds, but not a group's bound
+        # sibling on another/skipped platform) — the collapse then only
+        # grandfathers, never rebinds a live binding onto an uninstalled sibling
+        # (#1296).
         emitted = collapse_sibling_groups(
             shortcuts_data,
             registry,

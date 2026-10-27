@@ -61,15 +61,15 @@ over.
 
 **While a sync runs**, the left of the page becomes the run itself: one bar for the whole run, and under it every
 platform and collection the run plans to touch. A finished one shows what it added and updated, the one being worked
-shows what it is doing and how far in it is, and the rest show what is waiting for them. When the run reaches your
-collections, it reads all of them before it creates any of their shortcuts: the first collection's row shows the
-fetching meanwhile, its bar filling as each collection is read, and the line under the bar names the collection being
-read. That list scrolls on its own, and the platform being worked is kept in the middle of it, so a run over sixteen
-platforms does not walk out of sight. **Cancel Sync** sits just under the bar, above that list, so stopping a run is
-never more than a press or two away however many platforms it covers. While Tender is working out a preview there are no
-rows to show yet, so the line names what it is fetching instead. If Steam reloads its interface mid-run the plan is gone
-for the rest of that run: the bar, the counter and that line stand, and only if there is no line either does the page
-tell you the per-platform detail is not available for the run.
+shows what it is doing and how far in it is, and the rest show what is waiting for them. That list scrolls on its own,
+and the platform being worked is kept in the middle of it, so a run over sixteen platforms does not walk out of sight.
+**Cancel Sync** sits just under the bar, above that list, so stopping a run is never more than a press or two away
+however many platforms it covers. When the run reaches your collections, it reads all of them before it creates any of
+their shortcuts: meanwhile the first collection's row shows it fetching, its bar filling as each collection is read, and
+the collections after it still show waiting. While Tender is working out a preview there are no rows to show yet, so the
+line names what it is fetching instead. If Steam reloads its interface mid-run the plan is gone for the rest of that
+run: the bar, the counter and that line stand, and only if there is no line either does the page tell you the
+per-platform detail is not available for the run.
 
 **On the right** are **Skip preview** (now remembered between sessions), **Force Full Sync** behind a confirmation,
 Steam's memory now and how much the last run added to it, and your last ten sync runs with when each started, what it

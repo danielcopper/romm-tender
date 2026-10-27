@@ -10,8 +10,7 @@ listed platforms with no platform unit this run. An own smart collection walks
 those platforms even when nothing is left over, and a foreign smart collection
 is walked whole. Why, and what each kind's
 skip compares, is in docs/architecture/backend-architecture.md, "Incremental
-skip". An apply fetches every collection unit of its run this way before the
-first one applies.
+skip".
 """
 
 from __future__ import annotations
@@ -58,10 +57,14 @@ class CollectionFetcherConfig:
 
 @dataclass(frozen=True)
 class CollectionDelivery:
-    """What one collection unit of a run delivers, fetched before the run applies any.
+    """What one collection unit of a run delivers.
 
     ``roms``, ``member_rom_ids`` and ``skipped`` are
-    :meth:`CollectionFetcher.fetch_collection_unit`'s answer for ``unit``;
+    :meth:`CollectionFetcher.fetch_collection_unit`'s answer for ``unit``, until
+    :meth:`~services.library.unit_apply.UnitApplier.fetch_collection_units`
+    replaces ``roms`` with what the unit mints over: its own ROMs, joined by the
+    members later units delivered of a group no binding holds that it delivers
+    first, and without its members of such a group an earlier unit delivers.
     ``fetch_started_at`` is the clock read before that unit's skip check, which
     the unit's final chunk stamps as the next skip's reference.
     """
@@ -316,9 +319,10 @@ class CollectionFetcher:
             on a skip.
 
         ``progress_step`` / ``progress_total_steps`` are the run's coarse unit
-        index / total, threaded through to the throttled per-page ``fetching``
-        frames so a large collection fetch narrates its progress like a
-        platform fetch does; ``units_fetched`` is
+        index / total — while every collection unit is fetched, the first
+        collection unit's index for each — threaded through to the throttled
+        per-page ``fetching`` frames so a large collection fetch narrates its
+        progress like a platform fetch does; ``units_fetched`` is
         :func:`~services.library._fetch_pages.emit_fetch_page_progress`'s.
         """
         if unit.type != "collection":

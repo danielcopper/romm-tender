@@ -863,18 +863,19 @@ version**.
   what it delivered, and a later unit sees the binding an earlier one committed, so a game whose versions sit in
   different collections would be minted by the first of them over its own versions alone, and the preview, collapsing
   the union, would name another. When the run reaches its first collection unit it therefore fetches every collection
-  unit of the run (`CollectionFetcher.fetch_collection_units`, in queue order, with the same dedup), stamps the
-  component keys once over all of their deliveries with the resident keys the preview reads, and moves every member of a
-  group no bound row holds into the first delivery holding one (`domain/sync_diff.py::gather_unbound_groups`, which
-  groups bound rows as the collapse does). That unit mints the group over every version the run delivers, the installed
-  one and RomM's default included, as the preview's union does; the preview needs no change. A group that already holds
-  a binding is untouched, so a shortcut minted while only one version was delivered keeps its version. A skipped
-  collection delivers bound rows only and takes part in neither step. The fetch adds no request — the same skip probes
-  and walks, made earlier — and holds the deliveries until each unit applies, never more than the preview holds at once.
-  A cancel or a RomM failure during it applies no collection unit (the platform units before it stay applied), and the
-  first collection's shortcuts appear only once every collection is fetched. Its frames carry the first collection
-  unit's step, with the bar counting the collections fetched, so no later row reads done before it applies and the bar
-  never steps back.
+  unit of the run (`CollectionFetcher.fetch_collection_units`, in queue order, each against the run's `synced_rom_ids`
+  as a unit-by-unit fetch is, so a ROM two collections list is delivered by the first), stamps the component keys once
+  over all of their deliveries with the resident keys the preview reads, and moves every member of a group no bound row
+  holds into the first delivery holding one (`domain/sync_diff.py::gather_unbound_groups`, which groups bound rows as
+  the collapse does). That unit mints the group over every version the run delivers, the installed one and RomM's
+  default included, as the preview's union does; the preview needs no change. A group that already holds a binding is
+  untouched, so a shortcut an earlier sync minted, in collection order or before its other versions were delivered,
+  keeps its version. A skipped collection delivers bound rows only and takes part in neither step. The fetch adds no
+  request — the same skip probes and walks, made earlier — and holds the deliveries until each unit applies, never more
+  than the preview holds at once. A cancel or a RomM failure during it applies no collection unit (the platform units
+  before it stay applied), and the first collection's shortcuts appear only once every collection is fetched. Its frames
+  carry the first collection unit's step, with the bar counting the collections fetched, so no later row reads done
+  before it applies and the bar never steps back.
 - **Resolution chain** (`domain/sibling_resolution.py::resolve_group_representative`, total + shuffle-stable): an
   installed sibling wins; else an existing binding; else RomM's per-user default (`is_main_sibling`); else the **1G1R
   ranking** — prerelease demotion > **region priority** > revision (newest) > alphabetical `fs_name_no_ext` > `rom_id`.
@@ -1194,7 +1195,8 @@ and the count and left out of the run's new ROMs. Three cases are known: a scan 
 show, and an unbound sibling on a skipped platform. The last is left out of the platform's rebuilt rows, which hold only
 bound rows, and the walk does not ask for its platform, which has a unit. The collection skip leaves unbound members out
 the same way. An apply fetches every collection unit this way when it reaches the first of them, before any applies
-("Group-aware sync" above), so a member two collections list is delivered by the one queued first.
+("Group-aware sync" above); each unit leaves out what an earlier one delivered, so a member two collections list is
+delivered by the one queued first.
 
 **A smart collection's listing is not its live membership.** Its listed `rom_ids` are a stored column RomM computes for
 the collection's owner and refreshes after the writes that can move it (in RomM 5.3.0 a scan, a ROM edit or deletion, a
