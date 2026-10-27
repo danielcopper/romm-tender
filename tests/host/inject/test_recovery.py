@@ -21,6 +21,7 @@ from host.inject.recovery import (
     RELOAD_DELAY_MS,
     RELOAD_EXPRESSION,
     RUNNING_APPS_EXPRESSION,
+    read_running_apps,
 )
 
 _RUNNING_APPS_TS = Path(__file__).resolve().parents[3] / "frontend" / "src" / "utils" / "runningApps.ts"
@@ -51,9 +52,9 @@ def running_apps(tmp_path, prelude: str) -> dict[str, Any]:
 RUNNING = "local_per_client_data: { display_status: 4 }"
 
 
-def held(name: str, *, status_read: bool = True) -> dict[str, Any]:
-    """One app in the expression's answer."""
-    return {"name": name, "statusRead": status_read}
+def held(name: str, *, status_read: bool = True, appid: int = 1) -> dict[str, Any]:
+    """One app in the expression's answer; *appid* defaults to the id every one-app prelude lists."""
+    return {"name": name, "appid": appid, "statusRead": status_read}
 
 
 class TestWhichAppsAreRunning:
@@ -64,7 +65,9 @@ class TestWhichAppsAreRunning:
             f" {{ appid: 3, {RUNNING} }}"
             "] };"
         )
-        assert running_apps(tmp_path, prelude) == {"value": [held("Celeste"), held("Hades"), held("a game")]}
+        assert running_apps(tmp_path, prelude) == {
+            "value": [held("Celeste", appid=1), held("Hades", appid=2), held("a game", appid=3)]
+        }
 
     def test_an_empty_list_is_the_one_answer_that_says_nothing_runs(self, tmp_path):
         assert running_apps(tmp_path, "globalThis.SteamUIStore = { RunningApps: [] };") == {"value": []}
@@ -132,7 +135,43 @@ class TestWhichEntriesHold:
             ' { appid: 2, display_name: "Hades", local_per_client_data: { display_status: 4 } }'
             "] };"
         )
-        assert running_apps(tmp_path, prelude) == {"value": [held("Hades")]}
+        assert running_apps(tmp_path, prelude) == {"value": [held("Hades", appid=2)]}
+
+
+class TestEachEntryNamesItsApp:
+    """#2620 D1: the reading says which app holds, so a ROM can be matched by its shortcut's app id."""
+
+    def test_an_entry_carries_the_app_id_steam_lists_it_under(self, tmp_path):
+        prelude = (
+            "globalThis.SteamUIStore = { RunningApps: ["
+            f'{{ appid: 3000000007, display_name: "Celeste", {RUNNING} }}'
+            "] };"
+        )
+        assert running_apps(tmp_path, prelude)["value"][0]["appid"] == 3000000007
+
+    @pytest.mark.parametrize("appid", ['"3000000007"', "undefined", "null"], ids=["string", "absent", "null"])
+    def test_an_app_id_that_is_not_a_number_is_null(self, tmp_path, appid):
+        prelude = (
+            f'globalThis.SteamUIStore = {{ RunningApps: [{{ appid: {appid}, display_name: "Celeste", {RUNNING} }}] }};'
+        )
+        assert running_apps(tmp_path, prelude)["value"][0]["appid"] is None
+
+    async def test_the_reading_keeps_an_integer_app_id_and_nothing_else(self):
+        answer = [
+            {"name": "Celeste", "appid": 3000000007, "statusRead": True},
+            {"name": "Hades", "appid": "3000000008", "statusRead": True},
+            {"name": "Metroid", "appid": True, "statusRead": False},
+            {"name": "Zelda", "statusRead": True},
+        ]
+
+        async def evaluate(expression: str) -> Any:
+            assert expression == RUNNING_APPS_EXPRESSION
+            return answer
+
+        reading = await read_running_apps(evaluate)
+
+        assert reading.apps is not None
+        assert [app.app_id for app in reading.apps] == [3000000007, None, None, None]
 
 
 class TestTheStatusHomesAgree:

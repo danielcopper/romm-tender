@@ -68,7 +68,9 @@ DISPLAY_STATUSES_THAT_HOLD = {"Launching": 1, "Running": 4, "Terminating": 36}
 # behind". Unlike the panel's reader, every shape it cannot read answers
 # ``null`` rather than an empty list, because here an empty list is the
 # go-ahead — and for the same reason an entry whose status cannot be read still
-# holds, named with ``statusRead: false``.
+# holds, named with ``statusRead: false``. ``appid`` is the listed app's id —
+# a Tender shortcut's is the one ``roms.shortcut_app_id`` records — and ``null``
+# where it is not a number.
 RUNNING_APPS_EXPRESSION = (
     "(() => {"
     ' if (typeof SteamUIStore === "undefined" || SteamUIStore === null) { return null; }'
@@ -86,6 +88,7 @@ RUNNING_APPS_EXPRESSION = (
     " if (status !== null && !holding.includes(status)) { continue; }"
     " holdingApps.push({"
     ' name: String((app && (app.display_name || app.strDisplayName)) || "a game"),'
+    ' appid: app && typeof app.appid === "number" ? app.appid : null,'
     " statusRead: status !== null });"
     " }"
     " return holdingApps;"
@@ -140,10 +143,14 @@ class _OwnerReading:
 
 @dataclass(frozen=True)
 class ListedApp:
-    """One app Steam lists that holds a wait; ``status_read`` is false where only an unread status makes it hold."""
+    """One app Steam lists that holds a wait; ``status_read`` is false where only an unread status makes it hold.
+
+    ``app_id`` is ``None`` where Steam's entry carried no number for it.
+    """
 
     name: str
     status_read: bool
+    app_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -158,7 +165,12 @@ def _listed_app(value: object) -> ListedApp:
     """One entry of the expression's answer; anything but ``statusRead: true`` is a status not read."""
     if not isinstance(value, dict):
         return ListedApp(name=str(value), status_read=False)
-    return ListedApp(name=str(value.get("name", "a game")), status_read=value.get("statusRead") is True)
+    app_id = value.get("appid")
+    return ListedApp(
+        name=str(value.get("name", "a game")),
+        status_read=value.get("statusRead") is True,
+        app_id=app_id if type(app_id) is int else None,
+    )
 
 
 async def read_running_apps(evaluate: EvaluateFn) -> AppsReading:

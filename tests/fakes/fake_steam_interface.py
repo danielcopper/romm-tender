@@ -11,6 +11,7 @@ class FakeListedApp:
 
     name: str
     status_read: bool = True
+    app_id: int | None = None
 
 
 class FakeSteamInterface:
@@ -19,7 +20,8 @@ class FakeSteamInterface:
     ``apps`` is one reading: a tuple of names, ``()`` for a definite none, or
     ``None`` for a reading that could not be taken; each is listed with its
     status read, followed by ``apps_status_unread`` listed with a status that
-    could not be read. ``frees_at`` is ``None`` while the limit would let one
+    could not be read, and by one app for each id in ``listed_app_ids``, its
+    status read. ``frees_at`` is ``None`` while the limit would let one
     more reload through. ``raises``, where set, is raised by every app reading
     instead, and ``limit_raises`` by every reading of the limit.
     """
@@ -29,10 +31,12 @@ class FakeSteamInterface:
         *,
         apps: tuple[str, ...] | None = (),
         apps_status_unread: tuple[str, ...] = (),
+        listed_app_ids: tuple[int, ...] = (),
         frees_at: float | None = None,
     ) -> None:
         self.apps = apps
         self.apps_status_unread = apps_status_unread
+        self.listed_app_ids = listed_app_ids
         self.frees_at = frees_at
         self.readings = 0
         self.raises: Exception | None = None
@@ -47,6 +51,7 @@ class FakeSteamInterface:
         return (
             *(FakeListedApp(name) for name in self.apps),
             *(FakeListedApp(name, status_read=False) for name in self.apps_status_unread),
+            *(FakeListedApp(f"app {app_id}", app_id=app_id) for app_id in self.listed_app_ids),
         )
 
     async def reload_frees_at(self) -> float | None:

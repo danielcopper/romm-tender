@@ -179,11 +179,13 @@ class RendererGcFn(Protocol):
 
 
 class ListedRunningApp(Protocol):
-    """One app Steam lists that holds a wait: its name, and whether its display status was read.
+    """One app Steam lists that holds a wait: its name, its app id, and whether its display status was read.
 
     ``status_read`` is false for an app that counts only because its status
     could not be read, which is never the same as one whose status was read
-    and holds the wait.
+    and holds the wait. ``app_id`` is the id Steam lists the app under — a
+    Tender shortcut's is the one ``roms.shortcut_app_id`` records — and
+    ``None`` where Steam's entry carried none.
     """
 
     @property
@@ -191,6 +193,9 @@ class ListedRunningApp(Protocol):
 
     @property
     def status_read(self) -> bool: ...
+
+    @property
+    def app_id(self) -> int | None: ...
 
 
 class SteamInterfaceReader(Protocol):
