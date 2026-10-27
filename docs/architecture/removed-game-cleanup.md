@@ -266,6 +266,19 @@ A lease is the frontend's to release, so every path that receives one must give 
 work. The TTL remains the backstop for the one case the frontend cannot cover: a response lost in transit carries a
 token the frontend never learned, and the expiry log is what makes that visible.
 
+### A game that is running
+
+A running cleanup refuses launch evaluation, but not a game started before it, and a removed game can still be running
+from its shortcut. A group whose shortcut's game Steam lists as running is skipped whole as `game_running`, its result
+naming the game beside "This game is running, so it was left as it is. Quit it and scan again to remove it." — its
+shortcut, its files and its saves stay as they are, and the next scan offers it again. The group planner asks when it
+reaches the group (`services/prune/planning.py`), after the group's admission checks and before any liveness request,
+and the run asks again before anything irreversible (`_armed_to_mutate`, `services/prune/executor.py`), beside its
+re-check of the downloads; a group skipped there keeps its sealed bundle and reports its path. What counts as running is
+the save sync's reading ([Is the game running](save-file-sync-architecture.md#is-the-game-running)), matched by the
+shortcut's app id, so only the group's bound row can make it run. The preview does not ask: whether the game runs is a
+question about the moment of the removal, and the preview is taken before the user confirms.
+
 ## Actions and frames
 
 A frontend action mutates Steam only after atomically claiming its exact run, token, discriminant, and binding.

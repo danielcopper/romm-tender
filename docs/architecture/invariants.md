@@ -907,7 +907,31 @@ Format: **invariant** — tier — enforced by.
   pins the three panel readings. **Prompt-only**: no module reads `SteamUIStore.RunningApps` but these two — a third
   reader would pass every test above with its own rule — and the stranded card's sentence follows what the backend waits
   on: it names an app whose status could not be read whatever stop Tender saw for it, because the backend's reload has
-  no stop rule; the card's tests pin that, and nothing joins them to the backend's expression
+  no stop rule; the card's tests pin that, and nothing joins them to the backend's expression. The expression's entries
+  also name their `appid`, and `RunningGames.running_rom_ids` (`services/running_games.py`) matches them to the ROMs
+  whose shortcut `roms.shortcut_app_id` records, so the save sync counts a game as running as the backend's waits hold:
+  Launching, Running or Terminating, or a status that could not be read. `TestEachEntryNamesItsApp` runs the expression
+  under node for the id and pins the reading's parse; `tests/services/test_running_games.py` pins the match, and that no
+  reading — or a reader that raised — is nothing running
+- **No save path but the sync before a start and the one after a game changes the saves of a game Steam lists as
+  running: Sync All Saves Now and a platform's delete pass it over and name it, every press on its page that writes its
+  saves is refused `game_running`, the removed-game cleanup skips its group, the follow of a moved save directory does
+  nothing, and a start's stop reaches a sweep's or a Sync Saves' sync of that game** — test + prompt-only. An emulator
+  that rewrites its save by path writes over a save swapped under it, and the next sync uploads that over the other
+  device's newer save without a conflict; one that keeps the file open writes the session into the copy moved aside
+  ([A game that is running](save-file-sync-architecture.md#a-game-that-is-running)). The two syncs are exempt because
+  the first runs before the start and the second after it. `tests/services/saves/test_running_game.py` pins the sweep's
+  skip and its sentence, each refused press and the same press with the game not running, the platform delete, the
+  follow on the status read, the local-save check and the platform count, the two exempt syncs, and the stop of a
+  sweep's and a Sync Saves' sync of the started game with another game's untouched;
+  `tests/services/prune/test_planning.py::TestARunningGameIsLeftOut` the cleanup's skip before any probe and
+  `tests/services/prune/test_service.py::test_a_running_removed_game_is_left_as_it_is_and_offered_again` its re-check
+  before the Steam action; `tests/contract/test_running_game.py` the sweep, Sync Saves and the platform delete, and
+  `tests/contract/test_prune.py::test_a_removed_game_steam_lists_as_running_is_left_as_it_is_over_the_real_wire` the
+  cleanup, over the real wiring with Steam's reading included. **Prompt-only**: a new path that writes, moves or deletes
+  a game's saves asks `SyncEngine.refuse_while_running` or `is_game_running` under the ROM's `rom_lock` before it looks
+  at a file — nothing finds a path that does not — and only `pre_launch_sync` and `post_exit_sync` follow with
+  `while_running`. The RetroDECK home migration is outside the rule, and #2226 removes it
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts` pins what a render pass does to a tab array (added once, added again to
