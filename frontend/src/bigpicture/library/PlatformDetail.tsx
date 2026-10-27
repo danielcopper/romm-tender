@@ -149,10 +149,9 @@ type CoreOffer =
  * said, with the cause, and nothing more. Every other reason leaves the muted
  * branch, which is where Apple I lands: run through this repo's own
  * `classify_command` over the shipped `es_systems.xml`, its two commands come
- * back `no_rom_target` and `quoting`, both `kind: "standalone"` with a null
- * `core_so`. The first is unbakeable because its whole MAME invocation is one
- * quoted argument, so it does not end in `%ROM%` — a different reason from
- * the second's, and neither is `not_installed`.
+ * back `no_rom_target` and `quoting`. The first is unbakeable because its
+ * whole MAME invocation is one quoted argument, so it does not end in `%ROM%`
+ * — a different reason from the second's, and neither is `not_installed`.
  *
  * Any of the three may still sit beside a bakeable entry whose installation
  * could not be established — no default only because Tender never makes it

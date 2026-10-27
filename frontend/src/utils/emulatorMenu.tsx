@@ -30,6 +30,10 @@ export function reasonCopy(reason: string | null): string {
       return "emulator not installed";
     case "shortcut_script":
       return "script/shortcut form";
+    case "core_unlocated":
+      return "where its core lies is not established";
+    case "start_script_runs_nothing":
+      return "RetroDECK's start script finds no emulator for it";
     default:
       // no_rom_target / quoting / startdir / unknown_placeholder / null
       return "not launchable from Steam";

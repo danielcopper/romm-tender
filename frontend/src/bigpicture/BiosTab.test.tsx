@@ -37,7 +37,7 @@ const coreInfo: CoreInfo = {
       label: "Snes9x",
       labels: ["Snes9x"],
       name: "Snes9x",
-      kind: "libretro",
+      kind: "core",
       core_so: "snes9x_libretro",
       emulator: "snes9x_libretro.so",
       is_default: true,

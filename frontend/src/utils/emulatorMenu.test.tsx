@@ -54,6 +54,11 @@ describe("reasonCopy", () => {
     expect(reasonCopy("shortcut_script")).toBe("script/shortcut form");
   });
 
+  it("words the two refusals the resolver's statements cause", () => {
+    expect(reasonCopy("core_unlocated")).toBe("where its core lies is not established");
+    expect(reasonCopy("start_script_runs_nothing")).toBe("RetroDECK's start script finds no emulator for it");
+  });
+
   it("falls back to a generic message for other slugs", () => {
     for (const r of ["no_rom_target", "quoting", "startdir", "unknown_placeholder", null]) {
       expect(reasonCopy(r)).toBe("not launchable from Steam");
