@@ -1,7 +1,8 @@
 """Shared mutable state for the library sync pipeline.
 
-Built by ``bootstrap/library.py`` and handed to the façade and to each
-sub-service, so they can coordinate without back-refs to the façade. The contract:
+Built by ``bootstrap/library.py`` and handed to the façade and to the
+sub-services that share a run's state, so they can coordinate without
+back-refs to the façade. The contract:
 sub-services mutate the box's coordination fields directly (it is the
 single source of truth for in-flight sync run state); the façade exposes
 property accessors over the box so external callers see a flat shape
@@ -38,8 +39,8 @@ if TYPE_CHECKING:
     from domain.sync_run_kind import SyncRunKind
 
 
-# The messages a run's two refusals carry: a cancelled run or fetch, and a run
-# admission the box refused because another run holds the slot.
+# What a cancelled run or fetch says, and what a run is refused with while
+# another run holds the slot.
 SYNC_CANCELLED = "Sync cancelled"
 SYNC_IN_PROGRESS = "Sync already in progress"
 

@@ -3314,9 +3314,10 @@ whether a later start re-reads Steam's file at all.
 
 ## Composition Root (`bootstrap/`)
 
-The composition root is a package of two halves, one per phase, the `Application` that composes them, the wrapper each
-start-up repair runs through (`startup.py`), and an `__init__.py` that is namespace and re-exports only — consumers
-write `from bootstrap import …` and never deep-import a submodule:
+The composition root is a package of two halves, one per phase, the library service's wiring (`library.py`, under item
+2), the `Application` that composes them, the wrapper each start-up repair runs through (`startup.py`), the copy of the
+live data a pre-install check builds on (`check.py`), and an `__init__.py` that is namespace and re-exports only —
+consumers write `from bootstrap import …` and never deep-import a submodule:
 
 1. **`adapters.py`** — owns `bootstrap()`, which is **told** where the directories are, and where releases are asked
    for, rather than deriving them, then builds every adapter, applies the SQLite schema migrations, and loads + migrates

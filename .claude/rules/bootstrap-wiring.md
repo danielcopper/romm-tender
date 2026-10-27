@@ -11,10 +11,10 @@ paths:
 `adapters.py` instantiates every adapter and returns the typed bundles; `services.py` holds `WiringConfig` and turns
 those bundles into service instances — protocols in, services out; `library.py` builds the library service's state box
 and every part and hands the façade the ones it calls (`wire_library`, which `services.py` calls); `application.py`
-composes the two into the `Application` (`build_application()`, synchronous, runs nothing) that holds the services and
-runs the start-up repairs and the shutdown when the entry point asks; `check.py` copies the live data a pre-install
-check builds on (`copy_live_data`). `__init__.py` is namespace plus re-exports only, so consumers write
-`from bootstrap import …` and never deep-import a submodule. Adapter instantiation never happens in `main.py` — a
+composes the adapters and the services into the `Application` (`build_application()`, synchronous, runs nothing) that
+holds the services and runs the start-up repairs and the shutdown when the entry point asks; `check.py` copies the live
+data a pre-install check builds on (`copy_live_data`). `__init__.py` is namespace plus re-exports only, so consumers
+write `from bootstrap import …` and never deep-import a submodule. Adapter instantiation never happens in `main.py` — a
 Protocol-wrapped persister is built in `bootstrap()` and passed through `CallbackBundle`.
 
 **Process boundaries — `main.py` vs `bootstrap/`**: `[ours]` `main.py` owns the process entry point (`run()` and
@@ -55,6 +55,6 @@ deliberately out of scope for the module-size gate.
 
 `bootstrap/` is **not** exempt. Every module in it is governed by the ~1000-LOC threshold in
 `scripts/check_module_size.py` and none is grandfathered, so each has real headroom and a hard stop. A new adapter goes
-into `adapters.py`, new wiring into `services.py`; when either reaches the threshold the answer is the next split along
-the same seam (a wiring module per service cluster, as `library.py` is for the library service), never an allowlist
-entry.
+into `adapters.py`, new wiring into `services.py` (a library part's into `library.py`); when either reaches the
+threshold the answer is the next split along the same seam (a wiring module per service cluster, as `library.py` is for
+the library service), never an allowlist entry.

@@ -101,11 +101,11 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
     """Build the library service and its peers over the fakes a test hands it.
 
     Each argument replaces one seam of the library service's parts: ``loop``
-    the loop they run their executor hops on (the peers keep the running one),
-    ``romm_api`` the RomM API the two fetchers and the artwork service read,
-    ``artwork`` the artwork seam the cover preparer and the reporter ask (the
-    harness's ``artwork`` stays the real peer). Every service gets the test's
-    running loop unless one is handed.
+    the loop they run their executor hops on, ``romm_api`` the RomM API the two
+    fetchers and the artwork service read, ``artwork`` the artwork seam the
+    cover preparer and the reporter ask (the harness's ``artwork`` stays the
+    real peer). The parts get the test's running loop unless one is handed; the
+    peers always get it.
     """
     running = asyncio.get_running_loop()
 

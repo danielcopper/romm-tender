@@ -1,8 +1,8 @@
 """The library service's wiring — its state box and every part, built once and handed in.
 
 ``LibraryService`` builds none of its parts: this module builds the box and
-the thirteen sub-services over it, in the order their holders need them, and
-hands the façade the ones it calls. ``wire_services`` calls :func:`wire_library`
+every sub-service over it, in the order their holders need them, and hands the
+façade the ones it calls. ``wire_services`` calls :func:`wire_library`
 and keeps the service; a test calls it with fakes and reaches the parts it
 built.
 """
@@ -73,16 +73,9 @@ if TYPE_CHECKING:
 class LibraryWiring:
     """What the library's parts are built from: adapters, runtime seams and peer services.
 
-    The live settings dict, the loop and logger, the launcher every shortcut
-    runs through, the event emitter, the time/sleep/uuid seams, the
-    ``settings.json`` persister, the debug logger, the Unit-of-Work factory,
-    and the peers: the artwork service, the per-ROM ``active_core`` and
-    ``disc_resolver`` the bake reads, the ``emulator_sources`` a run takes its
-    one reading of, the ``renderer_rss`` / ``renderer_gc`` pair the
-    session-budget gate measures with, the ``conflict_rules`` a use case checks
-    at its entry and the ``sync_stale`` / ``sync_complete`` leases go through,
-    and the ``artwork_job`` the orchestrator and the preview request runs of and
-    the chunk dispatcher takes its placeholder icon from.
+    Everything the parts take from outside the library, and nothing they take
+    from one another — :func:`wire_library` hands each field on to the parts
+    that hold it.
     """
 
     romm_api: RommLibraryApi
@@ -182,8 +175,6 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
         )
     )
 
-    # One of the two holders of the ``artwork`` seam, for commit-time
-    # cover-path finalisation; the cover preparer below is the other.
     reporter = SyncReporter(
         config=SyncReporterConfig(
             steam_config=wiring.steam_config,

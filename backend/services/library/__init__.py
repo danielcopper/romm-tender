@@ -9,8 +9,8 @@ sync sub-services (:class:`LibraryFetcher`, :class:`CollectionFetcher`,
 :class:`ShortcutLaunchResolver`, :class:`ChunkDispatcher`, :class:`CoverPreparer`,
 :class:`SyncRunRecorder`, :class:`LocalLibraryReader`) over a shared
 :class:`LibrarySyncStateBox` — are built only by the composition root, from
-the re-exports below, and handed to the façade. RomM communication goes
-through Protocol-typed adapters.
+the re-exports below, and handed to the parts that hold them. RomM
+communication goes through Protocol-typed adapters.
 """
 
 from services.library._state import LibrarySyncStateBox

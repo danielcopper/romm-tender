@@ -2,7 +2,8 @@
 
 ``adapters.py`` owns adapter instantiation and the typed bundles it
 hands on; ``services.py`` turns those bundles into the live service
-instances, and ``library.py`` builds the library service's parts for it; ``application.py`` composes the two into the
+instances, and ``library.py`` builds the library service's parts for it;
+``application.py`` composes the adapters and the services into the
 :class:`Application` ``main.py`` runs, whose start-up repairs each run
 through the wrapper in ``startup.py``; ``check.py`` copies the live data a
 pre-install check builds on. The names re-exported below are

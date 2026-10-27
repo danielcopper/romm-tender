@@ -331,6 +331,6 @@ class TestSeamTable:
         assert set(check.SEAM_PROTOCOLS.values()) == set(check.SEAM_OWNERS)
 
     def test_no_owner_set_names_the_facade(self):
-        # The façade holds no seam; naming it as an owner would let it hold
-        # every one of them again.
+        # The façade holds no seam; listing it among a seam's owners would let
+        # it hold that seam again.
         assert all("service.py" not in owners for owners in check.SEAM_OWNERS.values())

@@ -10,11 +10,13 @@ split was for stops being checkable by reading one file.
 Three confinements are enforced here, each recording a promise a module
 docstring already makes:
 
-* ``active_core`` / ``disc_resolver`` belong to ``shortcut_launch_resolver.py``.
-  They are the only reason the sync ever resolves a ROM's emulator or its
-  disc-pinned launch path, and holding them in one module is what keeps the
-  per-ROM UoW the ``active_core`` seam opens out of the read UoW the
-  install-path scan holds (:mod:`services.library.shortcut_launch_resolver`).
+* ``active_core`` / ``disc_resolver`` / ``emulator_sources`` belong to
+  ``shortcut_launch_resolver.py``. The first two are the only reason the sync
+  ever resolves a ROM's emulator or its disc-pinned launch path, and holding
+  them in one module is what keeps the per-ROM UoW the ``active_core`` seam
+  opens out of the read UoW the install-path scan holds; the third is where a
+  run takes its one reading of the emulator sources
+  (:mod:`services.library.shortcut_launch_resolver`).
 * ``renderer_rss`` / ``renderer_gc`` belong to ``session_budget.py``. Its
   contract is that no renderer-RSS **reading** is taken anywhere else in the
   package — every other budget site prices against a reading that module handed
@@ -35,14 +37,15 @@ The scan is AST-shaped and covers the two ways a module takes hold of a seam:
 * an **annotation** naming the seam's Protocol type (``ActiveCoreReader``,
   ``RendererRssFn``, …) on a dataclass field, a parameter, or a return.
 
-**No module of the package passes a seam on.** ``bootstrap/library.py`` builds
+**No module but a seam's owner names it.** ``bootstrap/library.py`` builds
 every part and hands each seam straight to its owner's config, so inside the
 package a seam appears only where it is received: the owner's config field and
 the constructor that reads it. Any other mention — a façade or a part handing a
 seam on as a keyword argument, a config of a non-owner declaring it — is a
 finding. The composition root lies outside the scanned tree, and what it wires
 is still checked at the receiving end: a seam handed to the wrong part needs a
-field on that part's config, which is flagged.
+field on that part's config, which is flagged unless that field is both renamed
+and typed through an aliased Protocol (the last blind spot below).
 
 It is a surface-syntax guardrail, not dataflow analysis. What it cannot see:
 
@@ -60,8 +63,8 @@ It is a surface-syntax guardrail, not dataflow analysis. What it cannot see:
 
 The last two are precision in the documented reach rather than a way through:
 whatever the field is called and however its type was imported, the constructor
-that unpacks it reads ``config.<seam>``, and that read is flagged. What actually stays on review is a seam reached without ever
-naming it.
+that unpacks it reads ``config.<seam>``, and that read is flagged. What
+actually stays on review is a seam reached without ever naming it.
 
 Exit 0 when every seam is held only by its owner, 1 (one line per offending
 site) otherwise.
@@ -99,6 +102,7 @@ SEAM_PROTOCOLS: dict[str, str] = {
     "RendererGcFn": "renderer_gc",
     "ArtworkManager": "artwork",
 }
+
 
 def _iter_scanned_files(library_dir: Path) -> list[Path]:
     """Every ``.py`` under the library package, owners included.

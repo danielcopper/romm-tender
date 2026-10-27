@@ -297,11 +297,11 @@ Format: **invariant** — tier — enforced by.
   `services/library/session_budget.py`, and `artwork` by `services/library/cover_preparer.py` (the apply path's covers)
   **and** `services/library/reporter.py` (commit-time cover-path finalisation) — the one confinement with two owners,
   because those are two different questions a unit asks at two different points; two owners is a named pair, not a
-  licence for a third, and no other module of the package holds an `ArtworkManager`. No module of the package passes a
-  seam on: `bootstrap/library.py` builds every part and hands each seam to its owner's config, so inside the package a
-  seam is named only where its owner receives it, and anywhere else — the `service.py` façade included — it is a
-  finding** — check — `scripts/check_seam_owner.py` (AST over attributes named after a seam and over annotations naming
-  its Protocol, resolved per seam rather than per module — owning one grants nothing about another. It sees the
+  licence for a third, and no other module of the package holds an `ArtworkManager`. No module of the package but a
+  seam's owner names it: `bootstrap/library.py` builds every part and hands each seam to its owner's config, so inside
+  the package a seam is named only where its owner receives it, and anywhere else — the `service.py` façade included —
+  it is a finding** — check — `scripts/check_seam_owner.py` (AST over attributes named after a seam and over annotations
+  naming its Protocol, resolved per seam rather than per module — owning one grants nothing about another. It sees the
   injection, not every later use: a seam aliased to a differently-named attribute or local, one reached through
   `getattr`, one passed positionally into a helper that holds it, a quoted string annotation, and a Protocol imported
   under an alias all slip past it — the last two only on the annotation half, because the constructor read that unpacks

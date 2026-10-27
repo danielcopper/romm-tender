@@ -1,24 +1,9 @@
 """LibraryService façade.
 
-Owns the public use cases the endpoints call (platform/
-collection metadata, sync preview/apply/cancel, reporting, the
-``roms``-derived queries) over the shared :class:`LibrarySyncStateBox`.
-Implementation lives in the sub-service modules: :class:`LibraryFetcher` for
-the listings, the work queue and a platform unit's ROMs, :class:`CollectionFetcher`
-for a collection unit's ROMs, :class:`SyncOrchestrator` for a run's lifecycle,
-control and safety heartbeat, its unit loop and its finalize, :class:`UnitApplier`
-for one unit's apply, :class:`SyncPreview` for the preview and its staged
-snapshot, :class:`SyncProgress` for the ``sync_progress`` frames and the status
-read, :class:`SyncReporter` for post-apply finalisation and the ``roms``-derived
-queries, :class:`SessionBudgetMonitor` for Steam's renderer-heap budget,
-:class:`ShortcutLaunchResolver` for each ROM's launch facts,
-:class:`ChunkDispatcher` for one unit's emit → ack → commit round-trips,
-:class:`CoverPreparer` for a unit's covers, :class:`SyncRunRecorder` for the
-run's own ``SyncRun`` row, :class:`LocalLibraryReader` for what this device
-already recorded about the library. ``bootstrap/library.py`` builds the box and
-every part and hands the façade the ones it calls; the façade builds none of
-them. It checks each use case's conflict rules and delegates — anything that
-touches RomM or mutates in-flight sync state belongs in a sub-service.
+The use cases the endpoints call — platform/collection metadata, sync
+preview/apply/cancel, reporting, the ``roms``-derived queries. Each checks its
+conflict rules at its entry and delegates to the part that does the work;
+nothing that talks to RomM or runs a sync lives here.
 """
 
 from __future__ import annotations
@@ -43,9 +28,9 @@ if TYPE_CHECKING:
 class LibraryServiceConfig:
     """Frozen wiring bundle handed to ``LibraryService.__init__``: the parts the façade calls.
 
-    ``bootstrap/library.py`` builds them, over the one ``sync_state_box`` they
-    share. ``conflict_rules`` are what a library use case checks at its entry,
-    under its endpoint's name; ``settings`` is the live settings dict.
+    The parts share the one ``sync_state_box``. ``conflict_rules`` are what a
+    library use case checks at its entry, under its endpoint's name;
+    ``settings`` is the live settings dict.
     """
 
     sync_state_box: LibrarySyncStateBox
@@ -107,9 +92,9 @@ class LibraryService:
 
     # ── State accessors preserving the pre-decomposition attribute shape ──
     #
-    # The bootstrap-style ``get_pending_sync=lambda: service._pending_sync``
-    # callback and fixture-level test setup poke at the legacy private
-    # attribute names. Proxy them through the shared state box so external
+    # Test setup reads and writes the legacy private attribute names (the
+    # SteamGridDB tests' ``get_pending_sync=lambda: library._pending_sync``
+    # among them). Proxy them through the shared state box so external
     # readers and writers see the live values mutated by sub-services. The
     # run-lifecycle pair (``_sync_state`` / ``_current_sync_id``) is read-only
     # here: those two fields are written **only** through the box's verb

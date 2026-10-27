@@ -53,8 +53,9 @@ utilities) / `models/` (data shapes). `import-linter` enforces direction. `[CP]`
 
 A Protocol (in `services/protocols/`) + an adapter implementing it + a `FakeXxxAdapter` in `conftest` + `*ServiceConfig`
 ctor decomposition. `services/saves/` and `services/library/` are the reference decompositions for shared-state
-sub-services; `bootstrap/` builds the library's parts and hands them to its façade, which builds none of them.
-Sequencing for a new vertical: cross-cutting Protocols first, domain extraction next, the biggest service last.
+sub-services. For their wiring, `services/library/` and `services/downloads/` are the reference: `bootstrap/` builds the
+parts and hands them in, and the façade builds none of them. `SaveService` still builds its own. Sequencing for a new
+vertical: cross-cutting Protocols first, domain extraction next, the biggest service last.
 
 If a refactor breaks a `[CP]` rule, that's an architectural regression — call it out and fix it in the same PR or open a
 follow-up. `[ours]` deviations should be flagged in review but can be debated.
