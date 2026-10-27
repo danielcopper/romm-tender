@@ -46,6 +46,7 @@ from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMon
 if TYPE_CHECKING:
     import logging
 
+    from domain.work_unit import WorkUnit
     from services.library._state import CollectionMembership, LibrarySyncStateBox
     from services.library.collection_fetcher import CollectionDelivery
     from services.library.fetcher import LibraryFetcher
@@ -346,27 +347,16 @@ class SyncOrchestrator:
             # resolves its ROMs' emulators through it, and a change to the
             # sources during the run takes effect from the next one.
             sources = await self._loop.run_in_executor(None, self._shortcut_launch_resolver.do_read_sources)
-            deliveries: dict[tuple[str, str], CollectionDelivery] | None = None
+            deliveries: dict[tuple[str, str], CollectionDelivery] = {}
             try:
                 for unit_index, unit in enumerate(work_queue):
                     if box.is_cancelling():
                         cancelled = True
                         break
 
-                    # Every collection unit is fetched before the first applies:
-                    # the first one delivering a member of a group no binding
-                    # holds mints it over every member the run delivers.
-                    delivery = None
-                    if unit.type == "collection":
-                        if deliveries is None:
-                            deliveries = await self._unit_applier.fetch_collection_units(
-                                [u for u in work_queue[unit_index:] if u.type == "collection"],
-                                synced_rom_ids,
-                                unit_index=unit_index,
-                                total_units=total_units,
-                            )
-                        delivery = deliveries.pop(collection_membership_key(unit))
-
+                    delivery = await self._delivery_for(
+                        work_queue, unit_index, deliveries, synced_rom_ids=synced_rom_ids
+                    )
                     applied = await self._unit_applier.apply_unit(
                         unit,
                         sources=sources,
@@ -452,6 +442,36 @@ class SyncOrchestrator:
             # ``settle``: the shortcuts this run minted reach shortcuts.vdf a
             # little after it, and the artwork job's worklist is read from there.
             self._artwork_job.request_run(settle=True)
+
+    async def _delivery_for(
+        self,
+        work_queue: list[WorkUnit],
+        unit_index: int,
+        deliveries: dict[tuple[str, str], CollectionDelivery],
+        *,
+        synced_rom_ids: set[int],
+    ) -> CollectionDelivery | None:
+        """The delivery the unit at *unit_index* applies from, taken out of *deliveries*; ``None`` for a platform unit.
+
+        The first collection unit fills *deliveries* with every collection unit
+        left in *work_queue*, fetched by :meth:`UnitApplier.fetch_collection_units`
+        before any of them applies: the first one delivering a member of a group
+        no binding holds mints it over every member the run delivers.
+        """
+        unit = work_queue[unit_index]
+        if unit.type != "collection":
+            return None
+        key = collection_membership_key(unit)
+        if key not in deliveries:
+            deliveries.update(
+                await self._unit_applier.fetch_collection_units(
+                    [u for u in work_queue[unit_index:] if u.type == "collection"],
+                    synced_rom_ids,
+                    unit_index=unit_index,
+                    total_units=len(work_queue),
+                )
+            )
+        return deliveries.pop(key)
 
     async def _record_terminal_status(self, run_id: str | None, *, cancelled: bool, outcome: FinalizeOutcome) -> None:
         """Write the run's terminal ``SyncRun`` status: the one a stopped run earns, or completed."""
