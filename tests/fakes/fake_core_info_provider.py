@@ -44,6 +44,7 @@ def standalone_option(
     status: str = "bakeable",
     reason: str | None = None,
     emulator: str | None = None,
+    launcher: str | None = None,
 ) -> EmulatorOption:
     """Build a standalone :class:`EmulatorOption` from a full ES-DE command.
 
@@ -51,6 +52,7 @@ def standalone_option(
     ``needs_setup`` or ``unbakeable`` entry (e.g. to prove a per-game pin to an
     un-bakeable label hard-fails). ``emulator`` is the identity a firmware answer
     joins on, and it is left unset for the entry the resolver could not identify.
+    ``launcher`` is the sandbox launcher the resolver states for the entry.
     """
     return EmulatorOption(
         label=label,
@@ -60,6 +62,7 @@ def standalone_option(
         status=status,
         reason=reason,
         emulator=emulator,
+        launcher=launcher,
     )
 
 
@@ -88,9 +91,6 @@ class FakeCoreInfoProvider:
     real adapter and projects :meth:`get_active_core` into a libretro invocation
     (so ``get_active_core`` is still consulted — and recorded — for the libretro
     path).
-
-    The sandbox-launcher seam is :class:`FakeSandboxLauncher`, a separate object
-    because it is a separate Protocol answered from a separate source.
     """
 
     def __init__(
@@ -158,21 +158,3 @@ class FakeCoreInfoProvider:
             "reason": None if self.available else self.reason,
             "source": self.source,
         }
-
-
-class FakeSandboxLauncher:
-    """In-memory ``SandboxLauncherFn`` for tests.
-
-    Maps a standalone command to the sandbox launcher path the folder-boot bake
-    execs; an unseeded command resolves to ``None``, which is what a command with
-    no emulator token or no reachable find-rule entry answers. ``calls`` records
-    every command asked about.
-    """
-
-    def __init__(self, launchers: dict[str, str] | None = None) -> None:
-        self.launchers: dict[str, str] = launchers if launchers is not None else {}
-        self.calls: list[str] = []
-
-    def __call__(self, command: str) -> str | None:
-        self.calls.append(command)
-        return self.launchers.get(command)

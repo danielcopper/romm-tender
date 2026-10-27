@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import TYPE_CHECKING, Any
 
 from domain.platform_sync_state import PlatformSyncState
@@ -375,12 +376,53 @@ def seed_es_systems(harness: ContractHarness, xml: str | None = None) -> None:
     and the RetroDECK marker rides along because a catalogue is only ever read
     through a detected installation. The default seeds a single ``gba`` system
     with an mGBA default and a VBA Next alternative.
+
+    RetroArch and every core the catalogue names are laid down with it
+    (:func:`_seed_retroarch`), because whether a libretro entry is installed is
+    the resolver's answer too, and without them none would be.
     """
     seed_retrodeck_marker(harness)
+    catalogue = xml if xml is not None else _DEFAULT_ES_SYSTEMS_XML
     dest = os.path.join(_systems_linux_dir(harness), "es_systems.xml")
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     with open(dest, "w") as f:
-        f.write(xml if xml is not None else _DEFAULT_ES_SYSTEMS_XML)
+        f.write(catalogue)
+    _seed_retroarch(harness, catalogue)
+
+
+# ES-DE's custom find-rules layer, which wins over the bundled one name by name:
+# RetroArch's own rules go here, so a test's bundled es_find_rules.xml
+# (seed_es_find_rules) never has to repeat them.
+_RETROARCH_FIND_RULES_XML = """\
+<?xml version="1.0"?>
+<ruleList>
+  <emulator name="RETROARCH">
+    <rule type="staticpath"><entry>/app/retrodeck/components/retroarch/retroarch</entry></rule>
+  </emulator>
+  <core name="RETROARCH">
+    <rule type="corepath"><entry>/var/config/retroarch/cores</entry></rule>
+  </core>
+</ruleList>
+"""
+
+_CORE_RE = re.compile(r"%CORE_RETROARCH%/([\w-]+_libretro\.so)")
+
+
+def _seed_retroarch(harness: ContractHarness, catalogue: str) -> None:
+    """Lay down RetroArch, its find rules and every core *catalogue* names, so the resolver finds each."""
+    config = os.path.dirname(os.path.dirname(_retrodeck_marker_path(harness)))
+    _write(os.path.join(config, "ES-DE", "custom_systems", "es_find_rules.xml"), _RETROARCH_FIND_RULES_XML)
+    _write(
+        os.path.join(_flatpak_files_dir(harness), "retrodeck", "components", "retroarch", "retroarch"), "#!/bin/sh\n"
+    )
+    for core in set(_CORE_RE.findall(catalogue)):
+        _write(os.path.join(config, "retroarch", "cores", core), "")
+
+
+def _write(path: str, text: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(text)
 
 
 def seed_retrodeck_not_set_up(harness: ContractHarness) -> None:
@@ -395,10 +437,10 @@ def seed_retrodeck_not_set_up(harness: ContractHarness) -> None:
 
 
 def seed_es_find_rules(harness: ContractHarness, xml: str) -> None:
-    """Write ``es_find_rules.xml`` beside the seeded ``es_systems.xml``.
+    """Write the bundled ``es_find_rules.xml`` beside the seeded ``es_systems.xml``.
 
-    The sandbox-launcher probe (``resolve_sandbox_launcher``) and the standalone
-    existence probe both read this file, which ES-DE ships in the same
+    The resolver's launch lookup reads it to say whether a standalone emulator
+    is installed and where its launcher lies; ES-DE ships it in the same
     per-flavor ``systems/`` dir as its catalogue.
     """
     dest = os.path.join(_systems_linux_dir(harness), "es_find_rules.xml")
@@ -410,10 +452,10 @@ def seed_es_find_rules(harness: ContractHarness, xml: str) -> None:
 def seed_component_launcher(harness: ContractHarness, component: str) -> str:
     """Create a bundled RetroDECK component launcher; return its SANDBOX path.
 
-    Lays down the on-disk launcher under the flatpak files tree so the existence
-    probe treats the standalone emulator as installed, and returns the
+    Lays down the on-disk launcher under the flatpak files tree so the resolver
+    states the standalone emulator startable, and returns the
     ``/app/retrodeck/components/<component>/component_launcher.sh`` sandbox path —
-    the value ``resolve_sandbox_launcher`` returns and the direct bake carries.
+    the launcher the resolver states and the direct bake carries.
     """
     host = os.path.join(_flatpak_files_dir(harness), "retrodeck", "components", component, "component_launcher.sh")
     os.makedirs(os.path.dirname(host), exist_ok=True)

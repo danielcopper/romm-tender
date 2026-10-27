@@ -48,10 +48,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
+    AVAILABILITY_NOT_INSTALLED,
+    AVAILABILITY_STARTABLE,
+    CAVEAT_COMMAND_REWRITTEN_AT_START,
+    CAVEAT_CORE_NOT_INSTALLED,
+    CAVEAT_CORE_RULES_MISSING,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE,
     CAVEAT_EMULATOR_CATALOGUE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
+    CAVEAT_EMULATOR_NOT_FOUND,
+    CAVEAT_EMULATOR_RULES_MISSING,
+    CAVEAT_FIND_RULES_REWRITTEN_AT_START,
+    CAVEAT_FIND_RULES_UNREADABLE,
+    CAVEAT_LAUNCH_PATH_ASSUMED,
+    CAVEAT_LAUNCH_PATH_UNESTABLISHED,
+    CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
+    CAVEAT_LAUNCHER_SCRIPT_MISSING,
+    CAVEAT_PROGRAM_NOT_FOUND,
+    CAVEAT_RUN_GAME_DIFFERS,
     HEALTH_ISSUE_CATALOGUE_INVALID,
     HEALTH_ISSUE_NOT_SET_UP,
     KIND_LIBRETRO,
@@ -59,9 +74,13 @@ from _vendor.atlas import (
 
 from adapters.atlas_identity import emulator_identity
 from domain.emulator_commands import (
-    EmulatorOption,
+    NOT_ESTABLISHED,
+    NOT_ESTABLISHED_FIND_RULES_UNREAD,
+    NOT_ESTABLISHED_LOOKUP_UNSUPPORTED,
+    NOT_ESTABLISHED_NO_FIND_RULE,
+    NOT_ESTABLISHED_PATH_UNSEEN,
+    NOT_INSTALLED,
     classify_command,
-    downgrade_if_not_installed,
     option_to_invocation,
     select_default_option,
 )
@@ -71,6 +90,7 @@ from domain.emulator_sources import (
     CATALOGUE_SEALED,
     CATALOGUE_UNAVAILABLE,
 )
+from domain.shortcut_data import RETRODECK_APP_ID
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -121,6 +141,36 @@ _CATALOGUE_REFUSALS = frozenset(
     }
 )
 
+# Why the resolver could not establish whether what an entry launches is there,
+# each in Tender's word for it. An entry states exactly one reason, ahead of its
+# notes; a reason this map does not hold reads as plain ``NOT_ESTABLISHED``.
+_NOT_ESTABLISHED_BECAUSE = {
+    CAVEAT_EMULATOR_RULES_MISSING: NOT_ESTABLISHED_NO_FIND_RULE,
+    CAVEAT_CORE_RULES_MISSING: NOT_ESTABLISHED_NO_FIND_RULE,
+    CAVEAT_FIND_RULES_UNREADABLE: NOT_ESTABLISHED_FIND_RULES_UNREAD,
+    CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED: NOT_ESTABLISHED_LOOKUP_UNSUPPORTED,
+    CAVEAT_LAUNCH_PATH_UNESTABLISHED: NOT_ESTABLISHED_PATH_UNSEEN,
+}
+
+# The reasons beside ``not-installed``, deliberately not told apart: each says
+# ES-DE refuses the launch, and the panel words that one way.
+_NOT_INSTALLED_BECAUSE = frozenset(
+    {CAVEAT_EMULATOR_NOT_FOUND, CAVEAT_PROGRAM_NOT_FOUND, CAVEAT_LAUNCHER_SCRIPT_MISSING, CAVEAT_CORE_NOT_INSTALLED}
+)
+
+# Notes beside a verdict, deliberately not acted on here: ``run-game-differs``
+# is about RetroDECK's ``run_game.sh`` started without ``-e``, and the other
+# three state assumptions of a frontend on the host (EmuDeck's), which starts no
+# game through Tender.
+_LAUNCH_NOTES = frozenset(
+    {
+        CAVEAT_RUN_GAME_DIFFERS,
+        CAVEAT_LAUNCH_PATH_ASSUMED,
+        CAVEAT_FIND_RULES_REWRITTEN_AT_START,
+        CAVEAT_COMMAND_REWRITTEN_AT_START,
+    }
+)
+
 _CORE_SO_SUFFIX = ".so"
 
 
@@ -167,6 +217,36 @@ def _own_core_so(core_so: str) -> str:
 def _caveat_codes(answer: Any) -> tuple[str, ...]:
     """Every stable caveat code the answer states."""
     return tuple(caveat.code for caveat in answer.caveats)
+
+
+def _not_startable(entry: Any) -> str | None:
+    """Tender's installation reason for *entry*, ``None`` where the resolver states it startable.
+
+    Anything but ``startable`` and ``not-installed`` reads as not established —
+    the resolver's own rule for a value a client does not know.
+    """
+    if entry.availability == AVAILABILITY_STARTABLE:
+        return None
+    if entry.availability == AVAILABILITY_NOT_INSTALLED:
+        return NOT_INSTALLED
+    return next(
+        (_NOT_ESTABLISHED_BECAUSE[code] for code in _caveat_codes(entry) if code in _NOT_ESTABLISHED_BECAUSE),
+        NOT_ESTABLISHED,
+    )
+
+
+def _sandbox_launcher(entry: Any) -> str | None:
+    """The path inside RetroDECK's sandbox the resolver states ES-DE runs for *entry*, or ``None``.
+
+    The folder-boot bake execs it with ``flatpak run --command=`` in RetroDECK's
+    sandbox, so a launcher spelled anywhere else is none. Nor is a launcher
+    whose rule entry carries a replacement command: ES-DE then runs that
+    command, and the path only selected it.
+    """
+    launcher = entry.launcher
+    if launcher is None or launcher.app_id != RETRODECK_APP_ID or launcher.replacement_command is not None:
+        return None
+    return launcher.path
 
 
 def catalogue_refused(answer: Any) -> bool:
@@ -224,11 +304,9 @@ class AtlasCatalogueAdapter:
         self,
         *,
         sources: EmulatorSourcesAdapter,
-        emulator_installed: Callable[[str], bool],
         log_debug: Callable[[str], None],
     ) -> None:
         self._sources = sources
-        self._emulator_installed = emulator_installed
         self._log_debug = log_debug
 
     # -- public API ----------------------------------------------------------
@@ -303,11 +381,13 @@ class AtlasCatalogueAdapter:
         "starts_games"}``, ``None`` where none answers.
 
         ``options`` is in DECLARED order, so the first bakeable entry is the
-        system default. A bakeable **standalone** option whose emulator is not
-        installed in RetroDECK is downgraded to ``needs_setup`` (reason
-        ``not_installed``) via the injected find-rules probe, so it neither
-        becomes the default nor bakes into a shortcut. A system the catalogue
-        does not declare yields ``available: True`` with an empty list.
+        system default. Whether what an entry launches is there is the
+        resolver's ``availability``, libretro cores included: an entry it does
+        not state startable is ``needs_setup`` with ``not_installed``, or with
+        a not-established reason, so it neither becomes the default nor bakes
+        into a shortcut, and its launcher is the one the resolver states. A
+        system the catalogue does not declare yields ``available: True`` with
+        an empty list.
         """
         reading = self._reading(reading)
         source = _source_payload(reading)
@@ -319,7 +399,13 @@ class AtlasCatalogueAdapter:
         if catalogue_refused(answer):
             return _unavailable(_refusal_reason(answer), source)
         options = [
-            self._probe_installed(classify_command(entry.label, entry.command, emulator=emulator_identity(entry)))
+            classify_command(
+                entry.label,
+                entry.command,
+                emulator=emulator_identity(entry),
+                not_startable=_not_startable(entry),
+                launcher=_sandbox_launcher(entry),
+            )
             for entry in _declared_order(answer.entries)
         ]
         return {"available": True, "options": options, "reason": None, "source": source}
@@ -370,18 +456,6 @@ class AtlasCatalogueAdapter:
     def _reading(self, reading: SourcesReading | None) -> SourcesReading:
         """The reading handed in, or a fresh one for this call."""
         return reading if reading is not None else self._sources.read()
-
-    def _probe_installed(self, option: EmulatorOption) -> EmulatorOption:
-        """Downgrade a bakeable standalone whose emulator is not installed.
-
-        Libretro options and already-non-bakeable options pass through untouched
-        (RetroArch ships with RetroDECK; the domain rule guards the kind). For a
-        bakeable standalone, hand the find-rules probe's on-disk verdict to
-        :func:`domain.emulator_commands.downgrade_if_not_installed`.
-        """
-        if option.status != "bakeable" or option.kind != "standalone":
-            return option
-        return downgrade_if_not_installed(option, self._emulator_installed(option.command))
 
     def _trace(self, subject: str, shape: str, answer: Any) -> None:
         """Trace one answer's shape and the stable caveat codes it states.

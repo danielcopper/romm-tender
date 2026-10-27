@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
-from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
+from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
@@ -169,7 +169,6 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
             config=ActiveCoreResolverConfig(
                 uow_factory=FakeUnitOfWorkFactory(uow=uow),
                 core_info=core_info,
-                sandbox_launcher=FakeSandboxLauncher(),
                 platform_core_reader=platform_core_reader,
                 platform_systems=FakePlatformSystems(),
                 logger=logger,

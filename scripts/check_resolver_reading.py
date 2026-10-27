@@ -206,7 +206,6 @@ WATCHED_NAMES = frozenset(
 
 # Module -> the codes and names it reads today, outside a reading module. Only shrinks.
 READERS_TODAY: dict[str, frozenset[str]] = {
-    "adapters/es_find_rules.py": frozenset({"staticpath"}),
     "adapters/repositories/rom_install.py": frozenset({"launchable"}),
     "domain/bios_status.py": frozenset(
         {
@@ -315,9 +314,6 @@ READERS_TODAY: dict[str, frozenset[str]] = {
 
 # Module -> {name: why it is not the resolver's there}.
 NOT_THE_RESOLVERS: dict[str, dict[str, str]] = {
-    "adapters/flatpak_install.py": {
-        "flatpak": "a folder of Flatpak's own per-user install tree",
-    },
     "adapters/gavel_native.py": {
         "native": "the folder the compiled save-sync core ships in",
         "size_fixed": "a field of the save-sync core's own input, which states its own contract",

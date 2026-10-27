@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 
 from fakes.fake_core_info_provider import (
     FakeCoreInfoProvider,
-    FakeSandboxLauncher,
     libretro_option,
     standalone_option,
 )
@@ -99,7 +98,6 @@ def _make_resolver(
     core_info: FakeCoreInfoProvider,
     platform_systems: FakePlatformSystems | None = None,
     platform_core_reader: FakePlatformCoreReader | None = None,
-    sandbox_launchers: dict[str, str] | None = None,
 ) -> tuple[ActiveCoreResolver, FakePlatformSystems]:
     resolver_fn = platform_systems if platform_systems is not None else FakePlatformSystems()
     platform_reader = platform_core_reader if platform_core_reader is not None else FakePlatformCoreReader()
@@ -107,7 +105,6 @@ def _make_resolver(
         config=ActiveCoreResolverConfig(
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             core_info=core_info,
-            sandbox_launcher=FakeSandboxLauncher(sandbox_launchers),
             platform_core_reader=platform_reader,
             platform_systems=resolver_fn,
             logger=logging.getLogger("test"),
@@ -480,16 +477,17 @@ def test_stale_standalone_pin_degrades_to_default(caplog: pytest.LogCaptureFixtu
 _PS3_EBOOT = "/roms/ps3/MyGame/PS3_GAME/USRDIR/EBOOT.BIN"
 _PS3_ROM_DIR = "/roms/ps3/MyGame"
 _RPCS3_LAUNCHER = "/app/retrodeck/components/rpcs3/component_launcher.sh"
+_RPCS3_WITH_LAUNCHER = EmulatorInvocation.standalone(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)
 
 
 def test_folder_boot_standalone_rewrites_to_direct() -> None:
     """A standalone PS3 default over a folder-boot install becomes the ``direct``
-    sandbox invocation (its launcher resolved via the es_find_rules probe)."""
+    sandbox invocation, through the launcher the resolver states for it."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=70, platform_slug="ps3", emulator_override=None)
     _seed_install(uow, rom_id=70, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3})
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info, sandbox_launchers={_RPCS3_COMMAND: _RPCS3_LAUNCHER})
+    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3_WITH_LAUNCHER})
+    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
     assert resolver.active_emulator_for_rom(70) == EmulatorInvocation.direct(
         _RPCS3_COMMAND, _RPCS3_LAUNCHER, _RPCS3_LABEL
@@ -504,8 +502,10 @@ def test_folder_boot_standalone_pin_also_rewrites_to_direct() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=71, platform_slug="ps3", emulator_override=_RPCS3_LABEL)
     _seed_install(uow, rom_id=71, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(options=[standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL)])
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info, sandbox_launchers={_RPCS3_COMMAND: _RPCS3_LAUNCHER})
+    core_info = FakeCoreInfoProvider(
+        options=[standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)]
+    )
+    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
     assert resolver.active_emulator_for_rom(71) == EmulatorInvocation.direct(
         _RPCS3_COMMAND, _RPCS3_LAUNCHER, _RPCS3_LABEL
@@ -518,10 +518,10 @@ def test_non_folder_install_keeps_standalone_run_game_form() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=72, platform_slug="ps3", emulator_override=None)
     _seed_install(uow, rom_id=72, file_path="/roms/ps3/Game.iso", rom_dir="/roms/ps3/Game")
-    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3})
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info, sandbox_launchers={_RPCS3_COMMAND: _RPCS3_LAUNCHER})
+    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3_WITH_LAUNCHER})
+    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(72) == _RPCS3
+    assert resolver.active_emulator_for_rom(72) == _RPCS3_WITH_LAUNCHER
 
 
 def test_uninstalled_rom_keeps_standalone() -> None:
@@ -529,10 +529,10 @@ def test_uninstalled_rom_keeps_standalone() -> None:
     invocation passes through unchanged for the read-path projection."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=73, platform_slug="ps3", emulator_override=None)
-    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3})
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info, sandbox_launchers={_RPCS3_COMMAND: _RPCS3_LAUNCHER})
+    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3_WITH_LAUNCHER})
+    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(73) == _RPCS3
+    assert resolver.active_emulator_for_rom(73) == _RPCS3_WITH_LAUNCHER
 
 
 def test_libretro_over_folder_boot_install_is_never_rewritten() -> None:
@@ -543,11 +543,11 @@ def test_libretro_over_folder_boot_install_is_never_rewritten() -> None:
     _seed_install(uow, rom_id=74, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
     core_info = FakeCoreInfoProvider(
         options=[
-            standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL),
+            standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER),
             libretro_option("lrps3_libretro", "LRPS3"),
         ],
     )
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info, sandbox_launchers={_RPCS3_COMMAND: _RPCS3_LAUNCHER})
+    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
     assert resolver.active_emulator_for_rom(74) == EmulatorInvocation.libretro(
         "lrps3_libretro", "LRPS3", "lrps3_libretro.so"
@@ -557,13 +557,13 @@ def test_libretro_over_folder_boot_install_is_never_rewritten() -> None:
 def test_folder_boot_standalone_unresolvable_launcher_keeps_run_game_and_warns(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """When the sandbox launcher cannot be resolved, the standalone run_game form is
+    """When the resolver states no sandbox launcher, the standalone run_game form is
     kept (no direct) and a WARNING is logged — the launch fails until a re-bake heals."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=75, platform_slug="ps3", emulator_override=None)
     _seed_install(uow, rom_id=75, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
     core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3})
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)  # no launcher seeded → unresolvable
+    resolver, _ = _make_resolver(uow=uow, core_info=core_info)  # the resolver states no launcher
 
     with caplog.at_level(logging.WARNING, logger="test"):
         result = resolver.active_emulator_for_rom(75)

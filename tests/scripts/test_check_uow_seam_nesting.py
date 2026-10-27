@@ -413,7 +413,6 @@ class TestIoSeamsViolations:
     @pytest.mark.parametrize(
         "attribute",
         [
-            "_sandbox_launcher",
             "_system_extensions",
             "_system_known",
             "_platform_firmware_resolver",

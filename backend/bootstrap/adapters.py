@@ -30,7 +30,6 @@ from adapters.database_rename import DatabaseRenameAdapter
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.download_file import DownloadFileAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
-from adapters.es_find_rules import EsFindRulesAdapter
 from adapters.firmware_file import FirmwareFileAdapter
 from adapters.game_process import GameProcessAdapter
 from adapters.gavel_native import GavelNativeAdapter
@@ -118,7 +117,6 @@ if TYPE_CHECKING:
         RetroDeckFolders,
         RomFileStore,
         RommApi,
-        SandboxLauncherFn,
         SaveFileStore,
         SaveLocationReader,
         SettingsPersister,
@@ -245,7 +243,6 @@ class CallbackBundle:
     retrodeck_folders: RetroDeckFolders
     platform_core_reader: PlatformCoreReader
     m3u_support: SystemM3uSupportFn
-    sandbox_launcher: SandboxLauncherFn
     system_known: SystemKnownFn
     system_extensions: SystemSupportedExtensionsFn
     list_rom_dir_files: DirectoryFileListerFn
@@ -391,8 +388,6 @@ def bootstrap(
     # service config — the service cutover (#784) consumes it.
     uow_factory: UnitOfWorkFactory = functools.partial(SqliteUnitOfWork, db_path)
 
-    es_find_rules = EsFindRulesAdapter(logger=logger, user_home=user_home)
-
     persistence = PersistenceAdapter(directories.config_dir, logger, clock=clock)
     settings = migrate_settings(persistence.load_settings())
     # If load_settings quarantined a corrupt file this boot, fold the reset into
@@ -482,11 +477,7 @@ def bootstrap(
     firmware_resolver = AtlasFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
     platform_firmware_resolver = AtlasPlatformFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
     firmware_identifier = AtlasFirmwareIdentifier(sources=emulator_sources, log_debug=debug_logger)
-    emulator_catalogue = AtlasCatalogueAdapter(
-        sources=emulator_sources,
-        emulator_installed=es_find_rules.command_emulator_installed,
-        log_debug=debug_logger,
-    )
+    emulator_catalogue = AtlasCatalogueAdapter(sources=emulator_sources, log_debug=debug_logger)
     save_locations = AtlasSaveLocationAdapter(sources=emulator_sources, log_debug=debug_logger)
     source_platform_systems = AtlasPlatformSystemsAdapter(sources=emulator_sources, log_debug=debug_logger)
 
@@ -539,7 +530,6 @@ def bootstrap(
         retrodeck_folders=retrodeck_folders,
         platform_core_reader=platform_core_reader,
         m3u_support=emulator_catalogue.system_supports_m3u,
-        sandbox_launcher=es_find_rules.resolve_sandbox_launcher,
         system_known=emulator_catalogue.is_known_system,
         system_extensions=emulator_catalogue.get_supported_extensions,
         list_rom_dir_files=download_file_store.list_files,

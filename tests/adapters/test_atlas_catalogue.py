@@ -22,17 +22,27 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from _vendor.atlas import (
+    AVAILABILITY_NOT_INSTALLED,
+    AVAILABILITY_STARTABLE,
     AVAILABILITY_UNESTABLISHED,
+    CAVEAT_CORE_NOT_INSTALLED,
+    CAVEAT_CORE_RULES_MISSING,
     CAVEAT_EMULATOR_CATALOGUE_EXCLUSIVE,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE,
     CAVEAT_EMULATOR_CATALOGUE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
     CAVEAT_EMULATOR_LIST_DERIVED,
+    CAVEAT_EMULATOR_NOT_FOUND,
+    CAVEAT_EMULATOR_RULES_MISSING,
+    CAVEAT_FIND_RULES_UNREADABLE,
+    CAVEAT_LAUNCH_PATH_UNESTABLISHED,
+    CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
+    CAVEAT_RUN_GAME_DIFFERS,
     HEALTH_ISSUE_CATALOGUE_INVALID,
     HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_ROOT_MISSING,
@@ -41,17 +51,30 @@ from _vendor.atlas import (
 )
 from _vendor.atlas.esde import CatalogueKind, EmulatorSpec
 from _vendor.atlas.installations import CatalogueAnswer, EmulatorEntry, RomPlacement, SystemsAnswer
-from _vendor.atlas.launch import LaunchResolution
+from _vendor.atlas.launch import Launcher, LaunchResolution
 from _vendor.atlas.placement import Caveat
 
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.shortcut_data import EmulatorInvocation
 
+if TYPE_CHECKING:
+    from _vendor.atlas import Availability
+
 _RETROARCH = "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/{core}.so %ROM%"
 
 # The answering source a catalogue answer names where RetroDECK answers.
 _RETRODECK = {"kind": "retrodeck", "starts_games": True}
+
+# Where RetroDECK's sandbox keeps RPCS3's launcher — what the resolver states ES-DE runs for it.
+_LAUNCHER = "/app/retrodeck/components/rpcs3/component_launcher.sh"
+
+
+def _launcher(*, app_id: str | None = "net.retrodeck.retrodeck", replacement: str | None = None) -> Launcher:
+    return Launcher(path=_LAUNCHER, replacement_command=replacement, app_id=app_id, rule="staticpath", entry=_LAUNCHER)
+
+
+_STARTABLE = LaunchResolution(availability=AVAILABILITY_STARTABLE, launcher=_launcher())
 
 _HEALTH = Caveat(code=HEALTH_ISSUE_ROOT_MISSING, message="a health finding, on every answer this machine gives")
 
@@ -81,13 +104,14 @@ def _entry(
     selection: str | None = None,
     system: str = "ps3",
     emulator: str | None = None,
+    launch: LaunchResolution = _STARTABLE,
 ) -> EmulatorEntry:
     """One catalogue entry, as the resolver hands it over.
 
     The host an entry is bound to answers its identity and its placement
     questions; only the first is asked here, and the adapter reads the spec's
-    other fields directly. Its launch answer is one the adapter does not read,
-    so it is left unestablished.
+    other fields directly. Its launch answer defaults to startable, through a
+    launcher in RetroDECK's sandbox.
     """
     return EmulatorEntry(
         cast("Any", _Identifying(emulator)),
@@ -102,11 +126,18 @@ def _entry(
             selection=selection,
         ),
         caveats=(),
-        launch=LaunchResolution(availability=AVAILABILITY_UNESTABLISHED),
+        launch=launch,
     )
 
 
-def _libretro(*, label: str, core: str, declared_index: int | None, selection: str | None = None) -> EmulatorEntry:
+def _libretro(
+    *,
+    label: str,
+    core: str,
+    declared_index: int | None,
+    selection: str | None = None,
+    launch: LaunchResolution = _STARTABLE,
+) -> EmulatorEntry:
     return _entry(
         label=label,
         command=_RETROARCH.format(core=core),
@@ -114,6 +145,7 @@ def _libretro(*, label: str, core: str, declared_index: int | None, selection: s
         kind=KIND_LIBRETRO,
         core_so=f"{core}.so",
         selection=selection,
+        launch=launch,
     )
 
 
@@ -185,12 +217,10 @@ def _adapter(
     installation: _Installation | None,
     traces: list[str],
     *,
-    installed: bool = True,
     sources: EmulatorSourcesAdapter | None = None,
 ) -> AtlasCatalogueAdapter:
     return AtlasCatalogueAdapter(
         sources=sources if sources is not None else _sources([] if installation is None else [installation], traces),
-        emulator_installed=lambda command: installed,
         log_debug=traces.append,
     )
 
@@ -220,7 +250,9 @@ class TestDeclaredOrder:
         adapter = _adapter(installation, traces)
 
         assert _labels(adapter) == ["RPCS3", "RPCS3 Firmware", "RPCS3 Directory"]
-        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.standalone("%EMULATOR_RPCS3% %ROM%", "RPCS3")
+        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.standalone(
+            "%EMULATOR_RPCS3% %ROM%", "RPCS3", launcher=_LAUNCHER
+        )
 
     def test_the_promoted_entry_is_marked_default_when_it_is_also_declared_first(self, traces):
         installation = _Installation(
@@ -237,7 +269,9 @@ class TestDeclaredOrder:
         adapter = _adapter(installation, traces)
 
         assert _labels(adapter) == ["RPCS3", "RPCS3 Directory"]
-        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.standalone("%EMULATOR_RPCS3% %ROM%", "RPCS3")
+        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.standalone(
+            "%EMULATOR_RPCS3% %ROM%", "RPCS3", launcher=_LAUNCHER
+        )
 
     def test_a_skipped_declared_position_is_ordered_not_indexed(self, traces):
         # ES-DE's own walk skips a position where an empty-text <command> holds
@@ -387,7 +421,7 @@ class TestCatalogueRefusals:
 
         assert _labels(adapter) == ["My PCSX2"]
         assert adapter.get_default_emulator("ps3") == EmulatorInvocation.standalone(
-            "%EMULATOR_PCSX2% -batch %ROM%", "My PCSX2"
+            "%EMULATOR_PCSX2% -batch %ROM%", "My PCSX2", launcher=_LAUNCHER
         )
 
     def test_the_codes_reach_the_log(self, traces):
@@ -519,17 +553,30 @@ class TestActiveCore:
         assert adapter.get_emulator_options("arcade")["options"][0].status == "unbakeable"
 
 
-class TestInstalledProbe:
-    """The injected find-rules verdict reaches the classifier's downgrade rule."""
+def _launch(availability: Availability, *codes: str, launcher: Launcher | None = None) -> LaunchResolution:
+    return LaunchResolution(
+        availability=availability,
+        launcher=launcher,
+        caveats=tuple(Caveat(code=code, message="stated by the resolver") for code in codes),
+    )
 
-    def test_a_missing_standalone_is_downgraded_and_loses_the_default(self, traces):
+
+class TestTheResolversAvailability:
+    """Whether what an entry launches is there is the resolver's ``availability``, libretro cores included."""
+
+    def test_a_standalone_the_resolver_states_not_installed_is_withheld_and_loses_the_default(self, traces):
         installation = _Installation(
             catalogue=_answer(
-                _entry(label="Ryubing", command="%EMULATOR_RYUBING% %ROM%", declared_index=0),
+                _entry(
+                    label="Ryubing",
+                    command="%EMULATOR_RYUBING% %ROM%",
+                    declared_index=0,
+                    launch=_launch(AVAILABILITY_NOT_INSTALLED, CAVEAT_EMULATOR_NOT_FOUND),
+                ),
                 _libretro(label="Yuzu", core="yuzu_libretro", declared_index=1),
             )
         )
-        adapter = _adapter(installation, traces, installed=False)
+        adapter = _adapter(installation, traces)
 
         options = adapter.get_emulator_options("switch")["options"]
         assert (options[0].status, options[0].reason) == ("needs_setup", "not_installed")
@@ -537,28 +584,128 @@ class TestInstalledProbe:
             "yuzu_libretro", "Yuzu", "yuzu_libretro.so"
         )
 
-    def test_a_libretro_entry_is_never_downgraded(self, traces):
-        installation = _Installation(catalogue=_answer(_libretro(label="mGBA", core="mgba_libretro", declared_index=0)))
-        adapter = _adapter(installation, traces, installed=False)
-
-        assert adapter.get_emulator_options("gba")["options"][0].status == "bakeable"
-
-    def test_the_probe_is_re_run_on_every_call(self, traces):
-        # The on-disk verdict is asked on every call, so an emulator the user
-        # installs mid-session is seen on the next one.
+    def test_a_libretro_core_the_resolver_states_not_installed_is_withheld(self, traces):
         installation = _Installation(
-            catalogue=_answer(_entry(label="Ryubing", command="%EMULATOR_RYUBING% %ROM%", declared_index=0))
+            catalogue=_answer(
+                _libretro(
+                    label="mGBA",
+                    core="mgba_libretro",
+                    declared_index=0,
+                    launch=_launch(AVAILABILITY_NOT_INSTALLED, CAVEAT_CORE_NOT_INSTALLED),
+                )
+            )
         )
-        installed = {"value": False}
-        adapter = AtlasCatalogueAdapter(
-            sources=_sources([installation], traces),
-            emulator_installed=lambda command: installed["value"],
-            log_debug=traces.append,
+        adapter = _adapter(installation, traces)
+
+        option = adapter.get_emulator_options("gba")["options"][0]
+        assert (option.status, option.reason) == ("needs_setup", "not_installed")
+        assert adapter.get_default_emulator("gba") is None
+
+    @pytest.mark.parametrize(
+        ("code", "reason"),
+        [
+            (CAVEAT_EMULATOR_RULES_MISSING, "no_find_rule"),
+            (CAVEAT_CORE_RULES_MISSING, "no_find_rule"),
+            (CAVEAT_FIND_RULES_UNREADABLE, "find_rules_unread"),
+            (CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED, "lookup_unsupported"),
+            (CAVEAT_LAUNCH_PATH_UNESTABLISHED, "path_unseen"),
+        ],
+    )
+    def test_an_entry_the_resolver_cannot_establish_says_why_and_is_neither_offered_nor_called_missing(
+        self, traces, code, reason
+    ):
+        installation = _Installation(
+            catalogue=_answer(
+                _libretro(
+                    label="Paprium",
+                    core="genesis_plus_gx_expanded_libretro",
+                    declared_index=0,
+                    launch=_launch(AVAILABILITY_UNESTABLISHED, code),
+                )
+            )
+        )
+        adapter = _adapter(installation, traces)
+
+        option = adapter.get_emulator_options("megadrive")["options"][0]
+        assert (option.status, option.reason) == ("needs_setup", reason)
+        assert adapter.get_default_emulator("megadrive") is None
+
+    def test_an_unestablished_entry_without_a_known_reason_is_plainly_not_established(self, traces):
+        installation = _Installation(
+            catalogue=_answer(
+                _entry(
+                    label="RPCS3",
+                    command="%EMULATOR_RPCS3% %ROM%",
+                    declared_index=0,
+                    launch=_launch(AVAILABILITY_UNESTABLISHED),
+                )
+            )
         )
 
-        assert adapter.get_emulator_options("switch")["options"][0].status == "needs_setup"
-        installed["value"] = True
-        assert adapter.get_emulator_options("switch")["options"][0].status == "bakeable"
+        option = _adapter(installation, traces).get_emulator_options("ps3")["options"][0]
+        assert (option.status, option.reason) == ("needs_setup", "not_established")
+
+    def test_a_note_beside_a_startable_entry_changes_nothing(self, traces):
+        installation = _Installation(
+            catalogue=_answer(
+                _entry(
+                    label="PICO-8",
+                    command="%EMULATOR_PICO-8% -run %ROM%",
+                    declared_index=0,
+                    launch=_launch(AVAILABILITY_STARTABLE, CAVEAT_RUN_GAME_DIFFERS, launcher=_launcher()),
+                )
+            )
+        )
+
+        option = _adapter(installation, traces).get_emulator_options("pico8")["options"][0]
+        assert (option.status, option.reason) == ("bakeable", None)
+
+
+class TestTheLauncher:
+    """The launcher the folder-boot bake execs is the one the resolver states."""
+
+    def test_a_startable_standalone_carries_the_resolvers_launcher(self, traces):
+        installation = _Installation(
+            catalogue=_answer(
+                _entry(label="RPCS3 Directory", command="%EMULATOR_RPCS3% --no-gui %ROM%", declared_index=0)
+            )
+        )
+        invocation = _adapter(installation, traces).get_default_emulator("ps3")
+
+        assert invocation is not None
+        assert invocation.launcher == _LAUNCHER
+
+    def test_a_launcher_spelled_outside_retrodecks_sandbox_is_none(self, traces):
+        startable_on_the_host = LaunchResolution(availability=AVAILABILITY_STARTABLE, launcher=_launcher(app_id=None))
+        installation = _Installation(
+            catalogue=_answer(
+                _entry(
+                    label="RPCS3 Directory",
+                    command="%EMULATOR_RPCS3% --no-gui %ROM%",
+                    declared_index=0,
+                    launch=startable_on_the_host,
+                )
+            )
+        )
+
+        assert _adapter(installation, traces).get_emulator_options("ps3")["options"][0].launcher is None
+
+    def test_a_launcher_whose_rule_runs_a_replacement_command_is_none(self, traces):
+        replaced = LaunchResolution(
+            availability=AVAILABILITY_STARTABLE, launcher=_launcher(replacement="/app/bin/rpcs3-wrapper")
+        )
+        installation = _Installation(
+            catalogue=_answer(
+                _entry(
+                    label="RPCS3 Directory",
+                    command="%EMULATOR_RPCS3% --no-gui %ROM%",
+                    declared_index=0,
+                    launch=replaced,
+                )
+            )
+        )
+
+        assert _adapter(installation, traces).get_emulator_options("ps3")["options"][0].launcher is None
 
 
 class TestAcceptList:
@@ -804,7 +951,6 @@ class TestTheRealResolverOverARealTree:
     def _adapter(self, home: str, traces: list[str]) -> AtlasCatalogueAdapter:
         return AtlasCatalogueAdapter(
             sources=EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append),
-            emulator_installed=lambda command: True,
             log_debug=traces.append,
         )
 
@@ -903,3 +1049,53 @@ class TestTheRealResolverOverARealTree:
             )
 
         assert _labels(adapter, "gba") == ["mGBA", "VBA-M"]
+
+    _SWITCH_AND_PS3 = """\
+<?xml version="1.0"?>
+<systemList>
+  <system>
+    <name>switch</name>
+    <extension>.nsp</extension>
+    <command label="Ryubing (Standalone)">%EMULATOR_RYUBING% %ROM%</command>
+  </system>
+  <system>
+    <name>ps3</name>
+    <extension>.ps3</extension>
+    <command label="RPCS3 Directory (Standalone)">%EMULATOR_RPCS3% --no-gui %ROM%</command>
+  </system>
+</systemList>
+"""
+
+    _FIND_RULES = """\
+<?xml version="1.0"?>
+<ruleList>
+  <emulator name="RYUBING">
+    <rule type="staticpath"><entry>/app/retrodeck/components/ryubing/component_launcher.sh</entry></rule>
+  </emulator>
+  <emulator name="RPCS3">
+    <rule type="staticpath"><entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry></rule>
+  </emulator>
+</ruleList>
+"""
+
+    def test_the_resolvers_lookup_decides_what_is_installed_and_where_its_launcher_lies(self, tmp_path, traces):
+        home = _seed_retrodeck(tmp_path, catalogue=self._SWITCH_AND_PS3)
+        files = os.path.join(
+            home, ".local", "share", "flatpak", "app", "net.retrodeck.retrodeck", "current", "active", "files"
+        )
+        systems = os.path.dirname(os.path.join(files, _LINUX_SYSTEMS_SUFFIX))
+        with open(os.path.join(systems, "es_find_rules.xml"), "w", encoding="utf-8") as handle:
+            handle.write(self._FIND_RULES)
+        rpcs3 = os.path.join(files, "retrodeck", "components", "rpcs3", "component_launcher.sh")
+        os.makedirs(os.path.dirname(rpcs3))
+        with open(rpcs3, "w", encoding="utf-8") as handle:
+            handle.write("#!/bin/sh\n")
+        adapter = self._adapter(home, traces)
+
+        ryubing = adapter.get_emulator_options("switch")["options"][0]
+        assert (ryubing.status, ryubing.reason) == ("needs_setup", "not_installed")
+        directory = adapter.get_emulator_options("ps3")["options"][0]
+        assert (directory.status, directory.launcher) == (
+            "bakeable",
+            "/app/retrodeck/components/rpcs3/component_launcher.sh",
+        )

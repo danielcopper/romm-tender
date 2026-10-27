@@ -38,7 +38,6 @@ if TYPE_CHECKING:
         CoreInfoProvider,
         PlatformCoreReader,
         PlatformSystems,
-        SandboxLauncherFn,
         UnitOfWorkFactory,
     )
 
@@ -49,16 +48,14 @@ class ActiveCoreResolverConfig:
 
     Carries the SQLite Unit-of-Work factory (to read the ROM's
     ``platform_slug`` + ``emulator_override``), the core-info read seam (the
-    classified emulator options + the system-layer default), the sandbox-launcher
-    seam the folder-boot rewrite resolves through, the per-platform core reader
-    (the ``settings.json`` ``platform_cores`` map), the platform's system — the
-    install record's for an installed ROM — and the logger used to warn on a
-    stale label.
+    classified emulator options + the system-layer default), the per-platform
+    core reader (the ``settings.json`` ``platform_cores`` map), the platform's
+    system — the install record's for an installed ROM — and the logger used to
+    warn on a stale label.
     """
 
     uow_factory: UnitOfWorkFactory
     core_info: CoreInfoProvider
-    sandbox_launcher: SandboxLauncherFn
     platform_core_reader: PlatformCoreReader
     platform_systems: PlatformSystems
     logger: logging.Logger
@@ -70,7 +67,6 @@ class ActiveCoreResolver:
     def __init__(self, *, config: ActiveCoreResolverConfig) -> None:
         self._uow_factory = config.uow_factory
         self._core_info = config.core_info
-        self._sandbox_launcher = config.sandbox_launcher
         self._platform_core_reader = config.platform_core_reader
         self._platform_systems = config.platform_systems
         self._logger = config.logger
@@ -108,8 +104,8 @@ class ActiveCoreResolver:
         off :func:`folder_boot_root` — the same fact the disc/bake-path seam uses
         to fold the target to the game folder — so the invocation form and the
         baked path are always decided from one layout fact. A libretro emulator,
-        a non-folder install, or an unresolvable sandbox launcher all leave the
-        invocation unchanged.
+        a non-folder install, or a standalone the resolver states no sandbox
+        launcher for all leave the invocation unchanged.
 
         *reading* is a run's one reading of the emulator sources, handed down so
         a run resolving many ROMs asks each catalogue question once; a call
@@ -171,22 +167,22 @@ class ActiveCoreResolver:
         """Rewrite a standalone *emulator* to the folder-boot ``direct`` form when warranted.
 
         Fires only for a **standalone** emulator whose *install* is a folder-boot
-        layout (:func:`folder_boot_root` returns a game root). Resolves the
-        emulator's sandbox launcher via the es_find_rules probe and returns a
-        ``direct`` invocation. Leaves the emulator unchanged for a libretro core,
-        a non-folder install, a missing install, or an unresolvable launcher —
-        the last is logged (the baked ``run_game`` form will fail to launch a
-        folder until a later re-bake heals it).
+        layout (:func:`folder_boot_root` returns a game root), and returns a
+        ``direct`` invocation through the sandbox launcher the resolver states
+        for it. Leaves the emulator unchanged for a libretro core, a non-folder
+        install, a missing install, or no such launcher — the last is logged
+        (the baked ``run_game`` form will fail to launch a folder until a later
+        re-bake heals it).
         """
         if emulator is None or emulator.kind != "standalone" or emulator.command is None:
             return emulator
         if install is None or folder_boot_root(install.file_path, install.rom_dir) is None:
             return emulator
-        launcher = self._sandbox_launcher(emulator.command)
+        launcher = emulator.launcher
         if launcher is None:
             self._logger.warning(
-                "active_core_resolver: folder-boot rom_id=%s resolves to standalone '%s' but its sandbox "
-                "launcher is unresolvable; keeping the run_game form (launch will fail until healed)",
+                "active_core_resolver: folder-boot rom_id=%s resolves to standalone '%s' but the resolver states "
+                "no sandbox launcher for it; keeping the run_game form (launch will fail until healed)",
                 rom_id,
                 emulator.label,
             )

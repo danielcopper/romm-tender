@@ -305,7 +305,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         config=ActiveCoreResolverConfig(
             uow_factory=cfg.callbacks.uow_factory,
             core_info=cfg.adapters.core_info_provider,
-            sandbox_launcher=cfg.callbacks.sandbox_launcher,
             platform_core_reader=cfg.callbacks.platform_core_reader,
             platform_systems=platform_systems,
             logger=cfg.runtime.logger,

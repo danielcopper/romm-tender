@@ -16,9 +16,10 @@ from typing import ClassVar
 import pytest
 
 from domain.emulator_commands import (
+    NOT_ESTABLISHED_PATH_UNSEEN,
+    NOT_INSTALLED,
     EmulatorOption,
     classify_command,
-    downgrade_if_not_installed,
     label_to_invocation,
     option_to_invocation,
     options_to_payload,
@@ -119,56 +120,67 @@ class TestClassifyCommand:
         assert option.kind == "standalone"
 
 
-class TestDowngradeIfNotInstalled:
-    """The pure half of the standalone existence probe (ADR-0020)."""
+class TestAnEntryTheResolverDoesNotStateStartable:
+    """An installation reason the reading hands in takes the place of the bake verdict."""
 
-    def test_bakeable_standalone_missing_becomes_needs_setup(self):
-        option = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%")
-        result = downgrade_if_not_installed(option, emulator_installed=False)
-        assert result.status == "needs_setup"
-        assert result.reason == "not_installed"
-        # Identity fields survive the downgrade.
-        assert result.label == "Ryubing (Standalone)"
-        assert result.kind == "standalone"
-        assert result.command == "%EMULATOR_RYUBING% %ROM%"
+    def test_a_missing_standalone_is_withheld_with_its_reason(self):
+        option = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", not_startable=NOT_INSTALLED)
+        assert option.status == "needs_setup"
+        assert option.reason == "not_installed"
+        # Identity fields survive.
+        assert option.label == "Ryubing (Standalone)"
+        assert option.kind == "standalone"
+        assert option.command == "%EMULATOR_RYUBING% %ROM%"
 
-    def test_bakeable_standalone_installed_unchanged(self):
-        option = classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH)
-        assert downgrade_if_not_installed(option, emulator_installed=True) == option
+    def test_a_startable_entry_keeps_its_bake_verdict(self):
+        assert classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH, not_startable=None).status == "bakeable"
 
-    def test_libretro_never_downgraded_even_when_flagged_missing(self):
-        # RetroArch ships with RetroDECK — a libretro option is always installed,
-        # and the kind guard means the missing flag is ignored regardless.
-        option = classify_command("SwanStation", PSX_SWANSTATION)
-        assert downgrade_if_not_installed(option, emulator_installed=False) == option
+    def test_a_libretro_core_the_resolver_states_missing_is_withheld(self):
+        option = classify_command("SwanStation", PSX_SWANSTATION, not_startable=NOT_INSTALLED)
+        assert (option.status, option.reason) == ("needs_setup", "not_installed")
+        assert option.kind == "libretro"
+        assert option.core_so == "swanstation_libretro"
 
-    def test_already_needs_setup_unchanged(self):
-        option = classify_command("Vita3K", VITA3K_INJECT_NO_ROM)
-        assert downgrade_if_not_installed(option, emulator_installed=False) == option
+    def test_the_installation_reason_stands_ahead_of_an_unbakeable_command(self):
+        option = classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, not_startable=NOT_INSTALLED)
+        assert option.reason == "not_installed"
 
-    def test_already_unbakeable_unchanged(self):
-        option = classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT)
-        assert downgrade_if_not_installed(option, emulator_installed=False) == option
+    def test_a_not_established_entry_is_withheld_with_its_cause(self):
+        option = classify_command("MESS 2015", PSX_SWANSTATION, not_startable=NOT_ESTABLISHED_PATH_UNSEEN)
+        assert (option.status, option.reason) == ("needs_setup", "path_unseen")
 
-    def test_downgraded_option_drops_out_of_default_selection(self):
-        # A system whose only bakeable command is a missing standalone resolves to
-        # no default → the caller plain-launches (the pre-standalone behavior).
-        missing = downgrade_if_not_installed(
-            classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%"),
-            emulator_installed=False,
-        )
-        assert select_default_option([missing]) is None
-        assert label_to_invocation([missing], "Ryubing (Standalone)") is None
+    def test_a_withheld_option_drops_out_of_default_selection(self):
+        # A system whose only bakeable command is withheld resolves to no
+        # default, so the caller plain-launches.
+        for reason in (NOT_INSTALLED, NOT_ESTABLISHED_PATH_UNSEEN):
+            withheld = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", not_startable=reason)
+            assert select_default_option([withheld]) is None
+            assert label_to_invocation([withheld], "Ryubing (Standalone)") is None
 
-    def test_downgraded_option_reads_disabled_with_reason_in_payload(self):
-        missing = downgrade_if_not_installed(
-            classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%"),
-            emulator_installed=False,
-        )
-        payload = options_to_payload([missing])
+    def test_a_withheld_option_reads_disabled_with_reason_in_payload(self):
+        withheld = classify_command("Ryubing (Standalone)", "%EMULATOR_RYUBING% %ROM%", not_startable=NOT_INSTALLED)
+        payload = options_to_payload([withheld])
         assert payload[0]["bakeable"] is False
         assert payload[0]["reason"] == "not_installed"
         assert payload[0]["is_default"] is False
+
+
+class TestTheLauncher:
+    """The resolver's launcher rides on the option into a standalone invocation."""
+
+    _LAUNCHER = "/app/retrodeck/components/rpcs3/component_launcher.sh"
+
+    def test_a_standalone_invocation_carries_the_launcher(self):
+        option = classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, launcher=self._LAUNCHER)
+        invocation = option_to_invocation(option)
+        assert invocation is not None
+        assert invocation.launcher == self._LAUNCHER
+
+    def test_a_withheld_entry_renders_no_invocation_whatever_its_launcher(self):
+        option = classify_command(
+            "RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, not_startable=NOT_INSTALLED, launcher=self._LAUNCHER
+        )
+        assert option_to_invocation(option) is None
 
 
 class TestSelectDefaultOption:
@@ -253,7 +265,7 @@ class TestResolveFirmwareOption:
 
     def test_the_emulator_retrodeck_declares_first_where_nothing_bakes(self):
         """RetroDECK's plain launch starts its first declared emulator, installed or not."""
-        first = downgrade_if_not_installed(classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE), False)
+        first = classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE, not_startable=NOT_INSTALLED)
         options = [first, classify_command("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED)]
         assert resolve_firmware_option(options, "MAME - Current") is first
 

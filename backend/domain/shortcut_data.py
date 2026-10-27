@@ -59,6 +59,9 @@ class EmulatorInvocation:
       (already ending in ``%ROM%``, e.g. ``%EMULATOR_RPCS3% --no-gui %ROM%``),
       baked verbatim into ``-e``. RetroDECK's ``run_game.sh`` resolves
       ``%EMULATOR_*%`` and substitutes ``%ROM%`` with the trailing rom path.
+      ``launcher``, where set, is the sandbox path the resolver states ES-DE
+      runs for it; the renderer ignores it, and it is what a folder-boot install
+      turns this into a ``direct`` invocation with.
     - ``kind == "direct"`` → the folder-boot form (ADR-0019): ``command`` is the
       same full ES-DE standalone command AND ``launcher`` is the emulator's
       sandbox launcher path (e.g.
@@ -97,9 +100,11 @@ class EmulatorInvocation:
         return cls(kind="libretro", label=label, core_so=core_so, emulator=emulator)
 
     @classmethod
-    def standalone(cls, command: str, label: str | None = None, emulator: str | None = None) -> EmulatorInvocation:
+    def standalone(
+        cls, command: str, label: str | None = None, emulator: str | None = None, *, launcher: str | None = None
+    ) -> EmulatorInvocation:
         """A standalone emulator, identified by its full ES-DE ``<command>`` text."""
-        return cls(kind="standalone", label=label, command=command, emulator=emulator)
+        return cls(kind="standalone", label=label, command=command, launcher=launcher, emulator=emulator)
 
     @classmethod
     def direct(

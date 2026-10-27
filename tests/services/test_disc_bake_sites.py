@@ -205,9 +205,7 @@ class TestARunAsksTheAcceptListOncePerSystem:
             detect_installations=lambda home, machine: [installation],
             machine=object(),
         )
-        catalogue = AtlasCatalogueAdapter(
-            sources=sources, emulator_installed=lambda command: True, log_debug=lambda msg: None
-        )
+        catalogue = AtlasCatalogueAdapter(sources=sources, log_debug=lambda msg: None)
         uow = FakeUnitOfWork()
         for rom_id, system in ((1, "psx"), (2, "psx"), (3, "psx"), (4, "saturn")):
             _seed_folder_install(uow, rom_id=rom_id, system=system)

@@ -78,18 +78,17 @@ seams are closed the cheap way instead: every consumer in ``services/`` binds
 each to one attribute, and that attribute name is what the list carries. A
 leading underscore marks an attribute a service binds rather than a method a
 Protocol names, and the list carries two kinds of them. The call-shaped seams
-are eight today: ``_sandbox_launcher``, ``_system_extensions``,
-``_system_known``, ``_platform_firmware_resolver``, ``_firmware_resolver``,
-``_resolve_path``, ``_renderer_above_ceiling`` and ``_back_up_save``. Three of
-those eight are listed a second time under their implementation's own method
-name, for a peer that holds the object rather than the bound method:
-``EsFindRulesAdapter.resolve_sandbox_launcher`` beside ``_sandbox_launcher``,
+are seven today: ``_system_extensions``, ``_system_known``,
+``_platform_firmware_resolver``, ``_firmware_resolver``, ``_resolve_path``,
+``_renderer_above_ceiling`` and ``_back_up_save``. Two of those seven are
+listed a second time under their implementation's own method name, for a peer
+that holds the object rather than the bound method:
 ``LibraryService.renderer_above_ceiling`` beside ``_renderer_above_ceiling``,
-and ``SaveBackup.back_up_save_file`` beside ``_back_up_save``. The first and
-the last name are plainly not the attribute minus its underscore, which is the
-point: a twin exists when the implementation has a method name a peer could
-write, and it has to be read off the implementation rather than derived from
-the attribute. The other five seams have no such twin.
+and ``SaveBackup.back_up_save_file`` beside ``_back_up_save``. The second name
+is plainly not the attribute minus its underscore, which is the point: a twin
+exists when the implementation has a method name a peer could write, and it has
+to be read off the implementation rather than derived from the attribute. The
+other five seams have no such twin.
 That is a convention, not a guarantee — a
 consumer binding one under a different attribute slips past, and it only works
 while the attribute name means one thing. Doing the same for rule 1 means a
@@ -224,15 +223,6 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # would be enforced only where the seam itself is named, and green
         # everywhere the wrapper reaches it from.
         "save_answer",
-        # SandboxLauncherFn (services/protocols/paths.py) — reads ES-DE's
-        # es_find_rules.xml (re-probing the flatpak roots for it and re-statting
-        # it before it may answer from the parse cache) to resolve a standalone
-        # command's launcher inside the RetroDECK sandbox. The Protocol is
-        # call-shaped, so `_sandbox_launcher` — the attribute every consumer in
-        # services/ binds it to — is listed beside `resolve_sandbox_launcher`,
-        # the implementation's own method name.
-        "resolve_sandbox_launcher",
-        "_sandbox_launcher",
         # SteamConfigStore.read_shortcut_exes and .read_shortcut_launch_options
         # (services/protocols/transport.py) — each parses Steam's whole
         # shortcuts.vdf, to answer which shortcuts of ours still name a launcher
@@ -283,10 +273,9 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # (services/protocols/paths.py) — two more questions to ES-DE's
         # catalogue, answered by the same resolver, and kept the same way, as
         # the CoreInfoProvider reads above. Both Protocols are call-shaped, and
-        # unlike SandboxLauncherFn there is no method name a service could write
-        # beside the attribute: the implementations
-        # (AtlasCatalogueAdapter.get_supported_extensions / .is_known_system)
-        # are on no Protocol a service holds. So the attribute is all there is,
+        # there is no method name a service could write beside the attribute:
+        # the implementations (AtlasCatalogueAdapter.get_supported_extensions /
+        # .is_known_system) are on no Protocol a service holds. So the attribute is all there is,
         # and it is matchable because each of these means one thing in the tree.
         "_system_extensions",
         "_system_known",

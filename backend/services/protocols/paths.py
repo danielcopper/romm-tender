@@ -219,12 +219,6 @@ class CoreInfoProvider(Protocol):
     it judges by come off one choice. The launch-layer default
     (``get_default_emulator``) and the full picker (``get_emulator_options``) are
     emulator-kind-aware (libretro OR standalone).
-
-    Resolving an emulator to its sandbox launcher path is a different question
-    and is :class:`SandboxLauncherFn`'s: this one is answered out of the
-    catalogue, that one out of ES-DE's find rules. Holding both here would make
-    one implementation forward to the other and hide which source answered a
-    given call.
     """
 
     def get_active_core(
@@ -306,24 +300,6 @@ class SaveLocationReader(Protocol):
     ) -> SavestateLocation | NoSavestates | None: ...
 
     def installation_detected(self) -> bool: ...
-
-
-class SandboxLauncherFn(Protocol):
-    """Resolve a standalone launch command to the launcher path inside RetroDECK's sandbox.
-
-    The folder-boot bake (ADR-0019) cannot go through RetroDECK's ``run_game.sh``
-    — it reinterprets a directory ``%ROM%`` as an ES-DE "directory as a file" —
-    so it execs the emulator's own component launcher via ``flatpak run
-    --command=``. That path comes from ES-DE's ``es_find_rules.xml``. The
-    resolver answers it too, as a catalogue entry's ``launcher`` path, which
-    Tender does not read.
-
-    ``None`` when the command names no emulator token, when the find rules do not
-    carry it, or when none of its entries is reachable inside the sandbox — the
-    caller then keeps the standalone ``run_game.sh`` form.
-    """
-
-    def __call__(self, command: str) -> str | None: ...
 
 
 class SystemM3uSupportFn(Protocol):

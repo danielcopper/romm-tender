@@ -19,7 +19,7 @@ from _factories import (
     _refused_by_conflict_rule,
 )
 from _spawns import record_spawns
-from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
+from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
@@ -263,7 +263,6 @@ async def make_downloads(emit, logger) -> MakeDownloads:
             config=ActiveCoreResolverConfig(
                 uow_factory=FakeUnitOfWorkFactory(uow),
                 core_info=core_info,
-                sandbox_launcher=FakeSandboxLauncher(),
                 platform_core_reader=FakePlatformCoreReader(),
                 platform_systems=shared_platform_systems,
                 logger=logger,

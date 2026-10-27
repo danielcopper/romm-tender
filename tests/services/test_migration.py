@@ -13,7 +13,7 @@ from _factories import (
     _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
-from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
+from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_migration_file_store import FakeMigrationFileStore
@@ -113,7 +113,6 @@ def migration(logger) -> MigrationHarness:
         config=ActiveCoreResolverConfig(
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             core_info=core_info,
-            sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=FakePlatformCoreReader(),
             platform_systems=FakePlatformSystems(),
             logger=logger,

@@ -14,7 +14,6 @@ from _factories import _make_conflict_rules, _refused_by_conflict_rule
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import (
     FakeCoreInfoProvider,
-    FakeSandboxLauncher,
     libretro_option,
     standalone_option,
 )
@@ -3859,7 +3858,6 @@ def _rom_scoped_surfaces(
         config=ActiveCoreResolverConfig(
             uow_factory=uow_factory,
             core_info=core_info,
-            sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=_platform_core_reader(fw),
             platform_systems=platform_systems,
             logger=logger,

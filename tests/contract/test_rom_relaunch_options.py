@@ -33,15 +33,15 @@ _PS3_ES_SYSTEMS_XML = """\
 </systemList>
 """
 
-# RPCS3 find rule mirroring the real shape: a host AppImage entry BEFORE the
-# bundled /app RetroDECK component launcher (the sandbox path the direct bake uses).
+# RPCS3 find rule in the real shape's staticpath half: a host AppImage entry
+# BEFORE the bundled /app RetroDECK component launcher (the sandbox path the
+# direct bake uses). The real file's systempath rule is left out: ES-DE checks
+# it first, against the sandbox's PATH, and with no Flatpak runtime under
+# tmp_path the resolver cannot see that PATH and states nothing.
 _PS3_ES_FIND_RULES_XML = """\
 <?xml version="1.0"?>
 <ruleList>
   <emulator name="RPCS3">
-    <rule type="systempath">
-      <entry>rpcs3</entry>
-    </rule>
     <rule type="staticpath">
       <entry>~/Applications/rpcs3*.AppImage</entry>
       <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>
@@ -90,7 +90,8 @@ async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
     the sandbox over the game FOLDER — bypassing ``run_game.sh``, which would
     reinterpret the directory as an ES-DE "directory as a file" and never boot
     it. Drives the real bake seam (es_systems + es_find_rules + the on-disk
-    component launcher) over real files under tmp_path.
+    component launcher, through the resolver's launch lookup) over real files
+    under tmp_path.
     """
     seed_es_systems(harness, _PS3_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, _PS3_ES_FIND_RULES_XML)
