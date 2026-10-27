@@ -7816,9 +7816,12 @@ class TestAPlatformUnitIsKeyedAsThePreviewKeysIt:
 
         fake_romm_api.hidden_rom_ids = {31}
         fake_romm_api.roms[31]["sibling_roms"] = [{"id": 30}, {"id": 32}]
-        _seed_platform(
-            fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[cls._golf(32, "Japan", [31], ss_id=7)]
-        )
+        fake_romm_api.roms[32] = {
+            **cls._golf(32, "Japan", [31], ss_id=7),
+            "platform_id": 2,
+            "platform_name": "GBA",
+            "platform_slug": "gba",
+        }
 
     @staticmethod
     async def _apply(library, emit, run_id):
@@ -7866,7 +7869,10 @@ class TestAPlatformUnitIsKeyedAsThePreviewKeysIt:
     async def test_a_duplicate_made_before_takes_its_game_s_key_and_both_shortcuts_stay(
         self, make_library, fake_romm_api, emit, tmp_path, installed
     ):
-        """D2: the apply used to key 32 as a game of its own and bind it; it is rekeyed, nothing removed."""
+        """D2: 32 is bound under a key of its own, a duplicate an apply without this fix made.
+
+        It takes the group's key, both bindings stay, nothing is removed and the install records stay.
+        """
         library = make_library(romm_api=fake_romm_api)
         await self._bind_usa_then_hide_europe(library, fake_romm_api, emit)
         _seed_rom_row(library, 32, app_id=6032, platform_slug="gba", name="Golf (Japan)", sibling_group_key="ss:7:2")
