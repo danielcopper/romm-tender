@@ -307,12 +307,13 @@ If one game has **several Steam shortcuts** — from a library synced before Ten
 RomM joined two games that each had one — the next sync keeps **one** and removes the others. The preview counts them
 under removals. The shortcut that stays is the one of the version you have installed, the ranking above choosing among
 several; with none installed, the one of the version Tender would pick among them, as above. A version RomM no longer
-lists keeps its shortcut only when it is installed and no version RomM lists is, or when RomM lists none of the game's
-versions at all — then the installed one, else the oldest. Before a shortcut goes, the one that stays is added to the
-Steam collections the removed one was in, Favorites included, is hidden if the removed one was, and takes over every
-image you set in Steam for the removed one where it has none set in Steam itself. The removed shortcut's own Steam
-playtime and screenshots do not move. Tender keeps each version's saves, playtime and download, so switching back to
-that version later loses nothing.
+lists keeps its shortcut only when it is installed and no version RomM lists is, or when no version RomM lists has a
+shortcut — then the installed one, else the one added to RomM first. Before a shortcut goes, the one that stays is added
+to the Steam collections the removed one was in, Favorites included, is hidden if the removed one was, and takes over
+every image but the icon you set in Steam for the removed one where it has none set in Steam itself. The removed
+shortcut's icon set in Steam, its own Steam playtime and screenshots, and a controller layout saved under its name do
+not move. Tender keeps each version's saves, playtime and download, so switching back to that version later loses
+nothing.
 
 ## Per-Platform Toggles
 

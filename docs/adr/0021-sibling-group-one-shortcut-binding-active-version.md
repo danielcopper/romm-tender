@@ -293,8 +293,10 @@ holding more than one bound shortcut converges on the next sync
 - **How.** The other shortcuts are removals the preview counts and the finalize of a run that was not stopped makes,
   beside the stale ones; their rows are unbound, and every row's saves, playtime and install records stay. Before a
   shortcut goes, the panel carries over to the kept one the user's Steam collections, Favorites and Hidden, and each
-  image set in Steam where the kept one has none set in Steam; the removal then resets the removed appId's Steam Input
-  setting and deletes its grid images.
+  image but the icon set in Steam where the kept one has none set in Steam; the removal then resets the removed appId's
+  Steam Input setting and deletes its grid images. An icon set in Steam stays behind — Steam keeps it as a path in
+  `shortcuts.vdf`, which only the backend reads — with Steam's own playtime, screenshots and a controller layout stored
+  under the removed shortcut's name.
 
 The rejection of a force-collapse under Alternatives stands for a migration; this convergence is a sync step the preview
 shows, and it moves what Steam lets it move instead of deleting it.

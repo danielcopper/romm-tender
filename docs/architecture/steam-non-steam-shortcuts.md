@@ -240,8 +240,9 @@ the panel in `sync_stale` like any stale shortcut, each entry naming the shortcu
 - the user's collections in `collectionStore.userCollections` that hold the removed appId — Favorites among them — and
   not Tender's own `RomM: …` collections, which the run's collection maps file the kept shortcut in;
 - Hidden, through `collectionStore.BIsHidden` / `SetAppsAsHidden`, which sit beside the user collections;
-- every image the ARTWORK read (`get_artwork_slots`) calls set in Steam on the removed shortcut, where the kept one has
-  none set in Steam, read from the loopback URL Steam shows it at and written with `SetCustomArtworkForApp`.
+- every image but the icon the ARTWORK read (`get_artwork_slots`) calls set in Steam on the removed shortcut, where the
+  kept one has none set in Steam, read from the loopback URL Steam shows it at and written with
+  `SetCustomArtworkForApp`.
 
 Each part is best effort: one that fails is logged, and the removal still runs, since the backend unbound the row
 already. What a session cannot move stays behind with the removed shortcut: its icon (a path in `shortcuts.vdf`), its
