@@ -639,8 +639,12 @@ Format: **invariant** — tier — enforced by.
   bound, a row RomM did not confirm included (#2490 D2, D3); the preview counts exactly the removals and the platform
   collections the apply makes; and of the two, only the apply records what the stale removal established on the row
   (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM itself clears the mark,
-  and any other answer writes nothing. The removed-game cleanup's own proof marks and clears rows too, by its rule in
-  docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  and any other answer writes nothing. Beside it, a group holding more than one bound shortcut converges (#2645): on a
+  platform unit the run fetched in full, every bound row of such a group but the one
+  `domain/sync_diff.py::converge_bound_groups` keeps is removed and unbound on a run that was not stopped — never sorted
+  as stale, and never over an appId the run bound — with the preview counting the same removals, and no platform whose
+  rows still hold such a group is skipped. The removed-game cleanup's own proof marks and clears rows too, by its rule
+  in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
   `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
@@ -699,7 +703,20 @@ Format: **invariant** — tier — enforced by.
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes` pins the two
   agreeing for a row whose game the run synced on a platform it did not read, the only bound row on that platform once a
   version switch moved the shortcut onto it, whether RomM is asked about it or not, the collection skipped or fetched,
-  with platform groups on and off. The rule spans the domain sort, the reader, the reporter's commit, the chunk
+  with platform groups on and off. The convergence keeps a game whose bindings the stale sort would keep one by one from
+  keeping two shortcuts for good: it judges a group over a platform unit's whole listing and its platform's bound rows,
+  the rows the listing leaves out included, which is why only a fetched platform unit converges, why the gate refuses
+  the skip on the stored keys of every bound row whatever its generation
+  (`domain/fetch_generation.py::convergence_pending`, over the same `groups_to_converge`), and why the preview converges
+  over the listings it fetched in full rather than over its union, where a skipped collection's rebuilt row would read
+  as listed; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and `TestCollapseHandedTheConvergedRows` pin the
+  rule and the collapse's side of it,
+  `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` the apply and the preview
+  agreeing for every install state, an unlisted version and a game RomM lists no version of, the stopped run, the #1036
+  guard and the row the kept shortcut moves onto, `TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts` the
+  preview's listing, and `tests/services/library/test_fetcher.py::TestAGroupWithSeveralShortcutsIsFetchedInFull` the
+  gate and the plan's prediction; that a new collapse caller on a complete view hands the collapse the losers
+  (`converged=`) is prompt-only. The rule spans the domain sort, the reader, the reporter's commit, the chunk
   dispatcher, the fetcher's exact-id question (`LibraryFetcher.ask_romm_for_roms`), the orchestrator and the preview,
   and the preview and the apply each read it — through `services/library/_stale_rows.py::settle_stale_rows` with the
   same group keys, which is prompt-only, as is that the chunk dispatcher names the unit's kind on every commit; that the

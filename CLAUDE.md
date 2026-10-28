@@ -718,8 +718,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   bound, a row RomM did not confirm included (#2490 D2, D3); the preview counts exactly the removals and the platform
   collections the apply makes; and of the two, only the apply records what the stale removal established on the row
   (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM itself clears the mark,
-  and any other answer writes nothing. The removed-game cleanup's own proof marks and clears rows too, by its rule in
-  docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  and any other answer writes nothing. Beside it, a group holding more than one bound shortcut converges (#2645): on a
+  platform unit the run fetched in full, every bound row of such a group but the one
+  `domain/sync_diff.py::converge_bound_groups` keeps is removed and unbound on a run that was not stopped — never sorted
+  as stale, and never over an appId the run bound — with the preview counting the same removals, and no platform whose
+  rows still hold such a group is skipped. The removed-game cleanup's own proof marks and clears rows too, by its rule
+  in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
   `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (among it the third run, the stopped run, the platform route and the fallback),
@@ -739,13 +743,18 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/domain/test_sync_diff.py::TestComputePlatformCollectionDiff::test_a_row_left_bound_is_filed_by_the_setting_alone`
   for a game RomM did not confirm, filed by the setting alone on both sides, and
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes` for a row whose
-  game the run synced, asked about or not. Prompt-only: the collection records are read before the run's first unit
-  (`do_read_collection_listed_rom_ids`); the platform listing is the run's own
-  (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; the chunk dispatcher names the unit's kind
-  on every commit; the preview and the apply both sort through `services/library/_stale_rows.py::settle_stale_rows` with
-  the group keys `domain/sync_diff.py::group_keys_of` reads for the run's synced ROMs; the preview names every platform
-  collection its diff counts by the name the names `services/library/_stale_rows.py::with_kept_platform_names` answers
-  hold for its slug, else the slug — an emitted entry's and a row left bound's through
+  game the run synced, asked about or not; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and
+  `TestCollapseHandedTheConvergedRows` for the convergence's rule,
+  `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` and
+  `TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts` for the apply and the preview, and
+  `tests/services/library/test_fetcher.py::TestAGroupWithSeveralShortcutsIsFetchedInFull` for the skip. Prompt-only: a
+  new collapse caller on a complete view hands the collapse the convergence's losers (`converged=`); the collection
+  records are read before the run's first unit (`do_read_collection_listed_rom_ids`); the platform listing is the run's
+  own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; the chunk dispatcher names the unit's
+  kind on every commit; the preview and the apply both sort through `services/library/_stale_rows.py::settle_stale_rows`
+  with the group keys `domain/sync_diff.py::group_keys_of` reads for the run's synced ROMs; the preview names every
+  platform collection its diff counts by the name the names `services/library/_stale_rows.py::with_kept_platform_names`
+  answers hold for its slug, else the slug — an emitted entry's and a row left bound's through
   `domain/sync_diff.py::platform_collection_name`, a kept row's by the same lookup in `compute_platform_collection_diff`
   — which must agree with `SyncReporter._names_with_bound_platforms_kept`; the preview hands that diff every stale row
   `settle_stale_rows` neither removes nor keeps; and the preview and the apply both pick the rebuilt rows they file as

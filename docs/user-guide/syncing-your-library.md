@@ -303,9 +303,16 @@ RomM default, or change the preferred region. This keeps the shortcut's artwork,
 does mean the shortcut's name can differ from the version it currently launches, and that changing the preferred region
 only affects games synced **after** the change.
 
-If you synced **before** this update and already have several Steam shortcuts for one game, those existing shortcuts are
-**kept** — Tender never deletes a shortcut you can see. They converge to a single entry naturally as you uninstall the
-extra versions.
+If one game has **several Steam shortcuts** — from a library synced before Tender made one shortcut per game, or because
+RomM joined two games that each had one — the next sync keeps **one** and removes the others. The preview counts them
+under removals. The shortcut that stays is the one of the version you have installed, the ranking above choosing among
+several; with none installed, the one of the version Tender would pick among them, as above. A version RomM no longer
+lists keeps its shortcut only when it is installed and no version RomM lists is, or when RomM lists none of the game's
+versions at all — then the installed one, else the oldest. Before a shortcut goes, the one that stays is added to the
+Steam collections the removed one was in, Favorites included, is hidden if the removed one was, and takes over every
+image you set in Steam for the removed one where it has none set in Steam itself. The removed shortcut's own Steam
+playtime and screenshots do not move. Tender keeps each version's saves, playtime and download, so switching back to
+that version later loses nothing.
 
 ## Per-Platform Toggles
 
@@ -520,11 +527,12 @@ and with the platforms and collections you turned on or off. Existing shortcuts 
 
 When the version a shortcut is bound to is no longer available on RomM — deleted there, or hidden from your RomM user,
 which RomM answers the same way — the shortcut **stays bound to it**, installed or not, with its name, launch command,
-artwork and playtime, and in its platform's Steam collection. A Steam collection made from a RomM collection keeps a
-hidden version, since RomM still lists it there, and drops a deleted one, which RomM no longer lists. That holds when
-the game still has other versions on RomM and when every version of it is gone. The game's page says the version is no
-longer available and what that means for a downloaded copy; to play another version, choose it in the
-[version picker](managing-games.md#the-switch-version-control), and to remove the game, use
+artwork and playtime, and in its platform's Steam collection. The exception is a game that also has another shortcut:
+then the two converge to one, as described under [Multiple versions of a game](#multiple-versions-of-a-game). A Steam
+collection made from a RomM collection keeps a hidden version, since RomM still lists it there, and drops a deleted one,
+which RomM no longer lists. That holds when the game still has other versions on RomM and when every version of it is
+gone. The game's page says the version is no longer available and what that means for a downloaded copy; to play another
+version, choose it in the [version picker](managing-games.md#the-switch-version-control), and to remove the game, use
 [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm).
 
 A platform RomM no longer lists at all is gone from RomM rather than turned off, even while it is still on in Tender:

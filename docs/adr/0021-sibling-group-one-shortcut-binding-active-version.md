@@ -270,3 +270,31 @@ the run when it reaches the first one, and every member of a group no bound row 
 unit delivering one of its members, which mints it over all of them; the resolution chain and the canonical name then
 pick over every member the run delivers, as the preview does. A group that already holds a binding is still
 grandfathered untouched, so a shortcut minted before keeps its version and its name.
+
+## Amendment — a group holding more than one bound shortcut converges to one
+
+§5 expected a game with more than one shortcut to converge by the normal stale path, as the user uninstalled the extra
+versions. That path never removed one: the collapse emitted every surviving bound sibling whether it was installed or
+not, uninstalling a version keeps its shortcut, and the stale removal keeps a row whose game the run synced. A game
+therefore kept every shortcut it ever held, and a later fault could add one
+([#2617](https://github.com/danielcopper/romm-tender/issues/2617)). Tender now mirrors RomM's sibling relation, one
+shortcut per game in both directions ([#2625](https://github.com/danielcopper/romm-tender/issues/2625)), and a group
+holding more than one bound shortcut converges on the next sync
+([#2645](https://github.com/danielcopper/romm-tender/issues/2645)):
+
+- **Which shortcut stays.** The one bound to, in order: an installed version RomM lists, the chain of §3 ranking
+  several; else an installed version RomM no longer lists; else a listed version, by the chain, so one RomM holds a file
+  for comes first; else the unlisted version with the lowest `rom_id`. A version RomM no longer lists takes part, since
+  the listing cannot tell a version hidden in RomM from one deleted there, and so does a game RomM lists no version of
+  at all.
+- **Where.** On a complete view only: the listing of a platform unit the run fetches in full, and in the preview the
+  same listings. A platform whose rows still hold such a group is never skipped, so it is fetched in full once,
+  converges and skips again.
+- **How.** The other shortcuts are removals the preview counts and the finalize of a run that was not stopped makes,
+  beside the stale ones; their rows are unbound, and every row's saves, playtime and install records stay. Before a
+  shortcut goes, the panel carries over to the kept one the user's Steam collections, Favorites and Hidden, and each
+  image set in Steam where the kept one has none set in Steam; the removal then resets the removed appId's Steam Input
+  setting and deletes its grid images.
+
+The rejection of a force-collapse under Alternatives stands for a migration; this convergence is a sync step the preview
+shows, and it moves what Steam lets it move instead of deleting it.
