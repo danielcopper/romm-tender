@@ -337,13 +337,6 @@ export function platformSystemOffSentence(kind: string, system: string): string 
   return `System ${system} is switched off in ${sourceName(kind)}.`;
 }
 
-/** The platform page's clause naming the system a platform is in its source. */
-export function platformSystemClause(answer: PlatformSystemAnswer): string | null {
-  return answer.state === "found" && answer.system !== null
-    ? `${sourceName(answer.source)} system: ${answer.system}`
-    : null;
-}
-
 /** The sentence for a platform with no switched-on system, or `null` for any other answer. */
 function platformSystemSentence(reason: EmulatorDataReason | null, answer: PlatformSystemAnswer | null): string | null {
   if (answer === null) return null;

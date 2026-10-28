@@ -1405,15 +1405,15 @@ listing they need fails.
 
 The detail offers no sync control of its own — the row already is one, focus is already there and A works the toggle,
 and the list's two header buttons act on every row at once — so it opens with a two-line header instead of a Sync
-section. The first line is the platform's name alone, with the core picker's icon button right-aligned beside it; the
-second, in the platform page's 10 px small print and muted, is
-`<core name> · N versions on RomM · M versions in Steam · <source> system: <system>`. Each part of that line keeps
-itself on one line and carries its `·` in front, so the line wraps only between parts and never cuts one: with the name
-beside the facts, the Deck's width squeezed a two-word name onto two lines over the counts and broke
-`RetroDECK system snes` after its first word. The system part names the system the platform is in the answering source
-and its source (`RetroDECK system: psx`, worded by `platformSystemClause`); it is absent where no system was taken,
-which is when the line under the header says why
-([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). **That line, the notes under the BIOS
+section. The first line is the platform's name alone, with the core picker's icon button right-aligned beside it. Under
+it, in the platform page's 10 px small print and muted, stand up to three lines
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D25): the emulator in effect (`platform-facts`); one
+line per enabled source whose user chose an emulator inside ES-DE (`platform-frontend-choices`, "Gearsystem chosen in
+ES-DE", "RetroDECK: Gearsystem chosen in ES-DE" where more than one source is listed), absent where no source has such a
+choice; and `N versions on RomM · M versions in Steam` (`platform-counts`). Each part of the counts line keeps itself on
+one line and carries its `·` in front, so the line wraps only between parts and never cuts one. The system a platform is
+in is not named while one is found; it shows only in the line that says why there is none or why it is switched off
+([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). **Those lines, the notes under the BIOS
 heading and the lines under each BIOS file's name share one size**, `NOTE_FONT` (10 px), below the 11 px
 `SECONDARY_FONT` the other panes' secondary lines keep: on the Deck the three read as large as the rows' file names at
 11 px, and set apart they looked like three different sizes. The BIOS table's rows and its column names are set at 12
@@ -1422,7 +1422,7 @@ all, so a file name one pixel above the description under it did not read as a n
 size read as notes rather than as a table head. Two pixels is the gap that shows. The row buttons keep their own 11 px
 label, so focus and press sizes are unchanged.
 
-**Both counts on the second line are ROM files**, and the line says so: it reads "`N` versions on RomM · `M` versions in
+**Both counts on the counts line are ROM files**, and the line says so: it reads "`N` versions on RomM · `M` versions in
 Steam" ("1 version" on either half) — "version" is the glossary's word for one ROM, so it reads apart from the shortcut
 count on the Remove button. `M` is not claimed to be a part of `N`, because it need not be one (below). `N` is RomM's
 own `rom_count` for the platform; `M` is `reachable_count` — the platform's reachable ROMs (every member of a sibling
@@ -1503,9 +1503,9 @@ it, for the focused platform:
     **red** and the line says the games will not launch, because they will not.
 
   Under them stand, where they apply, the pick whose name no longer exists in its source ("Your choice '_label_' no
-  longer exists in _source_; the default '_default_' is used", or "there is no default to use instead", D5), and every
-  enabled source's own default with the user's choice in ES-DE where it differs (D4). Where Tender's default comes from
-  a source games do not start through, none of the starting source's own lines stands under it — no refusal, no vanished
+  longer exists in _source_; the default '_default_' is used", or "there is no default to use instead", D5). Each
+  source's own default is not repeated on the page; the emulator menu marks it (D4). Where Tender's default comes from a
+  source games do not start through, none of the starting source's own lines stands under it — no refusal, no vanished
   pick, no "lists no emulator", no red — and the clause names that default in the default's colour, also where the
   starting source lists no emulator (D24).
 

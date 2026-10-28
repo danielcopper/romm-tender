@@ -701,13 +701,14 @@ Its **`active_core_label`** names the per-platform pick while its label still na
 **Tender's default** ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D4): the default of the first
 enabled source in the user's order that offers one — EmuDeck's where EmuDeck is first. Where Tender's default comes from
 a source games do not start through, the page shows that default and none of the starting source's own lines beneath it:
-no refusal, no vanished pick, no red (D24). Beside it, **`source_defaults`** names every enabled source in the user's
-order with the entry it ships first for the platform, the user's choice in it inside ES-DE where that differs, or why
-there is none (its list's refusal, `no_entry`, or the shipped entry's not-established note); **`tender_default`** names
-the source and entry Tender's default is. `start` and `vanished_pick` are the platform's own, as on the game page. The
-identically-named field `get_platform_firmware_status` carries per platform is the label of `resolve_firmware_option`:
-the pick while its label exists, else the shipped default whatever its state, since an emulator that cannot start still
-declares the firmware it would need.
+no refusal, no vanished pick, no red (D24). **`source_defaults`** names every enabled source in the user's order with
+the entry it ships first for the platform, the user's choice in it inside ES-DE where that differs, or why there is none
+(its list's refusal, `no_entry`, or the shipped entry's not-established note); the page shows only the ES-DE choices
+from it (D25), and Tender's default is derived from it: **`tender_default`** names the source and entry Tender's default
+is. `start` and `vanished_pick` are the platform's own, as on the game page. The identically-named field
+`get_platform_firmware_status` carries per platform is the label of `resolve_firmware_option`: the pick while its label
+exists, else the shipped default whatever its state, since an emulator that cannot start still declares the firmware it
+would need.
 
 ### One identity space on the wire
 

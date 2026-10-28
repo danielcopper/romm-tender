@@ -308,15 +308,16 @@ and the row you focus is the one the right-hand pane describes.
    read that failed says so in the pane). Checking one platform takes a tenth to half a second on a Steam Deck, so a
    library of thirty is done in a few seconds, and leaving the page stops the work
 4. Move down the list to pick a platform; the pane on the right changes with the focus
-5. The pane's first line names the platform. The smaller grey line under it names the emulator it launches with — by
-   name, in grey when it is the platform's default and in gold when you have picked something else — then how many
-   versions it has on RomM and how many versions are in Steam ("12 versions on RomM · 9 versions in Steam"; every
-   version of a game that shares one shortcut counts, so this can be more than the shortcuts the Remove button names),
-   and the system its games are in your emulator source ("RetroDECK system: psx"). The name is in red where the
-   platform's games cannot start with it — it is not installed, or RetroDECK's start script cannot start it — and the
-   sentence below says why. If it reads **no default** in red, whether the emulator RetroDECK ships as its default is
-   installed could not be established, so nothing is the default until you pick one; the sentence below says so. If it
-   reads **no emulator** in red, RetroDECK has none for this platform at all
+5. The pane's first line names the platform. The smaller grey lines under it name the emulator it launches with — by
+   name, in grey when it is the platform's default and in gold when you have picked something else — then, where you
+   chose an emulator for the system inside ES-DE, that choice ("Gearsystem chosen in ES-DE", with the source named when
+   more than one is switched on), then how many versions it has on RomM and how many versions are in Steam ("12 versions
+   on RomM · 9 versions in Steam"; every version of a game that shares one shortcut counts, so this can be more than the
+   shortcuts the Remove button names). The name is in red where the platform's games cannot start with it — it is not
+   installed, or RetroDECK's start script cannot start it — and the sentence below says why. If it reads **no default**
+   in red, whether the emulator RetroDECK ships as its default is installed could not be established, so nothing is the
+   default until you pick one; the sentence below says so. If it reads **no emulator** in red, RetroDECK has none for
+   this platform at all
 6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
@@ -925,10 +926,9 @@ from.
 **The default is the emulator RetroDECK ships as its default** for the platform, whatever state it is in — Tender never
 passes it over for a later one by itself. An emulator you chose for the system inside ES-DE is marked **(chosen in
 ES-DE)** in the menu and named under the header, but it does not become Tender's default: what you set in ES-DE belongs
-to ES-DE, and Tender's choice is made here. Under the header the pane also names each emulator source's own default, and
-the emulator you chose in it in ES-DE where that differs — "RetroDECK's default: Genesis Plus GX (Gearsystem chosen in
-ES-DE)." — or why a source has none. Where EmuDeck stands first in **Settings › Emulator sources**, the header names
-EmuDeck's default, and none of RetroDECK's own lines stands under it.
+to ES-DE, and Tender's choice is made here. Each source's own default is marked in the menu rather than repeated on the
+page. Where EmuDeck stands first in **Settings › Emulator sources**, the header names EmuDeck's default, and none of
+RetroDECK's own lines stands under it.
 
 1. Open **Library** from the main QAM page and move to the **Platforms** tab
 2. Move to the platform you want to change

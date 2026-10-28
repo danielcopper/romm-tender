@@ -6,9 +6,9 @@
  */
 
 import { getPlatformCoreInfo, logError } from "../api/backend";
-import type { EmulatorDataReason, EmulatorOption, EmulatorStart, SourceDefault, VanishedPick } from "../types";
-import { isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
-import { emulatorDataReasonSentence, sourceName } from "./emulatorSourceWording";
+import type { EmulatorOption, EmulatorStart, SourceDefault, VanishedPick } from "../types";
+import { notEstablishedCause } from "./emulatorInstallation";
+import { sourceName } from "./emulatorSourceWording";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
 
@@ -75,24 +75,17 @@ export function vanishedPickSentence(vanished: VanishedPick): string {
 }
 
 /**
- * One source's own default for a platform, as the platform page states it: the
- * entry it ships first, the one chosen in it inside ES-DE where that differs,
- * or why it has none.
+ * The platform page's lines for the emulators the user chose inside ES-DE, one
+ * per source in *sources* that has such a choice, the source named where more
+ * than one is listed (#2195 D25).
  */
-export function sourceDefaultSentence(entry: SourceDefault): string {
-  const name = sourceName(entry.kind);
-  if (entry.default !== null) {
-    const chosen = entry.chosen_in_frontend === null ? "" : ` (${entry.chosen_in_frontend} chosen in ES-DE)`;
-    return `${name}'s default: ${entry.default}${chosen}.`;
-  }
-  if (entry.reason === "no_entry") return `${name} lists no emulator for this platform.`;
-  if (isNotEstablished(entry.reason)) {
-    const cause = notEstablishedCause(entry.reason);
-    return `Whether ${name}'s default is installed could not be established${cause === null ? "" : `: ${cause}`}.`;
-  }
-  // Any other reason is the refusal of the source's list, in the words the picker uses for it.
-  const source = { kind: entry.kind, starts_games: false };
-  return `${name}: ${emulatorDataReasonSentence(entry.reason as EmulatorDataReason | null, source)}`;
+export function frontendChoiceLines(sources: readonly SourceDefault[]): string[] {
+  const named = sources.length > 1;
+  return sources.flatMap((entry) => {
+    if (entry.chosen_in_frontend === null) return [];
+    const line = `${entry.chosen_in_frontend} chosen in ES-DE`;
+    return [named ? `${sourceName(entry.kind)}: ${line}` : line];
+  });
 }
 
 /**

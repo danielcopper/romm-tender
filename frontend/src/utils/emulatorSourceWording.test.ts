@@ -11,7 +11,6 @@ import {
   findingSentence,
   mainSourceBanners,
   noPlatformSystemSentence,
-  platformSystemClause,
   platformSystemOffSentence,
   sourceName,
   sourceRowLines,
@@ -478,23 +477,6 @@ describe("a platform with no switched-on system", () => {
     const unshaped = { success: false, reason: "no_platform_system", message: "m" };
     expect(withPlatformSystemSentence(unshaped)).toBe(unshaped);
     expect(withPlatformSystemSentence(null)).toBeNull();
-  });
-});
-
-describe("platformSystemClause", () => {
-  it("names the system taken with its source", () => {
-    expect(platformSystemClause({ state: "found", source: "retrodeck", system: "psx", platform: "PlayStation" })).toBe(
-      "RetroDECK system: psx",
-    );
-  });
-
-  it("names nothing where no system was taken", () => {
-    expect(
-      platformSystemClause({ state: "switched_off", source: "retrodeck", system: "xbox360", platform: "Xbox 360" }),
-    ).toBeNull();
-    expect(
-      platformSystemClause({ state: "no_system", source: "retrodeck", system: null, platform: "VIC-20" }),
-    ).toBeNull();
   });
 });
 

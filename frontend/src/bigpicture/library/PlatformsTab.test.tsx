@@ -292,6 +292,16 @@ function factTexts(container: HTMLElement): string[] {
   return factParts(container).map((el) => el.textContent.replace(/^· /, ""));
 }
 
+/** The counts line's parts, each without the separator it carries in front. */
+function countParts(container: HTMLElement): HTMLElement[] {
+  const line = container.querySelector('[data-testid="platform-counts"]');
+  return line ? [...line.querySelectorAll<HTMLElement>(":scope > span")] : [];
+}
+
+function countTexts(container: HTMLElement): string[] {
+  return countParts(container).map((el) => el.textContent.replace(/^· /, ""));
+}
+
 function factPart(container: HTMLElement, text: string): HTMLElement | undefined {
   return factParts(container).find((el) => el.textContent.replace(/^· /, "") === text);
 }
@@ -1238,13 +1248,12 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "12 versions on RomM", "9 versions in Steam"]);
-      expect(factParts(container).map((el) => el.textContent)).toEqual([
-        "mGBA",
-        "· 12 versions on RomM",
+      expect(factTexts(container)).toEqual(["mGBA"]);
+      expect(countParts(container).map((el) => el.textContent)).toEqual([
+        "12 versions on RomM",
         "· 9 versions in Steam",
       ]);
-      const line = container.querySelector<HTMLElement>('[data-testid="platform-facts"]')!;
+      const line = container.querySelector<HTMLElement>('[data-testid="platform-counts"]')!;
       expect(line.textContent).not.toContain("Game Boy Advance");
       expect(line.style.fontSize).toBe(NOTE_FONT);
       expect(line.style.flexWrap).toBe("wrap");
@@ -1257,8 +1266,8 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const parts = factParts(container);
-      expect(parts).toHaveLength(4);
+      const parts = countParts(container);
+      expect(parts).toHaveLength(2);
       for (const part of parts) {
         expect(part.style.whiteSpace).toBe("nowrap");
         expect(part.style.overflow).toBe("");
@@ -1267,19 +1276,28 @@ describe("Library › Platforms", () => {
     });
 
     it("sets the facts line, the BIOS notes and each file's description in one small size", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          source_defaults: [{ kind: "retrodeck", default: "mGBA", chosen_in_frontend: "VBA Next", reason: null }],
+        }),
+      );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
       const byText = (start: string) =>
         [...container.querySelectorAll<HTMLElement>("div")].find((el) => el.textContent.startsWith(start));
       const facts = container.querySelector<HTMLElement>('[data-testid="platform-facts"]');
+      const choices = container.querySelector<HTMLElement>('[data-testid="platform-frontend-choices"]');
+      const counts = container.querySelector<HTMLElement>('[data-testid="platform-counts"]');
       const note = byText("The one file mGBA opens by name");
       const description = byText("GBA BIOS");
-      expect([facts?.style.fontSize, note?.style.fontSize, description?.style.fontSize]).toEqual([
-        NOTE_FONT,
-        NOTE_FONT,
-        NOTE_FONT,
-      ]);
+      expect([
+        facts?.style.fontSize,
+        choices?.style.fontSize,
+        counts?.style.fontSize,
+        note?.style.fontSize,
+        description?.style.fontSize,
+      ]).toEqual([NOTE_FONT, NOTE_FONT, NOTE_FONT, NOTE_FONT, NOTE_FONT]);
       expect(Number.parseFloat(NOTE_FONT)).toBeLessThan(Number.parseFloat(SECONDARY_FONT));
     });
 
@@ -1305,19 +1323,16 @@ describe("Library › Platforms", () => {
       expect(px(marks?.style.fontSize)).toBeLessThanOrEqual(px(heading?.style.fontSize));
     });
 
-    it("names the system the platform is in its source, muted like the counts", async () => {
+    it("names no system while one is found", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual([
-        "mGBA",
-        "12 versions on RomM",
-        "9 versions in Steam",
-        "RetroDECK system: gba",
-      ]);
+      expect(factTexts(container)).toEqual(["mGBA"]);
+      expect(countTexts(container)).toEqual(["12 versions on RomM", "9 versions in Steam"]);
+      expect(container.textContent).not.toContain("system: gba");
     });
 
     it("says why a platform with no system has no emulators to pick", async () => {
@@ -1403,7 +1418,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "12 versions on RomM", "12 versions in Steam"]);
+      expect(countTexts(container)).toEqual(["12 versions on RomM", "12 versions in Steam"]);
       expect(buttonByText(container, "Remove 9 shortcuts")).toBeTruthy();
     });
 
@@ -1416,7 +1431,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "12 versions on RomM", "3 versions in Steam"]);
+      expect(countTexts(container)).toEqual(["12 versions on RomM", "3 versions in Steam"]);
     });
 
     it("counts a single version in the singular", async () => {
@@ -1427,7 +1442,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "1 version on RomM", "1 version in Steam"]);
+      expect(countTexts(container)).toEqual(["1 version on RomM", "1 version in Steam"]);
     });
 
     it("counts a single version in Steam in the singular beside many on RomM", async () => {
@@ -1437,7 +1452,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "12 versions on RomM", "1 version in Steam"]);
+      expect(countTexts(container)).toEqual(["12 versions on RomM", "1 version in Steam"]);
     });
 
     it("names the active core in the header and greys it when it is the default", async () => {
@@ -1623,7 +1638,7 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)).toBeDisabled();
     });
 
-    it("names every source's own default with the choice made in ES-DE beside it (#2195 D4)", async () => {
+    it("names Tender's default and, per source, the choice made in ES-DE, the source named where several are on (#2195 D25)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
           source_defaults: [
@@ -1637,10 +1652,32 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factPart(container, "PicoDrive")).toBeTruthy();
-      expect(container.textContent).toContain(
-        "EmuDeck's default: PicoDrive (Gearsystem chosen in ES-DE). RetroDECK's default: mGBA.",
+      expect(factTexts(container)).toEqual(["PicoDrive"]);
+      const choices = container.querySelector<HTMLElement>('[data-testid="platform-frontend-choices"]');
+      expect([...choices!.children].map((line) => line.textContent)).toEqual(["EmuDeck: Gearsystem chosen in ES-DE"]);
+      expect(container.textContent).not.toContain("default:");
+    });
+
+    it("says the choice made in ES-DE without a source's name where one source is on, and nothing without one (#2195 D25)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          source_defaults: [{ kind: "retrodeck", default: "mGBA", chosen_in_frontend: "VBA Next", reason: null }],
+        }),
       );
+      const { container, unmount } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const choices = container.querySelector<HTMLElement>('[data-testid="platform-frontend-choices"]');
+      expect([...choices!.children].map((line) => line.textContent)).toEqual(["VBA Next chosen in ES-DE"]);
+      unmount();
+
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({ source_defaults: [{ kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null }] }),
+      );
+      const again = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(again.container.querySelector('[data-testid="platform-frontend-choices"]')).toBeNull();
     });
 
     it("draws a default from a source games do not start through as the default, with no red (#2195 D24)", async () => {
@@ -1789,7 +1826,8 @@ describe("Library › Platforms", () => {
       // nothing was established — beside a sentence saying the opposite. The
       // assertion is on the clause span rather than on the pane's text, so a
       // sentence that names emulators in its own words does not trip it.
-      expect(factTexts(container)).toEqual(["12 versions on RomM", "9 versions in Steam"]);
+      expect(factTexts(container)).toEqual([]);
+      expect(countTexts(container)).toEqual(["12 versions on RomM", "9 versions in Steam"]);
     });
 
     it("says a RetroDECK that is not set up has no emulators established instead of an empty picker", async () => {

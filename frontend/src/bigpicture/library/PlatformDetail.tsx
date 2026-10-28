@@ -13,7 +13,7 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
 
-import type { FC } from "react";
+import type { CSSProperties, FC } from "react";
 import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spinner } from "@decky/ui";
 import { FaMicrochip } from "react-icons/fa";
 import type { FirmwarePlatformExt, SystemCoreInfo } from "../../types";
@@ -27,10 +27,10 @@ import { activeEmulatorNote } from "../../utils/emulatorInstallation";
 import {
   canPickAnother,
   emulatorStartRefusal,
-  sourceDefaultSentence,
+  frontendChoiceLines,
   vanishedPickSentence,
 } from "../../utils/emulatorStart";
-import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
+import { emulatorDataReasonSentence } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { WaitingLine } from "../WaitingLine";
 import { entryForLabel } from "../../utils/emulatorEntries";
@@ -114,23 +114,24 @@ const CORE_BUTTON = {
  * perform. A `pick` carries one too where the emulator RetroDECK would fall
  * back to is one whose installation could not be established.
  */
+/** The style every line under the platform's name shares: one small size, muted (#2195 D25). */
+const HEADER_LINE: CSSProperties = { padding: "2px 16px 0", fontSize: NOTE_FONT, color: MUTED };
+
 /**
- * The header's second line: the facts about the platform, smaller and muted.
+ * One header line of parts under the platform's name.
  *
  * Each part keeps itself on one line and carries the separator in front of it,
  * so the line wraps only between parts — at the Deck's width a free-flowing
- * line broke "RetroDECK system snes" after its first word — and never cuts one.
+ * line broke a two-word part after its first word — and never cuts one.
  */
-const HeaderFacts: FC<{ parts: { text: string; color?: string }[] }> = ({ parts }) => (
+const HeaderFacts: FC<{ testId: string; parts: { text: string; color?: string }[] }> = ({ testId, parts }) => (
   <div
-    data-testid="platform-facts"
+    data-testid={testId}
     style={{
+      ...HEADER_LINE,
       display: "flex",
       flexWrap: "wrap",
       columnGap: "4px",
-      padding: "2px 16px 0",
-      fontSize: NOTE_FONT,
-      color: MUTED,
     }}
   >
     {parts.map((part, index) => (
@@ -229,15 +230,22 @@ const CoreNotice: FC<{ row: PlatformRow; state: PlatformsPageState; offer: CoreO
     {core?.vanished_pick && <Muted>{vanishedPickSentence(core.vanished_pick)}</Muted>}
     {offer.notice !== undefined && <Muted>{offer.notice}</Muted>}
     {core && <ActiveEmulatorNote core={core} />}
-    {core && <SourceDefaults core={core} />}
     <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="core" />
   </>
 );
 
-/** Each enabled source's own default for the platform, the user's ES-DE choice where it differs, or why there is none
- *  (#2195 D4). */
-const SourceDefaults: FC<{ core: SystemCoreInfo }> = ({ core }) =>
-  core.source_defaults.length === 0 ? null : <Muted>{core.source_defaults.map(sourceDefaultSentence).join(" ")}</Muted>;
+/** One line per enabled source whose user chose an emulator inside ES-DE (#2195 D25). */
+const FrontendChoices: FC<{ core: SystemCoreInfo }> = ({ core }) => {
+  const lines = frontendChoiceLines(core.source_defaults);
+  if (lines.length === 0) return null;
+  return (
+    <div data-testid="platform-frontend-choices" style={HEADER_LINE}>
+      {lines.map((line) => (
+        <div key={line}>{line}</div>
+      ))}
+    </div>
+  );
+};
 
 /** The note under the header where the emulator this platform launches with is one whose installation could not be
  *  established. */
@@ -459,7 +467,6 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
     activeLabel !== null && !activeIsDefault,
   );
   const coreClause = clause === null ? null : { text: clause.text, color: coreColor };
-  const systemClause = core?.platform_system ? platformSystemClause(core.platform_system) : null;
 
   return (
     <>
@@ -516,12 +523,13 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
           there instead read as "207 are missing" on a platform where nothing
           was. The Remove button below keeps the shortcut count — that one
           really is about Steam entries. */}
+      {coreClause && <HeaderFacts testId="platform-facts" parts={[coreClause]} />}
+      {core && <FrontendChoices core={core} />}
       <HeaderFacts
+        testId="platform-counts"
         parts={[
-          ...(coreClause ? [{ text: coreClause.text, color: coreClause.color }] : []),
           { text: `${pluralize(row.romCount, "version")} on RomM` },
           ...(row.reachableCount === null ? [] : [{ text: `${pluralize(row.reachableCount, "version")} in Steam` }]),
-          ...(systemClause === null ? [] : [{ text: systemClause }]),
         ]}
       />
       {/* The count is what failed, not the removal: taking the platform's games

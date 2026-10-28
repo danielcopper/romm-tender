@@ -11,9 +11,9 @@ import {
   canPickAnother,
   emulatorRefusalForRom,
   emulatorStartRefusal,
+  frontendChoiceLines,
   frontendChoiceSentence,
   gameCanPickAnother,
-  sourceDefaultSentence,
   startRefused,
   vanishedPickSentence,
 } from "./emulatorStart";
@@ -167,32 +167,30 @@ describe("the choice made in ES-DE", () => {
   });
 });
 
-describe("each source's own default", () => {
-  it("names the default and the ES-DE choice beside it", () => {
-    expect(
-      sourceDefaultSentence({
-        kind: "retrodeck",
-        default: "Genesis Plus GX",
-        chosen_in_frontend: "Gearsystem",
-        reason: null,
-      }),
-    ).toBe("RetroDECK's default: Genesis Plus GX (Gearsystem chosen in ES-DE).");
+describe("the emulators chosen in ES-DE, on the platform page", () => {
+  const source = (kind: string, chosen: string | null) => ({
+    kind,
+    default: null,
+    chosen_in_frontend: chosen,
+    reason: null,
   });
 
-  it("says a source lists no emulator, or that whether its default is installed could not be established", () => {
-    expect(
-      sourceDefaultSentence({ kind: "emudeck", default: null, chosen_in_frontend: null, reason: "no_entry" }),
-    ).toBe("EmuDeck lists no emulator for this platform.");
-    expect(
-      sourceDefaultSentence({ kind: "emudeck", default: null, chosen_in_frontend: null, reason: "path_unseen" }),
-    ).toBe(
-      "Whether EmuDeck's default is installed could not be established: ES-DE looks for it where Tender cannot see.",
-    );
+  it("says the choice alone where one source is listed", () => {
+    expect(frontendChoiceLines([source("retrodeck", "Gearsystem")])).toEqual(["Gearsystem chosen in ES-DE"]);
   });
 
-  it("says why a source's list could not be read", () => {
-    const words = sourceDefaultSentence({ kind: "emudeck", default: null, chosen_in_frontend: null, reason: "sealed" });
-    expect(words.startsWith("EmuDeck: ")).toBe(true);
+  it("names the source where more than one is listed, and leaves out a source with no choice", () => {
+    expect(
+      frontendChoiceLines([
+        source("retrodeck", "Gearsystem"),
+        source("emudeck", null),
+        source("bare_retroarch_flatpak", "Genesis Plus GX"),
+      ]),
+    ).toEqual(["RetroDECK: Gearsystem chosen in ES-DE", "RetroArch (Flatpak): Genesis Plus GX chosen in ES-DE"]);
+  });
+
+  it("says nothing where no source has a choice", () => {
+    expect(frontendChoiceLines([source("retrodeck", null)])).toEqual([]);
   });
 });
 
