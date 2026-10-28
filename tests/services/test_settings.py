@@ -227,6 +227,7 @@ class TestSaveServerUrl:
             ("  romm.local:8080 ", "https://romm.local:8080"),
             ("192.168.1.5:8080", "https://192.168.1.5:8080"),
             ("romm.example.com/romm", "https://romm.example.com/romm"),
+            ("romm.local:8080?q=a:/b", "https://romm.local:8080?q=a:/b"),
         ],
     )
     async def test_a_url_without_a_scheme_is_offered_with_https_without_writing(
@@ -252,7 +253,8 @@ class TestSaveServerUrl:
         assert settings["romm_url"] == "https://romm.local:8080"
 
     @pytest.mark.parametrize(
-        "bad_url", ["ftp://romm.local", "romm://romm.local", "file:///romm", "http:/romm.local", "ftp:/romm.local"]
+        "bad_url",
+        ["ftp://romm.local", "romm://romm.local", "file:///romm", "http:/romm.local", "ftp:/romm.local", "://nohost"],
     )
     async def test_a_url_with_a_scheme_tender_does_not_accept_is_refused_as_before(
         self, service, settings, settings_persister, bad_url

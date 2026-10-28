@@ -15,10 +15,13 @@ Stdlib-only (``urllib``); no I/O, no network — purely lexical.
 
 from __future__ import annotations
 
+import re
 import urllib.parse
 from typing import Any
 
 _DEFAULT_PORTS = {"http": 80, "https": 443}
+# A scheme as RFC 3986 spells one, followed by at least one slash, at the start of the text.
+_LEADING_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:/")
 
 
 def normalize_origin(url: str) -> str | None:
@@ -102,16 +105,19 @@ def is_valid_server_url(url: str) -> bool:
 def with_https_added(url: str) -> str | None:
     """*url* with ``https://`` in front where it names no scheme at all, else ``None``.
 
-    A missing scheme is told by a missing ``:/``, not by
-    ``urllib.parse.urlsplit``, which reads ``romm.local:8080`` as the scheme
-    ``romm.local``. ``:/`` rather than ``://``, so a scheme typed with one slash
-    (``http:/romm.local``) is left to be refused as an invalid URL instead of
-    being completed to ``https://http:/romm.local``; a port followed by a path
-    (``romm.local:8080/romm``) holds no ``:/`` and is completed. Https, not
-    http, because sign-in sends the RomM password to this address: a wrong
-    https only fails, a wrong http sends it unencrypted.
+    *url* names a scheme only when it BEGINS with one followed by ``:/``; what
+    comes later — a ``:/`` in a path, query or fragment
+    (``romm.local:8080?q=a:/b``) — names none. The test is that leading match,
+    not ``urllib.parse.urlsplit``, which reads ``romm.local:8080`` as the
+    scheme ``romm.local``. One slash is enough, so a scheme typed with one
+    slash too few (``http:/romm.local``) is left to be refused as an invalid
+    URL instead of being completed to ``https://http:/romm.local``; a host
+    with a port (``romm.local:8080/romm``) does not match, since a port is no
+    slash, and is completed, while ``romm.local:/x`` matches and is left alone.
+    Https, not http, because sign-in sends the RomM password to this address:
+    a wrong https only fails, a wrong http sends it unencrypted.
     """
-    return None if ":/" in url else f"https://{url}"
+    return None if _LEADING_SCHEME.match(url) else f"https://{url}"
 
 
 # urllib takes no credentials from an address, so none reaches RomM. With a

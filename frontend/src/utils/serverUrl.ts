@@ -5,9 +5,9 @@
  * a usable server URL carries an `http://` or `https://` scheme. The backend's
  * other check, a URL carrying a user name or password, has no copy here. The
  * sign-in handlers trim and reject scheme-less or empty input before calling
- * the backend; the URL save does not, because the backend answers a
- * scheme-less URL with its https:// completion. Trimming also keeps a leading
- * space from hiding the "Allow Insecure SSL" toggle.
+ * the backend; the URL save trims but does not reject, because the backend
+ * answers a scheme-less URL with its https:// completion. Trimming also keeps
+ * a leading space from hiding the "Allow Insecure SSL" toggle.
  */
 
 /** Trim surrounding whitespace from a user-entered server URL. */
