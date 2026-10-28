@@ -2897,8 +2897,11 @@ the old one.
 **A declaration that established nothing is unread, whatever its state says.** `read` with an empty requirement list is
 the one pairing that means "this emulator needs no firmware". `packaged` with an empty list means a card exists and this
 query established nothing — the same silence a missing `.info` leaves — so it counts as unread; PCSX2 answers exactly
-that when its own ini names no BIOS file. `unsupported` is an emulator the resolver has no source for, and a refused
-declaration counts as unread too: the emulator does want something the resolver would not follow to a destination.
+that when its own ini names no BIOS file. A libretro core installed without its `.info` answers `packaged` too where
+atlas carries a declaration for it, with `core-info-packaged` beside it; the state is read and the statement changes
+nothing ([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D3). `unsupported` is an emulator the resolver
+has no source for, and a refused declaration counts as unread too: the emulator does want something the resolver would
+not follow to a destination.
 
 **One platform, one emulator.** Which emulator a platform's BIOS answers are ABOUT is resolved once, by
 `domain/emulator_commands.py`'s `resolve_firmware_option` — the per-platform override (`settings.json` `platform_cores`)
