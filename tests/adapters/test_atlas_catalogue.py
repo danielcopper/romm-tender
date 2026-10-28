@@ -742,12 +742,17 @@ class TestEveryLaunchLookupCodeIsClassified:
     """Each code of the resolver's launch lookup is in exactly one of the reading's three sets."""
 
     def test_each_code_has_one_place(self):
+        launch_command_refusals = {
+            "CAVEAT_FRONTEND_BUILD_UNPINNED",
+            "CAVEAT_FRONTEND_BUILD_SEALED",
+            "CAVEAT_LAUNCHER_SCRIPT_UNPINNED",
+        }
         lookup = {
             value
             for name, value in vars(find_rules).items()
             if name.startswith("CAVEAT_")
             and not name.startswith("CAVEAT_LAUNCH_COMMAND_")
-            and name != "CAVEAT_FRONTEND_BUILD_UNPINNED"
+            and name not in launch_command_refusals
         } | {CAVEAT_CORE_NOT_INSTALLED}
         places = [
             set(atlas_catalogue._NOT_ESTABLISHED_BECAUSE),

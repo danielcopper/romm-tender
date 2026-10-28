@@ -244,7 +244,7 @@ VECTORS_WITHOUT_A_SYSTEM = 33
 VECTORS_WITHOUT_AN_EMULATOR = 5
 
 # (system, emulator) pairs compared over every firmware vector.
-PAIRS_COMPARED = 289
+PAIRS_COMPARED = 303
 
 # Firmware vectors that ask exactly Tender's question, so their recorded answer
 # is the live one's to equal.
