@@ -3,6 +3,11 @@ import * as backend from "../api/backend";
 import type { ArtworkSlotRow, ArtworkSlots, ArtworkTabSlot } from "../api/backend";
 import { carryOverShortcutState, isConvergedRemoval, type ConvergedRemoval } from "./shortcutCarryOver";
 
+vi.mock("../api/backend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/backend")>()),
+  logWarn: vi.fn(),
+}));
+
 vi.mock("./artworkThumbs", () => ({
   slotThumbnailUrls: (appId: number, row: ArtworkSlotRow) => [`https://steamloopback.host/${appId}/${row.slot}`],
 }));
@@ -56,6 +61,7 @@ const setArtwork = vi.fn().mockResolvedValue(undefined);
 
 beforeEach(() => {
   vi.mocked(backend.getArtworkSlots).mockReset();
+  vi.mocked(backend.logWarn).mockClear();
   answerSlots(slots({}), slots({}));
   setArtwork.mockClear();
   collections = [];
@@ -116,6 +122,35 @@ describe("carryOverShortcutState (#2645)", () => {
     await carryOverShortcutState(REMOVAL);
 
     expect([platform.added, both.added]).toEqual([[], []]);
+  });
+
+  it("carries the other collections when one cannot take the app", async () => {
+    const smart = { ...collection("uc-6", "Smart", [6031]), AsDragDropCollection: () => null };
+    const refusing = { ...collection("uc-7", "Refusing", [6031]), Save: vi.fn().mockRejectedValue(new Error("no")) };
+    const golf = collection("uc-1", "Golf games", [6031]);
+    collections = [smart, refusing, golf] as unknown as ReturnType<typeof collection>[];
+
+    await carryOverShortcutState(REMOVAL);
+
+    expect(golf.added).toEqual([6030]);
+    expect(golf.Save).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries the collections and the artwork where Steam offers no Hidden", async () => {
+    vi.stubGlobal("collectionStore", {
+      get userCollections() {
+        return collections;
+      },
+    });
+    const golf = collection("uc-1", "Golf games", [6031]);
+    collections = [golf];
+    answerSlots(slots({ grid: "set_in_steam" }), slots({}));
+
+    await carryOverShortcutState(REMOVAL);
+
+    expect(golf.added).toEqual([6030]);
+    expect(setArtwork).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(backend.logWarn)).not.toHaveBeenCalled();
   });
 
   it("hides the kept shortcut when the removed one was hidden", async () => {

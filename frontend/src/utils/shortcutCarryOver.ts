@@ -2,10 +2,11 @@
  * What a shortcut the sync converged away leaves to the shortcut its game keeps (#2645 D2).
  *
  * The backend names, for each such removal, the shortcut that stays (`kept_app_id`). Before the removal, the user's
- * Steam collections — Favorites among them — and Hidden carry over to it, and so does each image set in Steam in a slot
- * where the kept shortcut has none set in Steam. Tender's own collections are left alone: the run's collection maps
- * file the kept shortcut there. Every part is best effort, and a part that fails is logged and holds nothing up: the
- * backend unbound the row already, so a shortcut left behind would belong to no version at all.
+ * Steam collections and Hidden carry over to it, and so does each image set in Steam in a slot where the kept shortcut
+ * has none set in Steam. That Favorites is among `userCollections` and that Hidden is read and set beside them is not
+ * measured on a device. Tender's own collections are left alone: the run's collection maps file the kept shortcut
+ * there. Every part is best effort, and a part that fails is logged and holds nothing up: the backend unbinds the row
+ * whatever the panel does, so a shortcut left behind would belong to no version at all.
  */
 
 import { debugLog, getArtworkSlots, isEndpointFailure, logWarn, type ArtworkSlotRow } from "../api/backend";
@@ -49,8 +50,14 @@ async function carryOverCollections({ app_id, kept_app_id }: ConvergedRemoval): 
   for (const collection of collectionStore.userCollections) {
     if (!collection.apps.has(app_id) || collection.apps.has(kept_app_id)) continue;
     if (foldCollectionName(collection.displayName).startsWith("romm: ")) continue;
-    collection.AsDragDropCollection().AddApps([kept]);
-    await collection.Save();
+    // One collection that cannot take the app — a dynamic one may have no
+    // drag-and-drop side — does not keep it from the others.
+    try {
+      collection.AsDragDropCollection().AddApps([kept]);
+      await collection.Save();
+    } catch (e) {
+      logWarn(`Carry-over: the collection "${collection.displayName}" did not take appId ${kept_app_id}: ${e}`);
+    }
   }
 }
 
