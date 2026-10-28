@@ -126,12 +126,15 @@ interface DownloadProgress {
 
 interface CustomPlayButtonProps {
   appId: number;
+  /** Why the game's emulator cannot start it, as the page says it under the row;
+   *  Play is then disabled (#2195 D7, D21). Absent or `null`: nothing stands in its way. */
+  emulatorRefusal?: string | null;
 }
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
 // Prettier from relocating the trailing comment into the body (which would break the suppression).
 // prettier-ignore
-export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // NOSONAR(typescript:S3776) — remaining cc is the per-state render branching (download/dl_complete/uninstalling/launching/checking/syncing/conflict/play each return a distinct button shape); the gate chain now lives in runLaunchGate, not here.
+export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRefusal = null }) => { // NOSONAR(typescript:S3776) — remaining cc is the per-state render branching (download/dl_complete/uninstalling/launching/checking/syncing/conflict/play each return a distinct button shape); the gate chain now lives in runLaunchGate, not here.
   const leaseOwner = `custom-play-button:${appId}`;
   const [state, setState] = useState<PlayButtonState>("loading");
   const [romId, setRomId] = useState<number | null>(null);
@@ -1523,6 +1526,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
           detach(handlePlay());
         }}
         onFocus={scrollToTop}
+        disabled={emulatorRefusal !== null}
+        {...(emulatorRefusal === null ? {} : { title: emulatorRefusal })}
       >
         Play
       </DialogButton>

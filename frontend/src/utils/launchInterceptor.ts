@@ -44,6 +44,7 @@ import { tellStrandedPress } from "./strandedPanelStore";
 import { strandedPanelSentence } from "./strandedPanelWording";
 import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
 import { boundAvailabilityOf, type BoundAvailability } from "./vanishedBinding";
+import { emulatorRefusalForRom } from "./emulatorStart";
 
 /**
  * A start the watcher cancelled: the appId it resolved, and the game ID Steam
@@ -327,6 +328,14 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
             // (no relaunch).
             if (!rom.installed) {
               showToast(await notInstalledSentence(appId));
+              return;
+            }
+
+            // The emulator the game starts with cannot start it: refused with the
+            // game page's own words, no relaunch (#2195 D7).
+            const refusal = await emulatorRefusalForRom(rom.romId, WATCHER_TAG);
+            if (refusal !== null) {
+              showToast(refusal);
               return;
             }
 

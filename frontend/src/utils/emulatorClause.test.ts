@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { libretroEmu, sharedBy, standaloneEmu } from "../test-utils/coreFixtures";
+import { emulatorStart, libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
 import { emulatorClause, type EmulatorClauseSource } from "./emulatorClause";
 
 const known = (overrides: Partial<EmulatorClauseSource>): EmulatorClauseSource => ({
   emulator_data_available: true,
   emulators: [libretroEmu("mgba_libretro", "mGBA", true)],
   active_core_label: "mGBA",
+  start: emulatorStart({ entry: "mGBA" }),
   ...overrides,
 });
 
@@ -14,31 +15,30 @@ describe("emulatorClause", () => {
     expect(emulatorClause(known({}))).toEqual({ text: "mGBA", gamesCannotStart: false });
   });
 
-  it("says RetroDECK decides where nothing is bakeable but its fallback can run", () => {
-    const emulators = [standaloneEmu("mGBA (Standalone)", false, { bakeable: false, reason: "inject" })];
-    expect(emulatorClause(known({ emulators, active_core_label: null }))).toEqual({
-      text: "RetroDECK decides",
+  it("names a default Tender cannot bake, whose games start through RetroDECK's own start", () => {
+    const emulators = [standaloneEmu("mGBA (Standalone)", true, { bakeable: false, reason: "inject" })];
+    expect(emulatorClause(known({ emulators, active_core_label: "mGBA (Standalone)" }))).toEqual({
+      text: "mGBA (Standalone)",
       gamesCannotStart: false,
     });
   });
 
-  it("says no emulator installed where the fallback RetroDECK would use is not installed", () => {
-    const emulators = [
-      standaloneEmu("mGBA (Standalone)", false, { bakeable: false, reason: "not_installed" }),
-      standaloneEmu("VBA-M (Standalone)", false, { bakeable: false, reason: "inject" }),
-    ];
-    expect(emulatorClause(known({ emulators, active_core_label: null }))).toEqual({
-      text: "no emulator installed",
+  it("names a default that cannot start the games, in the state they cannot start in", () => {
+    const emulators = [standaloneEmu("Ryubing (Standalone)", true, { bakeable: false, reason: "not_installed" })];
+    const start = emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)" });
+    expect(emulatorClause(known({ emulators, active_core_label: "Ryubing (Standalone)", start }))).toEqual({
+      text: "Ryubing (Standalone)",
       gamesCannotStart: true,
     });
   });
 
-  it("reads only the fallback: a later option that is not installed leaves RetroDECK deciding", () => {
-    const emulators = [
-      standaloneEmu("mGBA (Standalone)", false, { bakeable: false, reason: "inject" }),
-      standaloneEmu("VBA-M (Standalone)", false, { bakeable: false, reason: "not_installed" }),
-    ];
-    expect(emulatorClause(known({ emulators, active_core_label: null }))?.text).toBe("RetroDECK decides");
+  it("says no default where the default's installation could not be established", () => {
+    const emulators = [standaloneEmu("BlastEm", false, { reason: "no_find_rule" })];
+    const start = emulatorStart({ state: "choose", reason: "no_find_rule", entry: "BlastEm" });
+    expect(emulatorClause(known({ emulators, active_core_label: null, start }))).toEqual({
+      text: "no default",
+      gamesCannotStart: true,
+    });
   });
 
   it("says no emulator where the list holds none at all", () => {
@@ -48,9 +48,9 @@ describe("emulatorClause", () => {
     });
   });
 
-  it("names an emulator stored under one of several labels by every label its entry carries", () => {
-    const emulators = [sharedBy(libretroEmu("pcsx2_libretro", "LRPS2", true), ["LRPS2", "PCSX2"])];
-    expect(emulatorClause(known({ emulators, active_core_label: "PCSX2" }))?.text).toBe("LRPS2 / PCSX2");
+  it("names an emulator by the one label it was picked under, two labels that run one command being two rows", () => {
+    const emulators = [libretroEmu("pcsx2_libretro", "LRPS2", true), libretroEmu("pcsx2_libretro", "PCSX2")];
+    expect(emulatorClause(known({ emulators, active_core_label: "PCSX2" }))?.text).toBe("PCSX2");
   });
 
   it("says nothing where there is no answer yet", () => {

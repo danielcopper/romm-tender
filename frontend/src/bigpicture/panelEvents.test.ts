@@ -11,6 +11,7 @@ import * as cachedStore from "../utils/cachedGameDetailStore";
 import type { CoreInfo } from "../types";
 import { wirePanelEvents, type PanelEventContext } from "./panelEvents";
 import { loadData, type PanelState } from "./panelState";
+import { coreInfo } from "../test-utils/coreFixtures";
 
 vi.mock("../utils/cachedGameDetailStore", () => ({
   getCachedGameDetail: vi.fn(),
@@ -30,7 +31,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 function coreInfoNamed(label: string): CoreInfo {
-  return {
+  return coreInfo({
     active_core: `${label}.so`,
     active_core_label: label,
     platform_core_label: null,
@@ -40,7 +41,7 @@ function coreInfoNamed(label: string): CoreInfo {
     emulator_source: { kind: "retrodeck", starts_games: true },
     platform_system: null,
     emulators: [],
-  };
+  });
 }
 
 function basePanelState(romId: number): PanelState {

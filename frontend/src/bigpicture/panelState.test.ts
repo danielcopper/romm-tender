@@ -18,6 +18,7 @@ import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { refreshCoreInfoInBackground } from "../utils/sectionRefresh";
 import type { CoreInfoFields } from "../utils/playSection";
 import type { CoreInfo, SaveSlotSummary } from "../types";
+import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
 
 /** A promise the test resolves by hand, so two reads of the same endpoint can be
  *  made to answer in the opposite order to the one they were issued in. */
@@ -134,7 +135,7 @@ describe("bindRomInState", () => {
 // The panel and the play row each read this ROM's core info on every page open,
 // microtasks apart, and neither knows about the other (#1758).
 describe("core info shared with the play row's load", () => {
-  const coreInfo: CoreInfo = {
+  const coreInfo: CoreInfo = coreInfoFixture({
     active_core: "snes9x.so",
     active_core_label: "Snes9x",
     platform_core_label: null,
@@ -144,7 +145,7 @@ describe("core info shared with the play row's load", () => {
     emulator_source: { kind: "retrodeck", starts_games: true },
     platform_system: null,
     emulators: [],
-  };
+  });
 
   beforeEach(() => {
     vi.resetAllMocks();

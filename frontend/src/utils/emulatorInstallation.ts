@@ -43,5 +43,5 @@ export function activeEmulatorNote(emulators: readonly EmulatorOption[], activeL
   if (entry === undefined || !isNotEstablished(entry.reason)) return null;
   const cause = notEstablishedCause(entry.reason);
   const why = cause === null ? "" : `: ${cause}`;
-  return `Whether ${entry.name} is installed could not be established${why}.`;
+  return `Whether ${entry.label} is installed could not be established${why}.`;
 }

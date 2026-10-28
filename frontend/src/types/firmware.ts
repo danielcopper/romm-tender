@@ -405,25 +405,66 @@ interface FirmwareFile extends FirmwareVerdict {
  * and another from a folder or an ISO. `null` is an emulator the resolver could
  * not identify, which nothing may be keyed on.
  *
- * One entry stands for every label that runs the same launch command —
- * RetroDECK's `LRPS2` and `PCSX2` are one entry — while one emulator launched
- * different ways is one entry per way. `labels` are the entry's labels in
- * RetroDECK's order and `name` is them joined " / ", which is what a launch
- * place prints — the BIOS part names the emulator instead
- * (docs/architecture/core-emulator-selection.md, "The BIOS part names the
- * emulator; the launch places name the entry"); `label` is the first of them,
- * the one a pick stores. An override
- * stored under any of `labels` reads as this entry (`utils/emulatorEntries.ts`).
+ * Every entry is a row of its own, in the order the resolver lists them, two
+ * labels that run one command included: ES-DE stores a choice by its label.
+ * `label` is what a pick stores and what a launch place prints. With
+ * `emulator`, `declared_index` — the entry's place in the order its source
+ * ships — is the row's join key. `is_default` marks the entry the source ships
+ * first, unless its installation could not be established; `chosen_in_frontend`
+ * the one the user chose inside ES-DE, where that is another entry.
  */
 export interface EmulatorOption {
   label: string;
-  labels: string[];
-  name: string;
   kind: "core" | "program" | "foreign_core";
   core_so: string | null;
   emulator: string | null;
+  declared_index: number | null;
   is_default: boolean;
+  chosen_in_frontend: boolean;
   bakeable: boolean;
+  reason: string | null;
+}
+
+/**
+ * What starting with the entry a game or a platform resolves to comes to.
+ * `starts` — it starts (through `run_game.sh` where Tender cannot bake it,
+ * which nothing words); `cannot_start` — `reason` says why
+ * (`not_installed`, `start_script_runs_nothing`, `folder_install`, the last
+ * naming in `folder_entry` the entry that starts a folder); `choose` — there is
+ * no default, because the shipped entry's installation could not be
+ * established (`reason` is its note); `no_entry` — nothing to start with.
+ * `entry` is the label of the entry it is about — for `choose`, the shipped one.
+ */
+export interface EmulatorStart {
+  state: "starts" | "cannot_start" | "choose" | "no_entry";
+  reason: string | null;
+  entry: string | null;
+  folder_entry: string | null;
+}
+
+/**
+ * A stored pick whose label no longer exists in its source: `label`, the kind
+ * of that `source`, the `layer` it was stored on, and the entry `used`
+ * instead, `null` where there is none.
+ */
+export interface VanishedPick {
+  label: string;
+  source: string | null;
+  layer: "game" | "platform";
+  used: string | null;
+}
+
+/**
+ * One enabled emulator source's own default for a platform: the entry it ships
+ * first (`default`, `null` where there is none), the one the user chose in it
+ * inside ES-DE where that differs, and why there is no default where there is
+ * none — a refusal of its list, `no_entry`, or the shipped entry's
+ * not-established note.
+ */
+export interface SourceDefault {
+  kind: string;
+  default: string | null;
+  chosen_in_frontend: string | null;
   reason: string | null;
 }
 
@@ -456,6 +497,8 @@ export interface CoreInfo {
   active_core_label: string | null;
   platform_core_label: string | null;
   has_game_override: boolean;
+  start: EmulatorStart;
+  vanished_pick: VanishedPick | null;
 }
 
 /**
@@ -465,15 +508,12 @@ export interface CoreInfo {
  * per-game layer (there is no ROM), and no BIOS data (the detail's table reads
  * that off `get_firmware_status`).
  *
- * `active_core_label` is the platform-layer resolution — the per-platform
- * override when it still resolves to a bakeable emulator, else the es_systems
- * default — so in both ordinary cases it IS the emulator's name. `null` means
- * nothing is pinned and no option can be the default, which is not the same as
- * there being none: a menu of emulators that are not installed, standalone
- * emulators or cores alike, answers `null` with `emulators.length >= 1`, and so
- * does one whose only bakeable entries could not be established.
- * RetroDECK then resolves the emulator itself at launch, and the Library page
- * says that rather than printing a name or claiming a failure.
+ * `active_core_label` is the per-platform pick while its label names an entry,
+ * else Tender's default (`tender_default`), whatever state that entry is in;
+ * `null` where nothing is picked and no source offers a default. `start` and
+ * `vanished_pick` are as on {@link CoreInfo}, for the platform's own choice.
+ * `source_defaults` is every enabled source in the user's order with its own
+ * default; `tender_default` the source and entry Tender's default is.
  *
  * There is no `success`, for the reason its sibling has none: the endpoint has
  * no in-band failure to report. What can go wrong — no emulator list from the
@@ -490,6 +530,10 @@ export interface SystemCoreInfo {
   /** The platform's system in the answering source, which the page names. */
   platform_system: PlatformSystemAnswer | null;
   active_core_label: string | null;
+  start: EmulatorStart;
+  vanished_pick: VanishedPick | null;
+  source_defaults: SourceDefault[];
+  tender_default: { kind: string; label: string | null } | null;
 }
 
 /**

@@ -39,6 +39,11 @@ import type {
   WireReason,
 } from "../../types";
 import { NOTE_FONT, SECONDARY_FONT } from "../layout/pane";
+import {
+  coreInfo as coreInfoFixture,
+  emulatorStart,
+  systemCoreInfo as systemCoreInfoFixture,
+} from "../../test-utils/coreFixtures";
 
 // `scrollFocusedToCenter` is the game page tab's, not this page's: one test
 // below renders that tab beside the pane to compare what the two say.
@@ -59,8 +64,8 @@ vi.mock("../../utils/collections", () => ({
 
 const MGBA = {
   label: "mGBA",
-  labels: ["mGBA"],
-  name: "mGBA",
+  declared_index: null,
+  chosen_in_frontend: false,
   kind: "core" as const,
   core_so: "mgba_libretro",
   emulator: "mgba_libretro.so",
@@ -70,8 +75,8 @@ const MGBA = {
 };
 const VBA = {
   label: "VBA Next",
-  labels: ["VBA Next"],
-  name: "VBA Next",
+  declared_index: null,
+  chosen_in_frontend: false,
   kind: "core" as const,
   core_so: "vba_next_libretro",
   emulator: "vba_next_libretro.so",
@@ -84,15 +89,15 @@ const VBA = {
 const LRPS2_PCSX2 = {
   ...MGBA,
   label: "LRPS2",
-  labels: ["LRPS2", "PCSX2"],
-  name: "LRPS2 / PCSX2",
+  declared_index: null,
+  chosen_in_frontend: false,
   core_so: "pcsx2_libretro",
   emulator: "pcsx2_libretro.so",
 };
 
 /** What the game page's BIOS tab needs to render beside its sentence — the same
  *  platform the pane below is showing, so the two are answering about one thing. */
-const GBA_CORE_INFO: CoreInfo = {
+const GBA_CORE_INFO: CoreInfo = coreInfoFixture({
   emulators: [MGBA],
   emulator_data_available: true,
   emulator_data_reason: null,
@@ -102,10 +107,10 @@ const GBA_CORE_INFO: CoreInfo = {
   active_core_label: MGBA.label,
   platform_core_label: null,
   has_game_override: false,
-};
+});
 
 function coreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemCoreInfo {
-  return {
+  return systemCoreInfoFixture({
     emulators: [MGBA, VBA],
     emulator_data_available: true,
     emulator_data_reason: null,
@@ -113,7 +118,7 @@ function coreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemCoreInfo {
     platform_system: null,
     active_core_label: "mGBA",
     ...overrides,
-  };
+  });
 }
 
 function platform(overrides: Partial<PlatformSyncSetting> = {}): PlatformSyncSetting {
@@ -1449,76 +1454,80 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)!.querySelector("svg")!.style.color).toBe(GREY);
     });
 
-    it("names a core stored under one of several labels by every label, greyed while it is the default", async () => {
+    it("names a core by the one label it was picked under, gold where it is another row than the default's", async () => {
+      const pcsx2 = { ...LRPS2_PCSX2, label: "PCSX2", is_default: false };
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({ emulators: [LRPS2_PCSX2, { ...VBA, is_default: false }], active_core_label: "PCSX2" }),
+        coreInfo({ emulators: [LRPS2_PCSX2, pcsx2, { ...VBA, is_default: false }], active_core_label: "PCSX2" }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = factPart(container, "LRPS2 / PCSX2");
+      const clause = factPart(container, "PCSX2");
       expect(clause).toBeTruthy();
-      expect(clause!.style.color).toBe(GREY);
-      expect(coreButton(container)!.querySelector("svg")!.style.color).toBe(GREY);
+      expect(clause!.style.color).toBe(AMBER);
+      expect(container.textContent).not.toContain("LRPS2 / PCSX2");
     });
 
-    it("names the fallback RetroDECK would launch with by every label its command carries", async () => {
+    it("names a default that is not installed, and says these games cannot start", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: false, reason: "not_installed" }],
-          active_core_label: null,
+          emulators: [{ ...LRPS2_PCSX2, bakeable: false, reason: "not_installed" }],
+          active_core_label: "LRPS2",
+          start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "LRPS2" }),
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
       const sentence =
-        "RetroDECK would launch these with LRPS2 / PCSX2, which is not installed — and nothing here can pin a different one.";
+        "LRPS2 is not installed, so these games cannot start. Choose another emulator in the emulator menu.";
       expect(container.textContent).toContain(sentence);
       expect(coreButton(container)!.title).toBe(sentence);
     });
 
-    it("says the fallback's installation could not be established, with its cause, and still offers the pick", async () => {
+    it("says no emulator is the default where the default's installation could not be established, and still offers the pick", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
           emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "lookup_unsupported" }],
           active_core_label: null,
+          start: emulatorStart({ state: "choose", reason: "lookup_unsupported", entry: "LRPS2" }),
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
       expect(container.textContent).toContain(
-        "RetroDECK would launch these with LRPS2 / PCSX2, whose installation could not be established " +
-          "(Tender cannot follow ES-DE's lookup for it yet).",
+        "No emulator is the default, because whether LRPS2 is installed could not be established " +
+          "(Tender cannot follow ES-DE's lookup for it yet). Choose an emulator in the emulator menu.",
       );
       expect(container.textContent).not.toContain("not installed");
       expect(coreButton(container)).not.toBeDisabled();
     });
 
     it.each([
-      ["not installed", "not_installed", "RetroDECK would launch these with mGBA, which is not installed."],
-      ["unbakeable", "inject", "No emulator here is the default, so RetroDECK picks one when a game launches."],
-    ])(
-      "keeps the picker open where the fallback is %s but an entry not established can be pinned",
-      async (_shape, reason, sentence) => {
-        vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-          coreInfo({
-            emulators: [
-              { ...MGBA, is_default: false, bakeable: false, reason },
-              { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "no_find_rule" },
-            ],
-            active_core_label: null,
-          }),
-        );
-        const { container } = render(<LibraryPage onBack={vi.fn()} />);
-        await flushAsync();
+      ["not installed", "not_installed", "mGBA is not installed, so these games cannot start."],
+      ["one Tender cannot bake", "inject", null],
+    ])("keeps the picker open beside a default that is %s", async (_shape, reason, sentence) => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [
+            { ...MGBA, bakeable: false, reason },
+            { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "no_find_rule" },
+          ],
+          active_core_label: "mGBA",
+          start:
+            reason === "not_installed"
+              ? emulatorStart({ state: "cannot_start", reason, entry: "mGBA" })
+              : emulatorStart({ entry: "mGBA" }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
 
-        expect(container.textContent).toContain(sentence);
-        expect(container.textContent).not.toContain("nothing here can pin");
-        expect(coreButton(container)).not.toBeDisabled();
-      },
-    );
+      if (sentence === null) expect(container.textContent).not.toContain("cannot start");
+      else expect(container.textContent).toContain(sentence);
+      expect(coreButton(container)).not.toBeDisabled();
+    });
 
     it("says so under the header where the platform's own pick could not be established", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
@@ -1531,7 +1540,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(container.textContent).toContain(
-        "Whether LRPS2 / PCSX2 is installed could not be established: ES-DE looks for it where Tender cannot see.",
+        "Whether LRPS2 is installed could not be established: ES-DE looks for it where Tender cannot see.",
       );
     });
 
@@ -1568,59 +1577,99 @@ describe("Library › Platforms", () => {
     });
 
     it.each([
-      ["one option", [{ ...MGBA, is_default: false, bakeable: false, reason: "not_installed" }]],
+      ["one option", [{ ...MGBA, bakeable: false, reason: "not_installed" }]],
       [
-        "two options, the first of them",
+        "two options, the second not one Tender can bake",
         [
-          { ...MGBA, is_default: false, bakeable: false, reason: "not_installed" },
+          { ...MGBA, bakeable: false, reason: "not_installed" },
           { ...VBA, bakeable: false, reason: "inject" },
         ],
       ],
-    ])("names the emulator RetroDECK would fall back to when it is not installed (%s)", async (_shape, emulators) => {
-      // `run_game.sh` takes `command[1]` for the system when no alternate is
-      // set, and the options keep ES-DE's document order — so `emulators[0]` is
-      // that command. If its emulator is not installed the fallback names a
-      // binary that is not there, and "RetroDECK picks one" would be false.
-      // Apple I is this shape: its first ES-DE command is unbakeable for
-      // `no_rom_target`, not for a missing emulator, so the muted branch is the
-      // correct one there and the red clause belongs to a different platform.
-      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(coreInfo({ emulators, active_core_label: null }));
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
-
-      const clause = factPart(container, "no emulator installed");
-      expect(clause).toBeTruthy();
-      expect(clause!.style.color).toBe(RED);
-      expect(container.textContent).toContain("RetroDECK would launch these with mGBA, which is not installed");
-      expect(container.textContent).not.toContain("RetroDECK decides");
-      expect(container.textContent).not.toContain("Default");
-      // Rendered and dead rather than absent, so the header keeps its shape
-      // and a reader who lands on it is told why it cannot be pressed.
-      expect(coreButton(container)).toBeDisabled();
-    });
-
-    it("says RetroDECK decides where its fallback can actually run", async () => {
-      // The other half of the unpinnable state: a `%INJECT%` command is
-      // well-formed and RetroDECK can run it — we simply cannot bake it into a
-      // Steam shortcut. The games do start, so the clause must not say
-      // otherwise.
+    ])("names a default that is not installed in red, with nothing else to pin (%s)", async (_shape, emulators) => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...MGBA, is_default: false, bakeable: false, reason: "inject" }],
-          active_core_label: null,
+          emulators,
+          active_core_label: "mGBA",
+          start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "mGBA" }),
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = factPart(container, "RetroDECK decides");
+      const clause = factPart(container, "mGBA");
       expect(clause).toBeTruthy();
-      expect(clause!.style.color).toBe(GREY);
-      expect(container.textContent).toContain("None of this platform's emulators can be pinned from here");
-      expect(container.textContent).not.toContain("not installed");
+      expect(clause!.style.color).toBe(RED);
+      expect(container.textContent).toContain("mGBA is not installed, so these games cannot start");
       // Rendered and dead rather than absent, so the header keeps its shape
       // and a reader who lands on it is told why it cannot be pressed.
       expect(coreButton(container)).toBeDisabled();
+    });
+
+    it("names a default Tender cannot bake, whose games start through RetroDECK's own start", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [{ ...MGBA, bakeable: false, reason: "inject" }],
+          active_core_label: "mGBA",
+          start: emulatorStart({ entry: "mGBA" }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const clause = factPart(container, "mGBA");
+      expect(clause).toBeTruthy();
+      expect(clause!.style.color).toBe(GREY);
+      expect(container.textContent).not.toContain("cannot start");
+      expect(coreButton(container)).toBeDisabled();
+    });
+
+    it("names every source's own default with the choice made in ES-DE beside it (#2195 D4)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          source_defaults: [
+            { kind: "emudeck", default: "PicoDrive", chosen_in_frontend: "Gearsystem", reason: null },
+            { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
+          ],
+          tender_default: { kind: "emudeck", label: "PicoDrive" },
+          active_core_label: "PicoDrive",
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(factPart(container, "PicoDrive")).toBeTruthy();
+      expect(container.textContent).toContain(
+        "EmuDeck's default: PicoDrive (Gearsystem chosen in ES-DE). RetroDECK's default: mGBA.",
+      );
+    });
+
+    it("says the platform's pick no longer exists and which default is used (#2195 D5)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({ vanished_pick: { label: "Gone-o-Tron", source: "retrodeck", layer: "platform", used: "mGBA" } }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "Your choice 'Gone-o-Tron' no longer exists in RetroDECK; the default 'mGBA' is used.",
+      );
+    });
+
+    it("reads no default, in red, where the default's installation could not be established", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [{ ...MGBA, is_default: false, reason: "no_find_rule" }, VBA],
+          active_core_label: null,
+          start: emulatorStart({ state: "choose", reason: "no_find_rule", entry: "mGBA" }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const clause = factPart(container, "no default");
+      expect(clause).toBeTruthy();
+      expect(clause!.style.color).toBe(RED);
+      expect(coreButton(container)).not.toBeDisabled();
     });
 
     it("leaves the save-compatibility warning to the picker that carries it", async () => {
@@ -2030,9 +2079,16 @@ describe("Library › Platforms", () => {
       });
     }
 
-    it("stores the first label of an entry several labels share, and says it switches to all of them", async () => {
+    it("stores the label of the row picked, two labels that run one command being two rows", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({ emulators: [MGBA, { ...LRPS2_PCSX2, is_default: false }], active_core_label: "mGBA" }),
+        coreInfo({
+          emulators: [
+            MGBA,
+            { ...LRPS2_PCSX2, is_default: false },
+            { ...LRPS2_PCSX2, label: "PCSX2", is_default: false },
+          ],
+          active_core_label: "mGBA",
+        }),
       );
       let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
@@ -2043,10 +2099,10 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await openCoreMenu(container);
-      await pickFromCoreMenu("LRPS2 / PCSX2");
+      await pickFromCoreMenu("PCSX2");
 
-      expect(backend.setSystemCore).toHaveBeenCalledWith("gba", "LRPS2");
-      expect(within(container).getByTestId("status-core").textContent).toBe("Switching to LRPS2 / PCSX2…");
+      expect(backend.setSystemCore).toHaveBeenCalledWith("gba", "PCSX2");
+      expect(within(container).getByTestId("status-core").textContent).toBe("Switching to PCSX2…");
       await act(async () => {
         finish({ success: true, rebake_items: [] });
         for (let i = 0; i < 10; i++) await Promise.resolve();

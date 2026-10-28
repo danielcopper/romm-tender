@@ -7,8 +7,15 @@ import {
 } from "./sectionRefresh";
 import * as backend from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
-import { libretroEmu } from "../test-utils/coreFixtures";
-import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
+import { coreInfo, libretroEmu } from "../test-utils/coreFixtures";
+import type {
+  AnsweringSource,
+  EmulatorDataReason,
+  EmulatorOption,
+  EmulatorStart,
+  PlatformSystemAnswer,
+  VanishedPick,
+} from "../types";
 
 interface BiosState {
   biosNeeded: boolean;
@@ -27,6 +34,8 @@ interface CoreState {
   emulatorPlatformSystem: PlatformSystemAnswer | null;
   platformCoreLabel: string | null;
   hasGameOverride: boolean;
+  emulatorStart: EmulatorStart | null;
+  vanishedPick: VanishedPick | null;
   unrelated: string;
 }
 
@@ -201,20 +210,22 @@ describe("refreshCoreInfoInBackground", () => {
   beforeEach(() => vi.restoreAllMocks());
 
   it("keys on rom_id and flows a non-default per-game core back (gold icon, #945)", async () => {
-    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValueOnce({
-      active_core: "parallel_n64_libretro.so",
-      active_core_label: "ParaLLEl N64",
-      platform_core_label: null,
-      has_game_override: false,
-      emulator_data_available: true,
-      emulator_data_reason: null,
-      emulator_source: { kind: "retrodeck", starts_games: true },
-      platform_system: null,
-      emulators: [
-        libretroEmu("mupen64plus_next_libretro.so", "Mupen64Plus-Next", true),
-        libretroEmu("parallel_n64_libretro.so", "ParaLLEl N64"),
-      ],
-    });
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValueOnce(
+      coreInfo({
+        active_core: "parallel_n64_libretro.so",
+        active_core_label: "ParaLLEl N64",
+        platform_core_label: null,
+        has_game_override: false,
+        emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
+        emulators: [
+          libretroEmu("mupen64plus_next_libretro.so", "Mupen64Plus-Next", true),
+          libretroEmu("parallel_n64_libretro.so", "ParaLLEl N64"),
+        ],
+      }),
+    );
 
     const setter = vi.fn<(updater: (prev: CoreState) => CoreState) => void>();
     refreshCoreInfoInBackground(404, () => false, setter as unknown as Dispatch<SetStateAction<CoreState>>);
@@ -234,6 +245,8 @@ describe("refreshCoreInfoInBackground", () => {
       emulatorPlatformSystem: null,
       platformCoreLabel: null,
       hasGameOverride: false,
+      emulatorStart: null,
+      vanishedPick: null,
       unrelated: "keep",
     });
     expect(next.activeCoreLabel).toBe("ParaLLEl N64");
@@ -244,17 +257,19 @@ describe("refreshCoreInfoInBackground", () => {
   });
 
   it("skips the setter when cancelled at call time", async () => {
-    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValueOnce({
-      active_core: null,
-      active_core_label: null,
-      platform_core_label: null,
-      has_game_override: false,
-      emulator_data_available: true,
-      emulator_data_reason: null,
-      emulator_source: { kind: "retrodeck", starts_games: true },
-      platform_system: null,
-      emulators: [],
-    });
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValueOnce(
+      coreInfo({
+        active_core: null,
+        active_core_label: null,
+        platform_core_label: null,
+        has_game_override: false,
+        emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
+        emulators: [],
+      }),
+    );
     const setter = vi.fn();
     refreshCoreInfoInBackground(404, () => true, setter);
     await flushMicrotasks();
@@ -272,17 +287,19 @@ describe("refreshCoreInfoInBackground", () => {
     refreshCoreInfoInBackground(404, () => cancelled, setter);
 
     cancelled = true;
-    d.resolve({
-      active_core: null,
-      active_core_label: null,
-      platform_core_label: null,
-      has_game_override: false,
-      emulator_data_available: true,
-      emulator_data_reason: null,
-      emulator_source: { kind: "retrodeck", starts_games: true },
-      platform_system: null,
-      emulators: [],
-    });
+    d.resolve(
+      coreInfo({
+        active_core: null,
+        active_core_label: null,
+        platform_core_label: null,
+        has_game_override: false,
+        emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
+        emulators: [],
+      }),
+    );
     await flushMicrotasks();
 
     expect(setter).not.toHaveBeenCalled();

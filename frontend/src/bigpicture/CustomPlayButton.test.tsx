@@ -303,6 +303,30 @@ describe("CustomPlayButton — a ROM RomM holds no file for (#2196)", () => {
   });
 });
 
+describe("CustomPlayButton — an emulator that cannot start the game (#2195 D7)", () => {
+  beforeEach(() => {
+    vi.mocked(getCachedGameDetail).mockReset();
+  });
+
+  const refusal = "Ryubing (Standalone) is not installed, so this game cannot start.";
+
+  it("disables Play and carries the reason", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { findByText } = render(<CustomPlayButton appId={100} emulatorRefusal={refusal} />);
+    const play = (await findByText("Play")).closest("button")!;
+
+    expect(play.disabled).toBe(true);
+    expect(play.title).toBe(refusal);
+  });
+
+  it("leaves Play enabled where nothing stands in the emulator's way", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { findByText } = render(<CustomPlayButton appId={100} emulatorRefusal={null} />);
+
+    expect((await findByText("Play")).closest("button")!.disabled).toBe(false);
+  });
+});
+
 describe("CustomPlayButton — download_failed listener", () => {
   beforeEach(() => {
     vi.mocked(getCachedGameDetail).mockReset();

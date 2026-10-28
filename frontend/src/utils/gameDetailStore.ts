@@ -116,6 +116,8 @@ const DEFAULT_STATE: GameDetailState = {
   emulatorPlatformSystem: null,
   platformCoreLabel: null,
   hasGameOverride: false,
+  emulatorStart: null,
+  vanishedPick: null,
 };
 
 type BiosStatusResult = Awaited<ReturnType<typeof getBiosStatus>>;

@@ -157,6 +157,7 @@ vi.mock("../utils/migrationStore", () => {
   return mod;
 });
 import * as migrationStore from "../utils/migrationStore";
+import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
 
 // ----- @decky/ui — global stub from test-setup.ts covers Focusable +
 // DialogButton. Pass-through is enough for this panel.
@@ -324,17 +325,19 @@ describe("RomMGameInfoPanel", () => {
     vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status_unknown: true });
     // Core info comes from the dedicated get_platform_core_info path (#923),
     // decoupled from BIOS status. Default: no cores. Tests opt into shapes.
-    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-      emulator_data_available: true,
-      emulator_data_reason: null,
-      emulator_source: { kind: "retrodeck", starts_games: true },
-      platform_system: null,
-      emulators: [],
-      active_core: null,
-      active_core_label: null,
-      platform_core_label: null,
-      has_game_override: false,
-    });
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+      coreInfoFixture({
+        emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
+        emulators: [],
+        active_core: null,
+        active_core_label: null,
+        platform_core_label: null,
+        has_game_override: false,
+      }),
+    );
     vi.mocked(backend.getSaveStatus).mockResolvedValue({
       rom_id: 0,
       files: [],
@@ -2275,29 +2278,31 @@ describe("RomMGameInfoPanel", () => {
         stale_fields: [],
       };
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail);
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "initial_core.so",
-        active_core_label: "INITIAL_CORE",
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label: "INITIAL_CORE",
-            labels: ["INITIAL_CORE"],
-            name: "INITIAL_CORE",
-            kind: "core",
-            core_so: "initial_core.so",
-            emulator: "initial_core.so",
-            is_default: true,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+        coreInfoFixture({
+          active_core: "initial_core.so",
+          active_core_label: "INITIAL_CORE",
+          platform_core_label: null,
+          has_game_override: false,
+          emulator_data_available: true,
+          emulator_data_reason: null,
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: null,
+          emulators: [
+            {
+              label: "INITIAL_CORE",
+              declared_index: null,
+              chosen_in_frontend: false,
+              kind: "core",
+              core_so: "initial_core.so",
+              emulator: "initial_core.so",
+              is_default: true,
+              bakeable: true,
+              reason: null,
+            },
+          ],
+        }),
+      );
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       await act(async () => {
@@ -2307,17 +2312,19 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.getPlatformCoreInfo).mockClear();
       vi.mocked(backend.getSaveStatus).mockClear();
       vi.mocked(cachedStore.invalidateCachedGameDetail).mockClear();
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: null,
-        active_core_label: null,
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: false,
-        emulator_data_reason: "switched_off",
-        emulator_source: null,
-        platform_system: null,
-        emulators: [],
-      });
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+        coreInfoFixture({
+          active_core: null,
+          active_core_label: null,
+          platform_core_label: null,
+          has_game_override: false,
+          emulator_data_available: false,
+          emulator_data_reason: "switched_off",
+          emulator_source: null,
+          platform_system: null,
+          emulators: [],
+        }),
+      );
 
       await act(async () => {
         globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
@@ -2395,29 +2402,31 @@ describe("RomMGameInfoPanel", () => {
       });
       // Core data comes from the dedicated path (#923), keyed on rom_id so the
       // active core reflects the per-game DB override (epic #945).
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "from_core_changed.so",
-        active_core_label: "FROM_CORE_CHANGED",
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label: "FROM_CORE_CHANGED",
-            labels: ["FROM_CORE_CHANGED"],
-            name: "FROM_CORE_CHANGED",
-            kind: "core",
-            core_so: "from_core_changed.so",
-            emulator: "from_core_changed.so",
-            is_default: true,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+        coreInfoFixture({
+          active_core: "from_core_changed.so",
+          active_core_label: "FROM_CORE_CHANGED",
+          platform_core_label: null,
+          has_game_override: false,
+          emulator_data_available: true,
+          emulator_data_reason: null,
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: null,
+          emulators: [
+            {
+              label: "FROM_CORE_CHANGED",
+              declared_index: null,
+              chosen_in_frontend: false,
+              kind: "core",
+              core_so: "from_core_changed.so",
+              emulator: "from_core_changed.so",
+              is_default: true,
+              bakeable: true,
+              reason: null,
+            },
+          ],
+        }),
+      );
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
@@ -2507,29 +2516,31 @@ describe("RomMGameInfoPanel", () => {
         stale_fields: [],
       });
       // Initial core label from the dedicated path (loadData background fetch).
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "initial_core.so",
-        active_core_label: "INITIAL_CORE",
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label: "INITIAL_CORE",
-            labels: ["INITIAL_CORE"],
-            name: "INITIAL_CORE",
-            kind: "core",
-            core_so: "initial_core.so",
-            emulator: "initial_core.so",
-            is_default: true,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+        coreInfoFixture({
+          active_core: "initial_core.so",
+          active_core_label: "INITIAL_CORE",
+          platform_core_label: null,
+          has_game_override: false,
+          emulator_data_available: true,
+          emulator_data_reason: null,
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: null,
+          emulators: [
+            {
+              label: "INITIAL_CORE",
+              declared_index: null,
+              chosen_in_frontend: false,
+              kind: "core",
+              core_so: "initial_core.so",
+              emulator: "initial_core.so",
+              is_default: true,
+              bakeable: true,
+              reason: null,
+            },
+          ],
+        }),
+      );
       const view = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       // Second resolve: found=false. The handler's early-return means
@@ -3641,29 +3652,31 @@ describe("RomMGameInfoPanel", () => {
         stale_fields: [],
       });
       // Core info from the dedicated path.
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "snes9x_libretro.so",
-        active_core_label: "Snes9x",
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label: "Snes9x",
-            labels: ["Snes9x"],
-            name: "Snes9x",
-            kind: "core",
-            core_so: "snes9x_libretro",
-            emulator: "snes9x_libretro.so",
-            is_default: true,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+        coreInfoFixture({
+          active_core: "snes9x_libretro.so",
+          active_core_label: "Snes9x",
+          platform_core_label: null,
+          has_game_override: false,
+          emulator_data_available: true,
+          emulator_data_reason: null,
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: null,
+          emulators: [
+            {
+              label: "Snes9x",
+              declared_index: null,
+              chosen_in_frontend: false,
+              kind: "core",
+              core_so: "snes9x_libretro",
+              emulator: "snes9x_libretro.so",
+              is_default: true,
+              bakeable: true,
+              reason: null,
+            },
+          ],
+        }),
+      );
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       await act(async () => {
@@ -4152,17 +4165,19 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        emulator_data_available: false,
-        emulator_data_reason: "sealed",
-        emulator_source: { kind: "emudeck", starts_games: false },
-        platform_system: null,
-        emulators: [],
-        active_core: null,
-        active_core_label: null,
-        platform_core_label: null,
-        has_game_override: false,
-      });
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+        coreInfoFixture({
+          emulator_data_available: false,
+          emulator_data_reason: "sealed",
+          emulator_source: { kind: "emudeck", starts_games: false },
+          platform_system: null,
+          emulators: [],
+          active_core: null,
+          active_core_label: null,
+          platform_core_label: null,
+          has_game_override: false,
+        }),
+      );
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       await act(async () => {
@@ -5310,29 +5325,30 @@ describe("RomMGameInfoPanel", () => {
     // shown against must follow the new active version.
     describe("BIOS tab across a version switch (#1681)", () => {
       /** A `get_platform_core_info` answer whose launching emulator is `label`. */
-      const coreInfoFor = (label: string, coreSo: string): CoreInfo => ({
-        active_core: coreSo,
-        active_core_label: label,
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label,
-            labels: [label],
-            name: label,
-            kind: "core",
-            core_so: coreSo,
-            emulator: `${coreSo}.so`,
-            is_default: true,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
+      const coreInfoFor = (label: string, coreSo: string): CoreInfo =>
+        coreInfoFixture({
+          active_core: coreSo,
+          active_core_label: label,
+          platform_core_label: null,
+          has_game_override: false,
+          emulator_data_available: true,
+          emulator_data_reason: null,
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: null,
+          emulators: [
+            {
+              label,
+              declared_index: null,
+              chosen_in_frontend: false,
+              kind: "core",
+              core_so: coreSo,
+              emulator: `${coreSo}.so`,
+              is_default: true,
+              bakeable: true,
+              reason: null,
+            },
+          ],
+        });
 
       /** A cached detail whose core needs BIOS, `localCount` of 3 files present. */
       const detailNeedingBios = (romId: number, localCount: number) => ({

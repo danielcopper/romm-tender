@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resolveSaveSyncLabel, applySaveSyncDisplay, extractBiosInfo, extractCoreInfo, timeoutMs } from "./playSection";
-import { libretroEmu, sharedBy } from "../test-utils/coreFixtures";
+import { libretroEmu } from "../test-utils/coreFixtures";
 import type { CoreInfo, SaveStatus, SaveSyncDisplay } from "../types";
+import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
 
 describe("resolveSaveSyncLabel", () => {
   beforeEach(() => {
@@ -212,7 +213,7 @@ describe("extractBiosInfo", () => {
 });
 
 describe("extractCoreInfo", () => {
-  const baseCoreInfo: CoreInfo = {
+  const baseCoreInfo: CoreInfo = coreInfoFixture({
     active_core: "mupen64plus_next_libretro.so",
     active_core_label: "Mupen64Plus-Next",
     platform_core_label: null,
@@ -225,7 +226,7 @@ describe("extractCoreInfo", () => {
       libretroEmu("mupen64plus_next_libretro.so", "Mupen64Plus-Next", true),
       libretroEmu("parallel_n64_libretro.so", "ParaLLEl N64"),
     ],
-  };
+  });
 
   it("projects CoreInfo into the core-selection play-section fields", () => {
     const result = extractCoreInfo(baseCoreInfo);
@@ -237,13 +238,13 @@ describe("extractCoreInfo", () => {
     expect(result.hasGameOverride).toBe(false);
   });
 
-  it("counts a game stored under the second label of the default entry as following the default", () => {
+  it("counts a game stored under a label that runs the default's command as off the default, each label being its own row", () => {
     const result = extractCoreInfo({
       ...baseCoreInfo,
       active_core_label: "PCSX2",
-      emulators: [sharedBy(libretroEmu("pcsx2_libretro", "LRPS2", true), ["LRPS2", "PCSX2"])],
+      emulators: [libretroEmu("pcsx2_libretro", "LRPS2", true), libretroEmu("pcsx2_libretro", "PCSX2")],
     });
-    expect(result.activeCoreIsDefault).toBe(true);
+    expect(result.activeCoreIsDefault).toBe(false);
   });
 
   it("maps has_game_override=true through to hasGameOverride (#211)", () => {
@@ -278,17 +279,19 @@ describe("extractCoreInfo", () => {
   });
 
   it("defaults emulators to [] when the list is empty", () => {
-    const result = extractCoreInfo({
-      active_core: null,
-      active_core_label: null,
-      platform_core_label: null,
-      has_game_override: false,
-      emulator_data_available: false,
-      emulator_data_reason: "unavailable",
-      emulator_source: { kind: "retrodeck", starts_games: true },
-      platform_system: null,
-      emulators: [],
-    });
+    const result = extractCoreInfo(
+      coreInfoFixture({
+        active_core: null,
+        active_core_label: null,
+        platform_core_label: null,
+        has_game_override: false,
+        emulator_data_available: false,
+        emulator_data_reason: "unavailable",
+        emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
+        emulators: [],
+      }),
+    );
     expect(result.emulators).toEqual([]);
     expect(result.emulatorDataAvailable).toBe(false);
   });

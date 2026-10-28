@@ -46,7 +46,6 @@ import {
 import type { FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
 import { placedSentence } from "../../utils/biosPlaceWords";
 import { detach } from "../../utils/detach";
-import { emulatorName } from "../../utils/emulatorEntries";
 import { batchConfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
 import { clearPlatformCollection } from "../../utils/collections";
 import {
@@ -638,11 +637,11 @@ export function usePlatformsPage(): PlatformsPageState {
     (slug: string, pickedLabel: string) => {
       const answer = cores[slug];
       // Picking the default-marked emulator clears the per-platform override
-      // (empty label → follow the es_systems default); any other pins it.
+      // (empty label → follow the default); any other pins it.
       const defaultLabel = answer?.emulators.find((e) => e.is_default)?.label;
       const label = pickedLabel === defaultLabel ? "" : pickedLabel;
       setBusySlug(slug);
-      setStatus({ slug, scope: "core", text: `Switching to ${emulatorName(answer?.emulators ?? [], pickedLabel)}…` });
+      setStatus({ slug, scope: "core", text: `Switching to ${pickedLabel}…` });
       // Captured before the continuation starts, so the catch can tell a
       // cancelled continuation from a failed switch.
       const admission = capturePruneLeaseAdmission(LEASE_OWNER);

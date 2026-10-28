@@ -21,6 +21,7 @@ import {
 import { hostEventListenerCount, emitHostEvent } from "../test-utils/host-event-bus";
 import type { CachedGameDetail } from "../api/backend";
 import type { CoreInfo, DownloadCompleteEvent, SaveStatus } from "../types";
+import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
 
 type BiosStatusResult = Awaited<ReturnType<typeof backend.getBiosStatus>>;
 type AchievementProgressResult = Awaited<ReturnType<typeof backend.getAchievementProgress>>;
@@ -107,7 +108,7 @@ const downloadComplete = (romId: number): DownloadCompleteEvent => ({
   launch_options: "",
 });
 
-const coreInfo: CoreInfo = {
+const coreInfo: CoreInfo = coreInfoFixture({
   active_core: "snes9x.so",
   active_core_label: "Snes9x",
   platform_core_label: null,
@@ -119,8 +120,8 @@ const coreInfo: CoreInfo = {
   emulators: [
     {
       label: "Snes9x",
-      labels: ["Snes9x"],
-      name: "Snes9x",
+      declared_index: null,
+      chosen_in_frontend: false,
       kind: "core",
       core_so: "snes9x.so",
       emulator: "snes9x.so",
@@ -129,12 +130,12 @@ const coreInfo: CoreInfo = {
       reason: null,
     },
   ],
-};
+});
 
 /** The answer a second core read returns — after a version switch, or after a
  *  re-read of the same rom — distinct from {@link coreInfo} so a fold of the
  *  first read's answer is visible. */
-const laterCoreInfo: CoreInfo = {
+const laterCoreInfo: CoreInfo = coreInfoFixture({
   active_core: "genesis_plus_gx.so",
   active_core_label: "Genesis Plus GX",
   platform_core_label: null,
@@ -146,8 +147,8 @@ const laterCoreInfo: CoreInfo = {
   emulators: [
     {
       label: "Genesis Plus GX",
-      labels: ["Genesis Plus GX"],
-      name: "Genesis Plus GX",
+      declared_index: null,
+      chosen_in_frontend: false,
       kind: "core",
       core_so: "genesis_plus_gx.so",
       emulator: "genesis_plus_gx.so",
@@ -156,7 +157,7 @@ const laterCoreInfo: CoreInfo = {
       reason: null,
     },
   ],
-};
+});
 
 const achievementSummary = (earned: number, total: number) => ({ earned, total, earned_hardcore: 0 });
 

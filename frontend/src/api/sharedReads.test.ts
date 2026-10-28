@@ -8,6 +8,7 @@ import {
 } from "./sharedReads";
 import type { BiosAnswer } from "./backend";
 import type { CoreInfo, RomMetadata } from "../types";
+import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
 
 /** A read a test can hold open across a second caller's arrival. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (e: unknown) => void } {
@@ -31,17 +32,18 @@ const romMetadata = (summary: string): RomMetadata => ({
   cached_at: 0,
 });
 
-const coreInfo = (label: string): CoreInfo => ({
-  active_core: "snes9x.so",
-  active_core_label: label,
-  platform_core_label: null,
-  has_game_override: false,
-  emulator_data_available: true,
-  emulator_data_reason: null,
-  emulator_source: { kind: "retrodeck", starts_games: true },
-  platform_system: null,
-  emulators: [],
-});
+const coreInfo = (label: string): CoreInfo =>
+  coreInfoFixture({
+    active_core: "snes9x.so",
+    active_core_label: label,
+    platform_core_label: null,
+    has_game_override: false,
+    emulator_data_available: true,
+    emulator_data_reason: null,
+    emulator_source: { kind: "retrodeck", starts_games: true },
+    platform_system: null,
+    emulators: [],
+  });
 
 describe("sharedReads (#1758)", () => {
   beforeEach(() => {

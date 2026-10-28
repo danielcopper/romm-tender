@@ -13,9 +13,11 @@ import type {
   CoreInfo,
   EmulatorDataReason,
   EmulatorOption,
+  EmulatorStart,
   PlatformSystemAnswer,
   SaveStatus,
   SaveSyncDisplay,
+  VanishedPick,
 } from "../types";
 import { hasAnySaveConflict } from "./saveStatus";
 import { formatTimeAgo } from "./formatters";
@@ -53,6 +55,9 @@ export interface CoreInfoFields {
   emulatorPlatformSystem: PlatformSystemAnswer | null;
   platformCoreLabel: string | null;
   hasGameOverride: boolean;
+  /** What starting with the game's entry comes to, and a stored pick whose label no longer exists. */
+  emulatorStart: EmulatorStart | null;
+  vanishedPick: VanishedPick | null;
 }
 
 export interface SaveSyncResolution {
@@ -121,13 +126,13 @@ export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
 
 /** Project a CoreInfo response (from the dedicated `get_platform_core_info`
  *  path, #923) into the core-selection fields the play-section row needs. The
- *  launching emulator counts as "default" when its label is one of the default
+ *  launching emulator counts as "default" when its label is the default
  *  entry's or no override is set. */
 export function extractCoreInfo(coreInfo: CoreInfo): CoreInfoFields {
   const activeCoreLabel = coreInfo.active_core_label ?? null;
   const emulators = coreInfo.emulators;
   const defaultEmulator = emulators.find((e) => e.is_default);
-  const activeCoreIsDefault = !activeCoreLabel || (defaultEmulator?.labels.includes(activeCoreLabel) ?? false);
+  const activeCoreIsDefault = !activeCoreLabel || defaultEmulator?.label === activeCoreLabel;
   return {
     activeCoreLabel,
     activeCoreIsDefault,
@@ -138,6 +143,8 @@ export function extractCoreInfo(coreInfo: CoreInfo): CoreInfoFields {
     emulatorPlatformSystem: coreInfo.platform_system,
     platformCoreLabel: coreInfo.platform_core_label ?? null,
     hasGameOverride: coreInfo.has_game_override,
+    emulatorStart: coreInfo.start,
+    vanishedPick: coreInfo.vanished_pick,
   };
 }
 

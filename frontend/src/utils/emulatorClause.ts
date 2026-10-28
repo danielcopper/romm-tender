@@ -1,12 +1,12 @@
 /**
  * The words the Platforms header prints for the emulator a platform launches
- * with — its core clause. Why a `null` label is two states rather than one, and
- * which of them the games start in, is `docs/architecture/qam-panel.md`, "The
- * clause names the core".
+ * with — its core clause. What a `null` label means, and which states the games
+ * cannot start in, is `docs/architecture/qam-panel.md`, "The clause names the
+ * core".
  */
 
 import type { SystemCoreInfo } from "../types";
-import { emulatorName } from "./emulatorEntries";
+import { startRefused } from "./emulatorStart";
 
 /** What the clause reads, and whether it names a state the games cannot start
  *  in — the one a surface draws in red. */
@@ -15,9 +15,11 @@ export interface EmulatorClause {
   gamesCannotStart: boolean;
 }
 
-/** The part of a core answer the clause reads, which both `SystemCoreInfo` and
- *  `CoreInfo` carry. */
-export type EmulatorClauseSource = Pick<SystemCoreInfo, "emulator_data_available" | "emulators" | "active_core_label">;
+/** The part of a core answer the clause reads. */
+export type EmulatorClauseSource = Pick<
+  SystemCoreInfo,
+  "emulator_data_available" | "emulators" | "active_core_label" | "start"
+>;
 
 /**
  * The clause for one core answer, or `null` where nothing can be said.
@@ -31,24 +33,7 @@ export type EmulatorClauseSource = Pick<SystemCoreInfo, "emulator_data_available
  */
 export function emulatorClause(core: EmulatorClauseSource | null): EmulatorClause | null {
   if (!core?.emulator_data_available) return null;
-  const noEmulator = core.emulators.length === 0;
-  // The fallback RetroDECK would use is missing, so the clause says that rather
-  // than naming a core nothing can run. Same shape as the empty menu: a state
-  // the games do not start in.
-  const fallbackMissing = core.active_core_label === null && core.emulators[0]?.reason === "not_installed";
-  return {
-    // Named by every label its picker entry carries, whichever one is stored.
-    text:
-      core.active_core_label === null
-        ? fallbackText(noEmulator, fallbackMissing)
-        : emulatorName(core.emulators, core.active_core_label),
-    gamesCannotStart: noEmulator || fallbackMissing,
-  };
-}
-
-/** Which of the three unpinnable states the answer is in, said in the fewest
- *  words the state supports. */
-function fallbackText(noEmulator: boolean, fallbackMissing: boolean): string {
-  if (noEmulator) return "no emulator";
-  return fallbackMissing ? "no emulator installed" : "RetroDECK decides";
+  if (core.emulators.length === 0) return { text: "no emulator", gamesCannotStart: true };
+  if (core.active_core_label === null) return { text: "no default", gamesCannotStart: true };
+  return { text: core.active_core_label, gamesCannotStart: startRefused(core.start) };
 }

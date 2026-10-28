@@ -67,7 +67,7 @@ import {
   releasePruneLeasesByOwner,
 } from "../utils/pruneLease";
 import { executeGameCoreChange } from "../utils/coreOverride";
-import { emulatorName } from "../utils/emulatorEntries";
+import { emulatorStartRefusal, frontendChoiceSentence, vanishedPickSentence } from "../utils/emulatorStart";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
 import { buildEmulatorMenu } from "../utils/emulatorMenu";
 import { formatBytes } from "../utils/formatters";
@@ -660,7 +660,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     await executeGameCoreChange({
       romId,
       coreLabel,
-      coreName: emulatorName(detail.emulators, coreLabel),
+      coreName: coreLabel,
       leaseOwner: `game-detail:${appId}`,
       onSuccess: () => refreshCoreDisplay(platformSlug),
       logTag: "handleChangeGameCore",
@@ -928,6 +928,14 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   }
 
+  // Why the game's emulator cannot start it: Play is disabled, and the same
+  // sentence stands under the row. Not on a stranded panel, and not for a
+  // download whose file is missing, where the row says that instead.
+  const emulatorRefusal =
+    stranded || fileMissing || detail.emulatorStart === null
+      ? null
+      : emulatorStartRefusal(detail.emulatorStart, "this game");
+
   const playSectionRow = (
     <Focusable
       key="play-row"
@@ -953,7 +961,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       }}
     >
       {/* Play button on the left */}
-      <CustomPlayButton appId={appId} />
+      <CustomPlayButton appId={appId} emulatorRefusal={emulatorRefusal} />
       {/* Disc picker for multi-disc ROMs — renders nothing otherwise (#865), and
           nothing for a download whose discs are missing */}
       {fileMissing || stranded ? null : <DiscSelector appId={appId} />}
@@ -1026,6 +1034,16 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // button drops back to "loading" and re-runs its init (#1682). A Fragment adds
   // no DOM node, so the row stays a direct child of the injected panel either way.
   const emulatorNote = activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
+  // The pick that no longer exists, why Play is refused, and the user's own
+  // choice in ES-DE — each said once, under the row.
+  const emulatorLines =
+    stranded || fileMissing
+      ? []
+      : [
+          detail.vanishedPick === null ? null : vanishedPickSentence(detail.vanishedPick),
+          emulatorRefusal,
+          frontendChoiceSentence(detail.emulators, detail.activeCoreLabel),
+        ].filter((line): line is string => line !== null);
   return (
     <Fragment>
       {detail.savefilesInContentDir === true && detail.saveSyncEnabled ? (
@@ -1038,6 +1056,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       <VanishedVersionBanner key="vanished-version-banner" appId={appId} installed={detail.installed} />
       {playSectionRow}
       {emulatorNote === null ? null : <Muted key="emulator-installation-note">{emulatorNote}</Muted>}
+      {emulatorLines.map((line) => (
+        <Muted key={line}>{line}</Muted>
+      ))}
     </Fragment>
   );
 };

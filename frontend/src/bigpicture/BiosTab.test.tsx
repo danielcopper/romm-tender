@@ -15,6 +15,7 @@ import { BiosTabWithState } from "../test-utils/biosTab";
 import { libretroEmu } from "../test-utils/coreFixtures";
 import { biosColorForLevel } from "../utils/biosColor";
 import type { BiosFileStatus, BiosStatus, CoreInfo, MissingConfiguredImage } from "../types";
+import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
 
 // The game page's tabs reach Steam's tabbed page through this module, a webpack
 // probe with no answer under happy-dom.
@@ -23,7 +24,7 @@ vi.mock("../utils/deckyUiInternals", async (importOriginal) => ({
   Tabs: (await import("../test-utils/steamTabs")).StubTabs,
 }));
 
-const coreInfo: CoreInfo = {
+const coreInfo: CoreInfo = coreInfoFixture({
   active_core: "snes9x_libretro.so",
   active_core_label: "Snes9x",
   platform_core_label: null,
@@ -35,8 +36,8 @@ const coreInfo: CoreInfo = {
   emulators: [
     {
       label: "Snes9x",
-      labels: ["Snes9x"],
-      name: "Snes9x",
+      declared_index: null,
+      chosen_in_frontend: false,
       kind: "core",
       core_so: "snes9x_libretro",
       emulator: "snes9x_libretro.so",
@@ -45,7 +46,7 @@ const coreInfo: CoreInfo = {
       reason: null,
     },
   ],
-};
+});
 
 // A state the backend can actually emit: the "missing" level comes from a
 // required file that is absent, so the required counts have to be there. Paired
@@ -1067,7 +1068,7 @@ describe("BiosTab", () => {
   describe("a one-of group on the game page", () => {
     // Beetle PSX's three region images: one requirement, judged for the game's
     // own regions wherever RomM names one that maps.
-    const beetle: CoreInfo = {
+    const beetle: CoreInfo = coreInfoFixture({
       active_core: "mednafen_psx_libretro.so",
       active_core_label: "Beetle PSX",
       platform_core_label: null,
@@ -1077,7 +1078,7 @@ describe("BiosTab", () => {
       emulator_source: { kind: "retrodeck", starts_games: true },
       platform_system: null,
       emulators: [libretroEmu("mednafen_psx_libretro", "Beetle PSX", true)],
-    };
+    });
     const option = (file_name: string, region: string, here: boolean): BiosFileStatus => ({
       file_name,
       downloaded: here,

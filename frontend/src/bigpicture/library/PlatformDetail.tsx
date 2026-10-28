@@ -23,7 +23,8 @@ import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary, saysNoBiosChosen } from "../../utils/biosSummary";
 import { emulatorClause } from "../../utils/emulatorClause";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
-import { activeEmulatorNote, isNotEstablished, notEstablishedCause } from "../../utils/emulatorInstallation";
+import { activeEmulatorNote } from "../../utils/emulatorInstallation";
+import { emulatorStartRefusal, sourceDefaultSentence, vanishedPickSentence } from "../../utils/emulatorStart";
 import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { WaitingLine } from "../WaitingLine";
@@ -138,46 +139,15 @@ type CoreOffer =
   { kind: "pick"; core: SystemCoreInfo; notice?: string } | { kind: "blocked"; reason: string; notice?: string };
 
 /**
- * The offer where nothing is the default (`active_core_label` is null).
- *
- * What the fallback then DOES splits the state in two, and the payload can
- * tell them apart. `run_game.sh` takes `command[1]` for the system when no
- * alternate emulator is set, and `options` keeps ES-DE's document order, so
- * `emulators[0]` IS that command. If its emulator is the one RetroDECK has
- * not installed, the fallback names a binary that is not there and the games
- * do not start; if whether it is installed could not be established, that is
- * said, with the cause, and nothing more. Every other reason leaves the muted
- * branch, which is where Apple I lands: run through this repo's own
- * `classify_command` over the shipped `es_systems.xml`, its two commands come
- * back `no_rom_target` and `quoting`. The first is unbakeable because its
- * whole MAME invocation is one quoted argument, so it does not end in `%ROM%`
- * — a different reason from the second's, and neither is `not_installed`.
- *
- * Any of the three may still sit beside a bakeable entry whose installation
- * could not be established — no default only because Tender never makes it
- * one — and then the picker stays open for a user who wants to pin it.
+ * The offer where nothing is the default (`active_core_label` is null) though
+ * the platform lists emulators: the entry its source ships first could not be
+ * established installed, so it is never the default by itself (#2195 D9). The
+ * picker stays open where an entry can be pinned.
  */
 function noDefaultOffer(core: SystemCoreInfo): CoreOffer {
-  const fallback = core.emulators[0];
-  const pinnable = core.emulators.some((entry) => entry.bakeable);
-  const pick = (notice: string): CoreOffer => ({ kind: "pick", core, notice });
-  if (fallback?.reason === "not_installed") {
-    const sentence = `RetroDECK would launch these with ${fallback.name}, which is not installed`;
-    if (pinnable) return pick(`${sentence}.`);
-    const blocked = `${sentence} — and nothing here can pin a different one.`;
-    return { kind: "blocked", reason: blocked, notice: blocked };
-  }
-  if (fallback && isNotEstablished(fallback.reason)) {
-    const cause = notEstablishedCause(fallback.reason);
-    const why = cause === null ? "" : ` (${cause})`;
-    return pick(
-      `RetroDECK would launch these with ${fallback.name}, whose installation could not be established${why}.`,
-    );
-  }
-  const none =
-    "None of this platform's emulators can be pinned from here, so RetroDECK picks one when a game launches.";
-  if (pinnable) return pick("No emulator here is the default, so RetroDECK picks one when a game launches.");
-  return { kind: "blocked", reason: none, notice: none };
+  const sentence = emulatorStartRefusal(core.start, "these games") ?? "No emulator is the default here.";
+  if (core.emulators.some((entry) => entry.bakeable)) return { kind: "pick", core, notice: sentence };
+  return { kind: "blocked", reason: sentence, notice: sentence };
 }
 
 function coreOffer(core: CoreAnswer): CoreOffer {
@@ -200,22 +170,21 @@ function coreOffer(core: CoreAnswer): CoreOffer {
     const none = "RetroDECK lists no emulator for this platform, so its games will not launch.";
     return { kind: "blocked", reason: none, notice: none };
   }
-  // Then the menu with no default, ahead of the counts because it is not one:
-  // `active_core_label` is null when nothing ES-DE lists is BAKEABLE, or the
-  // only bakeable entries are ones whose installation could not be
-  // established, which says nothing about how many entries there are. A
-  // platform whose only entry is an emulator this RetroDECK has not installed
-  // lands here with one option, and one with two uninstalled ones lands here
-  // with two — where a count-shaped branch would have said "offers one
-  // emulator" or nothing at all.
+  // Then the menu with no default, ahead of the counts because it is not one.
   if (core.active_core_label === null) return noDefaultOffer(core);
-  // One count branch, and it is exactly true: an empty menu was answered two
-  // branches up and a not-bakeable one the branch after it, so a single option
-  // here is a single BAKEABLE one — there really is nothing to switch to.
+  // A default the games cannot start with is said under the header, and the
+  // picker stays open for another emulator wherever there is one to pin.
+  const refusal = emulatorStartRefusal(core.start, "these games");
+  const notice = refusal === null ? {} : { notice: refusal };
   if (core.emulators.length === 1) {
-    return { kind: "blocked", reason: "This platform offers one emulator, so there is nothing to switch." };
+    const one = refusal ?? "This platform offers one emulator, so there is nothing to switch.";
+    return { kind: "blocked", reason: one, ...notice };
   }
-  return { kind: "pick", core };
+  if (!core.emulators.some((entry) => entry.bakeable && entry.label !== core.active_core_label)) {
+    const none = refusal ?? "None of this platform's other emulators can be pinned from here.";
+    return { kind: "blocked", reason: none, ...notice };
+  }
+  return { kind: "pick", core, ...notice };
 }
 
 /**
@@ -235,11 +204,18 @@ const CoreNotice: FC<{ row: PlatformRow; state: PlatformsPageState; offer: CoreO
   core,
 }) => (
   <>
+    {core?.vanished_pick && <Muted>{vanishedPickSentence(core.vanished_pick)}</Muted>}
     {offer.notice !== undefined && <Muted>{offer.notice}</Muted>}
     {core && <ActiveEmulatorNote core={core} />}
+    {core && <SourceDefaults core={core} />}
     <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="core" />
   </>
 );
+
+/** Each enabled source's own default for the platform, the user's ES-DE choice where it differs, or why there is none
+ *  (#2195 D4). */
+const SourceDefaults: FC<{ core: SystemCoreInfo }> = ({ core }) =>
+  core.source_defaults.length === 0 ? null : <Muted>{core.source_defaults.map(sourceDefaultSentence).join(" ")}</Muted>;
 
 /** The note under the header where the emulator this platform launches with is one whose installation could not be
  *  established. */

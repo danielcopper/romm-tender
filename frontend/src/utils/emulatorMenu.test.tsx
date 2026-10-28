@@ -11,7 +11,7 @@ vi.mock("@decky/ui", () => ({
 }));
 
 import { buildEmulatorMenu, reasonCopy, type EmulatorMenuConfig } from "./emulatorMenu";
-import { libretroEmu, sharedBy, standaloneEmu } from "../test-utils/coreFixtures";
+import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
 
 // The builder returns a <Menu> element; walk its child MenuItem elements without
 // rendering (the @decky/ui Menu/MenuItem are stubs). A MenuItem carries its label
@@ -221,46 +221,40 @@ describe("buildEmulatorMenu", () => {
   });
 });
 
-describe("an entry several labels share", () => {
-  // RetroDECK lists pcsx2_libretro.so under one command as LRPS2 and as PCSX2.
-  const shared = sharedBy(libretroEmu("pcsx2_libretro", "LRPS2"), ["LRPS2", "PCSX2"]);
+describe("two labels that run one command", () => {
+  // RetroDECK lists pcsx2_libretro.so under one command as LRPS2 and as PCSX2;
+  // ES-DE stores a choice by its label, so each is a row of its own.
+  const lrps2 = libretroEmu("pcsx2_libretro", "LRPS2");
+  const pcsx2 = libretroEmu("pcsx2_libretro", "PCSX2");
   const standalone = standaloneEmu("PCSX2 (Standalone)", true);
   const config = (overrides: Partial<EmulatorMenuConfig> = {}) =>
-    baseConfig({ emulators: [standalone, shared], ...overrides });
+    baseConfig({ emulators: [standalone, lrps2, pcsx2], ...overrides });
 
-  it("shows it once, named by every label", () => {
+  it("are two rows, each named by its own label", () => {
     const texts = items(buildEmulatorMenu(config())).map((item) => item.text);
 
-    expect(texts).toContain("LRPS2 / PCSX2");
-    expect(texts.filter((text) => text.includes("LRPS2") || text === "PCSX2")).toEqual(["LRPS2 / PCSX2"]);
+    expect(texts).toContain("LRPS2");
+    expect(texts).toContain("PCSX2");
   });
 
-  it("stores its first label when it is chosen", () => {
+  it("each store their own label when chosen", () => {
     const onPick = vi.fn();
-    const entry = items(buildEmulatorMenu(config({ onPick }))).find((item) => item.text === "LRPS2 / PCSX2");
+    const entries = items(buildEmulatorMenu(config({ onPick })));
 
-    entry!.onClick!();
+    entries.find((item) => item.text === "PCSX2")!.onClick!();
 
-    expect(onPick).toHaveBeenCalledWith("LRPS2");
+    expect(onPick).toHaveBeenCalledWith("PCSX2");
   });
 
-  it("shows it chosen for a game stored under its second label", () => {
+  it("mark only the row whose label is stored", () => {
     const texts = items(buildEmulatorMenu(config({ activeLabel: "PCSX2" }))).map((item) => item.text);
 
-    expect(texts).toContain("LRPS2 / PCSX2 ✓");
+    expect(texts).toContain("PCSX2 ✓");
+    expect(texts).toContain("LRPS2");
     expect(texts).toContain("PCSX2 (Standalone) (default)");
   });
 
-  it("marks it the default where its stored label is the second one", () => {
-    const sharedDefault = { ...shared, is_default: true };
-    const texts = items(buildEmulatorMenu(baseConfig({ emulators: [sharedDefault], activeLabel: "PCSX2" }))).map(
-      (item) => item.text,
-    );
-
-    expect(texts).toContain("LRPS2 / PCSX2 (default) ✓");
-  });
-
-  it("marks it the system's pick, by its whole name, for a platform stored under its second label", () => {
+  it("mark only the stored row as the system's pick", () => {
     const texts = items(
       buildEmulatorMenu(
         config({
@@ -271,7 +265,26 @@ describe("an entry several labels share", () => {
       ),
     ).map((item) => item.text);
 
-    expect(texts).toContain("Use System Override (LRPS2 / PCSX2) ✓");
-    expect(texts).toContain("LRPS2 / PCSX2 (system) ✓");
+    expect(texts).toContain("Use System Override (PCSX2) ✓");
+    expect(texts).toContain("PCSX2 (system) ✓");
+    expect(texts).toContain("LRPS2");
+  });
+});
+
+describe("the choice made in ES-DE", () => {
+  it("is marked on its row, beside the default the source ships", () => {
+    const gearsystem = { ...libretroEmu("gearsystem_libretro", "Gearsystem"), chosen_in_frontend: true };
+    const genesis = libretroEmu("genesis_plus_gx_libretro", "Genesis Plus GX", true);
+    const texts = items(buildEmulatorMenu(baseConfig({ emulators: [gearsystem, genesis] }))).map((item) => item.text);
+
+    expect(texts).toContain("Gearsystem (chosen in ES-DE)");
+    expect(texts).toContain("Genesis Plus GX (default) ✓");
+  });
+
+  it("marks a default Tender cannot bake as the default, disabled with its reason", () => {
+    const shortcut = standaloneEmu("RPCS3 Shortcut (Standalone)", true, { bakeable: false, reason: "shortcut_script" });
+    const texts = items(buildEmulatorMenu(baseConfig({ emulators: [shortcut] }))).map((item) => item.text);
+
+    expect(texts).toContain("RPCS3 Shortcut (Standalone) (default) ✓ — script/shortcut form");
   });
 });
