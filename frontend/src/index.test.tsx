@@ -162,8 +162,16 @@ vi.mock("./utils/steamReadyForToasts", async () => {
   return { ...actual, waitUntilSteamCanShowToasts: vi.fn().mockResolvedValue({ inTime: true, unmet: [] }) };
 });
 
+// The carry-over a converged removal runs first (#2645), observed here and tested beside its module.
+const carryOverShortcutState = vi.fn().mockResolvedValue(undefined);
+vi.mock("./utils/shortcutCarryOver", async () => {
+  const actual = await vi.importActual<typeof import("./utils/shortcutCarryOver")>("./utils/shortcutCarryOver");
+  return { ...actual, carryOverShortcutState: (...args: unknown[]) => carryOverShortcutState(...args) };
+});
+
 // Observe the surfaced error message (post-catch side effect).
 const logError = vi.fn();
+const reportConvergedRemovals = vi.fn().mockResolvedValue({ success: true, message: "" });
 vi.mock("./api/backend", async () => {
   const actual = await vi.importActual<typeof import("./api/backend")>("./api/backend");
   return {
@@ -171,6 +179,7 @@ vi.mock("./api/backend", async () => {
     invalidateCachedGameDetail: vi.fn(),
     logError: (...args: unknown[]) => logError(...args),
     logInfo: vi.fn(),
+    reportConvergedRemovals: (...args: unknown[]) => reportConvergedRemovals(...args),
   };
 });
 
@@ -819,6 +828,46 @@ describe("index.tsx — sync_stale listener", () => {
     expect(removeShortcut).toHaveBeenCalledWith(9900);
     expect(removeShortcut).toHaveBeenCalledWith(7700);
     expect(removeShortcut).toHaveBeenCalledTimes(2);
+  });
+
+  it("carries a converged shortcut's state over before it is removed, and reports it after (#2645)", async () => {
+    panelFactory();
+    await flush();
+    removeShortcut.mockClear();
+    carryOverShortcutState.mockClear();
+    reportConvergedRemovals.mockClear();
+    const converged = { rom_id: 31, app_id: 6031, kept_rom_id: 30, kept_app_id: 6030 };
+
+    act(() => {
+      emitHostEvent<SyncStaleData>("sync_stale", { remove: [{ rom_id: 99, app_id: 9900 }, converged] });
+    });
+    await vi.waitFor(() => expect(reportConvergedRemovals).toHaveBeenCalledWith([6031]));
+
+    expect(carryOverShortcutState).toHaveBeenCalledTimes(1);
+    expect(carryOverShortcutState).toHaveBeenCalledWith(converged);
+    const [carried] = carryOverShortcutState.mock.invocationCallOrder;
+    const removed = removeShortcut.mock.invocationCallOrder;
+    const [reported] = reportConvergedRemovals.mock.invocationCallOrder;
+    expect(removed).toHaveLength(2);
+    expect(Math.max(...removed)).toBeLessThan(reported ?? 0);
+    expect(carried).toBeLessThan(Math.min(...removed));
+  });
+
+  it("carries nothing over and reports nothing for plain stale removals", async () => {
+    panelFactory();
+    await flush();
+    carryOverShortcutState.mockClear();
+    reportConvergedRemovals.mockClear();
+    removeShortcut.mockClear();
+
+    act(() => {
+      emitHostEvent<SyncStaleData>("sync_stale", { remove: [{ rom_id: 99, app_id: 9900 }] });
+    });
+    await vi.waitFor(() => expect(removeShortcut).toHaveBeenCalledWith(9900));
+    await flush();
+
+    expect(carryOverShortcutState).not.toHaveBeenCalled();
+    expect(reportConvergedRemovals).not.toHaveBeenCalled();
   });
 
   it("ignores an empty remove array", async () => {

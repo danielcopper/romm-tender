@@ -797,11 +797,11 @@ class ArtworkService:
         # Sweep every grid-image form for the removed shortcut's appId
         app_id = entry.get("app_id")
         if app_id:
-            self._remove_grid_images(grid, app_id)
+            self.remove_grid_images(grid, app_id)
         # Fallback: legacy artwork_id format
         artwork_id = entry.get("artwork_id")
         if artwork_id:
-            self._remove_grid_images(grid, artwork_id)
+            self.remove_grid_images(grid, artwork_id)
         # Clean up any leftover staging file
         staging = os.path.join(grid, staging_filename(rom_id))
         if self._cover_art_file_store.exists(staging):
@@ -815,7 +815,7 @@ class ArtworkService:
         if self._cover_art_file_store.exists(meta_path):
             self._cover_art_file_store.remove_file(meta_path)
 
-    def _remove_grid_images(self, grid: str, app_id: int | str) -> None:
+    def remove_grid_images(self, grid: str, app_id: int | str) -> None:
         """Remove every grid-image form for *app_id* from the grid dir."""
         for filename in grid_image_filenames(app_id):
             path = os.path.join(grid, filename)

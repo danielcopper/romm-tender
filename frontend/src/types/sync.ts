@@ -570,9 +570,11 @@ export interface SyncStaleData {
    * read on the backend BEFORE the row was unbound, so the handler removes
    * the shortcut directly without re-resolving rom_id→app_id (which races
    * the backend unbind). Unbound stale ROMs are excluded — they have no
-   * Steam shortcut to remove.
+   * Steam shortcut to remove. An entry the convergence made (#2645) also
+   * names the shortcut its game keeps (`kept_rom_id`, `kept_app_id`), which
+   * the panel carries the removed one's state over to first.
    */
-  remove: { rom_id: number; app_id: number }[];
+  remove: { rom_id: number; app_id: number; kept_rom_id?: number; kept_app_id?: number }[];
   prune_lease_token?: string;
 }
 

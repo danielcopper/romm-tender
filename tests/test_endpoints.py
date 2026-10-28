@@ -238,6 +238,9 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "report_unit_results",
     "get_registry_platforms",
     "report_removal_results",
+    # The report after the shortcuts a sync converged away were removed: a Steam
+    # Input reset and a grid sweep, neither a RetroDECK path.
+    "report_converged_removals",
     "stage_prune_installed_selection",
     "release_prune_conflict_lease",
     "renew_prune_conflict_lease",

@@ -49,6 +49,7 @@ import {
   getUpdateInstallState,
   logError,
   logInfo,
+  reportConvergedRemovals,
 } from "./api/backend";
 import {
   createOrUpdateCollections,
@@ -100,6 +101,7 @@ import type {
 } from "./types";
 import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
+import { carryOverShortcutState, isConvergedRemoval } from "./utils/shortcutCarryOver";
 import { applyShortcutArtwork } from "./utils/shortcutArtwork";
 import { batchConfirmLaunchOptions } from "./utils/launchOptionsReconcile";
 import { disownStrandedPruneLeases, isPruneLeaseCancelled, withPruneLease } from "./utils/pruneLease";
@@ -975,8 +977,17 @@ const tender = definePanel(() => {
         await previousTail;
         const signal = continuationController.signal;
         if (isPruneLeaseCancelled(signal)) return;
+        // A shortcut the convergence takes away hands its Steam state to the
+        // one its game keeps before it goes, and is cleaned up after.
+        const converged = data.remove.filter(isConvergedRemoval);
+        for (const removal of converged) {
+          if (isPruneLeaseCancelled(signal)) return;
+          await carryOverShortcutState(removal);
+        }
         await removeShortcutsPaced(appIds, undefined, signal);
-        if (!isPruneLeaseCancelled(signal)) logInfo(`sync_stale: removed ${data.remove.length} stale shortcuts`);
+        if (isPruneLeaseCancelled(signal)) return;
+        logInfo(`sync_stale: removed ${data.remove.length} stale shortcuts`);
+        if (converged.length > 0) await reportConvergedRemovals(converged.map((removal) => removal.app_id));
       } finally {
         leaseSignal.removeEventListener("abort", abort);
       }

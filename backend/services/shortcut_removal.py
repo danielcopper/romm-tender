@@ -45,7 +45,13 @@ _PLATFORM_NAMES_KEY = "platform_names"
 # The claims a removal holds on the prune conflicts: the three use cases'
 # operations and the lease between them.
 _REMOVAL_CLAIMS = frozenset(
-    {"remove_all_shortcuts", "remove_platform_shortcuts", "report_removal_results", "shortcut_removal"}
+    {
+        "remove_all_shortcuts",
+        "remove_platform_shortcuts",
+        "report_removal_results",
+        "report_converged_removals",
+        "shortcut_removal",
+    }
 )
 
 
@@ -251,6 +257,36 @@ class ShortcutRemovalService:
                 finally:
                     if lease_token is not None:
                         await self._rules.release_lease(str(lease_token))
+        finally:
+            # Outside the hold, so the run it starts does not yield to this call's own claim.
+            self._artwork_job.request_run()
+
+    def _report_converged_removals_io(self, removed_app_ids: list[int]) -> None:
+        """Sync helper for report_converged_removals — Steam-Input reset and grid sweep, nothing else."""
+        if removed_app_ids:
+            try:
+                self._steam_config.set_steam_input_config(removed_app_ids, mode="default")
+            except Exception as e:
+                self._logger.error(f"Failed to clean up Steam Input config: {e}")
+        grid = self._steam_config.grid_dir()
+        if grid:
+            for app_id in removed_app_ids:
+                self._artwork_remover.remove_grid_images(grid, app_id)
+
+    async def report_converged_removals(self, removed_app_ids: list[int | str]) -> dict[str, Any]:
+        """Called by the frontend after removing the shortcuts a sync converged away (#2645).
+
+        Resets each removed appId's Steam Input setting and deletes its grid
+        images, as a removal the user starts does. The run's finalize unbound
+        the rows already, and each ROM keeps its cover cache, since its game
+        keeps another shortcut.
+        """
+        app_ids = [int(app_id) for app_id in removed_app_ids]
+        try:
+            async with self._rules.hold("report_converged_removals", prune=True):
+                await self._artwork_job.stop_for_removal()
+                await self._loop.run_in_executor(None, self._report_converged_removals_io, app_ids)
+                return {"success": True, "message": f"Cleaned up {len(app_ids)} removed shortcuts"}
         finally:
             # Outside the hold, so the run it starts does not yield to this call's own claim.
             self._artwork_job.request_run()

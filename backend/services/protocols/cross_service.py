@@ -578,10 +578,14 @@ class ArtworkRemover(Protocol):
     Consumed by ``ShortcutRemovalService`` to clean up grid/banner/cover
     files when a shortcut is removed. The exact set of files and the
     naming scheme are an artwork-layer concern — this Protocol exposes
-    only the single-entry deletion seam the removal flow needs.
+    the single-entry deletion seam the removal flow needs, and the grid
+    images of one appId alone, for a shortcut whose ROM keeps its cover
+    cache because its game keeps another shortcut.
     """
 
     def remove_artwork_files(self, grid: str, rom_id: str | int, entry: ShortcutRegistryEntry) -> None: ...
+
+    def remove_grid_images(self, grid: str, app_id: int | str) -> None: ...
 
 
 class SessionPlaytimeRecorder(Protocol):

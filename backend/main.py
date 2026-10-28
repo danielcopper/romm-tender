@@ -483,6 +483,10 @@ class Endpoints:
         return await self._services.shortcut_removal_service.report_removal_results(removed_rom_ids, lease_token)
 
     @route
+    async def report_converged_removals(self, removed_app_ids):
+        return await self._services.shortcut_removal_service.report_converged_removals(removed_app_ids)
+
+    @route
     async def reconcile_shortcuts(self, live_app_ids):
         return await self._services.shortcut_removal_service.reconcile_live_shortcuts(live_app_ids)
 

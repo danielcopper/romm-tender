@@ -307,6 +307,84 @@ class TestReportRemovalResults:
         assert call.args[2]["app_id"] == 1001
 
 
+class TestReportConvergedRemovals:
+    """After the panel removed the shortcuts a sync converged away (#2645 D2)."""
+
+    @pytest.mark.asyncio
+    async def test_resets_steam_input_for_the_removed_app_ids(self, svc, steam_config):
+        steam_config.set_steam_input_config = MagicMock()
+
+        result = await svc.report_converged_removals([1001, 1002])
+
+        assert result["success"] is True
+        steam_config.set_steam_input_config.assert_called_once_with([1001, 1002], mode="default")
+
+    @pytest.mark.asyncio
+    async def test_a_steam_input_write_that_fails_still_sweeps_the_grid(
+        self, svc, steam_config, artwork_remover_mock, tmp_path
+    ):
+        steam_config.set_steam_input_config = MagicMock(side_effect=OSError("VDF write failed"))
+        steam_config.grid_dir = lambda: str(tmp_path)
+
+        result = await svc.report_converged_removals([1001])
+
+        assert result["success"] is True
+        artwork_remover_mock.remove_grid_images.assert_called_once_with(str(tmp_path), 1001)
+
+    @pytest.mark.asyncio
+    async def test_unbinds_nothing_and_leaves_the_cover_cache(
+        self, svc, uow, steam_config, artwork_remover_mock, tmp_path
+    ):
+        """The run's finalize unbound the row already; the per-ROM cover cache stays the ROM's."""
+        steam_config.set_steam_input_config = MagicMock()
+        steam_config.grid_dir = lambda: str(tmp_path)
+        _seed_rom(uow, 10, app_id=1001, name="Game A", cover_path="/covers/10.png")
+
+        await svc.report_converged_removals([1001])
+
+        with uow:
+            assert uow.roms.get(10).shortcut_app_id == 1001
+        artwork_remover_mock.remove_artwork_files.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_the_artwork_job_is_stopped_and_asked_for_again(self, svc, steam_config, artwork_job):
+        steam_config.set_steam_input_config = MagicMock()
+
+        await svc.report_converged_removals([1001])
+
+        assert (artwork_job.removal_stops, artwork_job.requests) == (1, [False])
+
+
+class TestConvergedRemovalSweepsTheGrid:
+    """Integration: the report drives the real ArtworkService's grid sweep."""
+
+    @pytest.mark.asyncio
+    async def test_every_grid_image_of_the_removed_shortcut_goes_and_the_cover_cache_stays(
+        self, uow, steam_config, tmp_path, logger
+    ):
+        from domain.artwork_paths import cache_filename
+
+        _seed_rom(uow, 10, app_id=100001, name="Game A")
+        grid_dir = tmp_path / "grid"
+        grid_dir.mkdir()
+        removed = [grid_dir / name for name in ("100001p.png", "100001.jpg", "100001_hero.png", "100001_logo.png")]
+        kept = grid_dir / "100002p.png"
+        for path in [*removed, kept]:
+            path.write_text("fake")
+        cache = tmp_path / "covers" / cache_filename(10)
+        cache.parent.mkdir()
+        cache.write_text("cover")
+        steam_config.grid_dir = lambda: str(grid_dir)
+        steam_config.set_steam_input_config = MagicMock()
+
+        svc = _artwork_integration_service(uow, steam_config, tmp_path, logger)
+        await svc.report_converged_removals([100001])
+
+        assert [path.exists() for path in removed] == [False] * len(removed)
+        assert kept.exists()
+        assert cache.exists()
+
+
 # ── TestReconcileLiveShortcuts ────────────────────────────────────────────────
 
 
