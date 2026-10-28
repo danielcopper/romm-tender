@@ -1233,8 +1233,12 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "9 in Steam"]);
-      expect(factParts(container).map((el) => el.textContent)).toEqual(["mGBA", "· 12 on RomM", "· 9 in Steam"]);
+      expect(factTexts(container)).toEqual(["mGBA", "12 versions on RomM", "9 of them in Steam"]);
+      expect(factParts(container).map((el) => el.textContent)).toEqual([
+        "mGBA",
+        "· 12 versions on RomM",
+        "· 9 of them in Steam",
+      ]);
       const line = container.querySelector<HTMLElement>('[data-testid="platform-facts"]')!;
       expect(line.textContent).not.toContain("Game Boy Advance");
       expect(line.style.fontSize).toBe(NOTE_FONT);
@@ -1303,7 +1307,12 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "9 in Steam", "RetroDECK system: gba"]);
+      expect(factTexts(container)).toEqual([
+        "mGBA",
+        "12 versions on RomM",
+        "9 of them in Steam",
+        "RetroDECK system: gba",
+      ]);
     });
 
     it("says why a platform with no system has no emulators to pick", async () => {
@@ -1389,7 +1398,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "12 in Steam"]);
+      expect(factTexts(container)).toEqual(["mGBA", "12 versions on RomM", "12 of them in Steam"]);
       expect(buttonByText(container, "Remove 9 shortcuts")).toBeTruthy();
     });
 
@@ -1402,7 +1411,18 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "3 in Steam"]);
+      expect(factTexts(container)).toEqual(["mGBA", "12 versions on RomM", "3 of them in Steam"]);
+    });
+
+    it("counts a single version in the singular", async () => {
+      vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [platform({ rom_count: 1 })] });
+      vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
+        platforms: [{ slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(factTexts(container)).toEqual(["mGBA", "1 version on RomM", "1 of them in Steam"]);
     });
 
     it("names the active core in the header and greys it when it is the default", async () => {
@@ -1636,7 +1656,7 @@ describe("Library › Platforms", () => {
       // nothing was established — beside a sentence saying the opposite. The
       // assertion is on the clause span rather than on the pane's text, so a
       // sentence that names emulators in its own words does not trip it.
-      expect(factTexts(container)).toEqual(["12 on RomM", "9 in Steam"]);
+      expect(factTexts(container)).toEqual(["12 versions on RomM", "9 of them in Steam"]);
     });
 
     it("says a RetroDECK that is not set up has no emulators established instead of an empty picker", async () => {
@@ -2075,7 +2095,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("0 in Steam");
+      expect(container.textContent).toContain("0 of them in Steam");
       expect(coreButton(container)).not.toBeDisabled();
       await openCoreMenu(container);
       await pickFromCoreMenu("VBA Next");
