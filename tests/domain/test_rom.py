@@ -254,6 +254,23 @@ class TestRecordFsSizeBytes:
         assert rom.fs_size_bytes == 999_000
 
 
+class TestFollowGroup:
+    def test_takes_the_key_of_the_group_it_follows(self):
+        rom = _make_rom()
+
+        rom.follow_group("ss:5:57")
+
+        assert rom.sibling_group_key == "ss:5:57"
+
+    def test_an_empty_key_is_refused(self):
+        rom = _make_rom()
+        rom.follow_group("igdb:1:57")
+
+        with pytest.raises(ValueError, match="sibling_group_key must not be empty"):
+            rom.follow_group("")
+        assert rom.sibling_group_key == "igdb:1:57"
+
+
 class TestArtworkCheck:
     def test_a_check_records_when_it_started(self):
         rom = _make_rom()

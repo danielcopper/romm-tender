@@ -38,9 +38,10 @@ class Rom:
     (region/language/revision variants), how large it is, and whether there is
     anything to download. They are set at construction from the fetch and
     refreshed on every sync (they ride the sync UPSERT, unlike the user-pin
-    ``emulator_override`` / ``selected_disc``). Only ``fs_size_bytes`` has a
-    verb, :meth:`record_fs_size_bytes`: an install records the size RomM stated
-    between syncs.
+    ``emulator_override`` / ``selected_disc``). Two have a verb:
+    :meth:`record_fs_size_bytes`, as an install records the size RomM stated
+    between syncs, and :meth:`follow_group`, as a sync that does not fetch the
+    ROM keys it with the group it follows.
     """
 
     rom_id: int
@@ -165,6 +166,16 @@ class Rom:
         if size <= 0:
             raise ValueError("fs_size_bytes must be positive")
         self.fs_size_bytes = size
+
+    def follow_group(self, sibling_group_key: str) -> None:
+        """Take *sibling_group_key*, the key of the group this ROM follows while a sync does not fetch it.
+
+        Which group that is: :func:`domain.sibling_group.compute_group_keys_with_unfetched`.
+        An empty key names no group and raises ``ValueError``.
+        """
+        if not sibling_group_key:
+            raise ValueError("sibling_group_key must not be empty")
+        self.sibling_group_key = sibling_group_key
 
     def update_cover_path(self, path: str) -> None:
         """Record the local cover-art path once artwork has been written."""
