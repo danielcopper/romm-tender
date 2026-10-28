@@ -8332,6 +8332,32 @@ class TestAGameWithSeveralShortcutsConverges:
         assert "Stale removal: keeping" not in caplog.text
 
     @pytest.mark.asyncio
+    async def test_a_removed_shortcut_gets_no_cover_refresh_and_the_kept_one_does(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """Both versions' covers changed in RomM: only the shortcut that stays has its cover pushed again."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        with library.uow as uow:
+            for rom_id in (30, 31):
+                rom = uow.roms.get(rom_id)
+                rom.adopt_cover_source(f"/cover/{rom_id}.png?ts=old")
+                uow.roms.save(rom)
+                fake_romm_api.roms[rom_id]["path_cover_large"] = f"/cover/{rom_id}.png?ts=new"
+                fake_romm_api.download_payloads[f"cover:/cover/{rom_id}.png?ts=new"] = b"new cover"
+        start = len(emit.call_args_list)
+
+        await self._apply(library, emit, "run-2")
+
+        refreshes = [
+            refresh
+            for call in emit.call_args_list[start:]
+            if call.args and call.args[0] == "sync_apply_unit"
+            for refresh in call.args[1]["cover_refreshes"]
+        ]
+        assert refreshes == [{"rom_id": 30, "app_id": 6030}]
+
+    @pytest.mark.asyncio
     async def test_a_converged_row_whose_app_id_this_run_bound_is_not_removed(self, make_library, emit):
         """The #1036 guard holds for a converged row too: an appId this run bound is never removed."""
         library = make_library()
