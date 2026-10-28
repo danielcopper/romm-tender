@@ -274,6 +274,76 @@ class SaveCopyService:
 
         return {"status": "ok"}
 
+    async def _copy_listed_save(
+        self,
+        rom_id: int,
+        save_state: RomSaveSyncState,
+        device_id: LiveDeviceId,
+        core_so: str | None,
+        save_id: int,
+        target_slot: str,
+        info: dict[str, Any],
+        server_saves: list[dict[str, Any]],
+        default_slot: str,
+    ) -> dict[str, Any]:
+        """The copy from the listing on: the refusals the listing decides, then :meth:`_copy_save_to_slot_io`.
+
+        Runs under the caller's ``rom_lock``. Answers ``version_deleted``,
+        ``already_present{existing_id}`` or ``target_slot_busy{message}``, in
+        that order, before anything is copied, else the copy's own answer.
+        *save_state* is persisted however this ends: the pre-flight may have
+        performed real uploads/downloads on the current slot, and the copy's
+        download and upload mutate it too, so a skipped write would leave the
+        next sync to mis-classify (#1012).
+        """
+        try:
+            source_save = next((s for s in server_saves if s.get("id") == save_id), None)
+            if source_save is None:
+                return {"status": "version_deleted"}
+
+            # Dedup pre-check: if the chosen save's content is already present in
+            # the target slot, a copy would make RomM dedup server-side and
+            # the upload would adopt the pre-existing save as current —
+            # churning the tracked save for no gain (which surfaced the current
+            # save in its own version history). Detect it up front via the
+            # content_hash RomM populates on each save and refuse without touching
+            # any copy state. A missing source content_hash skips the check; the
+            # copy then falls through and RomM's own server-side dedup applies.
+            existing_id = self._find_already_present(server_saves, source_save, target_slot)
+            if existing_id is not None:
+                self._log_debug(
+                    f"copy_save_to_slot: rom {rom_id} save {save_id} already present in slot "
+                    f"{target_slot!r} as {existing_id}; skipping copy"
+                )
+                return {"status": "already_present", "existing_id": existing_id}
+
+            # A slot whose newest save cannot be established (``None``) is left to RomM's 409.
+            if slot_refuses_new_save(server_saves, target_slot, device_id) is True:
+                self._log_debug(
+                    f"copy_save_to_slot: rom {rom_id} slot {target_slot!r} has a newest save this device "
+                    "is not current on; refusing before the copy"
+                )
+                return {
+                    "status": "target_slot_busy",
+                    "message": f"slot {target_slot!r} has a newer save this device has not synced",
+                }
+
+            return await self._loop.run_in_executor(
+                None,
+                self._copy_save_to_slot_io,
+                rom_id,
+                save_state,
+                device_id,
+                core_so,
+                source_save,
+                target_slot,
+                info,
+                server_saves,
+                default_slot,
+            )
+        finally:
+            await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+
     async def copy_save_to_slot(self, rom_id: int, save_id: int, target_slot: str) -> dict[str, Any]:
         """Copy one server save into *target_slot*, making it the active slot.
 
@@ -423,62 +493,6 @@ class SaveCopyService:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "server_unreachable", "message": str(e)}
 
-            source_save = next((s for s in server_saves if s.get("id") == save_id), None)
-            if source_save is None:
-                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-                return {"status": "version_deleted"}
-
-            # Dedup pre-check: if the chosen save's content is already present in
-            # the target slot, a copy would make RomM dedup server-side and
-            # the upload would adopt the pre-existing save as current —
-            # churning the tracked save for no gain (which surfaced the current
-            # save in its own version history). Detect it up front via the
-            # content_hash RomM populates on each save and refuse without touching
-            # any copy state. A missing source content_hash skips the check; the
-            # copy then falls through and RomM's own server-side dedup applies.
-            existing_id = self._find_already_present(server_saves, source_save, target_slot)
-            if existing_id is not None:
-                self._log_debug(
-                    f"copy_save_to_slot: rom {rom_id} save {save_id} already present in slot "
-                    f"{target_slot!r} as {existing_id}; skipping copy"
-                )
-                # The pre-flight may have performed real uploads/downloads on the
-                # current slot; persist those baselines even though the copy is a
-                # no-op (#1012). No copy state was mutated.
-                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-                return {"status": "already_present", "existing_id": existing_id}
-
-            # A slot whose newest save cannot be established (``None``) is left to RomM's 409.
-            if slot_refuses_new_save(server_saves, target_slot, device_id) is True:
-                self._log_debug(
-                    f"copy_save_to_slot: rom {rom_id} slot {target_slot!r} has a newest save this device "
-                    "is not current on; refusing before the copy"
-                )
-                # The pre-flight's baselines are persisted as for already_present.
-                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-                return {
-                    "status": "target_slot_busy",
-                    "message": f"slot {target_slot!r} has a newer save this device has not synced",
-                }
-
-            try:
-                result = await self._loop.run_in_executor(
-                    None,
-                    self._copy_save_to_slot_io,
-                    rom_id,
-                    save_state,
-                    device_id,
-                    core_so,
-                    source_save,
-                    target_slot,
-                    info,
-                    server_saves,
-                    default_slot,
-                )
-            finally:
-                # The pre-flight (and the copy's own download/upload) mutate the
-                # in-memory aggregate; persist regardless of how the copy ends or
-                # the next sync mis-classifies (#1012).
-                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-
-            return result
+            return await self._copy_listed_save(
+                rom_id, save_state, device_id, core_so, save_id, target_slot, info, server_saves, default_slot
+            )
