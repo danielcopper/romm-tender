@@ -101,6 +101,7 @@ import type {
 } from "./types";
 import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
+import { pacedForEach } from "./utils/pacedOps";
 import { carryOverShortcutState, isConvergedRemoval } from "./utils/shortcutCarryOver";
 import { applyShortcutArtwork } from "./utils/shortcutArtwork";
 import { batchConfirmLaunchOptions } from "./utils/launchOptionsReconcile";
@@ -980,10 +981,10 @@ const tender = definePanel(() => {
         // A shortcut the convergence takes away hands its Steam state to the
         // one its game keeps before it goes, and is cleaned up after.
         const converged = data.remove.filter(isConvergedRemoval);
-        for (const removal of converged) {
-          if (isPruneLeaseCancelled(signal)) return;
-          await carryOverShortcutState(removal);
-        }
+        const carried = await pacedForEach(converged, (removal) => carryOverShortcutState(removal), {
+          isCancelled: () => isPruneLeaseCancelled(signal),
+        });
+        if (!carried) return;
         await removeShortcutsPaced(appIds, undefined, signal);
         if (isPruneLeaseCancelled(signal)) return;
         logInfo(`sync_stale: removed ${data.remove.length} stale shortcuts`);

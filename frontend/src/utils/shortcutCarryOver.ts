@@ -9,12 +9,20 @@
  * whatever the panel does, so a shortcut left behind would belong to no version at all.
  */
 
-import { debugLog, getArtworkSlots, isEndpointFailure, logWarn, type ArtworkSlotRow } from "../api/backend";
+import {
+  debugLog,
+  getArtworkSlots,
+  isEndpointFailure,
+  logWarn,
+  type ArtworkSlotRow,
+  type ArtworkTabSlot,
+} from "../api/backend";
 import { STEAM_ASSET_TYPES } from "./artwork";
 import { writeSlotArtwork } from "./artworkSlotsStore";
 import { slotThumbnailUrls } from "./artworkThumbs";
 import { foldCollectionName } from "./collectionName";
 import { detach } from "./detach";
+import { pacedForEach } from "./pacedOps";
 
 /** A `sync_stale` removal the convergence made: the shortcut that goes, and the one its game keeps. */
 export interface ConvergedRemoval {
@@ -29,27 +37,34 @@ export function isConvergedRemoval(entry: { rom_id: number; app_id: number }): e
   return typeof (entry as Partial<ConvergedRemoval>).kept_app_id === "number";
 }
 
+const PARTS = [
+  ["collections", carryOverCollections],
+  ["Hidden", carryOverHidden],
+  ["artwork", carryOverArtwork],
+] as const;
+
 /** Carry over to the kept shortcut what Steam holds of the one *removal* takes away. */
 export async function carryOverShortcutState(removal: ConvergedRemoval): Promise<void> {
-  for (const [part, carry] of [
-    ["collections", carryOverCollections],
-    ["Hidden", carryOverHidden],
-    ["artwork", carryOverArtwork],
-  ] as const) {
+  // One Steam write after another, as every bulk Steam loop here runs.
+  await pacedForEach(PARTS, async ([part, carry]) => {
     try {
       await carry(removal);
     } catch (e) {
       logWarn(`Carry-over: the ${part} of appId ${removal.app_id} did not reach appId ${removal.kept_app_id}: ${e}`);
     }
-  }
+  });
 }
 
 async function carryOverCollections({ app_id, kept_app_id }: ConvergedRemoval): Promise<void> {
   const kept = appStore.GetAppOverviewByAppID(kept_app_id);
   if (!kept) return;
-  for (const collection of collectionStore.userCollections) {
-    if (!collection.apps.has(app_id) || collection.apps.has(kept_app_id)) continue;
-    if (foldCollectionName(collection.displayName).startsWith("romm: ")) continue;
+  const collections = collectionStore.userCollections.filter(
+    (collection) =>
+      collection.apps.has(app_id) &&
+      !collection.apps.has(kept_app_id) &&
+      !foldCollectionName(collection.displayName).startsWith("romm: "),
+  );
+  await pacedForEach(collections, async (collection) => {
     // One collection that cannot take the app — a dynamic one may have no
     // drag-and-drop side — does not keep it from the others.
     try {
@@ -58,10 +73,10 @@ async function carryOverCollections({ app_id, kept_app_id }: ConvergedRemoval): 
     } catch (e) {
       logWarn(`Carry-over: the collection "${collection.displayName}" did not take appId ${kept_app_id}: ${e}`);
     }
-  }
+  });
 }
 
-async function carryOverHidden({ app_id, kept_app_id }: ConvergedRemoval): Promise<void> {
+function carryOverHidden({ app_id, kept_app_id }: ConvergedRemoval): void {
   if (typeof collectionStore.BIsHidden !== "function" || typeof collectionStore.SetAppsAsHidden !== "function") return;
   if (collectionStore.BIsHidden(app_id) && !collectionStore.BIsHidden(kept_app_id)) {
     collectionStore.SetAppsAsHidden([kept_app_id], true);
@@ -77,19 +92,22 @@ async function carryOverArtwork(removal: ConvergedRemoval): Promise<void> {
     throw new Error(isEndpointFailure(removed) ? removed.message : (kept as { message: string }).message);
   }
   const keptSetInSteam = new Set(kept.slots.filter((row) => row.state === "set_in_steam").map((row) => row.slot));
-  for (const row of removed.slots) {
-    // The icon is a path in shortcuts.vdf rather than an image in the grid folder.
-    if (row.slot === "icon" || row.state !== "set_in_steam" || keptSetInSteam.has(row.slot)) continue;
+  // The icon is a path in shortcuts.vdf rather than an image in the grid folder.
+  const carried = removed.slots.filter(
+    (row): row is ArtworkSlotRow & { slot: Exclude<ArtworkTabSlot, "icon"> } =>
+      row.slot !== "icon" && row.state === "set_in_steam" && !keptSetInSteam.has(row.slot),
+  );
+  await pacedForEach(carried, async (row) => {
     const image = await steamsImage(removal.app_id, row);
     if (image === null) {
       detach(debugLog(`Carry-over: the ${row.slot} of appId ${removal.app_id} could not be read`));
-      continue;
+      return;
     }
     const assetType = STEAM_ASSET_TYPES[row.slot];
     await writeSlotArtwork(removal.kept_app_id, row.slot, () =>
       SteamClient.Apps.SetCustomArtworkForApp(removal.kept_app_id, image.base64, image.type, assetType),
     );
-  }
+  });
 }
 
 /** The image Steam shows for *row* of shortcut *appId*, read from the first of its URLs that loads. */
@@ -97,14 +115,19 @@ async function steamsImage(
   appId: number,
   row: ArtworkSlotRow,
 ): Promise<{ base64: string; type: "png" | "jpg" } | null> {
-  for (const url of slotThumbnailUrls(appId, row)) {
-    const answer = await fetch(url).catch(() => null);
-    if (!answer?.ok) continue;
-    const blob = await answer.blob();
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let binary = "";
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    return { base64: btoa(binary), type: blob.type === "image/jpeg" ? "jpg" : "png" };
-  }
-  return null;
+  const answer = await firstThatLoads(slotThumbnailUrls(appId, row));
+  if (answer === null) return null;
+  const blob = await answer.blob();
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCodePoint(byte);
+  return { base64: btoa(binary), type: blob.type === "image/jpeg" ? "jpg" : "png" };
+}
+
+/** The answer of the first of *urls* that loads, tried in order; `null` when none does. */
+async function firstThatLoads(urls: readonly string[]): Promise<Response | null> {
+  const [url, ...rest] = urls;
+  if (url === undefined) return null;
+  const answer = await fetch(url).catch(() => null);
+  return answer?.ok ? answer : firstThatLoads(rest);
 }
