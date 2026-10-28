@@ -83,7 +83,8 @@ export function formatAttributionSegment(
     return deviceName ? `${deviceName} ${label}${check}` : `${label}${check}`;
   }
   if (uploadedByUs === false) {
-    // Intentionally no device name — lastSyncer is our own sync record, not the actual uploader
+    // Intentionally no device name — the last device to sync it need not be the uploader (it is this device once it
+    // has downloaded the save).
     return `${label}${check}`;
   }
   if (label === null) {
