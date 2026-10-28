@@ -281,6 +281,7 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             conflict_rules=wiring.conflict_rules,
             artwork_job=wiring.artwork_job,
             progress=progress,
+            running_rom_ids=wiring.running_rom_ids,
         )
     )
 

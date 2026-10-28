@@ -28,6 +28,7 @@ from domain.sync_diff import (
     should_include_in_platform_collection,
     sort_stale_rows,
     with_kept_rows_rebound,
+    without_running_groups,
 )
 
 
@@ -1106,6 +1107,23 @@ class TestAGroupWithARunningGameIsLeftOut:
 
     def test_a_running_rom_outside_every_group_changes_nothing(self):
         assert self._converged({9}) == [(2, 1), (4, 3)]
+
+
+class TestWithoutRunningGroups:
+    """``without_running_groups`` — the finalize's last look at what runs leaves a whole group out (#2645 D6)."""
+
+    _CONVERGED = (
+        ConvergedBinding(2, 1002, 1, 1001),
+        ConvergedBinding(3, 1003, 1, 1001),
+        ConvergedBinding(5, 1005, 4, 1004),
+    )
+
+    @pytest.mark.parametrize("running", [{1}, {3}], ids=["the-kept-one", "a-removed-one"])
+    def test_a_group_with_a_running_shortcut_is_left_out_whole(self, running):
+        assert without_running_groups(self._CONVERGED, running) == [ConvergedBinding(5, 1005, 4, 1004)]
+
+    def test_nothing_running_leaves_every_removal(self):
+        assert without_running_groups(self._CONVERGED, frozenset()) == list(self._CONVERGED)
 
 
 class TestCollapseHandedTheConvergedRows:

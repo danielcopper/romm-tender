@@ -8395,8 +8395,48 @@ class TestAGameWithSeveralShortcutsConverges:
         await library.sync.sync_preview()
         await self._apply(library, emit, "run-3")
 
-        assert readings == 1
+        assert readings == 2, "the converging run reads at its unit and again before its removal"
         assert library.running_games.readings == readings
+
+    @pytest.mark.asyncio
+    async def test_a_game_started_after_its_unit_applied_keeps_both_shortcuts_and_converges_next_sync(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """D6: nothing runs when the unit converges; 31 has started by the time the finalize would remove it."""
+        library = make_library(romm_api=fake_romm_api)
+        bind = await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        running = library.running_games
+
+        def start_after_the_unit(reading):
+            if reading == 2:
+                running.running = {31}
+
+        running.on_read = start_after_the_unit
+        _sent, while_running = await self._apply(library, emit, "run-2")
+        bindings_while_running = self._bindings(library)
+        running.on_read = None
+        running.running = set()
+        library.chunk_dispatcher._wait_for_unit_complete = bind
+        fake_romm_api.call_log.clear()
+        _sent, removed = await self._apply(library, emit, "run-3")
+
+        assert while_running == []
+        assert bindings_while_running == {30: 6030, 31: 6031}
+        assert self._list_calls(fake_romm_api), "the platform is fetched in full while the game has two shortcuts"
+        assert [row["rom_id"] for row in removed] == [31]
+        assert self._bindings(library) == {30: 6030, 31: None}
+
+    @pytest.mark.asyncio
+    async def test_with_nothing_running_the_finalize_reads_once_more_and_removes(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+
+        _sent, removed = await self._apply(library, emit, "run-2")
+
+        assert library.running_games.readings == 2
+        assert [row["rom_id"] for row in removed] == [31]
 
     @pytest.mark.asyncio
     async def test_a_removed_shortcut_gets_no_cover_refresh_and_the_kept_one_does(

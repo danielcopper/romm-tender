@@ -407,6 +407,22 @@ def converge_bound_groups(
     return bindings
 
 
+def without_running_groups(
+    converged: Sequence[ConvergedBinding], running_rom_ids: AbstractSet[int]
+) -> list[ConvergedBinding]:
+    """*converged* less every group one of whose shortcuts *running_rom_ids* names, the kept one's included (#2645 D6).
+
+    The bindings of one group share the shortcut it keeps (``kept_app_id``);
+    such a group keeps all its shortcuts and converges on a later run.
+    """
+    running_groups = {
+        binding.kept_app_id
+        for binding in converged
+        if binding.rom_id in running_rom_ids or binding.kept_rom_id in running_rom_ids
+    }
+    return [binding for binding in converged if binding.kept_app_id not in running_groups]
+
+
 def with_kept_rows_rebound(
     converged: Sequence[ConvergedBinding], emitted: Sequence[dict[str, Any]]
 ) -> list[ConvergedBinding]:
