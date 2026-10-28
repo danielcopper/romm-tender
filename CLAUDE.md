@@ -745,8 +745,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   for a game RomM did not confirm, filed by the setting alone on both sides, and
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes` for a row whose
   game the run synced, asked about or not; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and
-  `TestCollapseHandedTheConvergedRows` for the convergence's rule,
-  `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` and
+  `TestCollapseHandedTheConvergedRows` for the convergence's rule and `TestAGroupWithARunningGameIsLeftOut` for a
+  running game, `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` and
   `TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts` for the apply and the preview, and
   `tests/services/library/test_fetcher.py::TestAGroupWithSeveralShortcutsIsFetchedInFull` for the skip. Prompt-only: a
   new collapse caller on a complete view hands the collapse the convergence's losers (`converged=`); the collection
