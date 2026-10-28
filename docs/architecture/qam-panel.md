@@ -2417,12 +2417,19 @@ the device, and the button says which state it is in.
 The RomM URL's modal checks the URL the way **Another folder…** checks a place: OK, Enter in the field and R2 save it
 through the backend, a refusal — or _Failed to save settings_ where the backend could not be reached — is shown under
 the field in amber with the text kept, editing the text drops it, and only a stored URL closes it on OK, Enter or R2.
-Cancel and B close it at once; a save OK already sent still lands, and the page takes up the URL it stored. The **Allow
-Insecure SSL** switch saves the URL again with its flag; a refusal of that save puts its message on the section's status
-line, and the switch goes back to the stored flag, or, where none is known, to where it stood before the press. An
-accepted save of either puts the switch at the flag it sent, and clears the line of a message the switch's save put
-there; what loading the settings or signing in said stays. The status line shows a refusal or a failure — of a save, of
-loading the settings, of signing out — in amber behind a warning sign, and any other message plain.
+One refusal changes the text instead of keeping it: a URL with no `://` in it is refused `scheme_missing` with
+`completed_url`, the URL with `https://` in front (`lib/url_host.py::with_https_added`, checked by the backend as any
+URL is), and the field takes that URL with the refusal's line under it, so the next OK saves it. Nothing is saved on the
+first OK, and Tender never tries http by itself. The completion is told by the missing `://` rather than by `urlsplit`,
+which reads `romm.local:8080` as the scheme `romm.local`; a URL whose completion is no valid URL either (a blank one) is
+refused as before, and one whose completion carries a user name or password gets that refusal instead. Like any refusal,
+a completion that arrives after the text was edited is dropped. Cancel and B close it at once; a save OK already sent
+still lands, and the page takes up the URL it stored. The **Allow Insecure SSL** switch saves the URL again with its
+flag; a refusal of that save puts its message on the section's status line, and the switch goes back to the stored flag,
+or, where none is known, to where it stood before the press. An accepted save of either puts the switch at the flag it
+sent, and clears the line of a message the switch's save put there; what loading the settings or signing in said stays.
+The status line shows a refusal or a failure — of a save, of loading the settings, of signing out — in amber behind a
+warning sign, and any other message plain.
 
 ## Data Management
 

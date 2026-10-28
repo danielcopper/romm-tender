@@ -16,7 +16,7 @@ from domain.rom import Rom
 from host.logging_setup import LOG_FILENAME, configure_logging
 from lib.errors import NotConfigured, Refused
 from lib.steam_input_apply import SteamInputApply
-from services.settings import SettingsService, SettingsServiceConfig
+from services.settings import SchemeMissing, SettingsService, SettingsServiceConfig
 
 # The sentence a RomM URL entered with a user name or password is refused with.
 _ADDRESS_WITH_USERINFO = (
@@ -212,11 +212,61 @@ class TestSaveServerUrl:
         assert settings["romm_url"] == "https://romm.local"
         settings_persister.save_settings.assert_called_once_with()
 
-    @pytest.mark.parametrize("bad_url", ["", "   ", "romm.local", "ftp://romm.local", "https://"])
+    @pytest.mark.parametrize("bad_url", ["", "   ", "ftp://romm.local", "https://"])
     async def test_invalid_url_rejected_without_writing(self, service, settings, settings_persister, bad_url):
         with pytest.raises(NotConfigured) as refused:
             await service.save_server_url(bad_url)
         assert (refused.value.message, refused.value.details) == ("Enter a valid http(s):// server URL", {})
+        assert "romm_url" not in settings
+        settings_persister.save_settings.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("typed", "completed"),
+        [
+            ("romm.local", "https://romm.local"),
+            ("  romm.local:8080 ", "https://romm.local:8080"),
+            ("192.168.1.5:8080", "https://192.168.1.5:8080"),
+            ("romm.example.com/romm", "https://romm.example.com/romm"),
+        ],
+    )
+    async def test_a_url_without_a_scheme_is_offered_with_https_without_writing(
+        self, service, settings, settings_persister, typed, completed
+    ):
+        with pytest.raises(SchemeMissing) as refused:
+            await service.save_server_url(typed, True)
+        assert (refused.value.reason, refused.value.message, refused.value.details) == (
+            "scheme_missing",
+            "Added https:// — press OK to save it, or change it to http:// if your RomM answers only on http.",
+            {"completed_url": completed},
+        )
+        assert settings == {}
+        settings_persister.save_settings.assert_not_called()
+
+    async def test_the_offered_url_is_saved_when_sent_again(self, service, settings):
+        with pytest.raises(SchemeMissing) as refused:
+            await service.save_server_url("romm.local:8080")
+
+        result = await service.save_server_url(refused.value.details["completed_url"])
+
+        assert result["success"] is True
+        assert settings["romm_url"] == "https://romm.local:8080"
+
+    @pytest.mark.parametrize("bad_url", ["ftp://romm.local", "romm://romm.local", "file:///romm"])
+    async def test_a_url_with_a_scheme_tender_does_not_accept_is_refused_as_before(
+        self, service, settings, settings_persister, bad_url
+    ):
+        with pytest.raises(NotConfigured) as refused:
+            await service.save_server_url(bad_url)
+        assert (refused.value.message, refused.value.details) == ("Enter a valid http(s):// server URL", {})
+        assert "romm_url" not in settings
+        settings_persister.save_settings.assert_not_called()
+
+    async def test_a_url_without_a_scheme_but_with_a_user_name_is_refused_for_the_user_name(
+        self, service, settings, settings_persister
+    ):
+        with pytest.raises(NotConfigured) as refused:
+            await service.save_server_url("user:fake-pw-41@romm.local")
+        assert (refused.value.message, refused.value.details) == (_ADDRESS_WITH_USERINFO, {})
         assert "romm_url" not in settings
         settings_persister.save_settings.assert_not_called()
 

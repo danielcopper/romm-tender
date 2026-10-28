@@ -8,9 +8,9 @@ URL into that canonical key and answers whether two URLs name the same server.
 plaintext is a different (and hostile) destination, not the same one.
 
 Anything that needs to decide "is this URL the same server as that one?",
-"is this a usable http(s) server URL?" or "does this URL carry a user name or
-password?" belongs here. Stdlib-only (``urllib``); no I/O, no network — purely
-lexical.
+"is this a usable http(s) server URL?", "does this URL carry a user name or
+password?" or "what is a URL typed without a scheme offered as?" belongs here.
+Stdlib-only (``urllib``); no I/O, no network — purely lexical.
 """
 
 from __future__ import annotations
@@ -97,6 +97,17 @@ def is_valid_server_url(url: str) -> bool:
     rejected.
     """
     return normalize_origin(url.strip()) is not None
+
+
+def with_https_added(url: str) -> str | None:
+    """*url* with ``https://`` in front where it names no scheme at all, else ``None``.
+
+    A missing scheme is told by a missing ``://``, not by
+    ``urllib.parse.urlsplit``, which reads ``romm.local:8080`` as the scheme
+    ``romm.local``. Https, not http, because sign-in sends the RomM password to
+    this address: a wrong https only fails, a wrong http sends it unencrypted.
+    """
+    return None if "://" in url else f"https://{url}"
 
 
 # urllib takes no credentials from an address, so none reaches RomM. With a

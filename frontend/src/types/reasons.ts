@@ -154,6 +154,7 @@ export type WireReason =
   | "save_shape_unsupported"
   | "savefiles_in_content_dir"
   | "saves_root_missing"
+  | "scheme_missing"
   | "selection_finalized"
   | "service_stopping"
   | "shortcut_file_unreadable"

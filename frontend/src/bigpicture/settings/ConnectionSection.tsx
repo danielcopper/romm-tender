@@ -28,6 +28,7 @@ import { CustomHeadersModal } from "./CustomHeadersModal";
 import type { SaveHeadersResult } from "./CustomHeadersModal";
 import { isHttpsUrl } from "../../utils/serverUrl";
 import type { CustomHeaderEntry } from "../../types";
+import type { ServerUrlResult } from "../../api/backend";
 import { AMBER } from "../layout/pane";
 
 // Sign-out only forgets the token on this device; it never revokes it in RomM.
@@ -47,7 +48,7 @@ interface ConnectionSectionProps {
   statusWarns: boolean;
   /** Names of the configured proxy headers — values never reach the frontend. */
   customHeaderNames: string[];
-  onSaveUrl: (value: string) => Promise<{ success: boolean; message: string }>;
+  onSaveUrl: (value: string) => Promise<ServerUrlResult>;
   onSaveCustomHeaders: (headers: CustomHeaderEntry[]) => Promise<SaveHeadersResult>;
   onConnect: (username: string, password: string) => Promise<SignInResult>;
   onConnectToken: (token: string) => Promise<SignInResult>;

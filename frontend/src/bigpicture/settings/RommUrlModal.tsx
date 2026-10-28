@@ -2,7 +2,9 @@
  * The RomM URL's own window: it stays open until the backend has stored the
  * typed URL. OK, Enter in the field and R2 save it; a refusal — or a save that
  * could not reach the backend — is shown under the field in amber with the
- * text kept for correcting. Editing the text drops a shown refusal, and a
+ * text kept for correcting, except that a URL typed without a scheme is
+ * replaced by the one the backend completed it to, which the next OK saves.
+ * Editing the text drops a shown refusal, and a
  * refusal that arrives after an edit is dropped too. A save that went through
  * closes the window even then, because the URL is stored. Cancel and B close it
  * without waiting for a save in flight, whose answer then reaches nothing in
@@ -11,7 +13,7 @@
 
 import { ChangeEvent, FC, useRef, useState } from "react";
 import { TextField } from "@decky/ui";
-import { logError } from "../../api/backend";
+import { logError, type ServerUrlResult } from "../../api/backend";
 import { AMBER } from "../layout/pane";
 import { SAVE_FAILED } from "./helpers";
 import { ValidatingModalShell } from "./ValidatingModalShell";
@@ -22,7 +24,7 @@ interface RommUrlModalProps {
   closeModal?: () => void;
   /** The URL the backend holds, which the field starts with. */
   value: string;
-  save: (text: string) => Promise<{ success: boolean; message: string }>;
+  save: (text: string) => Promise<ServerUrlResult>;
 }
 
 const refusalStyle = { marginTop: "12px", fontSize: "13px", color: AMBER } as const;
@@ -52,7 +54,12 @@ export const RommUrlModal: FC<RommUrlModalProps> = ({ closeModal, value, save })
         close();
         return;
       }
-      if (current.current === asked) setRefusal(answer.message);
+      if (current.current !== asked) return;
+      if (answer.reason === "scheme_missing" && answer.completed_url !== undefined) {
+        current.current = answer.completed_url;
+        setText(answer.completed_url);
+      }
+      setRefusal(answer.message);
     } catch (e) {
       // The type alone: the text of a failed request can carry what it was sent with.
       logError(`Failed to save the RomM URL: ${e instanceof Error ? e.name : typeof e}`);

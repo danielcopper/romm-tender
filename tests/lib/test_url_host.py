@@ -10,6 +10,7 @@ from lib.url_host import (
     is_valid_server_url,
     normalize_origin,
     same_origin,
+    with_https_added,
     without_userinfo,
 )
 
@@ -231,6 +232,24 @@ class TestIsValidServerUrl:
 
     def test_trims_before_validating(self):
         assert is_valid_server_url("\t https://romm.local \n") is True
+
+
+class TestWithHttpsAdded:
+    @pytest.mark.parametrize(
+        ("url", "completed"),
+        [
+            ("romm.local", "https://romm.local"),
+            # urlsplit reads this as the scheme "romm.local"; the missing "://" says there is none.
+            ("romm.local:8080", "https://romm.local:8080"),
+            ("192.168.1.5:8080/romm", "https://192.168.1.5:8080/romm"),
+        ],
+    )
+    def test_a_url_with_no_scheme_gets_https(self, url, completed):
+        assert with_https_added(url) == completed
+
+    @pytest.mark.parametrize("url", ["http://romm.local", "https://romm.local", "ftp://romm.local", "://nohost"])
+    def test_a_url_with_a_scheme_is_left_alone(self, url):
+        assert with_https_added(url) is None
 
 
 class TestUserinfo:

@@ -86,6 +86,12 @@ export interface BackendResult {
   prune_lease_token?: string;
 }
 
+/** The server URL save's verdict: a URL typed without a scheme is refused (`scheme_missing`) with
+ *  `completed_url`, the URL with `https://` in front, for the user to confirm. */
+export interface ServerUrlResult extends BackendResult {
+  completed_url?: string;
+}
+
 /**
  * The custom-header save's verdict (#1822). A refusal names the offending header
  * in `message`; it never carries a value back, so there is no payload beyond the
@@ -270,7 +276,7 @@ export interface CachedGameDetail extends BiosAnswer {
 // for back-compat with existing import sites.
 export { getCachedGameDetail, invalidateCachedGameDetail } from "../utils/cachedGameDetailStore";
 export const getSettings = endpoint<[], Settings>("get_settings");
-export const saveServerUrl = endpoint<[string, boolean], BackendResult>("save_server_url");
+export const saveServerUrl = endpoint<[string, boolean], ServerUrlResult>("save_server_url");
 export const saveCustomHeaders = endpoint<[CustomHeaderEntry[]], CustomHeadersResult>("save_custom_headers");
 export const connectWithCredentials = endpoint<[string, string, string, boolean], BackendResult>(
   "connect_with_credentials",

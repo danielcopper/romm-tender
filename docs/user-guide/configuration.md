@@ -53,10 +53,15 @@ The **Connections** section manages your RomM server connection.
 
 - **RomM URL** — the full URL of your RomM server, including port if needed (e.g. `http://192.168.1.100:8080`). Tap
   **Edit** to change it and **OK** (or Enter, or R2) to save it. A URL Tender does not take stays in the window with the
-  reason below it in amber. Leave any user name and password out of it (`https://user:password@host`): Tender cannot
-  sign in through the address, and the window says "Tender cannot sign in through a user name and password in the RomM
-  URL — leave them out. Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom
-  headers." A login your proxy asks for goes into [Custom headers](#custom-headers-for-an-authenticating-proxy) instead.
+  reason below it in amber. A URL typed without `http://` or `https://` (`romm.example.com`, `192.168.1.100:8080`) is
+  not saved yet: the field then holds it with `https://` in front, and the line under it reads "Added https:// — press
+  OK to save it, or change it to http:// if your RomM answers only on http." Press **OK** again to save it. Tender does
+  not fall back to http by itself: https is the default because signing in sends your RomM password to this address, and
+  a wrong https only fails where a wrong http would send it unencrypted. Leave any user name and password out of it
+  (`https://user:password@host`): Tender cannot sign in through the address, and the window says "Tender cannot sign in
+  through a user name and password in the RomM URL — leave them out. Sign in to RomM under RomM Account; a login for a
+  proxy in front of RomM goes into Custom headers." A login your proxy asks for goes into
+  [Custom headers](#custom-headers-for-an-authenticating-proxy) instead.
 - **RomM Account** — shows **Signed in** once a token is stored, or **Not signed in** otherwise. Signing in registers
   this device with RomM — it appears in RomM's device list — whether or not save sync is on, because the play sessions
   Tender sends to RomM name the device as well. Tap **Sign in** to open a one-time prompt. The prompt offers three

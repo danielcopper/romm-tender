@@ -24,9 +24,14 @@ from domain.custom_headers import (
     stored_custom_headers,
 )
 from domain.sibling_resolution import AUTO_REGION
-from lib.errors import NotConfigured, Refused
+from lib.errors import NamedRefused, NotConfigured, Refused
 from lib.steam_input_apply import SteamInputApply
-from lib.url_host import ENTERED_ADDRESS_WITH_USERINFO_MESSAGE, carries_userinfo, is_valid_server_url
+from lib.url_host import (
+    ENTERED_ADDRESS_WITH_USERINFO_MESSAGE,
+    carries_userinfo,
+    is_valid_server_url,
+    with_https_added,
+)
 
 if TYPE_CHECKING:
     from services.protocols import ConflictRules, SettingsPersister, SteamConfigStore, UnitOfWorkFactory
@@ -36,6 +41,16 @@ _MASK_PLACEHOLDER = "••••"
 _VALID_LOG_LEVELS = ("debug", "info", "warn", "error")
 _VALID_STEAM_INPUT_MODES = ("default", "force_on", "force_off")
 _SERVER_URL_KEYS = ("romm_url", "romm_allow_insecure_ssl")
+_HTTPS_ADDED_MESSAGE = (
+    "Added https:// — press OK to save it, or change it to http:// if your RomM answers only on http."
+)
+
+
+class SchemeMissing(NamedRefused):
+    """A server URL typed without a scheme, not saved; ``completed_url`` is it with ``https://`` in front."""
+
+    reason = "scheme_missing"
+
 
 # The level names the frontend sends against the stdlib level each record is
 # stamped with. Written out rather than resolved through ``logging`` by name:
@@ -150,10 +165,13 @@ class SettingsService:
         """Persist the trimmed server URL and optional SSL flag.
 
         Refuses a blank or non-http(s) URL, and one carrying a user name or
-        password, with ``NotConfigured`` without writing anything, and a
-        settings file that cannot be written with ``save_failed`` and its
-        cause, giving the previous URL and SSL flag back to the live settings so
-        memory and file agree. Credentials and tokens are never touched here —
+        password, with ``NotConfigured`` without writing anything; a URL with
+        no scheme that is valid once ``https://`` is put in front is refused
+        with ``SchemeMissing`` instead, carrying that URL for the user to
+        confirm, and nothing is written either. A settings file that cannot be
+        written is refused with ``save_failed`` and its cause, giving the
+        previous URL and SSL flag back to the live settings so memory and file
+        agree. Credentials and tokens are never touched here —
         minting and storing the Client API Token is ``ConnectionService``'s job.
         ``allow_insecure_ssl=None`` leaves the SSL flag unchanged.
 
@@ -170,6 +188,11 @@ class SettingsService:
         trimmed = romm_url.strip()
         if carries_userinfo(trimmed):
             raise NotConfigured(ENTERED_ADDRESS_WITH_USERINFO_MESSAGE)
+        completed = with_https_added(trimmed)
+        if completed is not None and is_valid_server_url(completed):
+            if carries_userinfo(completed):
+                raise NotConfigured(ENTERED_ADDRESS_WITH_USERINFO_MESSAGE)
+            raise SchemeMissing(_HTTPS_ADDED_MESSAGE, completed_url=completed)
         if not is_valid_server_url(trimmed):
             raise NotConfigured("Enter a valid http(s):// server URL")
         previous = {key: self._settings[key] for key in _SERVER_URL_KEYS if key in self._settings}

@@ -43,6 +43,7 @@ import {
   moveEmulatorSource,
   isEndpointFailure,
   type EmulatorSourceRefusal,
+  type ServerUrlResult,
 } from "../api/backend";
 import type {
   RegisteredDevice,
@@ -365,7 +366,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   // RommUrlModal shows a refusal or a failure itself and closes on a stored
   // URL, so the answer is handed straight back to it; only an accepted save
   // reaches the page's state.
-  const handleSaveUrl = async (value: string): Promise<{ success: boolean; message: string }> => {
+  const handleSaveUrl = async (value: string): Promise<ServerUrlResult> => {
     const trimmed = trimServerUrl(value);
     const sentSsl = allowInsecureSsl;
     try {

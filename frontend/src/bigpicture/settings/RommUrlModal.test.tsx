@@ -4,7 +4,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import * as backend from "../../api/backend";
 import { RommUrlModal } from "./RommUrlModal";
 
-type Answer = { success: boolean; message: string };
+type Answer = { success: boolean; message: string; reason?: "scheme_missing"; completed_url?: string };
 
 const REFUSED: Answer = {
   success: false,
@@ -13,6 +13,13 @@ const REFUSED: Answer = {
     "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers.",
 };
 const ACCEPTED: Answer = { success: true, message: "Settings saved" };
+const HTTPS_ADDED = "Added https:// — press OK to save it, or change it to http:// if your RomM answers only on http.";
+const completedTo = (url: string): Answer => ({
+  success: false,
+  reason: "scheme_missing",
+  message: HTTPS_ADDED,
+  completed_url: url,
+});
 
 function open(save: (text: string) => Promise<Answer>, value = "https://romm.local") {
   const closeModal = vi.fn();
@@ -167,6 +174,56 @@ describe("RommUrlModal", () => {
     await Promise.resolve();
 
     expect(window.closeModal).toHaveBeenCalledTimes(1);
+  });
+
+  it("a URL without a scheme is answered with the https:// URL in the field and the line under it", async () => {
+    const window = open(async () => completedTo("https://romm.local:8080"));
+    window.type("romm.local:8080");
+
+    window.ok();
+
+    expect(await window.findByTestId("romm-url-refusal")).toHaveTextContent(HTTPS_ADDED);
+    expect(window.field.value).toBe("https://romm.local:8080");
+    expect(window.closeModal).not.toHaveBeenCalled();
+  });
+
+  it("a second OK saves the completed URL and closes the window", async () => {
+    const window = open(async (text) => (text === "romm.local" ? completedTo("https://romm.local") : ACCEPTED));
+    window.type("romm.local");
+    window.ok();
+    await window.findByTestId("romm-url-refusal");
+    await waitFor(() => expect(window.getByText("OK")).not.toBeDisabled());
+
+    window.ok();
+
+    await waitFor(() => expect(window.closeModal).toHaveBeenCalledTimes(1));
+    expect(window.save).toHaveBeenLastCalledWith("https://romm.local");
+  });
+
+  it("changing the completed URL to http:// drops the line", async () => {
+    const window = open(async () => completedTo("https://romm.local"));
+    window.type("romm.local");
+    window.ok();
+    await window.findByTestId("romm-url-refusal");
+
+    window.type("http://romm.local");
+
+    expect(window.queryByTestId("romm-url-refusal")).toBeNull();
+    expect(window.field.value).toBe("http://romm.local");
+  });
+
+  it("a completed URL that arrives after the text was edited leaves the text alone", async () => {
+    let answer: (value: Answer) => void = () => undefined;
+    const window = open(() => new Promise((resolve) => (answer = resolve)));
+    window.type("romm.local");
+    window.ok();
+
+    window.type("http://romm.local");
+    answer(completedTo("https://romm.local"));
+
+    await waitFor(() => expect(window.getByText("OK")).not.toBeDisabled());
+    expect(window.field.value).toBe("http://romm.local");
+    expect(window.queryByTestId("romm-url-refusal")).toBeNull();
   });
 
   it("Cancel closes the window with nothing saved", () => {
