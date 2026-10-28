@@ -25,7 +25,7 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
-from lib.errors import RommApiError, RommNotFoundError, classify_error, with_system_text
+from lib.errors import RommApiError, RommConflictError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target, newest_server_saves_by_target
 from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import resolve_default_slot
@@ -137,6 +137,8 @@ class SaveCopyService:
         canonical: str,
         rom_name: str,
         save_names: tuple[str, ...],
+        *,
+        romm_conflict: bool,
     ) -> None:
         """Record the target slot's newest save for *canonical* as the file's baseline.
 
@@ -144,13 +146,22 @@ class SaveCopyService:
         on disk as a change against the save the target slot holds; what that
         sync then does is the copy section of
         ``docs/architecture/save-file-sync-architecture.md``. A slot with no such
-        save keeps the baseline the download recorded. The baseline, and the
-        dropped tracking of a head without a ``content_hash`` or an id, are
+        save keeps the baseline the download recorded, unless the upload was
+        RomM's 409 (*romm_conflict*): the slot then holds a save *server_saves*
+        does not list, and *canonical*'s tracking is dropped. The baseline, and
+        the dropped tracking of a head without a ``content_hash`` or an id, are
         :meth:`RomSaveSyncState.adopt_head_with_local_change`'s.
         """
         in_slot = [s for s in server_saves if save_in_slot(s, target_slot)]
         head = newest_server_saves_by_target(in_slot, rom_name, known_names=save_names).get(canonical)
         if head is None:
+            if romm_conflict:
+                save_state.delete_file_tracking(canonical)
+                self._logger.warning(
+                    "_copy_save_to_slot_io: slot %r refused the upload but listed no save for %r; dropped its tracking",
+                    target_slot,
+                    canonical,
+                )
             return
         if not save_state.adopt_head_with_local_change(canonical, head):
             self._logger.warning(
@@ -255,7 +266,15 @@ class SaveCopyService:
                 save_id,
                 e,
             )
-            self._adopt_target_head_as_baseline(save_state, server_saves, target_slot, canonical, rom_name, save_names)
+            self._adopt_target_head_as_baseline(
+                save_state,
+                server_saves,
+                target_slot,
+                canonical,
+                rom_name,
+                save_names,
+                romm_conflict=isinstance(e, RommConflictError),
+            )
             return {"status": "upload_failed", "message": str(e)}
 
         return {"status": "ok"}
