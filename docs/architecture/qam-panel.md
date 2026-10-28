@@ -1407,31 +1407,32 @@ The detail offers no sync control of its own — the row already is one, focus i
 and the list's two header buttons act on every row at once — so it opens with a two-line header instead of a Sync
 section. The first line is the platform's name alone, with the core picker's icon button right-aligned beside it; the
 second, in the platform page's 10 px small print and muted, is
-`<core name> · N versions on RomM · M of them in Steam · <source> system: <system>`. Each part of that line keeps itself
-on one line and carries its `·` in front, so the line wraps only between parts and never cuts one: with the name beside
-the facts, the Deck's width squeezed a two-word name onto two lines over the counts and broke `RetroDECK system snes`
-after its first word. The system part names the system the platform is in the answering source and its source
-(`RetroDECK system: psx`, worded by `platformSystemClause`); it is absent where no system was taken, which is when the
-line under the header says why ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). **That
-line, the notes under the BIOS heading and the lines under each BIOS file's name share one size**, `NOTE_FONT` (10 px),
-below the 11 px `SECONDARY_FONT` the other panes' secondary lines keep: on the Deck the three read as large as the rows'
-file names at 11 px, and set apart they looked like three different sizes. The BIOS table's rows and its column names
-are set at 12 px, the heading's size, and the marks in the On-disk cell at 12 px too: on the Deck 11 px and 10 px are no
-difference at all, so a file name one pixel above the description under it did not read as a name, and column names in
-the secondary size read as notes rather than as a table head. Two pixels is the gap that shows. The row buttons keep
-their own 11 px label, so focus and press sizes are unchanged.
+`<core name> · N versions on RomM · M versions in Steam · <source> system: <system>`. Each part of that line keeps
+itself on one line and carries its `·` in front, so the line wraps only between parts and never cuts one: with the name
+beside the facts, the Deck's width squeezed a two-word name onto two lines over the counts and broke
+`RetroDECK system snes` after its first word. The system part names the system the platform is in the answering source
+and its source (`RetroDECK system: psx`, worded by `platformSystemClause`); it is absent where no system was taken,
+which is when the line under the header says why
+([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). **That line, the notes under the BIOS
+heading and the lines under each BIOS file's name share one size**, `NOTE_FONT` (10 px), below the 11 px
+`SECONDARY_FONT` the other panes' secondary lines keep: on the Deck the three read as large as the rows' file names at
+11 px, and set apart they looked like three different sizes. The BIOS table's rows and its column names are set at 12
+px, the heading's size, and the marks in the On-disk cell at 12 px too: on the Deck 11 px and 10 px are no difference at
+all, so a file name one pixel above the description under it did not read as a name, and column names in the secondary
+size read as notes rather than as a table head. Two pixels is the gap that shows. The row buttons keep their own 11 px
+label, so focus and press sizes are unchanged.
 
-**Both counts on the second line are ROM files**, and the line says so: it reads "`N` versions on RomM · `M` of them in
-Steam" ("1 version" in the singular) — "version" is the panel's word for one ROM file, and "of them" ties `M` to the
-versions, so it reads apart from the shortcut count on the Remove button. `N` is RomM's own `rom_count` for the
-platform; `M` is `reachable_count` — the platform's reachable ROMs (every member of a sibling group that holds a
-binding, because one shortcut serves the group (ADR-0021 §2) and the game's page switches versions across it), less the
-versions RomM no longer serves (below). `M` is **not** the number of shortcuts: a fully-synced 665-ROM platform behind
-458 shortcuts reads `665 · 665`, where counting bindings read `665 · 458` and so reported 207 games as missing when none
-was. The number of shortcuts is `count` on the same payload, and it is what the Remove group says and acts on — the two
-must not be folded, or the button offers to remove more shortcuts than exist. Where a whole game never reached Steam the
-two halves genuinely differ (`3084 versions on RomM · 8 of them in Steam` for a platform with one applied game), and
-that difference is the line doing its job.
+**Both counts on the second line are ROM files**, and the line says so: it reads "`N` versions on RomM · `M` versions in
+Steam" ("1 version" on either half) — "version" is the glossary's word for one ROM, so it reads apart from the shortcut
+count on the Remove button. `M` is not claimed to be a part of `N`, because it need not be one (below). `N` is RomM's
+own `rom_count` for the platform; `M` is `reachable_count` — the platform's reachable ROMs (every member of a sibling
+group that holds a binding, because one shortcut serves the group (ADR-0021 §2) and the game's page switches versions
+across it), less the versions RomM no longer serves (below). `M` is **not** the number of shortcuts: a fully-synced
+665-ROM platform behind 458 shortcuts reads `665 · 665`, where counting bindings read `665 · 458` and so reported 207
+games as missing when none was. The number of shortcuts is `count` on the same payload, and it is what the Remove group
+says and acts on — the two must not be folded, or the button offers to remove more shortcuts than exist. Where a whole
+game never reached Steam the two halves genuinely differ (`3084 versions on RomM · 8 versions in Steam` for a platform
+with one applied game), and that difference is the line doing its job.
 
 Two things the line does not claim. The halves count **different populations** — the left is what RomM holds now, the
 right is what our own rows say — so ROMs added on RomM since the last sync widen the gap, and equality means "nothing
@@ -1460,12 +1461,12 @@ sync would need a live server call, which this read deliberately does not make �
 offline, and that is what keeps the pane useful with RomM unreachable.
 
 The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the stamp's fetch did not
-return raises the shortcut count without raising the header, so a pane can read `2 on RomM · 3 in Steam` beside
-`Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, which the stale removal keeps bound, and a
-collection-added row on an already-stamped platform, which commits with no generation, so the exclusion leaves out a row
-RomM still serves. The second heals at the platform's next commit. The first lasts until the user switches the game to
-another version or removes the gone one with this cleanup. The direction is a conservative under-count, which is why it
-is recorded rather than guarded.
+return raises the shortcut count without raising the header, so a pane can read
+`2 versions on RomM · 3 versions in Steam` beside `Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on
+RomM, which the stale removal keeps bound, and a collection-added row on an already-stamped platform, which commits with
+no generation, so the exclusion leaves out a row RomM still serves. The second heals at the platform's next commit. The
+first lasts until the user switches the game to another version or removes the gone one with this cleanup. The direction
+is a conservative under-count, which is why it is recorded rather than guarded.
 
 **The BIOS ratio is not on the second line** — it was, and its width is what wrapped the line three times on a platform
 with a long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
@@ -2022,9 +2023,9 @@ about any platform) and `get_registry_platforms` (ROMs bound to a Steam shortcut
 what "has synced games" means here). Only the first gates the list; the other two fill in beside it. A failed
 `get_firmware_status` leaves the downloads offered, as they are while it is in flight, and a download the server cannot
 serve says so itself. A failed `get_registry_platforms` **says so on the pane**, because a failure and an answer arrive
-the same way — as an absence: read as zero shortcuts would print `0 in Steam` in the header and disable the removal, two
-claims about a platform nothing was learned about; the counts go to `null` instead, which is not zero, and a line under
-the header says the number is missing while the removal stays live (it needs only the slug).
+the same way — as an absence: read as zero shortcuts would print `0 versions in Steam` in the header and disable the
+removal, two claims about a platform nothing was learned about; the counts go to `null` instead, which is not zero, and
+a line under the header says the number is missing while the removal stays live (it needs only the slug).
 
 The fourth is `get_platform_firmware_status`, and it is asked **once per platform** rather than once per page — for
 **every platform the list shows**, whether or not the RomM library holds firmware for it or any of its games is synced

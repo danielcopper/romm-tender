@@ -311,14 +311,14 @@ and the row you focus is the one the right-hand pane describes.
 4. Move down the list to pick a platform; the pane on the right changes with the focus
 5. The pane's first line names the platform. The smaller grey line under it names the emulator it launches with — by
    name, in grey when it is the platform's default and in gold when you have picked something else — then how many
-   versions it has on RomM and how many of them are in Steam ("12 versions on RomM · 9 of them in Steam"; every version
-   of a game that shares one shortcut counts, so this can be more than the shortcuts the Remove button names), and the
-   system its games are in your emulator source ("RetroDECK system: psx"). If it reads **RetroDECK decides**, Tender
-   could not pin any of this platform's emulators — they may need setting up, or ES-DE's command for them is not one
-   Tender can bake — so RetroDECK chooses one itself when a game starts. If it reads **no emulator installed** in red,
-   the emulator RetroDECK would have fallen back to is not on this machine, and the sentence below names it. If it reads
-   **no emulator** in red, RetroDECK has none for this platform at all. The sentence below the line says which of the
-   three it is
+   versions it has on RomM and how many versions are in Steam ("12 versions on RomM · 9 versions in Steam"; every
+   version of a game that shares one shortcut counts, so this can be more than the shortcuts the Remove button names),
+   and the system its games are in your emulator source ("RetroDECK system: psx"). If it reads **RetroDECK decides**,
+   Tender could not pin any of this platform's emulators — they may need setting up, or ES-DE's command for them is not
+   one Tender can bake — so RetroDECK chooses one itself when a game starts. If it reads **no emulator installed** in
+   red, the emulator RetroDECK would have fallen back to is not on this machine, and the sentence below names it. If it
+   reads **no emulator** in red, RetroDECK has none for this platform at all. The sentence below the line says which of
+   the three it is
 6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —

@@ -249,7 +249,7 @@ const ActiveEmulatorNote: FC<{ core: SystemCoreInfo }> = ({ core }) => {
 };
 
 /** The removal confirmation's title. The count is interleaved with the
- *  platform's name, so this is the one count label on the pane `pluralize`
+ *  platform's name, so this is the one count label here that `pluralize`
  *  cannot spell; an unread count drops the number rather than guessing one. */
 function removeShortcutsTitle(row: PlatformRow): string {
   if (row.shortcutCount === null) return `Remove ${row.name} shortcuts?`;
@@ -507,7 +507,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
         parts={[
           ...(coreClause ? [{ text: coreClause.text, color: coreClause.color }] : []),
           { text: `${pluralize(row.romCount, "version")} on RomM` },
-          ...(row.reachableCount === null ? [] : [{ text: `${row.reachableCount} of them in Steam` }]),
+          ...(row.reachableCount === null ? [] : [{ text: `${pluralize(row.reachableCount, "version")} in Steam` }]),
           ...(systemClause === null ? [] : [{ text: systemClause }]),
         ]}
       />
