@@ -267,9 +267,11 @@ function folderWithheld(satisfied: boolean | null | undefined, has: (code: strin
  *
  * **It is not RomM's description** — `_server_files` builds no `description`
  * key at all, and `_wanted_fields` overwrites whatever came in.
- * What arrives is the core's own `firmwareN_desc` out of its `.info` file, or,
- * for a row no placement covers, the file name itself (`build_file_entry`'s
- * `else file_name`). Both spell the name into the words.
+ * What arrives is the core's own `firmwareN_desc` out of its `.info` file, the
+ * description of a declaration atlas packages (which the `packaged` rule below
+ * hides), or, for a row no placement covers, the file name itself
+ * (`build_file_entry`'s `else file_name`). The first and the last spell the
+ * name into the words.
  *
  * **A file the reading identified by its contents is described as "found in
  * the BIOS folder"**, whichever declaration it came from, and that is decided

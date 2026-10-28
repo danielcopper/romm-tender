@@ -122,7 +122,9 @@ class BiosFileEntry:
 
     ``declaration`` is the resolver's own word for how the emulator that supplied
     ``description`` stated what it wants — ``read`` off its own ``.info``,
-    ``packaged`` out of the card standing in for one that ships none — and it is
+    ``packaged`` out of the declaration atlas packages in place of one the
+    machine lacks: a standalone emulator's card, or a libretro core's
+    declaration where its ``.info`` is missing — and it is
     what a surface reads to decide whether that prose is the packager's label for
     the file or atlas explaining the requirement in sentences. ``None`` for a row
     no emulator declared, whose ``description`` is the file name itself.

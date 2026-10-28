@@ -135,17 +135,18 @@ if TYPE_CHECKING:
 # installation — a libretro ``.info`` read from the machine.
 _DECLARATION_READ = "read"
 
-# The state in which a packaged rule card stands in for an emulator that ships
-# no declaration. It is stated ONLY together with a requirement: a card may
-# identify its image by content, so ``packaged`` with an empty list means the
-# card exists and this query established nothing — the same unasked question a
-# missing ``.info`` leaves, and never "this emulator needs no firmware".
+# The state in which atlas's packaged declaration stands in for one the machine
+# does not carry — a standalone emulator's rule card, or a libretro core
+# installed without its ``.info`` (``core-info-packaged`` beside it). It is
+# stated ONLY together with a requirement: a card may identify its image by
+# content, so ``packaged`` with an empty list means the card exists and this
+# query established nothing — the same unasked question a missing ``.info``
+# leaves, and never "this emulator needs no firmware".
 _DECLARATION_PACKAGED = "packaged"
 
-# Statements beside a declaration state that change nothing read here (#2644
-# D3). ``core-info-packaged`` says atlas's packaged declaration stands in for a
-# libretro core's missing ``.info``; the state itself is ``declaration``
-# ``packaged``, which :func:`_stated` reads, and the statement adds no verdict.
+# Statements an entry carries beside its declaration that change nothing read
+# here (#2644 D3): ``core-info-packaged`` is the provenance of
+# :data:`_DECLARATION_PACKAGED` above.
 _NOTES_THAT_CHANGE_NOTHING = frozenset({CAVEAT_CORE_INFO_PACKAGED})
 
 # The keys a caveat names an emulator under. Three, because the resolver states
@@ -448,9 +449,10 @@ def _stated(core: Any) -> bool:
 
     Two states say yes and every other one says the emulator was not asked.
     ``read`` is its own declaration off the machine, and an empty one there is
-    the finished answer that it needs nothing. ``packaged`` is a rule card
-    standing in for an emulator that ships none, and it is an answer only where
-    it named something: a card may identify its image by CONTENT, so a card with
+    the finished answer that it needs nothing. ``packaged`` is atlas's packaged
+    declaration standing in for one the machine lacks
+    (:data:`_DECLARATION_PACKAGED`), and it is an answer only where it named
+    something: a card may identify its image by CONTENT, so a card with
     no requirement in hand has stated nothing about what the emulator wants —
     which is not the same as no verdict: such a card can still be answered not
     met (``docs/architecture/backend-architecture.md``, FirmwareService notes,
@@ -743,7 +745,7 @@ def _declared_location(requirement: Any, place: str, root: str) -> str | None:
 
     A FILE requirement whose ``declared`` is a FOLDER its core declares goes in
     that folder under its own name: LRPS2 declares ``pcsx2/bios`` and, with its
-    ``pcsx2_bios`` option set, the resolver states the requirement as the file
+    ``pcsx2_bios`` option set to a name the core offers, the resolver states the requirement as the file
     that option names while keeping the folder as ``declared``, so the location
     as it stands would place the file where the folder is. Whether ``declared``
     is such a folder is the resolver's own table's answer
