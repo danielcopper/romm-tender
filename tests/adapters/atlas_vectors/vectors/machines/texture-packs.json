@@ -846,6 +846,93 @@
               }
             }
           ],
+          "redirects": [
+            {
+              "via": "flag",
+              "name": "-u",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "savestates",
+                "configuration",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "variable",
+              "name": "DOLPHIN_EMU_USERPATH",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "savestates",
+                "configuration",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "variable",
+              "name": "XDG_DATA_HOME",
+              "argument": "<dir>",
+              "moves": [
+                "saves",
+                "savestates",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "flag",
+              "name": "-C",
+              "argument": "Dolphin.Core.GCIFolderAPathOverride=<dir>",
+              "moves": [
+                "saves"
+              ]
+            },
+            {
+              "via": "flag",
+              "name": "-C",
+              "argument": "Dolphin.Core.GCIFolderBPathOverride=<dir>",
+              "moves": [
+                "saves"
+              ]
+            },
+            {
+              "via": "flag",
+              "name": "-C",
+              "argument": "Dolphin.Core.MemcardAPath=<file>",
+              "moves": [
+                "saves"
+              ]
+            },
+            {
+              "via": "flag",
+              "name": "-C",
+              "argument": "Dolphin.Core.MemcardBPath=<file>",
+              "moves": [
+                "saves"
+              ]
+            },
+            {
+              "via": "flag",
+              "name": "-C",
+              "argument": "Dolphin.General.NANDRootPath=<dir>",
+              "moves": [
+                "saves",
+                "firmware",
+                "installed-content"
+              ]
+            },
+            {
+              "via": "flag",
+              "name": "-C",
+              "argument": "Dolphin.GBA.SavesPath=<dir>",
+              "moves": [
+                "saves"
+              ]
+            }
+          ],
           "granularity": {
             "value": "per-game-directory",
             "mode": "nand",

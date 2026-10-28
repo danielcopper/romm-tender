@@ -4859,7 +4859,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -4956,7 +4956,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -5077,7 +5077,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -5879,7 +5879,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -5960,7 +5960,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -5998,7 +5998,7 @@
               "code": "firmware-path-not-a-directory",
               "data": {
                 "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -6056,7 +6056,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6175,7 +6175,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6286,7 +6286,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6398,7 +6398,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6438,7 +6438,7 @@
                 "dir": "/home/deck/.config/retroarch/system/pcsx2/bios",
                 "core_so": "pcsx2_libretro.so",
                 "need": "required",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -6490,7 +6490,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6530,7 +6530,7 @@
                 "dir": "/home/deck/.config/retroarch/system/pcsx2/bios",
                 "core_so": "pcsx2_libretro.so",
                 "need": "required",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -6584,7 +6584,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6677,7 +6677,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6768,7 +6768,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6859,7 +6859,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -6902,7 +6902,7 @@
                   "/home/deck/.config/retroarch/system/pcsx2/bios/scph39001.bin"
                 ],
                 "core_so": "pcsx2_libretro.so",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -6955,7 +6955,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7004,7 +7004,7 @@
                   "/home/deck/.config/retroarch/system/pcsx2/bios/scph39001.bin"
                 ],
                 "core_so": "pcsx2_libretro.so",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -7061,7 +7061,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7162,7 +7162,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7267,7 +7267,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7309,7 +7309,7 @@
                 "md5": "dc752f160044f2ed5fc1f4964db2a095",
                 "core_so": "pcsx2_libretro.so",
                 "table": "6.0.0",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -7363,7 +7363,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7454,7 +7454,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7552,7 +7552,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7607,7 +7607,7 @@
     },
     {
       "name": "firmware-a-configured-image-the-packaged-prefix-does-not-know-stays-open",
-      "rationale": "The configured file is there and its bytes are under no pcsx2/bios/ identity. That is neither a failure nor a green light: LoadBIOS opens the configured file whatever its header reads as (pcsx2/ps2/BiosTools.cpp:281, the ROMDIR walk at :294 with its return discarded) and nothing about its bytes turns it down: what can is an open that fails (:281-283) or a size of zero (:286-290) — the IsBIOS gate at main.cpp:1818 gates the listing and nothing else. So checked is unrecognised and satisfied is None.",
+      "rationale": "The configured file is there, of a size LRPS2's listing keeps, and its bytes are under no pcsx2/bios/ identity. Whether the core offers the name rests on its ROMDIR header (IsBIOS at libretro/main.cpp:1818 at 14d19f8), and this machine models no header answer for the file, so that read did not come back: firmware-unreadable states it, and the name stands as the requirement rather than being judged not offered. LoadBIOS opens a configured file whatever the packaged table says (pcsx2/ps2/BiosTools.cpp:281), so the table's silence is neither a failure nor a green light: checked is unrecognised and satisfied is None.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -7651,7 +7651,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7693,6 +7693,12 @@
               "code": "arrangement-unverified",
               "data": {
                 "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-unreadable",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/mystery.bin"
               }
             }
           ]
@@ -7750,7 +7756,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7844,7 +7850,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -7949,7 +7955,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -8013,8 +8019,8 @@
       }
     },
     {
-      "name": "firmware-a-directory-at-the-configured-name-is-not-searched-past",
-      "rationale": "The core's test for 'is the configured file there' is path_is_valid, which is a stat that succeeded and nothing more: LoadBIOS searches the folder where the composed path is empty or that call says no (pcsx2/ps2/BiosTools.cpp:270 at 14d19f8), the call is retro_vfs_stat_impl(path, NULL) & RETRO_VFS_STAT_IS_VALID (libretro-common/file/file_path_io.c:87-90), and that answers 0 on an empty path (libretro-common/vfs/vfs_implementation.c:848-849) and where the stat itself fails (:941-952) — a directory sets a separate IS_DIRECTORY bit nobody tests here. So a directory at the configured name stats perfectly well and is not searched past; it goes to the open at :281 instead, and what that open then yields for a directory is the platform's answer rather than anything those lines state, which is why the configured file stays the requirement with found 'directory', firmware-path-obstructed states the shape, and satisfied is null rather than false. The folder holds a recognised image and no verdict is stated over it — a green light there would rest on a listing this launch does not reach.",
+      "name": "firmware-a-directory-at-the-configured-name-is-not-offered",
+      "rationale": "The pcsx2_bios value names a directory inside the folder. LRPS2's listing passes FILESYSTEM_FIND_FILES alone (libretro/main.cpp:1807 at 14d19f8), so a directory is no value the core offers. RetroArch hands a core a stored value only where it matches one the core declared (core_option_manager.c:1031-1053, the guard at :1037, at a79435a), and LRPS2 declares as pcsx2_bios's values only the bare names of the files its listing keeps: 4 to 8 MiB, passing IsBIOS's ROMDIR walk, the first of them the default (libretro/main.cpp:1810-1834 at 14d19f8). So the launch reads the default, the first image the listing kept, and never reaches the stat that a directory would pass: firmware-configured-image-not-offered says so, and the folder verdict is the answer — the recognised image there satisfies it.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -8066,8 +8072,8 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
-              "requirements_met": null,
+              "locating": "by-name-then-content",
+              "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
               "requirements": [
@@ -8076,27 +8082,27 @@
                   "system": "ps2",
                   "system_source": "systemname",
                   "need": "required",
-                  "file_name": "a-folder",
-                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios/a-folder",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
                   "declared": "pcsx2/bios",
-                  "declared_kind": "file",
+                  "declared_kind": "directory",
                   "identity": null,
                   "found": "directory",
                   "present": true,
                   "checked": "unknown",
-                  "satisfied": null,
+                  "satisfied": true,
                   "supplied_by": null
                 }
               ],
               "refused": [],
               "caveats": [
                 {
-                  "code": "firmware-image-configured",
+                  "code": "firmware-configured-image-not-offered",
                   "data": {
                     "core": "pcsx2",
                     "key": "pcsx2_bios",
                     "name": "a-folder",
-                    "options_file": "/home/deck/.config/retroarch/retroarch-core-options.cfg"
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
                   }
                 }
               ]
@@ -8111,9 +8117,18 @@
               }
             },
             {
-              "code": "firmware-path-obstructed",
+              "code": "firmware-image-identified",
               "data": {
-                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/a-folder"
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcsx2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
               }
             }
           ]
@@ -8174,7 +8189,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -8279,7 +8294,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -8334,7 +8349,7 @@
     },
     {
       "name": "firmware-the-per-core-options-file-outranks-the-global-one",
-      "rationale": "RetroArch reads the per-core .opt before the global options file unless global_core_options switched it on, and that file is named for the core's library_name — which lives only in the binary, so reading it costs the same probe RetroArch makes. Here the two files name different images and the per-core one governs.",
+      "rationale": "RetroArch reads the per-core .opt before the global options file unless global_core_options switched it on, and that file is named for the core's library_name — which lives only in the binary, so reading it costs the same probe RetroArch makes. Here the two files name different images and the per-core one governs. That file's ROMDIR header, which decides whether LRPS2 offers the name, has no modeled answer on this machine, so firmware-unreadable states the read that did not come back and the name stands.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -8393,7 +8408,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -8435,6 +8450,12 @@
               "code": "arrangement-unverified",
               "data": {
                 "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-unreadable",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/mystery.bin"
               }
             }
           ]
@@ -8497,7 +8518,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -8558,8 +8579,8 @@
       }
     },
     {
-      "name": "firmware-a-configured-name-climbing-out-of-the-root-is-refused",
-      "rationale": "Path::Combine resolves no component of its own, so a value with ../ composes literally and where it lands is the kernel's answer. This one leaves the firmware root, which atlas refuses rather than follows: no destination is stated for it, firmware-path-escapes-root says why, and the folder's own listing is what the answer carries. An absolute value would not need refusing — the combine swallows its leading separator and it lands below the folder.",
+      "name": "firmware-a-configured-name-climbing-out-of-the-root-is-not-offered",
+      "rationale": "The pcsx2_bios value carries separators and climbs out of the firmware root. The core offers GetFileName of each file its listing returns (libretro/main.cpp:1819 at 14d19f8), so a name with a separator is no value it offers. RetroArch hands a core a stored value only where it matches one the core declared (core_option_manager.c:1031-1053, the guard at :1037, at a79435a), and LRPS2 declares as pcsx2_bios's values only the bare names of the files its listing keeps: 4 to 8 MiB, passing IsBIOS's ROMDIR walk, the first of them the default (libretro/main.cpp:1810-1834 at 14d19f8). So the name never reaches Path::Combine: nothing is composed or refused, firmware-configured-image-not-offered says the stored name was not handed on, and the folder's own listing is the answer.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -8608,7 +8629,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -8633,11 +8654,12 @@
               "refused": [],
               "caveats": [
                 {
-                  "code": "firmware-path-escapes-root",
+                  "code": "firmware-configured-image-not-offered",
                   "data": {
-                    "core_so": "pcsx2_libretro.so",
-                    "declared": "../../../elsewhere/scph70004.bin",
-                    "key": "pcsx2_bios"
+                    "core": "pcsx2",
+                    "key": "pcsx2_bios",
+                    "name": "../../../elsewhere/scph70004.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
                   }
                 }
               ]
@@ -8671,8 +8693,8 @@
       }
     },
     {
-      "name": "firmware-a-configured-name-with-a-separator-is-followed-inside-the-root",
-      "rationale": "Path::Combine resolves no component of its own and upstream normalises nothing, so a value carrying ../ composes literally and where it lands is the kernel's answer — which is the file the core opens (FullpathToBios, pcsx2/Pcsx2Config.cpp:994-1000 at 14d19f8, then LoadBIOS at pcsx2/ps2/BiosTools.cpp:281). atlas follows it for that reason and refuses only what leaves the firmware root, which is the bound every read it makes is held to. So path names a file OUTSIDE the declared folder while declared stays the folder, and the claim follows the path: the file is in a directory the unclaimed scan walks, and it is not stated there a second time.",
+      "name": "firmware-a-configured-name-with-a-separator-is-not-offered",
+      "rationale": "The pcsx2_bios value carries a separator and would land on a file beside the folder. The core offers GetFileName of each file its listing returns (libretro/main.cpp:1819 at 14d19f8), so a name with a separator is no value it offers. RetroArch hands a core a stored value only where it matches one the core declared (core_option_manager.c:1031-1053, the guard at :1037, at a79435a), and LRPS2 declares as pcsx2_bios's values only the bare names of the files its listing keeps: 4 to 8 MiB, passing IsBIOS's ROMDIR walk, the first of them the default (libretro/main.cpp:1810-1834 at 14d19f8). So the launch reads the default, nothing composes the name, and the folder verdict is the answer: the folder holds nothing of an accepted size, so the requirement is unmet, and the file beside it is claimed by no core: the inventory states it as unclaimed, named by its bytes as the packaged image it is.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -8684,6 +8706,7 @@
           "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"../elsewhere.bin\"\n",
           "/home/deck/.config/retroarch/system/pcsx2/elsewhere.bin": {
             "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "sha1": "434bc0b4eb4827da0773ec0795aadc5162569a07",
             "size": 4194304
           }
         },
@@ -8717,8 +8740,8 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
-              "requirements_met": true,
+              "locating": "by-name-then-content",
+              "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
               "requirements": [
@@ -8727,43 +8750,63 @@
                   "system": "ps2",
                   "system_source": "systemname",
                   "need": "required",
-                  "file_name": "elsewhere.bin",
-                  "path": "/home/deck/.config/retroarch/system/pcsx2/elsewhere.bin",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
                   "declared": "pcsx2/bios",
-                  "declared_kind": "file",
-                  "identity": {
-                    "md5": "dc752f160044f2ed5fc1f4964db2a095",
-                    "sha1": "434bc0b4eb4827da0773ec0795aadc5162569a07",
-                    "size": 4194304,
-                    "kind": "file"
-                  },
-                  "found": "file",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
                   "present": true,
-                  "checked": "verified",
-                  "satisfied": true,
+                  "checked": "unknown",
+                  "satisfied": false,
                   "supplied_by": null
                 }
               ],
               "refused": [],
               "caveats": [
                 {
-                  "code": "firmware-image-configured",
+                  "code": "firmware-configured-image-not-offered",
                   "data": {
                     "core": "pcsx2",
                     "key": "pcsx2_bios",
                     "name": "../elsewhere.bin",
-                    "options_file": "/home/deck/.config/retroarch/retroarch-core-options.cfg"
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
                   }
                 }
               ]
             }
           ],
-          "unclaimed": [],
+          "unclaimed": [
+            {
+              "path": "/home/deck/.config/retroarch/system/pcsx2/elsewhere.bin",
+              "identity": {
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "sha1": "434bc0b4eb4827da0773ec0795aadc5162569a07",
+                "size": 4194304,
+                "kind": "file"
+              },
+              "known_as": [
+                "pcsx2/bios/ps2-0200e-20040614.bin"
+              ],
+              "description": "pcsx2/bios/ps2-0200e-20040614.bin",
+              "console": "ps2",
+              "concerns": []
+            }
+          ],
           "caveats": [
             {
               "code": "arrangement-unverified",
               "data": {
                 "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-directory-holds-no-candidate",
+              "data": {
+                "dir": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                "core_so": "pcsx2_libretro.so",
+                "need": "required",
+                "table_version": "6"
               }
             }
           ]
@@ -8824,7 +8867,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -9325,7 +9368,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -9407,7 +9450,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -9673,7 +9716,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -9727,7 +9770,7 @@
                 "dir": "/mnt/sd/retrodeck/bios",
                 "core_so": "pcsx2_libretro.so",
                 "need": "required",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -9796,7 +9839,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -9902,7 +9945,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -9939,7 +9982,7 @@
                   "/mnt/sd/retrodeck/bios/xbox_hdd.qcow2"
                 ],
                 "core_so": "pcsx2_libretro.so",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -10019,7 +10062,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -10170,7 +10213,7 @@
               "declared_index": null,
               "label": null,
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -10289,7 +10332,7 @@
               "declared_index": 0,
               "label": "LRPS2",
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -10320,7 +10363,7 @@
               "declared_index": 1,
               "label": "PCSX2",
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": null,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -10417,7 +10460,7 @@
               "declared_index": 0,
               "label": "LRPS2",
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -10448,7 +10491,7 @@
               "declared_index": 1,
               "label": "PCSX2",
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -10555,7 +10598,7 @@
               "declared_index": 0,
               "label": "LRPS2",
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -10596,7 +10639,7 @@
               "declared_index": 1,
               "label": "PCSX2",
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": true,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -21798,7 +21841,7 @@
               "declared_index": 0,
               "label": "LRPS2",
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -21829,7 +21872,7 @@
               "declared_index": 1,
               "label": "PCSX2",
               "declaration": "read",
-              "locating": "unestablished",
+              "locating": "by-name-then-content",
               "requirements_met": false,
               "system_firmware": null,
               "system_firmware_met": null,
@@ -21861,7 +21904,7 @@
               "code": "firmware-path-not-a-directory",
               "data": {
                 "path": "/mnt/sd/retrodeck/bios/pcsx2/bios",
-                "table_version": "4"
+                "table_version": "6"
               }
             }
           ]
@@ -30980,6 +31023,1668 @@
           ],
           "unclaimed": [],
           "caveats": []
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-without-its-info-answers-from-a-packaged-declaration",
+      "rationale": "PCEE2 is deployed without its .info, so nothing on the machine declares its firmware. atlas packages the declaration in that file's place (atlas/data/core_declarations.json): the folder pcsx2/bios, required, read from pcee2-libretro at 340ce04. The core answers declaration='packaged' with core-info-packaged leading its caveats, and locating='by-name-then-content' from its core_firmware.json entry. The configured pcsx2_bios value names a file in the folder whose ROMDIR header passes the core's own test, so the core offers it and the launch opens it (pcee2-libretro/Libretro.cpp:1023-1025): the requirement is that file, verified by the packaged prefix table.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"scph70004.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "scph70004.bin",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "file",
+                  "identity": {
+                    "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                    "sha1": "434bc0b4eb4827da0773ec0795aadc5162569a07",
+                    "size": 4194304,
+                    "kind": "file"
+                  },
+                  "found": "file",
+                  "present": true,
+                  "checked": "verified",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                },
+                {
+                  "code": "firmware-image-configured",
+                  "data": {
+                    "core": "pcee2",
+                    "key": "pcsx2_bios",
+                    "name": "scph70004.bin",
+                    "options_file": "/home/deck/.config/retroarch/retroarch-core-options.cfg"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-a-configured-name-at-no-file-leaves-the-listing",
+      "rationale": "The configured pcsx2_bios value names a file the folder does not hold. The core never offered that name as a value (its values are auto and the files its listing accepts, pcee2-libretro/Libretro.cpp:660-680), so RetroArch hands it the default auto and the core takes the first file of its listing that passes the header test (:640-657). firmware-configured-image-missing says the stored name is stale, and the folder verdict is the answer: the image there satisfies the declaration.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"scph10000.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                },
+                {
+                  "code": "firmware-configured-image-missing",
+                  "data": {
+                    "core": "pcee2",
+                    "key": "pcsx2_bios",
+                    "name": "scph10000.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-identified",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcee2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-auto-takes-an-image-of-any-size",
+      "rationale": "With pcsx2_bios at auto the core lists its folder and takes the first file whose ROMDIR header passes IsBIOS, with no size filter (pcee2-libretro/Libretro.cpp:640-657, :660-680) — unlike LRPS2, which keeps only 4-8 MiB. A 2 MiB file the header test passes is an image here, named by its own header because the packaged table does not list its bytes, and it satisfies the declaration. auto is the option's value for the listing, never a file name, so it composes no path.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"auto\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/custom.bin": {
+            "md5": "0123456789abcdef0123456789abcdef",
+            "size": 2097152
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/custom.bin": {
+            "romver": "0160AC20000727",
+            "serial": "fixture-us"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-unlisted",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/custom.bin",
+                "description": "USA     v01.60(27/07/2000)  Console fixture-us",
+                "zone": "USA",
+                "version": "01.60",
+                "date": "2000-07-27",
+                "serial": "fixture-us",
+                "md5": "0123456789abcdef0123456789abcdef",
+                "table": "6.0.0",
+                "core_so": "pcee2_libretro.so"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-with-no-bios-and-another-core-without-its-info",
+      "rationale": "Only a core with a packaged entry is answered from one. PCEE2's folder is there and empty: with no size filter, 'no candidate' means no file at all, so the listing offers nothing and the declaration is unmet without reading a byte. mesen_libretro.so is deployed without its .info too and has no packaged entry, so it stays declaration='unreadable' with core-info-unreadable — exactly what it answered before.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/usr/lib/libretro/mesen_libretro.so": {
+            "status": "invalid-text"
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info",
+          "/home/deck/.config/retroarch/system/pcsx2/bios"
+        ],
+        "firmware_query": {
+          "kind": "inventory"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": false,
+          "cores": [
+            {
+              "core_so": "mesen_libretro.so",
+              "emulator": "mesen_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "unreadable",
+              "locating": "unestablished",
+              "requirements_met": null,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-unreadable",
+                  "data": {
+                    "core_so": "mesen_libretro.so",
+                    "status": "missing"
+                  }
+                }
+              ]
+            },
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": false,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": false,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-directory-holds-no-candidate",
+              "data": {
+                "dir": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                "core_so": "pcee2_libretro.so",
+                "need": "required",
+                "table_version": "6"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-a-configured-file-that-fails-the-header-is-not-offered",
+      "rationale": "The configured pcsx2_bios value names a file that is there, and its ROMDIR header fails the core's own test. The core's option offers only the files its listing accepts by IsBIOS (pcee2-libretro/Libretro.cpp:660-680), and RetroArch hands a core a stored value only where it matches a declared one (core_option_manager.c:1031-1053, guard :1037, at a79435a) — so the launch reads auto and takes the listing. firmware-configured-image-not-offered says so, and the folder verdict is the answer: the other file there is an image.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"notes.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/notes.bin": {
+            "md5": "fedcba9876543210fedcba9876543210",
+            "size": 4194304
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/notes.bin": "not-a-bios",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                },
+                {
+                  "code": "firmware-configured-image-not-offered",
+                  "data": {
+                    "core": "pcee2",
+                    "key": "pcsx2_bios",
+                    "name": "notes.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-identified",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcee2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-a-configured-file-without-a-content-check-stays-open",
+      "rationale": "Whether the core offers a configured file turns on its header, and without a content check the header is not read. The named file stays the requirement, unchecked, and satisfied is null: nothing establishes whether the launch opens it or falls back to the listing.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"scph70004.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so"
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": false,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": null,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "scph70004.bin",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "file",
+                  "identity": null,
+                  "found": "file",
+                  "present": true,
+                  "checked": "unchecked",
+                  "satisfied": null,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                },
+                {
+                  "code": "firmware-image-configured",
+                  "data": {
+                    "core": "pcee2",
+                    "key": "pcsx2_bios",
+                    "name": "scph70004.bin",
+                    "options_file": "/home/deck/.config/retroarch/retroarch-core-options.cfg"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-a-directory-at-the-configured-name-is-not-offered",
+      "rationale": "The core lists its folder with FILESYSTEM_FIND_FILES (pcee2-libretro/Libretro.cpp:669-671), so a directory is never one of the option's values, and a stored name reaching one reaches the core as auto. The stat settles it without a content check: firmware-configured-image-not-offered, and the folder verdict beside it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"old\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/old"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                },
+                {
+                  "code": "firmware-configured-image-not-offered",
+                  "data": {
+                    "core": "pcee2",
+                    "key": "pcsx2_bios",
+                    "name": "old",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-identified",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcee2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-a-configured-name-with-a-separator-is-not-offered",
+      "rationale": "The option's values are the bare names of the files the listing accepts (Path::GetFileName, pcee2-libretro/Libretro.cpp:677), so a stored value carrying a separator is never one of them, wherever it would land. It is not followed: firmware-configured-image-not-offered, and the folder verdict beside it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"../scph70004.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                },
+                {
+                  "code": "firmware-configured-image-not-offered",
+                  "data": {
+                    "core": "pcee2",
+                    "key": "pcsx2_bios",
+                    "name": "../scph70004.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-identified",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcee2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-a-hidden-configured-name-is-not-offered",
+      "rationale": "Both of PCEE2's listings pass no FILESYSTEM_FIND_HIDDEN_FILES (pcee2-libretro/Libretro.cpp:644, :670-671), so FindFiles skips every name starting with '.' (common/FileSystem.cpp:2319-2325, common/FileSystemVFS.cpp:675-682 at 340ce04). A hidden file is never one of the pcsx2_bios values, whatever its header says, so a stored hidden name reaches the core as auto: firmware-configured-image-not-offered, and the folder verdict beside it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \".scph70004.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/.scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/.scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                },
+                {
+                  "code": "firmware-configured-image-not-offered",
+                  "data": {
+                    "core": "pcee2",
+                    "key": "pcsx2_bios",
+                    "name": ".scph70004.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-identified",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcee2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-pcee2-a-configured-file-whose-header-will-not-come-back-is-unread",
+      "rationale": "The header read that decides whether the core offers the configured file did not come back. That is a statement about atlas's read, not about the file: the named file stays the requirement, firmware-unreadable states the failed read, and the packaged table's answer about its bytes stands beside it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/lib/libretro/pcee2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"scph70004.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "0123456789abcdef0123456789abcdef",
+            "size": 4194304
+          }
+        },
+        "dirs": [
+          "/usr/share/libretro/info"
+        ],
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcee2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": "unreadable"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcee2_libretro.so",
+              "emulator": "pcee2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "packaged",
+              "locating": "by-name-then-content",
+              "requirements_met": null,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcee2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "scph70004.bin",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "file",
+                  "identity": null,
+                  "found": "file",
+                  "present": true,
+                  "checked": "unrecognised",
+                  "satisfied": null,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "core-info-packaged",
+                  "data": {
+                    "core_so": "pcee2_libretro.so"
+                  }
+                },
+                {
+                  "code": "firmware-image-configured",
+                  "data": {
+                    "core": "pcee2",
+                    "key": "pcsx2_bios",
+                    "name": "scph70004.bin",
+                    "options_file": "/home/deck/.config/retroarch/retroarch-core-options.cfg"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-unreadable",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-lrps2-a-configured-file-of-another-size-is-not-offered",
+      "rationale": "The pcsx2_bios value names a file that is there and whose header reads as a PS2 BIOS, but it is 2 MiB, below the 4 MiB LRPS2's listing keeps (MIN_BIOS_SIZE, libretro/main.cpp:1810-1816 at 14d19f8) — the listing's first test, a stat made before any read. RetroArch hands a core a stored value only where it matches one the core declared (core_option_manager.c:1031-1053, the guard at :1037, at a79435a), and LRPS2 declares as pcsx2_bios's values only the bare names of the files its listing keeps: 4 to 8 MiB, passing IsBIOS's ROMDIR walk, the first of them the default (libretro/main.cpp:1810-1834 at 14d19f8). So the launch reads the default, the first image the listing kept: firmware-configured-image-not-offered says so, and the folder verdict is the answer — the right-sized image beside it satisfies the declaration.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/share/libretro/info/pcsx2_libretro.info": "systemname = \"Sony PlayStation 2\"\nfirmware_count = 1\nfirmware0_desc = \"'pcsx2/bios' folder\"\nfirmware0_path = \"pcsx2/bios\"\nfirmware0_opt = \"false\"\n",
+          "/usr/lib/libretro/pcsx2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"small.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/small.bin": {
+            "md5": "0123456789abcdef0123456789abcdef",
+            "size": 2097152
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcsx2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/small.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcsx2_libretro.so",
+              "emulator": "pcsx2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "read",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcsx2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "firmware-configured-image-not-offered",
+                  "data": {
+                    "core": "pcsx2",
+                    "key": "pcsx2_bios",
+                    "name": "small.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-identified",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcsx2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-lrps2-a-configured-file-of-another-size-is-not-offered-without-a-content-check",
+      "rationale": "The same size test as the vector beside it, asked without a content check. The size is a stat, LRPS2's first filter over its listing (libretro/main.cpp:1815 at 14d19f8), so it settles that the name is not offered without reading any bytes: firmware-configured-image-not-offered is stated, and the folder answers as it does without a content check — files of an accepted size whose header nobody read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/share/libretro/info/pcsx2_libretro.info": "systemname = \"Sony PlayStation 2\"\nfirmware_count = 1\nfirmware0_desc = \"'pcsx2/bios' folder\"\nfirmware0_path = \"pcsx2/bios\"\nfirmware0_opt = \"false\"\n",
+          "/usr/lib/libretro/pcsx2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"big.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/big.bin": {
+            "md5": "0123456789abcdef0123456789abcdee",
+            "size": 8388609
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcsx2_libretro.so",
+          "verify": false
+        },
+        "ps2_bios_headers": {}
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": false,
+          "cores": [
+            {
+              "core_so": "pcsx2_libretro.so",
+              "emulator": "pcsx2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "read",
+              "locating": "by-name-then-content",
+              "requirements_met": null,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcsx2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": null,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "firmware-configured-image-not-offered",
+                  "data": {
+                    "core": "pcsx2",
+                    "key": "pcsx2_bios",
+                    "name": "big.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-search-unverified",
+              "data": {
+                "dir": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                "candidates": "1",
+                "need": "required",
+                "core_so": "pcsx2_libretro.so"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-lrps2-a-configured-file-that-fails-the-header-is-not-offered",
+      "rationale": "The pcsx2_bios value names a right-sized file that is there, and its ROMDIR header fails the core's own test. LRPS2's listing keeps only the files IsBIOS accepts (libretro/main.cpp:1818 at 14d19f8). RetroArch hands a core a stored value only where it matches one the core declared (core_option_manager.c:1031-1053, the guard at :1037, at a79435a), and LRPS2 declares as pcsx2_bios's values only the bare names of the files its listing keeps: 4 to 8 MiB, passing IsBIOS's ROMDIR walk, the first of them the default (libretro/main.cpp:1810-1834 at 14d19f8). The core itself would have opened that file whatever its header said (pcsx2/ps2/BiosTools.cpp:281, the walk's return discarded at :294), but the name never reaches it: firmware-configured-image-not-offered says so, and the folder verdict is the answer — the other file there is an image.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/share/libretro/info/pcsx2_libretro.info": "systemname = \"Sony PlayStation 2\"\nfirmware_count = 1\nfirmware0_desc = \"'pcsx2/bios' folder\"\nfirmware0_path = \"pcsx2/bios\"\nfirmware0_opt = \"false\"\n",
+          "/usr/lib/libretro/pcsx2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \"notes.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/notes.bin": {
+            "md5": "fedcba9876543210fedcba9876543210",
+            "size": 4194304
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcsx2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/notes.bin": "not-a-bios",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcsx2_libretro.so",
+              "emulator": "pcsx2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "read",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcsx2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "firmware-configured-image-not-offered",
+                  "data": {
+                    "core": "pcsx2",
+                    "key": "pcsx2_bios",
+                    "name": "notes.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-identified",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcsx2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firmware-lrps2-a-hidden-configured-name-is-not-offered",
+      "rationale": "The pcsx2_bios value names a file whose name starts with a dot. LRPS2 lists its folder without FILESYSTEM_FIND_HIDDEN_FILES (libretro/main.cpp:1807 at 14d19f8), and FindFiles skips such a name (common/FileSystem.cpp:855-862), so it is no value the core offers, however right its bytes. RetroArch hands a core a stored value only where it matches one the core declared (core_option_manager.c:1031-1053, the guard at :1037, at a79435a), and LRPS2 declares as pcsx2_bios's values only the bare names of the files its listing keeps: 4 to 8 MiB, passing IsBIOS's ROMDIR walk, the first of them the default (libretro/main.cpp:1810-1834 at 14d19f8). firmware-configured-image-not-offered says so, and the folder verdict is the answer.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/retroarch/retroarch.cfg": "system_directory = \"/home/deck/.config/retroarch/system\"\nlibretro_directory = \"/usr/lib/libretro\"\nlibretro_info_path = \"/usr/share/libretro/info\"\n",
+          "/usr/share/libretro/info/pcsx2_libretro.info": "systemname = \"Sony PlayStation 2\"\nfirmware_count = 1\nfirmware0_desc = \"'pcsx2/bios' folder\"\nfirmware0_path = \"pcsx2/bios\"\nfirmware0_opt = \"false\"\n",
+          "/usr/lib/libretro/pcsx2_libretro.so": {
+            "status": "invalid-text"
+          },
+          "/home/deck/.config/retroarch/retroarch-core-options.cfg": "pcsx2_bios = \".scph70004.bin\"\n",
+          "/home/deck/.config/retroarch/system/pcsx2/bios/.scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "md5": "dc752f160044f2ed5fc1f4964db2a095",
+            "size": 4194304
+          }
+        },
+        "firmware_query": {
+          "kind": "core",
+          "core_so": "pcsx2_libretro.so",
+          "verify": true
+        },
+        "ps2_bios_headers": {
+          "/home/deck/.config/retroarch/system/pcsx2/bios/.scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          },
+          "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin": {
+            "romver": "0200EC20040614",
+            "serial": "fixture-eu"
+          }
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_native",
+            "label": "RetroArch (native)",
+            "kinds": [
+              "bare_retroarch_native"
+            ],
+            "root": "/home/deck/.config/retroarch",
+            "health": []
+          }
+        ],
+        "firmware": {
+          "root": "/home/deck/.config/retroarch/system",
+          "hash_checked": true,
+          "cores": [
+            {
+              "core_so": "pcsx2_libretro.so",
+              "emulator": "pcsx2_libretro.so",
+              "declared_index": null,
+              "label": null,
+              "declaration": "read",
+              "locating": "by-name-then-content",
+              "requirements_met": true,
+              "system_firmware": null,
+              "system_firmware_met": null,
+              "requirements": [
+                {
+                  "core_so": "pcsx2_libretro.so",
+                  "system": "ps2",
+                  "system_source": "systemname",
+                  "need": "required",
+                  "file_name": "bios",
+                  "path": "/home/deck/.config/retroarch/system/pcsx2/bios",
+                  "declared": "pcsx2/bios",
+                  "declared_kind": "directory",
+                  "identity": null,
+                  "found": "directory",
+                  "present": true,
+                  "checked": "unknown",
+                  "satisfied": true,
+                  "supplied_by": null
+                }
+              ],
+              "refused": [],
+              "caveats": [
+                {
+                  "code": "firmware-configured-image-not-offered",
+                  "data": {
+                    "core": "pcsx2",
+                    "key": "pcsx2_bios",
+                    "name": ".scph70004.bin",
+                    "dir": "/home/deck/.config/retroarch/system/pcsx2/bios"
+                  }
+                }
+              ]
+            }
+          ],
+          "unclaimed": [],
+          "caveats": [
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_native"
+              }
+            },
+            {
+              "code": "firmware-image-identified",
+              "data": {
+                "path": "/home/deck/.config/retroarch/system/pcsx2/bios/scph70004.bin",
+                "image": "ps2-0200e-20040614.bin",
+                "md5": "dc752f160044f2ed5fc1f4964db2a095",
+                "table": "6.0.0",
+                "core_so": "pcsx2_libretro.so",
+                "description": "Europe  v02.00(14/06/2004)  Console fixture-eu",
+                "zone": "Europe",
+                "version": "02.00",
+                "date": "2004-06-14",
+                "serial": "fixture-eu"
+              }
+            }
+          ]
         }
       }
     }

@@ -1,0 +1,588 @@
+{
+  "schema": 1,
+  "spec": "The EmuDeck launcher scripts ES-DE can run, each pinned by the git blob hash of its deployed copy together with every file it sources (sources, shared by every script through functions/all.sh) or runs or copies on its launch path, itself or through a function it reaches (executes), and what each runs beside the emulator, read at the backend revision named in backend. Read by atlas.launcher_scripts; held against the deployed backend by tests/test_launcher_script_tripwire.py.",
+  "backend": {
+    "repository": "dragoonDorise/EmuDeck",
+    "revision": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
+  },
+  "sources": {
+    "$emudeckBackend/android/functions/EmuScripts/Android_Azahar.sh": "bde44c3c45e319454730c59983ef4f4d05cb0928",
+    "$emudeckBackend/android/functions/EmuScripts/Android_Dolphin.sh": "aeb4061b31169597e9d6113735df940002241a73",
+    "$emudeckBackend/android/functions/EmuScripts/Android_NetherSX2.sh": "ad81a9787840bb71f73043652507029228f68275",
+    "$emudeckBackend/android/functions/EmuScripts/Android_PPSSPP.sh": "88f957cd1ed35daabbe00dbee46687600c863b95",
+    "$emudeckBackend/android/functions/EmuScripts/Android_RetroArch.sh": "c4b83dfcb973a02c96590844d93518bd2e92ca40",
+    "$emudeckBackend/android/functions/EmuScripts/Android_ScummVM.sh": "6207f3e26a5a0fa812e5291c51522165d1415e96",
+    "$emudeckBackend/android/functions/EmuScripts/Android_Vita3K.sh": "2d9b61bb338996c758124b8634fa0cafbb421a88",
+    "$emudeckBackend/android/functions/EmuScripts/Android_Yuzu.sh": "88f833e483673a29b6ae34fceba708d403afb669",
+    "$emudeckBackend/android/functions/ToolScripts/Android_ADB.sh": "eb85b8686729a3dc8fc6372dea09f5a4dcc647e6",
+    "$emudeckBackend/android/functions/ToolScripts/Android_Daijisho.sh": "47de7daf30f8fda626a05fb0b5d677143f7726e5",
+    "$emudeckBackend/android/functions/ToolScripts/Android_Pegasus.sh": "9ec01da6cd00a12b5da2a7b76ca7a2b42ebca439",
+    "$emudeckBackend/android/functions/all.sh": "ce0e0d498fc2a67da6db5bf12700a5cb0aa1c176",
+    "$emudeckBackend/android/vars.sh": "b0c406a40fb500c0077dcb492611513ba484a917",
+    "$emudeckBackend/functions/EmuScripts/emuDeckAzahar.sh": "c3f032cb0f124af325b33aa2df9727d855b3eb79",
+    "$emudeckBackend/functions/EmuScripts/emuDeckBigPEmu.sh": "38e5ea74683c2b92358d290a51441b00ebcbd57d",
+    "$emudeckBackend/functions/EmuScripts/emuDeckCemu.sh": "2bc8f9f2a8a86e8f9fef476d071abef504dbdd18",
+    "$emudeckBackend/functions/EmuScripts/emuDeckCemuProton.sh": "978d0efb2ad7a6501b7a795fc5ed464dba97bdba",
+    "$emudeckBackend/functions/EmuScripts/emuDeckCitron.sh": "51176e0637cf38d7f82e5fa014a1203a75f882a4",
+    "$emudeckBackend/functions/EmuScripts/emuDeckDolphin.sh": "7054c7055bc4036be6d20203c7ee4b8dd8c9677a",
+    "$emudeckBackend/functions/EmuScripts/emuDeckDuckStation.sh": "0e0194b822e01f52d88add4ec1f4b44382ffae6b",
+    "$emudeckBackend/functions/EmuScripts/emuDeckEden.sh": "2149466783f23800c2b6b6b819fdffb1e82fc442",
+    "$emudeckBackend/functions/EmuScripts/emuDeckFlycast.sh": "5eaf47cc20a738648e82d3dd8b5acc9ae38c7a4c",
+    "$emudeckBackend/functions/EmuScripts/emuDeckMAME.sh": "280cdf794f7d6af9e1d4ddd5326d6fae4826a8dd",
+    "$emudeckBackend/functions/EmuScripts/emuDeckMGBA.sh": "77ee806ce22ca5a57476b7d78681cfb1a1b68c1f",
+    "$emudeckBackend/functions/EmuScripts/emuDeckMelonDS.sh": "52c604a04a035a00b940a41bc183f4d7ed4b6013",
+    "$emudeckBackend/functions/EmuScripts/emuDeckModel2.sh": "9b6aacd12d01f7c04594cd96201cbe0aa91eda23",
+    "$emudeckBackend/functions/EmuScripts/emuDeckPCSX2QT.sh": "7cfb7714228a3811c2a3bff642ec59288adc6d71",
+    "$emudeckBackend/functions/EmuScripts/emuDeckPPSSPP.sh": "65e3572e01dd1e5a92acfb0a7384d01452a1e72d",
+    "$emudeckBackend/functions/EmuScripts/emuDeckPrimehack.sh": "95dcec31b43e4409d45aa65e38d9b18fd91a1ccb",
+    "$emudeckBackend/functions/EmuScripts/emuDeckRMG.sh": "7460209b782c1c87656cdd8787ffc0f8a7a82aa3",
+    "$emudeckBackend/functions/EmuScripts/emuDeckRPCS3.sh": "3b79d12faa760ddc9212cb1cd433f080bdf7607c",
+    "$emudeckBackend/functions/EmuScripts/emuDeckRetroArch.sh": "758669f1a0bb78aa49e898886787e88bab899dea",
+    "$emudeckBackend/functions/EmuScripts/emuDeckRyujinx.sh": "deaacbaccdc5b60e82c689621e769d2099df9df9",
+    "$emudeckBackend/functions/EmuScripts/emuDeckScummVM.sh": "96ad53301475e0673297f921fdaf343d30533fe0",
+    "$emudeckBackend/functions/EmuScripts/emuDeckShadPS4.sh": "31c1af583cfe0274a83b7532bef138fd822be8f2",
+    "$emudeckBackend/functions/EmuScripts/emuDeckSupermodel.sh": "61fa7ee753bc87618e2c09762b593c5342fd1124",
+    "$emudeckBackend/functions/EmuScripts/emuDeckVita3K.sh": "dc1a714c10a944b5e1272bf812831770c0e51d70",
+    "$emudeckBackend/functions/EmuScripts/emuDeckXemu.sh": "64ead6be1234b5c06c42da6a08421547ba371c62",
+    "$emudeckBackend/functions/EmuScripts/emuDeckXenia.sh": "73b78b27c9c7a952b117535f6b01ad1f499c5af5",
+    "$emudeckBackend/functions/EmuScripts/emuDeckYuzu.sh": "30f685f482de69c9cc80bd36898e5a5e9f27964d",
+    "$emudeckBackend/functions/EmuScripts/emuDeckares.sh": "5dd042a414d33f292860420e79453a645da7e254",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationBottles.sh": "27578393acef76c5a65c6eef9cb8a5884e3ff46a",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationCider.sh": "e1a0711ea869c500bb980445c2ee034816eb7cd3",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationFlatseal.sh": "87fba1ed024f6c42db286fcf9e9c8023ca1568cf",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationHeroic.sh": "473d12a5d8c25fcb4a520ab89ab5906ff38285d1",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationLutris.sh": "c662a131c16b84fb8874deb424cb8efe70679bd4",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationPlexamp.sh": "5ff577066e65eb20bbc0f5354229fbb41c197f4b",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationSpotify.sh": "cf6876976bdab2ffff668b42c3bf9a011778dbea",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationTidal.sh": "3e52d5438e2cad52801930478af010480f6d4055",
+    "$emudeckBackend/functions/GenericApplicationsScripts/genericApplicationWarehouse.sh": "edc0ada170df75b5bfd5af131bd986316ac1ab24",
+    "$emudeckBackend/functions/RemotePlayClientScripts/remotePlayChiaki.sh": "e849ad513dfd15bb87877d02a5605c31b87f71d7",
+    "$emudeckBackend/functions/RemotePlayClientScripts/remotePlayChiaking.sh": "99d90acf9ca7572b7955e609c3403bc42f9bc258",
+    "$emudeckBackend/functions/RemotePlayClientScripts/remotePlayGreenlight.sh": "d7ed0d7fca9f7c7a6a69126523f5880316abc327",
+    "$emudeckBackend/functions/RemotePlayClientScripts/remotePlayMoonlight.sh": "b454a4f3cfed27aac9fa5e2c891ede8313d56a7f",
+    "$emudeckBackend/functions/RemotePlayClientScripts/remotePlayParsec.sh": "915abdc79d4dda287262a382cd3ee153a60eba80",
+    "$emudeckBackend/functions/RemotePlayClientScripts/remotePlayShadow.sh": "13b4281ad7986dcaf751ec45180b76c0257883c7",
+    "$emudeckBackend/functions/RemotePlayClientScripts/remotePlaySteamLink.sh": "b3230e401cbbb4c396fa5732749da1272a706b87",
+    "$emudeckBackend/functions/ToolScripts/emuDeckBINUP.sh": "80ce5394044eb076544a22949a70cc17cf93ad44",
+    "$emudeckBackend/functions/ToolScripts/emuDeckCHD.sh": "a5ef7870beacfcfddd0c78ffd0e8293055dd75b9",
+    "$emudeckBackend/functions/ToolScripts/emuDeckCloudBackup.sh": "ce80ad180b0a9162918ed0f9843339c520e29249",
+    "$emudeckBackend/functions/ToolScripts/emuDeckCloudSync.sh": "a6009914fba38277f553003ef25548796a6550c7",
+    "$emudeckBackend/functions/ToolScripts/emuDeckCopyGames.sh": "11ee0ad22874097d3a5d8036eab40a60365954b0",
+    "$emudeckBackend/functions/ToolScripts/emuDeckESDE.sh": "c5de350a186dc5e20cbf3f9e9354c5d7be566fd2",
+    "$emudeckBackend/functions/ToolScripts/emuDeckFlatpakUP.sh": "8cbe82e21568900ed1b88f3081a14c7b01e9baa0",
+    "$emudeckBackend/functions/ToolScripts/emuDeckInstallHomebrewGames.sh": "2d2a4d0a65fc579c826e733d4c83a72eb91cf093",
+    "$emudeckBackend/functions/ToolScripts/emuDeckMigration.sh": "b129a56e11dfc7a65081f2b57af20b0c61e79525",
+    "$emudeckBackend/functions/ToolScripts/emuDeckNetPlay.sh": "e60af83f484beb0bfe3b41acbefd21d0362d64be",
+    "$emudeckBackend/functions/ToolScripts/emuDeckPegasus.sh": "4405f3650e1e949016a5bb06f3e2293952177bac",
+    "$emudeckBackend/functions/ToolScripts/emuDeckPlugins.sh": "db115ee8b055c97eaf3998ca6f4b9f1d1a13016f",
+    "$emudeckBackend/functions/ToolScripts/emuDeckRemotePlayWhatever.sh": "411214584957cc68334dbdf7855f173f8be725aa",
+    "$emudeckBackend/functions/ToolScripts/emuDeckSRM.sh": "8788875c021a544327d931535e233d1046fabf42",
+    "$emudeckBackend/functions/ToolScripts/emuDeckStore.sh": "55ab2d7350061b7bc4ce6f2a1c4658d0f654584a",
+    "$emudeckBackend/functions/ToolScripts/emuDecky.sh": "f6849dec54b21b5c156791cde895c1d8cfa955bc",
+    "$emudeckBackend/functions/all.sh": "f15b56da4c5abe460f154c01d7ad9ff96069b098",
+    "$emudeckBackend/functions/appImageInit.sh": "71f35d56cab24addc24aa0244a48b5865be11b31",
+    "$emudeckBackend/functions/autofix.sh": "bb93ab67bf5b4e29ca11e0e8c74b55b40f4a64d3",
+    "$emudeckBackend/functions/checkBIOS.sh": "bd726fd3fc61814ddd646a6e9bf48249207d3985",
+    "$emudeckBackend/functions/checkInstalledEmus.sh": "9cf439f031fa10985e4ef1615cbb79b0dde7b64a",
+    "$emudeckBackend/functions/cloudSyncHealth.sh": "e1cd70701387715ddbd302dc8d7857903fb8c011",
+    "$emudeckBackend/functions/configEmuAI.sh": "4527b1a41e3a68d93f1ee9fdd09f02f64bd87afd",
+    "$emudeckBackend/functions/configEmuFP.sh": "095bd68d9ec5d6762f24124e8899e08986881aea",
+    "$emudeckBackend/functions/createDesktopIcons.sh": "995ab96581e6f89ec39e9f44da87097cb6a172fe",
+    "$emudeckBackend/functions/createFolders.sh": "80413108bc70d8cfff1f7f89f256bfd53a490a93",
+    "$emudeckBackend/functions/dialogBox.sh": "86b019dc8b6a25aa0b9c2cc29715fb11c665b53b",
+    "$emudeckBackend/functions/emuDeckPrereqs.sh": "a6ff96e27f29801744b21a9f47e409b123cb065a",
+    "$emudeckBackend/functions/generateGameLists.sh": "98a30211176ba41d938944bf30906d9d8f534a37",
+    "$emudeckBackend/functions/helperFunctions.sh": "f50a0497a81794f5e78cd8aaa7ef394621944eac",
+    "$emudeckBackend/functions/installEmuAI.sh": "73ae91c5d8d87c6ac9c67c6e409ea9b48ecb423b",
+    "$emudeckBackend/functions/installEmuBI.sh": "42726e019c1f1fd86b2e2c2ddfc695ade6c8c90f",
+    "$emudeckBackend/functions/installEmuFP.sh": "44e0402348d0e163d8cbcf26c612d670dd92e1d6",
+    "$emudeckBackend/functions/installToolAI.sh": "6bed9c945538b2e8a102b8b7f5876e3f0e992d39",
+    "$emudeckBackend/functions/jsonToBashVars.sh": "ba4ee5a62ef63ab6944da01a71694bb49c902ea4",
+    "$emudeckBackend/functions/migrateAndLinkConfig.sh": "972589207333a596235419878f6e45f0699942a2",
+    "$emudeckBackend/functions/nonDeck.sh": "2c308b92b6a78aed3eb4817f614cf821ff4a9ecd",
+    "$emudeckBackend/functions/runSRM.sh": "68fc60f0ab9b1fa09e7678cb5950faa2e4528356",
+    "$emudeckBackend/functions/setMSG.sh": "aa3553e4ec35e125275f0daa3beceb60d664b3aa",
+    "$emudeckBackend/functions/uninstallEmuAI.sh": "69342fffda8fcdc323c25a036aace34c0a123e00",
+    "$emudeckBackend/functions/uninstallEmuFP.sh": "972fcb81b1e1ed25a9d58fa478f13759a529d599",
+    "$emudeckBackend/functions/uninstallGeneric.sh": "f29864c476e37de2db5d44906af99288a240f8be",
+    "$emudeckBackend/functions/updateEmuFP.sh": "d622b9c624bb177e3b054d2c0b9d65bfaeb85d02",
+    "$emudeckBackend/vars.sh": "7c66331adcbf4d01370e72301ff91d7b68d74880"
+  },
+  "scripts": [
+    {
+      "script": "dolphin-emu.sh",
+      "blob": "8f3fbbaf87cee02013d162b1ec1021120eaa2110",
+      "emulator": "dolphin",
+      "variant": "flatpak",
+      "variant_citation": "tools/launchers/dolphin-emu.sh:4 runs /usr/bin/flatpak run org.DolphinEmu.dolphin-emu, whatever else is installed.",
+      "executes": {
+        "$emudeckBackend/configs/org.DolphinEmu.dolphin-emu/config/dolphin-emu/GCPadNew.ini": "3ed2db695c3d3bf65ac5f0cf7a5c235caab35495",
+        "$emudeckBackend/tools/gamepads/dolphinGamepads.py": "073768af4e0f107bb32c5c46d39a2ba3d7407c00"
+      },
+      "steps": [
+        {
+          "code": "backend-update",
+          "runs": true,
+          "citation": "dolphin-emu.sh:3 calls emulatorInit, which runs cd $emudeckBackend and git reset --hard && git pull (functions/helperFunctions.sh:1046-1047) and then sources functions/all.sh again (:1048), so every step after it runs the pulled definitions."
+        },
+        {
+          "code": "launch-fixes",
+          "runs": "settings",
+          "citation": "emulatorInit runs emulatorLaunchFixes \"$emuName\" (functions/helperFunctions.sh:1051), which calls ${emuName}_launch_fixes or its lower-case form where one is declared (functions/helperFunctions.sh:1112-1127); dolphin-emu.sh:3 hands it dolphin, and functions/EmuScripts/emuDeckDolphin.sh:230-232 declares it as Dolphin_setGamepads (:200-228), which returns at once on a device whose product name getProductName reads as Jupiter or Galileo (functions/helperFunctions.sh:97-98) and then where autoMap is false, and otherwise copies GCPadNew.ini, rewrites the button layout and writes the connected gamepads into Dolphin's configuration."
+        },
+        {
+          "code": "service-stop",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_stopService (functions/helperFunctions.sh:1059), systemctl --user stop EmuDeckCloudSync.service (functions/ToolScripts/emuDeckCloudSync.sh:620-623)."
+        },
+        {
+          "code": "saves-marker-write",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_downloadEmu for every emulator but retroarch and esde (functions/helperFunctions.sh:1073-1075), whose first act writes the emulator's name to $savesPath/.emuName (functions/ToolScripts/emuDeckCloudSync.sh:432)."
+        },
+        {
+          "code": "cloud-sync-download",
+          "runs": "settings",
+          "citation": "cloud_sync_downloadEmu syncs only where $toolsPath/rclone/rclone is a file and cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:2-3, :434-436); a provider without Emudeck in its name gets a dialog instead (:437-441), and otherwise the network and the save folder's markers decide between a download, a conflict dialog and a failure marker (:444-546)."
+        },
+        {
+          "code": "service-start",
+          "runs": "settings",
+          "citation": "emulatorInit runs cloud_sync_downloadEmu \"$emuName\" && cloud_sync_startService (functions/helperFunctions.sh:1074), and cloud_sync_startService restarts the service only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:611-618); cloud_sync_downloadEmu returns 0 where it has no rclone binary or after the provider dialog, and otherwise what the sync returned."
+        },
+        {
+          "code": "cloud-sync-check",
+          "runs": "settings",
+          "citation": "emulatorInit checks the network and the service, with an error dialog where either is down, where $cloud_sync_bin is a file, cloud_sync_status is true and netPlay is not true (functions/helperFunctions.sh:1079-1108)."
+        },
+        {
+          "code": "cloud-sync-upload",
+          "runs": "settings",
+          "citation": "dolphin-emu.sh:5 calls cloud_sync_uploadForced, which uploads where $savesPath/.no_upload exists after the emulator exits (functions/ToolScripts/emuDeckCloudSync.sh:570-575); cloud_sync_upload acts only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:243-248)."
+        },
+        {
+          "code": "saves-marker-removal",
+          "runs": true,
+          "citation": "dolphin-emu.sh:6 removes $savesPath/.gaming."
+        }
+      ]
+    },
+    {
+      "script": "cemu.sh",
+      "blob": "a5bb0ffa5fe1ac8aa8fbf31682eb5f88324ea506",
+      "emulator": "Cemu",
+      "variant": "unestablished",
+      "variant_citation": "tools/launchers/cemu.sh:37-93 searches $emusFolder recursively for an AppImage, then the installed flatpaks, then falls to Proton, and with -w (:80-83) runs Proton only where Cemu.exe is in the ROM folder (:127, :174): not the probe atlas models.",
+      "executes": {
+        "$emulationPath/tools/appID.py": "5e7c686348b23b0914c6f8ce529bc8c73c5b4396",
+        "$emulationPath/tools/proton-launch.sh": "71682459521dd92e714b728539846f66641f6a05",
+        "$emudeckBackend/tools/gamepads/cemuGamepads.py": "4b91197d2c070d67b470e1ee9fbced3b546b309c",
+        "$emudeckBackend/configs/cemu/config/cemu/controllerTemplates/gamepad.xml": "d00a6c62f805f68905197c8117415b39498f2d1c",
+        "$emudeckBackend/configs/cemu/config/cemu/controllerTemplates/pro.xml": "5ea524882ac039d2f9faff6fbc9dd04cbf66fa8e"
+      },
+      "steps": [
+        {
+          "code": "backend-update",
+          "runs": true,
+          "citation": "cemu.sh:3 calls emulatorInit, which runs cd $emudeckBackend and git reset --hard && git pull (functions/helperFunctions.sh:1046-1047) and then sources functions/all.sh again (:1048), so every step after it runs the pulled definitions."
+        },
+        {
+          "code": "launch-fixes",
+          "runs": "settings",
+          "citation": "emulatorInit runs emulatorLaunchFixes \"$emuName\" (functions/helperFunctions.sh:1051), which calls ${emuName}_launch_fixes or its lower-case form where one is declared (functions/helperFunctions.sh:1112-1127); cemu.sh:3 hands it Cemu, and functions/EmuScripts/emuDeckCemu.sh:508-510 declares it as Cemu_functions setControllers (:349-376), which returns at once on a Jupiter or Galileo and then where autoMap is false, and otherwise rewrites the button layout of Cemu's controller profiles and writes the connected gamepads from EmuDeck's templates."
+        },
+        {
+          "code": "service-stop",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_stopService (functions/helperFunctions.sh:1059), systemctl --user stop EmuDeckCloudSync.service (functions/ToolScripts/emuDeckCloudSync.sh:620-623)."
+        },
+        {
+          "code": "saves-marker-write",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_downloadEmu for every emulator but retroarch and esde (functions/helperFunctions.sh:1073-1075), whose first act writes the emulator's name to $savesPath/.emuName (functions/ToolScripts/emuDeckCloudSync.sh:432)."
+        },
+        {
+          "code": "cloud-sync-download",
+          "runs": "settings",
+          "citation": "cloud_sync_downloadEmu syncs only where $toolsPath/rclone/rclone is a file and cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:2-3, :434-436); a provider without Emudeck in its name gets a dialog instead (:437-441), and otherwise the network and the save folder's markers decide between a download, a conflict dialog and a failure marker (:444-546)."
+        },
+        {
+          "code": "service-start",
+          "runs": "settings",
+          "citation": "emulatorInit runs cloud_sync_downloadEmu \"$emuName\" && cloud_sync_startService (functions/helperFunctions.sh:1074), and cloud_sync_startService restarts the service only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:611-618); cloud_sync_downloadEmu returns 0 where it has no rclone binary or after the provider dialog, and otherwise what the sync returned."
+        },
+        {
+          "code": "cloud-sync-check",
+          "runs": "settings",
+          "citation": "emulatorInit checks the network and the service, with an error dialog where either is down, where $cloud_sync_bin is a file, cloud_sync_status is true and netPlay is not true (functions/helperFunctions.sh:1079-1108)."
+        },
+        {
+          "code": "emulator-made-executable",
+          "runs": null,
+          "citation": "cemu.sh:115-117 and :135-137 makes the emulator file the script found executable; which file it finds, if any, is decided at launch."
+        },
+        {
+          "code": "proton-install",
+          "runs": null,
+          "citation": "cemu.sh:205 runs proton-launch.sh, which looks for the Proton version it needs in Steam's libraries and, where none holds it, asks Steam to install it with a dialog (tools/proton-launch.sh:53-87, findProton :90-112); the exit that follows (:81) leaves only the command substitution findProton runs in (:252), so the script goes on with no Proton — it creates the prefix (set_env, :267) and runs python with an empty Proton path (:270-275), and the emulator does not start. Whether a library holds the version is decided at launch."
+        },
+        {
+          "code": "proton-prefix-create",
+          "runs": null,
+          "citation": "proton-launch.sh creates the launch's prefix under Steam's compatdata where it does not exist (tools/proton-launch.sh:137-146); whether it exists is decided at launch."
+        },
+        {
+          "code": "cloud-sync-upload",
+          "runs": "settings",
+          "citation": "cemu.sh:226 calls cloud_sync_uploadForced, which uploads where $savesPath/.no_upload exists after the emulator exits (functions/ToolScripts/emuDeckCloudSync.sh:570-575); cloud_sync_upload acts only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:243-248)."
+        },
+        {
+          "code": "saves-marker-removal",
+          "runs": true,
+          "citation": "cemu.sh:227 removes $savesPath/.gaming."
+        }
+      ]
+    },
+    {
+      "script": "ryujinx.sh",
+      "blob": "7178fde48065562e54aee4e4537ab722c546d5ad",
+      "emulator": "ryujinx",
+      "variant": "unestablished",
+      "variant_citation": "tools/launchers/ryujinx.sh:11-24 searches $emusFolder/publish for Ryujinx.sh and falls back to the flatpak whose id carries Ryujinx: not the probe atlas models.",
+      "executes": {
+        "$emudeckBackend/tools/gamepads/ryujinxGamepads.py": "aa463d718148cec95ad6325db90fcf30ba1dab69",
+        "$emudeckBackend/configs/Ryujinx/Config.json": "964b6dd640898b0cb5de96a1c9635d793197706f",
+        "$emudeckBackend/configs/Ryujinx/profiles/controller/Deck.json": "3294cd05c05fd8922cb59cccbaa028a799bef970",
+        "$emudeckBackend/tools/launchers/ryujinx.sh": "7178fde48065562e54aee4e4537ab722c546d5ad",
+        "$emudeckBackend/tools/binaries/xmlstarlet": "c81180ac4525257717c82db7e928bdbc403cd1cf",
+        "$emudeckBackend/configs/emulationstation/custom_systems/es_systems.xml": "2e842b2e0adb25fbf5b7af0400b99ceeb6848dca",
+        "$emudeckBackend/chimeraOS/configs/emulationstation/custom_systems/es_find_rules.xml": "449c77b4e5842e23c052299323fa6f53696923cf",
+        "$emudeckBackend/icons/Ryujinx.png": "f8632d14cba13f78bf6e4aecaded9df9b2fa6355",
+        "$emudeckBackend/configs/emulationstation/gamelists/gc/gamelist.xml": "970ff4fd0d66513d2eb9d007250d660b2f1fdc5b",
+        "$emudeckBackend/configs/emulationstation/gamelists/psp/gamelist.xml": "0e775eafddceb38201bf5899e6b043d24f722834",
+        "$emudeckBackend/configs/emulationstation/gamelists/wii/gamelist.xml": "970ff4fd0d66513d2eb9d007250d660b2f1fdc5b",
+        "$emudeckBackend/configs/emulationstation/gamelists/ps2/gamelist.xml": "410c0ef803e2363da1776c41e82804b2db58a2ea",
+        "$emudeckBackend/configs/emulationstation/gamelists/nds/gamelist.xml": "8595e4d2151518e64e3a9b6dc5f76d000650b8fa",
+        "$emudeckBackend/configs/emulationstation/gamelists/n3ds/gamelist.xml": "fba3be422a92846acb537fa9ce547634df8a003e",
+        "$emudeckBackend/configs/emulationstation/gamelists/atarilynx/gamelist.xml": "0eea7bf17c3dcae989431e8df792d61fad407ccf",
+        "$emudeckBackend/configs/emulationstation/gamelists/psx/gamelist.xml": "ca462bb1313875906fcfdb304a728da68e8a607a",
+        "$emudeckBackend/configs/emulationstation/gamelists/saturn/gamelist.xml": "06a78759b68a59f18247496f36798f6b9a88dcb9",
+        "$emudeckBackend/configs/emulationstation/gamelists/scummvm/gamelist.xml": "aa395142291da6ba6d69bc40da5a2d6258c6389e",
+        "$emudeckBackend/configs/emulationstation/gamelists/switch/gamelist.xml": "718a5ada875ec4bf639b5bf5603fea3cf383df2a"
+      },
+      "steps": [
+        {
+          "code": "backend-update",
+          "runs": true,
+          "citation": "ryujinx.sh:3 calls emulatorInit, which runs cd $emudeckBackend and git reset --hard && git pull (functions/helperFunctions.sh:1046-1047) and then sources functions/all.sh again (:1048), so every step after it runs the pulled definitions."
+        },
+        {
+          "code": "emulator-install",
+          "runs": "settings",
+          "citation": "ryujinx_launch_fixes runs Ryujinx_migrateToSDL3 first where Ryujinx_IsInstalled finds $emusFolder/publish/Ryujinx (functions/EmuScripts/emuDeckRyujinx.sh:445-447, :280-286, :6; $emusFolder is ~/Applications, vars.sh:4-5) and jq finds a gamepad backend starting with GamepadSDL2 in ~/.config/Ryujinx/Config.json (:446, :7). The migration (:396-436) runs Ryujinx_install, which downloads the latest build and unpacks it over the old one (:49-61) and writes a desktop entry with EmuDeck's icon for it under ~/.local/share (installEmuBI, functions/installEmuBI.sh:56; createDesktopShortcut, functions/helperFunctions.sh:568-609), then Ryujinx_init (:64-88): the configuration from configs/Ryujinx (configEmuAI, functions/configEmuAI.sh:2-21), the save links after deleting the save folders it links again (:163-180), the launcher scripts deployed again (flushEmulatorLaunchers, functions/helperFunctions.sh:794-820), and ES-DE's custom systems, find rules and default emulators rewritten from EmuDeck's templates where ES-DE is there (Yuzu_addESConfig, functions/EmuScripts/emuDeckYuzu.sh:405-436; ESDE_refreshCustomEmus, functions/ToolScripts/emuDeckESDE.sh:517-522; ESDE_setDefaultEmulators :427-441). Whether a file atlas cannot read names such a backend is not established."
+        },
+        {
+          "code": "launch-fixes",
+          "runs": "settings",
+          "citation": "emulatorInit runs emulatorLaunchFixes \"$emuName\" (functions/helperFunctions.sh:1051), which calls ${emuName}_launch_fixes or its lower-case form where one is declared (functions/helperFunctions.sh:1112-1127); ryujinx.sh:3 hands it ryujinx, and functions/EmuScripts/emuDeckRyujinx.sh:444-452 declares it: its reinstall aside (emulator-install), Ryujinx_ensureGyroDSU (:438-442) installs the SteamDeckGyroDSU plugin on a Jupiter or Galileo where ~/sdgyrodsu/sdgyrodsu is not a file, and Ryujinx_set_gamepad_name (:340-394) returns at once on a Jupiter or Galileo and then where autoMap is false, and otherwise rewrites the button layout and writes the connected gamepads into Ryujinx's Config.json."
+        },
+        {
+          "code": "service-stop",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_stopService (functions/helperFunctions.sh:1059), systemctl --user stop EmuDeckCloudSync.service (functions/ToolScripts/emuDeckCloudSync.sh:620-623)."
+        },
+        {
+          "code": "saves-marker-write",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_downloadEmu for every emulator but retroarch and esde (functions/helperFunctions.sh:1073-1075), whose first act writes the emulator's name to $savesPath/.emuName (functions/ToolScripts/emuDeckCloudSync.sh:432)."
+        },
+        {
+          "code": "cloud-sync-download",
+          "runs": "settings",
+          "citation": "cloud_sync_downloadEmu syncs only where $toolsPath/rclone/rclone is a file and cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:2-3, :434-436); a provider without Emudeck in its name gets a dialog instead (:437-441), and otherwise the network and the save folder's markers decide between a download, a conflict dialog and a failure marker (:444-546)."
+        },
+        {
+          "code": "service-start",
+          "runs": "settings",
+          "citation": "emulatorInit runs cloud_sync_downloadEmu \"$emuName\" && cloud_sync_startService (functions/helperFunctions.sh:1074), and cloud_sync_startService restarts the service only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:611-618); cloud_sync_downloadEmu returns 0 where it has no rclone binary or after the provider dialog, and otherwise what the sync returned."
+        },
+        {
+          "code": "cloud-sync-check",
+          "runs": "settings",
+          "citation": "emulatorInit checks the network and the service, with an error dialog where either is down, where $cloud_sync_bin is a file, cloud_sync_status is true and netPlay is not true (functions/helperFunctions.sh:1079-1108)."
+        },
+        {
+          "code": "emulator-made-executable",
+          "runs": null,
+          "citation": "ryujinx.sh:21 makes the emulator file the script found executable; which file it finds, if any, is decided at launch."
+        },
+        {
+          "code": "cloud-sync-upload",
+          "runs": "settings",
+          "citation": "ryujinx.sh:44 calls cloud_sync_uploadForced, which uploads where $savesPath/.no_upload exists after the emulator exits (functions/ToolScripts/emuDeckCloudSync.sh:570-575); cloud_sync_upload acts only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:243-248)."
+        },
+        {
+          "code": "saves-marker-removal",
+          "runs": true,
+          "citation": "ryujinx.sh:45 removes $savesPath/.gaming."
+        }
+      ]
+    },
+    {
+      "script": "shadps4.sh",
+      "blob": "1335669876cce0d61aec03e6630dc6126085c079",
+      "emulator": "shadps4",
+      "variant": "unestablished",
+      "variant_citation": "tools/launchers/shadps4.sh:11-29 searches $ShadPS4_emuPath for the AppImage and falls back to the flatpak, stopping where there is none: not the probe atlas models.",
+      "executes": {},
+      "steps": [
+        {
+          "code": "backend-update",
+          "runs": true,
+          "citation": "shadps4.sh:3 calls emulatorInit, which runs cd $emudeckBackend and git reset --hard && git pull (functions/helperFunctions.sh:1046-1047) and then sources functions/all.sh again (:1048), so every step after it runs the pulled definitions."
+        },
+        {
+          "code": "launch-fixes",
+          "runs": false,
+          "citation": "emulatorInit runs emulatorLaunchFixes \"$emuName\" (functions/helperFunctions.sh:1051), which calls ${emuName}_launch_fixes or its lower-case form where one is declared (functions/helperFunctions.sh:1112-1127); shadps4.sh:3 hands it shadps4, and no sourced file declares shadps4_launch_fixes or shadps4_launch_fixes."
+        },
+        {
+          "code": "service-stop",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_stopService (functions/helperFunctions.sh:1059), systemctl --user stop EmuDeckCloudSync.service (functions/ToolScripts/emuDeckCloudSync.sh:620-623)."
+        },
+        {
+          "code": "saves-marker-write",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_downloadEmu for every emulator but retroarch and esde (functions/helperFunctions.sh:1073-1075), whose first act writes the emulator's name to $savesPath/.emuName (functions/ToolScripts/emuDeckCloudSync.sh:432)."
+        },
+        {
+          "code": "cloud-sync-download",
+          "runs": "settings",
+          "citation": "cloud_sync_downloadEmu syncs only where $toolsPath/rclone/rclone is a file and cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:2-3, :434-436); a provider without Emudeck in its name gets a dialog instead (:437-441), and otherwise the network and the save folder's markers decide between a download, a conflict dialog and a failure marker (:444-546)."
+        },
+        {
+          "code": "service-start",
+          "runs": "settings",
+          "citation": "emulatorInit runs cloud_sync_downloadEmu \"$emuName\" && cloud_sync_startService (functions/helperFunctions.sh:1074), and cloud_sync_startService restarts the service only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:611-618); cloud_sync_downloadEmu returns 0 where it has no rclone binary or after the provider dialog, and otherwise what the sync returned."
+        },
+        {
+          "code": "cloud-sync-check",
+          "runs": "settings",
+          "citation": "emulatorInit checks the network and the service, with an error dialog where either is down, where $cloud_sync_bin is a file, cloud_sync_status is true and netPlay is not true (functions/helperFunctions.sh:1079-1108)."
+        },
+        {
+          "code": "emulator-made-executable",
+          "runs": null,
+          "citation": "shadps4.sh:26 makes the emulator file the script found executable; which file it finds, if any, is decided at launch."
+        },
+        {
+          "code": "cloud-sync-upload",
+          "runs": "settings",
+          "citation": "shadps4.sh:78 calls cloud_sync_uploadForced, which uploads where $savesPath/.no_upload exists after the emulator exits (functions/ToolScripts/emuDeckCloudSync.sh:570-575); cloud_sync_upload acts only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:243-248)."
+        },
+        {
+          "code": "saves-marker-removal",
+          "runs": true,
+          "citation": "shadps4.sh:79 removes $savesPath/.gaming."
+        }
+      ]
+    },
+    {
+      "script": "bigpemu.sh",
+      "blob": "647635693fbd02270733596186a49c0143ab95dd",
+      "emulator": "BigPEmu",
+      "variant": "unestablished",
+      "variant_citation": "tools/launchers/bigpemu.sh:11-24 searches $emusFolder/BigPEmu for bigpemu and falls back to the flatpak whose id carries it: not the probe atlas models.",
+      "executes": {},
+      "steps": [
+        {
+          "code": "backend-update",
+          "runs": true,
+          "citation": "bigpemu.sh:3 calls emulatorInit, which runs cd $emudeckBackend and git reset --hard && git pull (functions/helperFunctions.sh:1046-1047) and then sources functions/all.sh again (:1048), so every step after it runs the pulled definitions."
+        },
+        {
+          "code": "launch-fixes",
+          "runs": false,
+          "citation": "emulatorInit runs emulatorLaunchFixes \"$emuName\" (functions/helperFunctions.sh:1051), which calls ${emuName}_launch_fixes or its lower-case form where one is declared (functions/helperFunctions.sh:1112-1127); bigpemu.sh:3 hands it BigPEmu, and no sourced file declares BigPEmu_launch_fixes or bigpemu_launch_fixes."
+        },
+        {
+          "code": "service-stop",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_stopService (functions/helperFunctions.sh:1059), systemctl --user stop EmuDeckCloudSync.service (functions/ToolScripts/emuDeckCloudSync.sh:620-623)."
+        },
+        {
+          "code": "saves-marker-write",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_downloadEmu for every emulator but retroarch and esde (functions/helperFunctions.sh:1073-1075), whose first act writes the emulator's name to $savesPath/.emuName (functions/ToolScripts/emuDeckCloudSync.sh:432)."
+        },
+        {
+          "code": "cloud-sync-download",
+          "runs": "settings",
+          "citation": "cloud_sync_downloadEmu syncs only where $toolsPath/rclone/rclone is a file and cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:2-3, :434-436); a provider without Emudeck in its name gets a dialog instead (:437-441), and otherwise the network and the save folder's markers decide between a download, a conflict dialog and a failure marker (:444-546)."
+        },
+        {
+          "code": "service-start",
+          "runs": "settings",
+          "citation": "emulatorInit runs cloud_sync_downloadEmu \"$emuName\" && cloud_sync_startService (functions/helperFunctions.sh:1074), and cloud_sync_startService restarts the service only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:611-618); cloud_sync_downloadEmu returns 0 where it has no rclone binary or after the provider dialog, and otherwise what the sync returned."
+        },
+        {
+          "code": "cloud-sync-check",
+          "runs": "settings",
+          "citation": "emulatorInit checks the network and the service, with an error dialog where either is down, where $cloud_sync_bin is a file, cloud_sync_status is true and netPlay is not true (functions/helperFunctions.sh:1079-1108)."
+        },
+        {
+          "code": "emulator-made-executable",
+          "runs": null,
+          "citation": "bigpemu.sh:21 makes the emulator file the script found executable; which file it finds, if any, is decided at launch."
+        },
+        {
+          "code": "cloud-sync-upload",
+          "runs": "settings",
+          "citation": "bigpemu.sh:44 calls cloud_sync_uploadForced, which uploads where $savesPath/.no_upload exists after the emulator exits (functions/ToolScripts/emuDeckCloudSync.sh:570-575); cloud_sync_upload acts only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:243-248)."
+        },
+        {
+          "code": "saves-marker-removal",
+          "runs": true,
+          "citation": "bigpemu.sh:45 removes $savesPath/.gaming."
+        }
+      ]
+    },
+    {
+      "script": "xenia.sh",
+      "blob": "e8f0d6ac406f8e9237c3ddb4668aa23fb9f6f08f",
+      "emulator": "xenia",
+      "variant": "proton",
+      "variant_citation": "tools/launchers/xenia.sh:54 runs the Windows build through proton-launch.sh, whatever else is installed.",
+      "executes": {
+        "$toolsPath/appID.py": "5e7c686348b23b0914c6f8ce529bc8c73c5b4396",
+        "$toolsPath/proton-launch.sh": "71682459521dd92e714b728539846f66641f6a05"
+      },
+      "steps": [
+        {
+          "code": "backend-update",
+          "runs": true,
+          "citation": "xenia.sh:4 calls emulatorInit, which runs cd $emudeckBackend and git reset --hard && git pull (functions/helperFunctions.sh:1046-1047) and then sources functions/all.sh again (:1048), so every step after it runs the pulled definitions."
+        },
+        {
+          "code": "launch-fixes",
+          "runs": false,
+          "citation": "emulatorInit runs emulatorLaunchFixes \"$emuName\" (functions/helperFunctions.sh:1051), which calls ${emuName}_launch_fixes or its lower-case form where one is declared (functions/helperFunctions.sh:1112-1127); xenia.sh:4 hands it xenia, and no sourced file declares xenia_launch_fixes or xenia_launch_fixes."
+        },
+        {
+          "code": "service-stop",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_stopService (functions/helperFunctions.sh:1059), systemctl --user stop EmuDeckCloudSync.service (functions/ToolScripts/emuDeckCloudSync.sh:620-623)."
+        },
+        {
+          "code": "saves-marker-write",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_downloadEmu for every emulator but retroarch and esde (functions/helperFunctions.sh:1073-1075), whose first act writes the emulator's name to $savesPath/.emuName (functions/ToolScripts/emuDeckCloudSync.sh:432)."
+        },
+        {
+          "code": "cloud-sync-download",
+          "runs": "settings",
+          "citation": "cloud_sync_downloadEmu syncs only where $toolsPath/rclone/rclone is a file and cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:2-3, :434-436); a provider without Emudeck in its name gets a dialog instead (:437-441), and otherwise the network and the save folder's markers decide between a download, a conflict dialog and a failure marker (:444-546)."
+        },
+        {
+          "code": "service-start",
+          "runs": "settings",
+          "citation": "emulatorInit runs cloud_sync_downloadEmu \"$emuName\" && cloud_sync_startService (functions/helperFunctions.sh:1074), and cloud_sync_startService restarts the service only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:611-618); cloud_sync_downloadEmu returns 0 where it has no rclone binary or after the provider dialog, and otherwise what the sync returned."
+        },
+        {
+          "code": "cloud-sync-check",
+          "runs": "settings",
+          "citation": "emulatorInit checks the network and the service, with an error dialog where either is down, where $cloud_sync_bin is a file, cloud_sync_status is true and netPlay is not true (functions/helperFunctions.sh:1079-1108)."
+        },
+        {
+          "code": "proton-install",
+          "runs": null,
+          "citation": "xenia.sh:54 runs proton-launch.sh, which looks for the Proton version it needs in Steam's libraries and, where none holds it, asks Steam to install it with a dialog (tools/proton-launch.sh:53-87, findProton :90-112); the exit that follows (:81) leaves only the command substitution findProton runs in (:252), so the script goes on with no Proton — it creates the prefix (set_env, :267) and runs python with an empty Proton path (:270-275), and the emulator does not start. Whether a library holds the version is decided at launch."
+        },
+        {
+          "code": "proton-prefix-create",
+          "runs": null,
+          "citation": "proton-launch.sh creates the launch's prefix under Steam's compatdata where it does not exist (tools/proton-launch.sh:137-146); whether it exists is decided at launch."
+        },
+        {
+          "code": "cloud-sync-upload",
+          "runs": "settings",
+          "citation": "xenia.sh:56 calls cloud_sync_uploadForced, which uploads where $savesPath/.no_upload exists after the emulator exits (functions/ToolScripts/emuDeckCloudSync.sh:570-575); cloud_sync_upload acts only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:243-248)."
+        },
+        {
+          "code": "saves-marker-removal",
+          "runs": true,
+          "citation": "xenia.sh:57 removes $savesPath/.gaming."
+        }
+      ]
+    },
+    {
+      "script": "model-2-emulator.sh",
+      "blob": "14e11892ff231be1747472430ccad310d7ff6dc0",
+      "emulator": "model2",
+      "variant": "proton",
+      "variant_citation": "tools/launchers/model-2-emulator.sh:65 runs the Windows build through proton-launch.sh, whatever else is installed. Its sed -i on \"M2CONFIGFILE\" (:25-31) is no step: the name is relative, the script still runs in the backend checkout emulatorInit changed into (functions/helperFunctions.sh:1046), and no such file is there, so sed edits nothing.",
+      "executes": {
+        "$toolsPath/appID.py": "5e7c686348b23b0914c6f8ce529bc8c73c5b4396",
+        "$toolsPath/proton-launch.sh": "71682459521dd92e714b728539846f66641f6a05"
+      },
+      "steps": [
+        {
+          "code": "backend-update",
+          "runs": true,
+          "citation": "model-2-emulator.sh:3 calls emulatorInit, which runs cd $emudeckBackend and git reset --hard && git pull (functions/helperFunctions.sh:1046-1047) and then sources functions/all.sh again (:1048), so every step after it runs the pulled definitions."
+        },
+        {
+          "code": "launch-fixes",
+          "runs": false,
+          "citation": "emulatorInit runs emulatorLaunchFixes \"$emuName\" (functions/helperFunctions.sh:1051), which calls ${emuName}_launch_fixes or its lower-case form where one is declared (functions/helperFunctions.sh:1112-1127); model-2-emulator.sh:3 hands it model2, and no sourced file declares model2_launch_fixes or model2_launch_fixes."
+        },
+        {
+          "code": "service-stop",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_stopService (functions/helperFunctions.sh:1059), systemctl --user stop EmuDeckCloudSync.service (functions/ToolScripts/emuDeckCloudSync.sh:620-623)."
+        },
+        {
+          "code": "saves-marker-write",
+          "runs": true,
+          "citation": "emulatorInit calls cloud_sync_downloadEmu for every emulator but retroarch and esde (functions/helperFunctions.sh:1073-1075), whose first act writes the emulator's name to $savesPath/.emuName (functions/ToolScripts/emuDeckCloudSync.sh:432)."
+        },
+        {
+          "code": "cloud-sync-download",
+          "runs": "settings",
+          "citation": "cloud_sync_downloadEmu syncs only where $toolsPath/rclone/rclone is a file and cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:2-3, :434-436); a provider without Emudeck in its name gets a dialog instead (:437-441), and otherwise the network and the save folder's markers decide between a download, a conflict dialog and a failure marker (:444-546)."
+        },
+        {
+          "code": "service-start",
+          "runs": "settings",
+          "citation": "emulatorInit runs cloud_sync_downloadEmu \"$emuName\" && cloud_sync_startService (functions/helperFunctions.sh:1074), and cloud_sync_startService restarts the service only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:611-618); cloud_sync_downloadEmu returns 0 where it has no rclone binary or after the provider dialog, and otherwise what the sync returned."
+        },
+        {
+          "code": "cloud-sync-check",
+          "runs": "settings",
+          "citation": "emulatorInit checks the network and the service, with an error dialog where either is down, where $cloud_sync_bin is a file, cloud_sync_status is true and netPlay is not true (functions/helperFunctions.sh:1079-1108)."
+        },
+        {
+          "code": "proton-install",
+          "runs": null,
+          "citation": "model-2-emulator.sh:65 runs proton-launch.sh, which looks for the Proton version it needs in Steam's libraries and, where none holds it, asks Steam to install it with a dialog (tools/proton-launch.sh:53-87, findProton :90-112); the exit that follows (:81) leaves only the command substitution findProton runs in (:252), so the script goes on with no Proton — it creates the prefix (set_env, :267) and runs python with an empty Proton path (:270-275), and the emulator does not start. Whether a library holds the version is decided at launch."
+        },
+        {
+          "code": "proton-prefix-create",
+          "runs": null,
+          "citation": "proton-launch.sh creates the launch's prefix under Steam's compatdata where it does not exist (tools/proton-launch.sh:137-146); whether it exists is decided at launch."
+        },
+        {
+          "code": "cloud-sync-upload",
+          "runs": "settings",
+          "citation": "model-2-emulator.sh:67 calls cloud_sync_uploadForced, which uploads where $savesPath/.no_upload exists after the emulator exits (functions/ToolScripts/emuDeckCloudSync.sh:570-575); cloud_sync_upload acts only where cloud_sync_status is true (functions/ToolScripts/emuDeckCloudSync.sh:243-248)."
+        },
+        {
+          "code": "saves-marker-removal",
+          "runs": true,
+          "citation": "model-2-emulator.sh:68 removes $savesPath/.gaming."
+        }
+      ]
+    }
+  ]
+}

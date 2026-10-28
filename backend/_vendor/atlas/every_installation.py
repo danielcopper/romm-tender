@@ -250,7 +250,7 @@ class EveryInstallation:
         )
 
     def systems(self) -> tuple[InstallationAnswer[SystemsAnswer], ...]:
-        """What each installation's frontend catalogue declares, or why it states nothing."""
+        """Every system each installation lists, or why it lists none."""
         return self._ask(lambda installation: installation.systems())
 
     def systems_for_platform(

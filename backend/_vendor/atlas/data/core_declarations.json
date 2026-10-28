@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "spec": "The firmware declaration of a libretro core the distribution ships without its .info, packaged in that file's place. A .info is the one place a libretro core's firmware is declared on the machine, and where the .so is deployed and its .info is not, atlas would otherwise answer that nothing could be established. Each entry is keyed by the .so short name the way core_firmware.json and core_audit.json are, states the systemname its declarations are filed under, as a .info would, and lists the firmware the core opens with a citation per slot at a pinned upstream revision, plus each path a published .info for the core declares that this build does not need, cited the same way. An entry is read only where the core's .info is missing: a .info that is there is read as it stands, and one that is there and cannot be read stays unreadable. build.stamp is the string constant the deployed binary carries for that revision, so tests/test_core_declarations_tripwire.py can hold the entry against the build. Read by atlas.core_declarations.load_core_declarations; the method is in docs/research/core-firmware-locating.md.",
+  "cores": {
+    "pcee2": {
+      "systemname": {
+        "name": "Sony PlayStation 2",
+        "citation": "The one field taken from upstream's packaging rather than from the core's source: libretro-core-info's pcee2_libretro.info states systemname = \"Sony PlayStation 2\" at b03bfc451381e1a5eb92fda9e56a1e81bfeb92c9, the commit that added the file. That .info is not imported, because it declares pcsx2/resources required and this build does not need it (left_out below); every requirement here comes from the core's source. The name is what a .info would state, so the slots are filed through the same systemname map a read .info goes through."
+      },
+      "firmware": [
+        {
+          "path": "pcsx2/bios",
+          "description": "'pcsx2/bios' folder, holding any PS2 BIOS image whose ROMDIR header the core's own test passes",
+          "need": "required",
+          "citation": "The folder: LibretroHost::InitializeConfig sets EmuFolders::DataRoot to the frontend's system directory joined with pcsx2 (pcee2-libretro/Libretro.cpp:481-487), and EmuFolders::LoadConfig resolves the Bios folder under it with the default name bios (pcsx2/Pcsx2Config.cpp:2334, the default set at :2306-2308). The core option's values come from the same folder composed directly: RegisterCoreOptions lists <system>/pcsx2/bios non-recursively with FILESYSTEM_FIND_FILES and keeps every file IsBIOS accepts, with no size filter (pcee2-libretro/Libretro.cpp:660-680), after a leading auto, at most 126 files beside it in the 128-slot value array (:733-736). A pcsx2_bios value other than auto is written to Filenames/BIOS (:1023-1025); auto leaves it empty, and SettingsOverride then takes the first file of the folder's listing that IsBIOS accepts, again with no size filter (:640-657). IsBIOS is the ROMDIR read LoadBiosVersion makes (pcsx2/ps2/BiosTools.cpp:284-294, :80-197). Required: LoadBIOS returns false where neither the configured path nor its own search finds a file (pcsx2/ps2/BiosTools.cpp:317-333), and its search, FindBiosImage, keeps only files of 4 to 8 MiB (:258-282, the bounds at :16-17)."
+        }
+      ],
+      "left_out": [
+        {
+          "path": "pcsx2/resources",
+          "citation": "libretro-core-info's pcee2_libretro.info declares this folder required (firmware1_path), and this build does not need it: where it is missing, InitializeConfig logs a warning and goes on, because the shaders and fonts the core cannot start without are built into it, and only the game database and the patches are lost (pcee2-libretro/Libretro.cpp:495-504)."
+        }
+      ],
+      "build": {
+        "revision": "340ce04",
+        "stamp": "340ce04071716c52692d33194e0bbfef4514bb22",
+        "citation": "The deployed build carries the full commit hash as a string constant of its own: pcsx2/BuildVersion.cpp:14 stores GIT_HASH, which cmake/Pcsx2Utils.cmake:85-88 fills with git rev-parse HEAD at build time, and an unfiltered strings -a pass over the deployed pcee2_libretro.so holds 340ce04071716c52692d33194e0bbfef4514bb22 as a line of its own. The version the core reports through retro_get_system_info cannot pin it: library_version is GIT_REV (pcee2-libretro/Libretro.cpp:1436), which cmake/Pcee2UpstreamVersion.cmake:49-50 replaces with the upstream PCSX2 release recorded in pcee2-libretro/upstream.version, v2.9.78, the same string across several pcee2 commits."
+      },
+      "provenance": {
+        "source": "github.com/WizzardSK/pcee2-libretro, branch libretro, at 340ce04071716c52692d33194e0bbfef4514bb22 (mirrored on git.libretro.com/libretro/pcee2-libretro, the tree the buildbot builds). The cited files were read at that commit, and pcee2-libretro/Libretro.cpp, pcsx2/Pcsx2Config.cpp and pcsx2/ps2/BiosTools.cpp are byte-identical at bbd05c0, the commit before the six that lead to it."
+      }
+    }
+  }
+}

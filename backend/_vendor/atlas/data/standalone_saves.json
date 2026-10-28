@@ -1,6 +1,6 @@
 {
   "schema": 3,
-  "spec": "Standalone save cards: which emulators the savefile question can answer for a non-libretro catalogue entry, keyed by the %EMULATOR_…% token the launch command names. This is world knowledge under DESIGN.md's boundary rule — each card names the configuration file that governs the emulator's save tree and the catalogue systems it answers for, with source citations at the revision the arrangement ships; the reading itself is code beside the card (atlas/installations.py), which reads that configuration the way the emulator does and states every degradation as a structured caveat. A card is deliberately thin: what SlotA = 8 means, what an empty path key defaults to, how a configured path templates its region — none of that is on the machine, so it lives as cited code, never as a copied value that could age apart from the binary. A card states no flatpak app id: which app the arrangement installs the emulator as is a property of the INSTALLATION rather than of the save question, so it is stated once in emulator_settings.json (#288) — here it could only be stated for emulators that happen to have a save card, which is how MAME's savestate answer came to refuse a launch it could read. A card may also pin the builds its citations were read at, as the optional builds list — each one the release the deploy names, the upstream revision, the stamp the build itself carries as one string constant, the citation tying the three, and the provenance an answer read under that build carries — which a tripwire holds against the deployed binary, passing where it carries one of their stamps as a whole NUL-delimited constant. More than one build is a card whose emulator answers differently by build, and whose resolver reads which build runs (schema 3: the list replaced schema 2's single build block).",
+  "spec": "Standalone save cards: which emulators the savefile question can answer for a non-libretro catalogue entry, keyed by the %EMULATOR_…% token the launch command names. This is world knowledge under DESIGN.md's boundary rule — each card names the configuration file that governs the emulator's save tree and the catalogue systems it answers for, with source citations at the revision the arrangement ships; the reading itself is code beside the card (atlas/installations.py), which reads that configuration the way the emulator does and states every degradation as a structured caveat. A card is deliberately thin: what SlotA = 8 means, what an empty path key defaults to, how a configured path templates its region — none of that is on the machine, so it lives as cited code, never as a copied value that could age apart from the binary. A card states no flatpak app id: which app the arrangement installs the emulator as is a property of the INSTALLATION rather than of the save question, so it is stated once in emulator_settings.json (#288) — here it could only be stated for emulators that happen to have a save card, which is how MAME's savestate answer came to refuse a launch it could read. A card may also pin the builds its citations were read at, as the optional builds list — each one the release the deploy names, the upstream revision, the stamp the build itself carries as one string constant, the citation tying the three, and the provenance an answer read under that build carries — which a tripwire holds against the deployed binary, passing where it carries one of their stamps as a whole NUL-delimited constant. More than one build is a card whose emulator answers differently by build, and whose resolver reads which build runs (schema 3: the list replaced schema 2's single build block). Every card states its redirects block: the routes one launch can move the emulator's saves by without its configuration being written — a launch flag, an environment variable or the launch's working directory, each with what it moves and a citation at the card's pinned build carrying its limits — and the provenance of what was searched, which is what backs an empty list.",
   "emulators": {
     "DOLPHIN": {
       "saves": {
@@ -10,24 +10,192 @@
           "wii"
         ],
         "citations": {
-          "build": "dolphin 2603a",
+          "build": "dolphin 2609",
           "slot_devices": "EXI_Device.h:25-45",
           "slot_defaults": "MainSettings.cpp:133-136",
-          "slot_parse": "Config.h:82-88, Layer.h:36-43, StringUtil.h:63-100",
+          "slot_parse": "Config.h:90-96, Layer.h:36-43, StringUtil.h:65-102",
           "session_overrides": "MainSettings.cpp:117-119",
-          "gci_names": "GCMemcardDirectory.cpp:56-60",
+          "gci_names": "GCMemcardDirectory.cpp:57-61",
           "nand_tree": "NandPaths.cpp:63-71",
-          "title_id": "VolumeWii.cpp:269-275",
-          "title_created": "ES.cpp:830-870, Boot_BS2Emu.cpp:621",
+          "title_id": "VolumeWii.cpp:270-276",
+          "title_created": "ES.cpp:834-874, Boot_BS2Emu.cpp:621",
           "wii_dir": "CommonPaths.h:49",
           "agp_paths": "MainSettings.cpp:92-93",
           "agp_save": "EXI_DeviceAGP.cpp:34-45, :73-85, :107-166",
-          "split_path": "StringUtil.cpp:295-328",
+          "split_path": "StringUtil.cpp:323-356",
           "card_size": "GCMemcardRaw.cpp:38-51, :121-153"
         }
       },
+      "redirects": {
+        "routes": [
+          {
+            "via": "flag",
+            "name": "-u",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "-u <dir> (long form --user) names the whole user directory (CommandLineParse.cpp:85); it is created where missing and taken before every other rule (UICommon.cpp:304-311, called at DolphinQt/Main.cpp:185, :194-196). Everything Dolphin keeps below the user directory moves with it (FileUtil.cpp:838-917): the configuration (Config/), the GameCube memory cards and GCI folders, the Wii NAND with its saves, the titles installed into it and a system menu where one is installed, the savestates (StateSaves/), and the GameCube IPL and DSP ROM lookups, which search the user GC folder before the shipped one (EXI_DeviceIPL.cpp:177-200, DSPLLE.cpp:104-112). A fresh directory starts from Dolphin's defaults."
+          },
+          {
+            "via": "variable",
+            "name": "DOLPHIN_EMU_USERPATH",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "DOLPHIN_EMU_USERPATH names the same whole user directory -u does, where no -u was given and no portable.txt sits beside the binary (UICommon.cpp:408, UICommon.cpp:436-443; -u returns first, UICommon.cpp:304-311). Everything Dolphin keeps below the user directory moves with it (FileUtil.cpp:838-917): the configuration (Config/), the GameCube memory cards and GCI folders, the Wii NAND with its saves, the titles installed into it and a system menu where one is installed, the savestates (StateSaves/), and the GameCube IPL and DSP ROM lookups, which search the user GC folder before the shipped one (EXI_DeviceIPL.cpp:177-200, DSPLLE.cpp:104-112). The folders below it are created at start-up (DolphinQt/Main.cpp:185, :194-196)."
+          },
+          {
+            "via": "variable",
+            "name": "XDG_DATA_HOME",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "With neither -u nor DOLPHIN_EMU_USERPATH, and ~/.dolphin-emu skipped inside a flatpak (UICommon.cpp:451-454), the user directory is $XDG_DATA_HOME/dolphin-emu and the configuration $XDG_CONFIG_HOME/dolphin-emu, each only where the value starts with '/' (UICommon.cpp:454-476). This variable moves the user directory alone: the memory cards and GCI folders, the Wii NAND, the savestates and the IPL and DSP ROM lookups move (FileUtil.cpp:838-917, EXI_DeviceIPL.cpp:177-200, DSPLLE.cpp:104-112), while Dolphin.ini stays where XDG_CONFIG_HOME puts it — so a memory-card, GCI-folder or NANDRootPath key it sets to any value still decides that path, as no longer derived from the user directory (MainSettings.cpp:770-903, UICommon.cpp:102-118), and a GCIFolderAPathOverride or GCIFolderBPathOverride it sets wins over both for its slot's GCI folder (EXI_DeviceMemoryCard.cpp:149-170).",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] MemcardAPath"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] MemcardBPath"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] GCIFolderAPath"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] GCIFolderBPath"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] GCIFolderAPathOverride"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] GCIFolderBPathOverride"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[General] NANDRootPath"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.Core.GCIFolderAPathOverride=<dir>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:97-101, CommandLineParse.cpp:45-60, CommandLineParse.cpp:71-74); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:157-183). This key is slot A's GCI folder taken literally — no region segment is replaced and nothing migrates into it — and the folder is created where it is missing (MainSettings.cpp:116-117, EXI_DeviceMemoryCard.cpp:149-170, EXI_DeviceMemoryCard.cpp:187-192). It moves slot A's GameCube saves where SlotA holds a GCI folder (device 8). Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:39-47), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates. Netplay sets this very key in its own layer (NetPlayConfigLoader.cpp:189-190).",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotA"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.Core.GCIFolderBPathOverride=<dir>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:97-101, CommandLineParse.cpp:45-60, CommandLineParse.cpp:71-74); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:157-183). This key is slot B's GCI folder taken literally — no region segment is replaced and nothing migrates into it — and the folder is created where it is missing (MainSettings.cpp:118-119, EXI_DeviceMemoryCard.cpp:149-170, EXI_DeviceMemoryCard.cpp:187-192). It moves slot B's GameCube saves where SlotB holds a GCI folder (device 8). Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:39-47), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates. Netplay sets this very key in its own layer (NetPlayConfigLoader.cpp:189-190).",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotB"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.Core.MemcardAPath=<file>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:97-101, CommandLineParse.cpp:45-60, CommandLineParse.cpp:71-74); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:157-183). This key is slot A's raw memory card file (MainSettings.cpp:80), read the way a configured value is — a template whose region segment the running disc replaces (MainSettings.cpp:770-903, EXI_DeviceMemoryCard.cpp:218-234). It moves slot A's GameCube saves where SlotA holds a memory card (device 1); a movie played from a clear save uses a card of its own instead (EXI_DeviceMemoryCard.cpp:218-234). Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:39-47), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates.",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotA"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.Core.MemcardBPath=<file>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:97-101, CommandLineParse.cpp:45-60, CommandLineParse.cpp:71-74); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:157-183). This key is slot B's raw memory card file (MainSettings.cpp:81), read the way a configured value is — a template whose region segment the running disc replaces (MainSettings.cpp:770-903, EXI_DeviceMemoryCard.cpp:218-234). It moves slot B's GameCube saves where SlotB holds a memory card (device 1); a movie played from a clear save uses a card of its own instead (EXI_DeviceMemoryCard.cpp:218-234). Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:39-47), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates.",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotB"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.General.NANDRootPath=<dir>",
+            "moves": [
+              "saves",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:97-101, CommandLineParse.cpp:45-60, CommandLineParse.cpp:71-74); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:157-183). This key is the Wii NAND root (MainSettings.cpp:335), applied whenever the configuration changes (UICommon.cpp:102-118, UICommon.cpp:126-136): every Wii save moves, with the titles installed into that NAND and a system menu where one is installed. Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:39-47), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates."
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.GBA.SavesPath=<dir>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:97-101, CommandLineParse.cpp:45-60, CommandLineParse.cpp:71-74); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:157-183). This key is the save folder of the Game Boy Advance cores Dolphin runs behind GBA controllers, created where missing (MainSettings.cpp:408, UICommon.cpp:102-118); the deployed build carries the mGBA integration it needs. Where GBA.SavesInRomPath is on, those saves sit beside the cartridge instead (GBACore.cpp:759-771). It moves nothing a GameCube or Wii game keeps itself. Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:39-47), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates.",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[GBA] SavesInRomPath"
+              }
+            ]
+          }
+        ],
+        "provenance": "Searched at f84df020: every option the command-line parser registers (CommandLineParse.cpp:80-128) and every environment read of the user-directory resolution (UICommon.cpp:402-483). The -C keys stated are the ones naming a save location; -C on any other key, -m/--movie and -s/--save_state move nothing. XDG_CONFIG_HOME on its own moves only the configuration, which is the configuration-file route and no redirect. A portable.txt beside the binary and an embedded user directory are properties of the deployment rather than of a launch."
+      },
+      "builds": [
+        {
+          "release": "594afeb78ede945c8fe0e774649443cf12b0706188ce03bb3cd49e3004659e5b",
+          "revision": "f84df020",
+          "stamp": "Dolphin 2609",
+          "citation": "RetroDECK ships the Flathub build: components/dolphin/component_recipe.json extracts the org.DolphinEmu.dolphin-emu flatpak at the commit its version variable names, copies its bin/ to bin/, and writes that Flathub commit as component_version, which reads 594afeb78ede945c8fe0e774649443cf12b0706188ce03bb3cd49e3004659e5b. That Flathub commit merges flathub/org.DolphinEmu.dolphin-emu@8e18a6e4, whose manifest builds dolphin-emu/dolphin at commit f84df02055ab9610feec48e65648cac5a3c098fa (org.DolphinEmu.dolphin-emu.yml:63-65), the commit the tag 2609 names. The build states itself through scmrev.h: SCM_DESC_STR is git describe --always --long --dirty with a trailing '-0' and the hash removed (CMake/ScmRevGen.cmake:10-15, Source/Core/Common/scmrev.h.in:2), so it reads the bare tag 2609 only where HEAD is the commit that tag names, f84df020 — a later commit reads 2609-<count>, and 2609a's own commit reads 2609a — and GetScmRevStr composes 'Dolphin ' and that description into one constant (Source/Core/Common/Version.cpp:28-42). The deployed components/dolphin/bin/dolphin-emu holds 'Dolphin 2609' as one NUL-delimited constant.",
+          "provenance": "Dolphin release 2609, built from commit f84df020."
+        }
+      ],
       "provenance": {
-        "source": "Dolphin 2603a, the release the shipped binary names in its version strings (components/dolphin/bin/dolphin-emu-nogui). GameCube: which device sits in each card slot is [Core] SlotA/SlotB in Dolphin.ini, an EXI device id (EXI_Device.h:25-45 — 1 memory card, 8 GCI folder, 9 AGP, 255 none; registered defaults GCI folder for A, none for B, MainSettings.cpp:133-136). A slot value is read the way TryParse reads it — strtoll in base 0 over the whole value, within the int the device id is (Config.h:82-88, Layer.h:36-43, StringUtil.h:63-100). So 0x9 and 011 are both the AGP, and so is 0b1001, because the deployed builds import the C23 strtoll (__isoc23_strtoll), which reads a 0b prefix; a value that does not parse, or does not fit an int, is the slot's default. Every value first loses one pair of surrounding double quotes, as the ini parse strips them (IniFile.cpp:34, StringUtil.cpp:219-225). An empty MemcardA/BPath defaults to <user>/GC/MemoryCard<A|B>.<region>.raw and an empty GCIFolderA/BPath to <user>/GC/<region>/Card <A|B> (GetMemcardPath :767-774, GetGCIFolderPath :835-841); a configured value of either is a template whose region segment the running disc replaces (:777-819, :844-873), so the answer keeps a <region> hole rather than reading the value literally. GCI files are named from the save's own directory entry — makercode-gamecode-filename.gci (GCMemcardDirectory.cpp:56-60) — none of it derivable from the content path, so the folder groups are unnamed. A raw card of standard size carries no block suffix (EXI.cpp:123-124 defaults to the 2043-block card; a smaller MemoryCardSize appends one, GetMemcardPath :763-765). Wii: a title's save lives in title/<hi:08x>/<lo:08x>/data below NANDRootPath (NandPaths.cpp:63-71), the title id the one the disc's game partition ticket states (VolumeWii.cpp:269-275). Nothing in the content path spells it, so the answer keeps the whole id, high word included, as the <save_id> hole. Booting a disc creates its title's data directory (ES.cpp:830-870, Boot_BS2Emu.cpp:621), so the answer lists the title directories the NAND already holds beside the hole. The user directory is the emulator's XDG data tree, which the arrangement pins and reroutes with symlinks the answer walks. A GBA cartridge adapter (AGP, slot id 9) loads the cartridge [Core] AgpCartA/BPath names (default empty, MainSettings.cpp:92-93) and, beside it, that path with its extension cut the way SplitPath cuts it (StringUtil.cpp:295-328) and .sav appended; the cartridge's save is as large as that file, 0 where it does not open, and exactly that many bytes are written back to it at shutdown, only where the cut path is not empty (EXI_DeviceAGP.cpp:34-45, :73-85, :107-166) — so a .sav with a size is one battery file every GameCube game run with that configuration writes, and a missing or empty one keeps nothing. Not modelled and stated as such where met: the GBA-integration SavesPath, and the GCIFolder*PathOverride keys a movie or netplay session sets. On EmuDeck the emulator is the org.DolphinEmu.dolphin-emu flatpak (emuDeckDolphin.sh:4-5), so the launch's flatpak variant reads the app's own XDG homes below ~/.var/app; EmuDeck grants every emulator flatpak --filesystem=host (installEmuFP.sh:33), so a configured HOST path stays the host path it names; the sandbox's own spellings still lead into the app's trees (/var/config, /var/data, /var/cache) or, for /app, into its deployed files."
+        "source": "Dolphin 2609, built from commit f84df020 — the release the shipped binary names in its version strings (components/dolphin/bin/dolphin-emu). GameCube: which device sits in each card slot is [Core] SlotA/SlotB in Dolphin.ini, an EXI device id (EXI_Device.h:25-45 — 1 memory card, 8 GCI folder, 9 AGP, 255 none; registered defaults GCI folder for A, none for B, MainSettings.cpp:133-136). A slot value is read the way TryParse reads it — strtoll in base 0 over the whole value, within the int the device id is (Config.h:90-96, Layer.h:36-43, StringUtil.h:65-102). So 0x9 and 011 are both the AGP, and so is 0b1001, because the deployed builds import the C23 strtoll (__isoc23_strtoll), which reads a 0b prefix; a value that does not parse, or does not fit an int, is the slot's default. Every value first loses one pair of surrounding double quotes, as the ini parse strips them (IniFile.cpp:34, StringUtil.cpp:247-253). An empty MemcardA/BPath defaults to <user>/GC/MemoryCard<A|B>.<region>.raw and an empty GCIFolderA/BPath to <user>/GC/<region>/Card <A|B> (GetMemcardPath MainSettings.cpp:783-790, GetGCIFolderPath :851-857); a configured value of either is a template whose region segment the running disc replaces (:793-835, :860-889), so the answer keeps a <region> hole rather than reading the value literally. GCI files are named from the save's own directory entry — makercode-gamecode-filename.gci (GCMemcardDirectory.cpp:57-61) — none of it derivable from the content path, so the folder groups are unnamed. A raw card of standard size carries no block suffix (EXI.cpp:123-124 defaults to the 2043-block card; a smaller MemoryCardSize appends one, GetMemcardPath MainSettings.cpp:779-781). Wii: a title's save lives in title/<hi:08x>/<lo:08x>/data below NANDRootPath (NandPaths.cpp:63-71), the title id the one the disc's game partition ticket states (VolumeWii.cpp:270-276). Nothing in the content path spells it, so the answer keeps the whole id, high word included, as the <save_id> hole. Booting a disc creates its title's data directory (ES.cpp:834-874, Boot_BS2Emu.cpp:621), so the answer lists the title directories the NAND already holds beside the hole. The user directory is the emulator's XDG data tree, which the arrangement pins and reroutes with symlinks the answer walks. A GBA cartridge adapter (AGP, slot id 9) loads the cartridge [Core] AgpCartA/BPath names (default empty, MainSettings.cpp:92-93) and, beside it, that path with its extension cut the way SplitPath cuts it (StringUtil.cpp:323-356) and .sav appended; the cartridge's save is as large as that file, 0 where it does not open, and exactly that many bytes are written back to it at shutdown, only where the cut path is not empty (EXI_DeviceAGP.cpp:34-45, :73-85, :107-166) — so a .sav with a size is one battery file every GameCube game run with that configuration writes, and a missing or empty one keeps nothing. Not modelled and stated as such where met: the GBA-integration SavesPath, and the GCIFolder*PathOverride keys a movie or netplay session sets. On EmuDeck the emulator is the org.DolphinEmu.dolphin-emu flatpak (emuDeckDolphin.sh:4-5), so the launch's flatpak variant reads the app's own XDG homes below ~/.var/app; EmuDeck grants every emulator flatpak --filesystem=host (installEmuFP.sh:33), so a configured HOST path stays the host path it names; the sandbox's own spellings still lead into the app's trees (/var/config, /var/data, /var/cache) or, for /app, into its deployed files."
       }
     },
     "PRIMEHACK": {
@@ -72,6 +240,174 @@
           }
         }
       },
+      "redirects": {
+        "routes": [
+          {
+            "via": "flag",
+            "name": "-u",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "-u <dir> (long form --user) names the whole user directory (CommandLineParse.cpp:86); it is created where missing and taken before every other rule (UICommon.cpp:278-284, called at DolphinQt/Main.cpp:162, :169-171). Everything Dolphin keeps below the user directory moves with it (FileUtil.cpp:836-904): the configuration (Config/), the GameCube memory cards and GCI folders, the Wii NAND with its saves, the titles installed into it and a system menu where one is installed, the savestates (StateSaves/), and the GameCube IPL and DSP ROM lookups, which search the user GC folder before the shipped one (EXI_DeviceIPL.cpp:175-198, DSPLLE.cpp:107-115). A fresh directory starts from Dolphin's defaults."
+          },
+          {
+            "via": "variable",
+            "name": "DOLPHIN_EMU_USERPATH",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "DOLPHIN_EMU_USERPATH names the same whole user directory -u does, where no -u was given and no portable.txt sits beside the binary (UICommon.cpp:406, UICommon.cpp:434-441; -u returns first, UICommon.cpp:278-284). Everything Dolphin keeps below the user directory moves with it (FileUtil.cpp:836-904): the configuration (Config/), the GameCube memory cards and GCI folders, the Wii NAND with its saves, the titles installed into it and a system menu where one is installed, the savestates (StateSaves/), and the GameCube IPL and DSP ROM lookups, which search the user GC folder before the shipped one (EXI_DeviceIPL.cpp:175-198, DSPLLE.cpp:107-115). The folders below it are created at start-up (DolphinQt/Main.cpp:162, :169-171)."
+          },
+          {
+            "via": "variable",
+            "name": "XDG_DATA_HOME",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "With neither -u nor DOLPHIN_EMU_USERPATH, and an existing $HOME/.primehack taken first — this fork tests for no flatpak, so a .primehack in the home directory outranks this variable (UICommon.cpp:450-452, CommonPaths.h:22) — the user directory is $XDG_DATA_HOME/primehack and the configuration $XDG_CONFIG_HOME/primehack, each only where the value starts with '/' (UICommon.cpp:452-474). This variable moves the user directory alone: the memory cards and GCI folders, the Wii NAND, the savestates and the IPL and DSP ROM lookups move (FileUtil.cpp:836-904, EXI_DeviceIPL.cpp:175-198, DSPLLE.cpp:107-115), while Dolphin.ini stays where XDG_CONFIG_HOME puts it — so a memory-card, GCI-folder or NANDRootPath key it sets to any value still decides that path, as no longer derived from the user directory (MainSettings.cpp:629-750, UICommon.cpp:101-117), and a GCIFolderAPathOverride or GCIFolderBPathOverride it sets wins over both for its slot's GCI folder (EXI_DeviceMemoryCard.cpp:152-174).",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] MemcardAPath"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] MemcardBPath"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] GCIFolderAPath"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] GCIFolderBPath"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] GCIFolderAPathOverride"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] GCIFolderBPathOverride"
+              },
+              {
+                "file": "Dolphin.ini",
+                "key": "[General] NANDRootPath"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.Core.GCIFolderAPathOverride=<dir>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:98-102, CommandLineParse.cpp:46-61, CommandLineParse.cpp:72-75); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:150-178). This key is slot A's GCI folder taken literally — no region segment is replaced and nothing migrates into it — and the folder is created where it is missing (MainSettings.cpp:95-96, EXI_DeviceMemoryCard.cpp:152-174, EXI_DeviceMemoryCard.cpp:189-194). It moves slot A's GameCube saves where SlotA holds a GCI folder (device 8). Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:40-48), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates. Netplay sets this very key in its own layer (NetPlayConfigLoader.cpp:128-129).",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotA"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.Core.GCIFolderBPathOverride=<dir>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:98-102, CommandLineParse.cpp:46-61, CommandLineParse.cpp:72-75); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:150-178). This key is slot B's GCI folder taken literally — no region segment is replaced and nothing migrates into it — and the folder is created where it is missing (MainSettings.cpp:97-98, EXI_DeviceMemoryCard.cpp:152-174, EXI_DeviceMemoryCard.cpp:189-194). It moves slot B's GameCube saves where SlotB holds a GCI folder (device 8). Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:40-48), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates. Netplay sets this very key in its own layer (NetPlayConfigLoader.cpp:128-129).",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotB"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.Core.MemcardAPath=<file>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:98-102, CommandLineParse.cpp:46-61, CommandLineParse.cpp:72-75); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:150-178). This key is slot A's raw memory card file (MainSettings.cpp:59), read the way a configured value is — a template whose region segment the running disc replaces (MainSettings.cpp:629-750, EXI_DeviceMemoryCard.cpp:220-235). It moves slot A's GameCube saves where SlotA holds a memory card (device 1); a movie played from a clear save uses a card of its own instead (EXI_DeviceMemoryCard.cpp:220-235). Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:40-48), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates.",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotA"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.Core.MemcardBPath=<file>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:98-102, CommandLineParse.cpp:46-61, CommandLineParse.cpp:72-75); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:150-178). This key is slot B's raw memory card file (MainSettings.cpp:60), read the way a configured value is — a template whose region segment the running disc replaces (MainSettings.cpp:629-750, EXI_DeviceMemoryCard.cpp:220-235). It moves slot B's GameCube saves where SlotB holds a memory card (device 1); a movie played from a clear save uses a card of its own instead (EXI_DeviceMemoryCard.cpp:220-235). Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:40-48), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates.",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotB"
+              }
+            ]
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.General.NANDRootPath=<dir>",
+            "moves": [
+              "saves",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:98-102, CommandLineParse.cpp:46-61, CommandLineParse.cpp:72-75); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:150-178). This key is the Wii NAND root (MainSettings.cpp:305), applied whenever the configuration changes (UICommon.cpp:101-117, UICommon.cpp:125-131): every Wii save moves, with the titles installed into that NAND and a system menu where one is installed. Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:40-48), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates."
+          },
+          {
+            "via": "flag",
+            "name": "-C",
+            "argument": "Dolphin.GBA.SavesPath=<dir>",
+            "moves": [
+              "saves"
+            ],
+            "citation": "-C <System>.<Section>.<Key>=<Value> (long form --config, repeatable) sets one key in a command-line config layer that writes nothing back (CommandLineParse.cpp:98-102, CommandLineParse.cpp:46-61, CommandLineParse.cpp:72-75); 'Dolphin' is the Main system's name, and a value under a system name it does not know is dropped silently (Config.cpp:150-178). This key is the save folder of the Game Boy Advance cores Dolphin runs behind GBA controllers, created where missing (MainSettings.cpp:375, UICommon.cpp:101-117); the deployed build carries the mGBA integration it needs. Where GBA.SavesInRomPath is on, those saves sit beside the cartridge instead (GBACore.cpp:736-748). It moves nothing a GameCube or Wii game keeps itself. Limits: the command-line layer ranks below the current-run, netplay, movie and both game-INI layers (Enums.h:40-48), so a game INI or a session that sets the key wins; the value ends at its first '=' (CommandLineParse.cpp:53); and no key moves the savestates.",
+            "outranked_by": [
+              {
+                "file": "Dolphin.ini",
+                "key": "[GBA] SavesInRomPath"
+              }
+            ]
+          }
+        ],
+        "provenance": "Searched at shiiion/dolphin 81bfb96: every option the command-line parser registers (CommandLineParse.cpp:81-129) and every environment read of the user-directory resolution (UICommon.cpp:400-481). The -C keys stated are the ones naming a save location; -C on any other key, -m/--movie and -s/--save_state move nothing. XDG_CONFIG_HOME on its own moves only the configuration, which is the configuration-file route and no redirect. A portable.txt beside the binary and an embedded user directory are properties of the deployment rather than of a launch."
+      },
+      "builds": [
+        {
+          "release": "master-230724.27",
+          "revision": "81bfb96",
+          "stamp": "81bfb96",
+          "citation": "RetroDECK ships a PrimeHack build of its own: components/primehack/component_recipe.json downloads RetroDECK-primehack-Artifact.tar.gz from the RetroDECK/io.github.shiiion.primehack release its version variable names, copies files/bin to bin/, and writes that release's tag as component_version, which reads master-230724.27. That release is the artifact of RetroDECK/io.github.shiiion.primehack@c18804e9, as its release notes state, and that commit's manifest builds shiiion/dolphin at commit 81bfb9686afd2d190134b44dd72d3cee876fe2ab (io.github.shiiion.primehack.yml:101-102). The build states itself through scmrev.h: SCM_DESC_STR is git describe --always --long --dirty with the hash suffix removed (CMake/ScmRevGen.cmake:10-15, Source/Core/Common/scmrev.h.in:2 at 81bfb96), and where describe reaches no tag --always answers the abbreviated hash alone. The deployed components/primehack/bin/primehack holds '81bfb96' as one NUL-delimited constant.",
+          "provenance": "PrimeHack release master-230724.27 of RetroDECK/io.github.shiiion.primehack, built from shiiion/dolphin commit 81bfb96."
+        }
+      ],
       "provenance": {
         "source": "PrimeHack, the Metroid Prime fork of Dolphin, read at shiiion/dolphin 81bfb96 — the revision RetroDECK's component master-230724.27 is built from and the one the Flathub flatpak EmuDeck installs is not (53f53e0). The save shape is Dolphin's, inherited whole, so the same reading serves both and the line numbers here are the fork's own. GameCube: which device sits in each card slot is [Core] SlotA/SlotB in Dolphin.ini, an EXI device id (EXI_Device.h:25-46 — 1 memory card, 8 GCI folder, 9 AGP, 255 none; registered defaults GCI folder for A, none for B, MainSettings.cpp:112-115). A slot value is read the way TryParse reads it — strtoll in base 0 over the whole value, within the int the device id is (Config.h:83-89, Layer.h:30-37, StringUtil.h:75-113). So 0x9 and 011 are both the AGP, and so is 0b1001, because the deployed builds import the C23 strtoll (__isoc23_strtoll), which reads a 0b prefix; a value that does not parse, or does not fit an int, is the slot's default. Every value first loses one pair of surrounding double quotes, as the ini parse strips them (IniFile.cpp:34, StringUtil.cpp:228-234). An empty MemcardA/BPath defaults to <user>/GC/MemoryCard<A|B>.<region>.raw and an empty GCIFolderA/BPath to <user>/GC/<region>/Card <A|B> (GetMemcardPath :635-649, GetGCIFolderPath :704-711); a configured value of either is a template whose region segment the running disc replaces (:652-688, :713-748), so the answer keeps a <region> hole rather than reading the value literally. GCI files are named from the save's own directory entry — makercode-gamecode-filename.gci (GCMemcardDirectory.cpp:54-62) — none of it derivable from the content path, so the folder groups are unnamed. A raw card of standard size carries no block suffix (EXI.cpp:116-119 defaults to the 2043-block card; a smaller MemoryCardSize appends one, GetMemcardPath :638-640). Wii: a title's save lives in title/<hi:08x>/<lo:08x>/data below NANDRootPath (NandPaths.cpp:49-58 — GetTitlePath composes title/<hi>/<lo> at :49-53 and GetTitleDataPath appends /data at :55-58), the title id the one the disc's game partition ticket states (VolumeWii.cpp:272-278). Nothing in the content path spells it, so the answer keeps the whole id, high word included, as the <save_id> hole. Booting a disc creates its title's data directory (ES.cpp:820-858, Boot_BS2Emu.cpp:598), so the answer lists the title directories the NAND already holds beside the hole. The user directory is the fork's own, and which name that is belongs to the build rather than to the emulator (emulator_settings.json states both, #246). A GBA cartridge adapter (AGP, slot id 9) loads the cartridge [Core] AgpCartA/BPath names (default empty, MainSettings.cpp:71-72) and, beside it, that path with its extension cut the way SplitPath cuts it (StringUtil.cpp:304-335) and .sav appended; the cartridge's save is as large as that file, 0 where it does not open, and exactly that many bytes are written back to it at shutdown (EXI_DeviceAGP.cpp:35-45, :73-85, :107-166) — at this revision even with no cartridge configured, in which case the path written is .sav, relative to the launching process's working directory; the Flathub build writes only where the cut path is not empty, as Dolphin does (EXI_DeviceAGP.cpp:34-45 at 53f53e0). Not modelled and stated as such where met: the GBA-integration SavesPath, and the GCIFolder*PathOverride keys a movie or netplay session sets. On EmuDeck the emulator is the io.github.shiiion.primehack flatpak (emuDeckPrimehack.sh:5-6), so the launch's flatpak variant reads the app's own XDG homes below ~/.var/app — where the fork spells its directory dolphin-emu, not primehack. The Flathub flatpak is a later rebase of the fork (53f53e0), so the same reading answers for it with that build's own line numbers, stated beside the app id."
       }
@@ -83,8 +419,34 @@
           "psp"
         ]
       },
+      "redirects": {
+        "routes": [
+          {
+            "via": "variable",
+            "name": "XDG_CONFIG_HOME",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "installed-content"
+            ],
+            "citation": "On Linux the whole memory stick is $XDG_CONFIG_HOME/ppsspp, the value taken as given — neither checked for being absolute nor for being empty — else ~/.config/ppsspp (NativeApp.cpp:473-491), and ppsspp.ini is loaded from its PSP/SYSTEM folder (NativeApp.cpp:504-509). So the saves (PSP/SAVEDATA), the savestates (PSP/PPSSPP_STATE), the configuration and the installed games and homebrew (PSP/GAME) all move, and a fresh stick is created with PPSSPP's defaults (PathUtil.cpp:45-140). The PSP's flash0 ships beside the binary and does not move (NativeApp.cpp:483)."
+          }
+        ],
+        "provenance": "Searched at fa50bb19: the command-line loop (NativeApp.cpp:531-600) and the memory-stick resolution (NativeApp.cpp:392-491). No flag moves the saves: --appendconfig= layers another ini over ppsspp.ini and writes it back, the configuration-file route (NativeApp.cpp:595-598), --state= loads one state and --root= mounts a folder as host0 for a homebrew it boots (PSPLoaders.cpp:377-388). A memstick_dir.txt is read on Android and UWP only."
+      },
+      "builds": [
+        {
+          "release": "193bbe95656ed696c8e5a5e42831ee8017d53514e9e0e0acaa3e1235e22089d3",
+          "revision": "fa50bb19",
+          "stamp": "v1.20.4",
+          "citation": "RetroDECK ships the Flathub build: components/ppsspp/component_recipe.json extracts the org.ppsspp.PPSSPP flatpak at the commit its version variable names, copies its bin/ to bin/, and writes that Flathub commit as component_version, which reads 193bbe95656ed696c8e5a5e42831ee8017d53514e9e0e0acaa3e1235e22089d3. The build states itself through git-version.cpp: PPSSPP_GIT_VERSION is git describe --always (git-version.cmake:7-14, written as the constant at :36-37), which reads the bare tag v1.20.4 only where HEAD is the commit that tag names, fa50bb19. The deployed components/ppsspp/bin/PPSSPPSDL holds 'v1.20.4' as one NUL-delimited constant.",
+          "provenance": "PPSSPP release v1.20.4, built from commit fa50bb19."
+        }
+      ],
       "provenance": {
-        "source": "PPSSPP v1.20.4, the release the shipped binary carries as a whole version string (components/ppsspp/bin/PPSSPPSDL). On Linux the memory stick is fixed by the build: $XDG_CONFIG_HOME/ppsspp, with no setting naming it (NativeApp.cpp:473-482) — which is why this card names no governing config. Savedata is <memstick>/PSP/SAVEDATA (PathUtil.cpp:52, :62-63): one directory per game, named by the game itself from its own id and save name, so the tree is stated and its entries refused — unnamed per game. The arrangement reroutes SAVEDATA with a symlink the answer walks. On EmuDeck the emulator is the org.ppsspp.PPSSPP flatpak (emuDeckPPSSPP.sh:4-5), so the launch's flatpak variant reads the app's own XDG homes below ~/.var/app — and since the memstick is the config home's own ppsspp directory, that is the whole answer there. EmuDeck grants every emulator flatpak --filesystem=host (installEmuFP.sh:33), so a configured HOST path stays the host path it names; the sandbox's own spellings still lead into the app's trees (/var/config, /var/data, /var/cache) or, for /app, into its deployed files."
+        "source": "PPSSPP v1.20.4, built from commit fa50bb19 — the release the shipped binary carries as a whole version string (components/ppsspp/bin/PPSSPPSDL). On Linux the memory stick is fixed by the build: $XDG_CONFIG_HOME/ppsspp, with no setting naming it (NativeApp.cpp:473-482) — which is why this card names no governing config. Savedata is <memstick>/PSP/SAVEDATA (PathUtil.cpp:52, :62-63): one directory per game, named by the game itself from its own id and save name, so the tree is stated and its entries refused — unnamed per game. The arrangement reroutes SAVEDATA with a symlink the answer walks. On EmuDeck the emulator is the org.ppsspp.PPSSPP flatpak (emuDeckPPSSPP.sh:4-5), so the launch's flatpak variant reads the app's own XDG homes below ~/.var/app — and since the memstick is the config home's own ppsspp directory, that is the whole answer there. EmuDeck grants every emulator flatpak --filesystem=host (installEmuFP.sh:33), so a configured HOST path stays the host path it names; the sandbox's own spellings still lead into the app's trees (/var/config, /var/data, /var/cache) or, for /app, into its deployed files."
       }
     },
     "XEMU": {
@@ -94,8 +456,21 @@
           "xbox"
         ]
       },
+      "redirects": {
+        "routes": [],
+        "provenance": "None at fc24584c. The saves, and the snapshots with them, live inside the hard-disk image xemu.toml names (system/vl.c:3060-3074, xemu-snapshots.c:157), and nothing a launch carries names another one without that file. -config_path <file> points at another xemu.toml, the configuration-file route (ui/xemu.c:1314-1323); -dvd_path moves the disc only (system/vl.c:3076-3095); every other argument reaches QEMU after xemu's own (system/vl.c:3104-3108), and QEMU refuses a second drive at the index xemu's image already holds (blockdev.c:946-949), so its -drive moves nothing wherever an image is configured. XDG_DATA_HOME, through SDL's preference path, moves xemu.toml and the default EEPROM (ui/xemu-settings.cc:73-92, :94-104, :107-117) — the configuration-file route again."
+      },
+      "builds": [
+        {
+          "release": "2f8b8889edcf69fb2ba2a8691371a7bb49febeba360e9c87555379c50ba946e9",
+          "revision": "fc24584c",
+          "stamp": "fc24584ce88f0915ad7f04775bb7712c2e3f49ee",
+          "citation": "RetroDECK ships the Flathub build: components/xemu/component_recipe.json extracts the app.xemu.xemu flatpak at the commit its version variable names, copies its bin/ to bin/, and writes that Flathub commit as component_version, which reads 2f8b8889edcf69fb2ba2a8691371a7bb49febeba360e9c87555379c50ba946e9. The build states itself through xemu-version-macro.h: XEMU_COMMIT is git rev-parse HEAD, or the XEMU_COMMIT file a source archive carries (scripts/xemu-version.sh:7-13, emitted at :39-47), and xemu_commit keeps it as a constant (xemu-version.c:7). The tag v0.8.136 names commit fc24584ce88f0915ad7f04775bb7712c2e3f49ee, and the deployed components/xemu/bin/xemu holds that full hash as one NUL-delimited constant.",
+          "provenance": "xemu release v0.8.136, built from commit fc24584c."
+        }
+      ],
       "provenance": {
-        "source": "xemu v0.8.135, the release the shipped binary carries as a whole version string (components/xemu/bin/xemu). xemu keeps xemu.toml under the DATA home, not the config one — the shipped binary takes its base path from SDL_GetPrefPath, which on Linux is $XDG_DATA_HOME/<org>/<app>/, and RetroDECK says the same in its own words while linking a config-tree directory there: 'linking back to original location where component will look', dir_prep \"$XDG_CONFIG_HOME/xemu\" \"$XDG_DATA_HOME/xemu/xemu\" (component_prepare.sh:16-17). The card names the location the emulator opens; where an arrangement keeps the real directory is its own business, and the read walks the link. Every game's save lives on the emulated Xbox hard disk: a disk image xemu.toml names in [sys.files] hdd_path, beside the console's EEPROM in eeprom_path (config_spec.yml:359-363). The image is one shared file — its FATX filesystem keeps one directory per title id under UDATA/, addressable only by parsing the image, which the save-inside-image caveat states machine-readably with the layout. The EEPROM holds the console's settings and rides as its own named group. On EmuDeck the emulator is the app.xemu.xemu flatpak (emuDeckXemu.sh:4-5), so the launch's flatpak variant reads the app's own XDG homes below ~/.var/app; EmuDeck grants every emulator flatpak --filesystem=host (installEmuFP.sh:33), so a configured HOST path stays the host path it names; the sandbox's own spellings still lead into the app's trees (/var/config, /var/data, /var/cache) or, for /app, into its deployed files."
+        "source": "xemu v0.8.136, built from commit fc24584c — the release the shipped binary carries as a whole version string (components/xemu/bin/xemu). xemu keeps xemu.toml under the DATA home, not the config one — the shipped binary takes its base path from SDL_GetPrefPath, which on Linux is $XDG_DATA_HOME/<org>/<app>/, and RetroDECK says the same in its own words while linking a config-tree directory there: 'linking back to original location where component will look', dir_prep \"$XDG_CONFIG_HOME/xemu\" \"$XDG_DATA_HOME/xemu/xemu\" (component_prepare.sh:16-17). The card names the location the emulator opens; where an arrangement keeps the real directory is its own business, and the read walks the link. Every game's save lives on the emulated Xbox hard disk: a disk image xemu.toml names in [sys.files] hdd_path, beside the console's EEPROM in eeprom_path (config_spec.yml:359-363). The image is one shared file — its FATX filesystem keeps one directory per title id under UDATA/, addressable only by parsing the image, which the save-inside-image caveat states machine-readably with the layout. The EEPROM holds the console's settings and rides as its own named group. On EmuDeck the emulator is the app.xemu.xemu flatpak (emuDeckXemu.sh:4-5), so the launch's flatpak variant reads the app's own XDG homes below ~/.var/app; EmuDeck grants every emulator flatpak --filesystem=host (installEmuFP.sh:33), so a configured HOST path stays the host path it names; the sandbox's own spellings still lead into the app's trees (/var/config, /var/data, /var/cache) or, for /app, into its deployed files."
       }
     },
     "CEMU": {
@@ -105,8 +480,50 @@
           "wiiu"
         ]
       },
+      "redirects": {
+        "routes": [
+          {
+            "via": "flag",
+            "name": "--mlc",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "--mlc <dir> (short form -m) names the Wii U's internal storage for this launch (LaunchSettings.cpp:64, :149-157, a leading '=' trimmed) and outranks settings.xml's mlc_path (ActiveSettings.cpp:242-252); it lives in the launch settings alone and is never written into settings.xml (CemuConfig.cpp:12-18 is the one writer besides the load). The MLC is created where missing, with its default folders (CemuApp.cpp:290-296, :461-535). It moves the saves and the accounts kept with them (usr/save, Account.cpp:177, :342), the installed games, updates and downloadable content (usr/title) and the system titles (sys/title); keys.txt and settings.xml stay in Cemu's own folders. Cemu has no savestates."
+          },
+          {
+            "via": "variable",
+            "name": "XDG_DATA_HOME",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "Cemu's user data is $XDG_DATA_HOME/Cemu, an empty value falling back to ~/.local/share (CemuApp.cpp:148-156), and its default MLC is mlc01 below it (ActiveSettings.cpp:265-268), with keys.txt beside it (KeyCache.cpp:63). It moves the saves, installed content and system titles only where neither --mlc nor settings.xml's mlc_path names the MLC, both of which rank above it (ActiveSettings.cpp:242-252); settings.xml stays in $XDG_CONFIG_HOME/Cemu (CemuApp.cpp:157).",
+            "outranked_by": [
+              {
+                "file": "settings.xml",
+                "key": "mlc_path"
+              }
+            ]
+          }
+        ],
+        "provenance": "Searched at a6fb0a48: the launch options (LaunchSettings.cpp:55-80) and the Linux path resolution (CemuApp.cpp:119-163). XDG_CONFIG_HOME on its own moves only settings.xml, the configuration-file route. The APPIMAGE route is not stated: with APPIMAGE set, a portable folder beside the AppImage it names becomes every path (CemuApp.cpp:129-142), which works only by telling Cemu it runs as an AppImage it is not, and what else Cemu does with that variable is unread."
+      },
+      "builds": [
+        {
+          "release": "4a22a30407fd3b647165c651ffa785ae0da3ef66b3b5c5249880e793bbec2d6e",
+          "revision": "a6fb0a48",
+          "stamp": "Cemu 2.6",
+          "citation": "RetroDECK ships the Flathub build: components/cemu/component_recipe.json extracts the info.cemu.Cemu flatpak at the commit its version variable names, copies its bin/ to bin/, and writes that Flathub commit as component_version, which reads 4a22a30407fd3b647165c651ffa785ae0da3ef66b3b5c5249880e793bbec2d6e. The build states itself through version.h: BUILD_VERSION_WITH_NAME_STRING is 'Cemu <major>.<minor>' from the version numbers the build passes in (src/Common/version.h:10-12, CMakeLists.txt:8-9 and :67-68 at a6fb0a48), and the tag v2.6 names commit a6fb0a48. The deployed components/cemu/bin/Cemu_relwithdebinfo holds 'Cemu 2.6' as one NUL-delimited constant and no prefix of the commit's hash at all, so the stamp names the release 2.6 rather than the commit: another build configured as 2.6 carries it too.",
+          "provenance": "Cemu release 2.6, built from commit a6fb0a48."
+        }
+      ],
       "provenance": {
-        "source": "Cemu 2.6, the release the shipped binary carries as a whole version string (components/cemu/bin/Cemu_relwithdebinfo). Every save lives in the Wii U's internal storage (MLC), resolved the way the emulator resolves it: an --mlc launch flag, else settings.xml's mlc_path, else mlc01 below Cemu's user data (ActiveSettings.cpp:242-268). The save tree inside it is usr/save/<title id hi>/<title id lo>/user/ — the shipped binary carries that scheme as the whole literal 'usr/save/{:08X}/{:08X}/user/' — one directory per title, the id the game's own, so the answer templates the unit as usr/save/<save_id> — filled with the title id, high then low word, each 8 lowercase hex digits, the spelling the runtime write sites compose (nn_save.cpp:133-145: 'usr/save/%08x/%08x/user/%08x/' and 'user/common/'). An arrangement may reroute usr/save with a symlink, which the answer walks. On EmuDeck the catalogue reaches this card through the launcher script the command names (tools/launchers/cemu.sh); the AppImage variant reads the host's own XDG tree (emuDeckCemu.sh:13, vars.sh:4-5)."
+        "source": "Cemu 2.6, built from commit a6fb0a48 — the release the shipped binary carries as a whole version string (components/cemu/bin/Cemu_relwithdebinfo). Every save lives in the Wii U's internal storage (MLC), resolved the way the emulator resolves it: an --mlc launch flag, else settings.xml's mlc_path, else mlc01 below Cemu's user data (ActiveSettings.cpp:242-268). The save tree inside it is usr/save/<title id hi>/<title id lo>/user/ — the shipped binary carries that scheme as the whole literal 'usr/save/{:08X}/{:08X}/user/' — one directory per title, the id the game's own, so the answer templates the unit as usr/save/<save_id> — filled with the title id, high then low word, each 8 lowercase hex digits, the spelling the runtime write sites compose (nn_save.cpp:133-145: 'usr/save/%08x/%08x/user/%08x/' and 'user/common/'). An arrangement may reroute usr/save with a symlink, which the answer walks. On EmuDeck the catalogue reaches this card through the launcher script the command names (tools/launchers/cemu.sh); the AppImage variant reads the host's own XDG tree (emuDeckCemu.sh:13, vars.sh:4-5)."
       }
     },
     "AZAHAR": {
@@ -116,8 +533,57 @@
           "n3ds"
         ]
       },
+      "redirects": {
+        "routes": [
+          {
+            "via": "working-directory",
+            "name": null,
+            "argument": "<dir>/user/",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "Where the launch's working directory holds a folder named user, Azahar takes that folder as its whole user directory, with its configuration below it in user/config, and this outranks XDG_DATA_HOME and XDG_CONFIG_HOME, which it reads only where no such folder exists (common/file_util.cpp:968-985, the working directory with its separator from :787-810). The SD card and NAND (saves, installed titles, system titles), the system data, the savestates and qt-config.ini all sit below it (:1023-1034, savestate.cpp:44-48). A fresh folder starts from Azahar's defaults; a qt-config.ini there that switches use_custom_storage on still decides the SD card and NAND (citra_qt/configuration/config.cpp:493-511)."
+          },
+          {
+            "via": "variable",
+            "name": "XDG_DATA_HOME",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "Without a user folder in the working directory, Azahar's user directory is $XDG_DATA_HOME/azahar-emu and its configuration $XDG_CONFIG_HOME/azahar-emu, each value required to be absolute (common/file_util.cpp:904-927, :974-985, :1014-1018); the SD card, NAND, system data and savestates sit below the user directory (:1023-1034, savestate.cpp:44-48). Where qt-config.ini — which this variable does not move — switches use_custom_storage on, its nand_directory and sdmc_directory rank above it, and only the savestates and system data move (citra_qt/configuration/config.cpp:493-511); Azahar writes the SD card and NAND paths it ran with back into those keys on save (:1090-1104).",
+            "outranked_by": [
+              {
+                "file": "qt-config.ini",
+                "key": "[Data Storage] sdmc_directory"
+              },
+              {
+                "file": "qt-config.ini",
+                "key": "[Data Storage] nand_directory"
+              }
+            ]
+          }
+        ],
+        "provenance": "Searched at 3e574df8: the Qt frontend's argument loop (citra_qt/citra_qt.cpp:268-398) and the command-line tool it hands compression options to (citra_meta/main.cpp:63-81, citra_cli/citra_cli.h:7-8) — no option names a save or user path — and the user-path resolution (common/file_util.cpp:935-1036). XDG_CONFIG_HOME on its own moves only qt-config.ini, the configuration-file route."
+      },
+      "builds": [
+        {
+          "release": "6739873b8d51ad294e1d8ac08f772d3e52ad5e7cd49b6d7404d5e01ec8227414",
+          "revision": "3e574df8",
+          "stamp": "3e574df8c1b502e945332b4b4d319ad683114d77",
+          "citation": "RetroDECK ships the Flathub build: components/azahar/component_recipe.json extracts the org.azahar_emu.Azahar flatpak at the commit its version variable names, copies its bin/ to bin/, and writes that Flathub commit as component_version, which reads 6739873b8d51ad294e1d8ac08f772d3e52ad5e7cd49b6d7404d5e01ec8227414. The build states itself through scm_rev.cpp: g_scm_rev is GIT_REV, the full commit hash read from the GIT-COMMIT file a source archive carries or from git HEAD (CMakeModules/GenerateBuildInfo.cmake:13-16, :24; src/common/scm_rev.cpp.in:7, :19). The tag 2126.1.1 names commit 3e574df8c1b502e945332b4b4d319ad683114d77, and the deployed components/azahar/bin/azahar holds that full hash as one NUL-delimited constant.",
+          "provenance": "Azahar release 2126.1.1, built from commit 3e574df8."
+        }
+      ],
       "provenance": {
-        "source": "Azahar 2125.1.1, the release RetroDECK ships (components/azahar/bin/azahar reports it). A 3DS save lives on the emulated SD: the archive mounts '<sdmc>/Nintendo 3DS/<ID0>/<ID1>/title/' and the per-title save is '<high:08x>/<low:08x>/data/00000001/' below it (archive_source_sd_savedata.cpp:21-29), with ID0 and ID1 compile-time all-zero strings (archive.h:22-24) — so the unit is a directory keyed by the title id, the same <save_id> spelling Cemu's card fills. The SD root is read the way the emulator reads it: qt-config.ini's [Data Storage] group, where use_custom_storage routes sdmc_directory and nand_directory and false leaves the XDG defaults (config.cpp:480-498; a '<key>\\default=true' companion makes the default win, ReadSetting, config.cpp:1442-1450). The title directory also holds installed content (title/<high>/<low>/content/), which is why the unit anchors at data/ and never at the title directory. Beside the unit, extdata ('Nintendo 3DS/<ID0>/<ID1>/extdata/') keeps save-adjacent data keyed by the title's own extdata id (archive_extsavedata.cpp), and system titles save into the NAND ('nand/data/<ID0>/sysdata') — stated, not templated."
+        "source": "Azahar 2126.1.1, built from commit 3e574df8 — the release RetroDECK ships (components/azahar/bin/azahar carries the commit's full hash). A 3DS save lives on the emulated SD: the archive mounts '<sdmc>/Nintendo 3DS/<ID0>/<ID1>/title/' and the per-title save is '<high:08x>/<low:08x>/data/00000001/' below it (archive_source_sd_savedata.cpp:21-29), with ID0 and ID1 compile-time all-zero strings (archive.h:22-24) — so the unit is a directory keyed by the title id, the same <save_id> spelling Cemu's card fills. The SD root is read the way the emulator reads it: qt-config.ini's [Data Storage] group, where use_custom_storage routes sdmc_directory and nand_directory and false leaves the XDG defaults (config.cpp:492-511; a '<key>\\default=true' companion makes the default win, ReadSetting, config.cpp:1464-1472). The title directory also holds installed content (title/<high>/<low>/content/), which is why the unit anchors at data/ and never at the title directory. Beside the unit, extdata ('Nintendo 3DS/<ID0>/<ID1>/extdata/') keeps save-adjacent data keyed by the title's own extdata id (archive_extsavedata.cpp), and system titles save into the NAND ('nand/data/<ID0>/sysdata') — stated, not templated."
       }
     },
     "DUCKSTATION": {
@@ -126,6 +592,23 @@
         "systems": [
           "psx"
         ]
+      },
+      "redirects": {
+        "routes": [
+          {
+            "via": "variable",
+            "name": "XDG_CONFIG_HOME",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware"
+            ],
+            "citation": "The data root is $XDG_CONFIG_HOME/duckstation where the value is absolute, else ~/.local/share/duckstation, created where missing (duckstation-qt/qthost.cpp:541-612, the variable at :563-568), and settings.ini lives in it (:425-426). Every folder settings.ini leaves relative joins the root — the memory cards, the savestates and the BIOS search directory among them — while an absolute one is kept (core/settings.cpp:1955-1983). So the whole root moves: a fresh one starts from the defaults with no BIOS in it, and flags the setup wizard to run (qthost.cpp:434-449, :467-468)."
+          }
+        ],
+        "provenance": "Searched at RetroDECK/Duckstation 1f6de046b: the command-line loop (qthost.cpp:2318-2459), which refuses any option it does not know (:2451-2455), and the data-root resolution (:515-612). -settings <file> loads another settings file, the configuration-file route (:2412-2417, :420-426); -portable moves the root to the deployed binary's own directory (:2406-2411), which a caller cannot choose; -state and -statefile load a state."
       },
       "builds": [
         {
@@ -147,8 +630,46 @@
           "ps2"
         ]
       },
+      "redirects": {
+        "routes": [
+          {
+            "via": "flag",
+            "name": "-datapath",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware"
+            ],
+            "citation": "-datapath <dir> puts the data root at <dir>/PCSX2 (pcsx2-qt/QtHost.cpp:2216-2221, pcsx2/Pcsx2Config.cpp:2251-2252) and outranks XDG_CONFIG_HOME; -portable, portable.ini or portable.txt beside the binary outrank it in turn (Pcsx2Config.cpp:2185-2196, :2206-2209). The root and its inis folder are created where missing (:2275-2280), PCSX2.ini is read from there (QtHost.cpp:1358), and every folder it leaves relative joins the root — the memory cards, savestates and BIOS among them — while an absolute one is kept (Pcsx2Config.cpp:2283-2323). A fresh root starts from the defaults with no BIOS in it, and flags the setup wizard to run (QtHost.cpp:1364-1378)."
+          },
+          {
+            "via": "variable",
+            "name": "XDG_CONFIG_HOME",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware"
+            ],
+            "citation": "Without -datapath and portable mode, the data root is $XDG_CONFIG_HOME/PCSX2 where the value is absolute, else ~/.config/PCSX2 (pcsx2/Pcsx2Config.cpp:2206-2243). It moves what -datapath moves, with the same defaults and the same fresh-root wizard (Pcsx2Config.cpp:2275-2323, pcsx2-qt/QtHost.cpp:1358-1378)."
+          }
+        ],
+        "provenance": "Searched at fd9d310c: the command-line loop (pcsx2-qt/QtHost.cpp:2173-2372), which refuses any option it does not know (:2331-2335), and the data-root resolution (pcsx2/Pcsx2Config.cpp:2185-2281). -portable on its own moves the root to the deployed binary's directory (:2268), which a caller cannot choose. The APPIMAGE route is not stated: with -portable and APPIMAGE set, the root moves beside the AppImage it names (:2262-2266), which works only by telling PCSX2 it runs as an AppImage it is not, and what else PCSX2 does with that variable is unread."
+      },
+      "builds": [
+        {
+          "release": "v2.8.2",
+          "revision": "fd9d310c",
+          "stamp": "fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3",
+          "citation": "RetroDECK ships PCSX2's own release build: components/pcsx2/component_recipe.json downloads the pcsx2-*-linux-appimage-x64-Qt.AppImage of the PCSX2/pcsx2 release its version variable names, extracts it, copies usr/bin to bin/, and writes the release's tag as component_version, which reads v2.8.2. The tag v2.8.2 names commit fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3. The build states itself through svnrev.h: GIT_HASH is git rev-parse HEAD, read as the build is configured (cmake/Pcsx2Utils.cmake:74-77, written at :109, :120 and :131), and BuildVersion::GitHash keeps it as a constant (pcsx2/BuildVersion.cpp:14). The deployed components/pcsx2/bin/pcsx2-qt holds that full hash as one NUL-delimited constant.",
+          "provenance": "PCSX2 release v2.8.2, built from commit fd9d310c."
+        }
+      ],
       "provenance": {
-        "source": "PCSX2 v2.6.3, the release RetroDECK ships (the tag string rides in the binary). On Linux the DataRoot is $XDG_CONFIG_HOME/PCSX2 where set, else ~/.config/PCSX2 — both the config side (Pcsx2Config.cpp:2197-2217) — with inis/PCSX2.ini inside. [Folders] MemoryCards names the card directory (default 'memcards', a relative value joining the DataRoot, :2259 and :2272-2285). [MemoryCards] SlotN_Enable and SlotN_Filename pick each slot's card (defaults Mcd001.ps2/Mcd002.ps2; default names MemoryCardFile.cpp:244-250, the slot spellings :2035-2054). The six multitap slots carry MultitapP_SlotNN spellings and need TWO switches, not one: that slot's own MultitapP_SlotN_Enable and the multitap's own [Pad] MultitapPort1 / MultitapPort2 (the ini keys are one-based where the C++ members are zero-based, SettingsWrapSection(\"Pad\") with SettingsWrapBitBoolEx, :1815-1817), both read through Pcsx2Config::LoadSave — LoadSaveCore and Pad.LoadSave alike (:2028-2033). With the tap off the running game cannot address that slot at all: FileMemoryCard::Open skips it (MemoryCardFile.cpp:271-277) and, one level up, MultitapProtocol::Select refuses to move the memory-card slot off 0 while SupportCheck answers absent (MultitapProtocol.cpp:17-38, :41-60), so Sio2::Memcard only ever reaches slot 0 of each port (Sio2.cpp:247). A slot enabled without its tap therefore holds no card this answer lists. The card's type is what sits at its full path — the memory-card directory joined with the filename (FullpathToMcd, :2065-2068), and an absolute filename does not escape that directory: Path::Combine appends one separator and then swallows the value's leading one (common/FileSystem.cpp:847-862 with PathAppendString :98-139), performing no IsAbsolute test — unlike LoadPathFromSettings at :2275, which is where PCSX2 does let an absolute value win: a directory there is a folder card, whose per-game saves live as subdirectories inside and are auto-managed (McdFolderAutoManage, default true); anything else is a file card, one shared .ps2 image (FileMcd_SetType, MemoryCardFile.cpp:584-604). An empty filename empties the slot. This card completes the ps2 pair beside the LRPS2 core rule, which keeps the libretro side's shared card."
+        "source": "PCSX2 v2.8.2, the release RetroDECK ships, built from commit fd9d310c (the binary carries the commit's full hash). On Linux the DataRoot is $XDG_CONFIG_HOME/PCSX2 where set, else ~/.config/PCSX2 — both the config side (Pcsx2Config.cpp:2223-2243) — with inis/PCSX2.ini inside; a launch passing -datapath <dir> puts it at <dir>/PCSX2 instead (QtHost.cpp:2216-2221, Pcsx2Config.cpp:2251-2252), which ES-DE's PCSX2 command does not pass. [Folders] MemoryCards names the card directory (default 'memcards', a relative value joining the DataRoot, :2288 and :2301-2314). [MemoryCards] SlotN_Enable and SlotN_Filename pick each slot's card (defaults Mcd001.ps2/Mcd002.ps2; default names MemoryCardFile.cpp:244-250, the slot spellings Pcsx2Config.cpp:2057-2076). The six multitap slots carry MultitapP_SlotNN spellings and need TWO switches, not one: that slot's own MultitapP_SlotN_Enable and the multitap's own [Pad] MultitapPort1 / MultitapPort2 (the ini keys are one-based where the C++ members are zero-based, SettingsWrapSection(\"Pad\") with SettingsWrapBitBoolEx, Pcsx2Config.cpp:1848-1850), both read through Pcsx2Config::LoadSave — LoadSaveCore and Pad.LoadSave alike (Pcsx2Config.cpp:2050-2055). With the tap off the running game cannot address that slot at all: FileMemoryCard::Open skips it (MemoryCardFile.cpp:271-277) and, one level up, MultitapProtocol::Select refuses to move the memory-card slot off 0 while SupportCheck answers absent (MultitapProtocol.cpp:17-38, :41-60), so Sio2::Memcard only ever reaches slot 0 of each port (Sio2.cpp:252). A slot enabled without its tap therefore holds no card this answer lists. The card's type is what sits at its full path — the memory-card directory joined with the filename (FullpathToMcd, Pcsx2Config.cpp:2087-2090), and an absolute filename does not escape that directory: Path::Combine appends one separator and then swallows the value's leading one (common/FileSystem.cpp:848-863 with PathAppendString :99-140), performing no IsAbsolute test — unlike LoadPathFromSettings at Pcsx2Config.cpp:2304, which is where PCSX2 does let an absolute value win: a directory there is a folder card, whose per-game saves live as subdirectories inside and are auto-managed — at this release always: FileMcd_EmuOpen calls SetFiltering(true) (MemoryCardFile.cpp:614) and FileMcd_ReIndex passes true (:826), and the McdFolderAutoManage toggle the fullscreen settings UI still writes (FullscreenUI_Settings.cpp:3628) is read nowhere; anything else is a file card, one shared .ps2 image (FileMcd_SetType, MemoryCardFile.cpp:584-604). An empty filename empties the slot. This card completes the ps2 pair beside the LRPS2 core rule, which keeps the libretro side's shared card."
       }
     },
     "MELONDS": {
@@ -158,8 +679,21 @@
           "nds"
         ]
       },
+      "redirects": {
+        "routes": [],
+        "provenance": "None at b86390e4. The command line takes the ROMs, a boot mode, fullscreen and an archive member, and no path (frontend/qt_sdl/CLI.cpp:36-60). XDG_CONFIG_HOME, through Qt's configuration location, moves the melonDS folder that holds melonDS.toml (main.cpp:180-213, Config.cpp:787, :811), but the saves and savestates follow SaveFilePath and SavestatePath, which an empty value puts beside the ROM (EmuInstance.cpp:445-475, :700, :766) — so moving them needs a configuration that names other folders, the configuration-file route."
+      },
+      "builds": [
+        {
+          "release": "9c8ac146f909e365673fdf2eb711f588c0fdf72fce11fc05c9db698a88d269ba",
+          "revision": "b86390e4",
+          "stamp": "melonDS 1.1",
+          "citation": "RetroDECK ships the Flathub build: components/melonds/component_recipe.json extracts the net.kuribo64.melonDS flatpak at the commit its version variable names, copies its bin/ to bin/, and writes that Flathub commit as component_version, which reads 9c8ac146f909e365673fdf2eb711f588c0fdf72fce11fc05c9db698a88d269ba. The build states itself through version.h: the window title and the start-up banner print 'melonDS ' and MELONDS_VERSION (src/frontend/qt_sdl/main.cpp:284, Window.cpp:262), the project VERSION 1.1 with an empty suffix (CMakeLists.txt:19-20, src/version.h.in:24-26 at b86390e4), and the tag 1.1 names commit b86390e4. The deployed components/melonds/bin/melonDS holds 'melonDS 1.1' as one NUL-delimited constant and no prefix of the commit's hash at all, so the stamp names the release 1.1 rather than the commit: another build configured as 1.1 carries it too.",
+          "provenance": "melonDS release 1.1, built from commit b86390e4."
+        }
+      ],
       "provenance": {
-        "source": "melonDS 1.1, the release the shipped binary carries as a whole version string (components/melonds/bin/melonDS) and the release Flathub currently installs for EmuDeck. One file per game: <rom stem>.sav, the loaded file's name without its extension — for a ROM inside an archive the name of the file inside it (EmuInstance.cpp:1884, :1846-1848 at 1.1; the archive suffixes are Window.cpp:124-140, matched case-insensitively :143-148), so archive content keeps the hole open. The directory is [Instance0] SaveFilePath, read the way Config::Load reads it: melonDS.toml under <config>/melonDS — a portable directory beside the executable would outrank that, and neither arrangement has one (pathInit, main.cpp:180-214) — with a missing TOML falling back to the pre-1.0 melonDS.ini line by line (Config.cpp:785-795, :682-775; the legacy key is instance-unique, :301) and a TOML that does not parse yielding factory defaults (:796-803). An empty or absent SaveFilePath puts the save beside the ROM itself (getAssetPath, EmuInstance.cpp:445-484; the default is empty, Config.cpp:116-121 with the fallback at :596); a relative value resolves against the launching process's working directory, trailing path separators trimmed either way (:459-467). Local-multiplayer instances append .2/.3 after the .sav; the normal window, instance 0, appends nothing (:176-181, :1891) — the answer is for the normal launch. On EmuDeck the emulator is the net.kuribo64.melonDS flatpak: melonds.sh runs it unconditionally (melonds.sh:4), EmuDeck grants it --filesystem=host (installEmuFP.sh:33) so a configured HOST path stays the host path it names — the sandbox's own spellings still lead into the app's trees — and those trees are the app's own XDG homes below ~/.var/app; the legacy INI EmuDeck writes there (emuDeckMelonDS.sh, melonDS_configFile) is 1.1's migration source while no TOML exists."
+        "source": "melonDS 1.1, built from commit b86390e4 — the release the shipped binary carries as a whole version string (components/melonds/bin/melonDS) and the release Flathub currently installs for EmuDeck. One file per game: <rom stem>.sav, the loaded file's name without its extension — for a ROM inside an archive the name of the file inside it (EmuInstance.cpp:1884, :1846-1848 at 1.1; the archive suffixes are Window.cpp:124-140, matched case-insensitively :143-148), so archive content keeps the hole open. The directory is [Instance0] SaveFilePath, read the way Config::Load reads it: melonDS.toml under <config>/melonDS — a portable directory beside the executable would outrank that, and neither arrangement has one (pathInit, main.cpp:180-214) — with a missing TOML falling back to the pre-1.0 melonDS.ini line by line (Config.cpp:785-795, :682-775; the legacy key is instance-unique, :301) and a TOML that does not parse yielding factory defaults (:796-803). An empty or absent SaveFilePath puts the save beside the ROM itself (getAssetPath, EmuInstance.cpp:445-484; the default is empty, Config.cpp:116-121 with the fallback at :596); a relative value resolves against the launching process's working directory, trailing path separators trimmed either way (:459-467). Local-multiplayer instances append .2/.3 after the .sav; the normal window, instance 0, appends nothing (:176-181, :1891) — the answer is for the normal launch. On EmuDeck the emulator is the net.kuribo64.melonDS flatpak: melonds.sh runs it unconditionally (melonds.sh:4), EmuDeck grants it --filesystem=host (installEmuFP.sh:33) so a configured HOST path stays the host path it names — the sandbox's own spellings still lead into the app's trees — and those trees are the app's own XDG homes below ~/.var/app; the legacy INI EmuDeck writes there (emuDeckMelonDS.sh, melonDS_configFile) is 1.1's migration source while no TOML exists."
       }
     },
     "RPCS3": {
@@ -169,8 +703,35 @@
           "ps3"
         ]
       },
+      "redirects": {
+        "routes": [
+          {
+            "via": "variable",
+            "name": "XDG_CONFIG_HOME",
+            "argument": "<dir>",
+            "moves": [
+              "saves",
+              "savestates",
+              "configuration",
+              "firmware",
+              "installed-content"
+            ],
+            "citation": "RPCS3's configuration directory is $XDG_CONFIG_HOME/rpcs3/, the value taken as given, else ~/.config/rpcs3/, created where missing (Utilities/File.cpp:2518-2614, the variable at :2585-2588); a portable folder beside the executable outranks it (:2528-2533). config.yml, vfs.yml and the savestates live there (Emu/System.cpp:507, Emu/vfs_config.cpp:142-145, Emu/savestate_utils.cpp:298-303), and vfs.yml's defaults put dev_hdd0 — the saves, the installed games — and dev_flash — the firmware — below it (Emu/vfs_config.h:12-19, Emu/vfs_config.cpp:14-52). So the whole tree moves: a fresh one holds no firmware and no installed games until they are installed again."
+          }
+        ],
+        "provenance": "Searched at d5213de6: the command-line options (rpcs3.cpp:814-859) and the configuration-directory resolution (Utilities/File.cpp:2518-2614). No flag moves the saves: --config <path> loads another config.yml for a game booted from the command line, the configuration-file route — the drives are in vfs.yml, which it does not name (rpcs3.cpp:827-828, :1312-1314); --user-id picks a user inside dev_hdd0 (:837-838); --savestate and --last-savestate load a state (:839-842). RPCS3_CONFIG_DIR is read on Windows only (File.cpp:2535-2578). The APPIMAGE route is not stated: with APPIMAGE set, the executable directory whose portable folder outranks XDG_CONFIG_HOME is the AppImage's (File.cpp:2469-2473), which works only by telling RPCS3 it runs as an AppImage it is not, and what else RPCS3 does with that variable is unread."
+      },
+      "builds": [
+        {
+          "release": "build-d5213de6dd329b4f61ad0b95c1a3dc7d6622aa3b",
+          "revision": "d5213de6",
+          "stamp": "20184-d5213de6",
+          "citation": "RetroDECK ships RPCS3's own Linux build: components/rpcs3/component_recipe.json downloads the linux64 AppImage of the RPCS3/rpcs3-binaries-linux release its version variable names, extracts it, copies usr/bin to bin/, and writes the release's tag as component_version, which reads build-d5213de6dd329b4f61ad0b95c1a3dc7d6622aa3b, the RPCS3/rpcs3 commit d5213de6 the release was built from. The build states itself through git-version.h: RPCS3_GIT_VERSION is git rev-list HEAD --count, a hyphen and git rev-parse --short=8 HEAD, both read from HEAD as the build is configured (rpcs3/git-version.cmake:7-31, written at :68-69). The deployed components/rpcs3/bin/rpcs3 holds '20184-d5213de6' as one NUL-delimited constant; the count 20184 is read off that binary, not recomputed from a history.",
+          "provenance": "RPCS3 build 20184, commit d5213de6."
+        }
+      ],
       "provenance": {
-        "source": "RPCS3 build 7c6b3dcd, the revision the shipped binary names. The save tree hangs off the emulated PS3's internal drive, whose host directory vfs.yml states: the key /dev_hdd0/, defaulting to $(EmulatorDir)dev_hdd0/ (vfs_config.h:13). $(EmulatorDir) is itself a key of that file: cfg_vfs::get replaces the token everywhere it appears and ends the resulting path with a separator where it has none (vfs_config.cpp:14-62), and what it replaces the token with is get_emu_dir's answer — the stated value as written, or the emulator's config directory where it is empty (system_utils.cpp:146-150, called at System.cpp:395 and passed at :483). Below the drive, saves are one directory per title id under home/<user>/savedata: the binary carries '/dev_hdd0/home/%08u/savedata/' as a whole string, beside '/dev_hdd0/home/%08d/' and the trophy tree. The user is a runtime selection — Emulator::m_usr initialises to '00000001' (System.h:164) and the user manager changes it — and nothing on disk records which one is current, so the answer states the user homes RPCS3's own GetUserAccounts would list (user_account.cpp:35-66 at 7c6b3dcd) and the ones it passes over as skipped, and names the uncertainty besides. That those homes are every one the emulator would list is claimed only where every entry found was decided: an entry left undecided here may be one GetUserAccounts keeps, and where one is, the sentence claims the accounts established here instead. It never says the listing could stop early, because neither kind of undecided entry can stop it — the walk below skips an entry whose stat fails and reads on into the next. A name below home/ whose own stat failed here is stated apart from both where check_user accepts it, because GetUserAccounts reaches it through fs::dir (user_account.cpp:41), a readdir walk that stats every entry and skips the ones whose fstatat fails — 'failed metadata (broken symlink?), ignore and skip to next file', unix_dir::read, File.cpp:2091-2105 — so the emulator's verdict on such a name rests on a stat of its own, and a stat that failed for atlas is not known to fail for it. A name check_user rejects is skipped instead, and established as skipped without any stat: that test reads nothing but the name (system_utils.cpp:59-69, applied at user_account.cpp:49-54), so the emulator passes such a name over whichever way its walk went. Both arrangements wire the first user: RetroDECK links saves/ps3/rpcs3 at dev_hdd0/home/00000001/savedata (component_prepare.sh), EmuDeck the same path from its own saves folder (emuDeckRPCS3.sh:189) and runs the AppImage (emuDeckRPCS3.sh:4-5). A second save location sits outside the per-user tree entirely — '/dev_hdd0/savedata/vmc/', the virtual memory cards for PS1 and PS2 classics, also a whole string in the binary — and it is a directory, so it rides as a group of its own with its file names left open, beside the file-set-spans-roots caveat that says a sync walking only the per-user tree misses it. What is written there and under which names has not been read. config.yml stays unread: it is nested YAML, and nothing this answer needs is in it."
+        "source": "RPCS3 build 20184, commit d5213de6, the revision the shipped binary names. The save tree hangs off the emulated PS3's internal drive, whose host directory vfs.yml states: the key /dev_hdd0/, defaulting to $(EmulatorDir)dev_hdd0/ (vfs_config.h:13). $(EmulatorDir) is itself a key of that file: cfg_vfs::get replaces the token everywhere it appears and ends the resulting path with a separator where it has none (vfs_config.cpp:14-64), and what it replaces the token with is get_emu_dir's answer — the stated value as written, or the emulator's config directory where it is empty (system_utils.cpp:148-152, called at System.cpp:450 and passed at :537). Below the drive, saves are one directory per title id under home/<user>/savedata: the binary carries '/dev_hdd0/home/%08u/savedata/' as a whole string, beside '/dev_hdd0/home/%08d/' and the trophy tree. The user is a runtime selection — Emulator::m_usr initialises to '00000001' (System.h:108) and the user manager changes it — and nothing on disk records which one is current, so the answer states the user homes RPCS3's own GetUserAccounts would list (user_account.cpp:35-66 at d5213de6) and the ones it passes over as skipped, and names the uncertainty besides. That those homes are every one the emulator would list is claimed only where every entry found was decided: an entry left undecided here may be one GetUserAccounts keeps, and where one is, the sentence claims the accounts established here instead. It never says the listing could stop early, because neither kind of undecided entry can stop it — the walk below skips an entry whose stat fails and reads on into the next. A name below home/ whose own stat failed here is stated apart from both where check_user accepts it, because GetUserAccounts reaches it through fs::dir (user_account.cpp:41), a readdir walk that stats every entry and skips the ones whose fstatat fails — 'failed metadata (broken symlink?), ignore and skip to next file', unix_dir::read, File.cpp:2391-2405 — so the emulator's verdict on such a name rests on a stat of its own, and a stat that failed for atlas is not known to fail for it. A name check_user rejects is skipped instead, and established as skipped without any stat: that test reads nothing but the name (system_utils.cpp:61-71, applied at user_account.cpp:49-54), so the emulator passes such a name over whichever way its walk went. Both arrangements wire the first user: RetroDECK links saves/ps3/rpcs3 at dev_hdd0/home/00000001/savedata (component_prepare.sh), EmuDeck the same path from its own saves folder (emuDeckRPCS3.sh:189) and runs the AppImage (emuDeckRPCS3.sh:4-5). A second save location sits outside the per-user tree entirely — '/dev_hdd0/savedata/vmc/', the virtual memory cards for PS1 and PS2 classics, also a whole string in the binary — and it is a directory, so it rides as a group of its own with its file names left open, beside the file-set-spans-roots caveat that says a sync walking only the per-user tree misses it. What is written there and under which names has not been read. config.yml stays unread: it is nested YAML, and nothing this answer needs is in it."
       }
     },
     "VITA3K": {
@@ -179,6 +740,10 @@
         "systems": [
           "psvita"
         ]
+      },
+      "redirects": {
+        "routes": [],
+        "provenance": "None at cb1f592c (3996) and e6ac4272 (4103). Searched: the command-line options (config/src/config.cpp:243-297 at cb1f592c, :330-391 at e6ac4272) and the path initialisation (app/src/app_init.cpp:144-259 at cb1f592c, :244-413 at e6ac4272). No flag moves the saves: -c/--config-location loads another config.yml, the configuration-file route; -r/--installed-path names an app the file system already holds. XDG_DATA_HOME moves the Vita file system — the saves, the installed apps and the firmware a PUP installs — to $XDG_DATA_HOME/Vita3K/Vita3K/ (app/src/app_init.cpp:226-227 at cb1f592c, :388-394 at e6ac4272), but it is no redirect, because the launch writes it into the configuration: an empty pref-path is filled from that root (config/src/config.cpp:189-190 and :362-363 at cb1f592c, :283-284 and :457-458 at e6ac4272) and config.yml is serialized whenever overwrite_config holds, its default (config/include/config/state.h:42; config.cpp:377-381 at cb1f592c, :472-476 at e6ac4272), so the moved path persists into later launches; only -w/--keep-config (config.cpp:283 at cb1f592c, :377 at e6ac4272) would keep an existing config.yml unwritten, and a set pref-path outranks the variable anyway. XDG_CONFIG_HOME on its own moves only config.yml. The APPIMAGE route is not stated: at 4103, with APPIMAGE set, a portable folder beside the AppImage it names becomes every path (app/src/app_init.cpp:273-292 at e6ac4272), which works only by telling Vita3K it runs as an AppImage it is not, and what else Vita3K does with that variable is unread."
       },
       "builds": [
         {

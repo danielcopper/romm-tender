@@ -134,6 +134,8 @@ from .find_rules import (
     LAYER_CUSTOM,
     RULE_COMMAND,
     CAVEAT_FRONTEND_BUILD_UNPINNED,
+    CAVEAT_FRONTEND_BUILD_SEALED,
+    CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
     CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN,
     CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
     Availability,
@@ -153,7 +155,24 @@ from .launch import (
     unsupported,
     word_after_program,
 )
-from .launch_command import TOO_LARGE, CommandInputs, LaunchCommand, TooLarge, take_apart
+from .launch_command import (
+    TOO_LARGE,
+    CommandInputs,
+    LaunchCommand,
+    LauncherScript,
+    LauncherStep,
+    TooLarge,
+    take_apart,
+)
+from .launcher_scripts import (
+    BACKEND_ROOT,
+    EMULATION_ROOT,
+    TOOLS_ROOT,
+    LauncherState,
+    launcher_rules,
+    ryujinx_names_sdl2,
+    step_runs,
+)
 from .frontend_path import frontend_search_path, frontend_working_directory
 from .launch_formats import lookup_install_first, lookup_standalone_launch
 from .firmware import firmware_for_core as _resolve_for_core
@@ -161,11 +180,13 @@ from .firmware import firmware_for_system as _resolve_for_system
 from .firmware import firmware_inventory as _resolve_inventory
 from .firmware import identify_firmware as _resolve_identification
 from .machine import (
+    APPIMAGE_CAPABILITY_MISSING,
     ARCHIVE_MISSING,
     claimed_extensions,
     FileStamp,
     StampingMachine,
     BoundedReadingMachine,
+    DIGEST_GIT_BLOB,
     DIGEST_MD5,
     GLOB_COMPLETE,
     GLOB_INCOMPLETE,
@@ -286,6 +307,8 @@ from .placement import (
     CAVEAT_SAVE_INSIDE_IMAGE,
     CAVEAT_SAVE_ROOT_REVOKED,
     CAVEAT_SAVE_FILES_COMPRESSED,
+    CAVEAT_REDIRECT_OUTRANKED,
+    CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
     CAVEAT_SAVE_WRITES_DISCARDED,
     CAVEAT_SIZE_FIXED_EXCEPT_TRAILING_FILL,
     CAVEAT_SAVESTATE_INSIDE_IMAGE,
@@ -403,7 +426,13 @@ from .placement import (
 )
 from . import duckstation, emulator_settings, melonds, qt_ini
 from .yaml_scalars import YamlScalars, read_scalars
-from .standalone_saves import StandaloneBuild, StandaloneSaveCard, lookup_standalone_save_card
+from .standalone_saves import (
+    RedirectSetting,
+    SaveRedirect,
+    StandaloneBuild,
+    StandaloneSaveCard,
+    lookup_standalone_save_card,
+)
 from .standalone_savestates import (
     SavestateIniKey,
     SavestateLaunchIni,
@@ -1682,10 +1711,7 @@ class _SandboxLaunchView:
     def read_text_within(self, path: str, limit: int) -> ReadResult | TooLarge | None:
         """The text at the sandbox's *path*, read through the host no further than *limit* + 1 bytes — missing where
         the sandbox shows nothing there, ``too-large`` where the file holds more than *limit*, ``None`` where what it
-        shows cannot be told.
-
-        A machine that cannot bound its read (:class:`~atlas.machine.BoundedReadingMachine`)
-        is asked the file's size first and read only within the bound.
+        shows cannot be told (:func:`_read_within`).
         """
         if not path.startswith("/"):
             return None
@@ -1694,14 +1720,7 @@ class _SandboxLaunchView:
             return None
         if isinstance(host, _Hidden):
             return ReadResult(READ_MISSING)
-        machine = self.machine
-        if isinstance(machine, BoundedReadingMachine):
-            read = machine.read_text_within(host, limit)
-            return TOO_LARGE if read is None else read
-        size = machine.file_size(host)
-        if size is not None and size > limit:
-            return TOO_LARGE
-        return machine.read_text(host)
+        return _read_within(self.machine, host, limit)
 
     def listing(self, directory: str) -> tuple[str, ...] | None:
         """The names in the sandbox's *directory*, read through the host — all of them, hidden ones included.
@@ -1717,6 +1736,22 @@ class _SandboxLaunchView:
         if isinstance(host, _Hidden):
             return ()
         return _host_listing(self.machine, host)
+
+
+def _read_within(machine: Machine, host: str, limit: int) -> ReadResult | TooLarge:
+    """The text at the host's *host*, read no further than *limit* + 1 bytes — ``too-large`` where the file holds
+    more than *limit*.
+
+    A machine that cannot bound its read (:class:`~atlas.machine.BoundedReadingMachine`)
+    is asked the file's size first and read only within the bound.
+    """
+    if isinstance(machine, BoundedReadingMachine):
+        read = machine.read_text_within(host, limit)
+        return TOO_LARGE if read is None else read
+    size = machine.file_size(host)
+    if size is not None and size > limit:
+        return TOO_LARGE
+    return machine.read_text(host)
 
 
 def _host_listing(machine: Machine, host: str) -> tuple[str, ...] | None:
@@ -1821,6 +1856,46 @@ class _HostLaunchView:
         if kind == KIND_INACCESSIBLE:
             return PROBE_UNKNOWN
         return PROBE_HIT if kind == KIND_FILE else PROBE_MISS
+
+    def is_directory(self, path: str) -> Probe:
+        """ES-DE's ``isDirectory`` on the host's *path*, links followed (``FileSystemUtil.cpp:1035-1050``)."""
+        if self._unknowable(path):
+            return PROBE_UNKNOWN
+        kind = self.machine.path_kind(path)
+        if kind == KIND_INACCESSIBLE:
+            return PROBE_UNKNOWN
+        return PROBE_HIT if kind == KIND_DIRECTORY else PROBE_MISS
+
+    def host_path(self, path: str) -> str | None:
+        """*path* itself: the frontend reads the host's own tree, so both spell a folder alike and the kernel follows
+        the links on the way for either — ``None`` where *path* cannot be told.
+        """
+        return None if self._unknowable(path) else path
+
+    def read_text_within(self, path: str, limit: int) -> ReadResult | TooLarge | None:
+        """The text at the host's *path*, links followed, read no further than *limit* + 1 bytes — ``too-large``
+        where the file holds more than *limit*, ``None`` where *path* cannot be told.
+        """
+        if self._unknowable(path):
+            return None
+        return _read_within(self.machine, path, limit)
+
+    def resolved(self, path: str) -> str | None:
+        """*path* with every link on the way followed, the kernel's way (:func:`_resolve_symlink_chain`) — ``None``
+        where it cannot be told: a path the view cannot place, or links that do not settle.
+        """
+        if self._unknowable(path):
+            return None
+        resolved = _resolve_symlink_chain(self.machine, path)[0]
+        return None if resolved is None else os.path.normpath(resolved)
+
+    def beneath(self, path: str, directory: str) -> bool:
+        """Whether *path* lies under *directory* once the links on the way to each are followed — a path or
+        directory whose links cannot be followed is compared as it is spelled.
+        """
+        inner = self.resolved(path) or os.path.normpath(path)
+        outer = self.resolved(directory) or os.path.normpath(directory)
+        return inner.startswith(outer.rstrip("/") + "/")
 
 
 # One file of the override chain as it is read: where it came from and its
@@ -3653,6 +3728,25 @@ def _rule_option_readings(
             source = f'core default: {key} = "{default}" (the stored value is not one the core registers)'
         values[key] = value
         readings[key] = OptionReading(key, value, source, options_file)
+    for key in card.listed_options:
+        # Registered from a listing the probe never sees, so no registered
+        # default or value set stands to normalise against: the stored value
+        # goes to the rule as it is, and the rule says what the core is handed
+        # (ModeChoice.handed).
+        value, source, options_file, _ = core_options_value(
+            machine,
+            override_config_dir=gates.override_config_dir,
+            global_file=option_gates.global_file,
+            library_name=library_name,
+            content_dir_name=content.dir_name,
+            rom_stem=content.rom_stem,
+            option_key=key,
+            option_default=None,
+            game_specific_options=option_gates.game_specific_options,
+            per_core_options=option_gates.per_core_options,
+        )
+        values[key] = value
+        readings[key] = OptionReading(key, value, source, options_file)
     return values, readings, caveats
 
 
@@ -3667,6 +3761,19 @@ def _rule_file_lookup(machine: Machine, base: str | None, name: str) -> FileLook
     if result.status == READ_MISSING:
         return FileLookup(None, FILE_ABSENT, path)
     return FileLookup(None, FILE_UNREADABLE, path)
+
+
+def _rule_files(machine: Machine, base: str | None, name: str) -> tuple[str, ...] | None:
+    """The regular files in one directory a rule asked about — :func:`_rule_entries`, files only."""
+    entries = _rule_entries(machine, base, name)
+    if entries is None or base is None:
+        return entries
+    directory = os.path.join(base, name)
+    return tuple(
+        entry
+        for entry in entries
+        if machine.path_kind(os.path.join(directory, entry)) == KIND_FILE
+    )
 
 
 def _rule_entries(machine: Machine, base: str | None, name: str) -> tuple[str, ...] | None:
@@ -3821,6 +3928,9 @@ def _rule_reading(
     def system_entries(name: str) -> tuple[str, ...] | None:
         return _rule_entries(machine, system.base(), name)
 
+    def system_files(name: str) -> tuple[str, ...] | None:
+        return _rule_files(machine, system.base(), name)
+
     def home_entries(name: str) -> tuple[str, ...] | None:
         return _rule_entries(machine, sandbox.expansion_home, name)
 
@@ -3851,6 +3961,7 @@ def _rule_reading(
             home_file=home_file,
             system_entries=system_entries,
             home_entries=home_entries,
+            system_files=system_files,
             save_dirs=tuple(save_dirs),
             is_directory=is_directory,
             content_path=content.path,
@@ -3931,6 +4042,15 @@ def _apply_rule_card(
         raise ValueError(
             f"the rule for card {card.key!r} offered alternatives {unknown}, which the card does "
             "not state — the rule and the card shipped out of step"
+        )
+    for key, value in choice.handed.items():
+        stored = readings[key]
+        readings[key] = OptionReading(
+            key,
+            value,
+            f'{key} = "{value}", as RetroArch hands it to the core from the values the core '
+            f"offers (stored: {stored.value!r}, {stored.provenance})",
+            stored.options_file,
         )
     consulted = tuple(readings[key] for key in recorder.consulted) + choice.readings
     granularity = Granularity(
@@ -6435,7 +6555,70 @@ def _retroarch_savefile_location(machine: Machine, query: _SaveQuery) -> Savefil
     )
 
 
-def _savefile_location_resolved(machine: Machine, query: _SaveQuery) -> SavefilePlacement | Unresolved:
+# Cards whose save folder another core composes for itself too, keyed by the
+# card: the other core's card key and its ``.so``. PCEE2 and LRPS2 each open
+# <system>/pcsx2/memcards on their own — pcee2-libretro's DataRoot is the
+# system directory joined with pcsx2 (Libretro.cpp:481-487 at 340ce04) and its
+# card folder memcards below it (Pcsx2Config.cpp:2311, :2337), and LRPS2 the
+# same at libretro/ps2 14d19f8, the build RetroDECK deploys (DataRoot at
+# libretro/main.cpp:1909-1913, memcards at pcsx2/Pcsx2Config.cpp:1043, :1062) —
+# so whether the two meet is read off the machine through the other core's own
+# answer for the same content (:func:`_save_files_shared`), never assumed. The
+# entry stands both ways, because each core's answer states the other.
+_SAVE_FOLDER_SHARED_WITH: Mapping[str, tuple[str, str]] = MappingProxyType(
+    {"pcee2": ("pcsx2", "pcsx2_libretro.so"), "pcsx2": ("pcee2", "pcee2_libretro.so")}
+)
+
+
+def _save_files_shared(
+    machine: Machine,
+    query: _SaveQuery,
+    *,
+    card: CoreCard,
+    mode: SaveMode,
+    placement: SavefilePlacement,
+    check: bool,
+) -> SavefilePlacement:
+    """*placement* with ``save-files-shared-with-core`` where another core writes its folder too.
+
+    The other core's folder is its own save answer, asked of the same machine
+    with the same content and only the core swapped — its options, its system
+    directory and whether it is installed at all are read the way they are for
+    any question about it — and the two are compared after links are resolved,
+    since a link is how two spellings name one folder. That answer is asked
+    without this check (*check* false), so two cards naming each other cannot
+    ask forever. A mode that keeps no file shares none, and a folder that is
+    still a template is no folder to compare.
+    """
+    other = _SAVE_FOLDER_SHARED_WITH.get(card.key)
+    if not check or other is None or query.core_so is None:
+        return placement
+    if mode.stated is not None or placement.needs:
+        return placement
+    other_key, other_so = other
+    sibling = (
+        os.path.join(os.path.dirname(query.core_so), other_so)
+        if os.sep in query.core_so
+        else other_so
+    )
+    swapped = cast(_SaveQuery, _dc_replace(query, core_so=sibling))
+    answer = _savefile_location_resolved(machine, swapped, check_shared=False)
+    folder = placement.physical_dir or placement.dir
+    if isinstance(answer, Unresolved) or answer.needs or (answer.physical_dir or answer.dir) != folder:
+        return placement
+    shared = Caveat(
+        CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
+        f"core {other_key!r} writes its save files in this same folder ({folder}) — both "
+        "cores keep their cards here, so a card either one uses can be the other's too, "
+        "and syncing or backing up this folder handles both cores' cards",
+        {"core": other_key, "dir": folder},
+    )
+    return cast(SavefilePlacement, _dc_replace(placement, caveats=(*placement.caveats, shared)))
+
+
+def _savefile_location_resolved(
+    machine: Machine, query: _SaveQuery, *, check_shared: bool = True
+) -> SavefilePlacement | Unresolved:
     """Where the savefile lands: the shared chain, then the per-core rule cards.
 
     The cards are what this route has and the savestate one does not — cores
@@ -6445,6 +6628,9 @@ def _savefile_location_resolved(machine: Machine, query: _SaveQuery) -> Savefile
     A core the machine established is not installed ends the question instead of
     steering it: there is no answer to give about where a core that is not here
     keeps its saves, and the typed refusal says so.
+
+    *check_shared* asks whether another core writes the same folder
+    (:func:`_save_files_shared`); that core's own answer is asked without it.
     """
     chain = _read_chain(machine, query, SAVEFILE_KEYS)
     if chain.core.not_installed is not None:
@@ -6504,7 +6690,7 @@ def _savefile_location_resolved(machine: Machine, query: _SaveQuery) -> Savefile
             ROOT_CONTENT_DIRECTORY: _content_directory_placement,
             ROOT_WORKING_DIRECTORY: _working_directory_placement,
         }[card_mode.root]
-        return diverted(
+        placement = diverted(
             machine,
             sandbox=query.sandbox,
             cfg_label=query.cfg_label,
@@ -6518,6 +6704,9 @@ def _savefile_location_resolved(machine: Machine, query: _SaveQuery) -> Savefile
             caveats=tuple(caveats),
             excluded=applied.excluded_observations,
             launch=chain.launch,
+        )
+        return _save_files_shared(
+            machine, query, card=card, mode=card_mode, placement=placement, check=check_shared
         )
 
     cross_parts = _CrossParts()
@@ -7371,11 +7560,11 @@ def _pcsx2_folder_below_dataroot(
     per-game settings layer's — and every one used to fold a
     present-but-empty line into "key absent". The emulator does not: ``GetStringValue`` falls to
     the compiled default only when the lookup FAILS (SettingsInterface.h:83-89
-    at v2.6.3) — SimpleIni stores the empty value a ``Key =`` line carries and
+    at v2.8.2) — SimpleIni stores the empty value a ``Key =`` line carries and
     hands it back — and ``Path::Combine(DataRoot, "")`` is the **DataRoot
     itself**, because the combine strips trailing separators after appending
-    the empty component (FileSystem.cpp:847-862). A relative value joins the
-    DataRoot (LoadPathFromSettings, Pcsx2Config.cpp:2272-2278). An absolute
+    the empty component (FileSystem.cpp:848-863). A relative value joins the
+    DataRoot (LoadPathFromSettings, Pcsx2Config.cpp:2301-2307). An absolute
     value is the caller's to translate through the launch's sandbox, which
     this helper cannot know: it returns ``(None, sentence)`` for that case.
     *spelled* is the case-variant spelling actually found in the file, where
@@ -7391,13 +7580,13 @@ def _pcsx2_folder_below_dataroot(
         return data_root, (
             f'PCSX2.ini: [Folders] {shown} = "" — a present-but-empty key keeps its empty '
             "value (GetStringValue defaults only when the lookup fails, "
-            'SettingsInterface.h:83-89 at v2.6.3) and Path::Combine(DataRoot, "") is the '
-            "DataRoot itself (FileSystem.cpp:847-862), not the compiled default"
+            'SettingsInterface.h:83-89 at v2.8.2) and Path::Combine(DataRoot, "") is the '
+            "DataRoot itself (FileSystem.cpp:848-863), not the compiled default"
         )
     if not os.path.isabs(raw):
         return os.path.join(data_root, raw), (
             f'PCSX2.ini: [Folders] {shown} = "{raw}" — a relative value joins the DataRoot '
-            "(LoadPathFromSettings, Pcsx2Config.cpp:2272-2278)"
+            "(LoadPathFromSettings, Pcsx2Config.cpp:2301-2307)"
         )
     return None, f'PCSX2.ini: [Folders] {shown} = "{raw}"'
 
@@ -7576,7 +7765,7 @@ def _pcsx2_rejected_switch(
             CAVEAT_CFG_VALUE_REJECTED,
             f'{switch.section}/{switch.key} = "{raw}" is not a value this emulator reads as a '
             "boolean — FromChars<bool> takes true/yes/on/1/enabled and false/no/off/0/disabled "
-            "(StringUtil.h:178-197 at v2.6.3), and GetBoolValue leaves the caller's variable "
+            "(StringUtil.h:175-194 at v2.8.2), and GetBoolValue leaves the caller's variable "
             "untouched when it yields nothing (INISettingsInterface.cpp:198-210), so the "
             f"compiled default {str(governing).lower()} governs; the setting does not become "
             "false because the value was unreadable",
@@ -7588,9 +7777,9 @@ def _pcsx2_rejected_switch(
 # What every PCSX2 route citing the layer cites, written once so two answers
 # cannot drift into two tellings of one fact.
 _PCSX2_LAYER = (
-    "UpdateGameSettingsLayer, VMManager.cpp:932-997 at PCSX2 v2.6.3 — the file is "
+    "UpdateGameSettingsLayer, VMManager.cpp:970-1035 at PCSX2 v2.8.2 — the file is "
     "<serial>_<CRC>.ini below [Folders] GameSettings, with <CRC>.ini as the legacy "
-    "spelling (GetGameSettingsPath, :774-781)"
+    "spelling (GetGameSettingsPath, :812-819)"
 )
 
 # The door every layered PCSX2 key comes through. ``VMManager::LoadSettings``
@@ -7599,7 +7788,7 @@ _PCSX2_LAYER = (
 # ``Pcsx2Config::LoadSave`` reads can be answered differently for one game.
 _PCSX2_LOAD_CORE = (
     "VMManager::LoadCoreSettings on Host::GetSettingsInterface, the layered interface "
-    "itself — VMManager.cpp:598-607 and :645-648, Host.cpp:173-176"
+    "itself — VMManager.cpp:606-615 and :653-656, Host.cpp:173-176"
 )
 
 # Why the directory half of every PCSX2 answer is immovable, and the reason so
@@ -7608,18 +7797,18 @@ _PCSX2_LOAD_CORE = (
 # ``[Folders]`` keys, and it has exactly two call sites, both handed the base
 # layer. No per-game file reaches any of them.
 _PCSX2_FOLDERS_ARE_BASE_ONLY = (
-    "EmuFolders::LoadConfig (Pcsx2Config.cpp:2280-2316) is the only reader of the [Folders] "
-    "keys and is handed the base layer at both of its call sites (VMManager.cpp:552, :835)"
+    "EmuFolders::LoadConfig (Pcsx2Config.cpp:2309-2345) is the only reader of the [Folders] "
+    "keys and is handed the base layer at both of its call sites (VMManager.cpp:560, :873)"
 )
 
 # PCSX2 has NO off switch for this layer, and that is a checked negative rather
-# than an unasked question: at v2.6.3 nothing named ApplyGameSettings exists,
-# and none of UpdateGameSettingsLayer's four call sites (VMManager.cpp:765,
-# :1108, :1334, :1650) is conditional on a setting — the function branches only
-# on a non-zero disc CRC (:935) and on the file existing (:938, :944). The two
+# than an unasked question: at v2.8.2 nothing named ApplyGameSettings exists,
+# and none of UpdateGameSettingsLayer's four call sites (VMManager.cpp:803,
+# :1146, :1374, :1697) is conditional on a setting — the function branches only
+# on a non-zero disc CRC (:973) and on the file existing (:976, :982). The two
 # switches that look like it are not: [EmuCore] EnableGameFixes gates the game
-# DATABASE's fixes (VMManager.cpp:703, :3295) and [EmuCore] EnablePatches /
-# EnableCheats gate the pnach patch and cheat system (Patch.cpp:815, :831).
+# DATABASE's fixes (VMManager.cpp:741, :3372) and [EmuCore] EnablePatches /
+# EnableCheats gate the pnach patch and cheat system (Patch.cpp:774, :790).
 # So the statements below are unconditional, unlike DuckStation's
 # (:func:`atlas.duckstation.applies_game_settings`).
 
@@ -7627,7 +7816,7 @@ _PCSX2_FOLDERS_ARE_BASE_ONLY = (
 # answer are named from the CARD rather than written here, so a card that renamed
 # either setting cannot leave this statement quietly describing the old one.
 _PCSX2_TEXTURE_READ_THROUGH = (
-    f"GSOptions::LoadSave, Pcsx2Config.cpp:908 and :1004, reached from {_PCSX2_LOAD_CORE}"
+    f"GSOptions::LoadSave, Pcsx2Config.cpp:923 and :1026, reached from {_PCSX2_LOAD_CORE}"
 )
 
 
@@ -7659,7 +7848,7 @@ def _pcsx2_game_settings_caveats(
     reads can be answered differently for one game than the global ``PCSX2.ini``
     answers it. The directory is the usual ``LoadPathFromSettings`` shape,
     ``[Folders] GameSettings`` defaulting to ``gamesettings`` below the DataRoot
-    (Pcsx2Config.cpp:2290).
+    (Pcsx2Config.cpp:2319).
 
     What the layer reaches is not "the configuration" — it is exactly the keys
     read through :data:`_PCSX2_LOAD_CORE`. Every ``[Folders]`` key goes through
@@ -7696,7 +7885,7 @@ def _pcsx2_game_settings_caveats(
         raw,
         key="GameSettings",
         default="gamesettings",
-        default_citation="Pcsx2Config.cpp:2290",
+        default_citation="Pcsx2Config.cpp:2319",
         data_root=data_root,
         spelled=spelled_dir,
     )
@@ -8038,7 +8227,7 @@ def _cites(card: StandaloneSaveCard, homes: _XdgHomes) -> _Cite:
     return cite
 
 
-# Dolphin 2603a, and its fork PrimeHack: one reading serves both, because the
+# Dolphin 2609, and its fork PrimeHack: one reading serves both, because the
 # fork inherits the shape whole — the same EXI ids, the same registered slot
 # defaults, the same compile-time region directories and card file stems, the
 # same NAND tree. What it does not inherit is the line numbers, so every
@@ -8076,9 +8265,11 @@ class _DolphinGameLayer:
       every other Dolphin answer already resolves, so its contents are a
       listing, counted like PCSX2's (:func:`_pcsx2_game_settings_caveats`).
     * ``GlobalGame`` reads ``GetSysDirectory() + GameSettings/`` — the build's
-      own tree, and ``GetSysDirectory()`` is the compile-time ``DATA_DIR "sys/"``
-      that is written **nowhere on a running machine**. Nothing atlas reads
-      spells it, so it is stated and never counted.
+      own tree, whose location the build decides and writes **nowhere on a
+      running machine**: the compile-time ``DATA_DIR "sys/"`` at both PrimeHack
+      pins, and at Dolphin 2609 a ``Sys`` directory beside the executable where
+      one exists, else the compile-time ``DATA_DIR "Sys/"``. Nothing atlas
+      reads spells it, so it is stated and never counted.
 
     Which is why this record lives in code rather than on a card: it is the
     emulator's own source, shared by the save, texture and mod answers alike,
@@ -8098,40 +8289,56 @@ class _DolphinGameLayer:
     unfiltered: str
     # LocalGame > GlobalGame > CommandLine > Base.
     order: str
-    # ``GetSysDirectory()`` is the compile-time ``DATA_DIR "sys/"``.
+    # Where ``GetSysDirectory()`` looks, and the lines that say so — the
+    # parenthetical of the build-layer caveat, because the place is not the
+    # same at every build.
     sys_dir: str
 
 
-# Two line sets, not four: PrimeHack's Flathub build is a later rebase onto
-# modern Dolphin and carries Dolphin's line numbers, while the revision
-# RetroDECK builds is three years older and carries its own. Which set a launch
-# gets is decided by the build it runs, never by the emulator's name.
+# Three line sets, not four: Dolphin 2609, the Flathub PrimeHack — a later
+# rebase onto Dolphin that carries the line numbers Dolphin had at 2603a — and
+# the revision RetroDECK builds PrimeHack from, three years older, which carries
+# its own. Which set a launch gets is decided by the build it runs, never by the
+# emulator's name.
 #
 # Only what a message actually says is data here. Two more facts were read at
 # these same pins and belong in the record without being fields no sentence
 # surfaces:
 #
 #   * the user directory's join, ``D_GAMESETTINGS_IDX = D_USER_IDX +
-#     GAMESETTINGS_DIR DIR_SEP`` — FileUtil.cpp:843 modern, :840 fork. The
-#     caveats name that directory by its resolved path, not by its citation,
-#     because it is a path atlas really walked.
+#     GAMESETTINGS_DIR DIR_SEP`` — FileUtil.cpp:843 at 2609 and 53f53e0, :840
+#     fork. The caveats name that directory by its resolved path, not by its
+#     citation, because it is a path atlas really walked.
 #   * the reachability proof — the layers are installed at
-#     ConfigManager.cpp:254-255 (modern) / :189-190 (fork), reached from
-#     BootManager.cpp:56 / :65, which runs before ``Core::Init`` and therefore
-#     before the emulated hardware opens a memory card or the video backend
-#     opens the Load tree. Adding a layer fires the config-changed callback
-#     that re-runs ``InitCustomPaths`` (UICommon.cpp:102-118, :131-135 modern;
-#     :101-118, :130 fork), which is how one ``LoadPath`` line moves both the
-#     texture tree and the graphics-mod tree (FileUtil.cpp:967-972 / :946-950).
-#     This is why the caveats are stated at all rather than hedged: the layer
-#     is provably in place before every read they qualify.
-_DOLPHIN_MODERN_LINES = {
+#     ConfigManager.cpp:286-287 (2609) / :254-255 (53f53e0) / :189-190 (fork),
+#     reached from BootManager.cpp:56 (2609 and 53f53e0) / :65 (fork), which
+#     runs before ``Core::Init`` and therefore before the emulated hardware
+#     opens a memory card or the video backend opens the Load tree. Adding a
+#     layer fires the config-changed callback that re-runs ``InitCustomPaths``
+#     (UICommon.cpp:102-118, :131-135 at 2609 and 53f53e0; :101-118, :130
+#     fork), which is how one ``LoadPath`` line moves both the texture tree and
+#     the graphics-mod tree (FileUtil.cpp:967-972 at 2609, :969-974 at
+#     53f53e0, :946-950 fork). This is why
+#     the caveats are stated at all rather than hedged: the layer is provably in
+#     place before every read they qualify.
+_DOLPHIN_2609_LINES = {
     "loader": "GameConfigLoader.cpp:185-197",
     "unfiltered": (
         "GameConfigLoader.cpp:261-277, the IsSettingSaveable filter being Save's own at :294"
     ),
     "order": "Enums.h:39-47",
-    "sys_dir": "FileUtil.cpp:760-793",
+    "sys_dir": (
+        "a Sys directory beside the executable where one exists, else the one compiled in, "
+        "FileUtil.cpp:760-793"
+    ),
+}
+_DOLPHIN_REBASED_FORK_LINES = {
+    "loader": "GameConfigLoader.cpp:185-197",
+    "unfiltered": (
+        "GameConfigLoader.cpp:261-277, the IsSettingSaveable filter being Save's own at :294"
+    ),
+    "order": "Enums.h:39-47",
+    "sys_dir": "compiled in, FileUtil.cpp:760-793",
 }
 _DOLPHIN_FORK_LINES = {
     "loader": "GameConfigLoader.cpp:176-198",
@@ -8139,7 +8346,7 @@ _DOLPHIN_FORK_LINES = {
         "GameConfigLoader.cpp:253-272, the IsSettingSaveable filter being Save's own at :292"
     ),
     "order": "Enums.h:40-48",
-    "sys_dir": "FileUtil.cpp:758-791",
+    "sys_dir": "compiled in, FileUtil.cpp:758-791",
 }
 
 # The tokens this layer is established for. Kept beside the table rather than
@@ -8152,7 +8359,7 @@ _DOLPHIN_FAMILY = frozenset({"DOLPHIN", "PRIMEHACK"})
 
 # The Dolphin build the cards cite, the same string as their
 # ``citations.build``.
-_DOLPHIN_BUILD = "dolphin 2603a"
+_DOLPHIN_BUILD = "dolphin 2609"
 
 # Keyed the way every standalone registry is: the token, and the flatpak app id
 # where the build differs per installation (#246). ``None`` covers an
@@ -8161,21 +8368,21 @@ _DOLPHIN_BUILD = "dolphin 2603a"
 # block exists to prevent, which is why that row is keyed separately.
 _DOLPHIN_GAME_LAYERS: dict[tuple[str, str | None], _DolphinGameLayer] = {
     ("DOLPHIN", None): _DolphinGameLayer(
-        name="Dolphin", build=_DOLPHIN_BUILD, **_DOLPHIN_MODERN_LINES
+        name="Dolphin", build=_DOLPHIN_BUILD, **_DOLPHIN_2609_LINES
     ),
     ("DOLPHIN", "org.DolphinEmu.dolphin-emu"): _DolphinGameLayer(
-        name="Dolphin", build=_DOLPHIN_BUILD, **_DOLPHIN_MODERN_LINES
+        name="Dolphin", build=_DOLPHIN_BUILD, **_DOLPHIN_2609_LINES
     ),
     ("PRIMEHACK", None): _DolphinGameLayer(
         name="PrimeHack", build="shiiion/dolphin 81bfb96", **_DOLPHIN_FORK_LINES
     ),
     ("PRIMEHACK", "io.github.shiiion.primehack"): _DolphinGameLayer(
-        name="PrimeHack", build="shiiion/dolphin 53f53e0", **_DOLPHIN_MODERN_LINES
+        name="PrimeHack", build="shiiion/dolphin 53f53e0", **_DOLPHIN_REBASED_FORK_LINES
     ),
 }
 
 # The user directory's per-game tree, below the emulator's own XDG data root —
-# the LocalGame layer's source (FileUtil.cpp:843 at dolphin 2603a).
+# the LocalGame layer's source (FileUtil.cpp:843 at dolphin 2609).
 _DOLPHIN_GAME_SETTINGS_DIR = "GameSettings"
 
 
@@ -8195,8 +8402,9 @@ def _dolphin_game_settings_caveats(
     listing fails ``per-game-layer-unread`` says the check did not happen — the
     PCSX2 vocabulary unchanged, because the situation is unchanged. The
     **build's** directory is not a listing atlas can make at all: its location
-    is compiled into the binary, so ``per-game-build-layer-unread`` states it
-    and no count of it will ever appear.
+    is one the build decides and writes nowhere on a running machine, so
+    ``per-game-build-layer-unread`` states it and no count of it will ever
+    appear.
 
     That second caveat is unconditional, and that is the point. Under the PCSX2
     shape, silence means "this answer holds for every game" — and for a
@@ -8242,8 +8450,8 @@ def _dolphin_game_settings_caveats(
     built_in = Caveat(
         CAVEAT_PER_GAME_BUILD_LAYER_UNREAD,
         f"{layer.name} loads a second per-game layer from its own build — the GameSettings "
-        f"directory below the Sys tree, whose location is compiled into the binary "
-        f"({layer.sys_dir} at {layer.build}) and written nowhere on a running machine, so "
+        f"directory below the Sys tree, whose location the build decides "
+        f"({layer.sys_dir} at {layer.build}) and writes nowhere on a running machine, so "
         f"this answer never lists it and states no count for it. Nothing filters what such a "
         f"file may set ({layer.unfiltered}), so the {plural} {spelled} — {governs} — can be "
         f"answered differently there for a game this answer cannot name; the user's own "
@@ -8294,7 +8502,7 @@ def _dolphin_game_settings_caveats(
 
 # The section-qualified keys each Dolphin-family answer depends on. The slot
 # path keys — the memory cards', the GCI folders' and the GBA cartridges'
-# (MainSettings.cpp:92-93 at dolphin 2603a) — map through the legacy section
+# (MainSettings.cpp:92-93 at dolphin 2609) — map through the legacy section
 # table ([Core] -> {Main, "Core"});
 # the General ones only through the free-form <System>.<Section> parse, whose
 # name for System::Main is "Dolphin" — [Main.General] resolves to nothing.
@@ -8309,7 +8517,7 @@ _DOLPHIN_GC_LAYER_KEYS = (
 _DOLPHIN_WII_LAYER_KEYS = ("[Dolphin.General] NANDRootPath",)
 # One key moves both the texture tree and the graphics-mod tree: it re-points
 # D_LOAD_IDX, and the rebuild recomputes D_HIRESTEXTURES_IDX and
-# D_GRAPHICSMOD_IDX below it (FileUtil.cpp:967-972 at dolphin 2603a).
+# D_GRAPHICSMOD_IDX below it (FileUtil.cpp:967-972 at dolphin 2609).
 _DOLPHIN_LOAD_LAYER_KEYS = ("[Dolphin.General] LoadPath",)
 
 _DOLPHIN_REGIONS = ("USA", "EUR", "JAP")
@@ -8333,7 +8541,7 @@ def _parse_sectioned_ini(text: str) -> dict[tuple[str, str], str]:
     the lookup's job, and it is ASCII case-insensitive with the last
     occurrence winning, because that is how the emulator reads this file
     (#295): sections are found by ``CaseInsensitiveEquals`` and case-variant
-    headers merge (IniFile.cpp:130-146, :289 at dolphin 2603a), keys live in
+    headers merge (IniFile.cpp:130-146, :289 at dolphin 2609), keys live in
     a ``CaseInsensitiveLess`` map where a duplicate's last value wins
     (IniFile.h:64; ``insert_or_assign``, IniFile.cpp:47-49 from the parse at
     :308), and the config layer the values land in keys them by
@@ -8349,11 +8557,11 @@ def _parse_sectioned_ini(text: str) -> dict[tuple[str, str], str]:
     differ only for a value beginning or ending in another whitespace
     character), then one pair of surrounding double quotes — both ends or
     neither, and nothing inside them (``StripQuotes(StripWhitespace(...))``,
-    IniFile.cpp:34 with StringUtil.cpp:219-225 at dolphin 2603a and at
+    IniFile.cpp:34 with StringUtil.cpp:247-253 at dolphin 2609, :219-225 at
     shiiion/dolphin@53f53e0, IniFile.cpp:34 with StringUtil.cpp:228-234 at
     @81bfb96). Every ini file a value can come from is read through that
     parse — ``Dolphin.ini`` by BaseConfigLoader.cpp:156-173 and both per-game
-    layers' files by GameConfigLoader.cpp:187-196 at 2603a and @53f53e0
+    layers' files by GameConfigLoader.cpp:187-196 at 2609 and @53f53e0
     (:105-123 and :178-187 at @81bfb96) — so
     ``MemcardAPath = "/mnt/cards/a.raw"`` names the path without its quotes.
     """
@@ -8422,16 +8630,16 @@ def _dolphin_try_parse_int(raw: str) -> int | None:
     """What Dolphin's ``TryParse`` makes of a slot value — ``None`` where it fails.
 
     ``GetUncached`` parses the stored string and takes the setting's default
-    where the parse fails (Config.h:82-88 at dolphin 2603a); an enum setting
+    where the parse fails (Config.h:90-96 at dolphin 2609); an enum setting
     parses its underlying ``int`` (Layer.h:36-43), through ``strtoll`` in base
-    0 (StringUtil.h:63-100): leading whitespace is skipped and a sign read, the
+    0 (StringUtil.h:65-102): leading whitespace is skipped and a sign read, the
     whole string must be consumed, and the value must fit the ``int`` — an
     out-of-range value fails like a word does, so the default governs. An
     empty value is the one spelling that parses with no digit at all:
     ``strtoll`` leaves its end at the start of the string, which is its end,
-    so ``SlotA =`` reads as 0. The same lines are the fork's at
-    shiiion/dolphin@53f53e0 and sit at Config.h:83-89, Layer.h:30-37 and
-    StringUtil.h:75-113 at @81bfb96.
+    so ``SlotA =`` reads as 0. The same code is the fork's, at Config.h:82-88,
+    Layer.h:36-43 and StringUtil.h:63-100 at shiiion/dolphin@53f53e0 and at
+    Config.h:83-89, Layer.h:30-37 and StringUtil.h:75-113 at @81bfb96.
     """
     rest = raw.lstrip(_C_WHITESPACE)
     negative = rest.startswith("-")
@@ -8485,7 +8693,7 @@ def _dolphin_region_split(value: str, *, separator: str) -> tuple[str, str]:
 
     The emulator's own move, made explicit: a configured card path is a
     template whose region segment the running disc replaces (GetMemcardPath
-    MainSettings.cpp:777-819, GetGCIFolderPath :844-873, at dolphin 2603a —
+    MainSettings.cpp:793-835, GetGCIFolderPath :860-889, at dolphin 2609 —
     the fork's own lines live on the card, per the note above
     ``_DOLPHIN_CITATION_SLOTS``). A value that spells no region keeps its
     tail and the region is inserted before it.
@@ -8509,10 +8717,10 @@ def _dolphin_raw_slot(
     """A raw memory card in one slot: one file per region, named.
 
     An empty path defaults to ``<GC user>/MemoryCard<slot>.<region>.raw``
-    (MainSettings.cpp:767-774 at dolphin 2603a); a standard-size card
+    (MainSettings.cpp:783-790 at dolphin 2609); a standard-size card
     carries no block suffix (EXI.cpp:123-126 sizes the card at 2043 blocks
     unless MemoryCardSize overrides it, and the suffix only exists below
-    that, MainSettings.cpp:763-765).
+    that, MainSettings.cpp:779-781).
     """
     if configured:
         resolved = sandbox.host(f"Memcard{letter}Path", configured)
@@ -8569,9 +8777,9 @@ def _dolphin_folder_slot(
     """A GCI folder in one slot: one directory per region, files unnamed.
 
     An empty path defaults to ``<GC user>/<region>/Card <slot>``
-    (MainSettings.cpp:835-841 at dolphin 2603a). The ``.gci`` names inside
+    (MainSettings.cpp:851-857 at dolphin 2609). The ``.gci`` names inside
     come from the save's own directory entry — makercode, gamecode and the
-    save's internal filename (GCMemcardDirectory.cpp:56-60) — none of which
+    save's internal filename (GCMemcardDirectory.cpp:57-61) — none of which
     any read of the content path recovers, so the groups stay unnamed.
     """
     if configured:
@@ -8619,7 +8827,7 @@ def _dolphin_folder_slot(
 
 # Whether a build writes the cartridge save back when no cartridge is
 # configured. Dolphin writes it only for a non-empty stem (~CEXIAgp,
-# EXI_DeviceAGP.cpp:43-44 at dolphin 2603a, and at shiiion/dolphin 53f53e0,
+# EXI_DeviceAGP.cpp:43-44 at dolphin 2609, and at shiiion/dolphin 53f53e0,
 # whose file is Dolphin's byte for byte); the PrimeHack revision RetroDECK
 # builds writes it unconditionally (:44 at shiiion/dolphin 81bfb96), so there
 # an unset key writes ``.sav`` into the launching process's working directory,
@@ -9345,10 +9553,10 @@ def _dolphin_wii_answer(
     """The Wii answer: one title's save directory in the NAND, keyed by its title id.
 
     ``NANDRootPath`` governs where the NAND lives (the default is the ``Wii``
-    tree below the user directory, CommonPaths.h:49 at 2603a); a title's save
+    tree below the user directory, CommonPaths.h:49 at 2609); a title's save
     inside it is ``title/<hi:08x>/<lo:08x>/data`` (NandPaths.cpp:63-71 at
-    2603a), the title id the one the disc's game partition ticket states
-    (VolumeWii.cpp:269-275). No read of the content path recovers it, so it
+    2609), the title id the one the disc's game partition ticket states
+    (VolumeWii.cpp:270-276). No read of the content path recovers it, so it
     stays the ``save_id`` hole, high word included — the high word is the
     title's category and not one fixed value. Beside the hole the answer lists
     the titles the NAND already holds, spelled the way the hole is filled
@@ -9426,7 +9634,7 @@ def _dolphin_wii_answer(
 
 
 # The shape Dolphin gives each word of a title directory's name: eight
-# lowercase hex digits (``{:08x}``, NandPaths.cpp:63-67 at 2603a). A name of
+# lowercase hex digits (``{:08x}``, NandPaths.cpp:63-67 at 2609). A name of
 # any other shape is no directory the emulator created for a title.
 _WII_TITLE_WORD_PATTERN = "[0-9a-f]" * 8
 
@@ -9512,7 +9720,7 @@ def _dolphin_savefile_placement(
     # edited key — the base layer loader ignores a failed open
     # (BaseConfigLoader.cpp:157 with IniFile.cpp:249-250) and sets only the
     # keys the file states (:160-174), so every other setting keeps its
-    # registered default (2603a).
+    # registered default (2609).
     stated_ini = ini_path
     missing = (
         (
@@ -9675,7 +9883,7 @@ def _settings_missing(token: str, config: str, *, emulator: str, governs: str) -
 
 
 # ---------------------------------------------------------------------------
-# xemu v0.8.135 — every game's save lives on the emulated Xbox hard disk,
+# xemu v0.8.136 — every game's save lives on the emulated Xbox hard disk,
 # a qcow2 image xemu.toml names ([sys.files] hdd_path, config_spec.yml:
 # 359-363), beside the EEPROM file (eeprom_path) that holds the console's
 # settings. Per-title structure exists inside the image's FATX filesystem —
@@ -9691,11 +9899,11 @@ def _xemu_launch_dependent_caveat(token: str, key: str, value: str) -> Caveat:
     """The relative-value rider: xemu opens the value from the launch's own cwd.
 
     A relative ``[sys.files]`` value is composed verbatim into the QEMU machine
-    options (system/vl.c:2983-3095 at v0.8.135) and opened with plain POSIX
+    options (system/vl.c:2983-3095 at v0.8.136) and opened with plain POSIX
     calls — ``xemu_check_file`` is ``qemu_fopen`` (vl.c:2527-2535), the EEPROM
     probe ``qemu_access`` (vl.c:2918), and both are ``fopen``/``access``
     outside Windows (include/qemu/osdep.h:645-653) — while no step of the
-    launch changes the process's directory (``main``, ui/xemu.c:1278-1379).
+    launch changes the process's directory (``main``, ui/xemu.c:1275-1376).
     So the anchor is the launching process's working directory: a property of
     the launch, not of the machine, exactly the melonDS relative-path fact.
     """
@@ -9704,7 +9912,7 @@ def _xemu_launch_dependent_caveat(token: str, key: str, value: str) -> Caveat:
         f"{key} is the relative value {value!r}, which xemu opens relative to the "
         "working directory of the launching process (the configured string is passed "
         "verbatim into the QEMU options, system/vl.c:2983-3095, and opened with plain "
-        "fopen/access, vl.c:2527-2535 and :2918 with osdep.h:645-653, at v0.8.135) — "
+        "fopen/access, vl.c:2527-2535 and :2918 with osdep.h:645-653, at v0.8.136) — "
         "a property of the launch, not of the machine; fill 'cwd' with the launcher's "
         "working directory to complete the path",
         {"token": token, "key": key, "path": value},
@@ -9783,7 +9991,7 @@ def _xemu_document(
     if result.status == READ_MISSING:
         # The compiled defaults name no file: [sys.files] declares hdd_path
         # and eeprom_path as strings with no default (config_spec.yml:362-363
-        # at v0.8.135), so without the file there is nothing either question
+        # at v0.8.136), so without the file there is nothing either question
         # could anchor at — the refusal of the missing file, not of an
         # unreadable one (#611).
         return Unresolved(
@@ -9999,7 +10207,7 @@ def _xemu_savefile_placement(
             alternatives=(),
             provenance=(
                 f"standalone save card '{card.token}': the image and the EEPROM from "
-                "xemu.toml ([sys.files], config_spec.yml:359-363 at v0.8.135)"
+                "xemu.toml ([sys.files], config_spec.yml:359-363 at v0.8.136)"
             ),
         ),
     )
@@ -10151,7 +10359,7 @@ def _cemu_savefile_placement(
 
 # The 3DS console-identity levels of the emulated SD tree — compile-time
 # all-zero strings in the emulator (ID0 the system identifier hash, ID1 the
-# scrambled SD CID; archive.h:22-24 at Azahar 2125.1.1), so the container
+# scrambled SD CID; archive.h:22-24 at Azahar 2126.1.1), so the container
 # below any SD root is one fixed spelling.
 _AZAHAR_ZERO_ID = "00000000000000000000000000000000"
 _AZAHAR_CONTAINER = os.path.join("Nintendo 3DS", _AZAHAR_ZERO_ID, _AZAHAR_ZERO_ID)
@@ -10163,7 +10371,7 @@ def _azahar_setting(
     """One setting read the way the emulator reads it → (value, configured).
 
     ``<key>\\default=true`` makes the compiled default win over any stored
-    value (ReadSetting, config.cpp:1442-1450 at 2125.1.1); an absent key is
+    value (ReadSetting, config.cpp:1464-1472 at 2126.1.1); an absent key is
     the default too. ``configured`` says whether the stored value governed.
     """
     if values.get((section, f"{key}\\default"), "").casefold() == "true":
@@ -10217,7 +10425,7 @@ def _azahar_sdmc_root(
                     f'qt-config.ini: [Data Storage] use_custom_storage = "{custom}"'
                     if custom_configured
                     else "use_custom_storage is unset or marked default — the compiled default "
-                    "false governs (settings.h:485 at 2125.1.1)"
+                    "false governs (settings.h:497 at 2126.1.1)"
                 ),
                 None,
             ),
@@ -10331,7 +10539,7 @@ def _azahar_savefile_placement(
                 "role": ROLE_BATTERY,
                 "save_id": "the 3DS title id: <high 8 hex>/<low 8 hex>, lowercase",
                 "save_id_spelling": SAVE_ID_SPELLING_TITLE_ID_WORDS,
-                "citation": "archive_source_sd_savedata.cpp:21-29 at Azahar 2125.1.1 — "
+                "citation": "archive_source_sd_savedata.cpp:21-29 at Azahar 2126.1.1 — "
                 "'{}Nintendo 3DS/{}/{}/title/' + '{:08x}/{:08x}/data/00000001/'; "
                 "ID0/ID1 are all-zero (archive.h:22-24)",
             },
@@ -10347,7 +10555,7 @@ def _azahar_savefile_placement(
                 "token": card.token,
                 "dir": extdata,
                 "role": ROLE_BATTERY,
-                "citation": "archive_extsavedata.cpp at Azahar 2125.1.1 — "
+                "citation": "archive_extsavedata.cpp at Azahar 2126.1.1 — "
                 "'{}Nintendo 3DS/{}/{}/extdata/'",
             },
         )
@@ -10361,7 +10569,7 @@ def _azahar_savefile_placement(
         readings=tuple(readings),
         provenance=(
             f"standalone save card '{card.token}': the emulated SD from qt-config.ini "
-            "(config.cpp:480-498 at 2125.1.1)"
+            "(config.cpp:492-511 at 2126.1.1)"
         ),
         extra_groups=(
             FileGroup(
@@ -10987,7 +11195,7 @@ def _duckstation_savefile_placement(
 
 
 # PCSX2's eight slot spellings, in the emulator's own order: the two console
-# ports, then the six multitap slots (Pcsx2Config.cpp:2035-2047 at v2.6.3).
+# ports, then the six multitap slots (Pcsx2Config.cpp:2057-2069 at v2.8.2).
 # Each entry is (enable key, filename key, default filename, enabled default,
 # multitap port) — the multitap slots default off, and `port` is the [Pad]
 # switch they ALSO depend on (#315), None for the two console slots, which
@@ -11013,17 +11221,17 @@ _PCSX2_SLOTS = tuple(
 # The multitap's own switch, which is NOT in [MemoryCards] and is not spelled
 # the way the C++ member is (#315). `SettingsWrapSection("Pad")` then
 # `SettingsWrapBitBoolEx(MultitapPort0_Enabled, "MultitapPort1")` and
-# `(MultitapPort1_Enabled, "MultitapPort2")` (Pcsx2Config.cpp:1815-1817 at
-# v2.6.3): the ini key is one-based where the member is zero-based, so the
+# `(MultitapPort1_Enabled, "MultitapPort2")` (Pcsx2Config.cpp:1848-1850 at
+# v2.8.2): the ini key is one-based where the member is zero-based, so the
 # key that pairs with the `Multitap1_Slot*` card spellings is `MultitapPort1`.
 # Both spellings being one-based, the pairing is by number.
 #
 # The compiled default is off, and reachably so: the default handed to
 # GetBoolValue is the member's CURRENT value (SettingsWrapper.h:133,
 # SettingsWrapper.cpp:96-99), which would be a stale-value trap were it not
-# for VMManager::ApplySettings doing `EmuConfig = Pcsx2Config()` at :726
-# immediately before LoadSettings() at :728 — and PadOptions' constructor ends
-# in `bitset = 0` (Pcsx2Config.cpp:1779-1788). Pad::SetDefaultControllerConfig
+# for VMManager::ApplySettings doing `EmuConfig = Pcsx2Config()` at :764
+# immediately before LoadSettings() at :766 — and PadOptions' constructor ends
+# in `bitset = 0` (Pcsx2Config.cpp:1812-1821). Pad::SetDefaultControllerConfig
 # writes the same false into a fresh ini (SIO/Pad/Pad.cpp:172-173).
 _PCSX2_MULTITAP_SECTION = "Pad"
 _PCSX2_MULTITAP_PORT_KEYS = {1: "MultitapPort1", 2: "MultitapPort2"}
@@ -11036,7 +11244,7 @@ _PCSX2_MULTITAP_PORT_KEYS = {1: "MultitapPort1", 2: "MultitapPort2"}
 # console-port keys would understate the layer's reach. The two [Pad] keys join
 # them because the slot listing now depends on them too (#315) and they come
 # through the same layered read — `Pcsx2Config::LoadSave` is `LoadSaveCore`
-# AND `Pad.LoadSave` (Pcsx2Config.cpp:2028-2033) — so listing only sixteen
+# AND `Pad.LoadSave` (Pcsx2Config.cpp:2050-2055) — so listing only sixteen
 # would understate that reach in the other direction.
 _PCSX2_MEMCARD_LAYER_KEYS = tuple(
     f"[MemoryCards] {key}" for slot in _PCSX2_SLOTS for key in (slot[0], slot[1])
@@ -11045,31 +11253,31 @@ _PCSX2_MEMCARD_LAYER_KEYS = tuple(
 )
 
 _PCSX2_MEMCARD_READ_THROUGH = (
-    "Pcsx2Config::LoadSaveMemcards, Pcsx2Config.cpp:2035-2054, and "
-    "Pcsx2Config::PadOptions::LoadSave, :1790-1818 — both reached from "
-    f"{_PCSX2_LOAD_CORE} through Pcsx2Config::LoadSave (:2028-2033)"
+    "Pcsx2Config::LoadSaveMemcards, Pcsx2Config.cpp:2057-2076, and "
+    "Pcsx2Config::PadOptions::LoadSave, :1823-1851 — both reached from "
+    f"{_PCSX2_LOAD_CORE} through Pcsx2Config::LoadSave (:2050-2055)"
 )
 
 # The precision this answer needs. PCSX2's layer moves a card's FILE NAME inside
 # a directory it cannot move, and an absolute name does not escape either: the
 # name is joined onto the memory-card directory by Path::Combine, which appends
 # one separator and then swallows the leading separator of what follows
-# (PathAppendString, FileSystem.cpp:98-139, entered with last_separator true).
+# (PathAppendString, FileSystem.cpp:99-140, entered with last_separator true).
 # Where PCSX2 wants an absolute value to win it tests for one — LoadPathFromSettings
-# does exactly that at Pcsx2Config.cpp:2275 — and FullpathToMcd does not.
+# does exactly that at Pcsx2Config.cpp:2304 — and FullpathToMcd does not.
 _PCSX2_SAVE_GOVERNS = (
     "A per-game file can name a different card file for a slot, and can hold a card in a slot "
     "this machine keeps empty. It cannot move the directory those names are read in: "
-    "FullpathToMcd joins the name onto the memory-card directory (Pcsx2Config.cpp:2065-2068) "
+    "FullpathToMcd joins the name onto the memory-card directory (Pcsx2Config.cpp:2087-2090) "
     "and Path::Combine concatenates rather than letting the name replace it — even an "
     "absolute name lands below that directory, because the separator it opens with is "
-    "swallowed (FileSystem.cpp:847-862, PathAppendString :98-139) — while [Folders] "
+    "swallowed (FileSystem.cpp:848-863, PathAppendString :99-140) — while [Folders] "
     f"MemoryCards is a folder setting, and {_PCSX2_FOLDERS_ARE_BASE_ONLY}. What such a name "
     "does decide beside the file is the card's kind: the type is read off whatever sits at "
     "the composed path, so a per-game name can make a slot a folder card where this answer "
     "states a file card (FileMcd_SetType, MemoryCardFile.cpp:584-604). A multitap slot takes "
     "one more switch than its own enable — [Pad] MultitapPort1/MultitapPort2, read through the "
-    "same layered call (Pcsx2Config.cpp:2028-2033, :1815-1817) — so such a file can also turn a "
+    "same layered call (Pcsx2Config.cpp:2050-2055, :1848-1850) — so such a file can also turn a "
     "whole multitap on or off under an unchanged [MemoryCards] section."
 )
 
@@ -11089,7 +11297,7 @@ def _pcsx2_multitap_ports(
     A memory-card slot behind a multitap needs this switch as well as its own
     ``[MemoryCards]`` enable, and the two are read through the same layered
     call — ``Pcsx2Config::LoadSave`` is ``LoadSaveCore`` *and* ``Pad.LoadSave``
-    (Pcsx2Config.cpp:2028-2033). The value is parsed with the emulator's own
+    (Pcsx2Config.cpp:2050-2055). The value is parsed with the emulator's own
     ``FromChars<bool>``, so a value that is neither true nor false leaves the
     compiled default standing exactly as it does for the slot enables
     (INISettingsInterface.cpp:198-210).
@@ -11104,13 +11312,13 @@ def _pcsx2_multitap_ports(
             provenance = (
                 f'PCSX2.ini sets {spelled} to "{raw}", which FromChars<bool> reads as neither '
                 "true nor false — the default false governs "
-                "(INISettingsInterface.cpp:198-210 at v2.6.3)"
+                "(INISettingsInterface.cpp:198-210 at v2.8.2)"
             )
         else:
             provenance = (
                 f"{key} is unset — the default false governs (PadOptions' constructor ends in "
-                "bitset = 0, Pcsx2Config.cpp:1779-1788, and ApplySettings resets the config "
-                "before every load, VMManager.cpp:726-728)"
+                "bitset = 0, Pcsx2Config.cpp:1812-1821, and ApplySettings resets the config "
+                "before every load, VMManager.cpp:764-766)"
             )
         ports[port] = _Pcsx2Tap(
             enabled=parsed if parsed is not None else False,
@@ -11159,7 +11367,7 @@ def _pcsx2_slot_group(
         enable_provenance = (
             f'PCSX2.ini sets {enable_spelled} to "{raw_enable}", which FromChars<bool> reads as '
             f"neither true nor false — the default {default_word} governs "
-            "(INISettingsInterface.cpp:198-210 at v2.6.3)"
+            "(INISettingsInterface.cpp:198-210 at v2.8.2)"
         )
     else:
         enable_provenance = f"{enable_key} is unset — the default {default_word} governs"
@@ -11171,7 +11379,7 @@ def _pcsx2_slot_group(
         # game: with the tap off, MultitapProtocol::Select refuses to move
         # currentMemcardSlot off 0 and SupportCheck answers "absent"
         # (MultitapProtocol.cpp:17-38, :41-60), so Sio2::Memcard only ever
-        # reaches slot 0 of each port (Sio2.cpp:247). FileMemoryCard::Open
+        # reaches slot 0 of each port (Sio2.cpp:252). FileMemoryCard::Open
         # skips the slot outright (MemoryCardFile.cpp:271-277); a FOLDER card
         # there is still opened and its directory even created
         # (FolderMemoryCardAggregator::Open, MemoryCardFolder.cpp:2291-2297,
@@ -11213,9 +11421,10 @@ def _pcsx2_slot_group(
                 "token": card.token,
                 "dir": full,
                 "role": "memory-card",
-                "citation": "FileMcd_SetType, MemoryCardFile.cpp:584-604 at v2.6.3 — a "
+                "citation": "FileMcd_SetType, MemoryCardFile.cpp:584-604 at v2.8.2 — a "
                 "directory at the card's full path is MemoryCardType::Folder "
-                "(McdFolderAutoManage default true, Pcsx2Config.cpp:1922)",
+                "(its filtering always on: SetFiltering(true), MemoryCardFile.cpp:614, "
+                "and FileMcd_ReIndex passing true, :826)",
             },
         )
         group = FileGroup(
@@ -11250,7 +11459,7 @@ def _pcsx2_memcards_dir(
         raw_dir,
         key="MemoryCards",
         default="memcards",
-        default_citation="Pcsx2Config.cpp:2259",
+        default_citation="Pcsx2Config.cpp:2288",
         data_root=data_root,
         spelled=dir_spelled,
     )
@@ -11361,7 +11570,7 @@ def _pcsx2_savefile_placement(
     """PCSX2's save answer: up to eight card slots, each file or folder.
 
     One DataRoot spelling on Linux — the config side whether or not
-    ``XDG_CONFIG_HOME`` is set (Pcsx2Config.cpp:2197-2217) — with
+    ``XDG_CONFIG_HOME`` is set (Pcsx2Config.cpp:2223-2243) — with
     ``inis/PCSX2.ini`` inside. The type of every enabled card is read off the
     disk the way ``FileMcd_SetType`` reads it, so a folder card answers as
     the per-game tree it is and a file card as the shared image it is.
@@ -11427,7 +11636,7 @@ def _pcsx2_savefile_placement(
     # and that is the emulator's rule rather than a convenience of this code
     # (#312): every card's full path is
     # ``Path::Combine(EmuFolders::MemoryCards, Filename)`` (``FullpathToMcd``,
-    # Pcsx2Config.cpp:2065-2068), a combine with no ``IsAbsolute`` test, so an
+    # Pcsx2Config.cpp:2087-2090), a combine with no ``IsAbsolute`` test, so an
     # absolute name lands BELOW that directory — see
     # :func:`atlas.qt_ini.path_combine`. What CAN move `dir` is a name carrying a
     # sub-path (``sub/card.ps2`` puts the group one level down), which is the
@@ -11468,7 +11677,7 @@ def _pcsx2_savefile_placement(
             alternatives=(),
             provenance=(
                 f"standalone save card '{card.token}': the slot pair from PCSX2.ini "
-                "(Pcsx2Config.cpp:2035-2047 at v2.6.3), each card's type read off the disk "
+                "(Pcsx2Config.cpp:2057-2069 at v2.8.2), each card's type read off the disk "
                 "(FileMcd_SetType)"
             ),
         ),
@@ -11872,7 +12081,7 @@ def _melonds_savefile_placement(
 
 
 # ---------------------------------------------------------------------------
-# RPCS3 build 7c6b3dcd — the save tree hangs off the emulated PS3's internal
+# RPCS3 build d5213de6 (20184) — the save tree hangs off the emulated PS3's internal
 # drive, whose host directory vfs.yml states (/dev_hdd0/, defaulting to
 # $(EmulatorDir)dev_hdd0/, vfs_config.h:13). Below it, one directory per title
 # id under home/<user>/savedata; the user is a runtime selection nothing on
@@ -11888,14 +12097,14 @@ _RPCS3_EMULATOR_DIR_KEY = "$(EmulatorDir)"
 _RPCS3_HDD0_KEY = "/dev_hdd0/"
 _RPCS3_HDD0_DEFAULT = "$(EmulatorDir)dev_hdd0/"
 # The route the drive is mounted by, which is where $(EmulatorDir) is settled:
-# Emulator::Init asks get_emu_dir() for it (System.cpp:395) and hands the answer,
+# Emulator::Init asks get_emu_dir() for it (System.cpp:450) and hands the answer,
 # never empty, to cfg_vfs::get — so that function's own fallback for an empty
-# argument (vfs_config.cpp:32-48) is never taken for this drive.
+# argument (vfs_config.cpp:32-50) is never taken for this drive.
 _RPCS3_EMULATOR_DIR_ROUTE = (
-    "get_emu_dir, system_utils.cpp:146-150, called at System.cpp:395 and passed at "
-    ":483 into vfs_config.cpp:50 at build 7c6b3dcd"
+    "get_emu_dir, system_utils.cpp:148-152, called at System.cpp:450 and passed at "
+    ":537 into vfs_config.cpp:52 at build d5213de6"
 )
-# The user home the emulator starts with (Emulator::m_usr, System.h:164), used
+# The user home the emulator starts with (Emulator::m_usr, System.h:108), used
 # where no home directory can be listed — never as a claim that it is the one
 # in force, which the caveat states.
 _RPCS3_FIRST_USER = "00000001"
@@ -11906,17 +12115,17 @@ _RPCS3_VMC_SUBDIR = os.path.join("savedata", "vmc")
 # When that tree comes into being, which is not when a game first saves:
 # ``Emulator::Init`` makes the whole home — ``home/<user>/`` with ``exdata/``,
 # ``savedata/`` and ``trophy/`` under it, and a ``localusername`` file beside
-# them — every time the emulator initialises (System.cpp:606-623 at build
-# 7c6b3dcd, the write at :617). Two guards stand above it, both satisfied on an
-# ordinary run: the VFS switch ``Initialize Directories`` (:583), whose
-# compiled default is on (system_config.h:105), and the creation of the drive
-# itself (``make_path_verbose(dev_hdd0, true)`` at :606), which the home tree
+# them — every time the emulator initialises (System.cpp:660-677 at build
+# d5213de6, the write at :671). Two guards stand above it, both satisfied on an
+# ordinary run: the VFS switch ``Initialize Directories`` (:637), whose
+# compiled default is on (system_config.h:104), and the creation of the drive
+# itself (``make_path_verbose(dev_hdd0, true)`` at :660), which the home tree
 # hangs inside. So the tree is the emulator's own startup work and the answer
 # no longer says a save has to happen first (#370).
 _RPCS3_HOME_CREATION = (
     "which it creates at startup rather than on the first save (Emulator::Init, "
-    "System.cpp:583-623 at build 7c6b3dcd, under the VFS 'Initialize Directories' "
-    "switch that defaults on, system_config.h:105)"
+    "System.cpp:637-677 at build d5213de6, under the VFS 'Initialize Directories' "
+    "switch that defaults on, system_config.h:104)"
 )
 
 
@@ -12097,8 +12306,8 @@ def _per_user_listing(machine: Machine, user_root: str) -> _PerUserListing:
     shape, on the same observation the placement then states.
 
     Two globs, ``*`` and ``.*``, because both emulators iterate the directory
-    — RPCS3's ``fs::dir`` is a readdir walk (File.cpp:2091-2108 at build
-    7c6b3dcd), Vita3K's is ``fs::directory_iterator`` (get_users_list,
+    — RPCS3's ``fs::dir`` is a readdir walk (File.cpp:2391-2408 at build
+    d5213de6), Vita3K's is ``fs::directory_iterator`` (get_users_list,
     user_management.cpp:87 at cb1f592c) — and a wildcard never matches a
     leading period, on the running machine and in a fixture alike. A name
     that starts with a period is one the emulators reach and decide by their
@@ -12368,7 +12577,7 @@ def _per_user_no_user_reason(survey: _PerUserSurvey) -> str:
 
 
 # What GetUserAccounts makes of one directory below home/ (user_account.cpp:35-66
-# at build 7c6b3dcd): kept when its name passes check_user and a localusername
+# at build d5213de6): kept when its name passes check_user and a localusername
 # file is there, passed over otherwise — and one fate that is atlas's alone, a
 # localusername whose stat failed here, where the emulator's own stat is not
 # known to fail the same way.
@@ -12382,28 +12591,28 @@ _RPCS3_USER_UNESTABLISHED = "unestablished"
 _RPCS3_USER_STAT_FAILED = "stat-failed"
 _RPCS3_LOCALUSERNAME = "localusername"
 _RPCS3_SELECTION_CITATION = (
-    "GetUserAccounts, user_account.cpp:35-66; check_user, system_utils.cpp:59-69 at build 7c6b3dcd"
+    "GetUserAccounts, user_account.cpp:35-66; check_user, system_utils.cpp:61-71 at build d5213de6"
 )
 # The two halves of that citation, narrowed to the one call each skip reason
 # actually turns on — used in the aside instead of the pair above, so a
 # sentence that already carries the pair in full does not carry it twice.
-_RPCS3_NAME_CITATION = "check_user, system_utils.cpp:59-69 at build 7c6b3dcd"
-_RPCS3_LOCALUSERNAME_CITATION = "GetUserAccounts, user_account.cpp:57-60 at build 7c6b3dcd"
+_RPCS3_NAME_CITATION = "check_user, system_utils.cpp:61-71 at build d5213de6"
+_RPCS3_LOCALUSERNAME_CITATION = "GetUserAccounts, user_account.cpp:57-60 at build d5213de6"
 # The walk itself, for a directory whose stat failed here. GetUserAccounts
 # iterates fs::dir (user_account.cpp:41), whose readdir walk stats every entry
 # and skips the ones whose fstatat fails — "//failed metadata (broken
-# symlink?), ignore and skip to next file", File.cpp:2101-2104. So the
+# symlink?), ignore and skip to next file", File.cpp:2401-2404. So the
 # emulator's verdict on such a directory rests on its own stat succeeding or
 # failing, which is exactly what atlas did not learn.
-_RPCS3_WALK_CITATION = "unix_dir::read, File.cpp:2091-2105 at build 7c6b3dcd"
+_RPCS3_WALK_CITATION = "unix_dir::read, File.cpp:2391-2405 at build d5213de6"
 
 
 def _rpcs3_check_user(name: str) -> int:
     """``rpcs3::utils::check_user``, mirrored from its code rather than its comment.
 
-    The code (system_utils.cpp:59-69 at build 7c6b3dcd) is ``id = 0; if
-    (user.size() == 8) std::from_chars(&user.front(), &user.back() + 1, id);
-    return id;`` — ``from_chars`` reads the leading run of decimal digits,
+    The code (system_utils.cpp:61-71 at build d5213de6) is ``id = 0; if
+    (user.size() == 8) std::from_chars(user.data(), user.data() + user.size(),
+    id); return id;`` — ``from_chars`` reads the leading run of decimal digits,
     stops at the first character that is not one, and its result code is never
     looked at. So a name passes when it is exactly eight bytes long (``size()``
     counts the bytes of the directory name, not its characters) and the digits
@@ -12435,10 +12644,10 @@ class _Rpcs3UserHome:
 def _rpcs3_user_home(machine: Machine, user_root: str, user: str) -> _Rpcs3UserHome:
     """One directory's fate — the two tests GetUserAccounts applies, in its order.
 
-    The name first (check_user, user_account.cpp:49-54 at build 7c6b3dcd),
+    The name first (check_user, user_account.cpp:49-54 at build d5213de6),
     then ``fs::is_file`` on ``<home>/localusername`` (:57-60): a ``stat`` that
-    succeeds on something other than a directory (File.cpp:1064-1079,
-    ``fs::get_stat`` being ``::stat`` at :1036-1043), which is what
+    succeeds on something other than a directory (File.cpp:1167-1182,
+    ``fs::get_stat`` being ``::stat`` at :1139-1146), which is what
     ``path_kind`` answers ``file`` for. A missing localusername and one that
     is a directory are the emulator's own skip; one whose stat failed here is
     neither — the emulator's stat is not known to fail the same way — so the
@@ -12457,7 +12666,7 @@ def _rpcs3_user_home(machine: Machine, user_root: str, user: str) -> _Rpcs3UserH
 def _rpcs3_unstatable_home(name: str) -> _Rpcs3UserHome:
     """An entry below home/ whose own ``stat`` failed — the one test that still decides it.
 
-    ``check_user`` reads nothing but the name (system_utils.cpp:59-69, applied
+    ``check_user`` reads nothing but the name (system_utils.cpp:61-71, applied
     at user_account.cpp:49-54), so a name it rejects is passed over whichever
     way the emulator's own walk went — its ``fstatat`` failing too, or
     succeeding on something that is no directory (dropped at
@@ -12513,9 +12722,9 @@ def _rpcs3_users(
             names=tuple(h.directory for h in homes if h.fate == _RPCS3_USER_UNESTABLISHED),
             unread=(
                 "its localusername could not be looked at, and the emulator's own look "
-                "(fs::is_file, File.cpp:1064-1079) is not known to fail the same way",
+                "(fs::is_file, File.cpp:1167-1182) is not known to fail the same way",
                 "their localusername could not be looked at, and the emulator's own look "
-                "(fs::is_file, File.cpp:1064-1079) is not known to fail the same way",
+                "(fs::is_file, File.cpp:1167-1182) is not known to fail the same way",
             ),
         ),
         _Undecided(
@@ -12567,7 +12776,7 @@ def _rpcs3_listing_claim(survey: _PerUserSurvey) -> str:
     these entries through ``fs::dir``, a ``readdir`` walk that stats every one
     and, where the ``fstatat`` fails, reads on into the next entry rather than
     ending ("ignore and skip to next file", ``unix_dir::read``,
-    File.cpp:2091-2105 at build 7c6b3dcd). So an undecided entry costs the
+    File.cpp:2391-2405 at build d5213de6). So an undecided entry costs the
     emulator's list that entry at most, never whatever came after it.
 
     The claim carries no aside: the sentence that takes it appends
@@ -12606,8 +12815,8 @@ def _rpcs3_default_drive(read: YamlScalars, config_dir: str) -> tuple[str, str, 
     The replacement is the one the mount makes: ``get_emu_dir()`` answers the
     value vfs.yml states, as written — no separator is added to it, so a value
     without a trailing ``/`` runs straight into ``dev_hdd0/`` — or the config
-    directory, which carries its own (fs::get_config_dir, Utilities/File.cpp:2284-2292
-    at build 7c6b3dcd), where the node holds nothing. It holds nothing where
+    directory, which carries its own (fs::get_config_dir, Utilities/File.cpp:2585-2593
+    at build d5213de6), where the node holds nothing. It holds nothing where
     ``$(EmulatorDir)`` is unset, empty or a null node, which no cfg::string
     takes a value from — the citations ride the null-node sentence
     :func:`_rpcs3_drive` emits. The caller has refused a ``$(EmulatorDir)`` the
@@ -12668,14 +12877,14 @@ def _rpcs3_drive(read: YamlScalars, config_dir: str) -> _Rpcs3Drive:
         provenance = (
             f"{_RPCS3_HDD0_KEY} is stated as a null node, which RPCS3's reader passes over "
             "— a cfg::string takes a value only where convert<std::string>::decode accepts "
-            "it (Utilities/Config.cpp:645-655 at build 7c6b3dcd) and a null node is no "
+            "it (Utilities/Config.cpp:648-658 at build d5213de6) and a null node is no "
             "scalar for it to accept (convert.h:73-75 at the yaml-cpp fork 51a5d623, the "
             f"submodule that build pins) — so {governs}"
         )
     elif stated is not None:
         provenance = (
             f"{_RPCS3_HDD0_KEY} is stated empty, and cfg_vfs::get falls to the default "
-            f"for an empty path (vfs_config.cpp:18-28 at build 7c6b3dcd) — so {governs}"
+            f"for an empty path (vfs_config.cpp:18-28 at build d5213de6) — so {governs}"
         )
     else:
         provenance = f"{_RPCS3_HDD0_KEY} is unset — {governs}"
@@ -12691,7 +12900,7 @@ def _rpcs3_repeated_drive_key(read: YamlScalars) -> str | None:
     the scalar reader holds the first, the way a yaml-cpp lookup answers. Both
     keys reach the drive: ``/dev_hdd0/`` states it, and ``$(EmulatorDir)`` is the
     variable a stated drive — or the compiled default an unstated one falls to —
-    is composed off (``fmt::replace_all``, vfs_config.cpp:50 at build 7c6b3dcd;
+    is composed off (``fmt::replace_all``, vfs_config.cpp:52 at build d5213de6;
     the default vfs_config.h:13).
 
     A repeated ``$(EmulatorDir)`` refuses whatever the drive's own statement
@@ -12744,7 +12953,7 @@ def _rpcs3_vfs_refusal(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"RPCS3's VFS configuration ({vfs_path}) states {repeated} more than once; the "
             "emulator applies every statement in turn and keeps the last it reads as a "
-            "scalar (cfg::decode, Utilities/Config.cpp:477-505 at build 7c6b3dcd), which "
+            "scalar (cfg::decode, Utilities/Config.cpp:480-508 at build d5213de6), which "
             "this reader does not follow — which drive its saves live on is unknowable here",
             {
                 "token": card.token,
@@ -12804,14 +13013,14 @@ def _rpcs3_savefile_placement(
     Two steps, both the emulator's own. ``cfg_vfs::get`` takes the configured
     ``/dev_hdd0/`` or its compiled default, replaces ``$(EmulatorDir)``
     everywhere and ends the resulting path with a separator where it has none
-    (vfs_config.cpp:14-62). What it replaces the token with is
+    (vfs_config.cpp:14-64). What it replaces the token with is
     ``get_emu_dir()``'s answer — the stated value as written, or the config
-    directory where it is empty (system_utils.cpp:146-150, called at
-    System.cpp:395 and passed at :483). Below the drive the tree is
+    directory where it is empty (system_utils.cpp:148-152, called at
+    System.cpp:450 and passed at :537). Below the drive the tree is
     ``home/<user>/savedata``, one directory per title id.
 
     The user is where this answer stops short of certainty: it is a runtime
-    selection (``m_usr``, System.h:164) and no file records which one is in
+    selection (``m_usr``, System.h:108) and no file records which one is in
     force, so every user account the emulator's own listing keeps and this
     reading decided — the directories ``GetUserAccounts`` takes, read here the
     way it runs — becomes a group and the caveat says the running emulator
@@ -12864,7 +13073,7 @@ def _rpcs3_savefile_placement(
         no_user_sentence = (
             f"whether any user account RPCS3 would list exists below {user_root} is not "
             f"established{survey.aside}, and the tree named is user {_RPCS3_FIRST_USER} "
-            f"(Emulator::m_usr, System.h:164), {_RPCS3_HOME_CREATION} — "
+            f"(Emulator::m_usr, System.h:108), {_RPCS3_HOME_CREATION} — "
             "stated as that rather than as a user found here"
         )
     elif survey.skipped:
@@ -12873,7 +13082,7 @@ def _rpcs3_savefile_placement(
         # the empty-tree ending below would otherwise claim of them too.
         no_user_sentence = (
             f"no user account RPCS3 would list exists below {user_root}{survey.aside}, and "
-            f"the tree named is user {_RPCS3_FIRST_USER} (Emulator::m_usr, System.h:164), "
+            f"the tree named is user {_RPCS3_FIRST_USER} (Emulator::m_usr, System.h:108), "
             f"{_RPCS3_HOME_CREATION} — stated as that rather than as a user "
             "found here"
         )
@@ -12884,7 +13093,7 @@ def _rpcs3_savefile_placement(
         no_user_sentence = (
             f"no user home exists below {user_root} — nothing has created one here yet. The tree "
             f"named is the one the emulator starts with, user {_RPCS3_FIRST_USER} "
-            f"(Emulator::m_usr, System.h:164), {_RPCS3_HOME_CREATION}; it is "
+            f"(Emulator::m_usr, System.h:108), {_RPCS3_HOME_CREATION}; it is "
             "not a home found on this machine"
         )
     return _per_user_savedata_placement(
@@ -12897,11 +13106,11 @@ def _rpcs3_savefile_placement(
             first_user=_RPCS3_FIRST_USER,
             names_citation=(
                 "'/dev_hdd0/home/%08u/savedata/' as a whole string in the shipped binary "
-                "(build 7c6b3dcd)"
+                "(build d5213de6)"
             ),
             user_sentence=(
                 "which user account the emulator runs as is a runtime selection — it starts "
-                f"at {_RPCS3_FIRST_USER} (Emulator::m_usr, System.h:164) and the user manager "
+                f"at {_RPCS3_FIRST_USER} (Emulator::m_usr, System.h:108) and the user manager "
                 f"changes it — and no file records the current one, so {claim}: a directory "
                 "below home named by eight bytes opening with a non-zero number and holding "
                 f"a localusername file ({_RPCS3_SELECTION_CITATION}), read here the same "
@@ -12917,7 +13126,7 @@ def _rpcs3_savefile_placement(
             reading_file=vfs_path if result.status == READ_OK else None,
             provenance=(
                 f"standalone save card '{card.token}': the drive from vfs.yml "
-                "(cfg_vfs::get, vfs_config.cpp:14-62 at build 7c6b3dcd)"
+                "(cfg_vfs::get, vfs_config.cpp:14-64 at build d5213de6)"
             ),
         ),
         extra_caveats=(
@@ -14830,7 +15039,7 @@ _DUCKSTATION_CARD_SIZE = (
     "refused when loaded, and a save writes the whole card"
 )
 _PCSX2_CARD_SIZE = (
-    "pcsx2/SIO/Memcard/MemoryCardFile.cpp:289, :308-326 and :484-524 at PCSX2 v2.6.3: a file card "
+    "pcsx2/SIO/Memcard/MemoryCardFile.cpp:289, :308-326 and :484-524 at PCSX2 v2.8.2: a file card "
     "is created at its size, opened r+b and written in place at the addressed offset, so its length "
     "never changes"
 )
@@ -14843,7 +15052,7 @@ _MELONDS_SAVE_SIZE = (
 )
 _XEMU_EEPROM_SIZE = (
     "hw/xbox/eeprom_generation.c:132-137, system/vl.c:2938-2945 and "
-    "hw/xbox/smbus_storage.c:90-128, :157 at xemu v0.8.135: the EEPROM is generated as 256 bytes, "
+    "hw/xbox/smbus_storage.c:90-128, :157 at xemu v0.8.136: the EEPROM is generated as 256 bytes, "
     "a file of any other size is refused, and the device writes its 256 bytes back whole"
 )
 
@@ -14893,7 +15102,8 @@ def _standalone_savefile_placement(
     names the card after the content's own stem — and the caller's working
     folder for the one it cannot: a relative path the emulator opens from the
     launch's own directory (xemu's disk image, melonDS's save directory,
-    Dolphin's GBA cartridge save).
+    Dolphin's GBA cartridge save). Every placement leaves here carrying the
+    card's redirect routes, the one field no resolver reads anything for.
     """
     resolver = _STANDALONE_SAVE_RESOLVERS.get(card.token)
     if resolver is None:
@@ -14901,7 +15111,7 @@ def _standalone_savefile_placement(
             f"standalone save card {card.token!r} has no resolver registered — the card and "
             "the code shipped out of step"
         )
-    return resolver(
+    outcome = resolver(
         machine,
         card=card,
         homes=homes,
@@ -14911,6 +15121,92 @@ def _standalone_savefile_placement(
         extra_caveats=extra_caveats,
         content_path=content_path,
         cwd=cwd,
+    )
+    if isinstance(outcome, Unresolved):
+        return outcome
+    # The routes are the card's, whichever resolver read the tree: what can
+    # move the saves for one launch is a fact about the emulator, stated once.
+    # What holds on this machine is the configuration the resolver read, and
+    # that is compared here, from the readings it already made.
+    return cast(
+        SavefilePlacement,
+        _dc_replace(
+            outcome,
+            redirects=card.redirects,
+            caveats=(*outcome.caveats, *_redirects_outranked(card, outcome)),
+        ),
+    )
+
+
+# The slot device a Dolphin-family ``-C`` card-slot key needs to apply, as the
+# mode word the slot's reading resolves to: a GCI-folder key moves the saves of
+# a slot holding the GCI folder (device 8), a raw-card key those of a slot
+# holding a memory card (device 1) (EXI_DeviceMemoryCard.cpp:149-170 and
+# :218-234 at dolphin 2609). A route naming a slot setting and missing here is
+# a card and code out of step, and raises.
+_DOLPHIN_SLOT_ROUTE_MODES = {
+    f"Dolphin.Core.{key}{letter}{suffix}": mode
+    for letter in ("A", "B")
+    for key, suffix, mode in (
+        ("GCIFolder", "PathOverride=<dir>", "folder"),
+        ("Memcard", "Path=<file>", "card"),
+    )
+}
+_DOLPHIN_SLOT_KEYS = ("SlotA", "SlotB")
+
+
+def _redirect_setting_outranks(
+    route: SaveRedirect, setting: RedirectSetting, placement: SavefilePlacement
+) -> bool:
+    """Whether the configuration this answer read outranks *route* through *setting*.
+
+    Read off the answer's own readings, so nothing is read the answer did not
+    already read: a setting with no reading is one this answer never
+    consulted, and outranks nothing it could state. A Dolphin slot setting
+    makes a card-slot route not apply where the slot resolved to a device
+    other than the one the route moves; every other setting outranks where its
+    reading carries a configured value, because a configured path is the one
+    the emulator uses in place of the route's.
+    """
+    granularity = placement.granularity
+    if granularity is None:
+        return False
+    bare = setting.key.split("] ", 1)[-1]
+    reading = next((r for r in granularity.readings if r.key == bare), None)
+    if reading is None:
+        return False
+    if bare not in _DOLPHIN_SLOT_KEYS:
+        return reading.value is not None
+    needed = _DOLPHIN_SLOT_ROUTE_MODES.get(route.argument)
+    if needed is None:
+        raise ValueError(
+            f"route {route.argument!r} names {setting.key!r} and no slot device it needs — "
+            "the card and the code shipped out of step"
+        )
+    modes = dict(zip(_DOLPHIN_SLOT_KEYS, (granularity.mode or "").split("+")))
+    return bare in modes and modes[bare] != needed
+
+
+def _redirects_outranked(card: StandaloneSaveCard, placement: SavefilePlacement) -> tuple[Caveat, ...]:
+    """One ``redirect-outranked`` per stated route and setting this answer's configuration outranks."""
+    return tuple(
+        Caveat(
+            CAVEAT_REDIRECT_OUTRANKED,
+            f"the configuration this answer read decides {setting.key} in {setting.file}, which "
+            f"outranks the {route.via} route {route.argument} or makes it not apply — on this "
+            "machine the route moves less than its scope, or nothing",
+            {
+                "token": card.token,
+                "via": route.via,
+                "name": route.name or "",
+                "argument": route.argument,
+                "file": setting.file,
+                "key": setting.key,
+            },
+        )
+        for route in card.redirects or ()
+        for setting in route.outranked_by
+        if _redirect_setting_outranks(route, setting, placement)
     )
 
 
@@ -18214,7 +18510,7 @@ class CatalogueAnswer:
 
 @dataclass(frozen=True, slots=True)
 class SystemsAnswer:
-    """Every system a frontend catalogue declares, and what was read to say so.
+    """Every system an installation lists, from its frontend catalogue or its installed cores, and what was read to say so.
 
     The same empty-is-ambiguous problem as :class:`CatalogueAnswer`, one level
     up: a catalogue that could not be read lists no systems, and so does one
@@ -18222,11 +18518,22 @@ class SystemsAnswer:
     """
 
     systems: tuple[str, ...] = ()
-    """Every system this frontend catalogue declares, in the catalogue's own spelling."""
+    """Every system this installation lists, sorted. On RetroDECK that is what its
+    frontend catalogue declares, in the catalogue's own spelling, and on EmuDeck what
+    its readable catalogue layers declare — joined, while the bundled layer is sealed,
+    by the systems the installed cores' own declarations file under. A bare RetroArch
+    ships no catalogue, so there the cores' systems are the whole list. A system taken
+    from the cores rather than a catalogue is named in atlas's own vocabulary, and an
+    answer listing one carries ``emulator-list-derived``.
+    """
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
-    """Every degradation of this answer, and on an empty one the statement of whether
-    the catalogue declares no systems or could not be read.
+    """Every degradation of this answer, and on an empty one the statement of which
+    empty it is: a catalogue that could not be read, one that declares no systems, or
+    none to read — an EmuDeck without ES-DE says ``emulator-catalogue-unestablished``,
+    and a bare RetroArch says ``emulator-catalogue-unavailable`` when its installed
+    cores could not be read either, and ``emulator-list-derived`` when they were read
+    and name no system.
     """
 
 
@@ -19523,6 +19830,31 @@ class _RulesFile(NamedTuple):
     text: str | None
 
 
+class _BlobHashes:
+    """The git blob hashes one handle keeps between questions, each under the stat identity of the file it came from.
+
+    The same keeping rule as :class:`_FindRulesFiles`: every ask stats the
+    file, a changed or replaced one is hashed again, and a machine that cannot
+    stamp hashes every time.
+    """
+
+    def __init__(self, machine: Machine) -> None:
+        self._machine = machine
+        self._held: dict[str, tuple[FileStamp, str | None]] = {}
+
+    def hash(self, path: str) -> str | None:
+        """The git blob hash of the file at *path*, links followed — ``None`` where it cannot be read."""
+        machine = self._machine
+        stamp = machine.file_stamp(path) if isinstance(machine, StampingMachine) else None
+        held = self._held.get(path)
+        if stamp is not None and held is not None and held[0] == stamp:
+            return held[1]
+        digest = machine.file_digest(path, DIGEST_GIT_BLOB)
+        if stamp is not None:
+            self._held[path] = (stamp, digest)
+        return digest
+
+
 class _FindRulesFiles:
     """The find-rules parses one handle keeps between questions, and the layers ES-DE composes out of them.
 
@@ -20031,7 +20363,9 @@ class SystemRomPlacement:
     """One system of a :class:`RomLocationsAnswer` and where its ROMs live."""
 
     system: str
-    """The system, in the catalogue's own spelling, as the systems answer lists it."""
+    """The system as the systems answer lists it — in the catalogue's own spelling, or in
+    atlas's own vocabulary where it was taken from the installed cores.
+    """
     placement: RomPlacement
     """Exactly the placement the per-system ROM question answers for this system, caveats included."""
 
@@ -20043,9 +20377,9 @@ class RomLocationsAnswer:
     The bulk form of :class:`RomPlacement` for a client that needs every ROM
     folder at once: one entry per system the systems answer lists, in its
     order, each carrying the placement the per-system question gives. What
-    the systems answer states about the catalogue as a whole — what was read,
-    and on an empty answer whether the catalogue declares no systems or could
-    not be read — is stated once here rather than inferred from the entries.
+    the systems answer states about the installation as a whole — what was
+    read, and on an empty answer which empty it is — is stated once here
+    rather than inferred from the entries.
     """
 
     placements: tuple[SystemRomPlacement, ...] = ()
@@ -20054,9 +20388,9 @@ class RomLocationsAnswer:
     """
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
-    """The systems answer's caveats: every degradation of the catalogue as a whole,
-    and on an empty answer the statement of whether the catalogue declares no
-    systems or could not be read.
+    """The systems answer's caveats: every degradation of its list as a whole, and
+    on an empty answer the statement of which empty it is, as the systems answer
+    states it.
     """
 
 
@@ -20090,7 +20424,10 @@ class EmulatorEntry:
 
     @property
     def system(self) -> str:
-        """The system this entry launches, in the catalogue's own spelling."""
+        """The system this entry launches — in the catalogue's own spelling, or, on an entry
+        derived from the installed cores, the identifier it was asked under, in atlas's own
+        vocabulary.
+        """
         return self._spec.system
 
     @property
@@ -21041,7 +21378,7 @@ class _CatalogueQueries:
 
     @one_question
     def systems(self) -> SystemsAnswer:
-        """Every system the frontend catalogue declares, sorted."""
+        """Every system this installation lists, sorted — from its frontend catalogue or its installed cores."""
         answer, version = self._systems_answer()
         return _systems_with_caveats(
             answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
@@ -21238,8 +21575,7 @@ class _CatalogueQueries:
         system, asked within this one question, so the catalogue is read and
         parsed once for all of them rather than once per system. The systems
         answer's sources and caveats ride once on the whole answer: an empty
-        one says whether the catalogue declares no systems or could not be
-        read.
+        one says which empty it is, exactly as the systems answer does.
         """
         listed = self.systems()
         return RomLocationsAnswer(
@@ -21307,14 +21643,16 @@ class _CatalogueQueries:
         ``command`` is ``None`` exactly where the answer refuses: a label the
         system does not carry (``launch-command-label-unknown``), an entry
         whose launch is not ``startable`` (its own reason caveat), a frontend
-        build no reading of ES-DE is pinned for (``frontend-build-unpinned``),
-        or a command atlas does not take apart — shell syntax beyond plain
+        build no reading of ES-DE is pinned for (``frontend-build-unpinned``)
+        or one this runtime cannot read out of its AppImage
+        (``frontend-build-sealed``), or a command atlas does not take apart — shell syntax beyond plain
         words, an ``env`` option, a ``.desktop`` file, an entry ES-DE itself
         refuses, an ``%INJECT%`` file it cannot read or one that injects
-        itself. RetroDECK takes its commands apart; EmuDeck's entries carry the
-        frontend's lookup and its commands are not taken apart yet
-        (``launch-resolution-unsupported`` naming the installation), and a bare
-        RetroArch has no frontend catalogue at all.
+        itself. RetroDECK and EmuDeck take their commands apart; EmuDeck's
+        command carries the launcher script it runs, with the script's steps,
+        or is refused where no reading is pinned for that script and the files
+        it rests on (``launcher-script-unpinned``); a bare RetroArch has no
+        frontend catalogue at all.
         """
         if not os.path.isabs(content_path):
             raise ValueError(f"content_path must be an absolute path, got {content_path!r}")
@@ -21442,6 +21780,63 @@ def _build_unpinned(build: str | None) -> Caveat:
         f"the deployed frontend states build {build}, and atlas's reading of how ES-DE builds a launch command is "
         "pinned to another — what this build would run is not established",
         {"version": build},
+    )
+
+
+def _build_sealed() -> Caveat:
+    """The refusal of a launch command whose frontend build sits in an AppImage this runtime cannot open."""
+    return Caveat(
+        CAVEAT_FRONTEND_BUILD_SEALED,
+        "the frontend's build is stated inside its AppImage, which this runtime cannot open — it lacks the codec the "
+        "image is compressed with — so the build, and with it what the frontend would run, is not established; the "
+        "capability is the runtime's, not the machine's",
+        {},
+    )
+
+
+def _probe_bool(probe: Probe) -> bool | None:
+    """A probe as a test's answer: hit true, miss false, ``None`` where it cannot be told."""
+    return None if probe == PROBE_UNKNOWN else probe == PROBE_HIT
+
+
+def _ryujinx_sdl2(config: ReadResult) -> bool | None:
+    """Whether Ryujinx's ``Config.json`` names an SDL2 gamepad: no file is no such name, since ``jq`` fails on it and
+    the fix takes no branch; a file atlas cannot read cannot be told.
+    """
+    if config.status == READ_MISSING:
+        return False
+    if config.text is None:
+        return None
+    return ryujinx_names_sdl2(config.text)
+
+
+def _read_line(read: ReadResult) -> str | None:
+    """What ``$(cat file)`` yields for *read*: the text without its trailing newlines, nothing for a missing file,
+    ``None`` where atlas cannot read what is there.
+    """
+    if read.status == READ_MISSING:
+        return ""
+    return None if read.text is None else read.text.rstrip("\n")
+
+
+def _script_unpinned(path: str, helper: str | None = None) -> Caveat:
+    """The refusal of a launch command that runs an EmuDeck launcher script no reading is pinned for — the script
+    itself, or *helper*, a file the reading rests on that is not the one it was made from.
+    """
+    if helper is None:
+        return Caveat(
+            CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
+            f"the command runs EmuDeck's launcher script {path}, which runs steps of its own around the emulator, and "
+            "atlas states what a script runs only for a copy its reading is pinned to — none is pinned for this one, "
+            "so what this launch runs is not established",
+            {"path": path},
+        )
+    return Caveat(
+        CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
+        f"the command runs EmuDeck's launcher script {path}, whose reading is pinned together with every file it "
+        f"sources or executes, and {helper} is not the file that reading was made from — what this launch runs is "
+        "not established",
+        {"path": path, "helper": helper},
     )
 
 
@@ -23575,10 +23970,12 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         self._home = home
         self._machine = machine
         # What this handle keeps between questions, each under the stat stamp
-        # of the file it came from: the find-rules parses, and the build
-        # stamp read out of the AppImage.
+        # of the file it came from: the find-rules parses, the build stamp
+        # read out of the AppImage, and the blob hashes of the files a
+        # launcher script is pinned by.
         self._find_rules_files = _FindRulesFiles(machine)
         self._build_held: tuple[FileStamp, AppImageStampResult] | None = None
+        self._blob_hashes = _BlobHashes(machine)
 
     def _marker_path(self) -> str:
         return os.path.join(self._home, EMUDECK_SETTINGS_SUFFIX)
@@ -23603,7 +24000,8 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
     # backend to ``~/.config/EmuDeck/backend`` (upstream ``dragoonDorise/
     # EmuDeck`` @ ``863ab69``) — and that checkout's HEAD is the one version
     # statement the arrangement leaves on disk: ``settings.sh`` names none.
-    _BACKEND_GIT_SUFFIX = os.path.join(_XDG_CONFIG_DIRNAME, "EmuDeck", "backend", ".git")
+    _BACKEND_SUFFIX = os.path.join(_XDG_CONFIG_DIRNAME, "EmuDeck", "backend")
+    _BACKEND_GIT_SUFFIX = os.path.join(_BACKEND_SUFFIX, ".git")
 
     def _observed_backend_head(self) -> str | None:
         """The backend commit this machine runs — EmuDeck's version statement.
@@ -24181,8 +24579,13 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         ("RYUJINX", "launchers/ryujinx.sh", 'name="RYUJINX"'),
     )
 
-    def _launch_for(self, snapshot: _EsdeSnapshot) -> Callable[[EmulatorSpec], LaunchResolution]:
+    def _launch_for(
+        self, snapshot: _EsdeSnapshot, lookups: "list[tuple[LaunchLookup, _HostLaunchView]] | None" = None
+    ) -> Callable[[EmulatorSpec], LaunchResolution]:
         """Each entry's launch answer, the find rules and the host read once — and only once an entry asks.
+
+        *lookups* is where the one lookup and its view are kept, for a caller
+        that takes a command apart after the entries are built.
 
         A launcher-script row (``/bin/bash <script> …``, the shape EmuDeck's
         own custom catalogue writes) is ES-DE's answer first: the second
@@ -24194,7 +24597,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         on a command the next start rewrites rides beside any verdict
         (:meth:`_systems_path_note`).
         """
-        held: list[tuple[LaunchLookup, _HostLaunchView]] = []
+        held: list[tuple[LaunchLookup, _HostLaunchView]] = [] if lookups is None else lookups
         resolve = _launch_for(lambda: self._lookup(snapshot), held)
 
         def launch_for(spec: EmulatorSpec) -> LaunchResolution:
@@ -24315,21 +24718,29 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         )
 
     def _deployed_esde_build(self) -> str | None:
-        """The ES-DE build the AppImage states, ``None`` where it states none this read can take.
+        """The ES-DE build the AppImage states, ``None`` where it states none this read can take
+        (:meth:`_deployed_esde_build_read`).
+        """
+        return self._deployed_esde_build_read().stamp
+
+    def _deployed_esde_build_read(self) -> AppImageStampResult:
+        """The read of the ES-DE build the AppImage states — its status beside the stamp.
 
         Read off ``usr/bin/es-de`` with :data:`ESDE_VERSION_STAMP`, which
         needs the image's codec (a zstd provider, :mod:`atlas.squashfs`), and
         kept under the AppImage's stat stamp: a replaced image is read again.
+        The status keeps a runtime without that codec
+        (``capability-missing``) apart from an image that states no build.
         """
         path = self._esde_appimage_path()
         machine = self._machine
         stamp = machine.file_stamp(path) if isinstance(machine, StampingMachine) else None
         held = self._build_held
         if stamp is not None and held is not None and held[0] == stamp:
-            return held[1].stamp
+            return held[1]
         read = machine.read_appimage_stamp(path, self.ESDE_BINARY_ENTRY, self.ESDE_VERSION_STAMP)
         self._build_held = None if stamp is None else (stamp, read)
-        return read.stamp
+        return read
 
     def _gamelist_selections(self, system: str) -> GamelistSelections:
         """The gamelist's emulator selections — EmuDeck seeds these itself.
@@ -24737,6 +25148,196 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             ),
             version,
         )
+
+    def _launch_command_answer(
+        self, system: str, content_path: str, label: str | None
+    ) -> tuple[LaunchCommandAnswer, str | None]:
+        """EmuDeck's launch command — the snapshot its launchability answer takes, the entry's own lookup.
+
+        The entry's verdict and the texts its command is built from come out of
+        one :class:`~atlas.launch.LaunchLookup` over one read of the find rules
+        and the host, as on RetroDECK. ES-DE runs on the host here, so the
+        program is the file ES-DE runs: ``native`` with its path — a Flatpak
+        export on the ``PATH`` among them, the wrapper a caller can start
+        unchanged — or ``appimage`` where the file is named as one. ``~`` is
+        the lookup's home, the user's own, and ``%ESPATH%``, ES-DE's directory
+        inside the AppImage's mount, is not established
+        (``launch-path-unestablished``). A command that runs one of EmuDeck's
+        launcher scripts (:meth:`_launcher_script_run`) carries the script
+        beside it — the build of the emulator it starts and the steps it runs
+        around it — read through the rule pinned for exactly that script and
+        the files it sources and executes (:meth:`_launcher_script_answer`);
+        where no rule is, the command is refused with
+        ``launcher-script-unpinned``, whatever the build. A command is taken
+        apart only for the ES-DE build the reading is pinned to
+        (:data:`ESDE_APPIMAGE_BUILD`, read off the image): a runtime without
+        the image's codec answers ``frontend-build-sealed``, and any other
+        build, or none the image states, ``frontend-build-unpinned``.
+        """
+        version = self._observed_backend_head()
+        snapshot = self._esde_snapshot(system)
+        if snapshot.refusal is not None:
+            return LaunchCommandAnswer(caveats=snapshot.refusal), version
+        if system not in snapshot.by_system and not snapshot.complete:
+            return self._derived_launch_command(snapshot, system, label), version
+        anchor = self._esde_system_dir(snapshot.by_system, system, complete=snapshot.complete)
+        lookups: list[tuple[LaunchLookup, _HostLaunchView]] = []
+        entries = _entries_from(
+            self,
+            _declared_entries(snapshot.by_system, system),
+            self._gamelist_selections(system),
+            system_roms_dir=anchor.directory,
+            content_path=content_path,
+            launch_for=self._launch_for(snapshot, lookups),
+        )
+        sources = (self._catalogue_provenance(snapshot.exclusive),)
+        caveats = (*snapshot.findings, *snapshot.tail, *anchor.caveats)
+        chosen = _chosen_entry(entries, label, system)
+        if isinstance(chosen, Caveat):
+            return LaunchCommandAnswer(sources=sources, caveats=(*caveats, chosen)), version
+        if chosen is None or chosen.availability != AVAILABILITY_STARTABLE or not lookups:
+            return LaunchCommandAnswer(chosen, sources=sources, caveats=caveats), version
+        lookup, view = lookups[0]
+        launcher = self._launcher_script_answer(chosen, snapshot.settings, view)
+        if isinstance(launcher, Caveat):
+            return LaunchCommandAnswer(chosen, sources=sources, caveats=(*caveats, launcher)), version
+        build = self._deployed_esde_build_read()
+        if build.status == APPIMAGE_CAPABILITY_MISSING:
+            return LaunchCommandAnswer(chosen, sources=sources, caveats=(*caveats, _build_sealed())), version
+        if build.stamp != self.ESDE_APPIMAGE_BUILD:
+            return (
+                LaunchCommandAnswer(chosen, sources=sources, caveats=(*caveats, _build_unpinned(build.stamp))),
+                version,
+            )
+        parts = lookup.command_parts(chosen.command, loads_core=chosen.kind == KIND_LIBRETRO)
+        if parts is None:
+            return LaunchCommandAnswer(chosen, sources=sources, caveats=caveats), version
+        inputs = CommandInputs(
+            content_path=content_path,
+            parts=parts,
+            home=view.home,
+            es_path=None,
+            rom_directory=self._launch_rom_directory(),
+        )
+        taken = take_apart(chosen.command, inputs, view)
+        command = taken.command
+        if command is not None and launcher is not None:
+            command = cast(LaunchCommand, _dc_replace(command, launcher_script=launcher))
+        return LaunchCommandAnswer(chosen, command, sources, (*caveats, *taken.caveats)), version
+
+    def _launcher_script_answer(
+        self, entry: EmulatorEntry, settings: Mapping[str, str], view: _HostLaunchView
+    ) -> LauncherScript | Caveat | None:
+        """The launcher script *entry*'s command runs, read through the rule pinned for it — the refusal where none
+        is, ``None`` where the command runs no launcher script (:meth:`_launcher_script_run`).
+
+        The script is matched by the git blob hash of the file at its path
+        (``~`` read as ES-DE reads it); every file the rule's reading rests
+        on — the backend files every script sources and the ones this script
+        executes — must hash to its pin, or the first that does not is named.
+        A file that cannot be hashed fails its pin the same way.
+        """
+        script = self._launcher_script_run(entry, settings, view)
+        if script is None:
+            return None
+        rules = launcher_rules()
+        rule = rules.by_blob.get(self._blob_hashes.hash(expand_home_path(script, view.home)) or "")
+        if rule is None:
+            return _script_unpinned(script)
+        for pinned, blob in (*rules.sources.items(), *rule.executes.items()):
+            path = self._pinned_path(pinned, settings)
+            if self._blob_hashes.hash(path) != blob:
+                return _script_unpinned(script, path)
+        state = self._launcher_state(settings, view)
+        steps = tuple(
+            LauncherStep(step.code, step_runs(step.code, step.runs, state, rule.emulator)) for step in rule.steps
+        )
+        return LauncherScript(script, rule.variant, steps, rules.revision)
+
+    def _launcher_state(self, settings: Mapping[str, str], view: _HostLaunchView) -> LauncherState:
+        """What the steps of a launcher script turn on, read the way EmuDeck's own tests read it.
+
+        The settings come from ``settings.sh``; the files are tested as the
+        backend tests them: ``-f`` on the rclone and the gyro plugin binaries
+        (emuDeckCloudSync.sh:3, emuDeckRyujinx.sh:440), ``-e`` on Ryujinx's
+        binary (:281, under ``$emusFolder/publish``, ``~/Applications`` per
+        vars.sh:4-5), its configuration through the fix's ``jq`` filter
+        (:445-446, :7), and the device's product name as ``getProductName``
+        reads it (helperFunctions.sh:97-98) — a file that is not there reads as
+        no name, as ``cat`` leaves it, and one atlas cannot read as unknown.
+        """
+        tools = self._setting_path(dict(settings), "toolsPath", "tools")[0]
+        product = self._machine.read_text(self._PRODUCT_NAME)
+        config = self._machine.read_text(os.path.join(self._home, ".config", "Ryujinx", "Config.json"))
+        ryujinx = self._machine.path_kind(os.path.join(self._home, "Applications", "publish", "Ryujinx"))
+        return LauncherState(
+            rclone=_probe_bool(view.regular_file(os.path.join(tools, "rclone", "rclone"))),
+            status=settings.get("cloud_sync_status") or "",
+            provider=settings.get("cloud_sync_provider") or "",
+            net_play=settings.get("netPlay") or "",
+            auto_map=settings.get("autoMap") or "",
+            product=_read_line(product),
+            gyro=_probe_bool(view.regular_file(os.path.join(self._home, "sdgyrodsu", "sdgyrodsu"))),
+            ryujinx_installed=None if ryujinx == KIND_INACCESSIBLE else ryujinx != KIND_MISSING,
+            ryujinx_sdl2=_ryujinx_sdl2(config),
+        )
+
+    # Where EmuDeck reads the device's product name (helperFunctions.sh:97-98).
+    _PRODUCT_NAME = "/sys/devices/virtual/dmi/id/product_name"
+
+    def _pinned_path(self, pinned: str, settings: Mapping[str, str]) -> str:
+        """Where a pinned file's path points on this machine: the backend checkout, or a folder the settings name."""
+        if pinned.startswith(BACKEND_ROOT):
+            return os.path.join(self._home, self._BACKEND_SUFFIX, pinned[len(BACKEND_ROOT) :])
+        if pinned.startswith(TOOLS_ROOT):
+            return os.path.join(self._setting_path(dict(settings), "toolsPath", "tools")[0], pinned[len(TOOLS_ROOT) :])
+        emulation = settings.get("emulationPath") or os.path.join(self._home, "Emulation")
+        return os.path.join(emulation, pinned[len(EMULATION_ROOT) :])
+
+    def _derived_launch_command(self, snapshot: _EsdeSnapshot, system: str, label: str | None) -> LaunchCommandAnswer:
+        """A system only the installed cores declare while the bundled layer is sealed: its entries are derived from
+        the cores, carry no command, and each answers its own ``launch-resolution-unsupported``.
+        """
+        context = self._derived_context(snapshot)
+        entries, derived = _derived_catalogue_entries(self, context, system)
+        caveats = (*snapshot.findings, *snapshot.tail, *derived)
+        chosen = _chosen_entry(entries, label, system)
+        if isinstance(chosen, Caveat):
+            return LaunchCommandAnswer(sources=context.sources, caveats=(*caveats, chosen))
+        return LaunchCommandAnswer(chosen, sources=context.sources, caveats=caveats)
+
+    def _launcher_script_run(
+        self, entry: EmulatorEntry, settings: Mapping[str, str], view: _HostLaunchView
+    ) -> str | None:
+        """The EmuDeck launcher script *entry*'s command runs, spelled as the command or the find rule spells it —
+        ``None`` where it runs none.
+
+        A launcher script is a file under ``<toolsPath>/launchers``, and the
+        comparison follows the links on the way to both
+        (:meth:`_HostLaunchView.beneath`): SteamOS mounts a card through
+        udisks as the deck user, under ``/run/media/deck/``, and links
+        ``/run/media/<label>`` to that mount point — ``/run/media/<device>``
+        for a card without a label (/usr/lib/hwsupport/steamos-automount.sh:88-113)
+        — and a find rule or a command may spell either. Two commands run one:
+        a ``/bin/bash <script> …`` row whose second word is such a file
+        (:func:`_launcher_script`, ``~`` read as ES-DE reads it in the
+        command), and an ``%EMULATOR_X%`` token whose find rule found one —
+        the entries EmuDeck's launcher writes into the custom find rules
+        (emuDeckESDE.sh:524-553 at 863ab69). Any other ``/bin/bash`` row, a
+        ``-c`` string or a script of the user's own elsewhere, is an ordinary
+        command.
+        """
+        launchers = os.path.join(self._setting_path(dict(settings), "toolsPath", "tools")[0], "launchers")
+        script = _launcher_script(entry.command)
+        if script is not None:
+            readable = not any(mark in script for mark in _SCRIPT_UNREADABLE)
+            if readable and view.beneath(expand_home_path(script, view.home), launchers):
+                return script
+            return None
+        launcher = entry.launcher
+        if launcher is not None and view.beneath(launcher.path, launchers):
+            return launcher.path
+        return None
 
     def _rom_location_answer(self, system: str) -> tuple[RomPlacement, str | None]:
         """EmuDeck's ROM placement — the overlay's declaration, resolved ES-DE's way.

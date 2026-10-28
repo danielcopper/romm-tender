@@ -87,6 +87,7 @@ from .core_firmware import (
     core_firmware_cards,
     LOCATING_UNESTABLISHED,
     CoreFirmwareCard,
+    CoreFirmwareFolderRoute,
     CoreFirmwareNameRoute,
     CoreFirmwareOverrideOption,
     CoreFirmwareRegionKey,
@@ -97,6 +98,7 @@ from .core_firmware import (
     locating_of_core,
     lookup_core_firmware,
 )
+from .core_declarations import PackagedCoreDeclaration, packaged_declaration_of
 from .core_info import (
     UNREAD_EMPTY,
     UNREAD_NO_SLOT,
@@ -469,6 +471,15 @@ CAVEAT_SYSTEM_ASSIGNMENT_DERIVED = "system-assignment-derived"
 CAVEAT_CORE_WITHOUT_SYSTEMNAME = "core-without-systemname"
 CAVEAT_SYSTEM_ASSIGNMENT_MAY_HIDE_CORES = "system-assignment-may-hide-cores"
 CAVEAT_CORE_INFO_UNREADABLE = "core-info-unreadable"
+# The core's ``.info`` is missing and atlas's packaged declaration stands in
+# its place (:mod:`atlas.core_declarations`), read from the core's source at a
+# pinned revision — the provenance statement every such core carries, beside
+# ``declaration: packaged``. Its own code rather than the standalone card's
+# ``firmware-packaged-declaration``, because that one carries a catalogue
+# label and an emulator token, and a core asked about by name has neither:
+# one code, one data shape, so a consumer reading its keys never meets a
+# missing one.
+CAVEAT_CORE_INFO_PACKAGED = "core-info-packaged"
 CAVEAT_EMULATOR_CATALOGUE_UNREADABLE = "emulator-catalogue-unreadable"
 # Four ways to answer from no full catalogue, and they are four different
 # claims: the arrangement has none (unavailable), it has one that could not be
@@ -626,6 +637,21 @@ CAVEAT_FIRMWARE_IMAGE_CONFIGURED = "firmware-image-configured"
 # name was read and composed and only the file is absent, which is what a
 # consumer prunes the setting on.
 CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING = "firmware-configured-image-missing"
+# The option names something the core never offered as one of its values, so
+# the frontend does not hand the name to the core at all. A core that fills the
+# option's values from its own listing offers only the files that listing
+# accepts, and RetroArch moves an option off its declared default only where
+# the stored value matches a declared one (core_option_manager.c:1031-1053,
+# the guard at :1037, at a79435a) — so the core reads its default instead,
+# which is the folder's own listing: ``auto`` for PCEE2, the first image the
+# listing kept for LRPS2. The name fails the listing one of four ways: it is
+# not a bare, unhidden file name a listing could produce at all; a directory
+# is at it; the file at it is of a size the listing drops (LRPS2 keeps 4 to
+# 8 MiB); or the file at it fails the core's header test. A name with nothing
+# at it is
+# :data:`CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING` instead, stated where the
+# name could have been offered.
+CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED = "firmware-configured-image-not-offered"
 # The names one launch of this core would try, in the order it tries them, and
 # the image it expects to find under them. It is no degradation: it is the one
 # fact a declaration cannot carry for a core that opens several spellings of
@@ -1329,15 +1355,35 @@ FIRMWARE_SYSTEM_OVERRIDE: Mapping[str, str] = {
 # whose value, where one is set, is the one file inside the folder the launch
 # opens — so the fields describing the listing answer where no name governs,
 # and a folder verdict is no longer the only answer such a declaration can
-# have.
-FIRMWARE_DECLARED_DIRECTORY_VERSION = "4"
-FIRMWARE_DECLARED_DIRECTORY_REVIEWED = "2026-09-03"
+# have. Version 5 adds a core whose listing filters by no size at all, whose
+# option has a value meaning "list the folder" rather than naming a file, and
+# whose option offers only the files its listing accepts — so a stored name the
+# listing would not produce never reaches the core — and states per row the
+# citations its caveats quote, since two cores now share the shape. Version 6
+# reads LRPS2's option through the frontend too: its values are the files its
+# size-bounded listing accepts, so a stored name outside them never reaches
+# the core either.
+FIRMWARE_DECLARED_DIRECTORY_VERSION = "6"
+FIRMWARE_DECLARED_DIRECTORY_REVIEWED = "2026-10-25"
 
 # The content reads a row may name, each the seam question that performs it.
 # Closed, and checked at construction: a row naming a read nobody implemented
 # would be a table promising a test the resolver cannot make.
 READER_PS2_BIOS_HEADER = "ps2-bios-header"
 DECLARED_DIRECTORY_READERS = frozenset({READER_PS2_BIOS_HEADER})
+
+# What LRPS2's row quotes in its caveats, at the shipped 14d19f8: the content
+# read, the listing's one content test, how many images the option offers, and
+# when the core lists the folder — the strings its caveats carried before rows
+# stated them.
+_LRPS2_OWN_CHECK = "the check the core makes itself (LoadBiosVersion, pcsx2/ps2/BiosTools.cpp:60-173 at 14d19f8)"
+_LRPS2_LISTING_TEST = "IsBIOS (main.cpp:1818)"
+_LRPS2_OFFERS = (
+    "Where the folder holds several, the core offers them all as option values, up to 127 — the fill loop "
+    "stops one short of the 128-slot RETRO_NUM_CORE_OPTION_VALUES_MAX to leave room for the terminator "
+    "(main.cpp:1828, :1833) — and one is enough"
+)
+_LRPS2_LISTS_WHEN = "whenever it has not read a value yet"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1376,13 +1422,46 @@ class DeclaredDirectory:
     A stored value does not stop the listing — LRPS2 lists whenever it has
     not read one yet, to fill the option's own values — which is why this
     sits beside the listing's knowledge rather than replacing it.
+
+    ``min_size`` / ``max_size`` are both ``None`` for a core whose listing
+    applies no size filter at all (PCEE2): every listed file goes on to the
+    content read.
+
+    ``option_lists`` is the option value that names no file but asks for the
+    listing — PCEE2's ``auto`` — and ``None`` where the option has no such
+    value. A stored value equal to it is read the way an unset one is.
+
+    ``offered_by_listing`` says the option's values are filled from the
+    listing and a stored name reaches the core only when it is one of them:
+    RetroArch moves an option off its declared default only where the stored
+    value matches a value the core declared (core_option_manager.c:1031-1053,
+    the guard at :1037, at a79435a). Where it holds, a configured name is the
+    file the launch opens only when it is a bare file name, a plain file is
+    there, of a size the row's filter keeps, and that file passes the content
+    read — anything else reaches the core as the option's default, the
+    listing. ``False`` keeps a configured name as what the launch opens
+    whatever its size and header — the core's own code read without the
+    frontend's guard in front of it; no row states it today.
+
+    ``own_check``, ``listing_test``, ``offers`` and ``lists_when`` are the
+    citations this row's caveats quote — the content read, the listing's one
+    content test, how many images the option offers, and when the core lists
+    the folder — because they are read at one core's revision and two cores
+    share the shape. Required, and refused blank, so no row quotes another
+    core's source by default.
     """
 
     identities: str
-    min_size: int
-    max_size: int
+    min_size: int | None
+    max_size: int | None
     reader: str
+    own_check: str
+    listing_test: str
+    offers: str
+    lists_when: str
     option_key: str | None = None
+    option_lists: str | None = None
+    offered_by_listing: bool = False
 
     def __post_init__(self) -> None:
         if self.reader not in DECLARED_DIRECTORY_READERS:
@@ -1390,10 +1469,29 @@ class DeclaredDirectory:
                 f"DeclaredDirectory: reader must be one of {sorted(DECLARED_DIRECTORY_READERS)}, "
                 f"got {self.reader!r}"
             )
+        if (self.min_size is None) != (self.max_size is None):
+            raise ValueError(
+                "DeclaredDirectory: a size filter states both bounds or neither, got "
+                f"{self.min_size!r}-{self.max_size!r}"
+            )
+        for name in ("own_check", "listing_test", "offers", "lists_when"):
+            if not getattr(self, name).strip():
+                raise ValueError(f"DeclaredDirectory: {name} cites this core's own source and is blank")
+        if self.option_lists is not None and self.option_key is None:
+            raise ValueError("DeclaredDirectory: option_lists is a value of option_key, and no option is named")
+
+    @property
+    def filters_by_size(self) -> bool:
+        """Does the core drop listed files by size before reading any of them?"""
+        return self.min_size is not None
 
     def accepts_size(self, size: int | None) -> bool:
         """Would the core keep a listed file of this size? ``None`` (unknown) is not a yes."""
-        return size is not None and self.min_size <= size <= self.max_size
+        if size is None:
+            return False
+        if self.min_size is None or self.max_size is None:
+            return True
+        return self.min_size <= size <= self.max_size
 
 
 FIRMWARE_DECLARED_DIRECTORY: Mapping[tuple[str, str], DeclaredDirectory] = {
@@ -1434,10 +1532,11 @@ FIRMWARE_DECLARED_DIRECTORY: Mapping[tuple[str, str], DeclaredDirectory] = {
     #     ``"*"`` with ``FILESYSTEM_FIND_FILES`` and no hidden-files flag
     #     (main.cpp:1807), where DuckStation's search asks for hidden names too
     #     and this one does not. A stored ``pcsx2_bios`` value does not stop
-    #     the listing — what it does instead is the section after this one —
-    #     and the file it names is opened under none of the listing's size
-    #     bounds, so the size verdict below is a verdict about the auto-detect
-    #     path;
+    #     the listing — what it does instead is the section after this one.
+    #     The core itself opens the file a stored value names under none of
+    #     the listing's size bounds, but a launch through RetroArch hands it
+    #     only a name the listing offered, so that file is within the same
+    #     bounds;
     #   - it keeps only files with ``MIN_BIOS_SIZE <= size <= MAX_BIOS_SIZE``,
     #     4 MiB and 8 MiB (libretro/main.cpp:1810-1816; the same constants in
     #     pcsx2/ps2/BiosTools.cpp:31-32), and validates each survivor by
@@ -1477,7 +1576,23 @@ FIRMWARE_DECLARED_DIRECTORY: Mapping[tuple[str, str], DeclaredDirectory] = {
     #     configured name stats perfectly well and is NOT searched past; it
     #     goes to the open at :281 instead. [D] What that open then yields
     #     for a directory is the platform's answer and not something these
-    #     lines state — atlas states the shape it found and no verdict.
+    #     lines state — atlas states the shape it found and no verdict;
+    #   - but both bullets above are the core's own code, and the value only
+    #     reaches it when it is one the core declared: RetroArch moves an
+    #     option off its declared default only where the stored value matches
+    #     a declared value (core_option_manager.c:1031-1053, the guard at
+    #     :1037, at a79435a). The core declares no values of its own for this
+    #     option (libretro/libretro_core_options.h:117-128) and fills them
+    #     from the listing: the bare names of the files of 4 to 8 MiB that
+    #     IsBIOS accepts, the first of them the default (main.cpp:1813-1834).
+    #     So a stored name that is no such file — missing, of another size,
+    #     failing the header test, not a plain file, hidden (FindFiles skips a
+    #     leading "." without FILESYSTEM_FIND_HIDDEN_FILES,
+    #     common/FileSystem.cpp:855-862), or carrying a separator — reaches
+    #     the core as the default, the first image the listing kept. A launch
+    #     through RetroArch therefore opens a configured file only where the
+    #     size filter and the header test passed it, and never a directory at
+    #     the configured name.
     #
     # The packaged identities under ``pcsx2/bios/`` (73 in the packaged table
     # at schema version 6.0.0, all 4194304 bytes, all ``kind`` file) are a
@@ -1488,7 +1603,78 @@ FIRMWARE_DECLARED_DIRECTORY: Mapping[tuple[str, str], DeclaredDirectory] = {
         min_size=4 * 1024 * 1024,
         max_size=8 * 1024 * 1024,
         reader=READER_PS2_BIOS_HEADER,
+        own_check=_LRPS2_OWN_CHECK,
+        listing_test=_LRPS2_LISTING_TEST,
+        offers=_LRPS2_OFFERS,
+        lists_when=_LRPS2_LISTS_WHEN,
         option_key="pcsx2_bios",
+        offered_by_listing=True,
+    ),
+    # PCEE2, at the deployed 340ce04 (the build stamp in
+    # atlas/data/core_declarations.json), upstream github.com/WizzardSK/
+    # pcee2-libretro — a port of current PCSX2, not of LRPS2's fork, with no
+    # .info on RetroDECK, so this row is reached through the packaged
+    # declaration. The folder is <system>/pcsx2/bios: InitializeConfig sets
+    # EmuFolders::DataRoot to <system>/pcsx2 (pcee2-libretro/Libretro.cpp:
+    # 481-487) and EmuFolders::LoadConfig resolves Bios under it with the
+    # default name bios (pcsx2/Pcsx2Config.cpp:2334, :2306-2308).
+    #
+    # What the core does with the listing, same revision:
+    #   - RegisterCoreOptions lists <system>/pcsx2/bios at every core load
+    #     (called from retro_set_environment, Libretro.cpp:1418) —
+    #     NON-recursively, "*" with FILESYSTEM_FIND_FILES (:669-671) — and
+    #     keeps every file IsBIOS accepts, with NO size filter (:672-678), as
+    #     the pcsx2_bios option's values after a leading "auto" (:663-664),
+    #     at most 126 files beside it: the fill stops at the 128-slot value
+    #     array minus the terminator (:733-736);
+    #   - IsBIOS opens the file and walks its ROMDIR header with
+    #     LoadBiosVersion (pcsx2/ps2/BiosTools.cpp:284-294, :80-197), the walk
+    #     atlas.ps2_bios performs — the same steps as at LRPS2's 14d19f8;
+    #   - with the option at "auto" nothing is written to Filenames/BIOS
+    #     (Libretro.cpp:1023-1025), and SettingsOverride takes the first file
+    #     of the folder's listing IsBIOS accepts, again with no size filter
+    #     (:640-657). So one recognised image of any size satisfies the
+    #     declaration, and several are more choice.
+    #
+    # What a STORED pcsx2_bios value does, same revision:
+    #   - a value other than "auto" is written to Filenames/BIOS
+    #     (Libretro.cpp:1023-1025), FullpathToBios joins it onto the BIOS
+    #     folder with Path::Combine (pcsx2/Pcsx2Config.cpp:2102-2108), and
+    #     LoadBIOS opens that path where it exists (BiosTools.cpp:321-335);
+    #   - but the value only reaches the core when it is one the core
+    #     declared: RetroArch moves an option off its declared default only
+    #     where the stored value matches a declared value
+    #     (core_option_manager.c:1031-1053, the guard at :1037, at a79435a,
+    #     read in docs/research/core-firmware-locating.md). The declared
+    #     values are "auto" and the bare names of the files the listing
+    #     accepted, so a stored name that is no such file — missing, failing
+    #     the header test, not a plain file, hidden (both listings pass no
+    #     FILESYSTEM_FIND_HIDDEN_FILES, so FindFiles skips a leading ".",
+    #     common/FileSystem.cpp:2319-2325, common/FileSystemVFS.cpp:675-682),
+    #     or carrying a separator — reaches the core as the default "auto",
+    #     which is the listing. LoadBIOS's own
+    #     fallback, FindBiosImage with its 4-8 MiB bound (BiosTools.cpp:258-282,
+    #     reached at :322-333), is therefore not a path a launch through
+    #     RetroArch takes: an offered name is a file the listing just accepted,
+    #     and "auto" found any image FindBiosImage could.
+    ("pcee2", "pcsx2/bios"): DeclaredDirectory(
+        identities="pcsx2/bios/",
+        min_size=None,
+        max_size=None,
+        reader=READER_PS2_BIOS_HEADER,
+        option_key="pcsx2_bios",
+        option_lists="auto",
+        offered_by_listing=True,
+        own_check=(
+            "the check the core makes itself (LoadBiosVersion, pcsx2/ps2/BiosTools.cpp:80-197 at 340ce04)"
+        ),
+        listing_test="IsBIOS (pcee2-libretro/Libretro.cpp:676)",
+        offers=(
+            "Where the folder holds several, the core offers them all as option values beside auto, up to "
+            "126 — the fill stops at the 128-slot value array minus the terminator "
+            "(pcee2-libretro/Libretro.cpp:733-736) — and one is enough"
+        ),
+        lists_when="every time the core is loaded (pcee2-libretro/Libretro.cpp:660-680, :1418)",
     ),
 }
 
@@ -1642,6 +1828,11 @@ class CoreDeclarations:
     the key, carried because the values themselves do not survive the
     enumeration and only a declaration with one could have been about some
     particular file.
+
+    ``packaged`` says the declaration is atlas's packaged one rather than a
+    ``.info`` read off this machine (:mod:`atlas.core_declarations`): the
+    ``.info`` is missing, which ``info_status`` still says, and ``systemname``
+    and ``firmware`` come from the packaged entry in its place.
     """
 
     core_so: str
@@ -1659,6 +1850,12 @@ class CoreDeclarations:
     # entry has to a label. Empty where the file states none or could not be
     # read; a caller labels with the ``.so`` name then, never a guess.
     corename: str = ""
+    packaged: bool = False
+
+    @property
+    def declared(self) -> bool:
+        """Is there a declaration to resolve — the ``.info`` read, or a packaged one in its place?"""
+        return self.info_status == READ_OK or self.packaged
 
     @property
     def serves_several_systems(self) -> bool:
@@ -1812,6 +2009,10 @@ def read_core_declarations(
         if stem in TEMPLATE_INFO_STEMS:
             continue
         result = machine.read_text(os.path.join(info_dir, f"{stem}.info"))
+        packaged = packaged_declaration_of(stem) if result.status == READ_MISSING else None
+        if packaged is not None:
+            cores.append(_packaged_core_declarations(packaged))
+            continue
         info = _UNREADABLE_INFO if result.text is None else _declarations_in(result.text, stem)
         cores.append(
             CoreDeclarations(
@@ -1829,6 +2030,31 @@ def read_core_declarations(
             )
         )
     return CoreEnumeration(tuple(sorted(cores, key=lambda c: c.core_so)), listing.unreadable)
+
+
+def _packaged_core_declarations(entry: PackagedCoreDeclaration) -> CoreDeclarations:
+    """A core whose ``.info`` is missing, declared by atlas's packaged entry in its place.
+
+    Each packaged slot becomes the slot a ``.info`` would enumerate and is
+    filed by :func:`_declaration_of`, the reading every read ``.info`` goes
+    through — the entry's ``systemname`` through the same map, and whether the
+    core opens a path as a folder through the same curated table.
+    ``info_status`` stays what the read found, because the ``.info`` is still
+    missing; ``packaged`` is what says a declaration stands in its place.
+    """
+    slots = (
+        FirmwareSlot(index=index, path=slot.path, description=slot.description, optional=slot.need == NEED_OPTIONAL)
+        for index, slot in enumerate(entry.firmware)
+    )
+    return CoreDeclarations(
+        core_so=f"{entry.stem}.so",
+        stem=entry.stem,
+        systemname=entry.systemname,
+        system=system_for("", entry.systemname),
+        firmware=tuple(_declaration_of(slot, entry.systemname, entry.stem) for slot in slots),
+        info_status=READ_MISSING,
+        packaged=True,
+    )
 
 
 def system_assignment_caveats(core: CoreDeclarations) -> tuple[Caveat, ...]:
@@ -2454,11 +2680,14 @@ DECLARATION_UNSUPPORTED: CoreDeclarationState = "unsupported"
 # The declaration is atlas's packaged card, not a file read off this machine:
 # a standalone emulator ships no ``.info``, so what it expects is established
 # from its source at the shipped release and packaged with citations
-# (:mod:`atlas.standalone_firmware`). Only the declaration is packaged — the
+# (:mod:`atlas.standalone_firmware`), and a libretro core shipped without its
+# ``.info`` has what that file would declare packaged in its place the same
+# way (:mod:`atlas.core_declarations`). Only the declaration is packaged — the
 # destinations are resolved against this arrangement's own trees the way the
 # emulator resolves them, and what sits there is read live, exactly like the
-# ``.info`` route. The entry's caveat states the provenance, so a client
-# never mistakes a card for a machine read.
+# ``.info`` route. The entry's caveat states the provenance
+# (``firmware-packaged-declaration`` for a card, ``core-info-packaged`` for a
+# libretro core), so a client never mistakes a card for a machine read.
 DECLARATION_PACKAGED: CoreDeclarationState = "packaged"
 
 CORE_DECLARATION_STATES = ("read", "unreadable", "absent", "unsupported", "packaged")
@@ -4510,14 +4739,6 @@ _GROUP_IMAGE = "image"
 _GROUP_CONTRADICTED = "contradicted"
 _GROUP_UNREAD = "unread"
 _GROUP_REJECTED = "rejected"
-_CORE_OFFERS_THEM_ALL = (
-    "Where the folder holds several, the core offers them all as option values, up to 127 — the fill loop "
-    "stops one short of the 128-slot RETRO_NUM_CORE_OPTION_VALUES_MAX to leave room for the terminator "
-    "(main.cpp:1828, :1833) — and one is enough"
-)
-_THE_CORES_OWN_CHECK = (
-    "the check the core makes itself (LoadBiosVersion, pcsx2/ps2/BiosTools.cpp:60-173 at 14d19f8)"
-)
 
 
 def _read_candidate(
@@ -4561,7 +4782,7 @@ def _image_by_header(
             CAVEAT_FIRMWARE_IMAGE_IDENTIFIED,
             f"{read.path} is {read.named.image} — the packaged table files these bytes under "
             f"{row.identities}, and its ROMDIR header reads as '{header.description}' by "
-            f"{_THE_CORES_OWN_CHECK}. {_CORE_OFFERS_THEM_ALL}",
+            f"{row.own_check}. {row.offers}",
             {
                 "path": read.path,
                 "image": read.named.image,
@@ -4585,18 +4806,18 @@ def _image_by_header(
         return Caveat(
             CAVEAT_FIRMWARE_IMAGE_UNLISTED,
             f"{read.path} reads as a PS2 BIOS — its ROMDIR header says '{header.description}' under "
-            f"{_THE_CORES_OWN_CHECK} — and the packaged table at version {table} files no identity for "
+            f"{row.own_check} — and the packaged table at version {table} files no identity for "
             f"these bytes under {row.identities}: the table lists what System.dat lists, and the listing's "
-            f"one content test is IsBIOS (main.cpp:1818), so this is an image the core offers. "
-            f"{_CORE_OFFERS_THEM_ALL}",
+            f"one content test is {row.listing_test}, so this is an image the core offers. "
+            f"{row.offers}",
             unlisted,
         )
     return Caveat(
         CAVEAT_FIRMWARE_IMAGE_UNLISTED,
         f"{read.path} reads as a PS2 BIOS — its ROMDIR header says '{header.description}' under "
-        f"{_THE_CORES_OWN_CHECK} — and its bytes could not be hashed, so whether the packaged table at "
+        f"{row.own_check} — and its bytes could not be hashed, so whether the packaged table at "
         f"version {table} files them under {row.identities} is not established: the header is the verdict, "
-        f"and this is an image the core offers. {_CORE_OFFERS_THEM_ALL}",
+        f"and this is an image the core offers. {row.offers}",
         unlisted,
     )
 
@@ -4619,7 +4840,7 @@ def _contradicted_image(
     return Caveat(
         CAVEAT_FIRMWARE_IMAGE_CONTRADICTED,
         f"{path} hashes to {named.image} — the packaged table files these bytes under {row.identities} — "
-        f"and its ROMDIR header does not read as a PS2 BIOS by {_THE_CORES_OWN_CHECK}: the two reads "
+        f"and its ROMDIR header does not read as a PS2 BIOS by {row.own_check}: the two reads "
         "disagree, and neither is taken over the other, so whether the core boots this file is not established",
         {
             "path": path,
@@ -4643,7 +4864,7 @@ def _unread_candidate(path: str) -> Caveat:
     )
 
 
-def _no_image(paths: list[str], *, directory: str, core_so: str) -> Caveat:
+def _no_image(paths: list[str], row: DeclaredDirectory, *, directory: str, core_so: str) -> Caveat:
     """Every kept file was read and none passes the core's test — the folder holds no image.
 
     Named by path, because on a linked root the directory is the whole BIOS
@@ -4654,10 +4875,10 @@ def _no_image(paths: list[str], *, directory: str, core_so: str) -> Caveat:
     """
     subject = (
         f"{len(paths)} files in {directory} are of a size this core accepts and none of them reads as a "
-        f"PS2 BIOS — each was read the way the core reads it, and {_THE_CORES_OWN_CHECK} fails every one"
+        f"PS2 BIOS — each was read the way the core reads it, and {row.own_check} fails every one"
         if len(paths) > 1
         else f"one file in {directory} is of a size this core accepts and it does not read as a PS2 BIOS — "
-        f"it was read the way the core reads it, and {_THE_CORES_OWN_CHECK} fails it"
+        f"it was read the way the core reads it, and {row.own_check} fails it"
     )
     return Caveat(
         CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE,
@@ -4764,7 +4985,7 @@ def _directory_identified(
     if groups[_GROUP_CONTRADICTED] or groups[_GROUP_UNREAD]:
         return _DirectoryContents(None, caveats, tuple(claimed))
     return _DirectoryContents(
-        False, (*caveats, _no_image(rejected, directory=directory, core_so=core_so)), tuple(claimed)
+        False, (*caveats, _no_image(rejected, row, directory=directory, core_so=core_so)), tuple(claimed)
     )
 
 
@@ -4810,8 +5031,7 @@ def _directory_contents(
         caveats.append(
             Caveat(
                 CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_CANDIDATE,
-                f"{directory} holds no file of a size this core accepts ({row.min_size}-{row.max_size} "
-                "bytes, its own first filter over the listing and a stat), so the folder is the right "
+                f"{directory} holds no file {_size_filter_clause(row)}, so the folder is the right "
                 "shape and the listing the core makes at core load offers nothing — "
                 "settled without reading a byte",
                 {
@@ -4843,6 +5063,16 @@ def _directory_contents(
         return _DirectoryContents(None, tuple(caveats), core_caveats=linked)
     read = _directory_identified(machine, context, row, kept, directory=directory, core_so=core_so)
     return _DirectoryContents(read.verdict, (*caveats, *read.caveats), read.claimed, linked)
+
+
+def _size_filter_clause(row: DeclaredDirectory) -> str:
+    """What "no candidate" means for this row: nothing in its size range, or nothing at all."""
+    if row.filters_by_size:
+        return (
+            f"of a size this core accepts ({row.min_size}-{row.max_size} bytes, its own first filter "
+            "over the listing and a stat)"
+        )
+    return "at all (this core filters its listing by no size, so every file there would be read)"
 
 
 def _candidates_linked_out(
@@ -5025,15 +5255,31 @@ def _configured_image_missing(
     )
 
 
+def _configured_image_not_offered(
+    core: CoreDeclarations, row: DeclaredDirectory, key: str, name: str, *, directory: str, why: str
+) -> Caveat:
+    """The configured name is not one the core offered, so the frontend hands it the listing instead."""
+    return Caveat(
+        CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED,
+        f"{core.core_so} is configured to open {name!r} ({key}), and {why} — so it is not one of the "
+        f"values the core offers for that option, which are the files its listing of {directory} "
+        f"accepts by {row.listing_test}. RetroArch hands a core a stored value only where it matches "
+        "one the core declared (core_option_manager.c:1031-1053, the guard at :1037, at a79435a), "
+        "so this launch reads the option's default, the listing, and the folder verdict beside this "
+        "is what it rests on",
+        {"core": core_short_name(core.stem), "key": key, "name": name, "dir": directory},
+    )
+
+
 def _configured_image_caveat(
-    core: CoreDeclarations, key: str, name: str, *, directory: str, options_file: str
+    core: CoreDeclarations, row: DeclaredDirectory, key: str, name: str, *, directory: str, options_file: str
 ) -> Caveat:
     """Where the named file came from — the one explanation a folder-declared file needs."""
     return Caveat(
         CAVEAT_FIRMWARE_IMAGE_CONFIGURED,
         f"{core.core_so} opens {name!r} for this launch: the {key} core option names it, and "
         f"{options_file} is the file this installation reads that option from. The core still "
-        f"lists {directory} whenever it has not read a value yet, to offer that option the names "
+        f"lists {directory} {row.lists_when}, to offer that option the names "
         "it found — so the setting does not replace the listing — but which image the launch "
         "opens is this setting's answer rather than the listing's, so the requirement below is "
         "that one file and no verdict is stated over the folder",
@@ -5058,14 +5304,15 @@ def _configured_content(
     ``unrecognised`` here means: bytes the packaged table does not know, and
     the core opens them regardless. It is no failure and no refusal. The
     content test the core makes stands over its LISTING (``IsBIOS``,
-    libretro/main.cpp:1818) and not between it and a configured file — that
-    one is opened and loaded whatever its header reads as
-    (pcsx2/ps2/BiosTools.cpp:281, the ROMDIR walk at :294 with its own return
-    discarded). Nothing about its bytes turns it down: what can is an open
-    that fails (:281-283) or a size of zero (:286-290), neither of which the
-    table has any say in. So the table's silence leaves what the file is
-    open, which is what ``satisfied`` answering ``None`` beside that value
-    says.
+    libretro/main.cpp:1818 at 14d19f8) and not between the core and a
+    configured file — that one is opened and loaded whatever its header reads
+    as (pcsx2/ps2/BiosTools.cpp:281, the ROMDIR walk at :294 with its own
+    return discarded). The listing reaches this file only through the
+    frontend, which hands the core a name its listing offered
+    (:attr:`DeclaredDirectory.offered_by_listing`, checked before this read),
+    and the table is no part of that offer either. So the table's silence
+    leaves what the file is open, which is what ``satisfied`` answering
+    ``None`` beside that value says.
 
     The third return is what this read learned about the destination's own
     bytes (:class:`_ObservedBytes`), so the provenance check that runs after
@@ -5211,6 +5458,24 @@ def _configured_image(
     then yields for a directory is the platform's answer rather than
     anything these lines state, which is exactly why no verdict is put on
     it.
+
+    The above is the core's own code. A row whose option offers only what its
+    listing accepts (:attr:`DeclaredDirectory.offered_by_listing` — LRPS2's
+    and PCEE2's both) is read through the frontend first, because RetroArch
+    hands such a core a stored value only where the core offered it, so for
+    those rows a separator, a climb and a directory at the name never reach
+    the composition and the stat above. Its value naming the listing
+    (:attr:`DeclaredDirectory.option_lists`, PCEE2's ``auto``) is read as
+    unset. A name a listing could not produce — one carrying a separator, or
+    a hidden one — is not offered and is never composed; nor is a name a
+    directory is at, nor one whose file is of a size the row's filter drops
+    (a stat, settled without ``verify``), nor, under ``verify``, one whose
+    file fails the row's content read. Each of those is stated as
+    :data:`CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED`, and the folder's own
+    listing answers, which is what the launch reads instead. A file whose
+    header read did not come back stays the requirement with that read
+    failure stated beside it, and without ``verify`` the named file stays the
+    requirement unchecked.
     """
     row = declared_directory_of(core.stem, declaration.path)
     if row is None or row.option_key is None or found != KIND_DIRECTORY:
@@ -5228,7 +5493,11 @@ def _configured_image(
     # the read returned, because a line the parser refused is one of the
     # reasons a value comes back unset.
     chain: tuple[Caveat, ...] = () if context.core_options is None else context.core_options.caveats
-    if not name:
+    if not name or name == row.option_lists:
+        return _ConfiguredImage(core_caveats=tuple(caveats), answer_caveats=chain)
+    if row.offered_by_listing and not _a_listing_could_name(name):
+        why = "that is not a bare, unhidden file name, which is all a listing of the folder produces"
+        caveats.append(_configured_image_not_offered(core, row, key, name, directory=path, why=why))
         return _ConfiguredImage(core_caveats=tuple(caveats), answer_caveats=chain)
     composed = qt_ini.path_combine(path, name)
     destination = _destination_of(machine, root, composed, declared_kind=DECLARED_FILE)
@@ -5237,6 +5506,10 @@ def _configured_image(
         caveats.append(_configured_refusal(core, key, refusal, name, root=root))
         return _ConfiguredImage(core_caveats=tuple(caveats), answer_caveats=chain)
     named = destination.path
+    offered = _OFFERED if not row.offered_by_listing else _offered(machine, row, named, verify=verify)
+    if offered.why is not None:
+        caveats.append(_configured_image_not_offered(core, row, key, name, directory=path, why=offered.why))
+        return _ConfiguredImage(core_caveats=tuple(caveats), answer_caveats=chain)
     if destination.link is not None:
         caveats.append(
             Caveat(
@@ -5255,7 +5528,7 @@ def _configured_image(
         caveats.append(_configured_image_missing(core, key, name, directory=path))
         return _ConfiguredImage(core_caveats=tuple(caveats), answer_caveats=chain)
     caveats.append(
-        _configured_image_caveat(core, key, name, directory=path, options_file=options_file)
+        _configured_image_caveat(core, row, key, name, directory=path, options_file=options_file)
     )
     requirement, observed = _configured_requirement(
         machine,
@@ -5270,7 +5543,84 @@ def _configured_image(
         file_name=os.path.basename(composed),
         verify=verify,
     )
-    return _ConfiguredImage(requirement, tuple(caveats), (*chain, *observed))
+    return _ConfiguredImage(requirement, tuple(caveats), (*chain, *offered.unread, *observed))
+
+
+def _a_listing_could_name(name: str) -> bool:
+    """Could a listing of the folder produce *name*? Only a bare file name, and never a hidden one.
+
+    Both cores offer ``GetFileName`` of each file their listing returns, and
+    neither listing passes ``FILESYSTEM_FIND_HIDDEN_FILES``, so ``FindFiles``
+    skips every name starting with ``.``. PCEE2: pcee2-libretro/Libretro.cpp:677
+    and :670-671 at 340ce04, with the skip at common/FileSystem.cpp:2319-2325
+    and the libretro VFS walk at common/FileSystemVFS.cpp:675-682. LRPS2:
+    libretro/main.cpp:1819 and :1807 at 14d19f8, with the skip at
+    common/FileSystem.cpp:855-862. ``.`` and ``..`` are among those names.
+    """
+    return "/" not in name and not name.startswith(".")
+
+
+@dataclass(frozen=True, slots=True)
+class _Offered:
+    """Whether a configured name is one the core offers: why not, where it is not, and a header read that failed.
+
+    ``why`` is ``None`` where the name is offered or where nothing settles that
+    it is not — a missing file and a path that could not be looked at are
+    answered by the configured route's own statements, and a header read that
+    did not come back leaves the name standing beside ``unread``, which states
+    the failure.
+    """
+
+    why: str | None = None
+    unread: tuple[Caveat, ...] = ()
+
+
+_OFFERED = _Offered()
+
+
+def _offered(machine: Machine, row: DeclaredDirectory, named: str, *, verify: bool) -> _Offered:
+    """Would the core's listing offer the file at *named* as a value of its option?
+
+    The listing keeps files only, of those the ones of a size the row's filter
+    keeps, and of those the ones the row's content read accepts
+    (:attr:`DeclaredDirectory.offered_by_listing`). A directory at the name is
+    settled by the stat, and so is a size outside the filter — the core's own
+    first test, made before anything is read (libretro/main.cpp:1815 at
+    14d19f8). A size the stat did not give settles nothing, and the header
+    read decides alone. A plain file is settled by its header, which is read only under
+    ``verify``: without a content check the name stands, and ``satisfied``
+    beside it says nothing was established.
+    """
+    kind = machine.path_kind(named)
+    if kind == KIND_DIRECTORY:
+        return _Offered(why="a directory is at that name, and the core's listing offers files only")
+    if kind != KIND_FILE:
+        return _OFFERED
+    size = machine.file_size(named)
+    if size is not None and not row.accepts_size(size):
+        return _Offered(
+            why=f"the file at that name is {size} bytes, and the core's listing keeps only files of "
+            f"{row.min_size}-{row.max_size} bytes"
+        )
+    if not verify:
+        return _OFFERED
+    header = _content_read(machine, row, named)
+    if header.status == PS2_BIOS_NOT_A_BIOS:
+        return _Offered(why=f"the file at that name does not read as a PS2 BIOS by {row.own_check}")
+    if header.status != PS2_BIOS_OK:
+        return _Offered(unread=(_unread_header(named, row),))
+    return _OFFERED
+
+
+def _unread_header(path: str, row: DeclaredDirectory) -> Caveat:
+    """The header read a configured file is offered by did not come back — a read failure, never a verdict."""
+    return Caveat(
+        CAVEAT_FIRMWARE_UNREADABLE,
+        f"{path} is the file the configured name reaches, and the ROMDIR header read {row.listing_test} "
+        "makes before the core offers a name did not come back, so whether the core offers it is "
+        "unestablished — a read failure, not a verdict on the file",
+        {"path": path},
+    )
 
 
 def _requirements_for(
@@ -5745,7 +6095,12 @@ def _read_core(
     for_a_launch: bool = True,
     content: "_GameContent | None" = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
-    """One core whose ``.info`` was read: the answer for it, and what it observed.
+    """One core whose declaration was read: the answer for it, and what it observed.
+
+    The declaration is the core's ``.info``, or atlas's packaged one where the
+    ``.info`` is missing (:attr:`CoreDeclarations.packaged`) — resolved by the
+    same code either way, and told apart by ``declaration`` and the
+    :data:`CAVEAT_CORE_INFO_PACKAGED` statement leading the core's caveats.
 
     Both routes that reach a read declaration — the per-core/system one and the
     catalogue one — build it here, because they differ only in where the label
@@ -5771,6 +6126,7 @@ def _read_core(
     # that reaches back into the rows above: their ``need`` alone, every other
     # field still the declaration's.
     located = _located_firmware(machine, context, core, verify=verify, content=content)
+    packaged = _packaged_core_caveat(core)
     requirements = _spoken_for_by_the_route(requirements, located.spoken_for)
     refused = _spoken_for_by_the_route(refused, located.spoken_for)
     return (
@@ -5782,15 +6138,32 @@ def _read_core(
             # asked (per-core, per-system, inventory).
             emulator=core.core_so,
             declared_index=declared_index,
-            declaration=DECLARATION_READ,
+            declaration=DECLARATION_PACKAGED if core.packaged else DECLARATION_READ,
             requirements=requirements if located.entry is None else (*requirements, located.entry),
-            caveats=(*_core_caveats(core, core_caveats), *located.core_caveats),
+            caveats=(
+                *([] if packaged is None else [packaged]),
+                *_core_caveats(core, core_caveats),
+                *located.core_caveats,
+            ),
             refused=refused,
             unread=core.unread,
             unread_stating_a_path=core.unread_stating_a_path,
             claims=tuple(sorted({*claims, *located.claims})),
         ),
         [*observed, *located.answer_caveats],
+    )
+
+
+def _packaged_core_caveat(core: CoreDeclarations) -> Caveat | None:
+    """The provenance statement a core declared by atlas's packaged entry carries, and ``None`` for a read one."""
+    if not core.packaged:
+        return None
+    return Caveat(
+        CAVEAT_CORE_INFO_PACKAGED,
+        f"{core.core_so} is installed without its .info, and what it declares here is atlas's "
+        "packaged declaration in that file's place, read from the core's source at a pinned "
+        "revision — not a declaration read off this machine",
+        {"core_so": core.core_so},
     )
 
 
@@ -5809,7 +6182,7 @@ def _resolve_cores(
     folders: _FolderReads = {}
     for core in cores:
         label = None if labels is None else labels.get(core.core_so)
-        if core.info_status != READ_OK:
+        if not core.declared:
             resolved.append(_undeclarable_core(core, label))
             continue
         answer, observed = _read_core(
@@ -9769,9 +10142,14 @@ def _located_firmware(
     lists try, which :func:`_spoken_for_by_the_route` re-emits as ``optional``
     because the entry it adds is already their requirement. Every other field
     of every row is the declaration's, either way.
+
+    A third shape adds nothing here: a route pointing at a declared folder
+    (:class:`atlas.core_firmware.CoreFirmwareFolderRoute`) is answered by the
+    folder declaration itself, whose curated row names the option and the
+    content read (:func:`_configured_image`, :func:`_contents_of_a_listed_folder`).
     """
     card = lookup_core_firmware(core.core_so)
-    if card is None or card.name_route is None:
+    if card is None or card.name_route is None or isinstance(card.name_route, CoreFirmwareFolderRoute):
         return _LocatedFirmware()
     root = context.root
     assert root is not None  # callers resolve the empty-root answer before getting here
@@ -10211,7 +10589,7 @@ def _catalogue_entry_core(
             ),
             [],
         )
-    if core.info_status != READ_OK:
+    if not core.declared:
         return _undeclarable_core(core, entry.label, entry.declared_index), []
     return _read_core(
         machine,

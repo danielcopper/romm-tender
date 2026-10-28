@@ -142,12 +142,39 @@ disagreed inside some window would make every vector built on it prove nothing,
 and the window would be exactly one hop wide, which is where nobody looks.
 """
 
-# Digest algorithms the seam answers for. Closed on purpose: these are the two
-# libretro-database's System.dat carries, and a port must implement exactly
-# them (an open algorithm parameter would make conformance unprovable).
+# Digest algorithms the seam answers for. Closed on purpose: md5 and sha1 are
+# the two libretro-database's System.dat carries, and git-blob is git's object
+# id of a file's bytes (sha1 over ``blob <size>\0`` and the bytes), which pins a
+# file to what a git checkout holds — EmuDeck's launcher scripts and the
+# backend files they source (#573). A port must implement exactly them (an
+# open algorithm parameter would make conformance unprovable). git-blob has no
+# scoped form: a prefix of a file is no git object.
 DIGEST_MD5 = "md5"
 DIGEST_SHA1 = "sha1"
-DIGEST_ALGORITHMS = (DIGEST_MD5, DIGEST_SHA1)
+DIGEST_GIT_BLOB = "git-blob"
+DIGEST_ALGORITHMS = (DIGEST_MD5, DIGEST_SHA1, DIGEST_GIT_BLOB)
+
+
+class _Digest(Protocol):
+    """What the seam asks of a hash object: feed it bytes, read its hex digest."""
+
+    def update(self, data: bytes, /) -> None: ...
+
+    def hexdigest(self) -> str: ...
+
+
+def _new_digest(algorithm: str, size: int) -> _Digest:
+    """A hash object for *algorithm* over a file of *size* bytes — git-blob's header already fed."""
+    if algorithm == DIGEST_GIT_BLOB:
+        return hashlib.sha1(b"blob %d\0" % size, usedforsecurity=False)
+    return hashlib.new(algorithm)
+
+
+def _refused_digest(algorithm: str, first_bytes: int | None) -> bool:
+    """Whether ``file_digest`` refuses the request outright: an unknown algorithm, a scope below 1, a scoped git-blob."""
+    if algorithm not in DIGEST_ALGORITHMS:
+        return True
+    return first_bytes is not None and (first_bytes < 1 or algorithm == DIGEST_GIT_BLOB)
 
 _DIGEST_CHUNK_BYTES = 1 << 20
 
@@ -1152,7 +1179,8 @@ class Machine(Protocol):
     answers what the whole file answers, because the read yields the same
     bytes. A scope below 1 is refused the way an unknown algorithm is
     (``None``): zero bytes is the digest of nothing, which no emulator's
-    recognition ever asks for.
+    recognition ever asks for — and so is any scope on ``git-blob``, whose
+    object is the whole file.
     """
 
     def read_text(self, path: str) -> ReadResult: ...
@@ -1804,7 +1832,7 @@ class RealMachine:
         return FileStamp(st.st_mtime_ns, st.st_size, st.st_ino, st.st_dev)
 
     def file_digest(self, path: str, algorithm: str, *, first_bytes: int | None = None) -> str | None:
-        if algorithm not in DIGEST_ALGORITHMS or (first_bytes is not None and first_bytes < 1):
+        if _refused_digest(algorithm, first_bytes):
             return None
         # Regular files only, checked BEFORE opening: reading a FIFO or a
         # character device blocks forever, and this runs inside a library entry
@@ -1816,7 +1844,7 @@ class RealMachine:
             return None
         if not _stat.S_ISREG(st.st_mode):
             return None
-        digest = hashlib.new(algorithm)
+        digest = _new_digest(algorithm, st.st_size)
         # What is left of the scope, so the loop stops reading once the
         # emulator's own read would have: a scoped digest over a 4 MiB image
         # must not pay for the 3.5 MiB nobody hashes.
@@ -2232,7 +2260,7 @@ def scoped_digest_key(key: str) -> tuple[str, int] | None:
     still states exactly what it stated.
     """
     algorithm, separator, scope = key.partition(":")
-    if not separator or algorithm not in DIGEST_ALGORITHMS or not scope.isdigit() or int(scope) < 1:
+    if not separator or _refused_digest(algorithm, 1) or not scope.isdigit() or int(scope) < 1:
         return None
     return algorithm, int(scope)
 
@@ -3485,7 +3513,7 @@ class FixtureMachine:
         return len(text.encode("utf-8")) if text is not None else None
 
     def file_digest(self, path: str, algorithm: str, *, first_bytes: int | None = None) -> str | None:
-        if algorithm not in DIGEST_ALGORITHMS or (first_bytes is not None and first_bytes < 1):
+        if _refused_digest(algorithm, first_bytes):
             return None
         if self._is_inaccessible(path):
             return None
@@ -3503,7 +3531,11 @@ class FixtureMachine:
         text = self._files.get(resolved, (READ_MISSING, None))[1]
         if text is not None:
             data = text.encode("utf-8")
-            return hashlib.new(algorithm, data if first_bytes is None else data[:first_bytes]).hexdigest()
+            if first_bytes is not None:
+                data = data[:first_bytes]
+            digest = _new_digest(algorithm, len(data))
+            digest.update(data)
+            return digest.hexdigest()
         if first_bytes is not None:
             scoped = blob.get(f"{algorithm}:{first_bytes}")
             if isinstance(scoped, str):

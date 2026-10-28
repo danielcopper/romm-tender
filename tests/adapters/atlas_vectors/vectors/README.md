@@ -68,12 +68,14 @@ walk it could read, and a fixture could state a directory that exists and cannot
 - **`{"status": "unreadable" | "invalid-text"}`**, optionally with `"size"` — a file that exists and yields that read
   outcome. The `size` belongs with it because the two come from different reads on a real machine: a chmod-000 file
   `stat`s fine and only its bytes fail.
-- **`{"md5": …, "sha1": …, "size": …}`** — a binary blob: it exists, reads as `invalid-text`, and answers those values
-  for `file_digest` / `file_size`. Any subset of the three, plus a **scoped** digest under `"<algorithm>:<bytes>"`
-  (`"md5:524288"`): the digest of the file's first N bytes, which an emulator that hashes a fixed-length prefix asks for
-  and which is a different fact from the file's own digest. It is needed only where the file is longer than the scope —
-  inside it the read yields the whole file, so the bare algorithm answers both, and a scope at least the stated `size`
-  is refused as one fact written twice. The scope is decimal, at least 1, with no leading zero.
+- **`{"md5": …, "sha1": …, "git-blob": …, "size": …}`** — a binary blob: it exists, reads as `invalid-text`, and answers
+  those values for `file_digest` / `file_size` (`git-blob` is git's object id of the file, which pins EmuDeck's launcher
+  scripts and the files they source or execute). Any subset of the four, plus a **scoped** md5 or sha1 digest under
+  `"<algorithm>:<bytes>"` (`"md5:524288"`): the digest of the file's first N bytes, which an emulator that hashes a
+  fixed-length prefix asks for and which is a different fact from the file's own digest. It is needed only where the
+  file is longer than the scope — inside it the read yields the whole file, so the bare algorithm answers both, and a
+  scope at least the stated `size` is refused as one fact written twice. The scope is decimal, at least 1, with no
+  leading zero.
 
 **`dirs`** — directories that exist with nothing in them. Parents of every path named anywhere are directories already;
 this list is how an _empty_ one is stated. A configured save root must be a directory: list it here, or put a file in
@@ -246,9 +248,16 @@ question's subject — the patch files are named after it — so a vector asking
 `launch_command_query` carries `system` and an absolute `content_path`, as the question requires, and may name the
 catalogue entry by its `label`; without one the frontend's own choice answers.
 
+`rom_location_query` carries `system` and no path: content plays no part in where a system's ROMs live.
+
 `rom_locations_query` asks every system the `systems` answer lists at once and, like `systems_query`, carries nothing
 but an optional `installation`: each entry of its answer is the `rom_location` answer for that system, and the answer's
 own `caveats` are the `systems` answer's.
+
+`firmware_query` names its `kind`: `core` asks about the core `core_so` names, `system` about the system `system` names,
+and `inventory` about every installed emulator's firmware and the files no emulator claims, naming neither. It may carry
+`verify`, a boolean that is `false` when absent: with it the bytes of each file a packaged table covers are compared
+with that table, and the answer's `hash_checked` says whether that comparison ran.
 
 `firmware_query` may carry an absolute `content_path` with `kind` `core` or `system`: the game the launch is for, whose
 disc decides the region of a group the console region selects. An `inventory` query takes none, because it asks about no
@@ -257,8 +266,18 @@ launch.
 `launchable_query` carries `system` and `content_path`, both required — a verdict without a file has no extension to
 judge, and one without a system has no accept-list to judge it by — and takes no `label`.
 
-`screenshot_query` carries what `savefile_query` and `texture_query` carry, a non-empty subset of `content_path`,
-`core_so` and `installation`, and like `texture_query` it takes no `cwd`.
+`savefile_query`, `savestate_query`, `screenshot_query`, `texture_query`, `mod_query` and `soft_patch_query` carry a
+non-empty subset of `content_path` (the content the launch is for), `core_so` (the core's `.so` file name) and
+`installation`. The four entry families — `entry_savefile_query`, `entry_savestate_query`, `entry_texture_query` and
+`entry_mod_query` — ask the same placement of a catalogue entry instead of a core: they carry the `system` whose
+catalogue holds the entry and may carry its `label`, without which the first entry answers, plus `content_path` and
+`installation`; they take no `core_so`.
+
+`catalogue_query` carries `system` and may carry `content_path`: given one, a per-game emulator choice the frontend
+records for that file can decide which entry comes first.
+
+`identify_query` states the content by at least one of `md5` and `sha1` (non-empty strings) and `size` (an integer); a
+`size` alone names no identity and is answered with a caveat rather than refused.
 
 `platform_systems_query` carries `vocabulary` and `value`: the vocabulary is one of `igdb`, `libretro`, `screenscraper`
 and `thegamesdb`, a closed set, so any other is refused; the value is the id in that vocabulary as a string, and a
@@ -271,10 +290,22 @@ on it: `savefile_query`, `entry_savefile_query`, `savestate_query`, `entry_saves
 value that is not absolute, is refused: the first would state an input no answer reflects, the second is one the library
 refuses at the call.
 
+`appendconfig` — the files the launch appends to RetroArch's configuration, spelled as RetroArch's own `--appendconfig`
+value: one string, absolute paths joined by `|` — may ride the questions that take `cwd` but `firmware_query`:
+`savefile_query`, `entry_savefile_query`, `savestate_query`, `entry_savestate_query`, and an `aggregate_query` whose
+`question` is `savefile_location` or `savestate_location`. Another family carrying one is refused, and so is a value
+that names no path or a relative one.
+
 Every single-question family may name `installation` (a handle kind) to choose which detected installation answers;
 without it the first one does. `roots_query` must name it, as `retrodeck` or `emudeck`: no other arrangement answers
 that question, so it is always asked of one by name. `aggregate_query` may not — asking the aggregate to choose is the
 one thing it does not do — and names its `question` instead.
+
+`aggregate_query` asks one of four questions and carries what that question takes, nothing else: `savefile_location` and
+`savestate_location` may carry `content_path`, `core_so`, `cwd` and `appendconfig`; `texture_pack_location` may carry
+`content_path` and `core_so`; and `emulators_for`, the catalogue question, must carry `system` and may carry
+`content_path`. Each installation's answer has the shape that question's single answer has, so `emulators_for` answers
+as `catalogue` does.
 
 ## `expected` — the answers, canonically serialized
 

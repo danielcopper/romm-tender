@@ -1,8 +1,8 @@
 # emu-atlas recorded machines — vendored
 
 `vectors/` is [emu-atlas](https://github.com/danielcopper/emu-atlas)'s `vectors/` folder, copied verbatim from the
-release asset `emu-atlas-vectors-v0.28.0.tar.gz`
-(`sha256:38ae831202762b8111f88140dac226ef8e35ce7ddf3776ecf20fb92873cb6784`). It is the same release as the resolver
+release asset `emu-atlas-vectors-v0.29.0.tar.gz`
+(`sha256:7daa48de12940bd027859a167b074ab360045078c03a3cdf1bf90e4ede2f7da8`). It is the same release as the resolver
 vendored at `backend/_vendor/atlas/`, and upstream's release manifest, vendored verbatim as
 `backend/_vendor/atlas.SHA256SUMS`, lists that digest for that asset.
 

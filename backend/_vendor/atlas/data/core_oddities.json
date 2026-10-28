@@ -2677,6 +2677,132 @@
         }
       }
     },
+    "pcee2": {
+      "identifiers": {
+        "library_name": [
+          "PCEE2"
+        ]
+      },
+      "saves": {
+        "governing_rule": {
+          "options": [
+            "pcsx2_memcard_slot1_enable",
+            "pcsx2_memcard_slot2_enable"
+          ],
+          "listed_options": [
+            "pcsx2_memcard_slot1_file",
+            "pcsx2_memcard_slot2_file"
+          ]
+        },
+        "modes": {
+          "both-slots": {
+            "root": "system_directory",
+            "groups": [
+              {
+                "subdir": "pcsx2/memcards",
+                "files": [
+                  "<memory_card_file>"
+                ],
+                "granularity": "shared-card",
+                "role": "memory-card"
+              }
+            ]
+          },
+          "slot-1": {
+            "root": "system_directory",
+            "groups": [
+              {
+                "subdir": "pcsx2/memcards",
+                "files": [
+                  "<memory_card_file>"
+                ],
+                "granularity": "shared-card",
+                "role": "memory-card"
+              }
+            ]
+          },
+          "slot-2": {
+            "root": "system_directory",
+            "groups": [
+              {
+                "subdir": "pcsx2/memcards",
+                "files": [
+                  "<memory_card_file>"
+                ],
+                "granularity": "shared-card",
+                "role": "memory-card"
+              }
+            ]
+          },
+          "folder-unlisted": {
+            "root": "system_directory",
+            "groups": [
+              {
+                "subdir": "pcsx2/memcards",
+                "granularity": "shared-card",
+                "role": "memory-card",
+                "unnamed": "Which file a switched-on slot opens follows from this folder's own listing: the core offers the .ps2 files the folder lists as each slot's values, and moves a slot's default to the first of them where its own name is not among them (pcee2-libretro/Libretro.cpp:683-702, :741-762 at 340ce04). Where the folder cannot be listed no card name follows from anything atlas reads. The cards are in this folder all the same: every card the core opens is a name joined onto it (pcsx2/Pcsx2Config.cpp:2110-2113, the folder at :2337)."
+              }
+            ]
+          },
+          "standalone-ini": {
+            "root": "system_directory",
+            "groups": [
+              {
+                "subdir": "pcsx2/memcards",
+                "granularity": "shared-card",
+                "role": "memory-card",
+                "unnamed": "A standalone PCSX2.ini stands under <system>/pcsx2/inis, or may stand there where atlas cannot tell, and the core adopts its [MemoryCards] section before it reads its own options (pcee2-libretro/Libretro.cpp:562-596, ReadCoreOptions after it at :2093, both at 340ce04): with no card in the folder its slot file names name the cards the core creates, and its multitap entries add cards beside them. atlas does not read those names, so the folder is stated and the names are not."
+              }
+            ]
+          },
+          "no-slot": {
+            "root": "system_directory",
+            "writes_discarded": "with pcsx2_memcard_slot1_enable and pcsx2_memcard_slot2_enable both off, the core switches both slots off (pcee2-libretro/Libretro.cpp:1057-1060 at 340ce04) and Open skips every slot that is off (pcsx2/SIO/Memcard/MemoryCardFile.cpp:281-285), while the multitap slots stay off unless a standalone PCSX2.ini switches them on (pcsx2/Pcsx2Config.cpp:1984): no memory card is opened or created, so a game has nowhere to save"
+          }
+        },
+        "sizes": {
+          "<memory_card_file>": {
+            "fixed": true,
+            "citation": "[V] pcsx2/SIO/Memcard/MemoryCardFile.cpp:287-295, :379-398, :312, :326 and :440-491 at pcee2-libretro 340ce04 — a card that is missing or empty is created at 8 MiB of 0xFF, the card is opened r+b with its size taken from the file, and every save writes in place at the addressed offset, so a card keeps the size it was created at."
+          }
+        },
+        "anchors": {
+          "pcsx2_memcard_slot1_enable": {
+            "literal": "pcsx2_memcard_slot1_enable"
+          },
+          "pcsx2_memcard_slot2_enable": {
+            "literal": "pcsx2_memcard_slot2_enable"
+          },
+          "pcsx2_memcard_slot1_file": {
+            "literal": "pcsx2_memcard_slot1_file"
+          },
+          "pcsx2_memcard_slot2_file": {
+            "literal": "pcsx2_memcard_slot2_file"
+          },
+          "pcsx2": {
+            "unprotected": "composed in code: InitializeConfig and the card listing each join the system directory with pcsx2 (pcee2-libretro/Libretro.cpp:481-482, :691), and an unfiltered byte search of the deployed binary finds the name only inside longer strings, never as a whole NUL-delimited literal"
+          },
+          "memcards": {
+            "unprotected": "composed in code: the card listing joins it on (pcee2-libretro/Libretro.cpp:691) and PCSX2 sets it as the folder's default (pcsx2/Pcsx2Config.cpp:2311, :2337), and an unfiltered byte search of the deployed binary finds the name only inside longer strings, never as a whole NUL-delimited literal"
+          },
+          "<memory_card_file>": {
+            "unprotected": "not one name: the folder's listing or a stored option supplies it at run time. The two names the core falls back to, Mcd001.ps2 and Mcd002.ps2, and the Mcd%03u.ps2 format PCSX2 builds them with are whole literals in the shipped binary"
+          }
+        }
+      },
+      "provenance": {
+        "source": "pcee2-libretro (github.com/WizzardSK/pcee2-libretro, branch libretro) at 340ce04, the commit the deployed build carries as its own GIT_HASH (atlas/data/core_declarations.json, pcee2's build block); the RetroArch steps at libretro/RetroArch@a79435a. The core asks RetroArch for no save directory and answers no save memory (retro_get_memory_size gives RETRO_MEMORY_SYSTEM_RAM alone, pcee2-libretro/Libretro.cpp:2963-2968), so RetroArch writes no .srm and the memory cards are the whole save; savestates go through retro_serialize and are RetroArch's own files.\n\nThe folder. InitializeConfig sets PCSX2's DataRoot to the system directory joined with pcsx2 (Libretro.cpp:481-487) and EmuFolders::LoadConfig resolves the card folder below it under its default name memcards (pcsx2/Pcsx2Config.cpp:2311, :2337); a standalone ini's Folders section is not adopted (Libretro.cpp:572-582), so nothing moves it. A card's path is its name joined onto that folder (Pcsx2Config.cpp:2110-2113). On RetroDECK that path is a link the arrangement made into its saves tree (retroarch/component_prepare.sh:97, in the Flatpak's components tree), the link LRPS2's card folder is too, because LRPS2 composes the same <system>/pcsx2/memcards itself.\n\nThe cards. Two slots, each switched by its own option: pcsx2_memcard_slot1_enable and pcsx2_memcard_slot2_enable, registered enabled/disabled with default enabled (pcee2-libretro/libretro_core_options.h:232-237), a slot on exactly where its value is \"enabled\" (Libretro.cpp:1057-1060). Which file a slot opens is pcsx2_memcard_slot1_file / pcsx2_memcard_slot2_file, and their values are not fixed: RegisterCoreOptions, called from retro_set_environment (:1418), lists the folder's files, keeps the names ending in .ps2, sorts them and keeps each once (:683-702), and offers at most 127 of them as each selector's values (:741-752). A slot's declared default, Mcd001.ps2 or Mcd002.ps2 (libretro_core_options.h:238-243), moves to the first offered card where it is not among them (:754-762). RetroArch hands a stored value on only where it is one of the offered values and the default otherwise (core_option_manager.c:1031-1053, the match at :1037-1053). Where the folder holds no .ps2 card the core registers neither selector (a null key ends the definitions at :716-725), sets no file name at startup (:1065), and PCSX2's own names stand, Mcd001.ps2 and Mcd002.ps2 (Pcsx2Config.cpp:1985, FileMcd_GetDefaultName at pcsx2/SIO/Memcard/MemoryCardFile.cpp:244-249), which Open creates (:287-295). Two slots can open one file — a folder holding one card gives it to both — and the answer states it once. Every card is shared-card: a card a game's own options picked is a file of the same folder any other game can pick too. The probe hands the core no system directory, so it registers no selector there; that is why the two file options are listed_options, read through every option layer like the switches but never confirmed against the probe's registration.\n\nWhat stops the names. A standalone <system>/pcsx2/inis/PCSX2.ini is adopted before the options are read (Libretro.cpp:562-596, then :2093): its [MemoryCards] slot names stand where the folder holds no card, and its multitap entries add cards (Pcsx2Config.cpp:2091-2098, kept to an enabled multitap port at MemoryCardFile.cpp:271-277). Where that file is present, unreadable or of unknown presence, the mode names the folder without file names (#664 D9). A folder atlas cannot list names no card either (#664 D8).",
+        "status": {
+          "both-slots": "[D] Read from source at 340ce04, the commit the deployed binary carries; the switch and selector keys and the default names are whole literals in the shipped binary. Not live-observed: no PS2 card written by this core exists on the machine the audit ran on.",
+          "slot-1": "[D] Read from source at 340ce04, the commit the deployed binary carries; the switch and selector keys and the default names are whole literals in the shipped binary. Not live-observed: no PS2 card written by this core exists on the machine the audit ran on.",
+          "slot-2": "[D] Read from source at 340ce04, the commit the deployed binary carries; the switch and selector keys and the default names are whole literals in the shipped binary. Not live-observed: no PS2 card written by this core exists on the machine the audit ran on.",
+          "folder-unlisted": "[D] Read from source at 340ce04. The names stay unstated because the listing they follow from was not read.",
+          "standalone-ini": "[D] Read from source at 340ce04. The names stay unstated because the ini that sets them is not read (#664 D9).",
+          "no-slot": "[D] Read from source at 340ce04. Not live-observed."
+        }
+      }
+    },
     "pcsx2": {
       "identifiers": {
         "library_name": [
@@ -2763,7 +2889,7 @@
         ]
       },
       "provenance": {
-        "source": "libretro/ps2 source: option def libretro_core_options.h:158-170; per-content branch main.cpp:2154-2166 sets Folders/MemoryCards to RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY and Pcsx2Config.cpp:995-997 names slot 1 '<rom_stem>.ps2'. Shared mode roots at PCSX2's default memcards folder — under RetroDECK that is <system_directory>/pcsx2/memcards, and that path is the arrangement's own work, not the core's: retroarch/component_prepare.sh:97 (in the Flatpak's components tree) runs dir_prep for it against <saves>/ps2/retroarch-core/LRPS2/memcards. What stands there is therefore whatever the arrangement last prepared — observed on 2026-08-12 as exactly that symlink, empty; a plain directory at the same path is the same answer for placement, since the core is handed the path either way. NOTE: an older LRPS2 generation used pcsx2_memcard_slot_1/2 keys (observed in a live retroarch-core-options.cfg) — this card matches the core shipped in RetroDECK 0.10.9b. LRPS2 registers its options later than retro_set_environment, so a probe of the shipped binary captures none of them and cannot confirm the default the way it can for other cards; governing_option.default is the recorded fallback for an options file that has no entry.",
+        "source": "libretro/ps2 source: option def libretro_core_options.h:158-170; per-content branch main.cpp:1998-2010 sets Folders/MemoryCards to RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY and Pcsx2Config.cpp:962 names slot 1 '<rom_stem>.ps2' (the per-content block at :959-964). Shared mode roots at PCSX2's default memcards folder — under RetroDECK that is <system_directory>/pcsx2/memcards, and that path is the arrangement's own work, not the core's: retroarch/component_prepare.sh:97 (in the Flatpak's components tree) runs dir_prep for it against <saves>/ps2/retroarch-core/LRPS2/memcards. What stands there is therefore whatever the arrangement last prepared — observed on 2026-08-12 as exactly that symlink, empty; a plain directory at the same path is the same answer for placement, since the core is handed the path either way. NOTE: an older LRPS2 generation used pcsx2_memcard_slot_1/2 keys (observed in a live retroarch-core-options.cfg) — this card matches the core shipped in RetroDECK 0.10.9b. LRPS2 registers its options later than retro_set_environment, so a probe of the shipped binary captures none of them and cannot confirm the default the way it can for other cards; governing_option.default is the recorded fallback for an options file that has no entry.",
         "status": {
           "enabled": "root verified via RetroDECK arrangement; filenames from format strings + PCSX2 defaults, not yet live-observed",
           "disabled": "root and slot-1 filename verified from source; slot-2 behaviour in this mode unestablished"

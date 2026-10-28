@@ -98,6 +98,15 @@ class CoreFirmwareBuild:
 
     revision: str
     citation: str
+    stamp: str | None = None
+    """The string constant the deployed binary carries for the revision, where its version string carries none.
+
+    PCEE2 reports the upstream PCSX2 release as its version, the same across
+    several of its own commits, and carries its commit hash as a constant of
+    its own, so the tripwire holds the entry against that constant — searched
+    for as raw bytes with a NUL on each side — instead of against the version.
+    ``None`` where the version string names the revision.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +226,25 @@ class CoreFirmwareSpellingRoute:
 
 
 @dataclass(frozen=True, slots=True)
+class CoreFirmwareFolderRoute:
+    """Both doors of a core whose one option names a file inside a folder it declares.
+
+    The third shape a ``name_route`` takes, and the one where nothing is
+    stated here but the folder: the core's option names one file inside the
+    declared folder, and the folder's own listing — the core's content read
+    over every file in it — is the second door. Both are read off the
+    folder's curated row (:data:`atlas.firmware.FIRMWARE_DECLARED_DIRECTORY`),
+    which names the option, the value that asks for the listing, the size
+    filter and the content read, so this shape points at that row rather than
+    stating any of it a second time, and states no ``content_route``: the
+    content door is a read the core makes, not a table it looks bytes up in.
+    """
+
+    declared_directory: str
+    citation: str
+
+
+@dataclass(frozen=True, slots=True)
 class CoreFirmwareContentRoute:
     """The second door: the table the search recognises a directory's files by.
 
@@ -250,14 +278,17 @@ class CoreFirmwareCard:
     locating: CoreFirmwareLocatingFact
     build: CoreFirmwareBuild
     provenance: str
-    name_route: CoreFirmwareNameRoute | CoreFirmwareSpellingRoute | None = None
-    """How the core decides the name it opens — one of two shapes, or nothing.
+    name_route: CoreFirmwareNameRoute | CoreFirmwareSpellingRoute | CoreFirmwareFolderRoute | None = None
+    """How the core decides the name it opens — one of three shapes, or nothing.
 
     :class:`CoreFirmwareNameRoute` is the first door of a
     ``by-name-then-content`` core: options name the image and a search follows
-    where it will not load. :class:`CoreFirmwareSpellingRoute` is the whole
-    door of a ``by-name`` core that tries several spellings of one image, which
-    no option names and no ``.info`` can state.
+    where it will not load. :class:`CoreFirmwareFolderRoute` is the other
+    ``by-name-then-content`` shape: one option names a file inside a declared
+    folder, and the folder's own listing is the content door.
+    :class:`CoreFirmwareSpellingRoute` is the whole door of a ``by-name`` core
+    that tries several spellings of one image, which no option names and no
+    ``.info`` can state.
 
     Which shape a word admits is fixed, and the two are told apart by a key
     rather than by guessing (:func:`_route_shape`): a
@@ -308,11 +339,19 @@ def _locating(key: str, entry: Any) -> CoreFirmwareLocatingFact:
 
 def _build(key: str, entry: Any) -> CoreFirmwareBuild:
     where = f"core firmware card {key!r}: build"
-    if not isinstance(entry, dict) or set(entry) != {"revision", "citation"}:
-        raise ValueError(f"{where}: expected exactly revision/citation, got {entry!r}")
+    if not isinstance(entry, dict) or set(entry) not in ({"revision", "citation"}, {"revision", "stamp", "citation"}):
+        raise ValueError(f"{where}: expected revision/citation and optionally stamp, got {entry!r}")
+    revision = _expect_str(entry["revision"], f"{where}.revision")
+    stamp = None if "stamp" not in entry else _expect_str(entry["stamp"], f"{where}.stamp")
+    if stamp is not None and not stamp.startswith(revision):
+        raise ValueError(
+            f"{where}: the stamp {stamp!r} does not begin with the revision {revision!r} — "
+            "the two spell one commit"
+        )
     return CoreFirmwareBuild(
-        revision=_expect_str(entry["revision"], f"{where}.revision"),
+        revision=revision,
         citation=_expect_str(entry["citation"], f"{where}.citation"),
+        stamp=stamp,
     )
 
 
@@ -501,22 +540,40 @@ def _spelling_route(key: str, entry: Any) -> CoreFirmwareSpellingRoute:
 
 # The key each ``name_route`` shape is recognised by. A shape is never guessed
 # at from what parses: an entry states the key of the shape it means, and one
-# that states both or neither is refused rather than read as the other one.
+# that states several or none is refused rather than read as another one.
 _TWO_DOOR_ROUTE_KEY = "region_option"
 _SPELLING_ROUTE_KEY = "override_option"
+_FOLDER_ROUTE_KEY = "declared_directory"
+_ROUTE_KEYS = (_TWO_DOOR_ROUTE_KEY, _SPELLING_ROUTE_KEY, _FOLDER_ROUTE_KEY)
 
 
 def _route_shape(where: str, entry: Any) -> str:
-    """Which of the two ``name_route`` shapes an entry states, by the key that says so."""
+    """Which of the three ``name_route`` shapes an entry states, by the key that says so."""
     if not isinstance(entry, dict):
         raise ValueError(f"{where}: expected a name_route object, got {entry!r}")
-    shapes = sorted({key for key in (_TWO_DOOR_ROUTE_KEY, _SPELLING_ROUTE_KEY) if key in entry})
+    shapes = sorted({key for key in _ROUTE_KEYS if key in entry})
     if len(shapes) != 1:
         raise ValueError(
-            f"{where}: a name_route states exactly one of {_TWO_DOOR_ROUTE_KEY!r} and "
-            f"{_SPELLING_ROUTE_KEY!r}, and this one states {shapes}"
+            f"{where}: a name_route states exactly one of {', '.join(map(repr, _ROUTE_KEYS))}, "
+            f"and this one states {shapes}"
         )
     return shapes[0]
+
+
+def _folder_route(key: str, entry: Any) -> CoreFirmwareFolderRoute:
+    where = f"core firmware card {key!r}: name_route"
+    if not isinstance(entry, dict) or set(entry) != {_FOLDER_ROUTE_KEY, "citation"}:
+        raise ValueError(f"{where}: expected exactly {_FOLDER_ROUTE_KEY}/citation, got {entry!r}")
+    declared = _expect_str(entry[_FOLDER_ROUTE_KEY], f"{where}.{_FOLDER_ROUTE_KEY}")
+    if declared.startswith("/") or declared.endswith("/"):
+        raise ValueError(
+            f"{where}.{_FOLDER_ROUTE_KEY} is {declared!r}, and it names a declared folder the way "
+            "the declaration spells it — relative, with no trailing separator"
+        )
+    return CoreFirmwareFolderRoute(
+        declared_directory=declared,
+        citation=_expect_str(entry["citation"], f"{where}.citation"),
+    )
 
 
 def _content_route(key: str, entry: Any) -> CoreFirmwareContentRoute:
@@ -547,7 +604,10 @@ def _content_route(key: str, entry: Any) -> CoreFirmwareContentRoute:
 
 def _routes(
     key: str, mode: FirmwareLocating, entry: dict[str, Any]
-) -> tuple[CoreFirmwareNameRoute | CoreFirmwareSpellingRoute | None, CoreFirmwareContentRoute | None]:
+) -> tuple[
+    CoreFirmwareNameRoute | CoreFirmwareSpellingRoute | CoreFirmwareFolderRoute | None,
+    CoreFirmwareContentRoute | None,
+]:
     """The route blocks, required and refused by the word the entry states.
 
     ``by-name-then-content`` is a claim about two doors, and an entry stating
@@ -563,9 +623,22 @@ def _routes(
     the word still says there is no second door. A ``by-name`` entry with no
     route is the ordinary case and stays legal: the core opens the names it
     was declared with.
+
+    The folder shape (:class:`CoreFirmwareFolderRoute`) is the one
+    ``by-name-then-content`` route that states no ``content_route``, and must
+    not: its content door is the declared folder's own listing, read the way
+    the core reads it off the folder's curated row, and a table beside it
+    would describe a lookup the core never makes.
     """
     where = f"core firmware card {key!r}"
     stated = {block for block in ("name_route", "content_route") if block in entry}
+    if mode == LOCATING_BY_NAME_THEN_CONTENT and _route_shape_or_none(entry) == _FOLDER_ROUTE_KEY:
+        if stated != {"name_route"}:
+            raise ValueError(
+                f"{where}: the {_FOLDER_ROUTE_KEY!r} route's content door is the folder's own listing, "
+                f"and this entry states {sorted(stated)} — name_route alone is what the shape claims"
+            )
+        return _folder_route(key, entry["name_route"]), None
     if mode == LOCATING_BY_NAME_THEN_CONTENT:
         if stated != {"name_route", "content_route"}:
             raise ValueError(
@@ -590,6 +663,19 @@ def _routes(
             "the shape of a core whose options name the image and whose search follows"
         )
     return _spelling_route(key, entry["name_route"]), None
+
+
+def _route_shape_or_none(entry: dict[str, Any]) -> str | None:
+    """The shape key of an entry's ``name_route`` where it states exactly one, ``None`` otherwise.
+
+    A look ahead, never a verdict: an entry stating several keys or none is
+    refused by :func:`_route_shape` on the path that reads it.
+    """
+    route = entry.get("name_route")
+    if not isinstance(route, dict):
+        return None
+    shapes = [key for key in _ROUTE_KEYS if key in route]
+    return shapes[0] if len(shapes) == 1 else None
 
 
 def _card(key: str, entry: Any) -> CoreFirmwareCard:

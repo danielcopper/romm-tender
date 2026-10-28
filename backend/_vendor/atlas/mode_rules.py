@@ -44,6 +44,7 @@ from .placement import (
     CAVEAT_EMULATOR_CONFIG_MISSING,
     CAVEAT_SAVE_ROOT_REDIRECTED,
     CAVEAT_SAVE_ROOT_UNRESOLVABLE,
+    CAVEAT_UNKNOWN_OPTION_VALUE,
     REASON_ARCHIVE_CONTENT_AMBIGUOUS,
     REASON_ARCHIVE_CONTENT_MIXED,
     REASON_ARCHIVE_CONTENT_UNRECOGNISED,
@@ -65,6 +66,7 @@ from .placement import (
     REASON_WHDLOAD_PREFS_UNREAD,
     REASON_WHDLOAD_SAVEPATH_UNRECORDED,
     TEMPLATE_ARCHIVE_MEMBER_STEM,
+    TEMPLATE_MEMORY_CARD_FILE,
     TEMPLATE_WHDLOAD_NAME,
     Caveat,
     DataValue,
@@ -113,7 +115,9 @@ class RuleReading:
     ``system_entries`` and ``home_entries`` list the names in a directory
     under the same two roots — ``()`` when the directory is not there, which
     is a truthful negative, and ``None`` when it exists and could not be
-    listed, or the root itself is out of reach. ``save_dirs`` is every
+    listed, or the root itself is out of reach. ``system_files`` lists the
+    same way and keeps only the regular files, for a core whose own listing
+    asks for files alone (PCEE2's card folder). ``save_dirs`` is every
     spelling the frontend's save root can have reached the core under (the
     configured root, and the sorted directory RetroArch redirects to), for a
     rule that must compare a configured path against it, and ``is_directory``
@@ -152,6 +156,7 @@ class RuleReading:
     home_file: Callable[[str], FileLookup]
     system_entries: Callable[[str], "tuple[str, ...] | None"]
     home_entries: Callable[[str], "tuple[str, ...] | None"]
+    system_files: Callable[[str], "tuple[str, ...] | None"]
     save_dirs: tuple[str, ...]
     is_directory: Callable[[str], bool | None]
     content_path: str | None
@@ -164,6 +169,8 @@ class RuleReading:
 # What a rule fills no template with — the state of every mode whose names
 # follow from the card alone.
 _NO_FILLS: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+# What a rule hands on for no listed option — the state of every card without one.
+_NO_HANDED: Mapping[str, str] = MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +197,13 @@ class ModeChoice:
     ``reads_cwd`` says the decision rests on ``RuleReading.cwd``: a place it
     states was joined to the working directory, so the answer carries what
     the resolver established about that directory (#660).
+
+    ``handed`` is the value RetroArch hands the core for a listed option the
+    rule consulted (:attr:`~atlas.oddities.CoreCard.listed_options`), keyed by
+    the option: which values the core offers follows from a listing only the
+    rule reads, so only the rule can say whether a stored value is kept or
+    the core's default stands. The resolver states it as that option's
+    reading in place of the stored value.
     """
 
     mode: str | None
@@ -198,6 +212,7 @@ class ModeChoice:
     readings: tuple[OptionReading, ...] = ()
     fills: Mapping[str, tuple[str, ...]] = _NO_FILLS
     reads_cwd: bool = False
+    handed: Mapping[str, str] = _NO_HANDED
 
 
 def _value_unestablished(core: str, option_key: str) -> Caveat:
@@ -2441,6 +2456,143 @@ def _opera(reading: RuleReading) -> ModeChoice:
     )
 
 
+# ---------------------------------------------------------------------------
+# pcee2 — two memory-card slots, each switched on or off by its own option and
+# each opening one file of <system>/pcsx2/memcards by name (pcee2-libretro at
+# 340ce04 throughout). The core offers as a slot's values the .ps2 files that
+# folder lists, sorted, once each and at most 127 (Libretro.cpp:683-702,
+# :741-752), and moves a slot's default to the first of them where its own
+# (Mcd001.ps2 / Mcd002.ps2, libretro_core_options.h:238-243) is not among
+# them (:754-762); RetroArch hands a stored name on only where it is offered,
+# the default otherwise (core_option_manager.c:1031-1053 at a79435a). With no
+# card in the folder it registers neither selector (:716-725) and PCSX2's own
+# names stand (:1065, Pcsx2Config.cpp:1985), which Open creates. A slot is on
+# exactly where its switch reads "enabled" (:1057-1060). Which mode holds is
+# the pair of switches; which files the cards are is the fill. Two reads stop
+# the names short of a fill, and the folder is still named without them: a
+# standalone PCSX2.ini under <system>/pcsx2/inis, whose [MemoryCards] section
+# the core adopts before it reads its options (:562-596, then :2093) — slot
+# names where the folder holds no card, and multitap cards on a port the
+# pcsx2_multitap option enables (#664 D9) — and a card folder atlas cannot list
+# (D8).
+# ---------------------------------------------------------------------------
+
+_PCEE2_SLOTS = (
+    ("pcsx2_memcard_slot1_enable", "pcsx2_memcard_slot1_file", "Mcd001.ps2"),
+    ("pcsx2_memcard_slot2_enable", "pcsx2_memcard_slot2_file", "Mcd002.ps2"),
+)
+_PCEE2_CARD_FOLDER = "pcsx2/memcards"
+_PCEE2_STANDALONE_INI = "pcsx2/inis/PCSX2.ini"
+_PCEE2_CARD_SUFFIX = ".ps2"
+# RETRO_NUM_CORE_OPTION_VALUES_MAX (128) less the terminator (Libretro.cpp:750).
+_PCEE2_OFFERED_MAX = 127
+_PCEE2_ENABLED = "enabled"
+_PCEE2_DISABLED = "disabled"
+_PCEE2_TOGGLES = (_PCEE2_ENABLED, _PCEE2_DISABLED)
+_PCEE2_STANDALONE_INI_MODE = "standalone-ini"
+_PCEE2_FOLDER_UNLISTED = "folder-unlisted"
+_PCEE2_NO_SLOT = "no-slot"
+_PCEE2_NO_FILL = (_PCEE2_STANDALONE_INI_MODE, _PCEE2_FOLDER_UNLISTED, _PCEE2_NO_SLOT)
+
+
+def _pcee2_mode(slot1: bool, slot2: bool, *, listed: bool, ini: bool) -> str:
+    """The mode a pair of switches selects, given the standalone ini and the folder's listing.
+
+    The ini comes first because the switches read here do not bound what it
+    adds: its multitap entries open cards whatever the two main slots say,
+    wherever ``pcsx2_multitap`` enables the port (MemoryCardFile.cpp:271-277;
+    Libretro.cpp:955-961, the ini's Pad section not adopted, :572-582). That
+    option is not read here, so with the ini present no reading rules a card
+    out, and the folder is named without names (#664 D9).
+    """
+    if ini:
+        return _PCEE2_STANDALONE_INI_MODE
+    if not (slot1 or slot2):
+        return _PCEE2_NO_SLOT
+    if not listed:
+        return _PCEE2_FOLDER_UNLISTED
+    if slot1 and slot2:
+        return "both-slots"
+    return "slot-1" if slot1 else "slot-2"
+
+
+def _pcee2_offered(names: tuple[str, ...]) -> tuple[str, ...]:
+    """The card names the core offers: its own filter, order and cap over the folder's files."""
+    offered = sorted({name for name in names if name.endswith(_PCEE2_CARD_SUFFIX)})
+    return tuple(offered[:_PCEE2_OFFERED_MAX])
+
+
+def _pcee2_card(
+    reading: RuleReading, file_key: str, default: str, offered: tuple[str, ...]
+) -> tuple[str, tuple[Caveat, ...]]:
+    """The card one switched-on slot opens, and the statement a passed-over name earns."""
+    if not offered:
+        # No selector is registered, so no stored value reaches the core and
+        # none is read: the slot opens PCSX2's own name for it.
+        return default, ()
+    if default not in offered:
+        default = offered[0]
+    stored = reading.option_values[file_key]
+    if not stored or stored in offered:
+        return stored or default, ()
+    return default, (
+        Caveat(
+            CAVEAT_UNKNOWN_OPTION_VALUE,
+            f'core option {file_key} = "{stored}" names no card the core offers — the folder '
+            f"holds no such .ps2 file, so RetroArch hands the core its default {default!r}",
+            {"core": "pcee2", "option_key": file_key, "value": stored},
+        ),
+    )
+
+
+def _pcee2(reading: RuleReading) -> ModeChoice:
+    switches = tuple(reading.option_values[enable] for enable, _, _ in _PCEE2_SLOTS)
+    pairs = tuple((enable, value) for (enable, _, _), value in zip(_PCEE2_SLOTS, switches))
+    missing = _require_values("pcee2", pairs)
+    if missing:
+        return ModeChoice(None, caveats=missing)
+    alien = _refuse_alien("pcee2", tuple((key, value, _PCEE2_TOGGLES) for key, value in pairs))
+    if alien:
+        return ModeChoice(None, caveats=alien)
+    slot1, slot2 = (value == _PCEE2_ENABLED for value in switches)
+    # An ini that cannot be read, or whose presence cannot be told, may be
+    # there all the same, so only an established absence lets the names stand.
+    ini = reading.system_file(_PCEE2_STANDALONE_INI).status != FILE_ABSENT
+    files = reading.system_files(_PCEE2_CARD_FOLDER)
+    listed = files is not None
+    mode = _pcee2_mode(slot1, slot2, listed=listed, ini=ini)
+    flips = (
+        (_pcee2_mode(not slot1, slot2, listed=listed, ini=ini), _PCEE2_SLOTS[0][0], not slot1),
+        (_pcee2_mode(slot1, not slot2, listed=listed, ini=ini), _PCEE2_SLOTS[1][0], not slot2),
+    )
+    alternatives = tuple(
+        (other, ((key, _PCEE2_ENABLED if on else _PCEE2_DISABLED),))
+        for other, key, on in flips
+        if other != mode
+    )
+    if files is None or mode in _PCEE2_NO_FILL:
+        return ModeChoice(mode, alternatives=alternatives)
+    offered = _pcee2_offered(files)
+    names: list[str] = []
+    caveats: list[Caveat] = []
+    handed: dict[str, str] = {}
+    for (_, file_key, default), on in zip(_PCEE2_SLOTS, (slot1, slot2)):
+        if not on:
+            continue
+        name, passed_over = _pcee2_card(reading, file_key, default, offered)
+        names.append(name)
+        caveats.extend(passed_over)
+        if offered:
+            handed[file_key] = name
+    return ModeChoice(
+        mode,
+        alternatives=alternatives,
+        caveats=tuple(caveats),
+        fills={TEMPLATE_MEMORY_CARD_FILE: tuple(dict.fromkeys(names))},
+        handed=handed,
+    )
+
+
 # The registry the card loader validates against: a card stating a
 # ``governing_rule`` must have its function here, and the test suite holds
 # the mirror claim — a rule with no card would be code describing nothing.
@@ -2456,4 +2608,5 @@ RULES: Mapping[str, Callable[[RuleReading], ModeChoice]] = {
     "puae": _puae_rule("puae"),
     "puae2021": _puae_rule("puae2021"),
     "opera": _opera,
+    "pcee2": _pcee2,
 }

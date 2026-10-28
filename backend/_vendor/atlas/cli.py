@@ -282,7 +282,7 @@ def build_parser() -> argparse.ArgumentParser:
     soft_patch.add_argument("--core", help="libretro core .so name, e.g. mgba_libretro.so")
 
     commands.add_parser(
-        "systems", parents=[common, selecting], help="what the frontend catalogue declares"
+        "systems", parents=[common, selecting], help="every system the installation lists"
     )
 
     roots = commands.add_parser(

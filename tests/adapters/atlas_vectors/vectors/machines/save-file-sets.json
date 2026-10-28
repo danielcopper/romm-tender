@@ -82,6 +82,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -177,6 +178,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -265,6 +267,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -354,6 +357,7 @@
             ]
           },
           "caveats": [],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -420,6 +424,7 @@
             "groups": []
           },
           "caveats": [],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -482,6 +487,7 @@
             "groups": []
           },
           "caveats": [],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -573,6 +579,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -654,6 +661,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -722,6 +730,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -807,6 +816,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -881,6 +891,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -957,6 +968,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -1076,6 +1088,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cartridge",
@@ -1167,6 +1180,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -1243,6 +1257,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -1320,6 +1335,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -1465,6 +1481,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "frontend-paths",
@@ -1574,6 +1591,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "disabled",
@@ -1685,6 +1703,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "disabled",
@@ -1796,6 +1815,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "disabled",
@@ -1916,6 +1936,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -1998,6 +2019,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -2110,6 +2132,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -2221,6 +2244,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -2322,6 +2346,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -2421,6 +2446,7 @@
             ]
           },
           "caveats": [],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": null,
@@ -2521,6 +2547,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -2634,6 +2661,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -2751,6 +2779,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -2944,6 +2973,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -3094,6 +3124,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "enabled",
@@ -3264,6 +3295,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "disabled",
@@ -3404,6 +3436,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "enabled",
@@ -3530,6 +3563,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -3618,6 +3652,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -3706,6 +3741,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -3781,6 +3817,7 @@
             ]
           },
           "caveats": [],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -3856,6 +3893,7 @@
             ]
           },
           "caveats": [],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -3969,6 +4007,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -4069,6 +4108,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",
@@ -4156,6 +4196,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-file",
             "mode": "always",
@@ -4283,6 +4324,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -4382,6 +4424,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-file",
             "mode": "always",
@@ -4481,6 +4524,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-file",
             "mode": "always",
@@ -4574,6 +4618,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -4660,6 +4705,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -4755,6 +4801,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -4847,6 +4894,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -4941,6 +4989,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -5038,6 +5087,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -5136,6 +5186,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -5235,6 +5286,7 @@
                   }
                 }
               ],
+              "redirects": null,
               "granularity": {
                 "value": "per-game-files",
                 "mode": "always",
@@ -5362,6 +5414,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-file",
             "mode": "cd-bios-bram+cart-4meg",
@@ -5600,6 +5653,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -5696,6 +5750,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "always",
@@ -5800,6 +5855,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "disabled",
@@ -5905,6 +5961,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "enabled",
@@ -6018,6 +6075,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "floppy-discarded",
@@ -6129,6 +6187,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -6219,6 +6278,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "floppy-writeback",
@@ -6318,6 +6378,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -6408,6 +6469,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "frontend-save-dir",
@@ -6514,6 +6576,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "frontend-save-dir",
@@ -6651,6 +6714,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "card1-per-code+card2-shared",
@@ -6834,6 +6898,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "card1-none+card2-none",
@@ -7012,6 +7077,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -7125,6 +7191,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -7246,6 +7313,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -7365,6 +7433,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -7476,6 +7545,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -7576,6 +7646,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -7688,6 +7759,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -7813,6 +7885,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -7928,6 +8001,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -8041,6 +8115,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -8135,6 +8210,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -8259,6 +8335,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cartridge",
@@ -8358,6 +8435,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -8455,6 +8533,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -8546,6 +8625,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -8621,6 +8701,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -8738,6 +8819,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -8873,6 +8955,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "floppy-writeback",
@@ -9050,6 +9133,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "floppy-format-discarded",
@@ -9228,6 +9312,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "floppy-discarded",
@@ -9424,6 +9509,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "floppy-redirected",
@@ -9606,6 +9692,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cd-per-game",
@@ -9781,6 +9868,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-file",
             "mode": "cd-shared",
@@ -9949,6 +10037,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "cd-no-nvram",
@@ -10113,6 +10202,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -10249,6 +10339,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -10382,6 +10473,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -10519,6 +10611,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -10660,6 +10753,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cd-per-game",
@@ -10828,6 +10922,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cd-per-game",
@@ -10991,6 +11086,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "floppy-discarded",
@@ -11187,6 +11283,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "floppy-redirected",
@@ -11365,6 +11462,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "cd-no-nvram",
@@ -11528,6 +11626,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "cd-no-nvram",
@@ -11704,6 +11803,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cd-per-game",
@@ -11871,6 +11971,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "floppy-writeback",
@@ -12053,6 +12154,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cd-per-game",
@@ -12246,6 +12348,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -12460,6 +12563,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -12673,6 +12777,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -12881,6 +12986,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files-unnamed",
@@ -13084,6 +13190,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files-unnamed",
@@ -13280,6 +13387,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files-unnamed",
@@ -13484,6 +13592,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-card",
             "mode": "whdload-hdfs",
@@ -13682,6 +13791,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "whdload-disabled",
@@ -13876,6 +13986,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -14017,6 +14128,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "archived-floppy-writeback-lost",
@@ -14220,6 +14332,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": "archived-floppy-redirected",
@@ -14404,6 +14517,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "floppy-discarded",
@@ -14583,6 +14697,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cd-per-game",
@@ -14759,6 +14874,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-file",
             "mode": "cd-shared",
@@ -14947,6 +15063,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -15135,6 +15252,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -15276,6 +15394,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -15437,6 +15556,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -15623,6 +15743,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -15759,6 +15880,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -15895,6 +16017,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -16031,6 +16154,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "hd-writeback",
@@ -16183,6 +16307,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "hd-writeback",
@@ -16360,6 +16485,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -16568,6 +16694,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -16775,6 +16902,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -16983,6 +17111,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -17191,6 +17320,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -17394,6 +17524,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files-unnamed",
@@ -17596,6 +17727,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files-unnamed",
@@ -17788,6 +17920,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -17944,6 +18077,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -18146,6 +18280,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -18329,6 +18464,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -18465,6 +18601,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -18606,6 +18743,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "archived-hd-writeback-lost",
@@ -18764,6 +18902,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -18910,6 +19049,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -19066,6 +19206,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files-unnamed",
@@ -19260,6 +19401,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -19401,6 +19543,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "archived-hd-writeback-lost",
@@ -19577,6 +19720,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -19783,6 +19927,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -19980,6 +20125,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -20131,6 +20277,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -20282,6 +20429,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -20427,6 +20575,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -20581,6 +20730,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -20771,6 +20921,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -20914,6 +21065,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "archived-hd-writeback-lost",
@@ -21067,6 +21219,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "hd-writeback",
@@ -21232,6 +21385,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -21382,6 +21536,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "none",
             "mode": "whdload-disabled",
@@ -21554,6 +21709,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": null
         }
       }
@@ -21715,6 +21871,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -21918,6 +22075,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-directory",
             "mode": "whdload-files",
@@ -22102,6 +22260,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "hd-writeback",
@@ -22217,6 +22376,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -22322,6 +22482,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -22418,6 +22579,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-files",
             "mode": null,
@@ -22538,6 +22700,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cartridge",
@@ -22657,6 +22820,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cartridge",
@@ -22810,6 +22974,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "frontend-paths",
@@ -22945,6 +23110,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-file",
             "mode": "cd-game-bram+cart-4meg",
@@ -23177,6 +23343,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "shared-file",
             "mode": "cd-game-bram+cart-4meg",
@@ -23401,6 +23568,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "cd-game-bram+cart-512k-per-game",
@@ -23593,6 +23761,7 @@
               }
             }
           ],
+          "redirects": null,
           "granularity": {
             "value": "per-game-file",
             "mode": "always",

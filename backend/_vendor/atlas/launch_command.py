@@ -241,6 +241,137 @@ class Injection:
     """What ES-DE did with it: one of :data:`INJECTION_OUTCOMES`."""
 
 
+LauncherStepCode = Literal[
+    "backend-update",
+    "emulator-install",
+    "launch-fixes",
+    "service-stop",
+    "saves-marker-write",
+    "cloud-sync-download",
+    "service-start",
+    "cloud-sync-check",
+    "emulator-made-executable",
+    "proton-install",
+    "proton-prefix-create",
+    "cloud-sync-upload",
+    "saves-marker-removal",
+]
+
+STEP_BACKEND_UPDATE: LauncherStepCode = "backend-update"
+"""EmuDeck's backend is updated from upstream before anything else runs (``git reset --hard`` and ``git pull`` of
+its checkout); the steps listed after it are read from the deployed files, which this update can replace."""
+STEP_EMULATOR_INSTALL: LauncherStepCode = "emulator-install"
+"""EmuDeck downloads the emulator again and installs it over the one there, writes a desktop entry and its icon under
+``~/.local/share``, then sets it up afresh from its templates: its configuration, its save folder links (deleting the
+save folders it links again), the launcher script, and ES-DE's custom systems, find rules and default emulators —
+Ryujinx's fix does it where its configuration still names an SDL2 gamepad."""
+STEP_LAUNCH_FIXES: LauncherStepCode = "launch-fixes"
+"""EmuDeck's fixes for this emulator are applied: the controller mapping written into its configuration, and for
+Ryujinx on a Steam Deck the gyro plugin installed where it is missing. A fix's own guards decide it: the mapping is
+skipped on Steam Deck hardware and with ``autoMap`` off, and an emulator the backend defines no fix for runs none."""
+STEP_SERVICE_STOP: LauncherStepCode = "service-stop"
+"""EmuDeck's cloud sync service is stopped (``systemctl --user stop``)."""
+STEP_SAVES_MARKER_WRITE: LauncherStepCode = "saves-marker-write"
+"""The emulator's name is written into ``.emuName`` at the top of EmuDeck's saves folder."""
+STEP_CLOUD_SYNC_DOWNLOAD: LauncherStepCode = "cloud-sync-download"
+"""EmuDeck's cloud sync for the emulator's saves before the launch: a download, or a dialog asking the user where a
+previous sync is pending or failed, or one saying the provider is not configured; with no network it marks the
+download as failed."""
+STEP_SERVICE_START: LauncherStepCode = "service-start"
+"""EmuDeck's cloud sync service is restarted (``systemctl --user``)."""
+STEP_CLOUD_SYNC_CHECK: LauncherStepCode = "cloud-sync-check"
+"""The network and the cloud sync service are checked, with an error dialog where either is down."""
+STEP_EMULATOR_MADE_EXECUTABLE: LauncherStepCode = "emulator-made-executable"
+"""The emulator file the script found is made executable (``chmod +x``)."""
+STEP_PROTON_INSTALL: LauncherStepCode = "proton-install"
+"""Steam is asked, with a dialog, to install the Proton version the launch needs, where no Steam library holds it;
+the launch then goes on without a Proton, and the emulator does not start."""
+STEP_PROTON_PREFIX_CREATE: LauncherStepCode = "proton-prefix-create"
+"""The Proton prefix for the launch is created under Steam's ``compatdata`` where it does not exist."""
+STEP_CLOUD_SYNC_UPLOAD: LauncherStepCode = "cloud-sync-upload"
+"""After the emulator exits, the saves are uploaded by EmuDeck's cloud sync, where a ``.no_upload`` marker at the top
+of the saves folder asks for it."""
+STEP_SAVES_MARKER_REMOVAL: LauncherStepCode = "saves-marker-removal"
+"""After the emulator exits, ``.gaming`` at the top of EmuDeck's saves folder is removed."""
+
+# The closed vocabulary of the steps an EmuDeck launcher script runs beside
+# the emulator, in the order a script runs them.
+LAUNCHER_STEPS = (
+    STEP_BACKEND_UPDATE,
+    STEP_EMULATOR_INSTALL,
+    STEP_LAUNCH_FIXES,
+    STEP_SERVICE_STOP,
+    STEP_SAVES_MARKER_WRITE,
+    STEP_CLOUD_SYNC_DOWNLOAD,
+    STEP_SERVICE_START,
+    STEP_CLOUD_SYNC_CHECK,
+    STEP_EMULATOR_MADE_EXECUTABLE,
+    STEP_PROTON_INSTALL,
+    STEP_PROTON_PREFIX_CREATE,
+    STEP_CLOUD_SYNC_UPLOAD,
+    STEP_SAVES_MARKER_REMOVAL,
+)
+
+EmuDeckVariant = Literal["appimage", "binary", "flatpak", "proton", "unestablished"]
+
+EMUDECK_VARIANT_APPIMAGE: EmuDeckVariant = "appimage"
+"""The emulator's AppImage."""
+EMUDECK_VARIANT_BINARY: EmuDeckVariant = "binary"
+"""The executable EmuDeck unpacked out of the emulator's AppImage."""
+EMUDECK_VARIANT_FLATPAK: EmuDeckVariant = "flatpak"
+"""The emulator's installed Flatpak."""
+EMUDECK_VARIANT_PROTON: EmuDeckVariant = "proton"
+"""The emulator's Windows build, run under Proton."""
+EMUDECK_VARIANT_UNESTABLISHED: EmuDeckVariant = "unestablished"
+"""Which build of the emulator runs is not established: the script picks it at launch in a way atlas does not
+model."""
+
+# The closed vocabulary of which build of the emulator an EmuDeck launcher
+# script runs.
+EMUDECK_VARIANTS = (
+    EMUDECK_VARIANT_APPIMAGE,
+    EMUDECK_VARIANT_BINARY,
+    EMUDECK_VARIANT_FLATPAK,
+    EMUDECK_VARIANT_PROTON,
+    EMUDECK_VARIANT_UNESTABLISHED,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LauncherStep:
+    """One step an EmuDeck launcher script runs beside the emulator, and whether it runs on this launch."""
+
+    code: LauncherStepCode
+    """What the step does: one of :data:`LAUNCHER_STEPS`."""
+    runs: bool | None
+    """Whether the step runs on this launch, as EmuDeck's settings read decide it — ``null`` where state at launch
+    decides it instead (a marker file, the network), which atlas does not predict."""
+
+    def __post_init__(self) -> None:
+        if self.code not in LAUNCHER_STEPS:
+            raise ValueError(f"LauncherStep: code must be one of {LAUNCHER_STEPS}, got {self.code!r}")
+
+
+@dataclass(frozen=True, slots=True)
+class LauncherScript:
+    """The EmuDeck launcher script a command runs: which build of the emulator it starts, and what it runs beside."""
+
+    path: str
+    """The script, as the command or the find rule that found it spells it."""
+    variant: EmuDeckVariant
+    """Which build of the emulator the script starts: one of :data:`EMUDECK_VARIANTS`."""
+    steps: tuple[LauncherStep, ...]
+    """Every step the script runs beside the emulator, in the order it runs them — for a launch that reaches the
+    emulator: a script that exits early, where it finds no emulator to run, skips the steps after that point."""
+    pinned_at: str
+    """The EmuDeck backend revision the script's reading was made at — provenance; the pin itself is the git blob
+    hash of the script and of every file it sources or executes."""
+
+    def __post_init__(self) -> None:
+        if self.variant not in EMUDECK_VARIANTS:
+            raise ValueError(f"LauncherScript: variant must be one of {EMUDECK_VARIANTS}, got {self.variant!r}")
+
+
 @dataclass(frozen=True, slots=True)
 class LaunchCommand:
     """The command the frontend would run for one file, taken apart."""
@@ -255,6 +386,8 @@ class LaunchCommand:
     """The folder the frontend runs the command in, ``null`` where the command names none."""
     injections: tuple[Injection, ...]
     """Every ``%INJECT%`` ES-DE resolved, in the order it resolved them — empty where the command has none."""
+    launcher_script: LauncherScript | None = None
+    """The EmuDeck launcher script the command runs, ``null`` where it runs none."""
 
 
 TooLarge = Literal["too-large"]
@@ -1136,7 +1269,9 @@ class CommandInputs:
     content_path: str
     parts: CommandParts
     home: str
-    es_path: str
+    es_path: str | None
+    """ES-DE's own directory (``%ESPATH%``), ``None`` where it is not established — the directory inside the mount
+    of a frontend run from an AppImage."""
     rom_directory: str | None
 
 
@@ -1244,11 +1379,19 @@ class _Assembly:
         replaced, wherever it stands, with the first match — a value put in as
         it is, unescaped.
         """
-        built, es_path = self.built, self.inputs.es_path
-        built.replace(_ESPATH, _raw_value(_ESPATH, es_path, es_path))
+        self._es_path()
         if found.replaced is not None:
             word, match = found.replaced
-            built.replace(word, _raw_value(word, match, match))
+            self.built.replace(word, _raw_value(word, match, match))
+
+    def _es_path(self) -> None:
+        """``%ESPATH%`` expanded across the command — refused where ES-DE's own directory is not established."""
+        built, es_path = self.built, self.inputs.es_path
+        if built.find(_ESPATH) == -1:
+            return
+        if es_path is None:
+            raise _Refused(_unestablished(_ESPATH))
+        built.replace(_ESPATH, _raw_value(_ESPATH, es_path, es_path))
 
     def _core(self, core: str, *, quoted: bool) -> None:
         """The ``%CORE_X%/name`` reference replaced with the core file (``FileData.cpp:1484-1551``)."""
@@ -1377,7 +1520,7 @@ class _Assembly:
     def _frontend_values(self) -> None:
         """``%ESPATH%`` … ``%GAMEDIRRAW%`` (``FileData.cpp:2092-2101``)."""
         built, content, inputs = self.built, self.content, self.inputs
-        built.replace(_ESPATH, _raw_value(_ESPATH, inputs.es_path, inputs.es_path))
+        self._es_path()
         emulator_dir = parent_path(inputs.parts.emulator.substituted.replace("\\", ""))
         built.replace(
             _EMUDIR,
@@ -1415,13 +1558,7 @@ class _Assembly:
         unsafe = reading.second_shell_unsafe(shell_words, argument_tilde=argument_tilde)
         if unsafe is not None:
             raise _Refused(_second_shell_unsafe(unsafe))
-        program = words[program_at]
-        app_id = self.view.app_id
-        launch_program = (
-            LaunchProgram(VARIANT_FLATPAK, app_id=app_id, command=program)
-            if app_id is not None
-            else LaunchProgram(VARIANT_NATIVE, path=program)
-        )
+        launch_program = _program(words[program_at], self.view.app_id)
         notes = [
             *self.notes,
             *(_argument_broken(name) for name in reading.broken_placeholders()),
@@ -1437,6 +1574,21 @@ class _Assembly:
             ),
             tuple(notes),
         )
+
+
+# How ES-DE's find rules and EmuDeck's launchers name an AppImage, compared in any case.
+_APPIMAGE_SUFFIX = ".appimage"
+
+
+def _program(program: str, app_id: str | None) -> LaunchProgram:
+    """What the command starts: inside *app_id*'s sandbox where the frontend runs in one, else on the host — an
+    AppImage where the file is named as one (:data:`_APPIMAGE_SUFFIX`), a native program otherwise.
+    """
+    if app_id is not None:
+        return LaunchProgram(VARIANT_FLATPAK, app_id=app_id, command=program)
+    if program.casefold().endswith(_APPIMAGE_SUFFIX):
+        return LaunchProgram(VARIANT_APPIMAGE, path=program)
+    return LaunchProgram(VARIANT_NATIVE, path=program)
 
 
 def _cut_entry(built: _Built, position: int, marker: str) -> str:

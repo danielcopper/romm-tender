@@ -61,7 +61,7 @@ from .installations import (
     SystemsAnswer,
 )
 from .launch import Launcher
-from .launch_command import LaunchCommand
+from .launch_command import LaunchCommand, LauncherScript
 from .platforms import PlatformIdentities
 from .placement import (
     Caveat,
@@ -146,10 +146,28 @@ def savefile_placement_contract(placement: SavefilePlacement) -> dict[str, Any]:
     with the full option combination that selects it — a client renders
     "is the wanted option active, and in which file does it change" from the
     readings, for one switch or several alike.
+
+    ``redirects`` is a list for a standalone emulator's answer, ``[]`` where no
+    route exists, and ``null`` where nothing is stated — every answer from a
+    RetroArch core. Each route's citation stays out, like all prose: the
+    structured ``via``, ``name``, ``argument`` and ``moves`` are what a caller
+    acts on.
     """
     granularity = placement.granularity
+    redirects = placement.redirects
     return {
         **_placement_core(placement),
+        "redirects": None
+        if redirects is None
+        else [
+            {
+                "via": r.via,
+                "name": r.name,
+                "argument": r.argument,
+                "moves": list(r.moves),
+            }
+            for r in redirects
+        ],
         "granularity": None
         if granularity is None
         else {
@@ -760,7 +778,8 @@ def launch_command_contract(answer: LaunchCommandAnswer) -> dict[str, Any]:
     ``null`` — a ``flatpak`` program carries ``app_id`` and ``command``, an
     ``appimage`` or ``native`` one its ``path``. ``environment`` is a list, in
     the order the command sets the variables, because the order is the
-    command's. ``working_folder`` is ``null`` where the command names none.
+    command's. ``working_folder`` is ``null`` where the command names none, and
+    ``launcher_script`` where the command runs no EmuDeck launcher script.
     """
     return {
         "entry": emulator_contract(answer.entry) if answer.entry is not None else None,
@@ -790,11 +809,22 @@ def _launch_command_body(command: LaunchCommand) -> dict[str, Any]:
             "created_if_missing": folder.created_if_missing,
         },
         "injections": [{"file": injection.file, "outcome": injection.outcome} for injection in command.injections],
+        "launcher_script": None if command.launcher_script is None else _launcher_script_body(command.launcher_script),
+    }
+
+
+def _launcher_script_body(script: LauncherScript) -> dict[str, Any]:
+    """The EmuDeck launcher script a command runs: the build it starts and its steps, in the order it runs them."""
+    return {
+        "path": script.path,
+        "variant": script.variant,
+        "steps": [{"code": step.code, "runs": step.runs} for step in script.steps],
+        "pinned_at": script.pinned_at,
     }
 
 
 def systems_contract(answer: SystemsAnswer) -> dict[str, Any]:
-    """The stable form of a systems answer — what the catalogue declares, or why nothing."""
+    """The stable form of a systems answer — every system the installation lists, or why none."""
     return {
         "systems": list(answer.systems),
         "caveats": _caveats_contract(answer.caveats),
@@ -879,14 +909,13 @@ def rom_placement_contract(placement: RomPlacement) -> dict[str, Any]:
 
 
 def rom_locations_contract(answer: RomLocationsAnswer) -> dict[str, Any]:
-    """The stable form of every system's ROM placement — one entry per system, and the catalogue's caveats.
+    """The stable form of every system's ROM placement — one entry per system, and the systems answer's caveats.
 
     ``placements`` keeps the systems answer's order, and each entry's
     ``placement`` is :func:`rom_placement_contract` of the answer the
     per-system question gives, so a client reads one entry exactly as it reads
     that question's answer. The top-level ``caveats`` are the systems answer's:
-    on an empty list they say whether the catalogue declares no systems or
-    could not be read.
+    on an empty list they say which empty it is.
     """
     return {
         "placements": [

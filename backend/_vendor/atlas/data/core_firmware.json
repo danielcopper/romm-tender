@@ -215,6 +215,41 @@
       "provenance": {
         "source": "libretro/beetle-psx-libretro at d6383bff (2025-11-14), the revision the deployed build stamps itself with. Two cores are built from this tree and both are entered here rather than one standing for the other: the renderer is a build option and the firmware route is shared, but an entry that covered a core it was never measured against would be a guess. The same pin applies for the same reason — search_firmware, the SHA1 directory search later revisions added, occurs nowhere in the tree at d6383bff — and the same tripwire holds it against the deployed stamp."
       }
+    },
+    "pcee2": {
+      "locating": {
+        "mode": "by-name-then-content",
+        "citation": "A name first: a pcsx2_bios value other than auto is written to Filenames/BIOS (pcee2-libretro/Libretro.cpp:1023-1025), FullpathToBios joins it onto the BIOS folder (pcsx2/Pcsx2Config.cpp:2102-2108), and LoadBIOS opens that path where it exists (pcsx2/ps2/BiosTools.cpp:321-335). Content as the fallback: with the option at auto nothing is written, and SettingsOverride takes the first file of the folder's listing whose ROMDIR header IsBIOS accepts, with no size filter (pcee2-libretro/Libretro.cpp:640-657; IsBIOS at pcsx2/ps2/BiosTools.cpp:284-294). The option only names a file the core offered: its values are auto and the files the same listing accepts (pcee2-libretro/Libretro.cpp:660-680, :733-736), and RetroArch hands a core a stored value only where it matches a declared one (core_option_manager.c:1031-1053, the guard at :1037, at libretro/RetroArch@a79435a), so a stored name the listing would not produce reaches the core as auto. [D] that last step rests on what the frontend answers rather than on the core's own code. Every pcee2-libretro citation here is at WizzardSK/pcee2-libretro@340ce04; the RetroArch chain names its own revision."
+      },
+      "name_route": {
+        "declared_directory": "pcsx2/bios",
+        "citation": "The folder declaration of atlas/data/core_declarations.json's pcee2 entry, whose curated row in atlas.firmware.FIRMWARE_DECLARED_DIRECTORY states the option (pcsx2_bios), the value that asks for the listing (auto), the absent size filter, and the content read (the ROMDIR walk LoadBiosVersion makes, pcsx2/ps2/BiosTools.cpp:80-197). The option is read at content load (pcee2-libretro/Libretro.cpp:1021-1025, ReadCoreOptions called with startup from retro_load_game at :2093); the folder is listed at core load (:660-680, called from retro_set_environment at :1418) and again by the auto pick (:640-657). All at WizzardSK/pcee2-libretro@340ce04."
+      },
+      "build": {
+        "revision": "340ce04",
+        "stamp": "340ce04071716c52692d33194e0bbfef4514bb22",
+        "citation": "The version PCEE2 reports through retro_get_system_info is the upstream PCSX2 release it is merged up to, v2.9.78 (pcee2-libretro/Libretro.cpp:1436 with cmake/Pcee2UpstreamVersion.cmake:49-50), so it cannot pin a pcee2 commit. The build carries the commit as a string constant of its own instead: pcsx2/BuildVersion.cpp:14 stores GIT_HASH, filled by git rev-parse HEAD at build time (cmake/Pcsx2Utils.cmake:85-88), and an unfiltered strings -a pass over the deployed pcee2_libretro.so holds 340ce04071716c52692d33194e0bbfef4514bb22 as a line of its own."
+      },
+      "provenance": {
+        "source": "github.com/WizzardSK/pcee2-libretro, branch libretro, at 340ce04071716c52692d33194e0bbfef4514bb22, the commit the deployed build carries; mirrored on git.libretro.com/libretro/pcee2-libretro. The same pin and stamp as the core's packaged declaration in atlas/data/core_declarations.json, which this entry's route points into."
+      }
+    },
+    "pcsx2": {
+      "locating": {
+        "mode": "by-name-then-content",
+        "citation": "A name first: check_variables reads pcsx2_bios and writes it to Filenames/BIOS (libretro/main.cpp:360-365), FullpathToBios joins it onto the BIOS folder with Path::Combine (pcsx2/Pcsx2Config.cpp:994-1000), and LoadBIOS opens that one path where it stats (pcsx2/ps2/BiosTools.cpp:269-281). Content as the fallback: the option's values are the files the core's listing of <system>/pcsx2/bios keeps — 4 to 8 MiB (libretro/main.cpp:1810-1816) and passing IsBIOS's ROMDIR walk (:1818; pcsx2/ps2/BiosTools.cpp:325-335) — and the first of them is the option's default (libretro/main.cpp:1828-1834), so an option with no stored value hands the core the first image the listing found. The option only names a file the core offered: it declares no values of its own (libretro/libretro_core_options.h:117-128), and RetroArch hands a core a stored value only where it matches a declared one (core_option_manager.c:1031-1053, the guard at :1037, at libretro/RetroArch@a79435a), so a stored name the listing would not produce reaches the core as that default. [D] that last step rests on what the frontend answers rather than on the core's own code. Every LRPS2 citation here is at libretro/ps2@14d19f8; the RetroArch chain names its own revision."
+      },
+      "name_route": {
+        "declared_directory": "pcsx2/bios",
+        "citation": "The folder declaration of the core's own pcsx2_libretro.info (firmware0_path \"pcsx2/bios\"), whose curated row in atlas.firmware.FIRMWARE_DECLARED_DIRECTORY states the option (pcsx2_bios), the 4-8 MiB size filter, and the content read (the ROMDIR walk LoadBiosVersion makes, pcsx2/ps2/BiosTools.cpp:60-173). The option is read at content load (check_variables at libretro/main.cpp:360-365, called from retro_load_game at :1926); the folder is listed in retro_init (:1801-1834, retro_init at :1789) whenever the core has not read a value yet. All at libretro/ps2@14d19f8."
+      },
+      "build": {
+        "revision": "14d19f8",
+        "citation": "LRPS2 reports its own short hash as its version: the build RetroDECK deploys at components/retroarch/rd_extras/cores/pcsx2_libretro.so answers library_version '14d19f8' through the core probe (atlas.machine.CoreInfo.library_version), the revision core_audit.json records for the core's save card."
+      },
+      "provenance": {
+        "source": "github.com/libretro/ps2 at 14d19f8339e3646b645c1c33e612b1888e632145, the revision the deployed build reports as its version. Read from the upstream tree at that revision: the BIOS route was followed from retro_init's listing and check_variables' option read into LoadBIOS, with the frontend's handling of the option's declared values read in RetroArch at a79435a."
+      }
     }
   }
 }

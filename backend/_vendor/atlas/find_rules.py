@@ -125,8 +125,12 @@ CAVEAT_COMMAND_REWRITTEN_AT_START = "command-rewritten-at-start"
 # invalid, an ``%INJECT%`` file atlas cannot read or one that injects itself
 # again, a ``%ROMPATH%`` whose ROM root is not established, a command that
 # reads as no words at all, a command larger than atlas follows, a label the
-# catalogue does not carry for the system, and a frontend build no reading of
-# ES-DE is pinned for.
+# catalogue does not carry for the system, a frontend build no reading of
+# ES-DE is pinned for, a frontend build sealed in an AppImage this runtime
+# cannot open — the sealed family's "atlas does not open it here", the
+# capability the runtime's and never the machine's — and an EmuDeck launcher
+# script the command runs that no reading is pinned for, the script itself or
+# a file it sources or executes (``helper`` names that file).
 CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX = "launch-command-shell-syntax"
 CAVEAT_LAUNCH_COMMAND_SECOND_SHELL_UNSAFE = "launch-command-second-shell-unsafe"
 CAVEAT_LAUNCH_COMMAND_ENV_OPTION = "launch-command-env-option"
@@ -139,6 +143,11 @@ CAVEAT_LAUNCH_COMMAND_NO_PROGRAM = "launch-command-no-program"
 CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS = "launch-command-beyond-limits"
 CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN = "launch-command-label-unknown"
 CAVEAT_FRONTEND_BUILD_UNPINNED = "frontend-build-unpinned"
+CAVEAT_FRONTEND_BUILD_SEALED = "frontend-build-sealed"
+"""The frontend's build sits in an AppImage this runtime cannot open (it lacks the codec the image needs, zstd for
+ES-DE's today): not established, and the capability is the runtime's, never the machine's — ``frontend-build-unpinned``
+is a build read and not pinned, or one the binary does not state."""
+CAVEAT_LAUNCHER_SCRIPT_UNPINNED = "launcher-script-unpinned"
 # The two notes beside a command that is answered: a placeholder ES-DE leaves
 # in the command as written, and a value ES-DE's own substitution would break,
 # answered as the value instead.

@@ -40,6 +40,7 @@ from .placement import (
     ROOT_CONTENT_DIRECTORY,
     ROOT_KINDS,
     ROOT_SAVEFILE_DIRECTORY,
+    ROOT_SYSTEM_DIRECTORY,
     SAVE_ID_SPELLINGS,
     SUBDIR_TEMPLATE_HOLES,
     TEMPLATE_ROM_STEM,
@@ -583,6 +584,12 @@ class CoreCard:
     modes: Mapping[str, SaveMode]
     provenance: str
     rule_options: tuple[str, ...] | None = None
+    # Options the rule reads that the core registers from a listing of the
+    # machine (PCEE2 offers the cards its folder holds, and registers no card
+    # selector while that folder is empty): a probe that hands the core no
+    # system directory never sees them, so they are read like rule options but
+    # neither confirm the card's generation nor are normalised against a probe.
+    listed_options: tuple[str, ...] = ()
     retired_options: tuple[RetiredOption, ...] = ()
     sizes: Mapping[str, SizeFact] = MappingProxyType({})
     """Whether each file the core writes itself keeps its size, keyed by its template.
@@ -613,15 +620,16 @@ def _stated_mode(mode: Any, *, root: str, field: str, reason: str, where: str) -
     Both replace the groups with required prose, so one loader carries them
     and the field name says which form it is building. The inside-content
     statement is about the loaded content file and anchors at its tree;
-    the discarded statement may also anchor at the frontend's save root —
-    where the save *would* have gone — because a core can keep nothing
-    without the content being involved at all (SwanStation with both
-    memory-card slots set to none).
+    the discarded statement may also anchor at the frontend's save root or
+    the system directory — where the save *would* have gone — because a core
+    can keep nothing without the content being involved at all (SwanStation
+    with both memory-card slots set to none, PCEE2 with both slots switched
+    off, whose cards would have gone under the system directory).
     """
     allowed = (
         (ROOT_CONTENT_DIRECTORY,)
         if field == "inside_content"
-        else (ROOT_CONTENT_DIRECTORY, ROOT_SAVEFILE_DIRECTORY)
+        else (ROOT_CONTENT_DIRECTORY, ROOT_SAVEFILE_DIRECTORY, ROOT_SYSTEM_DIRECTORY)
     )
     if root not in allowed:
         raise ValueError(
@@ -1005,6 +1013,7 @@ def recorded_vocabulary(
     option_key: str | None,
     modes: Mapping[str, SaveMode],
     rule_options: tuple[str, ...] = (),
+    listed_options: tuple[str, ...] = (),
 ) -> frozenset[str]:
     """Every word a card states as this core's own: option keys, subdirs, file names.
 
@@ -1024,6 +1033,7 @@ def recorded_vocabulary(
     if option_key is not None:
         words.add(option_key)
     words.update(rule_options)
+    words.update(listed_options)
     for mode in modes.values():
         for group in mode.groups:
             if group.subdir is not None:
@@ -1127,7 +1137,12 @@ def _expect_rule_filled_templates(
 
 
 def _retired_options(
-    value: object, where: str, *, option_key: str | None, rule_options: tuple[str, ...] | None
+    value: object,
+    where: str,
+    *,
+    option_key: str | None,
+    rule_options: tuple[str, ...] | None,
+    listed_options: tuple[str, ...] = (),
 ) -> tuple[RetiredOption, ...]:
     """A card's ``retired_options`` block — the spellings its generation left behind.
 
@@ -1144,7 +1159,7 @@ def _retired_options(
         return ()
     if not isinstance(value, list) or not value:
         raise ValueError(f"{where}: retired_options must be a non-empty list, got {value!r}")
-    current = {option_key, *(rule_options or ())} - {None}
+    current = {option_key, *(rule_options or ()), *listed_options} - {None}
     if not current:
         raise ValueError(
             f"{where}: retired_options on a card that reads no options — no read would ever "
@@ -1169,7 +1184,7 @@ def _retired_options(
 
 def _governing_rule(
     value: Any, where: str, *, card_key: str, option_key: str | None
-) -> tuple[str, ...] | None:
+) -> tuple[tuple[str, ...] | None, tuple[str, ...]]:
     """A card's ``governing_rule`` block: the options its selection rule reads.
 
     The list may be empty — ScummVM's rule reads a file of the emulator's own
@@ -1178,25 +1193,42 @@ def _governing_rule(
     function behind it is a build mistake and fails the load. The mirror
     claim (a rule with no card) is a test, because the loader validating one
     card cannot see which rules the others claimed.
+
+    ``listed_options`` is optional and returned second: the options the core
+    registers from a listing of the machine (:attr:`CoreCard.listed_options`).
+    A key in both lists would be checked against the probe and exempt from it
+    at once, so the two must not meet.
     """
     if value is None:
-        return None
+        return None, ()
     if option_key is not None:
         raise ValueError(
             f"{where}: 'governing_option' and 'governing_rule' are two answers to who selects "
             "the mode — a card states one of them"
         )
-    if not isinstance(value, dict) or set(value) != {"options"}:
+    if not isinstance(value, dict) or not {"options"} <= set(value) <= {"options", "listed_options"}:
         raise ValueError(
-            f"{where}: governing_rule must be an object naming exactly 'options', got {value!r}"
+            f"{where}: governing_rule must be an object naming 'options' and at most "
+            f"'listed_options' beside it, got {value!r}"
         )
     options = _expect_str_list(value["options"], f"{where}: governing_rule.options")
+    listed: tuple[str, ...] = ()
+    if "listed_options" in value:
+        listed = _expect_str_list(value["listed_options"], f"{where}: governing_rule.listed_options")
+        if not listed:
+            raise ValueError(f"{where}: governing_rule.listed_options, where stated, names an option")
+        both = sorted(set(options) & set(listed))
+        if both:
+            raise ValueError(
+                f"{where}: {both} are in both 'options' and 'listed_options' — an option is either "
+                "registered for a probe to confirm or registered from a listing, not both"
+            )
     if card_key not in MODE_RULES:
         raise ValueError(
             f"{where}: states a governing_rule and no selection rule is registered under "
             f"{card_key!r} in atlas.mode_rules — the marker would select nothing"
         )
-    return options
+    return options, listed
 
 
 def load_oddities(text: str | None = None) -> tuple[CoreCard, ...]:
@@ -1225,11 +1257,15 @@ def load_oddities(text: str | None = None) -> tuple[CoreCard, ...]:
         }
         provenance = entry.get("provenance", {})
         option_key = _expect_opt_str(governing.get("key"), f"{where}: governing_option.key")
-        rule_options = _governing_rule(
+        rule_options, listed_options = _governing_rule(
             saves.get("governing_rule"), where, card_key=key, option_key=option_key
         )
         retired_options = _retired_options(
-            saves.get("retired_options"), where, option_key=option_key, rule_options=rule_options
+            saves.get("retired_options"),
+            where,
+            option_key=option_key,
+            rule_options=rule_options,
+            listed_options=listed_options,
         )
         _expect_selectable_modes(where, option_key=option_key, rule_options=rule_options, modes=modes)
         _expect_rule_filled_templates(where, rule_options=rule_options, modes=modes)
@@ -1244,7 +1280,10 @@ def load_oddities(text: str | None = None) -> tuple[CoreCard, ...]:
                 anchors,
                 where=f"{where}: saves.anchors",
                 vocabulary=recorded_vocabulary(
-                    option_key=option_key, modes=modes, rule_options=rule_options or ()
+                    option_key=option_key,
+                    modes=modes,
+                    rule_options=rule_options or (),
+                    listed_options=listed_options,
                 ),
             )
         cards.append(
@@ -1258,6 +1297,7 @@ def load_oddities(text: str | None = None) -> tuple[CoreCard, ...]:
                 modes=modes,
                 provenance=provenance.get("source", "unstated"),
                 rule_options=rule_options,
+                listed_options=listed_options,
                 retired_options=retired_options,
                 sizes=_card_sizes(saves.get("sizes"), f"{where}: saves.sizes", modes),
             )
