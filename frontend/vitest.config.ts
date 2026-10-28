@@ -17,14 +17,15 @@ export default defineConfig({
     // Every test file starts in a context of its own — a new happy-dom Window,
     // in which each module is evaluated anew — on one worker as on many, since
     // vm pools ignore `isolate` and are never batched into one run
-    // (`groupSpecs`, vitest's `dist/chunks/index.*.js`). It does so inside a
-    // worker process that outlives it, so the process, happy-dom's own module
-    // and the text of the externalised dependency files the worker has read are
-    // reused rather than paid for again per file (`runVmTests` and its
-    // `FileMap`, vitest's `dist/chunks/vm.*.js`). What a file leaves behind at
-    // process level, `process.env` included, reaches the next file in that
-    // worker. Every file stays on happy-dom: a `node` environment beside it
-    // under this pool makes the coverage totals differ from run to run.
+    // (`resolveTestConfig` and `groupSpecs`, vitest's `dist/chunks/index.*.js`).
+    // It does so inside a worker process that outlives it, so the process,
+    // happy-dom's own module and the text of the externalised dependency files
+    // the worker has read are reused rather than paid for again per file
+    // (`runVmTests` and its `FileMap`, vitest's `dist/chunks/vm.*.js`). What a
+    // file leaves behind at process level, `process.env` included, reaches the
+    // next file in that worker. Every file stays on happy-dom: a `node`
+    // environment beside it under this pool makes the coverage totals differ
+    // from run to run.
     pool: "vmForks",
     environment: "happy-dom",
     globals: true,

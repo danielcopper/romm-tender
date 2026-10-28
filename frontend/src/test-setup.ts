@@ -8,14 +8,17 @@ import { resetStrandedPanel } from "./test-utils/stranded-panel";
 // Vitest evaluates this file anew for every test file, so a second evaluation in
 // the same global means test files are sharing one context. `--isolate=false`
 // does that under the `forks` and `threads` pools: a worker then runs every file
-// it is given in one global. Module state and the DOM carry from file to file,
-// and RTL registers its cleanup only in the first, so the suite fails far from
-// the cause. The suite's own vm pool never shares one (`vitest.config.ts`).
+// it is given in one global (`groupSpecs` and the pool's `sharedRunners`,
+// vitest's `dist/chunks/index.*.js`). Module state and the DOM carry from file
+// to file, and RTL registers its cleanup only in the first, so the suite fails
+// far from the cause. The suite's own vm pool never shares one
+// (`vitest.config.ts`).
 const EVALUATED_IN_THIS_CONTEXT = Symbol.for("tender.test-setup.evaluated");
 if ((globalThis as Record<symbol, unknown>)[EVALUATED_IN_THIS_CONTEXT]) {
   throw new Error(
     "Test files are sharing one context — Vitest ran more than one in the same global, which leaks module " +
-      "state and the DOM between them. --isolate=false does that under the forks and threads pools. " +
+      "state and the DOM between them. --isolate=false (or `isolate: false` in a config) does that under the " +
+      "forks and threads pools. " +
       "Drop it: with isolation on, every file gets a context of its own on any number of workers.",
   );
 }
