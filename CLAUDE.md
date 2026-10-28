@@ -1232,9 +1232,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   code site, `RomInstallRecorder.do_record_applied_launch_options`; the uninstall site —
   `RomRemovalService._drop_install_record` for one ROM, `_uninstall_all_roms_io` for the bulk run — also serves "Forget
   this download" (`forget_download`), which is therefore not a seventh writer site
-- **An abandoned-chunk stash's whole-unit apply staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources`)
-  is never mutated while the stash is pending (box IDLE) — every run-entry path passes `try_begin_run`, which clears the
-  stash before any staging write** — prompt-only — mechanize via a staging-writer call-site audit
+- **An abandoned-chunk stash's whole-unit apply staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources` /
+  `pending_followed_keys`) is never mutated while the stash is pending (box IDLE) — every run-entry path passes
+  `try_begin_run`, which clears the stash before any staging write** — prompt-only — mechanize via a staging-writer
+  call-site audit
 - **An apply chunk's ack identity — `active_unit_id` / `active_chunk_index` and a fresh `unit_complete_event` — is
   stamped on the box BEFORE that chunk's `sync_apply_unit` is emitted, with nothing awaited in between** — test +
   prompt-only — `tests/services/library/test_chunk_dispatcher.py::TestAckIdentityPrecedesTheEmit` pins the ordering

@@ -133,3 +133,38 @@ since [#2543](https://github.com/danielcopper/romm-tender/issues/2543), for plat
 collapse still diffs against the bound-row registry. A second shortcut the apply minted this way before keeps its
 binding, and its row now takes the group's key, so the group holds two bound members: a grandfathered duplicate under
 ADR-0021 §5.
+
+## Amendment — a stored key of a row the sync does not fetch
+
+A row's stored key used to change only when a unit fetched the row. RomM leaves a version that is deleted, or hidden
+from the user, out of the platform listing, and answers the two the same way. Where such a version alone carried the
+component's canonical id, the remaining versions were keyed by their own lower-priority id, apart from the bound row
+still holding the old key, and the sync minted a second shortcut beside it. Where a hidden version kept a stale key, a
+fresh member was keyed apart from it the same way, or the agreement gate split the component on that stale key
+([#2646](https://github.com/danielcopper/romm-tender/issues/2646)).
+
+A platform unit's listing is therefore a complete view of the rows it leaves out as well, and a component every member
+of which it listed (`domain/sibling_group.compute_group_keys_with_unfetched`) is keyed three ways more:
+
+- **A stale summary is not counted.** Where the gate would split the component, a candidate equal to the stored key of
+  the member whose edge carried it — the summary that member's group held at the last sync, not an id of the stored
+  row's own — is left out and the gate judges again. A stored row holding another value still splits the component.
+- **A row an edge reaches takes the component's key**, unless another component's edge reaches it under another key.
+- **A bound row no edge reaches follows** the one component a member of which held the row's stored key at the last
+  sync, where every member holding a stored key held that one and the component holds no other value at the stored key's
+  source. A `romm:` key is never followed. The bound row keeps its shortcut on the version that is gone, as ADR-0021
+  §2's amendment has it; no second one is minted.
+
+The apply and the preview lay those keys over the bound-row registry before the convergence and the collapse, and every
+chunk's commit writes them (`Rom.follow_group`). The preview treats only the platforms it fetched in full as complete,
+the platform units the apply fetches, and keys their listings before every other ROM of its union, against the keys they
+commit, as the apply's collection units are keyed after its platform units. A collection unit's keying is unchanged: it
+is not a complete view.
+
+Two limits were accepted. A version RomM separates from its game while the bound version it was keyed with is hidden
+looks, from the listing, exactly like the deleted case, so it stays with that game without a shortcut of its own until
+the hidden version is listed again, and the next sync separates it. And a hidden version whose stale key was not counted
+may really still carry that id in RomM: it stays with the game while it is hidden, and the gate splits it at the first
+sync that fetches it. Asking RomM by id for every unlisted bound version on every sync, in the preview and the apply
+alike, would tell the cases apart, at a request per version and with a preview and an apply that count differently when
+one such request fails; that was not taken.

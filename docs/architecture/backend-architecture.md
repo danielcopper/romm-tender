@@ -676,11 +676,13 @@ only representatives bound; Rom row then `rom_metadata`, FK-safe) over that chun
 crash-safe on its own and a mid-unit failure forfeits only the in-flight chunk. Chunks cut **only** at sibling-group
 boundaries (overflowing 200 to keep a game's dumps whole so they never straddle two commits); no-emit groups and
 unmatched leftovers ride chunk 0, and an empty unit is one empty chunk (the empty round-trip still commits its unbound
-rows). The whole-unit staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources`) is set once by the
-dispatcher, before its first chunk goes out; only the per-chunk coordination is re-armed each chunk. The motivating
-field crash is [#797](https://github.com/danielcopper/romm-tender/issues/797): a 3084-shortcut unit emitted in one frame
-lost ~24 minutes of work when `steamwebhelper` OOM-crashed before any ack — a 200-chunk caps both the frame payload
-(~200 KB vs ~3 MB) and the crash blast radius (~2 min vs 24+).
+rows). The whole-unit staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources` / `pending_followed_keys`)
+is set once by the dispatcher, before its first chunk goes out; only the per-chunk coordination is re-armed each chunk.
+Every chunk's commit writes the followed keys (below, "Group-aware sync"), so the first commit that writes a member of a
+game writes the key of the row its listing left out as well. The motivating field crash is
+[#797](https://github.com/danielcopper/romm-tender/issues/797): a 3084-shortcut unit emitted in one frame lost ~24
+minutes of work when `steamwebhelper` OOM-crashed before any ack — a 200-chunk caps both the frame payload (~200 KB vs
+~3 MB) and the crash blast radius (~2 min vs 24+).
 
 **Per-chunk wait: timeout vs. cancel.** The dispatcher emits each chunk's `sync_apply_unit`, then waits on
 `unit_complete_event` (heartbeat-clocked) for the frontend's `report_unit_results` ack. When the wait returns `None` the
@@ -693,18 +695,18 @@ teardown branches on the cause (#1052) — and either way, **every chunk committ
   late `report_unit_results`, but in production **after** the run has already wound down. The dispatcher moves the
   abandoned chunk into an `abandoned_chunk` stash on the box (`stash_abandoned_chunk`): its run/unit/chunk identity plus
   **this chunk's** ROMs (only the abandoned chunk, never the whole unit, the `metadatum` source), while it **keeps** the
-  whole-unit staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources`) live for the recovery commit to
-  read and **clears** the dispatch identity (`unit_complete_event` + `active_unit_id` + `active_chunk_index`). It then
-  marks the run `interrupted` and flips CANCELLING so the loop stops. The stash lives **outside** the run-lifecycle
-  state and deliberately survives `finish_run` (which nulls `current_sync_id`), so a late ack arriving after teardown
-  can still recover it (#1367 — an earlier design kept `active_unit_id` live and lost the ack once the run wound down).
-  `SyncReporter.report_unit_results` then matches the stash **by identity** (`take_abandoned_chunk`) and drives
-  `commit_unit_results` **itself** over the stashed rows — every fetched sibling upserted (identity + metadata), only
-  the acked representatives bound, and **never** a `platform_stamp` (a timed-out platform is incomplete) — persisting
-  the delivered bindings instead of leaving orphan shortcuts that the next sync re-creates as duplicates. The stash has
-  a bounded lifetime: the next run's `try_begin_run` clears it, so a frontend that crashes and never acks just leaves
-  inert data. The committed binding is mapped by the next sync's existing-shortcut scan, so no active orphan deletion is
-  needed (a Steam shortcut is the sole record of its tile).
+  whole-unit staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources` / `pending_followed_keys`) live for
+  the recovery commit to read and **clears** the dispatch identity (`unit_complete_event` + `active_unit_id` +
+  `active_chunk_index`). It then marks the run `interrupted` and flips CANCELLING so the loop stops. The stash lives
+  **outside** the run-lifecycle state and deliberately survives `finish_run` (which nulls `current_sync_id`), so a late
+  ack arriving after teardown can still recover it (#1367 — an earlier design kept `active_unit_id` live and lost the
+  ack once the run wound down). `SyncReporter.report_unit_results` then matches the stash **by identity**
+  (`take_abandoned_chunk`) and drives `commit_unit_results` **itself** over the stashed rows — every fetched sibling
+  upserted (identity + metadata), only the acked representatives bound, and **never** a `platform_stamp` (a timed-out
+  platform is incomplete) — persisting the delivered bindings instead of leaving orphan shortcuts that the next sync
+  re-creates as duplicates. The stash has a bounded lifetime: the next run's `try_begin_run` clears it, so a frontend
+  that crashes and never acks just leaves inert data. The committed binding is mapped by the next sync's
+  existing-shortcut scan, so no active orphan deletion is needed (a Steam shortcut is the sole record of its tile).
 
 **Session-budget gate: GC-before-measure at each chunk boundary
 ([ADR-0024](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0024-session-budget-rss-gate.md)).** Steam's
@@ -824,18 +826,29 @@ fresh sync.
 A game frequently exists in a RomM library as several dumps of the same title (region / language / revision variants).
 These share a **sibling group** (same `roms.sibling_group_key`, derived client-side by `domain/sibling_group.py`: a
 connected component over RomM's `sibling_roms` edges, keyed by the highest-priority metadata source the component agrees
-on — `compute_component_group_keys`, stamped onto the raw dicts before the shortcut build: once over the preview's
-union, per platform unit, and once over every collection unit's delivery, ADR-0022). Each stamp reads the key every
-stored row holds, unbound rows' included (`LocalLibraryReader.do_read_resident_group_keys`): RomM lists a version the
-user hid among its siblings' `sibling_roms` but leaves it out of the platform listing, so a new version whose only
-sibling is hidden joins its game only through that row's key (#2617). The sync pipeline treats a group as one game = at
-most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is the group's **active version**.
+on — `compute_group_keys_with_unfetched`, stamped onto the raw dicts before the shortcut build: per platform unit, once
+over every collection unit's delivery, and over the preview's union in the same order, the ROMs the platforms it fetched
+in full returned first and every other ROM after them against the keys those units commit, ADR-0022). Each stamp reads
+the key every stored row holds, unbound rows' included (`LocalLibraryReader.do_read_resident_group_keys`): RomM lists a
+version the user hid among its siblings' `sibling_roms` but leaves it out of the platform listing, so a new version
+whose only sibling is hidden joins its game only through that row's key (#2617). The sync pipeline treats a group as one
+game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is the group's **active version**.
 
 - **Persist all siblings, emit one shortcut per group.** The reporter's per-unit commit upserts a `roms` row (identity +
   version metadata, via the sync UPSERT) for **every** fetched ROM of the unit, but only the group's representative
   carries a Steam-shortcut binding — a non-representative sibling is a tracked, unbound row. Persisting the whole group
   is what the version picker (#1297) and the incremental-skip gate need; binding only the representative is what stops
   the same-named-collision and duplicate-shortcut bugs the ADR describes.
+- **A row its listing leaves out follows its game (#2646).** A platform unit's listing, and the preview's for a platform
+  it fetched in full, is a complete view: RomM leaves a version deleted there, or hidden from the user, out of it, and
+  answers the two the same way. The stamp then also answers the new key of each stored row the listing left out that
+  follows its group — a row an edge of the group reaches, and a bound row whose stored key a member of the group held at
+  the last sync — and does not count the stale summary such a row carries where it alone would split the group (the
+  rules: ADR-0022's amendment). The apply and the preview lay those keys over the bound-row registry before the
+  convergence and the collapse (`services/library/_followed_keys.py`), and every chunk's commit writes them
+  (`Rom.follow_group`), so a game whose version carrying its canonical id is deleted keeps its one shortcut on that
+  version, and a hidden version takes the key its game moves to. The preview reads its registry before it stamps, since
+  the bound rows a listing left out are read off it. A collection unit's keying is unchanged.
 - **The collapse happens at the same `build_shortcuts_data` boundary in both paths**
   (`domain/sync_diff.py::collapse_sibling_groups`). Preview and apply build the full per-ROM shortcut list, then
   collapse it to one entry per group against the bound-row registry (preview reads
@@ -919,15 +932,17 @@ most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is th
   ([ADR-0021](../adr/0021-sibling-group-one-shortcut-binding-active-version.md) §2's amendment). A bound sibling that
   vanished from the server emits nothing and keeps its binding, its shortcut, name and launch command, installed or not;
   the game page says it is gone, and the version picker switches it — unless its game holds another bound shortcut,
-  which converges (below, "Convergence"). The one move left is onto **the same dump under a new id** — in a view that
-  sees the group's whole membership (a platform unit, or the preview for a group a platform unit delivers; a partial
-  collection view never moves a binding), onto a fetched sibling with a file on RomM, no shortcut of its own and the
-  `fs_name_no_ext` the vanished row's stored `fs_name` has without its extension. The collapse then emits a **rebind
-  entry** keyed to the vanished sibling's `rom_id` (so the frontend reuses its existing shortcut through the
-  `rom_id → appId` map — no delete + recreate churn), carrying the target's launch bake and a `bind_rom_id` marker. The
-  commit translates the ack through `bind_rom_id`, so the DB binding moves onto the target; the collision-safe `Rom`
-  save then unbinds the vanished row. The shortcut's appId, artwork, collections and playtime all survive. The #1036
-  committed-appId guard is unchanged (the reused appId is committed this run, so it is never emitted for removal).
+  which converges (below, "Convergence"). It stays in its game's group where it carried the group's canonical id alone,
+  since it follows the key the remaining versions take (above), so no second shortcut is minted beside it. The one move
+  left is onto **the same dump under a new id** — in a view that sees the group's whole membership (a platform unit, or
+  the preview for a group a platform unit delivers; a partial collection view never moves a binding), onto a fetched
+  sibling with a file on RomM, no shortcut of its own and the `fs_name_no_ext` the vanished row's stored `fs_name` has
+  without its extension. The collapse then emits a **rebind entry** keyed to the vanished sibling's `rom_id` (so the
+  frontend reuses its existing shortcut through the `rom_id → appId` map — no delete + recreate churn), carrying the
+  target's launch bake and a `bind_rom_id` marker. The commit translates the ack through `bind_rom_id`, so the DB
+  binding moves onto the target; the collision-safe `Rom` save then unbinds the vanished row. The shortcut's appId,
+  artwork, collections and playtime all survive. The #1036 committed-appId guard is unchanged (the reused appId is
+  committed this run, so it is never emitted for removal).
 - **The stale removal keeps a game gone from RomM.** A bound row no unit of the run returned is sorted by
   `domain/sync_diff.py::sort_stale_rows`: on a platform the run read whole it is gone from RomM and stays bound — and
   stays in its platform's Steam collection. So does a bound row a collection's skip rebuilt from its stored row (above)

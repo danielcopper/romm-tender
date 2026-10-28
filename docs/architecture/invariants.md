@@ -2020,10 +2020,10 @@ Format: **invariant** — tier — enforced by.
   `forget_download` is the uninstall without the file deletion, so it records the same `""` through
   `_drop_install_record` rather than adding a seventh writer site, and
   `tests/services/test_rom_removal.py::TestForgetDownload` and `tests/contract/test_missing_download.py` pin the value
-- **An abandoned-chunk stash's whole-unit apply staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources`)
-  is never mutated while the stash is pending (box IDLE) — every run-entry path passes `try_begin_run`, which clears the
-  stash before any staging write** — prompt-only — the invariant holds today rather than being aspirational; mechanize
-  via a staging-writer call-site audit
+- **An abandoned-chunk stash's whole-unit apply staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources` /
+  `pending_followed_keys`) is never mutated while the stash is pending (box IDLE) — every run-entry path passes
+  `try_begin_run`, which clears the stash before any staging write** — prompt-only — the invariant holds today rather
+  than being aspirational; mechanize via a staging-writer call-site audit
 - **An apply chunk's ack identity — `active_unit_id` / `active_chunk_index` and a fresh `unit_complete_event` — is
   stamped on the box BEFORE that chunk's `sync_apply_unit` is emitted, with nothing awaited in between** — test +
   prompt-only — `tests/services/library/test_chunk_dispatcher.py::TestAckIdentityPrecedesTheEmit`, which wraps
