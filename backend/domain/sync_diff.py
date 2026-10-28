@@ -760,6 +760,7 @@ def compute_platform_collection_diff(
     platform_names: Mapping[str, str],
     *,
     kept_platform_slugs: Collection[str] = (),
+    left_bound_rows: Iterable[StaleRow] = (),
 ) -> dict[str, Any]:
     """Diff future platform-group collections against last-synced platforms.
 
@@ -787,8 +788,19 @@ def compute_platform_collection_diff(
     *kept_platform_slugs* are the platforms of the stale removal's kept rows — a
     version gone from RomM, fetched by nothing — whose collections the apply
     keeps whatever the setting, named through the same *platform_names*.
+    *left_bound_rows* are the other stale rows the run leaves bound — one RomM
+    was asked about and did not return, or one whose game the run synced. Each
+    is filed by :func:`platform_collection_name` over its own ``rom_id``, which
+    *platform_rom_ids* does not hold, as the apply's end-of-run scan files every
+    bound row, so only the platform-groups setting files one.
     """
     future_platforms = {platform_names.get(slug, slug) for slug in kept_platform_slugs}
+    for row in left_bound_rows:
+        name = platform_collection_name(
+            row.rom_id, row.platform_slug, platform_rom_ids, platform_names, create_platform_groups
+        )
+        if name is not None:
+            future_platforms.add(name)
     for sd in shortcuts_data:
         rid = sd.get(BIND_ROM_ID_KEY, sd["rom_id"])
         name = platform_collection_name(

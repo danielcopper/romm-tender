@@ -662,6 +662,22 @@ class TestComputePlatformCollectionDiff:
         )
         assert result == {"has_changes": False, "added_count": 0, "removed_count": 0}
 
+    @pytest.mark.parametrize(
+        ("platform_groups", "expected"),
+        [
+            (True, {"has_changes": False, "added_count": 0, "removed_count": 0}),
+            (False, {"has_changes": True, "added_count": 0, "removed_count": 1}),
+        ],
+        ids=["platform-groups-on", "platform-groups-off"],
+    )
+    def test_a_row_left_bound_is_filed_by_the_setting_alone(self, platform_groups, expected):
+        """A stale row the run leaves bound without keeping it is filed as the apply files every bound row (#2490)."""
+        left_bound = [StaleRow(7, 6007, "n64", "collection")]
+        result = compute_platform_collection_diff(
+            [], set(), ["Nintendo 64"], platform_groups, {"n64": "Nintendo 64"}, left_bound_rows=left_bound
+        )
+        assert result == expected
+
 
 class TestSelectStaleRemovals:
     """``select_stale_removals`` — drop any stale candidate whose appId this run re-bound (#1036)."""

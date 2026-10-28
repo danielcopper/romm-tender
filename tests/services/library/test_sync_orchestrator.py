@@ -7450,6 +7450,79 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         assert platform_collection_diff == applied
 
 
+class TestThePreviewFilesAGameRommDidNotConfirmAsTheApplyDoes:
+    """The preview counts the platform collection of a game RomM did not confirm as the apply files it (#2490 D3).
+
+    GBA's and SNES's sync is off. Faves lists A, 20, on GBA and S, 30, on
+    SNES, and the first run binds both. Then 20 leaves Faves, so the second
+    run asks RomM for it by its exact id: a 404, or an answer that establishes
+    nothing, keeps its shortcut. Each case runs the preview, then the apply it
+    would start, and holds the preview's platform-collection diff against the
+    platform collections that apply sends and the ones the run before it sent.
+    """
+
+    @staticmethod
+    async def _bind_20_and_30(library, fake_romm_api, *, platform_groups):
+        _seed_platform(
+            fake_romm_api, platform_id=2, name="Game Boy Advance", slug="gba", roms=[{"id": 20, "name": "A"}]
+        )
+        _seed_platform(fake_romm_api, platform_id=3, name="Super Nintendo", slug="snes", roms=[{"id": 30, "name": "S"}])
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20, 30])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
+        library.settings["enabled_platforms"] = {"2": False, "3": False}
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        library.settings["collection_create_platform_groups"] = platform_groups
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
+        await library.sync._orchestrator._do_sync_per_unit()
+        with library.uow as uow:
+            assert (uow.roms.get(20).shortcut_app_id, uow.roms.get(30).shortcut_app_id) == (6020, 6030)
+        faves = fake_romm_api.collections[0]
+        faves.update(rom_ids=[30], rom_count=1, updated_at="2030-01-01T00:00:00")
+        fake_romm_api.roms[20]["collection_ids"] = []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "answer",
+        [RommNotFoundError("Rom with id 20 not found"), RommConnectionError("connection refused")],
+        ids=["404", "nothing-established"],
+    )
+    @pytest.mark.parametrize("gba_listed", [True, False], ids=["gba-listed", "gba-no-longer-listed"])
+    @pytest.mark.parametrize("platform_groups", [True, False], ids=["platform-groups-on", "platform-groups-off"])
+    async def test_the_preview_counts_what_the_apply_writes(
+        self, make_library, fake_romm_api, emit, monkeypatch, answer, gba_listed, platform_groups
+    ):
+        """Where RomM no longer lists GBA, its collection is named from the name the first run cached."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind_20_and_30(library, fake_romm_api, platform_groups=platform_groups)
+        fake_romm_api.get_rom_once_side_effect_by_id[20] = answer
+        if not gba_listed:
+            fake_romm_api.platforms = [p for p in fake_romm_api.platforms if p["slug"] != "gba"]
+
+        (
+            _faves_skips,
+            platform_collection_diff,
+            applied,
+            platform_app_ids,
+        ) = await TestThePreviewNamesAPlatformCollectionAsTheApplyDoes._preview_then_apply(library, emit, monkeypatch)
+
+        if platform_groups:
+            assert platform_app_ids == {"Game Boy Advance": [6020], "Super Nintendo": [6030]}
+        else:
+            assert platform_app_ids == {}
+        assert platform_collection_diff == {"has_changes": False, "added_count": 0, "removed_count": 0}
+        assert platform_collection_diff == applied
+        with library.uow as uow:
+            assert uow.roms.get(20).shortcut_app_id == 6020
+
+
 class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
     """The preview's per-platform table labels a platform with the name the apply files it under (#2564).
 

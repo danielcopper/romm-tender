@@ -70,11 +70,13 @@ async def settle_stale_rows(
     cannot decide, settles those by :func:`settle_asked_rows`, and answers the
     marks by :meth:`~domain.sync_diff.StaleSort.gone_from_romm_marks`. A row RomM
     was asked about and did not return — a proven 404, or an answer that
-    established nothing — is in neither list: its shortcut stays, and being kept
-    does not file it in its platform's collection; only the platform-groups
-    setting can. Neither list holds a row whose game the run synced
+    established nothing — is in neither list: its shortcut stays, and it is
+    filed in its platform's collection only where the platform-groups setting
+    files every bound row. Neither list holds a row whose game the run synced
     (*synced_group_keys*) on a platform the run did not read either, though
-    RomM is asked about it where it would be asked about any other row.
+    RomM is asked about it where it would be asked about any other row. The
+    preview reads the rows in neither list as the ones the run leaves bound
+    (``compute_platform_collection_diff``'s *left_bound_rows*).
     """
     sort = sort_stale_rows(
         rows,

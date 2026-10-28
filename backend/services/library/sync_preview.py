@@ -233,8 +233,9 @@ class SyncPreview:
             )
             # The marks are discarded: docs/architecture/backend-architecture.md,
             # "The stale removal keeps a game gone from RomM".
+            stale_rows = stale_rows_of(stale, registry)
             removals, kept, _marks = await settle_stale_rows(
-                stale_rows_of(stale, registry),
+                stale_rows,
                 ask_romm=self._fetcher.ask_romm_for_roms,
                 logger=self._logger,
                 read_platform_slugs=set(slug_to_name),
@@ -243,11 +244,14 @@ class SyncPreview:
                 synced_group_keys=preview_group_keys(synced_rom_ids, resident_keys, all_roms),
             )
             removed_ids = {row.rom_id for row in removals}
+            kept_ids = {row.rom_id for row in kept}
+            left_bound = [row for row in stale_rows if row.rom_id not in removed_ids and row.rom_id not in kept_ids]
             stale = [rid for rid in stale if rid in removed_ids]
             rebuilt = {rom["id"]: rom["platform_slug"] for rom in all_roms if rom["id"] in classify_skipped}
             kept += stale_rows_of(rebuilt_rows_filed_as_kept(rebuilt, set(slug_to_name), platform_rom_ids), registry)
             platform_names = await with_kept_platform_names(
-                {row.platform_slug for row in [*kept, *removals]} | {sd["platform_slug"] for sd in emitted},
+                {row.platform_slug for row in [*kept, *left_bound, *removals]}
+                | {sd["platform_slug"] for sd in emitted},
                 box.run_listed_platform_names,
                 read_kept_names=lambda slugs: self._loop.run_in_executor(
                     None, self._local_library_reader.do_read_kept_platform_names, slugs
@@ -339,6 +343,7 @@ class SyncPreview:
                         self._settings.get("collection_create_platform_groups", False),
                         platform_names,
                         kept_platform_slugs={row.platform_slug for row in kept},
+                        left_bound_rows=left_bound,
                     ),
                 },
                 "new_names": [s["name"] for s in new[:10]],
