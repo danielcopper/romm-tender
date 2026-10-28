@@ -1676,10 +1676,10 @@ Which decision rows a `list_saves` without a device id reaches is under
 
 ```text
 if device_id and slot and not overwrite:
-    latest = saves_in_slot ordered by updated_at desc, then Save.id desc   # newest save in the slot (_saves_query)
-    sync   = get_device_sync(device_id, latest.id)            # our sync row for it, if any
+    latest = first of saves_in_slot by updated_at desc, Save.id desc   # newest save in the slot (_saves_query)
+    sync   = get_device_sync(device_id, latest.id)                      # our sync row for it, if any
     if sync is None or sync.last_synced_at < latest.updated_at:
-        raise HTTP 409                                        # not current (or never synced) → refuse
+        raise HTTP 409                                                  # not current (or never synced) → refuse
 ```
 
 Read in RomM's source at 5.3.0 and unchanged through 5.4.1. The slot's saves are taken over every file name. Two
