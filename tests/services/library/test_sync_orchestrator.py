@@ -7557,12 +7557,13 @@ class TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes:
         fake_romm_api.call_log.clear()
 
         (
-            _faves_skips,
+            faves_skips,
             platform_collection_diff,
             applied,
             platform_app_ids,
         ) = await TestThePreviewNamesAPlatformCollectionAsTheApplyDoes._preview_then_apply(library, emit, monkeypatch)
 
+        assert faves_skips == [not faves_fetched, not faves_fetched]
         asked = [args for name, args, _kwargs in fake_romm_api.call_log if name == "get_rom_once"]
         assert ((22,) in asked) is (route is not None)
         assert platform_app_ids == ({"GBA": [6020]} if platform_groups else {})

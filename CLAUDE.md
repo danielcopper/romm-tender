@@ -740,12 +740,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   for a game RomM did not confirm, filed by the setting alone on both sides, and
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes` for a row whose
   game the run synced, asked about or not. Prompt-only: the collection records are read before the run's first unit
-  (`do_read_collection_listed_rom_ids`), the platform listing is the run's own
-  (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk dispatcher names the unit's kind
-  on every commit, the preview and the apply both sort through `services/library/_stale_rows.py::settle_stale_rows` with
-  the group keys `domain/sync_diff.py::group_keys_of` reads for the run's synced ROMs, and the preview names every
-  platform collection its diff counts by the name the names `services/library/_stale_rows.py::with_kept_platform_names`
-  answers hold for its slug, else the slug — an emitted entry's and a row left bound's through
+  (`do_read_collection_listed_rom_ids`); the platform listing is the run's own
+  (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; the chunk dispatcher names the unit's kind
+  on every commit; the preview and the apply both sort through `services/library/_stale_rows.py::settle_stale_rows` with
+  the group keys `domain/sync_diff.py::group_keys_of` reads for the run's synced ROMs; the preview names every platform
+  collection its diff counts by the name the names `services/library/_stale_rows.py::with_kept_platform_names` answers
+  hold for its slug, else the slug — an emitted entry's and a row left bound's through
   `domain/sync_diff.py::platform_collection_name`, a kept row's by the same lookup in `compute_platform_collection_diff`
   — which must agree with `SyncReporter._names_with_bound_platforms_kept`; the preview hands that diff every stale row
   `settle_stale_rows` neither removes nor keeps; and the preview and the apply both pick the rebuilt rows they file as

@@ -697,13 +697,13 @@ Format: **invariant** — tier — enforced by.
   `tests/domain/test_sync_diff.py::TestComputePlatformCollectionDiff::test_a_row_left_bound_is_filed_by_the_setting_alone`
   the diff's rule;
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes` pins the two
-  agreeing for a row whose game the run synced on a platform it did not read, the only row on that platform once a
+  agreeing for a row whose game the run synced on a platform it did not read, the only bound row on that platform once a
   version switch moved the shortcut onto it, whether RomM is asked about it or not, the collection skipped or fetched,
   with platform groups on and off. The rule spans the domain sort, the reader, the reporter's commit, the chunk
   dispatcher, the fetcher's exact-id question (`LibraryFetcher.ask_romm_for_roms`), the orchestrator and the preview,
   and the preview and the apply each read it — through `services/library/_stale_rows.py::settle_stale_rows` with the
-  same group keys, which is prompt-only, as is that the chunk dispatcher names the unit's kind on every commit, that the
-  listing comes off the run state, and that the preview names every platform collection its diff counts by the name the
+  same group keys, which is prompt-only, as is that the chunk dispatcher names the unit's kind on every commit; that the
+  listing comes off the run state; that the preview names every platform collection its diff counts by the name the
   names `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an
   emitted entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the
   same lookup in `compute_platform_collection_diff` — which must agree with
