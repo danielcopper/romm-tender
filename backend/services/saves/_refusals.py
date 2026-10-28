@@ -47,4 +47,4 @@ class GameRunning(NamedRefused):
 
 def game_running(name: str, **details: Any) -> GameRunning:
     """The refusal of a press that would change the saves of *name*, which is running."""
-    return GameRunning(f"{name} is running. Quit it first; its saves sync when you quit it.", **details)
+    return GameRunning(f"{name} is running. Quit it first.", **details)

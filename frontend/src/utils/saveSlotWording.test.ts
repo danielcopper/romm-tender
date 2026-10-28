@@ -250,7 +250,7 @@ describe("switchSlotFailureMessage", () => {
   });
 
   it("words a running game by the backend's message, which names the game", () => {
-    const running = "Celeste is running. Quit it first; its saves sync when you quit it.";
+    const running = "Celeste is running. Quit it first.";
     expect(switchSlotFailureMessage("game_running", running)).toBe(running);
   });
 
@@ -277,7 +277,7 @@ describe("createSlotFailureMessage", () => {
   });
 
   it("words a running game by the backend's message, which names the game", () => {
-    const running = "Celeste is running. Quit it first; its saves sync when you quit it.";
+    const running = "Celeste is running. Quit it first.";
     expect(createSlotFailureMessage("game_running", running)).toBe(running);
   });
 

@@ -77,11 +77,11 @@ in the moment after you start it, does not count either, and a RetroDECK home mi
 runs or not. In between:
 
 - **Sync All Saves Now** syncs every other game and names the one it left out: "_\<game\>_ was skipped because it is
-  running; its saves sync when you quit it".
+  running".
 - On the running game's page, **Sync Save Files** and **Delete Local Saves** in the **RomM Actions** menu, switching,
   creating or deleting a slot, **Copy to slot**, restoring a version, resolving a conflict and the setup's copy of older
-  saves into a slot are refused: "_\<game\>_ is running. Quit it first; its saves sync when you quit it." A version
-  switch that first syncs the version you leave says the same.
+  saves into a slot are refused: "_\<game\>_ is running. Quit it first." A version switch that first syncs the version
+  you leave says the same.
 - Deleting all local saves of a platform keeps the running game's saves and names it.
 - **Clean Up Removed RomM Games** leaves a removed game that is running as it is — its shortcut, its files and its saves
   — and offers it again the next time.

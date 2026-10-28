@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from services.saves import SaveService
 
 _ROM = 42
-_RUNNING_MESSAGE = "rom-42 is running. Quit it first; its saves sync when you quit it."
+_RUNNING_MESSAGE = "rom-42 is running. Quit it first."
 _TRANSFERS = ("list_saves", "download_save_content", "upload_save", "delete_server_saves", "confirm_download")
 
 
@@ -107,9 +107,7 @@ class TestTheSweepPassesARunningGameOver:
         assert result["success"] is True
         assert result["synced"] == 1
         assert result["skipped_running"] == [{"rom_id": 1, "name": "rom-1"}]
-        assert result["message"] == (
-            "Synced 1 save(s) across 2 ROM(s); rom-1 was skipped because it is running; its saves sync when you quit it"
-        )
+        assert result["message"] == "Synced 1 save(s) across 2 ROM(s); rom-1 was skipped because it is running"
 
     @pytest.mark.asyncio
     async def test_it_asks_when_it_reaches_the_game_not_when_the_sweep_starts(self, tmp_path):
@@ -153,9 +151,7 @@ class TestTheSweepPassesARunningGameOver:
         result = await svc.sync_all_saves()
 
         assert isinstance(result, dict)
-        assert result["message"].endswith(
-            "; rom-1 and rom-2 were skipped because they are running; their saves sync when you quit them"
-        )
+        assert result["message"].endswith("; rom-1 and rom-2 were skipped because they are running")
 
     @pytest.mark.asyncio
     async def test_a_running_game_the_sweep_would_not_sync_anyway_is_not_named(self, tmp_path):

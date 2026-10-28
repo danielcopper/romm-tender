@@ -50,7 +50,7 @@ async def test_sync_all_saves_leaves_the_running_game_alone_and_names_it(harness
     assert os.path.exists(other_save)
     assert result["success"] is True
     assert result["skipped_running"] == [{"rom_id": _RUNNING, "name": "rom-42"}]
-    assert result["message"].endswith("; rom-42 was skipped because it is running; its saves sync when you quit it")
+    assert result["message"].endswith("; rom-42 was skipped because it is running")
 
 
 async def test_sync_saves_on_the_running_game_answers_game_running_naming_it(harness):
@@ -60,7 +60,7 @@ async def test_sync_saves_on_the_running_game_answers_game_running_naming_it(har
 
     assert result["success"] is False
     assert result["reason"] == "game_running"
-    assert result["message"] == "rom-42 is running. Quit it first; its saves sync when you quit it."
+    assert result["message"] == "rom-42 is running. Quit it first."
     assert result["synced"] == 0
     assert not any(call[0] in ("list_saves", "upload_save") for call in harness.romm.call_log)
 

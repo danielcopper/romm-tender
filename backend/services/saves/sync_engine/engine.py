@@ -1114,8 +1114,7 @@ class SyncEngine:
                         return SaveSweepIncomplete(
                             reason="device_sync_disabled",
                             message=running_skips.annotate(
-                                f"{DEVICE_SYNC_DISABLED} — stopped after syncing {total_synced} save(s)",
-                                syncs_on_quit=True,
+                                f"{DEVICE_SYNC_DISABLED} — stopped after syncing {total_synced} save(s)"
                             ),
                             synced=total_synced,
                             conflicts=len(all_conflicts),
@@ -1149,7 +1148,7 @@ class SyncEngine:
                 )
                 return {
                     "success": len(total_errors) == 0,
-                    "message": running_skips.annotate(msg, syncs_on_quit=True),
+                    "message": running_skips.annotate(msg),
                     "synced": total_synced,
                     "conflicts": conflicts_count,
                     "conflicts_list": list(all_conflicts),

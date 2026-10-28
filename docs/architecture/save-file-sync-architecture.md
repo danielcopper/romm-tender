@@ -1974,19 +1974,18 @@ over `RunningRomIdsFn`; what counts as running, and how long a reading may take,
   passes a running game over: nothing of it is listed, moved or written. Its follow takes no second reading
   (`while_running`): it asked a moment before, under the same lock, and a start since is the stop's (below). The rest
   sync, `success` is decided by their errors alone, and the answer names the games passed over — in `message`,
-  "_\<game\>_ was skipped because it is running; its saves sync when you quit it", and in `skipped_running`
-  (`[{rom_id, name}]`). A ROM the sweep would not sync anyway, one whose slot is not confirmed, is not named. The
-  partial answer of a sweep the server stops partway names them in its `message` only, since a partial failure's extras
-  are what was done.
+  "_\<game\>_ was skipped because it is running", and in `skipped_running` (`[{rom_id, name}]`). A ROM the sweep would
+  not sync anyway, one whose slot is not confirmed, is not named. The partial answer of a sweep the server stops partway
+  names them in its `message` only, since a partial failure's extras are what was done.
 - **A press on the running game's page is refused** with `game_running`, whose message names the game ("_\<game\>_ is
-  running. Quit it first; its saves sync when you quit it."): Sync Saves (with `synced=0`), a slot switch, a copy to a
-  slot, a version restore, a slot delete, Delete Local Saves, a conflict resolution, and the setup wizard's migration of
-  legacy saves. Each asks before it follows a moved save directory or touches a file, so a refused press writes nothing.
-  A slot confirmation without a migration writes no save and is not refused. The launch check's conflict dialog resolves
-  before the start and says so (`before_start`, from `gamepadLaunchPrompts.resolveConflicts`), so it is not refused
-  where Steam still lists a start the launch watcher cancelled for the check; a conflict resolved anywhere else — the
-  Play button's Resolve, a copy or a restore — is. A version switch's sync before the switch is a Sync Saves and is
-  refused the same way; the panel shows its message.
+  running. Quit it first."): Sync Saves (with `synced=0`), a slot switch, a copy to a slot, a version restore, a slot
+  delete, Delete Local Saves, a conflict resolution, and the setup wizard's migration of legacy saves. Each asks before
+  it follows a moved save directory or touches a file, so a refused press writes nothing. A slot confirmation without a
+  migration writes no save and is not refused. The launch check's conflict dialog resolves before the start and says so
+  (`before_start`, from `gamepadLaunchPrompts.resolveConflicts`), so it is not refused where Steam still lists a start
+  the launch watcher cancelled for the check; a conflict resolved anywhere else — the Play button's Resolve, a copy or a
+  restore — is. A version switch's sync before the switch is a Sync Saves and is refused the same way; the panel shows
+  its message.
 - **Deleting all local saves of a platform** leaves a running game's saves and record alone, deletes the rest, and names
   it in `message` and `skipped_running`; its `N ROM(s)` leaves the ROMs it passed over out. `count_platform_saves` still
   counts the running game's files, so the button's number is what the delete removes once the game has been quit.

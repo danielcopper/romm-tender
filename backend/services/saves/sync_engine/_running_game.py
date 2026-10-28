@@ -106,19 +106,11 @@ class RunningSkips:
         """The ROMs passed over, as a result carries them."""
         return [{"rom_id": rom_id, "name": name} for rom_id, name in self.skipped]
 
-    def annotate(self, message: str, *, syncs_on_quit: bool = False) -> str:
-        """*message*, with a sentence naming the games passed over where there were any.
-
-        *syncs_on_quit* adds that their saves sync when they are quit, which is
-        true of a sync's skip and not of a delete's.
-        """
+    def annotate(self, message: str) -> str:
+        """*message*, with a clause naming the games passed over where there were any."""
         if not self.skipped:
             return message
         names = [name for _rom_id, name in self.skipped]
         if len(names) == 1:
-            sentence = f"{names[0]} was skipped because it is running"
-            note = "; its saves sync when you quit it"
-        else:
-            sentence = f"{', '.join(names[:-1])} and {names[-1]} were skipped because they are running"
-            note = "; their saves sync when you quit them"
-        return f"{message}; {sentence}{note if syncs_on_quit else ''}"
+            return f"{message}; {names[0]} was skipped because it is running"
+        return f"{message}; {', '.join(names[:-1])} and {names[-1]} were skipped because they are running"

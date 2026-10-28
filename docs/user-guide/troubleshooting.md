@@ -536,7 +536,7 @@ name ([Save Sync](save-sync.md#save-file-location)).
 
 **Symptom**: **Sync All Saves Now** ends with "_\<game\>_ was skipped because it is running", or a press on a game's
 page — **Sync Save Files** or **Delete Local Saves** in the **RomM Actions** menu, or a slot or a version on the
-**Saves** tab — says "_\<game\>_ is running. Quit it first; its saves sync when you quit it."
+**Saves** tab — says "_\<game\>_ is running. Quit it first."
 
 **What happened**: Steam lists that game as starting, running or exiting, and Tender changes no save of a game while it
 runs ([While a game is running](save-sync.md#while-a-game-is-running)).

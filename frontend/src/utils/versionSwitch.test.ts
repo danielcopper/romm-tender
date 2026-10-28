@@ -359,7 +359,7 @@ describe("executeVersionSwitch", () => {
       server_reachable: true,
     });
     askUnsyncedSaves.mockResolvedValueOnce("sync_and_switch");
-    const running = "Game (USA) is running. Quit it first; its saves sync when you quit it.";
+    const running = "Game (USA) is running. Quit it first.";
     vi.mocked(backend.syncRomSaves).mockResolvedValueOnce({
       success: false,
       reason: "game_running",
