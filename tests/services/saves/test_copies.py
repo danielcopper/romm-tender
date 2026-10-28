@@ -610,6 +610,20 @@ class TestCopySaveToSlotRefusals:
         assert result == {"status": "version_deleted"}
 
     @pytest.mark.asyncio
+    async def test_a_deleted_save_copied_into_a_busy_slot_is_version_deleted(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path)
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        _setup_configured(svc, tmp_path, active_slot="autosave", tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = _tracked_save(100, slot="autosave")
+        fake.seed_foreign_save(42, save_id=77, slot=TARGET, uploaded_by="device-B")
+
+        result = await svc.copy_save_to_slot(42, 999, TARGET)
+
+        assert result == {"status": "version_deleted"}
+        assert _require_save_state(svc, 42).active_slot == "autosave"
+
+    @pytest.mark.asyncio
     async def test_server_unreachable_on_post_preflight_list(self, tmp_path):
         """A ``list_saves`` failure AFTER a clean pre-flight → server_unreachable."""
         svc, fake = make_service(tmp_path)
@@ -704,8 +718,9 @@ class TestCopySaveToSlotRefusals:
         assert _require_save_state(svc, 42).last_sync_check_at is not None
 
     @pytest.mark.asyncio
-    async def test_target_slot_busy_on_409(self, tmp_path):
-        """The target slot has a newer foreign save this device hasn't synced → 409 → target_slot_busy."""
+    async def test_a_target_slot_holding_a_save_this_device_never_synced_is_busy(self, tmp_path):
+        """The target slot holds another device's save this device never synced → target_slot_busy,
+        before anything is copied."""
         svc, fake = make_service(tmp_path)
         _create_save(tmp_path)
         local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))

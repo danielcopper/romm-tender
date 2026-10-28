@@ -133,7 +133,7 @@ describe("useCopyToSlot", () => {
     );
   });
 
-  it("target_slot_busy: toasts to resolve the target slot first, no refresh", async () => {
+  it("target_slot_busy: toasts to activate the target slot first, no refresh", async () => {
     await runCopy({ status: "target_slot_busy", message: "busy" }, { target: "promoted" });
 
     expect(toaster.toast).toHaveBeenCalledWith(

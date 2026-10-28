@@ -106,20 +106,18 @@ class SaveCopyService:
         return [lf["filename"] for lf in self._rom_info.find_save_files(rom_id)]
 
     @staticmethod
-    def _find_already_present(server_saves: list[dict[str, Any]], save_id: int, target_slot: str) -> int | None:
-        """The id of a save in *target_slot* whose content matches *save_id*, or None.
+    def _find_already_present(
+        server_saves: list[dict[str, Any]], source: dict[str, Any], target_slot: str
+    ) -> int | None:
+        """The id of a save in *target_slot* whose content matches *source*, or None.
 
         Compares the chosen save's ``content_hash`` (RomM's own digest of the
         bytes) against every save already in the target slot. Returns the first
         match's id — meaning the copy would be a content-identical no-op that
-        RomM would dedup server-side. Returns None when the chosen save is absent
-        (a later ``version_deleted``), carries no ``content_hash`` (older servers;
-        the copy falls through to RomM's own dedup), or has no content twin in the
-        slot.
+        RomM would dedup server-side. Returns None when the chosen save carries
+        no ``content_hash`` (older servers; the copy falls through to RomM's own
+        dedup) or has no content twin in the slot.
         """
-        source = next((s for s in server_saves if s.get("id") == save_id), None)
-        if source is None:
-            return None
         source_hash = source.get("content_hash")
         if not source_hash:
             return None
@@ -147,8 +145,9 @@ class SaveCopyService:
         sync then does is the copy section of
         ``docs/architecture/save-file-sync-architecture.md``. A slot with no such
         save keeps the baseline the download recorded, unless the upload was
-        RomM's 409 (*romm_conflict*): the slot then holds a save *server_saves*
-        does not list, and *canonical*'s tracking is dropped. The baseline, and
+        RomM's 409 (*romm_conflict*): the slot may then hold a save of
+        *canonical* that *server_saves* does not list, so *canonical*'s tracking
+        is dropped. The baseline, and
         the dropped tracking of a head without a ``content_hash`` or an id, are
         :meth:`RomSaveSyncState.adopt_head_with_local_change`'s.
         """
@@ -182,7 +181,7 @@ class SaveCopyService:
         save_state: RomSaveSyncState,
         device_id: LiveDeviceId,
         core_so: str | None,
-        save_id: int,
+        source_save: dict[str, Any],
         target_slot: str,
         info: dict[str, Any],
         server_saves: list[dict[str, Any]],
@@ -193,36 +192,32 @@ class SaveCopyService:
         By the time this runs the caller has already brought the *current* slot
         in sync (the matrix pre-flight) so no dirty local is lost when the
         download below overwrites the canonical local file. This function is the
-        copy proper:
+        copy proper of *source_save*, the chosen save as the caller found it in
+        the (unfiltered) server list:
 
-        1. Locate the chosen save in the (unfiltered) server list; a missing id
-           is ``version_deleted``.
-        2. Download the chosen save's content onto the canonical local file
+        1. Download the chosen save's content onto the canonical local file
            (backs the current local file up first, #965). Where this device
            cannot write it, the copy is ``copy_failed``; a RomM error raises on.
-        3. Make the target the ROM's active/confirmed slot
+        2. Make the target the ROM's active/confirmed slot
            (:meth:`RomSaveSyncState.confirm_slot`) — the upload resolves its slot
            purely from ``active_slot`` (:meth:`RomSaveSyncState.upload_slot`), so this must
            precede the POST for the copy to land in the target.
-        4. POST that content into the now-active target slot
+        3. POST that content into the now-active target slot
            (``server_save=None`` → a new save, ``overwrite=false`` → the 409
            backstop guards a busy target). Any upload error, a 409 included, is
            ``upload_failed``: the copy is complete on this device, the target
-           stays active, and :meth:`_adopt_target_head_as_baseline` records the
-           baseline the next sync compares the copy with.
+           stays active, and :meth:`_adopt_target_head_as_baseline` sets what the
+           next sync compares the copy with.
 
         The source save is never touched. Mutates *save_state* in memory; the
         caller owns the write UoW.
         """
-        target_save = next((s for s in server_saves if s.get("id") == save_id), None)
-        if target_save is None:
-            return {"status": "version_deleted"}
-
+        save_id = source_save.get("id")
         saves_dir = info["saves_dir"]
         system = info["system"]
         rom_name = info["rom_name"]
         save_names = info["save_answer"].synced_names
-        canonical = local_save_target(target_save, rom_name, known_names=save_names)
+        canonical = local_save_target(source_save, rom_name, known_names=save_names)
         local_path = os.path.join(saves_dir, canonical)
 
         # Bring the chosen save's content down onto the canonical local file. The
@@ -230,7 +225,7 @@ class SaveCopyService:
         # ``.romm-backup`` first, so nothing that lives only on disk is lost.
         try:
             self._save_transfer.download_save_file(
-                target_save, saves_dir, canonical, save_state, device_id, system, default_slot
+                source_save, saves_dir, canonical, save_state, device_id, system, default_slot
             )
         except OSError as e:
             self._logger.error(
@@ -310,15 +305,17 @@ class SaveCopyService:
            server answered that it has no such ROM or device id) is ``not_found``
            — distinct so the copy surface never reports an answering server
            offline (#1570) — and any other RomM answer ``classify_error`` does
-           not call unreachable is ``copy_failed`` with its message.
+           not call unreachable is ``copy_failed`` with its message. A chosen
+           save missing from the list is ``version_deleted``.
         9. The copy proper runs in :meth:`_copy_save_to_slot_io`.
 
         A dedup pre-check between the ``list_saves`` and the copy short-circuits
         with ``already_present{existing_id}`` when the chosen save's content is
         already in the target slot — copying it would only churn the tracked save
         (RomM dedups server-side). After it, a target slot whose newest save this
-        device is not current on is ``target_slot_busy`` before anything is
-        written (:func:`slot_refuses_new_save`, RomM's own refusal rule).
+        device is not current on is ``target_slot_busy`` before the copy
+        downloads, backs up or switches anything (:func:`slot_refuses_new_save`,
+        RomM's own refusal rule).
 
         Returns a discriminated-status dict (mirrors ``RollbackStatus``):
         ``ok | already_present{existing_id} | not_configured | invalid_slot_name |
@@ -426,6 +423,11 @@ class SaveCopyService:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "server_unreachable", "message": str(e)}
 
+            source_save = next((s for s in server_saves if s.get("id") == save_id), None)
+            if source_save is None:
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                return {"status": "version_deleted"}
+
             # Dedup pre-check: if the chosen save's content is already present in
             # the target slot, a copy would make RomM dedup server-side and
             # the upload would adopt the pre-existing save as current —
@@ -434,7 +436,7 @@ class SaveCopyService:
             # content_hash RomM populates on each save and refuse without touching
             # any copy state. A missing source content_hash skips the check; the
             # copy then falls through and RomM's own server-side dedup applies.
-            existing_id = self._find_already_present(server_saves, save_id, target_slot)
+            existing_id = self._find_already_present(server_saves, source_save, target_slot)
             if existing_id is not None:
                 self._log_debug(
                     f"copy_save_to_slot: rom {rom_id} save {save_id} already present in slot "
@@ -446,7 +448,7 @@ class SaveCopyService:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "already_present", "existing_id": existing_id}
 
-            # A slot whose times cannot be read (``None``) is left to RomM's 409.
+            # A slot whose newest save cannot be established (``None``) is left to RomM's 409.
             if slot_refuses_new_save(server_saves, target_slot, device_id) is True:
                 self._log_debug(
                     f"copy_save_to_slot: rom {rom_id} slot {target_slot!r} has a newest save this device "
@@ -467,7 +469,7 @@ class SaveCopyService:
                     save_state,
                     device_id,
                     core_so,
-                    save_id,
+                    source_save,
                     target_slot,
                     info,
                     server_saves,
