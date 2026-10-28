@@ -5255,7 +5255,7 @@ describe("RomMPlaySection", () => {
       return view;
     }
 
-    it("says why the game cannot start in the play row, behind the warning sign, and hands Play the same words", async () => {
+    it("says why the game cannot start under the play row's controls, inside the row, behind the warning sign, and hands Play the same words", async () => {
       const { container } = await mountWith({
         emulators: [standaloneEmu("RPCS3 Shortcut (Standalone)", true), standaloneEmu("RPCS3 Directory (Standalone)")],
         emulatorStart: {
@@ -5268,7 +5268,11 @@ describe("RomMPlaySection", () => {
       const sentence =
         "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) can — choose it in the emulator menu.";
       const refusal = container.querySelector<HTMLElement>('.romm-play-section-row [data-testid="emulator-refusal"]');
+      const controls = container.querySelector<HTMLElement>('.romm-play-section-row [data-testid="play-row-controls"]');
       expect(refusal?.textContent).toBe(sentence);
+      // On a line of its own after the controls, not among them.
+      expect(controls!.contains(refusal)).toBe(false);
+      expect(controls!.compareDocumentPosition(refusal!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       expect(refusal!.style.color).toBe("#ffaa00");
       expect(refusal!.querySelector("svg")).not.toBeNull();
       // Said once: in the row, not again under it.

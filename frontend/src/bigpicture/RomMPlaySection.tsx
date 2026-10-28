@@ -935,9 +935,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   }
 
   // Why the game's emulator cannot start it: Play is disabled, and the same
-  // sentence stands in the row beside it, behind the warning sign. Not on a
-  // stranded panel, and not for a download whose file is missing, where the row
-  // says that instead.
+  // sentence stands behind the warning sign on a line of its own under the
+  // row's controls, inside the play row. Not on a stranded panel, and not for a
+  // download whose file is missing, where the row says that instead.
   const emulatorRefusal =
     stranded || fileMissing || detail.emulatorStart === null
       ? null
@@ -964,39 +964,76 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       onFocus={scrollToTop}
       style={{
         display: "flex",
-        alignItems: "center",
-        gap: "20px",
+        flexDirection: "column",
+        gap: "10px",
         padding: "16px 2.8vw",
         background: "rgba(14, 20, 27, 0.33)",
         boxSizing: "border-box",
       }}
     >
-      {/* Play button on the left */}
-      <CustomPlayButton appId={appId} emulatorRefusal={emulatorRefusal} />
-      {/* Disc picker for multi-disc ROMs — renders nothing otherwise (#865), and
-          nothing for a download whose discs are missing */}
-      {fileMissing || stranded ? null : <DiscSelector appId={appId} />}
-      {/* Version picker for multi-version sibling groups — renders nothing otherwise (#1297) */}
-      {stranded ? null : <VersionPicker appId={appId} />}
-      {/* Info items row */}
-      <div
-        className="romm-info-items"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "20px",
-          flexWrap: "nowrap",
-          overflow: "hidden",
-        }}
-      >
-        {infoItems}
+      {/* The controls on one line; why the game cannot start goes on its own
+          line under them, inside the same band. */}
+      <div data-testid="play-row-controls" style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+        {/* Play button on the left */}
+        <CustomPlayButton appId={appId} emulatorRefusal={emulatorRefusal} />
+        {/* Disc picker for multi-disc ROMs — renders nothing otherwise (#865), and
+            nothing for a download whose discs are missing */}
+        {fileMissing || stranded ? null : <DiscSelector appId={appId} />}
+        {/* Version picker for multi-version sibling groups — renders nothing otherwise (#1297) */}
+        {stranded ? null : <VersionPicker appId={appId} />}
+        {/* Info items row */}
+        <div
+          className="romm-info-items"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+            flexWrap: "nowrap",
+            overflow: "hidden",
+          }}
+        >
+          {infoItems}
+        </div>
+        {/* Gear icon buttons pushed to the far right; a stranded panel offers none */}
+        {stranded ? null : (
+          <div
+            style={{
+              marginLeft: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexShrink: 0,
+            }}
+          >
+            {/* RomM actions button */}
+            <DialogButton className="romm-gear-btn" onClick={showRomMMenu} onFocus={scrollToTop} title="RomM Actions">
+              <FaGamepad size={18} color="#553e98" />
+            </DialogButton>
+            {/* Core selection button: where there are emulators to choose between,
+                and where the emulator list could not be established, whose menu
+                then says why. Never for a download whose file is missing. */}
+            {(detail.emulators.length > 1 || !detail.emulatorDataAvailable) && !fileMissing ? (
+              <DialogButton
+                key="core-btn"
+                className="romm-gear-btn"
+                onClick={showCoreMenu}
+                onFocus={scrollToTop}
+                title="Emulator Core"
+              >
+                <FaMicrochip size={18} color={detail.activeCoreIsDefault ? "#8f98a0" : "#d4a72c"} />
+              </DialogButton>
+            ) : null}
+            {/* Steam properties button */}
+            <DialogButton className="romm-gear-btn" onClick={showSteamMenu} onFocus={scrollToTop} title="Steam Properties">
+              <FaCog size={18} color="#8f98a0" />
+            </DialogButton>
+          </div>
+        )}
       </div>
       {emulatorRefusal === null ? null : (
         <div
           data-testid="emulator-refusal"
           style={{
-            flex: "1 1 0",
-            minWidth: 0,
             display: "flex",
             alignItems: "center",
             gap: "6px",
@@ -1006,41 +1043,6 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         >
           <FaExclamationTriangle size={12} style={{ flexShrink: 0 }} />
           <span>{emulatorRefusal}</span>
-        </div>
-      )}
-      {/* Gear icon buttons pushed to the far right; a stranded panel offers none */}
-      {stranded ? null : (
-        <div
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            flexShrink: 0,
-          }}
-        >
-          {/* RomM actions button */}
-          <DialogButton className="romm-gear-btn" onClick={showRomMMenu} onFocus={scrollToTop} title="RomM Actions">
-            <FaGamepad size={18} color="#553e98" />
-          </DialogButton>
-          {/* Core selection button: where there are emulators to choose between,
-              and where the emulator list could not be established, whose menu
-              then says why. Never for a download whose file is missing. */}
-          {(detail.emulators.length > 1 || !detail.emulatorDataAvailable) && !fileMissing ? (
-            <DialogButton
-              key="core-btn"
-              className="romm-gear-btn"
-              onClick={showCoreMenu}
-              onFocus={scrollToTop}
-              title="Emulator Core"
-            >
-              <FaMicrochip size={18} color={detail.activeCoreIsDefault ? "#8f98a0" : "#d4a72c"} />
-            </DialogButton>
-          ) : null}
-          {/* Steam properties button */}
-          <DialogButton className="romm-gear-btn" onClick={showSteamMenu} onFocus={scrollToTop} title="Steam Properties">
-            <FaCog size={18} color="#8f98a0" />
-          </DialogButton>
         </div>
       )}
     </Focusable>
