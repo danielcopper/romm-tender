@@ -137,7 +137,9 @@ describe("useCopyToSlot", () => {
     await runCopy({ status: "target_slot_busy", message: "busy" }, { target: "promoted" });
 
     expect(toaster.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ body: expect.stringContaining("sync it first") }),
+      expect.objectContaining({
+        body: "Slot 'promoted' has newer changes from another device. Nothing was copied — activate that slot first, then copy again.",
+      }),
     );
     expect(dataChanged).not.toHaveBeenCalled();
   });

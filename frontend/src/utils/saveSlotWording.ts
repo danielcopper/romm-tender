@@ -71,7 +71,7 @@ export function copyToSlotFeedback(
     case "target_slot_busy":
       return {
         kind: "toast",
-        message: `Slot '${displaySlot(targetSlot)}' has newer changes on another device — sync it first, then copy again.`,
+        message: `Slot '${displaySlot(targetSlot)}' has newer changes from another device. Nothing was copied — activate that slot first, then copy again.`,
       };
     case "preflight_failed":
       return {

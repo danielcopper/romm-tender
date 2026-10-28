@@ -114,7 +114,8 @@ describe("copyToSlotFeedback", () => {
   it("formats target_slot_busy status", () => {
     expect(copyToSlotFeedback({ status: "target_slot_busy", message: "busy" }, "slotB")).toEqual({
       kind: "toast",
-      message: "Slot 'slotB' has newer changes on another device — sync it first, then copy again.",
+      message:
+        "Slot 'slotB' has newer changes from another device. Nothing was copied — activate that slot first, then copy again.",
     });
   });
 
