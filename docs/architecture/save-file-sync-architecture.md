@@ -1604,13 +1604,13 @@ neither in place):
    9b judges the copy by raw size. A new slot has no save to record, and the next sync uploads the copy as its first
    save (row 2) — unless the upload was a 409 and the slot then holds a save of this file the step-5 listing did not:
    the file's tracking is dropped, and the next sync asks which to keep (row 11b) rather than download that save over
-   the copy. A save of another file that RomM refused on reaches the next sync's 409 backstop with nothing to reconcile,
-   and is reported as that file's error. Where the newest save carries no `content_hash` or no id, there is no baseline
-   to record from it, and the file's tracking is dropped instead: with no baseline beside a head it cannot prove the
-   copy identical to, the next sync answers a conflict — row 8b where this device is current on that save, row 11b where
-   it is not. Neither alternative holds: a hash made up to differ from the copy would claim a sync that never happened,
-   and keeping the download's baseline, which the copy matches, would let a next sync on a head this device is not
-   current on download that head over the copy.
+   the copy. Where the save RomM refused on is of another file, the copy's upload reaches the next sync's 409 backstop
+   with nothing to reconcile and is reported as an error for the copied file. Where the newest save carries no
+   `content_hash` or no id, there is no baseline to record from it, and the file's tracking is dropped instead: with no
+   baseline beside a head it cannot prove the copy identical to, the next sync answers a conflict — row 8b where this
+   device is current on that save, row 11b where it is not. Neither alternative holds: a hash made up to differ from the
+   copy would claim a sync that never happened, and keeping the download's baseline, which the copy matches, would let a
+   next sync on a head this device is not current on download that head over the copy.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?, message?} |
