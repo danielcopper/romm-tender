@@ -1683,16 +1683,16 @@ it, for the focused platform:
   `active_core_label` only where no entry is the launching emulator's — the pick those very counts were filtered by,
   never the core read beside it on the page. That is the emulator's name; the platform header prints the launch entry's,
   and the two can differ
-  ([core-emulator-selection.md](core-emulator-selection.md#standalone-emulator-selection-first-safely-bakeable), "The
-  BIOS part names the emulator; the launch places name the entry"). An empty `required_count` is worded "`<emulator>`
-  marks none of its BIOS files as required" and a one-of group with no image in place "`<emulator>` cannot start this
-  system without a BIOS image", because both are statements about one emulator's declaration. Whether the console itself
-  starts without an image is the resolver's to weigh into the verdict, and it is said of the console in a sentence of
-  its own (`console_needs_image`), so a subjectless sentence would state the count's conclusion as though the console
-  had been asked. Where the pick has no label the sentences name the role instead ("The launching emulator …"), and the
-  short `status` beside `BIOS FILES` stays subjectless because it is a heading, with the sentence under it where a name
-  fits. "Emulator" and never "core": what a platform launches with can be a STANDALONE emulator, which is not a core,
-  and the whole answer is keyed on the emulator's identity for that reason.
+  ([core-emulator-selection.md](core-emulator-selection.md#the-default-the-first-in-declared-order), "The BIOS part
+  names the emulator; the launch places name the entry"). An empty `required_count` is worded "`<emulator>` marks none
+  of its BIOS files as required" and a one-of group with no image in place "`<emulator>` cannot start this system
+  without a BIOS image", because both are statements about one emulator's declaration. Whether the console itself starts
+  without an image is the resolver's to weigh into the verdict, and it is said of the console in a sentence of its own
+  (`console_needs_image`), so a subjectless sentence would state the count's conclusion as though the console had been
+  asked. Where the pick has no label the sentences name the role instead ("The launching emulator …"), and the short
+  `status` beside `BIOS FILES` stays subjectless because it is a heading, with the sentence under it where a name fits.
+  "Emulator" and never "core": what a platform launches with can be a STANDALONE emulator, which is not a core, and the
+  whole answer is keyed on the emulator's identity for that reason.
 
   **The game page's BIOS tab is among its tabs for every game from the moment the page opens**, and no answer takes it
   away. The cached detail carries no BIOS answer, so the tab's comes from the live `get_bios_status` read a moment
