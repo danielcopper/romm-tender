@@ -289,14 +289,15 @@ holding more than one bound shortcut converges on the next sync
   at all.
 - **Where.** On a complete view only: the listing of a platform unit the run fetches in full, and in the preview the
   same listings. A platform whose rows still hold such a group is never skipped, so it is fetched in full once,
-  converges and skips again.
+  converges and skips again. A group one of whose shortcuts Steam lists as running is left out of that run (#2645 D5)
+  and its platform fetched in full again on the next.
 - **How.** The other shortcuts are removals the preview counts and the finalize of a run that was not stopped makes,
   beside the stale ones; their rows are unbound, and every row's saves, playtime and install records stay. Before a
-  shortcut goes, the panel carries over to the kept one the user's Steam collections, Favorites and Hidden, and each
-  image but the icon set in Steam where the kept one has none set in Steam; the removal then resets the removed appId's
-  Steam Input setting and deletes its grid images. An icon set in Steam stays behind — Steam keeps it as a path in
-  `shortcuts.vdf`, which only the backend reads — with Steam's own playtime, screenshots and a controller layout stored
-  under the removed shortcut's name.
+  shortcut goes, the panel carries over to the kept one the user's Steam collections, Favorites and Hidden (neither of
+  the last two measured on a device when this amendment was written), and each image but the icon set in Steam where the
+  kept one has none set in Steam; the removal then resets the removed appId's Steam Input setting and deletes its grid
+  images. An icon set in Steam stays behind — Steam keeps it as a path in `shortcuts.vdf`, which only the backend reads
+  — with Steam's own playtime, screenshots and a controller layout stored under the removed shortcut's name.
 
 The rejection of a force-collapse under Alternatives stands for a migration; this convergence is a sync step the preview
-shows, and it moves what Steam lets it move instead of deleting it.
+shows, and before it removes a shortcut it moves to the one that stays what Steam lets a session move.

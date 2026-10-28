@@ -42,8 +42,8 @@ if TYPE_CHECKING:
 # the platform's Steam collection by the name the sync gave it. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
 _PLATFORM_NAMES_KEY = "platform_names"
 
-# The claims a removal holds on the prune conflicts: the three use cases'
-# operations and the lease between them.
+# The claims a removal holds on the prune conflicts: each removal endpoint's
+# operation, and the lease a removal set holds from its call to its report.
 _REMOVAL_CLAIMS = frozenset(
     {
         "remove_all_shortcuts",

@@ -696,7 +696,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
   rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
   `fs_name_no_ext`; and a bound member gone from RomM is rebound only by that same rule, installed or not, its stem read
-  off its stored `fs_name`, and otherwise keeps its binding** — test + prompt-only —
+  off its stored `fs_name`, and otherwise keeps its binding — each of these unless its group holds another bound
+  shortcut, where `domain/sync_diff.py::converge_bound_groups` decides which binding stays** — test + prompt-only —
   `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile`,
   `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` (the name, shortcut and partial-view cases),
   `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default`,
@@ -721,10 +722,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   and any other answer writes nothing. Beside it, a group holding more than one bound shortcut converges (#2645): on a
   platform unit the run fetched in full, every bound row of such a group but the one
   `domain/sync_diff.py::converge_bound_groups` keeps is removed and unbound on a run that was not stopped — never sorted
-  as stale, and never over an appId the run bound — with the preview counting the same removals, and no platform whose
-  rows still hold such a group is skipped. The removed-game cleanup's own proof marks and clears rows too, by its rule
-  in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
-  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
+  as stale, never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running —
+  with the preview counting the same removals, and no platform whose rows still hold such a group is skipped. The
+  removed-game cleanup's own proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md,
+  "Discovery"** — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (among it the third run, the stopped run, the platform route and the fallback),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`

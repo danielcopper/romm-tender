@@ -918,16 +918,16 @@ most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is th
 - **A version gone from RomM stays bound; only the same dump takes its binding**
   ([ADR-0021](../adr/0021-sibling-group-one-shortcut-binding-active-version.md) §2's amendment). A bound sibling that
   vanished from the server emits nothing and keeps its binding, its shortcut, name and launch command, installed or not;
-  the game page says it is gone, and the version picker switches it. The one move left is onto **the same dump under a
-  new id** — in a view that sees the group's whole membership (a platform unit, or the preview for a group a platform
-  unit delivers; a partial collection view never moves a binding), onto a fetched sibling with a file on RomM, no
-  shortcut of its own and the `fs_name_no_ext` the vanished row's stored `fs_name` has without its extension. The
-  collapse then emits a **rebind entry** keyed to the vanished sibling's `rom_id` (so the frontend reuses its existing
-  shortcut through the `rom_id → appId` map — no delete + recreate churn), carrying the target's launch bake and a
-  `bind_rom_id` marker. The commit translates the ack through `bind_rom_id`, so the DB binding moves onto the target;
-  the collision-safe `Rom` save then unbinds the vanished row. The shortcut's appId, artwork, collections and playtime
-  all survive. The #1036 committed-appId guard is unchanged (the reused appId is committed this run, so it is never
-  emitted for removal).
+  the game page says it is gone, and the version picker switches it — unless its game holds another bound shortcut,
+  which converges (below, "Convergence"). The one move left is onto **the same dump under a new id** — in a view that
+  sees the group's whole membership (a platform unit, or the preview for a group a platform unit delivers; a partial
+  collection view never moves a binding), onto a fetched sibling with a file on RomM, no shortcut of its own and the
+  `fs_name_no_ext` the vanished row's stored `fs_name` has without its extension. The collapse then emits a **rebind
+  entry** keyed to the vanished sibling's `rom_id` (so the frontend reuses its existing shortcut through the
+  `rom_id → appId` map — no delete + recreate churn), carrying the target's launch bake and a `bind_rom_id` marker. The
+  commit translates the ack through `bind_rom_id`, so the DB binding moves onto the target; the collision-safe `Rom`
+  save then unbinds the vanished row. The shortcut's appId, artwork, collections and playtime all survive. The #1036
+  committed-appId guard is unchanged (the reused appId is committed this run, so it is never emitted for removal).
 - **The stale removal keeps a game gone from RomM.** A bound row no unit of the run returned is sorted by
   `domain/sync_diff.py::sort_stale_rows`: on a platform the run read whole it is gone from RomM and stays bound — and
   stays in its platform's Steam collection. So does a bound row a collection's skip rebuilt from its stored row (above)
@@ -995,18 +995,24 @@ most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is th
   joined after each part got its shortcut) keeps one (#2645, ADR-0021's amendment). A platform unit asks
   `domain/sync_diff.py::converge_bound_groups` over its listing and its platform's bound rows, the bound rows it does
   not list included: of a group `groups_to_converge` names, the shortcut stays on an installed listed version (the chain
-  ranking several), else an installed unlisted one, else the chain's pick among the listed ones, else the unlisted one
-  with the lowest `rom_id`. Installs of the unlisted rows come from `LocalLibraryReader.do_read_installed_rom_ids`. The
-  collapse takes the losers (`converged=`), emits nothing for them and still counts their shortcuts as held, so no
-  shortcut moves onto one in the same run. The run keeps them on `LibrarySyncStateBox.run_converged`; the finalize of a
-  run that was not stopped takes them out of the stale scan, passes them through `select_stale_removals` (#1036) and
-  sends them in `sync_stale` with `kept_rom_id` / `kept_app_id`, the row its game keeps once the run commits
-  (`with_kept_rows_rebound`), and the reporter unbinds them with the stale rows. A stopped run removes nothing. The
-  preview runs the same rule over the listings of the platform units it fetched in full and counts the losers as
-  removals. A collection unit never converges and never sees a loser: it leaves out every member a platform unit synced
-  and every member no listing returns. The panel carries each loser's Steam state over before the removal
-  (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removed appIds through `report_converged_removals`,
-  which resets their Steam Input setting and deletes their grid images, and leaves the per-ROM cover cache.
+  ranking several), else an installed unlisted one, else the chain's pick among the listed ones (one RomM holds a file
+  for before one without), else the unlisted one with the lowest `rom_id`. Installs of the unlisted rows come from
+  `LocalLibraryReader.do_read_installed_rom_ids`. A group one of whose bound shortcuts Steam lists as running is left
+  out (#2645 D5): `services/library/_convergence.py::converge_unless_running` reads `RunningGames.running_rom_ids` — the
+  reading the removed-game cleanup leaves a running game out by — only when a group would converge, in the apply's
+  platform unit and in the preview each at its own time. A platform whose rows hold such a group is never skipped
+  (`domain/fetch_generation.py::convergence_pending`), so it is fetched in full on every sync until the game has
+  converged, a game left out while it runs included. The collapse takes the losers (`converged=`), emits nothing for
+  them and still counts their shortcuts as held, so no shortcut moves onto one in the same run. The run keeps them on
+  `LibrarySyncStateBox.run_converged`; the finalize of a run that was not stopped takes them out of the stale scan,
+  passes them through `select_stale_removals` (#1036) and sends them in `sync_stale` with `kept_rom_id` / `kept_app_id`,
+  the row its game keeps once the run commits (`with_kept_rows_rebound`), and the reporter unbinds them with the stale
+  rows. A stopped run removes nothing. The preview runs the same rule over the listings of the platform units it fetched
+  in full and counts the losers as removals. A collection unit never converges and never sees a loser: it leaves out
+  every member a platform unit synced and every member no listing returns. The panel carries each loser's Steam state
+  over before the removal (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removed appIds through
+  `report_converged_removals`, which resets their Steam Input setting and deletes their grid images, and leaves the
+  per-ROM cover cache.
 - **Downstream group semantics.** The incremental-skip gate compares RomM's whole visible id set — every sibling, bound
   or unbound — with the checksum the completion stamp recorded (#743), so skip parity on platforms with sibling groups
   holds. The **backfill gate reads the stamp's fetch generation**: a NULL `sibling_group_key` forces a full fetch only
@@ -1159,17 +1165,18 @@ re-run"), and the gated apply's 0-delta final chunk writes the fresh stamp, whic
 margin outlives (the margin paragraph above).
 
 **A bound row the stamp's fetch did not return no longer holds the skip
-([#743](https://github.com/danielcopper/romm-tender/issues/743) D10).** Such a row is a version gone from RomM —
-deleted, or hidden — and it stays bound: the stale removal keeps a bound row missing from a platform the run read whole
-(ADR-0021 §2's amendment), and a run stopped before its end scans for none at all. The skip rebuilds its unit from every
-bound row, so a rebuilt unit carries it as if RomM had returned it, and the run's stale-removal scan never names it —
-which the keep rule would not act on anyway. Before the checksum the gate full-fetched while any bound row lacked the
-stamp's generation, because its count guards could miss such a row and a full fetch was the only way to see an id a
-re-import reissued. The checksum answers both: it records that the stamp's fetch did not return the row, and any change
-to the visible id set since — a reissued id included — forces the full fetch the same-dump move needs. With an equal
-checksum and nothing newer there is nothing for a full fetch to learn, so the platform skips. The row stays bound and
-still shows in the removed-game cleanup's list ([Removed-game cleanup](removed-game-cleanup.md#discovery)), which reads
-the generations, not the skip.
+([#743](https://github.com/danielcopper/romm-tender/issues/743) D10)** — unless its group holds another bound shortcut:
+then the platform is fetched in full until the group has converged (Sibling groups, "Convergence"). Such a row is a
+version gone from RomM — deleted, or hidden — and it stays bound: the stale removal keeps a bound row missing from a
+platform the run read whole (ADR-0021 §2's amendment), and a run stopped before its end scans for none at all. The skip
+rebuilds its unit from every bound row, so a rebuilt unit carries it as if RomM had returned it, and the run's
+stale-removal scan never names it — which the keep rule would not act on anyway. Before the checksum the gate
+full-fetched while any bound row lacked the stamp's generation, because its count guards could miss such a row and a
+full fetch was the only way to see an id a re-import reissued. The checksum answers both: it records that the stamp's
+fetch did not return the row, and any change to the visible id set since — a reissued id included — forces the full
+fetch the same-dump move needs. With an equal checksum and nothing newer there is nothing for a full fetch to learn, so
+the platform skips. The row stays bound and still shows in the removed-game cleanup's list
+([Removed-game cleanup](removed-game-cleanup.md#discovery)), which reads the generations, not the skip.
 
 The stamp's contract is **a stamp may authorise a skip ⟺ the platform's most recent apply attempt ran to completion, and
 neither a local removal nor a stale removal on a run that did not process the platform has unbound one of its rows

@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 # Marker key a rebind entry carries so the per-unit commit moves the DB binding
 # from the bound sibling it is keyed by (the entry's ``rom_id``, kept so the
 # frontend reuses its existing shortcut) onto the same dump under the sibling it
-# names. Absent on normal / grandfathered entries. See
+# names. Absent on new and bound entries. See
 # :func:`collapse_sibling_groups`.
 BIND_ROM_ID_KEY = "bind_rom_id"
 
@@ -266,7 +266,7 @@ def collapse_sibling_groups(
       ``name`` replaced by :func:`canonical_group_name` — the region-preferred
       member's name mints the sticky Steam shortcut (ADR-0021 §2/§3), while the
       representative's ``rom_id`` / launch bake stay the bind target. This is the
-      only lane that renames: an already-bound group (grandfathered / rebind)
+      only lane that renames: an already-bound group (bound / rebind)
       carries its persisted name verbatim, so a live shortcut is never renamed.
     * **Grandfathered untouched** (partial view only) — the group holds a binding
       that is not in THIS fetch: emit nothing. Absence from a partial view is not
@@ -280,7 +280,7 @@ def collapse_sibling_groups(
 
     Bound rows are grouped by their FETCHED sibling key when the row is in this
     fetch (so a legacy row whose stored key is still NULL is placed in its real
-    group and grandfathered rather than churned), falling back to the stored key
+    group and kept bound rather than churned), falling back to the stored key
     for a vanished bound row.
 
     *preferred_region* re-heads the region ranking that both the representative

@@ -422,6 +422,11 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
 - **Stranded version** — an installed version whose local saves the stranding verdict answers `unsynced`, or `unchecked`
   where the check could not tell, so leaving it strands them: the active version a switch would leave, or an inactive
   one already left. Unrelated to a **stranded panel**.
+- **Convergence** — a sync taking a group that holds more than one bound shortcut down to one: the shortcut bound to the
+  version `domain/sync_diff.py::converge_bound_groups` keeps stays, every other one is removed and its row **unbound**,
+  and every version's per-ROM state stays. Only a platform unit the sync fetched in full converges, and the preview
+  counts the same removals; a group one of whose shortcuts is running waits for a later sync. Not a **stale** removal:
+  the version it takes the shortcut off is still a version of a game the sync syncs.
 
 **Region** and **Languages** are **attributes of a single version**, parsed from its filename tags: `(Spain)` → where
 that release shipped; `(En,Fr,De,Es)` → the languages contained in that one dump. A multi-language version is still one
@@ -1116,9 +1121,9 @@ Three deliberately-distinct ROM-removal notions (see [ADR-0007](docs/adr/0007-ro
 - **Stale** — a **bound** ROM that no unit of a sync returned, judged only when the sync was not stopped (→ SyncRun); a
   unit the sync skipped as unchanged counts as returning every ROM it held. Triggers an **unbind** only for a ROM
   outside what the sync syncs — its platform turned off, or RomM still serving it outside every synced collection — and
-  never a delete: a ROM RomM no longer serves keeps its binding until the user switches versions or runs a **Prune**, or
-  until the same dump comes back under a new id, which the binding then moves onto. Local playtime/saves must survive
-  either way.
+  never a delete: a ROM RomM no longer serves keeps its binding until the user switches versions or runs a **Prune**,
+  until the same dump comes back under a new id, which the binding then moves onto, or until its group holds another
+  bound shortcut and converges (→ Convergence). Local playtime/saves must survive either way.
 - **Prune** — an explicit, opt-in purge that `DELETE`s the `roms` row, cascading every per-ROM child away atomically.
   The **only** thing that deletes rows. **Clean Up Removed RomM Games** performs it only after fresh exact-ID 404s,
   explicit options, and any enabled recovery bundle have passed their final guards.
