@@ -1,3 +1,10 @@
+---
+status: accepted
+decided: 2026-07-04
+updated: 2026-10-28
+amended-by: [0030]
+---
+
 # The live `es_systems.xml` is the sole source for per-system emulator resolution; the curated `core_defaults.json` snapshot is deleted
 
 ## Status
@@ -301,3 +308,17 @@ baked-`launch_options` model + the `resolve_emulator_invocation` seam),
 reads on the same bake), [Core and Emulator Selection](../architecture/core-emulator-selection.md) (the resolver,
 precedence, classifier, and picker in detail), [Config Source Parsers](../architecture/config-source-parsers.md)
 (`es_systems.xml` as the sole core/emulator source).
+
+## Amendment — the default is the first entry in declared order, nothing skipped
+
+The default is the entry a system's catalogue declares first, read off the resolver's `declared_index`, whatever Tender
+can do with it ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7). The rule above, "the first
+safely-bakeable command in document order", passed over an entry Tender could not bake for a later one it could, so a
+game started with an emulator neither the user nor the system's own order had chosen. Now nothing is skipped: an entry
+Tender cannot bake starts through RetroDECK's plain launch, one that cannot start at all — not installed, or one
+RetroDECK's start script runs nothing for — is said so and its game's Play is disabled, and one whose installation
+cannot be established leaves the game without a default until the user picks one. A choice made inside ES-DE
+(`alternativeEmulator`, a per-game `altemulator`) still never becomes the default (ADR-0012 stands); it is shown beside
+Tender's own choice. The effective default, which follows those choices, was not chosen: what the user sets in ES-DE is
+ES-DE's, and Tender's choice is made in Tender. The rows the picker lists are every entry, in the resolver's order, two
+labels that run one command included (D8).

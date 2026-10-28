@@ -1,7 +1,8 @@
 ---
 status: accepted
 decided: 2026-09-07
-updated: 2026-10-05
+updated: 2026-10-28
+amends: [0020]
 amended-by: [0042]
 ---
 

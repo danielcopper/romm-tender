@@ -1061,15 +1061,16 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`TestOnePlatformOneEmulator`,
   `TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required`,
   `TestTheAnswerNamesTheEmulatorItJudgedBy`, `TestOneRomOneEmulator`, `TestEachEmulatorsOwnPlace`); prompt-only: every
-  platform BIOS site resolves through `domain/emulator_commands.py::resolve_firmware_option` (the platform's core read
-  names the bake pick alone, `resolve_platform_label`), `.label` and `.emulator` come off one call, the key is the
-  emulator identity and never `.core_so`, and both game-page services ask `ActiveCoreReader.active_emulator_for_rom`,
-  never `active_core_for_rom`; the one-of groups an answer judges are that same pick's (`groups_for(identity)`), and so
-  are the rows (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other emulator's answer is an entry of
-  its own (`emulator_tabs`) the BIOS tables' emulator selector shows, which never changes the level, the header's counts
-  or the badge — on the platform page `Download required` fetches what the emulator shown requires (`emulator`, `None`
-  for the pick; an identity the answer holds no verdict for is refused `emulator_unknown`,
-  `TestEachEmulatorsOwnPlace::test_download_required_fetches_for_the_shown_emulator`,
+  platform BIOS site resolves through `domain/emulator_commands.py::resolve_firmware_option` (the pick while its label
+  exists, else the shipped default whatever its state; the platform's core read names the pick or Tender's default,
+  #2195 D4), `.label` and `.emulator` come off one call, the key is the emulator identity and never `.core_so`, and both
+  game-page services ask `ActiveCoreReader` — `resolve_rom` for the picker, `active_emulator_for_rom` for the BIOS
+  question, one resolution — never `active_core_for_rom`; the one-of groups an answer judges are that same pick's
+  (`groups_for(identity)`), and so are the rows (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other
+  emulator's answer is an entry of its own (`emulator_tabs`) the BIOS tables' emulator selector shows, which never
+  changes the level, the header's counts or the badge — on the platform page `Download required` fetches what the
+  emulator shown requires (`emulator`, `None` for the pick; an identity the answer holds no verdict for is refused
+  `emulator_unknown`, `TestEachEmulatorsOwnPlace::test_download_required_fetches_for_the_shown_emulator`,
   `::test_an_emulator_the_answer_does_not_hold_is_refused`); where a download is linked follows no pick: every download
   lands in the platform's store folder and is linked wherever an emulator of the platform opens the file (#2191 D3,
   `::test_a_game_page_download_links_the_file_for_every_emulator_of_the_platform`). Tests on the bare

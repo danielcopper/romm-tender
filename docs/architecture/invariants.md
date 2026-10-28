@@ -1593,48 +1593,48 @@ Format: **invariant** — tier — enforced by.
   for a third resolution that diverges on some other configuration;
   `::TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required` holds the download button
   to the same pick. The pick is `domain/emulator_commands.py::resolve_firmware_option` — the per-platform override
-  (`settings.json` `platform_cores`) when its label still names a bakeable emulator, else the es_systems default
-  (`resolve_platform_option`), and where nothing is bakeable the emulator RetroDECK declares first, installed or not,
-  which its plain launch starts unless an alternative emulator is set in ES-DE (#2190 D26) — and it is the read-path
-  precedence `ActiveCoreResolver` applies minus the per-game layer. Two call sites read it today:
+  (`settings.json` `platform_cores`) while its label still names an entry, whatever that entry's state, else the entry
+  the source ships first, whatever its state, since an emulator that cannot start still declares the firmware it would
+  need ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7, D23) — and it is the read-path precedence
+  `ActiveCoreResolver` applies minus the per-game layer. Two call sites read it today:
   `FirmwareStatusReader._platform_emulator` (which serves BOTH the per-platform answer's `active_core` /
   `active_core_label` and `check_platform_bios`'s `launching_emulator=None` fallback) and
   `FirmwareDownloader._platform_emulator_identity` (the emulator `Download required` fetches for where the page names
-  none). The platform's core read (`CoreService.get_system_core_info`) is not one of them: its `active_core_label` is
-  the bake pick alone (`resolve_platform_label`), and agrees with the BIOS pick wherever a bakeable emulator exists.
-  **Nothing joins them**, and a fourth resolution is exactly what this entry is about: the pane displayed a just-picked
-  PCSX ReARMed and judged the platform by the libretro system default beside it, so one PlayStation read `ok` on the
-  game page and `missing` on the pane. `.label` and `.emulator` must come off ONE call — two calls agree by coincidence,
-  which is what the old pair did until an override was set. **One seam now carries the pick rather than a projection of
-  it**: `BiosChecker` takes a `LaunchingEmulator` (`domain/emulator_commands.py` — `emulator` and `label`, both
-  read-only), so the per-game caller hands over the whole resolution and `check_platform_bios` reads both projections
-  off that one value. A mismatched pair is not representable there, which is why the answer may state its own
-  `active_core_label`: it is the label half of the pick those very counts were filtered by
-  (`TestTheAnswerNamesTheEmulatorItJudgedBy`, which hands the check two picks differing only in label and holds the
-  label to moving while the judgment does not). That covers this seam and no other — the remaining sites still pair by
-  discipline. The game page's BIOS headline names the emulator by the answer's launching entry in `emulator_tabs` —
-  every label its identity goes by (#2190 D28, D38) — and by `active_core_label` only where no entry is the launching
-  emulator's (`launchingName` in `frontend/src/utils/biosSummary.ts`). **The key is the emulator IDENTITY, not
-  `.core_so`** (#1821): the identity names a standalone pick as readily as a libretro one, where `core_so` is `None` for
-  every standalone emulator, and a pick with no identity is answered as not established (#2190 D26). Reaching for
-  `.core_so` here again would turn every standalone pick into that answer silently, because the field is still there and
-  still right for the picker payload beside it. `CoreInfoProvider.get_active_core` — the "first libretro entry, bakeable
-  or not" reading these sites used — has no production caller left. **The ROM scope is the same rule one layer in, over
-  a different pair of modules**: the game page is assembled by two services that each ask
-  `ActiveCoreReader.active_emulator_for_rom` for themselves — `services/cores.py::get_platform_core_info` names the pick
-  in the picker, `services/game_detail.py::get_bios_status` scopes the BIOS question to it — and
-  `::TestOneRomOneEmulator` asserts they agree across every way a ROM arrives at an emulator (nothing pinned, the
-  platform's pick, a per-game override, the override over a platform pick naming something else, a standalone pick, a
-  stale pin that degrades). They read one seam today and nothing says they must; the picker reaching for
-  `active_core_for_rom` — the `.so`-space projection right beside it — would answer `None` for every standalone pick and
-  send the BIOS rows back to the platform's own, which is the platform-scoped defect above, per ROM. The one-of groups
-  an answer judges are that same pick's too (`FirmwareCatalogue.groups_for(identity)`), and both classes hold the group
-  verdicts in their agreement (`_emulator_dependent`), so a second resolution feeding the groups would show as a
-  disagreement there rather than as a group judged for another emulator. So are the rows
-  ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D2, D9):
-  `FirmwareCatalogue.placements_for(identity)` answers each file name with the launching emulator's own requirement —
-  its place, its presence, its verdict — wherever it declares that name, so with YabaSanshiro picked for Saturn the row
-  is `saturn_bios.bin` directly under the BIOS root whatever lies under Kronos's `kronos/`
+  none). The platform's core read (`CoreService.get_system_core_info`) is not one of them: its `active_core_label` names
+  the pick, else Tender's default — the first enabled source's (#2195 D4) — and agrees with the BIOS pick wherever the
+  answering source is that source and its default's installation is established. **Nothing joins them**, and a fourth
+  resolution is exactly what this entry is about: the pane displayed a just-picked PCSX ReARMed and judged the platform
+  by the libretro system default beside it, so one PlayStation read `ok` on the game page and `missing` on the pane.
+  `.label` and `.emulator` must come off ONE call — two calls agree by coincidence, which is what the old pair did until
+  an override was set. **One seam now carries the pick rather than a projection of it**: `BiosChecker` takes a
+  `LaunchingEmulator` (`domain/emulator_commands.py` — `emulator` and `label`, both read-only), so the per-game caller
+  hands over the whole resolution and `check_platform_bios` reads both projections off that one value. A mismatched pair
+  is not representable there, which is why the answer may state its own `active_core_label`: it is the label half of the
+  pick those very counts were filtered by (`TestTheAnswerNamesTheEmulatorItJudgedBy`, which hands the check two picks
+  differing only in label and holds the label to moving while the judgment does not). That covers this seam and no other
+  — the remaining sites still pair by discipline. The game page's BIOS headline names the emulator by the answer's
+  launching entry in `emulator_tabs` — every label its identity goes by (#2190 D28, D38) — and by `active_core_label`
+  only where no entry is the launching emulator's (`launchingName` in `frontend/src/utils/biosSummary.ts`). **The key is
+  the emulator IDENTITY, not `.core_so`** (#1821): the identity names a standalone pick as readily as a libretro one,
+  where `core_so` is `None` for every standalone emulator, and a pick with no identity is answered as not established
+  (#2190 D26). Reaching for `.core_so` here again would turn every standalone pick into that answer silently, because
+  the field is still there and still right for the picker payload beside it. `CoreInfoProvider.get_active_core` — the
+  "first libretro entry, bakeable or not" reading these sites used — has no production caller left. **The ROM scope is
+  the same rule one layer in, over a different pair of modules**: the game page is assembled by two services that each
+  ask `ActiveCoreReader` for themselves — `services/cores.py::get_platform_core_info` names the pick in the picker
+  through `resolve_rom`, `services/game_detail.py::get_bios_status` scopes the BIOS question to it through
+  `active_emulator_for_rom`, the invocation half of that one resolution — and `::TestOneRomOneEmulator` asserts they
+  agree across every way a ROM arrives at an emulator (nothing pinned, the platform's pick, a per-game override, the
+  override over a platform pick naming something else, a standalone pick, a stale pin that degrades). They read one seam
+  today and nothing says they must; the picker reaching for `active_core_for_rom` — the `.so`-space projection right
+  beside it — would answer `None` for every standalone pick and send the BIOS rows back to the platform's own, which is
+  the platform-scoped defect above, per ROM. The one-of groups an answer judges are that same pick's too
+  (`FirmwareCatalogue.groups_for(identity)`), and both classes hold the group verdicts in their agreement
+  (`_emulator_dependent`), so a second resolution feeding the groups would show as a disagreement there rather than as a
+  group judged for another emulator. So are the rows ([#2190](https://github.com/danielcopper/romm-tender/issues/2190)
+  D2, D9): `FirmwareCatalogue.placements_for(identity)` answers each file name with the launching emulator's own
+  requirement — its place, its presence, its verdict — wherever it declares that name, so with YabaSanshiro picked for
+  Saturn the row is `saturn_bios.bin` directly under the BIOS root whatever lies under Kronos's `kronos/`
   (`tests/services/test_firmware.py::TestEachEmulatorsOwnPlace`). Every OTHER emulator the resolver answered for is an
   entry of its own (`emulator_tabs`, `::TestOneEntryPerEmulator`), its rows that emulator's own requirements, which the
   BIOS tables' emulator selector shows; choosing one never changes the level, the header's counts or the badge. What it

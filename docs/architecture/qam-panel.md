@@ -1482,43 +1482,29 @@ it, for the focused platform:
   scarce thing. The caveat is not lost — `buildEmulatorMenu` renders it as the menu's first item, so the copy on the
   page that opens the menu was the same sentence twice.
 
-  **The clause names the core; "Default" is not one of the names it can take.** `resolve_platform_label` answers with
-  the real label in both ordinary cases. `null` means nothing is pinned and no option can be the default — none is
-  **bakeable**, or the only bakeable ones are entries whose installation could not be established — which is not the
-  same as there being none, and the two are different sentences:
+  **The clause names the core; "Default" is not one of the names it can take.** `active_core_label` names the platform's
+  pick, else Tender's default (the entry the first enabled source ships first,
+  [core-emulator-selection.md](core-emulator-selection.md#per-platform-coreserviceset_system_core)), whatever its state
+  — a default Tender cannot bake is named like any other, and its games start through RetroDECK's plain launch, which
+  nothing words. The clause is red where the games cannot start (`frontend/src/utils/emulatorClause.ts`):
 
-  - **Options exist, none bakeable, and the fallback can run** — the plain RetroDECK launch is baked and RetroDECK
-    resolves the emulator itself. The clause reads `RetroDECK decides` in the muted colour and the line under it says
-    Tender cannot pin one; neither promises a launch, because what the fallback then finds is between RetroDECK and the
-    machine.
-  - **Options exist, none bakeable, and the fallback is not installed** — the same unpinnable state, with the opposite
-    outcome. `run_game.sh` takes `command[1]` for the system when no alternate emulator is set and `options_to_payload`
-    keeps ES-DE's document order, so `emulators[0]` **is** that command; when its own `reason` is `not_installed`, the
-    fallback names a binary that is not there. The clause reads `no emulator installed` in **red** and the line names
-    the emulator RetroDECK would have used. The reason is the resolver's statement that what the entry launches is not
-    there, libretro core or standalone emulator, and it stands whatever the command is
-    ([core-emulator-selection.md](core-emulator-selection.md)), so the branch fires exactly where the first command's
-    emulator is missing. **Apple I is the muted case, not this one**: ES-DE gives it two live commands, both MAME, and
-    the first is a _libretro_ one whose core is installed, so it reads `RetroDECK decides` and its games start. The
-    three standalone entries in that block are commented out and are not commands at all.
-  - **No default, and the fallback is an emulator whose installation could not be established** — such an entry is
-    bakeable, but Tender never makes it the default, while a user may pin it (#2195 D9). The line names the emulator
-    RetroDECK would use and says its installation could not be established, with the cause where one is known
-    (`frontend/src/utils/emulatorInstallation.ts`); it never says the emulator is missing. The clause stays
-    `RetroDECK decides` in the muted colour and the chip stays enabled. Beside such an entry the two cases above keep
-    the chip enabled too, and their lines drop "nothing here can pin a different one". Where the platform's own pick is
-    such an entry, a line under the header says its installation could not be established.
+  - **The emulator cannot start them** — `start` says `cannot_start`: it is not installed, or RetroDECK's start script
+    finds nothing for it. The clause names it in **red** and the line under it says why
+    (`frontend/src/utils/emulatorStart.ts`, the same sentence a game's page and a refused start use); the chip stays
+    open wherever another entry can be pinned.
+  - **No default** — the entry the source ships first could not be established installed, so it is never the default by
+    itself ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D9). The clause reads `no default` in
+    **red**, the line asks for a choice with the cause where one is known, and the chip stays open where an entry can be
+    pinned.
   - **No options at all** — `get_emulator_options` answers `available: true` with an empty list for a system whose
-    catalogue entry lists no command. RetroDECK's own launch then reads `command[1]` for the system, finds nothing, and
-    exits 1 (`libexec/run_game.sh`). A platform with no switched-on system in the answering source is not this case: its
-    list is not available, with the reason `no_platform_system` or `platform_system_off`
+    catalogue entry lists no command. A platform with no switched-on system in the answering source is not this case:
+    its list is not available, with the reason `no_platform_system` or `platform_system_off`
     ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). The clause reads `no emulator` in
     **red** and the line says the games will not launch, because they will not.
 
-  The chip is disabled for the three that leave nothing to pin, never withheld. Printing "Default" for any of them said
-  Tender had chosen; printing `no emulator` for all three said the games would not start where they do. Both were wrong,
-  in opposite directions, and the middle state is why the split is three rather than two: it is unpinnable like the
-  first and does not start like the last.
+  Under them stand, where they apply, the pick whose name no longer exists in its source ("Your choice '_label_' no
+  longer exists in _source_; the default '_default_' is used", D5), and every enabled source's own default with the
+  user's choice in ES-DE where it differs (D4).
 
   **The button is always rendered**, and opens a menu only when there is something to pick: the core read landed,
   RetroDECK was found, at least one option is bakeable, and there are at least two — or nothing is the default and an

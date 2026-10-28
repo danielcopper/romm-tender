@@ -2941,18 +2941,17 @@ follow to a destination.
 
 **One platform, one emulator.** Which emulator a platform's BIOS answers are ABOUT is resolved once, by
 `domain/emulator_commands.py`'s `resolve_firmware_option` — the per-platform override (`settings.json` `platform_cores`)
-when its label still names a bakeable emulator, else the es_systems default, and where nothing is bakeable the emulator
-RetroDECK declares first, installed or not, which its plain launch starts unless an alternative emulator is set in ES-DE
-(#2190 D26) — and every platform-scoped answer takes a projection of that one pick: the pane's `active_core_label` is
-its `.label`, the BIOS filter's key is its `.emulator`, and `download_required_firmware` asks the same function so the
-button fetches the set the pane called required. It is the read-path precedence `ActiveCoreResolver` applies minus the
-per-game layer, which is what lets `check_platform_bios` answer `launching_emulator=None` from it — that is the
-platform-level callers' signal — and a second resolution behind it would put the two surfaces on two emulators. Which is
-what a device pass found: with the PlayStation's emulator set to PCSX ReARMed the pane displayed that name and judged
-the platform by the system default beside it, so one platform read `ok` on the game page and `missing` on the pane. The
-per-game path passes the ROM's own resolved identity (`ActiveCoreReader.active_emulator_for_rom(...).emulator`), which
-names a standalone emulator as readily as a libretro core; `active_core_for_rom` cannot be used there, because it
-answers `None` for a standalone pick and would send the page back to the platform's.
+while its label still names an entry, else the entry the source ships first, whatever its state (#2195 D7, D23) — and
+every platform-scoped answer takes a projection of that one pick: the pane's `active_core_label` is its `.label`, the
+BIOS filter's key is its `.emulator`, and `download_required_firmware` asks the same function so the button fetches the
+set the pane called required. It is the read-path precedence `ActiveCoreResolver` applies minus the per-game layer,
+which is what lets `check_platform_bios` answer `launching_emulator=None` from it — that is the platform-level callers'
+signal — and a second resolution behind it would put the two surfaces on two emulators. Which is what a device pass
+found: with the PlayStation's emulator set to PCSX ReARMed the pane displayed that name and judged the platform by the
+system default beside it, so one platform read `ok` on the game page and `missing` on the pane. The per-game path passes
+the ROM's own resolved identity (`ActiveCoreReader.active_emulator_for_rom(...).emulator`), which names a standalone
+emulator as readily as a libretro core; `active_core_for_rom` cannot be used there, because it answers `None` for a
+standalone pick and would send the page back to the platform's.
 
 **Standalone emulators are in the scope, and the answer is only as good as upstream's cards.** They are identified and
 scoped like any other emulator now. What they want is another matter: `_vendor/atlas/data/standalone_firmware.json`
