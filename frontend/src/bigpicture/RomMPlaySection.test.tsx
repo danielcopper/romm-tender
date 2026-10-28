@@ -42,6 +42,7 @@ import * as formatters from "../utils/formatters";
 import { getGameDetail } from "../utils/gameDetailStore";
 import { resetBoundAvailability } from "../utils/vanishedBinding";
 import { libretroEmu, sharedBy } from "../test-utils/coreFixtures";
+import { makeConflict } from "../test-utils/saveFixtures";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
 import { useVersionError } from "../utils/connectionState";
 import { useMigrationStatus } from "../utils/migrationStore";
@@ -3274,6 +3275,30 @@ describe("RomMPlaySection", () => {
       const bodies = vi.mocked(toaster.toast).mock.calls.map((c) => c[0].body);
       expect(bodies).toContain("Saves uploaded to RomM");
       expect(bodies).toContain("2 conflict(s) need resolution");
+    });
+
+    it("success with a conflict → the save display shows the conflict, not 'Just now'", async () => {
+      const items = await setupSavesAction();
+      vi.mocked(backend.syncRomSaves).mockResolvedValue({
+        success: true,
+        message: "",
+        synced: 1,
+        uploaded: 1,
+        downloaded: 0,
+        conflicts: [makeConflict()],
+      });
+      await act(async () => {
+        await items[2]!.props.onClick?.();
+      });
+      await flushAsync();
+
+      // The label resolver is stubbed in this file, so the label is pinned by what it was handed.
+      expect(getGameDetail(testAppId).saveSyncStatus).toBe("conflict");
+      expect(playSectionUtils.resolveSaveSyncLabel).toHaveBeenLastCalledWith({
+        status: "conflict",
+        label: "Conflict",
+        last_sync_check_at: null,
+      });
     });
 
     it("failure → surfaces result.message", async () => {

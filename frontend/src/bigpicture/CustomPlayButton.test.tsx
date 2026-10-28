@@ -166,6 +166,8 @@ import { showAdoptUnusableModal } from "../bigpicture/AdoptUnusableModal";
 import { showAdoptVanishedModal } from "../bigpicture/AdoptVanishedModal";
 import { resetBoundAvailability, setBoundAvailability } from "../utils/vanishedBinding";
 import type { SyncConflict, SaveStatus } from "../types";
+import { executeManualSaveSync } from "../utils/manualSaveSync";
+import { makeConflict } from "../test-utils/saveFixtures";
 
 function mockCachedDetail(overrides: Partial<CachedGameDetail> = {}): void {
   vi.mocked(getCachedGameDetail).mockResolvedValue({
@@ -2257,6 +2259,51 @@ describe("CustomPlayButton — resolve conflict reads the known conflict (#1276)
     expect(vi.mocked(handleConflicts)).not.toHaveBeenCalled();
     expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Cleanup is active." });
     await utils.findByText("Resolve Conflict");
+  });
+});
+
+describe("CustomPlayButton — the game page's Sync Saves", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getCachedGameDetail).mockReset();
+  });
+
+  async function syncSaves(conflicts: SyncConflict[]): Promise<void> {
+    vi.mocked(backend.syncRomSaves).mockResolvedValue({
+      success: true,
+      message: "",
+      synced: 0,
+      uploaded: 0,
+      downloaded: 0,
+      conflicts,
+    });
+    await act(async () => {
+      await executeManualSaveSync(100, 42);
+    });
+  }
+
+  it("turns Play into Resolve Conflict when it finds a conflict", async () => {
+    mockCachedDetail();
+    const utils = render(<CustomPlayButton appId={100} />);
+    await utils.findByText("Play");
+
+    await syncSaves([makeConflict()]);
+
+    expect(await utils.findByText("Resolve Conflict")).toBeInTheDocument();
+    expect(vi.mocked(handleConflicts)).not.toHaveBeenCalled();
+  });
+
+  it("turns Resolve Conflict back into Play when it finds none", async () => {
+    mockCachedDetail();
+    const utils = render(<CustomPlayButton appId={100} />);
+    await utils.findByText("Play");
+    await syncSaves([makeConflict()]);
+    await utils.findByText("Resolve Conflict");
+
+    await syncSaves([]);
+
+    expect(await utils.findByText("Play")).toBeInTheDocument();
+    expect(utils.queryByText("Resolve Conflict")).not.toBeInTheDocument();
   });
 });
 

@@ -54,7 +54,7 @@ describe("executeManualSaveSync", () => {
     expect(dispatchSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "romm_data_changed",
-        detail: { type: "save_sync", rom_id: 42 },
+        detail: { type: "save_sync", rom_id: 42, has_conflict: false },
       }),
     );
     expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledWith(100, 42, {
@@ -91,9 +91,75 @@ describe("executeManualSaveSync", () => {
     await executeManualSaveSync(100, 42);
     expect(toast.showToast).not.toHaveBeenCalledWith("Saves already up to date");
     expect(toast.showToast).toHaveBeenCalledWith("1 conflict(s) need resolution");
-    // The sync itself succeeded, so the surfaces still refresh and the row says so.
+    // The sync itself succeeded, so the surfaces still refresh, and the row shows the conflict.
     expect(saveSyncAnnounced(dispatchSpy)).toBe(true);
     expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces the conflict a sync found and shows it on the row", async () => {
+    vi.mocked(backend.syncRomSaves).mockResolvedValueOnce({
+      success: true,
+      message: "Conflicts",
+      synced: 1,
+      uploaded: 1,
+      downloaded: 0,
+      conflicts: [makeConflict()],
+    });
+
+    await executeManualSaveSync(100, 42);
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "romm_data_changed",
+        detail: { type: "save_sync", rom_id: 42, has_conflict: true },
+      }),
+    );
+    expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledWith(100, 42, {
+      status: "conflict",
+      label: "Conflict",
+      last_sync_check_at: null,
+    });
+  });
+
+  it("announces that a sync without a conflict found none", async () => {
+    vi.mocked(backend.syncRomSaves).mockResolvedValueOnce({
+      success: true,
+      message: "Synced",
+      synced: 1,
+      uploaded: 1,
+      downloaded: 0,
+      conflicts: [],
+    });
+
+    await executeManualSaveSync(100, 42);
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "romm_data_changed",
+        detail: { type: "save_sync", rom_id: 42, has_conflict: false },
+      }),
+    );
+  });
+
+  it("announces no conflict for an answer that carries no conflict list", async () => {
+    vi.mocked(backend.syncRomSaves).mockResolvedValueOnce({
+      success: true,
+      message: "Synced",
+      synced: 1,
+      uploaded: 1,
+      downloaded: 0,
+    });
+
+    await executeManualSaveSync(100, 42);
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "romm_data_changed",
+        detail: { type: "save_sync", rom_id: 42, has_conflict: false },
+      }),
+    );
+    expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledWith(100, 42, {
+      status: "synced",
+      label: "Just now",
+      last_sync_check_at: null,
+    });
   });
 
   it("handles sync failure response with backend message", async () => {

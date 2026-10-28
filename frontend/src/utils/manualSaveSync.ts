@@ -5,6 +5,11 @@ import { showToast } from "./toast";
 import { saveSyncToastBody } from "./saveSyncToast";
 import { noteSaveSyncDisplay } from "./gameDetailStore";
 import { announceSaveSync } from "./saveSyncEvents";
+import type { SaveSyncDisplay } from "../types";
+
+/** The backend's display for a ROM with a conflict (`backend/domain/save_status.py`). */
+const CONFLICT_DISPLAY: SaveSyncDisplay = { status: "conflict", label: "Conflict", last_sync_check_at: null };
+const SYNCED_JUST_NOW_DISPLAY: SaveSyncDisplay = { status: "synced", label: "Just now", last_sync_check_at: null };
 
 export async function executeManualSaveSync(appId: number, romId: number): Promise<void> {
   try {
@@ -30,9 +35,8 @@ export async function executeManualSaveSync(appId: number, romId: number): Promi
       if (c > 0) {
         showToast(`${c} conflict(s) need resolution`);
       }
-      announceSaveSync(romId);
-      // Refresh save sync status — last_sync_check_at was just set by the backend
-      noteSaveSyncDisplay(appId, romId, { status: "synced", label: "Just now", last_sync_check_at: null });
+      announceSaveSync(romId, c > 0);
+      noteSaveSyncDisplay(appId, romId, c > 0 ? CONFLICT_DISPLAY : SYNCED_JUST_NOW_DISPLAY);
       return;
     }
     showToast(result.message || "Save sync failed");
