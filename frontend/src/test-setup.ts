@@ -6,23 +6,17 @@ import { resetHostEventBus } from "./test-utils/host-event-bus";
 import { resetStrandedPanel } from "./test-utils/stranded-panel";
 
 // Vitest evaluates this file anew for every test file, so a second evaluation in
-// the same global means test files are sharing one context. The vm pool does
-// that on a single worker: vm pools force `isolate: false`, `groupSpecs`
-// then hands every file to one task when maxWorkers is 1, and `runVmTests`
-// creates one context per task (vitest's `dist/chunks/cli-api.*.js` and
-// `dist/chunks/vm.*.js`). Module state and the DOM then carry from file to file,
+// the same global means test files are sharing one context. `--isolate=false`
+// does that under the `forks` and `threads` pools: a worker then runs every file
+// it is given in one global. Module state and the DOM carry from file to file,
 // and RTL registers its cleanup only in the first, so the suite fails far from
-// the cause. maxWorkers is 1 under `--maxWorkers=1` (or `VITEST_MAX_WORKERS=1`),
-// under `--no-file-parallelism` (which `--inspect` requires), and by default on a
-// machine with two CPUs or fewer, three in watch mode; with more than one worker
-// every file is a task of its own.
+// the cause. The suite's own vm pool never shares one (`vitest.config.ts`).
 const EVALUATED_IN_THIS_CONTEXT = Symbol.for("tender.test-setup.evaluated");
 if ((globalThis as Record<symbol, unknown>)[EVALUATED_IN_THIS_CONTEXT]) {
   throw new Error(
     "Test files are sharing one context — Vitest ran more than one in the same global, which leaks module " +
-      "state and the DOM between them. Under this suite's vm pool that is any single-worker run " +
-      "(--maxWorkers=1, --no-file-parallelism, or two CPUs or fewer); --isolate=false does it under any pool. " +
-      "To run on one worker, use --pool=forks and leave isolation on.",
+      "state and the DOM between them. --isolate=false does that under the forks and threads pools. " +
+      "Drop it: with isolation on, every file gets a context of its own on any number of workers.",
   );
 }
 (globalThis as Record<symbol, unknown>)[EVALUATED_IN_THIS_CONTEXT] = true;
