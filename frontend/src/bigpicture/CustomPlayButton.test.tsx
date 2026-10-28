@@ -2268,7 +2268,7 @@ describe("CustomPlayButton — the game page's Sync Saves", () => {
     vi.mocked(getCachedGameDetail).mockReset();
   });
 
-  async function syncSaves(conflicts: SyncConflict[]): Promise<void> {
+  async function syncSaves(conflicts: SyncConflict[], romId = 42): Promise<void> {
     vi.mocked(backend.syncRomSaves).mockResolvedValue({
       success: true,
       message: "",
@@ -2278,9 +2278,20 @@ describe("CustomPlayButton — the game page's Sync Saves", () => {
       conflicts,
     });
     await act(async () => {
-      await executeManualSaveSync(100, 42);
+      await executeManualSaveSync(100, romId);
     });
   }
+
+  it("stays on Play when the conflict it finds is another ROM's", async () => {
+    mockCachedDetail();
+    const utils = render(<CustomPlayButton appId={100} />);
+    await utils.findByText("Play");
+
+    await syncSaves([makeConflict({ rom_id: 43 })], 43);
+
+    expect(utils.getByText("Play")).toBeInTheDocument();
+    expect(utils.queryByText("Resolve Conflict")).not.toBeInTheDocument();
+  });
 
   it("turns Play into Resolve Conflict when it finds a conflict", async () => {
     mockCachedDetail();
