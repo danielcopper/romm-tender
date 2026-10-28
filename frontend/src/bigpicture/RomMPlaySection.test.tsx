@@ -2385,7 +2385,9 @@ describe("RomMPlaySection", () => {
       // keep the restored value — Steam's synthesized rt must NOT win.
       stubAppStore({ [testAppId]: { rt_last_time_played: 1222222222, minutes_playtime_forever: 120 } });
       act(() => {
-        globalThis.dispatchEvent(new CustomEvent("romm_playtime_changed", { detail: { appId: testAppId } }));
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_playtime_changed", { detail: { appId: testAppId, lastPlayedWritten: false } }),
+        );
       });
       expect(container.textContent).toContain(shown(ourSecs));
       expect(container.textContent).not.toContain(shown(1222222222));
