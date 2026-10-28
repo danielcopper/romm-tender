@@ -147,6 +147,17 @@ export interface MissingConfiguredImage {
 }
 
 /**
+ * A core option of the emulator names a file inside its folder declaration
+ * that the core does not offer — so the core starts with a BIOS from the
+ * folder's own listing. Not a verdict: the row's own verdict stands as it is.
+ * Either half is `null` where the resolver did not state it.
+ */
+export interface ConfiguredImageNotOffered {
+  emulator_label: string | null;
+  file_name: string | null;
+}
+
+/**
  * The reading's answer about one row, carried on both row shapes.
  *
  * `satisfied` is the verdict and the axis the REQUIRED counts key off: the
@@ -188,6 +199,8 @@ interface FirmwareVerdict {
   fetch_for_required?: boolean;
   /** See {@link MissingConfiguredImage}. Absent or `null` claims nothing. */
   missing_configured_image?: MissingConfiguredImage | null;
+  /** See {@link ConfiguredImageNotOffered}. Absent or `null` claims nothing. */
+  configured_image_not_offered?: ConfiguredImageNotOffered | null;
   /** The identity of the emulator whose requirement this row is, `null` for a
    *  library file no emulator claims. A row is shown with its own emulator
    *  ({@link EmulatorTab}), and an unclaimed one in the library's own section. */

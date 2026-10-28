@@ -49,6 +49,7 @@ export type BiosNoteRow = Pick<
   | "images"
   | "checked"
   | "missing_configured_image"
+  | "configured_image_not_offered"
 > &
   Partial<Pick<BiosFileStatus, "file_name" | "declared_path" | "local_path">>;
 
@@ -72,8 +73,9 @@ export interface BiosFileWords {
   /** The sentence under the row, or `""` where there is none. */
   note: string;
   /** One line each, rendered under the row: the images a folder's read
-   *  identified, where the list IS the content, and the neutral line saying an
-   *  emulator's setting names a file the folder does not hold. */
+   *  identified, where the list IS the content, and the neutral lines saying an
+   *  emulator's setting names a file the folder does not hold, or one its core
+   *  does not offer. */
   lines: string[];
   /**
    * The note is the library one — "not in your RomM library" and its missing
@@ -439,7 +441,12 @@ export function foundByContent(row: { caveats?: string[] }): boolean {
 export function biosFileNote(row: BiosNoteRow, emulator: string | null = null): BiosFileWords {
   const words = rowWords(row, emulator);
   const stale = row.missing_configured_image;
-  return stale ? { ...words, lines: [...words.lines, configuredImageLine(stale, emulator)] } : words;
+  const passedOver = row.configured_image_not_offered;
+  const settings = [
+    ...(stale ? [configuredImageLine(stale, emulator)] : []),
+    ...(passedOver ? [notOfferedImageLine(passedOver, emulator)] : []),
+  ];
+  return settings.length > 0 ? { ...words, lines: [...words.lines, ...settings] } : words;
 }
 
 /**
@@ -467,7 +474,26 @@ function configuredImageLine(
   return `ℹ ${whose} ${named} — it uses another BIOS from this folder instead.`;
 }
 
-/** Everything the row says before the configured-image line — see {@link biosFileNote}. */
+/**
+ * The neutral line under a folder whose core option names a file the core does
+ * not offer — "The core option names scph10000.bin, which LRPS2 does not offer
+ * — it starts with a BIOS from this folder."
+ *
+ * Like {@link configuredImageLine} it changes nothing about the row: the core
+ * starts with its default, a BIOS from the folder's own listing, so the folder's
+ * verdict is what the launch rests on. The emulator and the file are named as
+ * that line names them.
+ */
+function notOfferedImageLine(
+  passedOver: NonNullable<BiosNoteRow["configured_image_not_offered"]>,
+  emulator: string | null,
+): string {
+  const name = emulator ?? passedOver.emulator_label ?? "the emulator";
+  const what = passedOver.file_name ? `${passedOver.file_name}, which` : "a BIOS file that";
+  return `ℹ The core option names ${what} ${name} does not offer — it starts with a BIOS from this folder.`;
+}
+
+/** Everything the row says before the configured-image lines — see {@link biosFileNote}. */
 function rowWords(row: BiosNoteRow, emulator: string | null): BiosFileWords {
   if (row.supplied_by) return { note: `provided by ${row.supplied_by}`, lines: [], fromLibrary: false };
   const verdict = verdictNote(row, emulator);

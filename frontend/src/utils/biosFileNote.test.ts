@@ -297,6 +297,45 @@ describe("a stale configured image name", () => {
   });
 });
 
+describe("a configured image name the core does not offer", () => {
+  // LRPS2 set to a file its listing drops starts with a BIOS from the folder
+  // (#2644 D4). A neutral line, after whatever else the row says, and nothing
+  // about the verdict moves with it.
+  const passedOver = (emulator_label: string | null, file_name: string | null) => ({
+    ...folder(true, [], ["USA v02.00(14/06/2004)"]),
+    configured_image_not_offered: { emulator_label, file_name },
+  });
+
+  it("names the file the core option names and the emulator that does not offer it", () => {
+    expect(biosFileNote(passedOver("LRPS2", "scph10000.bin")).lines).toEqual([
+      "USA v02.00(14/06/2004)",
+      "ℹ The core option names scph10000.bin, which LRPS2 does not offer — it starts with a BIOS from this folder.",
+    ]);
+  });
+
+  it("names the emulator the way the surface shows it, over the answer's one label", () => {
+    const { lines } = biosFileNote(passedOver("LRPS2", "scph10000.bin"), "LRPS2 / PCSX2");
+    expect(lines[lines.length - 1]).toBe(
+      "ℹ The core option names scph10000.bin, which LRPS2 / PCSX2 does not offer — it starts with a BIOS from this folder.",
+    );
+  });
+
+  it("leaves out what the answer did not state rather than guessing it", () => {
+    const { lines } = biosFileNote(passedOver(null, null));
+    expect(lines[lines.length - 1]).toBe(
+      "ℹ The core option names a BIOS file that the emulator does not offer — it starts with a BIOS from this folder.",
+    );
+  });
+
+  it("changes nothing else the row says", () => {
+    const without = biosFileNote(folder(true, [], ["USA v02.00(14/06/2004)"]));
+    const withLine = biosFileNote(passedOver("LRPS2", "scph10000.bin"));
+    expect(withLine.note).toBe(without.note);
+    expect(withLine.fromLibrary).toBe(without.fromLibrary);
+    expect(withLine.lines.slice(0, -1)).toEqual(without.lines);
+  });
+});
+
 describe("biosFileDescription", () => {
   it("says a file the reading identified by its contents was found in the BIOS folder", () => {
     // The resolver's own prose for such a file is about its search; what the
