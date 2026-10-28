@@ -302,6 +302,36 @@ class TestListFileVersions:
         assert entry["device_syncs"][0]["device_name"] == "steamdeck"
 
     @pytest.mark.asyncio
+    async def test_a_version_names_only_the_devices_that_synced_it(self, tmp_path):
+        """RomM's placeholder for this device is left out of each version's ``device_syncs``."""
+        svc, fake = make_service(tmp_path)
+        _set_device_id(svc, "abc")
+
+        fake.saves[100] = _server_save(save_id=100, rom_id=42, slot="default", updated_at="2026-03-10T10:00:00Z")
+        synced_by_other = _server_save(save_id=60, rom_id=42, slot="default", updated_at="2026-03-05T10:00:00Z")
+        synced_by_other["device_syncs"] = [
+            {
+                "device_id": "other",
+                "device_name": "desktop",
+                "last_synced_at": "2026-03-05T10:00:00Z",
+                "is_untracked": False,
+                "is_current": True,
+            }
+        ]
+        fake.saves[60] = synced_by_other
+        synced_by_none = _server_save(save_id=50, rom_id=42, slot="default", updated_at="2026-03-01T10:00:00Z")
+        synced_by_none["device_syncs"] = []
+        fake.saves[50] = synced_by_none
+        self._setup_state(svc, tracked_id=100)
+
+        result = await svc.list_file_versions(42, "default", "pokemon.srm")
+
+        assert result["status"] == "ok"
+        by_id = {v["id"]: v for v in result["versions"]}
+        assert [ds["device_name"] for ds in by_id[60]["device_syncs"]] == ["desktop"]
+        assert by_id[50]["device_syncs"] == []
+
+    @pytest.mark.asyncio
     async def test_list_file_versions_populates_uploaded_by_us(self, tmp_path):
         """uploaded_by_us is True for IDs in own_upload_ids, False for others."""
         svc, fake = make_service(tmp_path)

@@ -1639,6 +1639,14 @@ the answer by `_build_save_schema`, and depends on whether the request names a d
   synced reads as not current.
 - **Without `device_id`** — `device_syncs` is empty, whatever rows are stored.
 
+The sync decision reads the placeholder, so the RomM adapter keeps it. What the SAVES tab is shown does not: a save
+row's and each version's `device_syncs` leave out the entry that names this device with the placeholder's shape —
+`is_current` false while `last_synced_at` is at or after the save's `updated_at`, which RomM's own `is_current` rule
+never answers for a stored row (`domain/save_status_builders.py::shown_device_syncs`). Without that, the placeholder,
+listed first and stamped with the same time as the row of the device that really uploaded the save, would be the one the
+"last synced by" name is taken from, and name this device on a save it never synced. A save row's `is_current` is still
+read off RomM's list as it came, so a save this device never synced still reads as not current.
+
 The rows that make a save current for a device are written only by:
 
 - an upload, a download, and the `POST /api/saves/{id}/downloaded` ack — see the sections below;

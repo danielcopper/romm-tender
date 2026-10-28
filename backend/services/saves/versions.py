@@ -24,6 +24,7 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot, slot_query_param
 from domain.save_status import compute_multi_file_slot
+from domain.save_status_builders import shown_device_syncs
 from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target
 from services.saves._save_state import read_save_state_or_new, write_save_state
@@ -200,7 +201,7 @@ class VersionsService:
                 "emulator": s.get("emulator"),
                 "updated_at": s.get("updated_at", ""),
                 "file_size_bytes": s.get("file_size_bytes"),
-                "device_syncs": s.get("device_syncs", []),
+                "device_syncs": shown_device_syncs(s, device_id),
                 "uploaded_by_us": (s["id"] in own_upload_ids) if own_upload_ids is not None else None,
             }
             for s in server_saves

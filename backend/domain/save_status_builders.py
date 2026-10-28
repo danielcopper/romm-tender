@@ -37,7 +37,7 @@ def build_file_status(
             "is_current": ds.get("is_current", False),
             "last_synced_at": ds.get("last_synced_at"),
         }
-        for ds in server_device_syncs
+        for ds in (shown_device_syncs(server, server_device_id) if server else [])
     ]
     own_sync = (
         next(
@@ -66,6 +66,30 @@ def build_file_status(
         "is_current": is_current,
         "uploaded_by_us": uploaded_by_us,
     }
+
+
+def shown_device_syncs(save: dict[str, Any], device_id: str | None) -> list[dict[str, Any]]:
+    """The *save*'s ``device_syncs`` without RomM's placeholder for *device_id*.
+
+    The placeholder is the entry naming *device_id* with ``is_current`` false
+    while its ``last_synced_at`` is at or after the save's ``updated_at``; what
+    it is, and why only the panel's copy drops it:
+    ``docs/architecture/save-file-sync-architecture.md``, "GET /api/saves
+    writes no sync row". Every other entry is kept as RomM sent it, and so is
+    one whose times cannot be read.
+    """
+    device_syncs: list[dict[str, Any]] = save.get("device_syncs") or []
+    if not device_id:
+        return list(device_syncs)
+    updated_at = parse_iso_to_epoch(save.get("updated_at"))
+
+    def is_placeholder(ds: dict[str, Any]) -> bool:
+        if ds.get("device_id") != device_id or ds.get("is_current") is not False or updated_at is None:
+            return False
+        synced_at = parse_iso_to_epoch(ds.get("last_synced_at"))
+        return synced_at is not None and synced_at >= updated_at
+
+    return [ds for ds in device_syncs if not is_placeholder(ds)]
 
 
 def status_from_action(action: object) -> str:

@@ -96,6 +96,49 @@ class TestSaveStatus:
         assert file_status["is_current"] is True
 
     @pytest.mark.asyncio
+    async def test_a_save_only_another_device_synced_names_that_device(self, tmp_path):
+        """RomM's placeholder for this device is not shown; the save still reads as not current."""
+        svc, fake = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _set_device_id(svc, "server-dev-1")
+
+        ss = _server_save(updated_at="2026-03-24T10:00:00Z")
+        # The stored row of the device that uploaded it, stamped with the save's
+        # own time, as RomM stamps an upload's row.
+        ss["device_syncs"] = [
+            {
+                "device_id": "server-dev-2",
+                "device_name": "desktop",
+                "is_current": True,
+                "last_synced_at": "2026-03-24T10:00:00Z",
+            },
+        ]
+        fake.saves[100] = ss
+
+        result = await svc.get_save_status(42)
+        file_status = result["files"][0]
+        assert [ds["device_name"] for ds in file_status["device_syncs"]] == ["desktop"]
+        assert file_status["is_current"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_save_no_device_synced_names_no_device(self, tmp_path):
+        """Only RomM's placeholder for this device: no entry is shown, and the save is not current."""
+        svc, fake = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _set_device_id(svc, "server-dev-1")
+
+        ss = _server_save(updated_at="2026-03-24T10:00:00Z")
+        ss["device_syncs"] = []
+        fake.saves[100] = ss
+
+        result = await svc.get_save_status(42)
+        file_status = result["files"][0]
+        assert file_status["device_syncs"] == []
+        assert file_status["is_current"] is False
+
+    @pytest.mark.asyncio
     async def test_save_status_filters_by_active_slot(self, tmp_path):
         """Saves from a different slot should not appear in status."""
         svc, fake = make_service(tmp_path)
