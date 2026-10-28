@@ -646,10 +646,9 @@ Three distinct notions in core selection, kept separate because they have differ
   program pick. The identifiers `active_core`, `active_core_label` and `required_by_active` keep their spellings; the
   prose around them does not expand them into a core.
 - **Platform pick** — the same resolution asked of a PLATFORM rather than a ROM, so with no per-game layer to apply: the
-  per-platform override when its label still names a bakeable emulator, else the default emulator. A platform's BIOS
-  answers go one rung further: where nothing is bakeable they are about the emulator RetroDECK declares first, installed
-  or not (#2190 D26). It is one pick with two projections — the name a surface displays, and the **emulator identity**
-  its BIOS answers key on — and resolving those separately is what let one pane name an emulator and judge by another.
+  per-platform override while its label still names an entry, whatever that entry's state, else the default emulator
+  (#2195 D23). It is one pick with two projections — the name a surface displays, and the **emulator identity** its BIOS
+  answers key on — and resolving those separately is what let one pane name an emulator and judge by another.
 - **Emulator identity** — which emulator an answer is about, in the spelling its own launch command uses: a core entry's
   core file basename (`dolphin_libretro.so`), a program's own command name (`DUCKSTATION`, `PCSX2`). The resolver states
   it on both the emulator catalogue and the firmware answer, which is what lets a pick be matched against the firmware
@@ -908,22 +907,36 @@ it), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script form, no emb
 `%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no placeholder outside the known whitelist. The
 classifier `domain/emulator_commands.py` decides this per command; anything not safely-bakeable is surfaced in the
 picker as **disabled** with a reason, never silently offered
-([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). The foil to **default emulator** (the first
-safely-bakeable command a system falls back to).
+([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). Whether an entry is safely-bakeable never decides
+which entry is the **default emulator**.
 
 ### Default emulator
 
-The emulator a ROM launches with absent any per-game or per-platform **emulator override**: the **first
-_safely-bakeable_ command in a system's `es_systems.xml` document order**. ES-DE lists a system's emulators in
-preference order, so ES-DE's own preference picks it — Tender adds no curation. It may be a **RetroArch core** or a
-**standalone emulator** (PCSX2, RPCS3, Dolphin, …), whichever ES-DE lists first that Tender can bake. Resolved live from
-the sole source (`es_systems.xml`) — there is no bundled snapshot (the curated `core_defaults.json` was deleted in
-\#1210). **Document order** here is the order the file DECLARES, never the order ES-DE would run: a gamelist
-`<altemulator>` / `<alternativeEmulator>` promotes an entry for ES-DE and moves nothing here
-([ADR-0030](docs/adr/0030-the-emulator-catalogue-is-read-by-the-vendored-resolver.md)). When no command is
-safely-bakeable (or the catalogue can't be read) there is no default emulator and the ROM plain-launches, letting
-RetroDECK resolve its own command ([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). The foil to
-**emulator override** (a user deviation from this default).
+The emulator a ROM launches with absent any per-game or per-platform **emulator override**: the **shipped default** —
+the entry a source ships first for a system, the lowest `declared_index` the resolver states — whatever its state (#2195
+D7). An entry Tender cannot bake, or one that is not installed, stays the default; only one whose installation could not
+be established is never the default by itself, and then there is none until the user picks (D9). It may be a **RetroArch
+core** or a **standalone emulator**. A choice made inside ES-DE never becomes it (see **chosen in ES-DE**). _Avoid_:
+"the first bakeable entry", the rule it replaced ([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md), as
+amended).
+
+**Tender's default** is the default emulator of the first switched-on source in the **emulator source order** that
+offers one for the platform (D4) — EmuDeck's where EmuDeck stands first. Each source's own default is that source's
+shipped default.
+
+### Chosen in ES-DE
+
+An emulator the user chose for a system or a game inside ES-DE (`alternativeEmulator`, a per-game `altemulator`), which
+the resolver states and Tender shows beside its own choice. It is ES-DE's state: it never becomes the **default
+emulator** and never decides which emulator Tender starts (#2195 D7,
+[ADR-0012](docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md)).
+
+### Stored pick
+
+A per-game or per-platform **emulator override** as Tender stores it: the entry's label, with the kind of the **emulator
+source** it was chosen from (#2195 D20). It stands while its label names an entry, whatever that entry's state (D23). A
+**vanished pick** is a stored pick whose label no longer names an entry in its source: Tender takes the next layer and
+says so — "Your choice '…' no longer exists in …" — rather than switching silently (D5).
 
 ### Disc
 

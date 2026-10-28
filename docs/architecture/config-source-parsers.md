@@ -507,11 +507,10 @@ Non-obvious design choices worth preserving:
 - **`core_so` is the full `.so` basename including `_libretro`, and without the `.so`.**
   `AtlasCatalogueAdapter.get_active_core` returns `(core_so, label)` where `core_so` is e.g. `"snes9x_libretro"`, not
   `"snes9x"`. The resolver states it _with_ the extension (`snes9x_libretro.so`, extracted from the `<command>`); the
-  adapter strips that, because every core identifier Tender holds — the resolved active core, the `platform_cores`
-  override, a classified option's `core_so` — is spelled without it, and comparing the two spellings would silently
-  match nothing. The `.info` filename is therefore `{core_so}.info` (e.g. `snes9x_libretro.info`), not
-  `{core_so}_libretro.info`. This is a subtle naming quirk documented here so future parser users don't double the
-  suffix.
+  adapter strips that, because every core identifier Tender holds — the resolved active core, a classified option's
+  `core_so` — is spelled without it, and comparing the two spellings would silently match nothing. The `.info` filename
+  is therefore `{core_so}.info` (e.g. `snes9x_libretro.info`), not `{core_so}_libretro.info`. This is a subtle naming
+  quirk documented here so future parser users don't double the suffix.
 
 - **RetroDECK-only path resolution, standalone RetroArch out of scope.** The `.info` adapter only looks under
   `net.retrodeck.retrodeck` Flatpak paths — the per-user `~/.local/share/flatpak/...` before the system-wide

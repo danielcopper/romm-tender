@@ -1622,13 +1622,13 @@ Format: **invariant** — tier — enforced by.
   "first libretro entry, bakeable or not" reading these sites used — has no production caller left. **The ROM scope is
   the same rule one layer in, over a different pair of modules**: the game page is assembled by two services that each
   ask `ActiveCoreReader` for themselves — `services/cores.py::get_platform_core_info` names the pick in the picker
-  through `resolve_rom`, `services/game_detail.py::get_bios_status` scopes the BIOS question to it through
-  `active_emulator_for_rom`, the invocation half of that one resolution — and `::TestOneRomOneEmulator` asserts they
-  agree across every way a ROM arrives at an emulator (nothing pinned, the platform's pick, a per-game override, the
-  override over a platform pick naming something else, a standalone pick, a stale pin that degrades). They read one seam
-  today and nothing says they must; the picker reaching for `active_core_for_rom` — the `.so`-space projection right
-  beside it — would answer `None` for every standalone pick and send the BIOS rows back to the platform's own, which is
-  the platform-scoped defect above, per ROM. The one-of groups an answer judges are that same pick's too
+  through `resolve_rom`, `services/game_detail.py::get_bios_status` scopes the BIOS question to the entry that same call
+  chose, whether or not Tender can bake it — and `::TestOneRomOneEmulator` asserts they agree across every way a ROM
+  arrives at an emulator (nothing pinned, the platform's pick, a per-game override, the override over a platform pick
+  naming something else, a standalone pick, a stale pin that degrades, a standing pick Tender cannot bake). They read
+  one seam today and nothing says they must; the picker reaching for `active_core_for_rom` — the `.so`-space projection
+  right beside it — would answer `None` for every standalone pick and send the BIOS rows back to the platform's own,
+  which is the platform-scoped defect above, per ROM. The one-of groups an answer judges are that same pick's too
   (`FirmwareCatalogue.groups_for(identity)`), and both classes hold the group verdicts in their agreement
   (`_emulator_dependent`), so a second resolution feeding the groups would show as a disagreement there rather than as a
   group judged for another emulator. So are the rows ([#2190](https://github.com/danielcopper/romm-tender/issues/2190)

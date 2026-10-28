@@ -123,11 +123,11 @@ red does not, grey not established). An emulator RetroDECK lists under two names
 _LRPS2 / PCSX2_ on a PlayStation 2, whichever of the two you picked. The emulator your games launch with has its name in
 blue and is outlined in blue in the row of names. An emulator that is not installed is listed too, its name in red — red
 even where it is the one your games launch with, which its blue outline still shows: what it would need is known all the
-same, and where you have picked nothing, the page reads the platform's default — the first emulator RetroDECK lists,
-whatever its state — as launching. The list shows the chosen emulator's own files, exactly where it opens them and with
-its own verdict for each: with YabaSanshiro launching Saturn, the list shows `saturn_bios.bin` directly in the BIOS
-folder, and with Kronos chosen `kronos/saturn_bios.bin`. Choosing another emulator changes only the table — never which
-emulator launches. The line above and the **BIOS** badge beside Play stay those of the emulator you launch with.
+same, and where you have picked nothing, the page reads the platform's default — the emulator RetroDECK ships as its
+default, whatever its state — as launching. The list shows the chosen emulator's own files, exactly where it opens them
+and with its own verdict for each: with YabaSanshiro launching Saturn, the list shows `saturn_bios.bin` directly in the
+BIOS folder, and with Kronos chosen `kronos/saturn_bios.bin`. Choosing another emulator changes only the table — never
+which emulator launches. The line above and the **BIOS** badge beside Play stay those of the emulator you launch with.
 
 The tab stands in two columns. The left one holds this line, the emulator selector, the chosen emulator's files as a
 table, the buttons under it and, dimmed below them, what the marks on either column mean; the right one holds the files
@@ -313,8 +313,8 @@ and the row you focus is the one the right-hand pane describes.
    versions it has on RomM and how many versions are in Steam ("12 versions on RomM · 9 versions in Steam"; every
    version of a game that shares one shortcut counts, so this can be more than the shortcuts the Remove button names),
    and the system its games are in your emulator source ("RetroDECK system: psx"). The name is in red where the
-   platform's games cannot start with it — it is not installed, or RetroDECK's start script finds nothing for it — and
-   the sentence below says why. If it reads **no default** in red, whether the first emulator RetroDECK lists is
+   platform's games cannot start with it — it is not installed, or RetroDECK's start script cannot start it — and the
+   sentence below says why. If it reads **no default** in red, whether the emulator RetroDECK ships as its default is
    installed could not be established, so nothing is the default until you pick one; the sentence below says so. If it
    reads **no emulator** in red, RetroDECK has none for this platform at all
 6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
@@ -922,13 +922,13 @@ Every name RetroDECK lists is an entry of its own, as in ES-DE: RetroDECK lists 
 2 as LRPS2 and as PCSX2, and the menu offers both. Your choice is stored by its name, with the emulator source it came
 from.
 
-**The default is the emulator RetroDECK lists first** for the platform, whatever state it is in — Tender never passes it
-over for a later one by itself. An emulator you chose for a system or a game inside ES-DE is marked **(chosen in
+**The default is the emulator RetroDECK ships as its default** for the platform, whatever state it is in — Tender never
+passes it over for a later one by itself. An emulator you chose for the system inside ES-DE is marked **(chosen in
 ES-DE)** in the menu and named under the header, but it does not become Tender's default: what you set in ES-DE belongs
 to ES-DE, and Tender's choice is made here. Under the header the pane also names each emulator source's own default, and
 the emulator you chose in it in ES-DE where that differs — "RetroDECK's default: Genesis Plus GX (Gearsystem chosen in
 ES-DE)." — or why a source has none. Where EmuDeck stands first in **Settings › Emulator sources**, the header names
-EmuDeck's default.
+EmuDeck's default, and none of RetroDECK's own lines stands under it.
 
 1. Open **Library** from the main QAM page and move to the **Platforms** tab
 2. Move to the platform you want to change
@@ -936,14 +936,15 @@ EmuDeck's default.
 4. The BIOS table below updates to show what the new choice needs
 
 A platform that offers one emulator says so instead of showing a button. Where the default cannot start the platform's
-games — it is not installed, or RetroDECK's start script finds nothing for it — the pane names it in red and says so,
-and the button stays open wherever there is another emulator to pick. Where whether the default is installed could not
-be established, the pane says no emulator is the default until you pick one, with the reason where one is known. A
-platform RetroDECK lists **no** emulator for says so. If the emulator list itself cannot be established, the pane says
-why rather than showing an empty picker: no emulator source was found, every source is switched off in Settings ›
-Emulator sources, ES-DE's systems file is broken, the source's list cannot be read yet (EmuDeck's today), or it is not
-established for another reason. Where the emulator you picked is no longer in the list after an update, the pane says
-**"Your choice '_name_' no longer exists in _source_; the default '_default_' is used."** rather than switching quietly.
+games — it is not installed, or RetroDECK's start script cannot start it — the pane names it in red and says so, and the
+button stays open, and the sentence points at the menu, wherever there is another emulator to pick. Where whether the
+default is installed could not be established, the pane says no emulator is the default until you pick one, with the
+reason where one is known. A platform RetroDECK lists **no** emulator for says so. If the emulator list itself cannot be
+established, the pane says why rather than showing an empty picker: no emulator source was found, every source is
+switched off in Settings › Emulator sources, ES-DE's systems file is broken, the source's list cannot be read yet
+(EmuDeck's today), or it is not established for another reason. Where the emulator you picked is no longer in the list
+after an update, the pane says **"Your choice '_name_' no longer exists in _source_;"** and what is used instead — your
+platform choice, the default, or that there is no default — rather than switching quietly.
 
 Tender stores the choice in its own settings and **immediately re-applies it** to every installed game on that platform
 — the change takes effect right away, with no sync needed (games that already have a per-game core keep their own
@@ -981,7 +982,7 @@ shown in parentheses so you know what the game will fall back to.
 
 Each core in the list below can show up to three markers, one per role:
 
-- **(default)** — the platform's default: the emulator RetroDECK lists first.
+- **(default)** — the platform's default: the emulator RetroDECK ships as its default.
 - **(system)** — the per-platform core you picked in [Library › Platforms](#per-platform-library-platforms-tab) (stored
   in Tender's settings). Absent when the platform has no per-platform override.
 - **✓** (checkmark) — the core this game actually launches with right now.
@@ -1005,13 +1006,14 @@ confirms the change landed before reporting success. If Steam can't accept the c
 a "Core saved — restart Steam to apply" message — your choice is still saved; it takes effect after a Steam restart (or
 the next sync).
 
-**When a game cannot start.** Where the emulator a game starts with is not installed, or RetroDECK's start script finds
-nothing for it, **Play** is disabled and a line under the play row says why and to choose another emulator in the menu;
-starting the game from Steam's library is refused with the same words. A PS3 game installed as a folder whose emulator
-cannot start a folder — RPCS3 Shortcut, RetroDECK's default — says so and names **RPCS3 Directory** as the one that can,
-for you to pick; Tender does not switch it by itself. Where whether the default is installed could not be established,
-the line asks you to choose an emulator, and Play stays disabled until you do. A pick you made stands whatever happens
-to it: only one whose name no longer exists gives way to the default, and the line says so.
+**When a game cannot start.** Where the emulator a game starts with is not installed, or RetroDECK's start script cannot
+start it, **Play** is disabled and a line under the play row says why — and to choose another emulator in the menu,
+where the game offers another; starting the game from Steam's library is refused with the same words. A PS3 game
+installed as a folder whose emulator cannot start a folder — RPCS3 Shortcut, RetroDECK's default — says so and names
+**RPCS3 Directory** as the one that can, for you to pick; Tender does not switch it by itself. Where whether the default
+is installed could not be established, the line asks you to choose an emulator, and Play stays disabled until you do. A
+pick you made stands whatever happens to it: only one whose name no longer exists gives way to the default, and the line
+says so.
 
 Per-game cores work for **any ROM filename**. Tender bakes the chosen core directly into the game's launch command, so
 it does not rely on RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in filenames)

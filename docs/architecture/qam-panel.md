@@ -1485,13 +1485,13 @@ it, for the focused platform:
   **The clause names the core; "Default" is not one of the names it can take.** `active_core_label` names the platform's
   pick, else Tender's default (the entry the first enabled source ships first,
   [core-emulator-selection.md](core-emulator-selection.md#per-platform-coreserviceset_system_core)), whatever its state
-  — a default Tender cannot bake is named like any other, and its games start through RetroDECK's plain launch, which
-  nothing words. The clause is red where the games cannot start (`frontend/src/utils/emulatorClause.ts`):
+  — a default Tender cannot bake is named like any other. The clause is red where the games cannot start
+  (`frontend/src/utils/emulatorClause.ts`):
 
   - **The emulator cannot start them** — `start` says `cannot_start`: it is not installed, or RetroDECK's start script
-    finds nothing for it. The clause names it in **red** and the line under it says why
+    cannot start it. The clause names it in **red** and the line under it says why
     (`frontend/src/utils/emulatorStart.ts`, the same sentence a game's page and a refused start use); the chip stays
-    open wherever another entry can be pinned.
+    open, and the line points at the emulator menu, only where another entry can be pinned.
   - **No default** — the entry the source ships first could not be established installed, so it is never the default by
     itself ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D9). The clause reads `no default` in
     **red**, the line asks for a choice with the cause where one is known, and the chip stays open where an entry can be
@@ -1503,17 +1503,19 @@ it, for the focused platform:
     **red** and the line says the games will not launch, because they will not.
 
   Under them stand, where they apply, the pick whose name no longer exists in its source ("Your choice '_label_' no
-  longer exists in _source_; the default '_default_' is used", D5), and every enabled source's own default with the
-  user's choice in ES-DE where it differs (D4).
+  longer exists in _source_; the default '_default_' is used", or "there is no default to use instead", D5), and every
+  enabled source's own default with the user's choice in ES-DE where it differs (D4). Where Tender's default comes from
+  a source games do not start through, none of the starting source's own lines stands under it — no refusal, no vanished
+  pick, no red — and the clause takes the default's colour (D24).
 
   **The button is always rendered**, and opens a menu only when there is something to pick: the core read landed,
-  RetroDECK was found, at least one option is bakeable, and there are at least two — or nothing is the default and an
-  option can be pinned. The platform's shortcut count is deliberately not a condition: the per-platform core is a
-  setting read when a game is resolved, so it applies to games synced later too, and picking it before the first sync is
-  the ordinary case. In every other case it is the same chip, disabled, with the reason in its `title` — the ruling the
-  Remove group already follows, and what keeps the header's shape constant across panes. A disabled button is still a
-  focus stop and the wide page's own sheet gives it Steam's focus outline, so a reader walking the header lands on it
-  and is told why.
+  RetroDECK was found, and there are at least two options, one of them a bakeable entry other than the one in effect —
+  or nothing is the default and an option can be pinned. The platform's shortcut count is deliberately not a condition:
+  the per-platform core is a setting read when a game is resolved, so it applies to games synced later too, and picking
+  it before the first sync is the ordinary case. In every other case it is the same chip, disabled, with the reason in
+  its `title` — the ruling the Remove group already follows, and what keeps the header's shape constant across panes. A
+  disabled button is still a focus stop and the wide page's own sheet gives it Steam's focus outline, so a reader
+  walking the header lands on it and is told why.
 
   **Which of those cases also keeps a line under the header is a judgement about what it reports, not about the chip.**
   "Nothing to switch" states — the read in flight, one emulator on the menu — say it in the tooltip alone: a sentence

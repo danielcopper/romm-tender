@@ -200,3 +200,13 @@ installation" with every emulator source the resolver detects, each asked throug
 ADR-0020's bake classifier and `es_find_rules.xml` probe with the launch command the resolver gives. The default
 emulator is the first enabled source in the user's source order that offers one for the system, and within it that
 source's own default.
+
+## Amendment — the rows keep the resolver's order and the user's ES-DE choice is shown
+
+§2's picker order and default are replaced ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7, D8).
+The picker lists one row per entry, in the order the resolver gives — a choice the user made inside ES-DE first, marked
+as chosen there — and joins each row on the entry's emulator and `declared_index`, so two labels that run one command
+stay two rows. The default is the entry the source ships first, the lowest `declared_index`, whatever its state, and no
+longer the first bakeable one. `entry.selection` is still never read as a launch input: the user's choice in ES-DE is
+shown beside Tender's own, and never decides which entry starts. The effective default, which follows that choice, was
+not chosen: what the user sets in ES-DE is ES-DE's, and Tender's choice is made in Tender.
