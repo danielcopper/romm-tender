@@ -1024,10 +1024,10 @@ rollback, slot switch, the slot-choice migration and conflict resolution refuse 
 answer beside the content (next section), otherwise with `save_shape_unsupported` and the answer's own explanation. A
 place not read from the settings also carries the resolver's finding, the source's kind and the emulator's label, which
 the panel words the refusal from ([The seven save states](save-sync-coverage.md#the-seven-save-states)). Two notes the
-resolver states change nothing here: `redirect-outranked`, since Tender moves no save by a launch's arguments or
-environment, and `save-files-shared-with-core`, which stands beside a card folder the two PlayStation 2 libretro cores
-share and so on an answer already refused as shared ([#2644](https://github.com/danielcopper/romm-tender/issues/2644)
-D2).
+resolver states change nothing here: `redirect-outranked`, since Tender reads no redirect route and moves no save by a
+launch's flags, environment or working directory, and `save-files-shared-with-core`, which stands beside a card folder
+the two PlayStation 2 libretro cores share and so on an answer already refused as shared
+([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D2).
 
 ### Saves written next to the content (`savefiles_in_content_dir`)
 

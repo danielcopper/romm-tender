@@ -98,16 +98,16 @@ outside the per-game save folder, or haven't been pinned down yet. A shared card
 other games' saves, so it doesn't fit per-game sync today. We're looking at safe ways to handle these in a future
 release.
 
-| System         | Why it doesn't sync today                                                                                                                                                                                               |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dreamcast      | Flycast ships with **Per-Game VMUs off**, so every game shares `vmu_save_A1.bin` and its siblings in RetroDECK's system folder. The core _can_ write per-game VMUs; the names it uses then aren't pinned down yet.      |
-| PlayStation 2  | The LRPS2 core ships with **shared memory cards on** (`Mcd001.ps2` / `Mcd002.ps2`). With that option off it writes one `<game>.ps2` card per game — which would fit per-game sync.                                      |
-| GameCube / Wii | RetroDECK runs both on Dolphin (Standalone). Wii: the save folder is known, not which title folder is the game's. GameCube: the card path holds a region placeholder, and the GCI files are not named after the game.   |
-| Neo Geo CD     | Ships writing one shared save. The core has a per-content mode; which one wins when loading isn't confirmed.                                                                                                            |
-| Nintendo 3DS   | The Azahar core appears to use its own save subtree. Not confirmed on-device yet.                                                                                                                                       |
-| PSP            | Where the PPSSPP core keeps its saves, and whether they are per game, hasn't been established.                                                                                                                          |
-| Arcade (MAME)  | NVRAM is stored separately by the emulator, not as a file named after your ROM.                                                                                                                                         |
-| Amiga          | PUAE keeps an `.adf` floppy's save inside the disk image itself, so there is no separate file to carry. A `.lha` names a `WHDSaves` folder whose contents the core does not list, and an `.hdf` is not answered at all. |
+| System         | Why it doesn't sync today                                                                                                                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dreamcast      | Flycast ships with **Per-Game VMUs off**, so every game shares `vmu_save_A1.bin` and its siblings in RetroDECK's system folder. The core _can_ write per-game VMUs; the names it uses then aren't pinned down yet.                                |
+| PlayStation 2  | The LRPS2 core ships with **shared memory cards on** (`Mcd001.ps2` / `Mcd002.ps2`). With that option off it writes one `<game>.ps2` card per game — which would fit per-game sync. The PCEE2 core always writes shared cards, in the same folder. |
+| GameCube / Wii | RetroDECK runs both on Dolphin (Standalone). Wii: the save folder is known, not which title folder is the game's. GameCube: the card path holds a region placeholder, and the GCI files are not named after the game.                             |
+| Neo Geo CD     | Ships writing one shared save. The core has a per-content mode; which one wins when loading isn't confirmed.                                                                                                                                      |
+| Nintendo 3DS   | The Azahar core appears to use its own save subtree. Not confirmed on-device yet.                                                                                                                                                                 |
+| PSP            | Where the PPSSPP core keeps its saves, and whether they are per game, hasn't been established.                                                                                                                                                    |
+| Arcade (MAME)  | NVRAM is stored separately by the emulator, not as a file named after your ROM.                                                                                                                                                                   |
+| Amiga          | PUAE keeps an `.adf` floppy's save inside the disk image itself, so there is no separate file to carry. A `.lha` names a `WHDSaves` folder whose contents the core does not list, and an `.hdf` is not answered at all.                           |
 
 ## No save data ⚪
 
@@ -158,7 +158,7 @@ states still work locally). See the full table for specifics.
     | `naomigd` | ❌ | Shared VMU card (Flycast default; the core has a per-game mode) |
     | `neogeocd` | ❌ | Shared save (the core has a per-content mode) |
     | `neogeocdjp` | ❌ | Shared save (the core has a per-content mode) |
-    | `ps2` | ❌ | Shared memory card by default (LRPS2); per-game `<game>.ps2` available as a core option |
+    | `ps2` | ❌ | Shared memory card by default (LRPS2), always (PCEE2); per-game `<game>.ps2` available as an LRPS2 core option |
     | `psp` | ❌ | Where the PPSSPP core keeps its saves is not established |
     | `pv1000` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `scummvm` | ❌ | Not synced |

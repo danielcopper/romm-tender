@@ -66,12 +66,10 @@ verbatim as `atlas.SHA256SUMS`. That keeps `atlas/` exactly equal to the manifes
 exceptions. The equality half is not optional: `sha256sum -c --ignore-missing` exits 0 after a vendored file is deleted,
 so a plain checksum sweep would pass a half-copied tree.
 
-`_vendor.atlas` is consumed by three adapters: `adapters/atlas_firmware.py` (the firmware seams behind
-`services.protocols.FirmwareResolver` and `FirmwareFolderVerdictFn`), `adapters/atlas_catalogue.py` (the emulator
-catalogue behind `CoreInfoProvider`, `SystemSupportedExtensionsFn`, `SystemM3uSupportFn` and `SystemKnownFn`), and
-`adapters/atlas_saves.py` (where one ROM's save lives and what it consists of, behind `SaveLocationReader`).
-`tests/test_vendored_atlas.py` additionally imports it and asserts the pinned version, so the copy is proven to resolve
-and not merely to hash correctly even if all three adapters ever stop importing it.
+`_vendor.atlas` is imported by the reading modules `scripts/check_resolver_reading.py` names (`READING_MODULES`), the
+adapters that put each kind of question to it, and by `adapters/atlas_zstd.py`, which hands it the zstd codec
+(`IMPORT_GRANTS`). `tests/test_vendored_atlas.py` additionally imports it and asserts the pinned version, so the copy is
+proven to resolve and not merely to hash correctly even if every adapter ever stops importing it.
 
 ### How to update atlas
 

@@ -270,10 +270,10 @@ reads them the way the core does, and lists the folder **one row per file**, lik
 - Where LRPS2's own settings name an image that is not in the folder, a neutral line says so, naming the emulator as the
   selector does — _ℹ LRPS2 / PCSX2's settings name scph10000.bin, which is not here — it uses another BIOS from this
   folder instead._ That is not a fault: LRPS2 falls back to the images it finds in the folder.
-- Where its core option names a file LRPS2 does not offer — one its own listing of the folder leaves out, such as a file
-  of the wrong size or one it does not recognise as a BIOS — a neutral line says that too: _ℹ The core option names
-  scph10000.bin, which LRPS2 / PCSX2 does not offer — it starts with a BIOS from this folder._ RetroArch never hands the
-  core that name, so LRPS2 starts with a BIOS from the folder instead, and the folder's own verdict stands.
+- Where that setting — LRPS2's core option — names a file LRPS2 does not offer, one its own listing of the folder leaves
+  out (such as a file of the wrong size or one it does not recognise as a BIOS), a neutral line says that too: _ℹ The
+  core option names scph10000.bin, which LRPS2 / PCSX2 does not offer — it starts with a BIOS from this folder._
+  RetroArch never hands the core that name, and the folder's own verdict stands.
 - A folder holding no image is red, exactly like a missing file, and it is what the red **BIOS** badge beside Play
   appears for. **Download required** then fetches one image — the first recognised one in your library, alphabetically —
   because one is all the emulator opens. While nothing lies in the folder and your library holds no file recognised for
@@ -581,9 +581,11 @@ your RomM library holds firmware for it — so a missing BIOS you have never upl
 
 Tender asks the **emulators RetroDECK offers for that system** what they want — every one it lists, RetroArch cores and
 standalone emulators alike. A RetroArch core ships a small description file next to it declaring the firmware it needs
-and where each file goes. A standalone emulator (PCSX2, DuckStation, Cemu, melonDS, xemu) states its firmware in its own
-format instead, and for those Tender uses a packaged rule card that reads the emulator's own settings. Both are read
-live, so the answers follow your RetroDECK install, including emulators added after your version of Tender was released.
+and where each file goes. Where RetroDECK leaves that file out — its PCEE2 core, for one — Tender's emulator-knowledge
+library carries what the file would declare, read from the core's source. A standalone emulator (PCSX2, DuckStation,
+Cemu, melonDS, xemu) states its firmware in its own format instead, and for those Tender uses a packaged rule card that
+reads the emulator's own settings. Both are read live, so the answers follow your RetroDECK install, including emulators
+added after your version of Tender was released.
 
 That same reading also answers whether a **declared** file is already sitting where the emulator will look for it, and
 for those placed under your BIOS folder Tender takes its answer rather than checking the path itself. The difference
@@ -651,8 +653,8 @@ Both shapes, and a file reading unknown, come from the launching emulator not ha
 one cause:
 
 - a standalone emulator with no packaged card, or one whose card named no file
-- a RetroArch core that ships without a description file — on a stock RetroDECK that is rare, since only a handful of
-  bundled cores are in that state
+- a RetroArch core that ships without a description file and that Tender's emulator-knowledge library carries no
+  declaration for — on a stock RetroDECK that is rare, since only a handful of bundled cores are in that state
 - an emulator whose declaration Tender could not follow to a location
 - a launching emulator Tender cannot name — a configuration it could not read at all leaves it unable to name one in the
   first place

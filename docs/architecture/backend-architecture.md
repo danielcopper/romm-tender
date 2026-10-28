@@ -2896,12 +2896,13 @@ the old one.
 
 **A declaration that established nothing is unread, whatever its state says.** `read` with an empty requirement list is
 the one pairing that means "this emulator needs no firmware". `packaged` with an empty list means a card exists and this
-query established nothing — the same silence a missing `.info` leaves — so it counts as unread; PCSX2 answers exactly
-that when its own ini names no BIOS file. A libretro core installed without its `.info` answers `packaged` too where
-atlas carries a declaration for it, with `core-info-packaged` beside it; the state is read and the statement changes
-nothing ([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D3). `unsupported` is an emulator the resolver
-has no source for, and a refused declaration counts as unread too: the emulator does want something the resolver would
-not follow to a destination.
+query established nothing — the same silence a missing `.info` leaves where atlas packages no declaration for the core —
+so it counts as unread; PCSX2 answers exactly that when its own ini names no BIOS file. A libretro core installed
+without its `.info` answers `packaged` too where atlas carries a declaration for it, with `core-info-packaged` beside
+it; Tender reads the state by the rule above, and the statement changes nothing
+([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D3). `unsupported` is an emulator the resolver has no
+source for, and a refused declaration counts as unread too: the emulator does want something the resolver would not
+follow to a destination.
 
 **One platform, one emulator.** Which emulator a platform's BIOS answers are ABOUT is resolved once, by
 `domain/emulator_commands.py`'s `resolve_firmware_option` — the per-platform override (`settings.json` `platform_cores`)
@@ -3029,10 +3030,10 @@ its identity, is `adapters/atlas_firmware.py::_ATTRIBUTION_KEYS`'s; that is how 
 — the label of the emulator whose reading the row is and the file its `pcsx2_bios` option names — and it is never a
 verdict: LRPS2 lists the folder instead, so the folder's verdict is what the launch rests on. Its sibling
 `firmware-configured-image-not-offered` — the option names a file the core does not offer, so RetroArch hands the core
-its default, the folder's listing — rides the same way as `configured_image_not_offered`, and is no verdict either
-([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D4, D7). A caveat naming none of the keys is a
-statement about the place with no owner — a listing that failed is the case that matters — and it stays on the row,
-which is the permissive direction: the row keeps a cause it might not own rather than losing one it does.
+its default, the folder's listing — reaches the row the same way and is carried as `configured_image_not_offered`, no
+verdict either ([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D4, D7). A caveat naming none of the
+keys is a statement about the place with no owner — a listing that failed is the case that matters — and it stays on the
+row, which is the permissive direction: the row keeps a cause it might not own rather than losing one it does.
 
 **The level is the resolver's verdict for the launching emulator, and no count decides it.** `compute_bios_level` reads
 `requirements_met` off the emulator's entry (`CoreFirmwareVerdict`): met is `ok`, not met is `missing`, not established

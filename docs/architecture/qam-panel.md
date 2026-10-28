@@ -1940,8 +1940,8 @@ it, for the focused platform:
   nothing was settled either way; the cause is the note's.
 
   The file name is printed once. The description under it is **not RomM's** — `_server_files` builds no description at
-  all and `_wanted_fields` overwrites what came in, so what arrives is the core's own `firmwareN_desc`, or the file name
-  itself for a row no placement covers.
+  all and `_wanted_fields` overwrites what came in, so what arrives is the core's own `firmwareN_desc`, the description
+  of a declaration atlas packages (hidden by the rule below), or the file name itself for a row no placement covers.
 
   **Only a `read` declaration's prose is shown at all**, which `biosFileDescription` decides first and the table
   therefore applies on both pages. The row carries the resolver's own word for how the emulator that supplied the
