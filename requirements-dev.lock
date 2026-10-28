@@ -10,7 +10,7 @@ execnet==2.1.2
     # via pytest-xdist
 grimp==3.18
     # via import-linter
-hypothesis==6.167.1
+hypothesis==6.170.9
     # via -r requirements-dev.txt
 import-linter==2.15
     # via -r requirements-dev.txt
