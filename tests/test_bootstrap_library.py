@@ -13,6 +13,7 @@ from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
+from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -51,6 +52,7 @@ def parts(home) -> LibraryParts:
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(),
             artwork_job=FakeShortcutArtworkJob(),
+            running_rom_ids=FakeRunningRomIds(),
         )
     )
 

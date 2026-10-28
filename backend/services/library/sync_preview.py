@@ -23,7 +23,6 @@ from domain.sync_diff import (
     collapse_sibling_groups,
     compute_collection_diff,
     compute_platform_collection_diff,
-    converge_bound_groups,
     count_disabled_platform_removals,
     platform_breakdown,
     rebuilt_rows_filed_as_kept,
@@ -32,6 +31,7 @@ from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.errors import Refused, classify_error
+from services.library._convergence import converge_unless_running
 from services.library._preview_union import collapse_counting_platform_rebinds
 from services.library._stale_rows import preview_group_keys, settle_stale_rows, stale_rows_of, with_kept_platform_names
 from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from services.library.session_budget import SessionBudgetMonitor
     from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
     from services.library.sync_progress import SyncProgress
-    from services.protocols import Clock, ShortcutArtworkJob, UuidGen
+    from services.protocols import Clock, RunningRomIdsFn, ShortcutArtworkJob, UuidGen
 
 
 @dataclass(frozen=True)
@@ -71,8 +71,9 @@ class SyncPreviewConfig:
     device's own record of the library goes to, the :class:`SessionBudgetMonitor`
     the post-preview prognosis is asked of, the :class:`CoverPreparer` that
     counts the cover-only work, the :class:`SyncProgress` the preview's frames go
-    out through, and the ``artwork_job``, asked for a run when the preview ends:
-    it stops while a run is in flight.
+    out through, the ``artwork_job``, asked for a run when the preview ends:
+    it stops while a run is in flight, and the ``running_rom_ids`` reading the
+    convergence leaves a running game out by.
     """
 
     settings: dict[str, Any]
@@ -90,6 +91,7 @@ class SyncPreviewConfig:
     cover_preparer: CoverPreparer
     progress: SyncProgress
     artwork_job: ShortcutArtworkJob
+    running_rom_ids: RunningRomIdsFn
 
 
 class SyncPreview:
@@ -109,6 +111,7 @@ class SyncPreview:
         self._cover_preparer = config.cover_preparer
         self._progress = config.progress
         self._artwork_job = config.artwork_job
+        self._running_rom_ids = config.running_rom_ids
 
     async def sync_preview(self):
         """Read-only preview: paginate every unit, classify, return the summary.
@@ -218,12 +221,14 @@ class SyncPreview:
             preferred_region = self._settings.get("preferred_region", AUTO_REGION)
             converged_ids = {
                 binding.rom_id
-                for binding in converge_bound_groups(
+                for binding in await converge_unless_running(
                     [sd for sd in shortcuts_data if sd["rom_id"] in listed_ids],
                     registry,
                     set(installed_paths),
                     platform_slugs=set(full_fetched_platforms),
                     preferred_region=preferred_region,
+                    running_rom_ids=self._running_rom_ids,
+                    logger=self._logger,
                 )
             }
             emitted, classify_skipped = collapse_counting_platform_rebinds(

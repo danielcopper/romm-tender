@@ -8332,6 +8332,73 @@ class TestAGameWithSeveralShortcutsConverges:
         assert "Stale removal: keeping" not in caplog.text
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("running", [30, 31], ids=["the-kept-one", "the-other"])
+    async def test_a_game_that_is_running_keeps_both_shortcuts_in_the_preview_and_the_apply(
+        self, make_library, fake_romm_api, emit, tmp_path, running
+    ):
+        """D5: one of the game's shortcuts is running, so neither the preview nor the apply converges it."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        library.running_games.running = {running}
+
+        summary = (await library.sync.sync_preview())["summary"]
+        _sent, removed = await self._apply(library, emit, "run-2")
+
+        assert summary["remove_count"] == 0
+        assert removed == []
+        assert self._bindings(library) == {30: 6030, 31: 6031}
+
+    @pytest.mark.asyncio
+    async def test_a_game_left_out_while_running_converges_at_the_next_sync_fetched_in_full(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        bind = await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        library.running_games.running = {31}
+        _sent, while_running = await self._apply(library, emit, "run-2")
+        library.running_games.running = set()
+        library.chunk_dispatcher._wait_for_unit_complete = bind
+
+        fake_romm_api.call_log.clear()
+        _sent, removed = await self._apply(library, emit, "run-3")
+
+        assert while_running == []
+        assert self._list_calls(fake_romm_api), "the platform is fetched in full while the game has two shortcuts"
+        assert [row["rom_id"] for row in removed] == [31]
+        assert self._bindings(library) == {30: 6030, 31: None}
+
+    @pytest.mark.asyncio
+    async def test_the_preview_and_the_apply_each_read_the_running_games_at_their_own_time(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """The game runs while the preview counts and has quit when the apply runs."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        library.running_games.running = {30}
+
+        summary = (await library.sync.sync_preview())["summary"]
+        library.running_games.running = set()
+        _sent, removed = await self._apply(library, emit, "run-2")
+
+        assert summary["remove_count"] == 0
+        assert [row["rom_id"] for row in removed] == [31]
+
+    @pytest.mark.asyncio
+    async def test_steam_is_not_asked_what_runs_when_nothing_converges(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        await self._apply(library, emit, "run-2")
+        readings = library.running_games.readings
+
+        await library.sync.sync_preview()
+        await self._apply(library, emit, "run-3")
+
+        assert readings == 1
+        assert library.running_games.readings == readings
+
+    @pytest.mark.asyncio
     async def test_a_removed_shortcut_gets_no_cover_refresh_and_the_kept_one_does(
         self, make_library, fake_romm_api, emit, tmp_path
     ):

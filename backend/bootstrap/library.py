@@ -60,6 +60,7 @@ if TYPE_CHECKING:
         RendererGcFn,
         RendererRssFn,
         RommLibraryApi,
+        RunningRomIdsFn,
         SettingsPersister,
         ShortcutArtworkJob,
         Sleeper,
@@ -99,6 +100,7 @@ class LibraryWiring:
     renderer_gc: RendererGcFn
     conflict_rules: ConflictRules
     artwork_job: ShortcutArtworkJob
+    running_rom_ids: RunningRomIdsFn
 
 
 @dataclass(frozen=True)
@@ -236,6 +238,7 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             cover_preparer=cover_preparer,
             chunk_dispatcher=chunk_dispatcher,
             emit_progress=progress.emit_progress,
+            running_rom_ids=wiring.running_rom_ids,
         )
     )
 
@@ -256,6 +259,7 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             cover_preparer=cover_preparer,
             progress=progress,
             artwork_job=wiring.artwork_job,
+            running_rom_ids=wiring.running_rom_ids,
         )
     )
 

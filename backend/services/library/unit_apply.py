@@ -20,11 +20,11 @@ from domain.sync_diff import (
     BIND_ROM_ID_KEY,
     classify_roms,
     collapse_sibling_groups,
-    converge_bound_groups,
     gather_unbound_groups,
     with_kept_rows_rebound,
 )
 from domain.sync_stage import SyncStage
+from services.library._convergence import converge_unless_running
 from services.library._unit_roms import (
     collection_membership_key,
     record_collection_membership,
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
     from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
-    from services.protocols import Clock, UnitOfWorkFactory
+    from services.protocols import Clock, RunningRomIdsFn, UnitOfWorkFactory
 
     EmitProgressFn = Callable[..., Awaitable[None]]
 
@@ -66,8 +66,10 @@ class UnitApplierConfig:
     :class:`LocalLibraryReader` the bound-row registry and the resident group
     keys are read through,
     the :class:`CoverPreparer` that holds the unit's covers, the
-    :class:`ChunkDispatcher` that takes the built delta the rest of the way, and
-    the ``emit_progress`` callback the unit's coarse frame goes out through.
+    :class:`ChunkDispatcher` that takes the built delta the rest of the way, the
+    ``emit_progress`` callback the unit's coarse frame goes out through, and the
+    ``running_rom_ids`` reading a platform unit's convergence leaves a running
+    game out by.
     """
 
     settings: dict[str, Any]
@@ -84,6 +86,7 @@ class UnitApplierConfig:
     cover_preparer: CoverPreparer
     chunk_dispatcher: ChunkDispatcher
     emit_progress: EmitProgressFn
+    running_rom_ids: RunningRomIdsFn
 
 
 class UnitApplier:
@@ -102,6 +105,7 @@ class UnitApplier:
         self._cover_preparer = config.cover_preparer
         self._chunk_dispatcher = config.chunk_dispatcher
         self._emit_progress = config.emit_progress
+        self._running_rom_ids = config.running_rom_ids
 
     def _clear_platform_stamp_io(self, platform_slug: str) -> None:
         """Delete *platform_slug*'s completion stamp in one short write UoW.
@@ -262,8 +266,14 @@ class UnitApplier:
             installed |= await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_installed_rom_ids, unlisted
             )
-            converged = converge_bound_groups(
-                shortcuts_data, registry, installed, platform_slugs={unit.slug}, preferred_region=preferred_region
+            converged = await converge_unless_running(
+                shortcuts_data,
+                registry,
+                installed,
+                platform_slugs={unit.slug},
+                preferred_region=preferred_region,
+                running_rom_ids=self._running_rom_ids,
+                logger=self._logger,
             )
         converged_ids = {binding.rom_id for binding in converged}
 

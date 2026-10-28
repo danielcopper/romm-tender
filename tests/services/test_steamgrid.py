@@ -23,6 +23,7 @@ from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
+from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
@@ -126,6 +127,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
             artwork_job=FakeShortcutArtworkJob(),
+            running_rom_ids=FakeRunningRomIds(),
         ),
     ).service
 
@@ -1183,6 +1185,7 @@ class TestDebugLoggerProtocolSeam:
                 renderer_gc=FakeRendererGc(),
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
                 artwork_job=FakeShortcutArtworkJob(),
+                running_rom_ids=FakeRunningRomIds(),
             ),
         ).service
 

@@ -514,6 +514,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             renderer_gc=cfg.adapters.renderer_gc,
             conflict_rules=conflict_rules,
             artwork_job=shortcut_artwork_service,
+            running_rom_ids=running_games.running_rom_ids,
         ),
     ).service
     pending_sync_binding.set(lambda: sync_service.pending_sync)

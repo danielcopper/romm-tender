@@ -22,6 +22,7 @@ from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
+from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -81,6 +82,7 @@ class LibraryHarness:
     settings: dict[str, Any]
     emulator_sources: FakeEmulatorSources
     artwork_job: FakeShortcutArtworkJob
+    running_games: FakeRunningRomIds
 
 
 class MakeLibrary(Protocol):
@@ -183,6 +185,7 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
         renderer_gc = FakeRendererGc()
         emulator_sources = FakeEmulatorSources()
         artwork_job = FakeShortcutArtworkJob()
+        running_games = FakeRunningRomIds()
 
         parts = wire_library(
             LibraryWiring(
@@ -207,6 +210,7 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
                 renderer_gc=renderer_gc,
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
                 artwork_job=artwork_job,
+                running_rom_ids=running_games,
             ),
         )
 
@@ -247,6 +251,7 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
             settings=settings,
             emulator_sources=emulator_sources,
             artwork_job=artwork_job,
+            running_games=running_games,
         )
 
     return build

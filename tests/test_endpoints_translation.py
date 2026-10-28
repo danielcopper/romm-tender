@@ -1275,6 +1275,7 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(),
+            running_rom_ids=FakeRunningRomIds(),
         ),
     ).service
     endpoints = Endpoints(_make_application(_make_services_bundle(sync_service=service)), HostStatus())
