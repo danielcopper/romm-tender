@@ -76,6 +76,7 @@ from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
     AVAILABILITY_NOT_INSTALLED,
+    CAVEAT_CORE_INFO_PACKAGED,
     CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
@@ -138,6 +139,12 @@ _DECLARATION_READ = "read"
 # card exists and this query established nothing — the same unasked question a
 # missing ``.info`` leaves, and never "this emulator needs no firmware".
 _DECLARATION_PACKAGED = "packaged"
+
+# Statements beside a declaration state that change nothing read here (#2644
+# D3). ``core-info-packaged`` says atlas's packaged declaration stands in for a
+# libretro core's missing ``.info``; the state itself is ``declaration``
+# ``packaged``, which :func:`_stated` reads, and the statement adds no verdict.
+_NOTES_THAT_CHANGE_NOTHING = frozenset({CAVEAT_CORE_INFO_PACKAGED})
 
 # The keys a caveat names an emulator under. Three, because the resolver states
 # the owner in whichever vocabulary the finding came from: ``core_so`` the core

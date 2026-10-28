@@ -24,6 +24,7 @@ import pytest
 from _standalone_firmware import SYSTEMS, lay_down_standalone_emulators
 from _vendor.atlas import (
     CAVEAT_CORE_FILE_FOREIGN,
+    CAVEAT_CORE_INFO_PACKAGED,
     CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
@@ -1041,6 +1042,31 @@ class TestUnreadEmulators:
         _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset()
+
+    def test_a_core_atlas_declares_in_place_of_its_info_is_read_by_its_declaration(self, adapter, monkeypatch):
+        """``core-info-packaged`` is the statement beside ``packaged``, and it changes nothing (#2644 D3).
+
+        A libretro core installed without its ``.info`` that atlas's packaged
+        declaration names a file for is read; one it names nothing for is not,
+        as for any packaged declaration.
+        """
+
+        def packaged_core(core_so: str, *requirements: FirmwareRequirement) -> CoreFirmware:
+            stated = Caveat(code=CAVEAT_CORE_INFO_PACKAGED, message="no .info", data={"core_so": core_so})
+            return _core(core_so=core_so, declaration="packaged", requirements=requirements, caveats=(stated,))
+
+        answer = _answer(
+            packaged_core(
+                "pcsx2_libretro.so", _requirement(core_so="pcsx2_libretro.so", file_name="ps2-0230a-20080220.bin")
+            ),
+            packaged_core("pcee2_libretro.so"),
+        )
+        _detect(monkeypatch, _detecting(_Installation(answer)))
+
+        catalogue = adapter()
+
+        assert catalogue.unread_emulators == frozenset({"pcee2_libretro.so"})
+        assert [placement.file_name for placement in catalogue.placements] == ["ps2-0230a-20080220.bin"]
 
     def test_a_read_core_that_declares_nothing_is_never_named(self, adapter, monkeypatch):
         """``read`` and empty is the one pairing that means "this emulator needs none"."""
