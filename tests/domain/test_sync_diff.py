@@ -1,5 +1,7 @@
 """Tests for domain.sync_diff — pure delta computations for the sync engine."""
 
+from collections.abc import Iterable
+from collections.abc import Set as AbstractSet
 from typing import Any
 
 import pytest
@@ -995,7 +997,7 @@ class TestConvergeBoundGroups:
     """``converge_bound_groups`` — a group holding more than one bound shortcut keeps one (#2645 D1, D3)."""
 
     @staticmethod
-    def _kept(members, registry, installed=frozenset(), platform_slugs=frozenset({"n64"})):
+    def _kept(members, registry, installed: Iterable[int] = (), platform_slugs: AbstractSet[str] = frozenset({"n64"})):
         converged = converge_bound_groups(members, registry, set(installed), platform_slugs=platform_slugs)
         return [(binding.rom_id, binding.kept_rom_id) for binding in converged]
 
