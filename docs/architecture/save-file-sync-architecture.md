@@ -1578,28 +1578,38 @@ neither in place):
    make-current, so nothing churns (the frontend toasts "already in slot … as `#<id>`" and does not refresh). It fires
    only when `content_hash` is populated (RomM 5.0.0+); an absent hash falls through to the copy and RomM's own
    server-side dedup. This is what stops a repeat-copy of already-present content from re-pointing the tracked save.
-7. `SaveCopyService._copy_save_to_slot_io` then: `SaveTransfer.download_save_file` (the chosen content onto the
+7. **Busy-slot pre-check**: where RomM would refuse the copy's POST, the copy is `target_slot_busy` with **no**
+   download, backup or make-current — the previous slot stays active, the local file and its baseline stay as they were,
+   and the panel does not refresh. The check is RomM's own rule (`add_save`, 5.3.0 through 5.4.1), read off the step-5
+   listing by `domain/add_save_gate.py::slot_refuses_new_save`: the target slot's newest save by `updated_at`, then by
+   id, over every file name, refuses unless this device's `device_syncs` entry on it is `is_current` — a slot this
+   device never synced is refused too, since RomM answers a device without a sync row with a not-current placeholder. An
+   empty slot passes, and a slot whose newest save cannot be established (a time that does not parse, or a tie with a
+   save that has no id) is left to RomM's 409. The toast tells the user to activate that slot — which syncs it — and
+   copy again.
+8. `SaveCopyService._copy_save_to_slot_io` then: `SaveTransfer.download_save_file` (the chosen content onto the
    canonical local file, backing the current local file up first, #965; a local file this device cannot write is
    `copy_failed`, and a RomM error is not caught here — either way the active slot stays as it was) →
    `confirm_slot(target)` (creates the slot if new, switches active + confirms) →
-   `upload_save_file(server_save=None, overwrite=False)` — a POST into the now-active target slot. A **409** is
-   `target_slot_busy` (the target has newer changes from another device — sync it first, then retry); any other upload
-   error is `upload_failed`: as with a restore's `put_failed`, the copy is complete on this device and its state is
-   persisted, and the target slot stays active. The download recorded the source save as the file's baseline, which the
-   copy matches, so where this device is current on the target slot's newest save, the next sync would find nothing
-   changed (row 7) and never upload it. `upload_failed` therefore records the target slot's newest save for that file —
-   its id, its `content_hash` and its size — as the baseline, and the next sync reads the copy as a local change: row 9
-   uploads it as a new version superseding that save, where this device is current on it. Row 9b still applies — a copy
-   under half that save's size, or for a file the save answer states fixed-size, any copy shorter than it, is a
-   conflict, not an upload — and so is a save there this device is not current on: row 12b, whether it never synced that
-   save or another device moved it on since. That baseline is recorded from the save's size alone and carries no
-   [content size](#the-content-size), so row 9b judges the copy by raw size. A new slot has no save to record, and the
-   next sync uploads the copy as its first save (row 2). Where the newest save carries no `content_hash` or no id, there
-   is no baseline to record from it, and the file's tracking is dropped instead: with no baseline beside a head it
-   cannot prove the copy identical to, the next sync answers a conflict — row 8b where this device is current on that
-   save, row 11b where it is not. Neither alternative holds: a hash made up to differ from the copy would claim a sync
-   that never happened, and keeping the download's baseline, which the copy matches, would let a next sync on a head
-   this device is not current on download that head over the copy.
+   `upload_save_file(server_save=None, overwrite=False)` — a POST into the now-active target slot. Any upload error is
+   `upload_failed`, a **409** included — another device's upload landed in the target slot between the step-7 check and
+   the POST, and undoing the download and the slot change would need a put-back that never overwrites: as with a
+   restore's `put_failed`, the copy is complete on this device and its state is persisted, and the target slot stays
+   active. `target_slot_busy` therefore always means that nothing changed. The download recorded the source save as the
+   file's baseline, which the copy matches, so where this device is current on the target slot's newest save, the next
+   sync would find nothing changed (row 7) and never upload it. `upload_failed` therefore records the target slot's
+   newest save for that file — its id, its `content_hash` and its size — as the baseline, and the next sync reads the
+   copy as a local change: row 9 uploads it as a new version superseding that save, where this device is current on it.
+   Row 9b still applies — a copy under half that save's size, or for a file the save answer states fixed-size, any copy
+   shorter than it, is a conflict, not an upload — and so is a save there this device is not current on: row 12b,
+   whether it never synced that save or another device moved it on since. That baseline is recorded from the save's size
+   alone and carries no [content size](#the-content-size), so row 9b judges the copy by raw size. A new slot has no save
+   to record, and the next sync uploads the copy as its first save (row 2). Where the newest save carries no
+   `content_hash` or no id, there is no baseline to record from it, and the file's tracking is dropped instead: with no
+   baseline beside a head it cannot prove the copy identical to, the next sync answers a conflict — row 8b where this
+   device is current on that save, row 11b where it is not. Neither alternative holds: a hash made up to differ from the
+   copy would claim a sync that never happened, and keeping the download's baseline, which the copy matches, would let a
+   next sync on a head this device is not current on download that head over the copy.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?, message?} |
@@ -1607,10 +1617,10 @@ server_unreachable{message} | not_found{message} | conflict_blocked{conflicts} |
 target_slot_busy{message} | already_present{existing_id} | copy_failed{message} | upload_failed{message}`.
 On `ok` and `upload_failed` the frontend dispatches `romm_data_changed` so the parent re-fetches — refreshing both the
 source and the target slot views; the `upload_failed` toast says the save is copied on this device but not uploaded to
-RomM yet, and names the two outcomes the next sync has outside the missing-hash case step 7 names: it uploads the copy,
+RomM yet, and names the two outcomes the next sync has outside the missing-hash case step 8 names: it uploads the copy,
 or asks which to keep. Outside the union the endpoint answers the shared failure shape (`success: false`) in two cases:
 when the conflict rules' hold in `SaveService.copy_save_to_slot` refuses, as for a restore, and on a RomM error at the
-step-7 download, with `classify_error`'s reason and message. The panel words it "Couldn't copy the save: …", followed by
+step-8 download, with `classify_error`'s reason and message. The panel words it "Couldn't copy the save: …", followed by
 the endpoint's message, and refreshes nothing. The source slot is excluded from the target picker (a same-slot copy is
 just a rollback) and the legacy `""` bucket is excluded as a target (it stays a read-only source).
 

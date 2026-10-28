@@ -262,7 +262,7 @@ class RomSaveSyncState:
         A head without a ``content_hash`` or an id drops *filename*'s tracking
         instead and answers ``False`` — unlike :meth:`record_transfer`, which
         changes nothing where it records nothing. Why: the copy-to-slot section
-        of ``docs/architecture/save-file-sync-architecture.md``, step 7.
+        of ``docs/architecture/save-file-sync-architecture.md``, step 8.
         """
         head_hash = head.get("content_hash")
         head_id = head.get("id")

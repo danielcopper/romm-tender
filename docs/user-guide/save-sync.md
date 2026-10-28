@@ -198,8 +198,8 @@ Common uses: promote a save from the Manual archive into a named slot, or bring 
 can continue it there.
 
 The button is unavailable while RomM is offline. If the game's current slot has an unresolved conflict, resolve it first
-(you'll be prompted). If the destination slot has newer changes from another device, sync that slot first, then copy
-again.
+(you'll be prompted). If the destination slot has newer changes from another device, nothing is copied and your active
+slot and save stay as they were: activate that slot with **Activate Slot**, which syncs it, then copy again.
 
 A game whose save Tender does not sync is refused here too, and so are switching its slot and restoring an older version
 — for example a memory card every game shares (standalone PCSX2's, even though Tender knows its folder), a save written
