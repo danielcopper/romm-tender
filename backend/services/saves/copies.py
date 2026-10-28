@@ -16,6 +16,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.add_save_gate import slot_refuses_new_save
 from domain.save_answer import (
     SAVE_SHAPE_UNSUPPORTED_REASON,
     SAVE_SYNC_CONTENT_DIR_REASON,
@@ -24,7 +25,7 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
-from lib.errors import RommApiError, RommConflictError, RommNotFoundError, classify_error, with_system_text
+from lib.errors import RommApiError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target, newest_server_saves_by_target
 from services.saves._save_state import read_save_state_or_new, write_save_state
 from services.saves._settings import resolve_default_slot
@@ -194,12 +195,10 @@ class SaveCopyService:
            precede the POST for the copy to land in the target.
         4. POST that content into the now-active target slot
            (``server_save=None`` → a new save, ``overwrite=false`` → the 409
-           backstop guards a busy target). A 409 is ``target_slot_busy`` (the
-           target has newer changes from another device — resolve it first); any
-           other upload error is ``upload_failed``: the copy is complete on this
-           device, the target stays active, and
-           :meth:`_adopt_target_head_as_baseline` records the baseline the next
-           sync compares the copy with.
+           backstop guards a busy target). Any upload error, a 409 included, is
+           ``upload_failed``: the copy is complete on this device, the target
+           stays active, and :meth:`_adopt_target_head_as_baseline` records the
+           baseline the next sync compares the copy with.
 
         The source save is never touched. Mutates *save_state* in memory; the
         caller owns the write UoW.
@@ -248,18 +247,6 @@ class SaveCopyService:
                 default_slot=default_slot,
                 overwrite=False,
             )
-        except RommConflictError as e:
-            # The target slot has a newer server version this device hasn't
-            # synced — an overwrite=false POST 409s rather than stack on it.
-            # Surface it so the user resolves/syncs the target first, then retries.
-            self._logger.warning(
-                "_copy_save_to_slot_io: target slot %r busy for rom=%s save=%s: %s",
-                target_slot,
-                rom_id,
-                save_id,
-                e,
-            )
-            return {"status": "target_slot_busy", "message": str(e)}
         except Exception as e:
             self._logger.error(
                 "_copy_save_to_slot_io: upload into slot %r failed for rom=%s save=%s: %s",
@@ -310,7 +297,9 @@ class SaveCopyService:
         A dedup pre-check between the ``list_saves`` and the copy short-circuits
         with ``already_present{existing_id}`` when the chosen save's content is
         already in the target slot — copying it would only churn the tracked save
-        (RomM dedups server-side).
+        (RomM dedups server-side). After it, a target slot whose newest save this
+        device is not current on is ``target_slot_busy`` before anything is
+        written (:func:`slot_refuses_new_save`, RomM's own refusal rule).
 
         Returns a discriminated-status dict (mirrors ``RollbackStatus``):
         ``ok | already_present{existing_id} | not_configured | invalid_slot_name |
@@ -437,6 +426,19 @@ class SaveCopyService:
                 # no-op (#1012). No copy state was mutated.
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "already_present", "existing_id": existing_id}
+
+            # A slot whose times cannot be read (``None``) is left to RomM's 409.
+            if slot_refuses_new_save(server_saves, target_slot, device_id) is True:
+                self._log_debug(
+                    f"copy_save_to_slot: rom {rom_id} slot {target_slot!r} has a newest save this device "
+                    "is not current on; refusing before the copy"
+                )
+                # The pre-flight's baselines are persisted as for already_present.
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                return {
+                    "status": "target_slot_busy",
+                    "message": f"slot {target_slot!r} has a newer save this device has not synced",
+                }
 
             try:
                 result = await self._loop.run_in_executor(
