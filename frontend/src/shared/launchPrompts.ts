@@ -1,6 +1,7 @@
 /**
- * The launch prompts drawn as Steam's gamepad modals — the set both launch
- * paths ask through.
+ * The launch prompts drawn as Steam's gamepad modals — the set Big Picture's
+ * Play button asks through, and the launch watcher's fallback
+ * (`launchPromptsForThisStart`).
  */
 
 import type { LaunchPrompts } from "../utils/launchVerdict";

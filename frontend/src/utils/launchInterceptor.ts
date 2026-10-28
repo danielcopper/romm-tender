@@ -249,9 +249,13 @@ async function readStartRom(appId: number): Promise<{ romId: number; installed: 
   return { romId, installed: await isRomInstalled(appId, romId) };
 }
 
-export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
+/**
+ * `promptsForStart` is called once per start, as its gate begins
+ * (docs/architecture/save-file-sync-architecture.md, "Pre-launch sync").
+ */
+export function registerLaunchInterceptor(promptsForStart: () => LaunchPrompts): void {
   SteamClient.Apps.RegisterForGameActionStart(
-    (gameActionId: number, gameId: string, action: string, _launchSource: number) => {
+    (gameActionId: number, gameId: string, action: string, launchSource: number) => {
       if (action !== "LaunchApp") return;
 
       const appId = appIdFromGameId(gameId);
@@ -288,7 +292,9 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
         return;
       }
 
-      logInfo(`Launch interceptor: appId=${appId} not running — running the launch gate [${running.diagnostics}]`);
+      logInfo(
+        `Launch interceptor: appId=${appId} not running — running the launch gate [${running.diagnostics}] launchSource=${launchSource}`,
+      );
       const start: CancelledStart = { appId, gameId };
 
       detach(
@@ -339,7 +345,7 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
               return;
             }
 
-            await runWatcherGate(start, rom.romId, prompts);
+            await runWatcherGate(start, rom.romId, promptsForStart());
           } catch (e) {
             // An unexpected error must not trap the launch. Use the bare
             // relaunch (no re-confirm): the failure may be the re-confirm's own

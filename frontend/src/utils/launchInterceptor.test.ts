@@ -108,7 +108,7 @@ const prompts = {
 };
 
 /** Register with the stub prompts — every test drives the interceptor through this. */
-const register = (): void => registerLaunchInterceptor(prompts);
+const register = (): void => registerLaunchInterceptor(() => prompts);
 
 /**
  * A shortcut's start as Steam reports it: the 64-bit game ID in decimal, whose
@@ -369,7 +369,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       handler(78, GAME_ID, "LaunchApp", PLAY_SOURCE);
       await flush();
       expect(backend.logInfo).toHaveBeenCalledWith(
-        `Launch interceptor: appId=${APP_ID} not running — running the launch gate [decided by stop]`,
+        `Launch interceptor: appId=${APP_ID} not running — running the launch gate [decided by stop] launchSource=${PLAY_SOURCE}`,
       );
     });
 
@@ -1083,6 +1083,77 @@ describe("launchInterceptor — full funnel watcher", () => {
       });
       expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
       expect(runGameMock()).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the prompts a start asks through", () => {
+    const otherPrompts = {
+      confirmCoreChange: vi.fn<LaunchPrompts["confirmCoreChange"]>(),
+      resolveConflicts: vi.fn<LaunchPrompts["resolveConflicts"]>(),
+      askOfflineDrift: vi.fn<LaunchPrompts["askOfflineDrift"]>(),
+      confirmFallbackLaunch: vi.fn<LaunchPrompts["confirmFallbackLaunch"]>(),
+      confirmUncheckedSource: vi.fn<LaunchPrompts["confirmUncheckedSource"]>(),
+      askSyncWait: vi.fn<LaunchPrompts["askSyncWait"]>(),
+    };
+
+    it("are resolved once per start, so a surface change mid-start does not move its questions", async () => {
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "offline_drift" });
+      prompts.askOfflineDrift.mockResolvedValueOnce("retry").mockResolvedValueOnce("cancel");
+      otherPrompts.askOfflineDrift.mockResolvedValue("start_anyway");
+      const promptsForStart = vi.fn<() => LaunchPrompts>().mockReturnValueOnce(prompts).mockReturnValue(otherPrompts);
+
+      registerLaunchInterceptor(promptsForStart);
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(promptsForStart).toHaveBeenCalledTimes(1);
+      expect(prompts.askOfflineDrift).toHaveBeenCalledTimes(2);
+      expect(otherPrompts.askOfflineDrift).not.toHaveBeenCalled();
+      expect(runGameMock()).not.toHaveBeenCalled();
+    });
+
+    it("are resolved afresh for each start", async () => {
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "sync_failed", message: "no device" });
+      prompts.confirmFallbackLaunch.mockResolvedValue(false);
+      otherPrompts.confirmFallbackLaunch.mockResolvedValue(false);
+      const promptsForStart = vi.fn<() => LaunchPrompts>().mockReturnValueOnce(prompts).mockReturnValue(otherPrompts);
+
+      registerLaunchInterceptor(promptsForStart);
+      const handler = captureHandler();
+      handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+      handler(78, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(promptsForStart).toHaveBeenCalledTimes(2);
+      expect(prompts.confirmFallbackLaunch).toHaveBeenCalledTimes(1);
+      expect(otherPrompts.confirmFallbackLaunch).toHaveBeenCalledTimes(1);
+    });
+
+    it("are not asked for by a start that never reaches the gate", async () => {
+      vi.mocked(backend.getInstalledRom).mockResolvedValue(null);
+      const promptsForStart = vi.fn<() => LaunchPrompts>(() => prompts);
+
+      registerLaunchInterceptor(promptsForStart);
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "ROM not downloaded. Download it from its game page first.",
+      });
+      expect(promptsForStart).not.toHaveBeenCalled();
+    });
+
+    it("logs the start's launch source beside the decision to run the gate", async () => {
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "allow" });
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(backend.logInfo).toHaveBeenCalledWith(
+        `Launch interceptor: appId=${APP_ID} not running — running the launch gate [decided by none] launchSource=${DEEP_LINK_SOURCE}`,
+      );
     });
   });
 
