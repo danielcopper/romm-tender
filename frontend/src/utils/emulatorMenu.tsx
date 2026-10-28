@@ -65,7 +65,8 @@ export interface EmulatorMenuConfig {
 
 /**
  * The entry text: its label plus the markers saying what it is. "(default)" is
- * the entry the source ships first, "(chosen in ES-DE)" the one the user chose
+ * the entry the source ships first, unless its installation is not
+ * established, "(chosen in ES-DE)" the one the user chose
  * there, "(system)" the per-platform override, ✓ the one actually in effect —
  * one entry can carry several, which is why they are suffixes rather than a
  * single state.

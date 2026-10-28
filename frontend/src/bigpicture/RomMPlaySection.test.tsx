@@ -41,7 +41,7 @@ import * as saveStatusUtils from "../utils/saveStatus";
 import * as formatters from "../utils/formatters";
 import { getGameDetail } from "../utils/gameDetailStore";
 import { resetBoundAvailability } from "../utils/vanishedBinding";
-import { libretroEmu } from "../test-utils/coreFixtures";
+import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
 import { makeConflict } from "../test-utils/saveFixtures";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
 import { useVersionError } from "../utils/connectionState";
@@ -4120,7 +4120,7 @@ describe("RomMPlaySection", () => {
       const coreItems = await openCoreMenuAndGetItems(testAppId);
       // The reset item is the dedicated clear path. A per-game core is pinned
       // (hasGameOverride=true), so the item carries NO ✓; the fallback label is
-      // the es_systems default (Snes9x) since no per-platform override is set.
+      // the shipped default (Snes9x) since no per-platform override is set.
       expect(coreItems[FOLLOW_SYSTEM_IDX]!.props.children).toBe("Use System Override (Snes9x)");
       vi.mocked(toaster.toast).mockClear();
       vi.mocked(backend.getPlatformCoreInfo).mockClear();
@@ -4571,7 +4571,7 @@ describe("RomMPlaySection", () => {
       expect(items.filter((i) => i.props.disabled === true)).toHaveLength(1);
       expect(items[0]!.props.disabled).toBe(true);
       // The reset item carries the ✓ (no per-game override) and the fallback
-      // label is the es_systems default (no per-platform override set).
+      // label is the shipped default (no per-platform override set).
       expect(items[1]!.props.children).toBe("Use System Override (Snes9x) ✓");
       // The active default core ALSO carries the ✓ (in effect).
       expect(items[2]!.props.children).toBe("Snes9x (default) ✓");
@@ -4673,7 +4673,7 @@ describe("RomMPlaySection", () => {
 
     it("Use System Override fallback label is the per-platform override when one is set (#211)", async () => {
       // A per-platform override (BlastEm) is set → the reset item's fallback
-      // label is the per-platform core, NOT the es_systems default. No per-game
+      // label is the per-platform core, NOT the shipped default. No per-game
       // override → the reset item carries the ✓.
       const items = await setupCoreMenuStructure({
         activeCoreLabel: "BlastEm",
@@ -5257,6 +5257,7 @@ describe("RomMPlaySection", () => {
 
     it("says why the game cannot start under the row and hands Play the same words", async () => {
       const { container } = await mountWith({
+        emulators: [standaloneEmu("RPCS3 Shortcut (Standalone)", true), standaloneEmu("RPCS3 Directory (Standalone)")],
         emulatorStart: {
           state: "cannot_start",
           reason: "folder_install",
@@ -5270,6 +5271,22 @@ describe("RomMPlaySection", () => {
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBe(sentence);
     });
 
+    it("points at no emulator menu where the page offers none", async () => {
+      const { container } = await mountWith({
+        emulators: [standaloneEmu("RPCS3 Shortcut (Standalone)", true)],
+        emulatorStart: {
+          state: "cannot_start",
+          reason: "folder_install",
+          entry: "RPCS3 Shortcut (Standalone)",
+          folder_entry: "RPCS3 Directory (Standalone)",
+        },
+      });
+      const sentence = "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder.";
+      expect(container.textContent).toContain(sentence);
+      expect(container.textContent).not.toContain("emulator menu");
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBe(sentence);
+    });
+
     it("names a pick that no longer exists, and the user's choice in ES-DE that Tender does not start with", async () => {
       const { container } = await mountWith({
         activeCoreLabel: "Genesis Plus GX",
@@ -5278,12 +5295,18 @@ describe("RomMPlaySection", () => {
           libretroEmu("genesis_plus_gx_libretro", "Genesis Plus GX", true),
         ],
         emulatorStart: { state: "starts", reason: null, entry: "Genesis Plus GX", folder_entry: null },
-        vanishedPick: { label: "Gone", source: "retrodeck", layer: "game", used: "Genesis Plus GX" },
+        vanishedPick: {
+          label: "Gone",
+          source: "retrodeck",
+          layer: "game",
+          used: "Genesis Plus GX",
+          used_layer: "default",
+        },
       });
       expect(container.textContent).toContain(
         "Your choice 'Gone' no longer exists in RetroDECK; the default 'Genesis Plus GX' is used.",
       );
-      expect(container.textContent).toContain("Gearsystem is chosen for this game in ES-DE");
+      expect(container.textContent).toContain("Gearsystem is chosen in ES-DE");
     });
 
     it("says nothing and hands Play no refusal where the emulator starts the game", async () => {

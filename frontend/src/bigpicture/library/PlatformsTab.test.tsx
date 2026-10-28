@@ -1468,7 +1468,7 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("LRPS2 / PCSX2");
     });
 
-    it("names a default that is not installed, and says these games cannot start", async () => {
+    it("names a default that is not installed, and says these games cannot start, pointing at no menu with nothing to pin", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
           emulators: [{ ...LRPS2_PCSX2, bakeable: false, reason: "not_installed" }],
@@ -1479,9 +1479,9 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const sentence =
-        "LRPS2 is not installed, so these games cannot start. Choose another emulator in the emulator menu.";
+      const sentence = "LRPS2 is not installed, so these games cannot start.";
       expect(container.textContent).toContain(sentence);
+      expect(container.textContent).not.toContain("emulator menu");
       expect(coreButton(container)!.title).toBe(sentence);
     });
 
@@ -1605,7 +1605,7 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)).toBeDisabled();
     });
 
-    it("names a default Tender cannot bake, whose games start through RetroDECK's own start", async () => {
+    it("names a default Tender cannot bake, which bakes nothing", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
           emulators: [{ ...MGBA, bakeable: false, reason: "inject" }],
@@ -1643,9 +1643,39 @@ describe("Library › Platforms", () => {
       );
     });
 
+    it("draws a default from a source games do not start through as the default, with no red (#2195 D24)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [{ ...MGBA, is_default: true }, LRPS2_PCSX2],
+          source_defaults: [
+            { kind: "emudeck", default: "PicoDrive", chosen_in_frontend: null, reason: null },
+            { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
+          ],
+          tender_default: { kind: "emudeck", label: "PicoDrive" },
+          active_core_label: "PicoDrive",
+          start: emulatorStart({ entry: "PicoDrive" }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const clause = factPart(container, "PicoDrive");
+      expect(clause).toBeTruthy();
+      expect(clause!.style.color).toBe(GREY);
+      expect(container.textContent).not.toContain("cannot start");
+    });
+
     it("says the platform's pick no longer exists and which default is used (#2195 D5)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({ vanished_pick: { label: "Gone-o-Tron", source: "retrodeck", layer: "platform", used: "mGBA" } }),
+        coreInfo({
+          vanished_pick: {
+            label: "Gone-o-Tron",
+            source: "retrodeck",
+            layer: "platform",
+            used: "mGBA",
+            used_layer: "default",
+          },
+        }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();

@@ -427,8 +427,7 @@ export interface EmulatorOption {
 
 /**
  * What starting with the entry a game or a platform resolves to comes to.
- * `starts` — it starts (through `run_game.sh` where Tender cannot bake it,
- * which nothing words); `cannot_start` — `reason` says why
+ * `starts` — nothing stands in its way; `cannot_start` — `reason` says why
  * (`not_installed`, `start_script_runs_nothing`, `folder_install`, the last
  * naming in `folder_entry` the entry that starts a folder); `choose` — there is
  * no default, because the shipped entry's installation could not be
@@ -452,6 +451,7 @@ export interface VanishedPick {
   source: string | null;
   layer: "game" | "platform";
   used: string | null;
+  used_layer: "platform" | "default" | null;
 }
 
 /**
@@ -510,7 +510,8 @@ export interface CoreInfo {
  *
  * `active_core_label` is the per-platform pick while its label names an entry,
  * else Tender's default (`tender_default`), whatever state that entry is in;
- * `null` where nothing is picked and no source offers a default. `start` and
+ * `null` where nothing is picked and Tender's default names no entry — no
+ * source offers one, or the one it offers could not be established installed. `start` and
  * `vanished_pick` are as on {@link CoreInfo}, for the platform's own choice.
  * `source_defaults` is every enabled source in the user's order with its own
  * default; `tender_default` the source and entry Tender's default is.

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { recheckStranded, toaster } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
+import { coreInfo, emulatorStart, standaloneEmu } from "../test-utils/coreFixtures";
 import * as backend from "../api/backend";
 import * as rommAppIds from "./rommAppIds";
 import * as launchGate from "./launchGate";
@@ -38,7 +39,11 @@ vi.mock("../api/backend", () => ({
   logError: vi.fn(),
   // The game's emulator, read before the gate; a refused start is the page's own sentence.
   getPlatformCoreInfo: vi.fn(() =>
-    Promise.resolve({ start: { state: "starts", reason: null, entry: null, folder_entry: null } }),
+    Promise.resolve({
+      start: { state: "starts", reason: null, entry: null, folder_entry: null },
+      emulators: [],
+      active_core_label: null,
+    }),
   ),
   // Called by runPreLaunchSync during the watcher's pre-launch sync (D6) and
   // by connectionState transitions.
@@ -934,9 +939,16 @@ describe("launchInterceptor — full funnel watcher", () => {
 
   describe("an emulator that cannot start the game (#2195 D7)", () => {
     it("refuses the start with the game page's own words and does NOT relaunch", async () => {
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValueOnce({
-        start: { state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)", folder_entry: null },
-      } as Awaited<ReturnType<typeof backend.getPlatformCoreInfo>>);
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValueOnce(
+        coreInfo({
+          start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)" }),
+          emulators: [
+            standaloneEmu("Ryubing (Standalone)", true, { bakeable: false, reason: "not_installed" }),
+            standaloneEmu("Ryujinx (Standalone)"),
+          ],
+          active_core_label: "Ryubing (Standalone)",
+        }),
+      );
       register();
       captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();

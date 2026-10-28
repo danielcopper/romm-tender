@@ -67,7 +67,12 @@ import {
   releasePruneLeasesByOwner,
 } from "../utils/pruneLease";
 import { executeGameCoreChange } from "../utils/coreOverride";
-import { emulatorStartRefusal, frontendChoiceSentence, vanishedPickSentence } from "../utils/emulatorStart";
+import {
+  emulatorStartRefusal,
+  frontendChoiceSentence,
+  gameCanPickAnother,
+  vanishedPickSentence,
+} from "../utils/emulatorStart";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
 import { buildEmulatorMenu } from "../utils/emulatorMenu";
 import { formatBytes } from "../utils/formatters";
@@ -934,7 +939,11 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const emulatorRefusal =
     stranded || fileMissing || detail.emulatorStart === null
       ? null
-      : emulatorStartRefusal(detail.emulatorStart, "this game");
+      : emulatorStartRefusal(
+          detail.emulatorStart,
+          "this game",
+          gameCanPickAnother(detail.emulators, detail.activeCoreLabel),
+        );
 
   const playSectionRow = (
     <Focusable

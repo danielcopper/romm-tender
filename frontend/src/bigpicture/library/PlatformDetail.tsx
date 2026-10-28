@@ -24,7 +24,12 @@ import { biosSummary, saysNoBiosChosen } from "../../utils/biosSummary";
 import { emulatorClause } from "../../utils/emulatorClause";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { activeEmulatorNote } from "../../utils/emulatorInstallation";
-import { emulatorStartRefusal, sourceDefaultSentence, vanishedPickSentence } from "../../utils/emulatorStart";
+import {
+  canPickAnother,
+  emulatorStartRefusal,
+  sourceDefaultSentence,
+  vanishedPickSentence,
+} from "../../utils/emulatorStart";
 import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { WaitingLine } from "../WaitingLine";
@@ -145,7 +150,9 @@ type CoreOffer =
  * picker stays open where an entry can be pinned.
  */
 function noDefaultOffer(core: SystemCoreInfo): CoreOffer {
-  const sentence = emulatorStartRefusal(core.start, "these games") ?? "No emulator is the default here.";
+  const sentence =
+    emulatorStartRefusal(core.start, "these games", canPickAnother(core.emulators, null)) ??
+    "No emulator is the default here.";
   if (core.emulators.some((entry) => entry.bakeable)) return { kind: "pick", core, notice: sentence };
   return { kind: "blocked", reason: sentence, notice: sentence };
 }
@@ -174,13 +181,17 @@ function coreOffer(core: CoreAnswer): CoreOffer {
   if (core.active_core_label === null) return noDefaultOffer(core);
   // A default the games cannot start with is said under the header, and the
   // picker stays open for another emulator wherever there is one to pin.
-  const refusal = emulatorStartRefusal(core.start, "these games");
+  const refusal = emulatorStartRefusal(
+    core.start,
+    "these games",
+    canPickAnother(core.emulators, core.active_core_label),
+  );
   const notice = refusal === null ? {} : { notice: refusal };
   if (core.emulators.length === 1) {
     const one = refusal ?? "This platform offers one emulator, so there is nothing to switch.";
     return { kind: "blocked", reason: one, ...notice };
   }
-  if (!core.emulators.some((entry) => entry.bakeable && entry.label !== core.active_core_label)) {
+  if (!canPickAnother(core.emulators, core.active_core_label)) {
     const none = refusal ?? "None of this platform's other emulators can be pinned from here.";
     return { kind: "blocked", reason: none, ...notice };
   }
@@ -416,11 +427,16 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   const clause = emulatorClause(core ?? null);
   // The platform-level twin of the game page's `activeCoreIsDefault`, read off
   // the payload's own `is_default`, which marks the entry `default_option`
-  // takes. One
-  // expression feeds the clause AND the icon, so the two cannot disagree — and
-  // no active label is muted rather than gold, because no entry lists a null
-  // label and "not the default" is not the same statement as "an override".
-  const activeIsDefault = entryForLabel(core?.emulators ?? [], activeLabel)?.is_default ?? false;
+  // takes. One expression feeds the clause AND the icon, so the two cannot
+  // disagree — and no active label is muted rather than gold, because no entry
+  // lists a null label and "not the default" is not the same statement as "an
+  // override". Where Tender's default comes from a source games do not start
+  // through, no row lists it, and it is the default all the same (#2195 D24).
+  const activeEntry = entryForLabel(core?.emulators ?? [], activeLabel);
+  const activeIsDefault =
+    activeEntry === undefined
+      ? activeLabel !== null && core?.tender_default?.label === activeLabel
+      : activeEntry.is_default;
   const coreColor = coreClauseColour(clause?.gamesCannotStart ?? false, activeLabel !== null && !activeIsDefault);
   const coreClause = clause === null ? null : { text: clause.text, color: coreColor };
   const systemClause = core?.platform_system ? platformSystemClause(core.platform_system) : null;

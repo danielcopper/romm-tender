@@ -15,7 +15,7 @@ describe("emulatorClause", () => {
     expect(emulatorClause(known({}))).toEqual({ text: "mGBA", gamesCannotStart: false });
   });
 
-  it("names a default Tender cannot bake, whose games start through RetroDECK's own start", () => {
+  it("names a default Tender cannot bake, which bakes nothing", () => {
     const emulators = [standaloneEmu("mGBA (Standalone)", true, { bakeable: false, reason: "inject" })];
     expect(emulatorClause(known({ emulators, active_core_label: "mGBA (Standalone)" }))).toEqual({
       text: "mGBA (Standalone)",
