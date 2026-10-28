@@ -121,6 +121,7 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
                 "remove_platform_shortcuts",
                 "reconcile_shortcuts",
                 "report_removal_results",
+                "report_converged_removals",
                 "rom_uninstall",
                 "bulk_uninstall",
                 "shortcut_removal",
