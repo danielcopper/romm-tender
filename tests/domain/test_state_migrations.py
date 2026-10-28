@@ -42,7 +42,7 @@ class TestUnreadableSettings:
 
 
 class TestMigrateSettings:
-    def test_a_file_at_version_13_gets_each_pick_with_no_source_and_keeps_the_rest(self):
+    def test_a_file_at_version_13_gets_each_pick_as_retrodecks_and_keeps_the_rest(self):
         data = {
             "version": 13,
             "romm_url": "http://example.com",
@@ -57,12 +57,12 @@ class TestMigrateSettings:
         assert migrate_settings(data) == {
             **data,
             "version": 14,
-            "platform_cores": {"snes": {"label": "bsnes", "source": None}},
+            "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}},
         }
 
     def test_a_value_that_names_no_pick_is_dropped(self):
         data = {"version": 13, "platform_cores": {"snes": "bsnes", "gba": "", "nes": 7}}
-        assert migrate_settings(data)["platform_cores"] == {"snes": {"label": "bsnes", "source": None}}
+        assert migrate_settings(data)["platform_cores"] == {"snes": {"label": "bsnes", "source": "retrodeck"}}
 
     def test_a_file_at_version_14_is_returned_unchanged(self):
         data = {"version": 14, "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}}}

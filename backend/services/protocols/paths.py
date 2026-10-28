@@ -7,7 +7,7 @@ where a game's save lives, and RetroArch core lookups for ES-DE configured
 systems.
 ``PlatformCoreReader`` exposes Tender's own per-platform core
 selection (stored in ``settings.json``, not the ES-DE gamelist) that the
-resolver layers over the es_systems default.
+resolver layers over the shipped default.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from domain.emulator_pick import StoredPick
     from domain.emulator_sources import ArrangedSource, SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue, SourceCatalogues
     from domain.platform_system import PlatformIds, PlatformSystem
@@ -371,8 +372,9 @@ class PlatformCoreReader(Protocol):
     Exposes the ``settings.json`` ``platform_cores`` map (RomM platform
     slug → the stored pick) so the resolver can layer a user-chosen
     platform-wide core over the default without reading the retired ES-DE
-    gamelist. Returns the stored label for a slug, or ``None`` when the
-    platform has no selection of Tender's own.
+    gamelist. Returns the stored pick for a slug — its label and the kind of
+    the source it was chosen from — or ``None`` when the platform has no
+    selection of Tender's own.
     """
 
-    def get_platform_core(self, platform_slug: str) -> str | None: ...
+    def get_platform_core(self, platform_slug: str) -> StoredPick | None: ...

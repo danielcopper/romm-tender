@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_commands import resolve_firmware_option
+from domain.emulator_pick import pick_for, source_kind
 from domain.firmware_groups import fetched_as_required
 from domain.firmware_rows import LibraryFirmware, StoreCopy, folder_entries, library_file, library_match, store_copy
 from lib.errors import Refused, RommApiError, romm_error_log_level
@@ -286,9 +287,8 @@ class FirmwareDownloader:
         this platform about" cannot appear behind a download button.
         """
         options = self._core_info.get_emulator_options(system)
-        emulator = resolve_firmware_option(
-            options["options"], self._platform_core_reader.get_platform_core(platform_slug)
-        )
+        pick = pick_for(self._platform_core_reader.get_platform_core(platform_slug), source_kind(options))
+        emulator = resolve_firmware_option(options["options"], pick.label if pick is not None else None)
         return emulator.emulator if emulator is not None else None
 
     async def platform_system(self, platform_slug: str, rom_id: int | None = None) -> str | None:

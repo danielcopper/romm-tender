@@ -34,10 +34,9 @@ PLATFORM_PICK = "platform"
 DEFAULT = "default"
 
 # What a game or a platform starting with its entry comes to, as a surface reads
-# it: the entry starts — through ``-e`` or, where Tender cannot bake it, through
-# RetroDECK's plain start, which nothing words; it cannot start; there is no
-# default because the shipped entry's installation is not established, and an
-# entry has to be chosen; or there is no entry at all.
+# it: ``STARTS`` — nothing stands in its way; ``CANNOT_START_STATE`` — it cannot
+# start; ``CHOOSE`` — no default, the shipped entry's installation is not
+# established; ``NO_ENTRY`` — no entry.
 STARTS = "starts"
 CANNOT_START_STATE = "cannot_start"
 CHOOSE = "choose"
@@ -133,24 +132,29 @@ def start_payload(
     return {"state": STARTS, "reason": None, "entry": option.label, "folder_entry": None}
 
 
-def vanished_payload(
-    choice: EmulatorChoice, *, answering_source: str | None, platform_source: str | None = None
-) -> dict[str, Any] | None:
-    """The pick a surface says no longer exists, as ``{label, source, layer, used}``, or ``None``.
+def unspoken_start(entry: str | None) -> dict[str, Any]:
+    """The start of a default that comes from a source games do not start through: nothing is said of it.
 
-    ``source`` is the kind of the source the pick was chosen from — the pick's
-    own, or *platform_source* for a per-platform pick read without it — and the
-    source the game starts through (*answering_source*) for a pick that
-    recorded none (#2195 D20). ``used`` is the label of the entry used instead,
-    ``None`` where there is none.
+    Until such a source starts games, whether its entry could start them is not
+    a question a page asks (#2195 D24).
+    """
+    return {"state": STARTS, "reason": None, "entry": entry, "folder_entry": None}
+
+
+def vanished_payload(choice: EmulatorChoice) -> dict[str, Any] | None:
+    """The pick a surface says no longer exists, as ``{label, source, layer, used, used_layer}``, or ``None``.
+
+    ``source`` is the kind of the source the pick was chosen from (#2195 D20).
+    ``used`` is the label of the entry used instead and ``used_layer`` the
+    layer it came from, both ``None`` where there is none.
     """
     vanished = choice.vanished
     if vanished is None:
         return None
-    source = vanished.pick.source or (platform_source if vanished.layer == PLATFORM_PICK else None)
     return {
         "label": vanished.pick.label,
-        "source": source or answering_source,
+        "source": vanished.pick.source,
         "layer": vanished.layer,
         "used": choice.option.label if choice.option is not None else None,
+        "used_layer": choice.layer if choice.option is not None else None,
     }

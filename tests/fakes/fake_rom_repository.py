@@ -95,7 +95,7 @@ class FakeRomRepository:
             rom.platform_slug for rom in self._roms.values() if rom.platform_slug and rom.shortcut_app_id is not None
         }
 
-    def set_emulator_override(self, rom_id: int, label: str | None, source: str | None = None) -> None:
+    def set_emulator_override(self, rom_id: int, label: str | None, source: str | None = "retrodeck") -> None:
         rom = self._roms.get(rom_id)
         if rom is not None:
             rom.emulator_override = label

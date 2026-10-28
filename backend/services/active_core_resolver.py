@@ -11,10 +11,12 @@ Precedence (three layers, then the plain launch): DB ``emulator_override`` (top)
 → ``settings.json`` per-platform core → the default, the entry the source ships
 first → ``None`` (:func:`domain.emulator_choice.choose_emulator`). An ES-DE
 ``<alternativeEmulator>`` or ``<altemulator>`` never moves that default
-(ADR-0012). A stored label stands while it names an entry, whatever that
-entry's state: one Tender cannot bake starts through the plain launch, and one
-that cannot start is refused at Play. Only a label that no longer exists gives
-way to the next layer, with a warning. The per-game/per-platform label may name
+(ADR-0012). A stored pick applies only while its source is the one games start
+through; otherwise the default applies and the pick is kept (#2222 D5). A
+stored label stands while it names an entry, whatever that entry's state: one
+Tender cannot bake renders no invocation, and one that cannot start is refused
+at Play. Only a label that no longer exists gives way to the next layer, with a
+warning. The per-game/per-platform label may name
 a **standalone** emulator (not just a libretro core); it resolves the same way.
 """
 
@@ -25,7 +27,7 @@ from typing import TYPE_CHECKING
 
 from domain.emulator_choice import DEFAULT, ResolvedEmulator, choose_emulator
 from domain.emulator_commands import option_for_label, option_to_invocation
-from domain.emulator_pick import StoredPick
+from domain.emulator_pick import StoredPick, pick_for, source_kind
 from domain.rom_files import folder_boot_root
 from domain.shortcut_data import DIRECT, RUN_GAME, EmulatorInvocation
 
@@ -124,23 +126,22 @@ class ActiveCoreResolver:
         system = platform.taken
         if system is None:
             return None
-        options = self._core_info.get_emulator_options(system, reading=reading)["options"]
-        game = (
+        answer = self._core_info.get_emulator_options(system, reading=reading)
+        options = answer["options"]
+        starting = source_kind(answer)
+        game = pick_for(
             StoredPick(label=rom.emulator_override, source=rom.emulator_override_source)
-            if rom.emulator_override is not None
-            else None
+            if rom.emulator_override is not None and rom.emulator_override_source is not None
+            else None,
+            starting,
         )
-        platform_label = (
+        platform = (
             None
             if game is not None and option_for_label(options, game.label) is not None
-            else self._platform_core_reader.get_platform_core(rom.platform_slug)
+            else pick_for(self._platform_core_reader.get_platform_core(rom.platform_slug), starting)
         )
-        choice = choose_emulator(
-            options,
-            game=game,
-            platform=StoredPick(label=platform_label, source=None) if platform_label is not None else None,
-        )
-        self._warn_vanished(game, platform_label, options, rom, system)
+        choice = choose_emulator(options, game=game, platform=platform)
+        self._warn_vanished(game, platform, options, rom, system)
         if choice.layer in (DEFAULT, None):
             emulator = self._core_info.get_default_emulator(system, reading=reading)
         else:
@@ -155,7 +156,12 @@ class ActiveCoreResolver:
         )
 
     def _warn_vanished(
-        self, game: StoredPick | None, platform_label: str | None, options: list[EmulatorOption], rom: Rom, system: str
+        self,
+        game: StoredPick | None,
+        platform: StoredPick | None,
+        options: list[EmulatorOption],
+        rom: Rom,
+        system: str,
     ) -> None:
         """Warn for each stored label the precedence passed over because no entry carries it any more."""
         if game is not None and option_for_label(options, game.label) is None:
@@ -166,11 +172,11 @@ class ActiveCoreResolver:
                 rom.rom_id,
                 system,
             )
-        if platform_label is not None and option_for_label(options, platform_label) is None:
+        if platform is not None and option_for_label(options, platform.label) is None:
             self._logger.warning(
                 "active_core_resolver: per-platform core '%s' for %s (rom_id=%s) no longer resolves; "
                 "degrading to the system default",
-                platform_label,
+                platform.label,
                 rom.platform_slug,
                 rom.rom_id,
             )

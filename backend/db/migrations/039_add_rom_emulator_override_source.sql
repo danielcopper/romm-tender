@@ -6,15 +6,14 @@
 --
 --   * roms.emulator_override_source — the kind of the emulator source whose
 --     catalogue the pinned label was chosen from ('retrodeck', 'emudeck'), so a
---     label that no longer exists there can be named with its source. NULL is a
---     pick from before this migration, or no pick.
+--     label is read against its own source and one that no longer exists there
+--     can be named with its source. NULL exactly where there is no pick.
 --
--- No backfill: which source a stored label was chosen from is not recorded
--- anywhere this step could read it. Such a pick is read against the source the
--- game starts through. Adding a nullable column changes no existing row, so the
--- runner's user_version ladder is the only guard this step needs.
+-- Every pick stored before this step becomes RetroDECK's: RetroDECK was the
+-- only source Tender started through (#2195 D20, #2222 D7).
 --
 -- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
 -- BEGIN/COMMIT and stamps PRAGMA user_version = 39.
 -- -----------------------------------------------------------------------------
 ALTER TABLE roms ADD COLUMN emulator_override_source TEXT;
+UPDATE roms SET emulator_override_source = 'retrodeck' WHERE emulator_override IS NOT NULL;

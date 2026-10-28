@@ -17,6 +17,7 @@ from adapters.persistence import (
     PlatformCoreReaderAdapter,
     SettingsPersisterAdapter,
 )
+from domain.emulator_pick import StoredPick
 
 
 @pytest.fixture
@@ -604,12 +605,12 @@ class TestPlatformCoreReaderAdapter:
             {
                 "platform_cores": {
                     "snes": {"label": "bsnes", "source": "retrodeck"},
-                    "gba": {"label": "mGBA", "source": None},
+                    "gba": {"label": "mGBA", "source": "emudeck"},
                 }
             }
         )
-        assert reader.get_platform_core("snes") == "bsnes"
-        assert reader.get_platform_core("gba") == "mGBA"
+        assert reader.get_platform_core("snes") == StoredPick("bsnes", "retrodeck")
+        assert reader.get_platform_core("gba") == StoredPick("mGBA", "emudeck")
 
     def test_returns_none_for_absent_platform(self):
         reader = PlatformCoreReaderAdapter({"platform_cores": {"snes": "bsnes"}})
@@ -636,4 +637,4 @@ class TestPlatformCoreReaderAdapter:
         assert reader.get_platform_core("snes") is None
         # Mutate the same dict the adapter holds.
         settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}  # type: ignore[index]
-        assert reader.get_platform_core("snes") == "bsnes"
+        assert reader.get_platform_core("snes") == StoredPick("bsnes", "retrodeck")

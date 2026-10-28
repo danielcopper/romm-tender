@@ -623,15 +623,6 @@ class TestEmulatorOverride:
         assert loaded is not None
         assert (loaded.emulator_override, loaded.emulator_override_source) == ("PCSX ReARMed", "emudeck")
 
-    def test_a_pick_from_before_its_source_was_recorded_reads_none(self, uow: SqliteUnitOfWork):
-        uow.roms.save(_rom(1))
-        assert uow._conn is not None
-        uow._conn.execute("UPDATE roms SET emulator_override = 'PCSX ReARMed' WHERE rom_id = 1")
-
-        loaded = uow.roms.get(1)
-        assert loaded is not None
-        assert (loaded.emulator_override, loaded.emulator_override_source) == ("PCSX ReARMed", None)
-
     def test_get_all_overrides_empty_when_none_pinned(self, uow: SqliteUnitOfWork):
         uow.roms.save(_rom(1))
         uow.roms.save(_rom(2))

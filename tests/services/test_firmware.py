@@ -3384,8 +3384,8 @@ def _psx_platform_service(
 ) -> FirmwareService:
     """A PlayStation ES-DE lists three emulators for, one of them standalone.
 
-    SwanStation is the es_systems default — first bakeable in document order —
-    and its console will not start without one of the images it declares. PCSX
+    SwanStation is the shipped default — the entry declared first — and its
+    console will not start without one of the images it declares. PCSX
     ReARMed declares the same three and carries its own substitute. DuckStation
     is standalone, so it names no core and nothing here can answer for it. The
     files, the empty BIOS directory and the reading are identical under all
@@ -3625,6 +3625,22 @@ class TestOnePlatformOneEmulator:
 
         assert _emulator_dependent(platform) == _emulator_dependent(page)
 
+    @pytest.mark.asyncio
+    async def test_a_retrodeck_pick_while_retrodeck_is_switched_off_waits_for_it(self):
+        """Both surfaces judge by the default meanwhile, and by the pick once RetroDECK is on (#2222 D5)."""
+        fw = _psx_platform_service(platform_core=_PSX_ALTERNATIVE_LABEL)
+        core_info = _core_info(fw)
+        core_info.source = {"kind": "emudeck", "starts_games": False}
+
+        off = (await _entries(fw, "psx"))["psx"], await fw.check_platform_bios("psx")
+
+        assert [answer["active_core_label"] for answer in off] == [_PSX_DEFAULT_LABEL, _PSX_DEFAULT_LABEL]
+
+        core_info.source = {"kind": "retrodeck", "starts_games": True}
+        on = (await _entries(fw, "psx"))["psx"], await fw.check_platform_bios("psx")
+
+        assert [answer["active_core_label"] for answer in on] == [_PSX_ALTERNATIVE_LABEL, _PSX_ALTERNATIVE_LABEL]
+
     @pytest.mark.parametrize("platform_core", _PLATFORM_PICKS)
     @pytest.mark.asyncio
     async def test_the_pane_judges_by_the_emulator_it_names(self, platform_core):
@@ -3849,6 +3865,7 @@ def _rom_scoped_surfaces(
             shortcut_app_id=1,
             last_synced_at="2026-01-01T00:00:00+00:00",
             emulator_override=game_pick,
+            emulator_override_source="retrodeck" if game_pick is not None else None,
             regions=regions,
         )
     )
@@ -3970,6 +3987,22 @@ class TestOneRomOneEmulator:
 
         named = next(e for e in picker["emulators"] if e["label"] == picker["active_core_label"])
         assert picker["active_core"] == named["emulator"]
+
+    @pytest.mark.asyncio
+    async def test_a_standing_pick_tender_cannot_bake_is_the_one_both_halves_answer_for(self, monkeypatch):
+        """A pick stands whatever its state (#2195 D23), so the BIOS half judges it, never the platform's own."""
+        real = standalone_option
+
+        def not_installed(command: str, label: str, **kwargs: Any) -> EmulatorOption:
+            return real(command, label, status="needs_setup", reason="not_installed", **kwargs)
+
+        monkeypatch.setitem(globals(), "standalone_option", not_installed)
+        picker, bios, fw = await self._both(_PSX_STANDALONE_LABEL, None)
+
+        assert picker["active_core_label"] == _PSX_STANDALONE_LABEL
+        named = await fw.check_platform_bios("psx", _pick(picker["active_core"], picker["active_core_label"]))
+        assert _emulator_dependent(bios) == _emulator_dependent(named)
+        assert bios["active_core_label"] == _PSX_STANDALONE_LABEL
 
     @pytest.mark.asyncio
     async def test_a_per_game_pin_moves_the_answer_on_both_halves(self):
@@ -5596,8 +5629,12 @@ class TestDownloadRequiredFirmware:
         }
 
     @staticmethod
-    async def _download_under(platform_core: str | None) -> tuple[list[int], int]:
+    async def _download_under(
+        platform_core: str | None, *, source: dict[str, Any] | None = None
+    ) -> tuple[list[int], int]:
         """Fetch the required set for a gba platform picked *platform_core*, and the pane's count.
+
+        *source* is the answering source, RetroDECK's unless a test states another.
 
         gpSP will not run without the GBA BIOS and mGBA will, so which of the two
         the platform resolves to decides the whole answer.
@@ -5626,6 +5663,7 @@ class TestDownloadRequiredFirmware:
             firmware_resolver=resolver,
             core_info=FakeCoreInfoProvider(
                 options=[libretro_option("gpsp_libretro", "gpSP"), libretro_option("mgba_libretro", "mGBA")],
+                source=source if source is not None else {"kind": "retrodeck", "starts_games": True},
             ),
             platform_core_reader=FakePlatformCoreReader({"gba": platform_core} if platform_core is not None else None),
             retrodeck_folders=FakeRetroDeckFolders(bios="/retrodeck/bios"),
@@ -5654,6 +5692,12 @@ class TestDownloadRequiredFirmware:
         assert await self._download_under(None) == ([1], 1)
         assert await self._download_under("gpSP") == ([1], 1)
         assert await self._download_under("mGBA") == ([], 0)
+
+    @pytest.mark.asyncio
+    async def test_a_retrodeck_pick_while_retrodeck_is_switched_off_fetches_what_the_default_requires(self):
+        """The pick waits while its source is off, for the button as for the count above it (#2222 D5)."""
+        emudeck = {"kind": "emudeck", "starts_games": False}
+        assert await self._download_under("mGBA", source=emudeck) == ([1], 1)
 
     @pytest.mark.asyncio
     async def test_a_file_whose_place_could_not_be_looked_at_is_neither_counted_nor_fetched(self):

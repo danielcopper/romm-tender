@@ -17,6 +17,9 @@ OLDEST_SETTINGS_VERSION = 13
 # its emulator source rather than as a bare label.
 PLATFORM_PICK_SOURCE_VERSION = 14
 
+# The source every pick stored before sources were recorded came from.
+PICKS_FROM_BEFORE_SOURCES = "retrodeck"
+
 _JSON_KINDS: dict[type, str] = {
     dict: "object",
     list: "array",
@@ -59,17 +62,17 @@ def migrate_settings(data: dict[str, Any]) -> dict[str, Any]:
     semantics — the caller's dict is never mutated.
 
     Version 14 stores each per-platform emulator pick as ``{"label",
-    "source"}``. A bare label from before carries ``None`` for its source,
-    since nothing recorded which catalogue it came from; a value that is no
-    label is dropped, as it named no pick. The step stays in every later release
-    and is safe to run again: it converts only a file older than 14.
+    "source"}``. A bare label from before becomes RetroDECK's, the only source
+    Tender started through (#2195 D20); a value that is no label is dropped, as
+    it named no pick. The step stays in every later release and is safe to run
+    again: it converts only a file older than 14.
     """
     migrated = dict(data)
     if migrated["version"] < PLATFORM_PICK_SOURCE_VERSION:
         picks = migrated.get("platform_cores")
         if isinstance(picks, dict):
             migrated["platform_cores"] = {
-                slug: {"label": label, "source": None}
+                slug: {"label": label, "source": PICKS_FROM_BEFORE_SOURCES}
                 for slug, label in picks.items()
                 if isinstance(label, str) and label
             }

@@ -41,6 +41,7 @@ from domain.bios_status import (
     format_bios_status,
 )
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
+from domain.emulator_pick import pick_for, source_kind
 from domain.firmware_groups import console_regions_of, judge_groups
 from domain.firmware_rows import leaves_its_folder, library_file
 from domain.platform_names import decode_platform_names
@@ -190,18 +191,18 @@ class FirmwareStatusReader:
         """The emulator this platform resolves to — the one pick every surface here reads.
 
         :func:`resolve_firmware_option` over the emulators ES-DE lists and the
-        per-platform override: the read-path precedence minus the per-game
-        layer, and where nothing is bakeable the emulator RetroDECK declares
-        first, which its plain launch starts unless an alternative emulator is
-        set in ES-DE. Both projections of it are taken from this
-        one call: the label a pane displays and the identity its BIOS answers
-        key on.
+        per-platform override: the per-platform pick while it applies
+        (:func:`~domain.emulator_pick.pick_for`) and its label names an entry,
+        else the shipped default whatever its state. Both projections of
+        it are taken from this one call: the label a pane displays and the
+        identity its BIOS answers key on.
 
         Takes the already-read *options* rather than the system name, because
         every caller needs the emulator list anyway and reading it costs a
         catalogue read plus a glob per bakeable standalone entry.
         """
-        return resolve_firmware_option(options["options"], self._platform_core_reader.get_platform_core(platform_slug))
+        pick = pick_for(self._platform_core_reader.get_platform_core(platform_slug), source_kind(options))
+        return resolve_firmware_option(options["options"], pick.label if pick is not None else None)
 
     def _resolve_launching_emulator(
         self, platform_slug: str, options: dict[str, Any], launching_emulator: LaunchingEmulator | None
@@ -213,12 +214,13 @@ class FirmwareStatusReader:
         how one surface comes to name one emulator and judge by another
         (:class:`~domain.emulator_commands.LaunchingEmulator`).
 
-        A non-``None`` *launching_emulator* is the pre-resolved per-game pick (the
-        game-detail path runs ``ActiveCoreResolver`` upstream) and is used as-is —
-        libretro or standalone, since the identity names both. ``None`` is the
+        A non-``None`` *launching_emulator* is the ROM's chosen entry (the
+        game-detail path runs ``ActiveCoreResolver.resolve_rom`` upstream),
+        whether or not Tender can bake it, and is used as-is — libretro or
+        standalone, since the identity names both. ``None`` is the
         platform-level callers' "use the platform's own pick" signal, and it is
-        also what the per-game path passes when nothing could be resolved for the
-        ROM at all. Both are answered by :meth:`_platform_emulator`, so the game
+        also what the per-game path passes where the ROM has no system to ask or
+        no entry is chosen. Both are answered by :meth:`_platform_emulator`, so the game
         page and the platform pane cannot key their answers on two different
         emulators.
         """

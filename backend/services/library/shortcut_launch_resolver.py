@@ -56,7 +56,7 @@ class ShortcutLaunchResolverConfig:
     Holds the SQLite Unit-of-Work factory the install lookups read through and
     the two per-ROM resolvers the bake's inputs are drawn from: ``active_core``
     folds the per-game ``emulator_override`` and the per-platform
-    ``settings.json`` core over the standalone-aware es_systems default, and
+    ``settings.json`` core over the shipped default, and
     ``disc_resolver`` resolves a multi-disc ROM's persisted ``selected_disc``
     pin against its install directory. ``emulator_sources`` gives the one
     reading of the emulator sources a run resolves every ROM through.
@@ -93,10 +93,10 @@ class ShortcutLaunchResolver:
 
         Runs every ROM in *roms* through the shared per-ROM ``active_core``
         resolver (the single seam that folds the per-game ``emulator_override``
-        and per-platform ``settings.json`` core over the standalone-aware
-        es_systems default). Only ROMs that resolve to an emulator (libretro core
-        or standalone) appear in the returned ``{rom_id: EmulatorInvocation}``
-        map, so :func:`build_shortcuts_data` bakes their ``-e`` form; a ROM that
+        and per-platform ``settings.json`` core over the shipped default). Only
+        ROMs that resolve to an emulator (libretro core or standalone) appear in
+        the returned ``{rom_id: EmulatorInvocation}`` map, so
+        :func:`build_shortcuts_data` bakes their ``-e`` form; a ROM that
         resolves to nothing (a genuinely unresolvable platform) is absent and
         falls back to the plain launch. The resolver already warns + degrades on
         a stale label, so no bogus invocation ever reaches the bake.

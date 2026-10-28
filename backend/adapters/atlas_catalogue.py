@@ -227,10 +227,10 @@ def _refusal_reason(answer: Any) -> str:
 def _own_core_so(core_so: str) -> str:
     """Atlas's ``mgba_libretro.so`` in Tender's own identifier space.
 
-    Every core identifier Tender holds — the resolved active core, the
-    ``platform_cores`` override, an ES-DE ``<command>``'s core — is the bare
-    ``.so`` basename without its extension. Comparing the two spellings without
-    normalising here would silently match nothing.
+    Every core identifier Tender holds — the resolved active core, an ES-DE
+    ``<command>``'s core — is the bare ``.so`` basename without its extension.
+    Comparing the two spellings without normalising here would silently match
+    nothing.
     """
     return core_so[: -len(_CORE_SO_SUFFIX)] if core_so.endswith(_CORE_SO_SUFFIX) else core_so
 
@@ -435,13 +435,14 @@ class AtlasCatalogueAdapter:
         ``options`` is in the order the resolver gives: a choice the user made
         inside ES-DE first, marked ``chosen_in_frontend``, the rest as declared.
         Asked with *content_path*, a game's own choice in ES-DE counts too. The
-        default is the entry with the lowest ``declared_index``. What an entry launches, the core it loads and that
-        core's path are the resolver's ``kind``, ``core_so`` and ``core_path``,
-        and an entry it states ``run_game.sh`` would run nothing for is not
-        bakeable. Whether what an entry launches is there is the resolver's
-        ``availability``, libretro cores included: one it states not
-        installed is ``needs_setup`` with ``not_installed``, so it neither
-        becomes the default nor bakes into a shortcut; one it could not
+        shipped default is the entry with the lowest ``declared_index``. What an
+        entry launches, the core it loads and that core's path are the
+        resolver's ``kind``, ``core_so`` and ``core_path``, and an entry it
+        states ``run_game.sh`` would run nothing for is not bakeable. Whether
+        what an entry launches is there is the resolver's ``availability``,
+        libretro cores included: one it states not installed is
+        ``needs_setup`` with ``not_installed``, so it bakes into no shortcut
+        and, as the default, cannot start; one it could not
         establish carries a ``not_established`` note and is never the default
         by itself. Each entry's launcher is the one the resolver states. A
         system the catalogue does not declare yields ``available: True`` with

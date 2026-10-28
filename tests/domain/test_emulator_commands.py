@@ -34,7 +34,6 @@ from domain.emulator_commands import (
     option_to_invocation,
     options_to_payload,
     resolve_firmware_option,
-    resolve_platform_label,
     shipped_default,
 )
 from domain.shortcut_data import EmulatorInvocation
@@ -224,7 +223,9 @@ class TestAnEntryTheResolverCouldNotEstablish:
         assert label_to_invocation([self._unseen()], "PCSX2 (Standalone)") == EmulatorInvocation.run_game(
             PS2_PCSX2_BATCH, "PCSX2 (Standalone)"
         )
-        assert resolve_platform_label([self._unseen()], "PCSX2 (Standalone)") == "PCSX2 (Standalone)"
+        picked = resolve_firmware_option([self._unseen()], "PCSX2 (Standalone)")
+        assert picked is not None
+        assert picked.label == "PCSX2 (Standalone)"
 
     def test_it_reads_selectable_with_its_note_in_payload(self):
         payload = options_to_payload([self._unseen()])
@@ -442,38 +443,6 @@ class TestResolveFirmwareOption:
 
     def test_none_where_no_emulator_is_listed(self):
         assert resolve_firmware_option([], None) is None
-
-
-class TestResolvePlatformLabel:
-    """The platform-layer label two services render — one rule, one place."""
-
-    OPTIONS: ClassVar[list[EmulatorOption]] = _declared(
-        _classify("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
-        _classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
-        _classify("RPCS3 ISO (Standalone)", PS3_RPCS3_DIRECTORY),
-    )
-
-    def test_no_override_falls_back_to_the_default(self):
-        assert resolve_platform_label(self.OPTIONS, None) == "RPCS3 Directory (Standalone)"
-
-    def test_a_resolvable_override_wins(self):
-        assert resolve_platform_label(self.OPTIONS, "RPCS3 ISO (Standalone)") == "RPCS3 ISO (Standalone)"
-
-    def test_an_override_naming_an_unbakeable_option_stands(self):
-        # A pick stands whatever its state (#2195 D23): the platform starts
-        # through the plain launch rather than with another emulator.
-        assert resolve_platform_label(self.OPTIONS, "RPCS3 Shortcut (Standalone)") == "RPCS3 Shortcut (Standalone)"
-
-    def test_an_override_naming_nothing_degrades(self):
-        assert resolve_platform_label(self.OPTIONS, "Uninstalled Emulator") == "RPCS3 Directory (Standalone)"
-
-    def test_a_default_that_cannot_be_baked_is_still_named(self):
-        options = _declared(_classify("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT))
-        assert resolve_platform_label(options, None) == "RPCS3 Shortcut (Standalone)"
-        assert resolve_platform_label(options, "RPCS3 Shortcut (Standalone)") == "RPCS3 Shortcut (Standalone)"
-
-    def test_empty_options_answer_no_label(self):
-        assert resolve_platform_label([], "anything") is None
 
 
 class TestOptionsToPayload:

@@ -7,7 +7,7 @@ rule is Tender's own, and it follows the script's handling of a command rather
 than ES-DE's. The emulator picker offers every entry, annotated with its
 bakeability and, when it cannot be baked, the reason.
 
-Which entry is the default is not a judgement either: it is the entry the
+Which entry is the default is no judgement of Tender's: it is the entry the
 source ships first, the lowest ``declared_index`` the resolver states, whatever
 that entry's state (:func:`shipped_default`). A choice the user made inside
 ES-DE never becomes it, and Tender never passes over the shipped entry for a
@@ -243,8 +243,8 @@ def classify_command(
 
     *installation* is what the resolver states where it does not state the
     entry startable, ``None`` where it does. :data:`NOT_INSTALLED` takes the
-    place of the bake verdict, so the entry is neither the default nor a pick
-    that resolves, and the picker shows it disabled. Any other word is the
+    place of the bake verdict, so the entry bakes nothing and the picker shows
+    it disabled; as the default or a stored pick it cannot start. Any other word is the
     entry's ``not_established`` note, beside the bake verdict its command earns.
     After it, *start_script_runs_nothing* refuses the bake
     (:data:`START_SCRIPT_RUNS_NOTHING`), and so does a :data:`CORE` entry
@@ -379,29 +379,6 @@ def label_to_invocation(options: list[EmulatorOption], label: str) -> EmulatorIn
     return option_to_invocation(option_for_label(options, label))
 
 
-def resolve_platform_option(options: list[EmulatorOption], override: str | None) -> EmulatorOption | None:
-    """Return the emulator a platform resolves to, or ``None``.
-
-    The platform-level projection of the read-path precedence
-    (``ActiveCoreResolver`` without the per-game layer): the per-platform pick
-    while its label still names an option, whatever that option's state, else
-    the default (:func:`default_option`). ``None`` where nothing is picked and
-    the platform has no default — no entry declared, or the shipped one's
-    installation not established.
-
-    **One pick, because a surface must not be able to answer for two
-    emulators.** The option is returned rather than one projection of it so that
-    the name a surface displays and the identity it scopes on
-    (``EmulatorOption.emulator``, the one field that names a standalone emulator,
-    where ``core_so`` is ``None`` for every standalone pick) come off the same
-    choice. Resolving them separately is what let a pane name PCSX ReARMed and
-    judge the platform by the system default beside it. The BIOS answers take
-    this pick through :func:`resolve_firmware_option`.
-    """
-    pinned = option_for_label(options, override) if override is not None else None
-    return pinned if pinned is not None else default_option(options)
-
-
 def resolve_firmware_option(options: list[EmulatorOption], override: str | None) -> EmulatorOption | None:
     """Return the emulator a platform's BIOS answer is about, or ``None``.
 
@@ -412,17 +389,6 @@ def resolve_firmware_option(options: list[EmulatorOption], override: str | None)
     """
     pinned = option_for_label(options, override) if override is not None else None
     return pinned if pinned is not None else shipped_default(options)
-
-
-def resolve_platform_label(options: list[EmulatorOption], override: str | None) -> str | None:
-    """Return the platform-layer active-emulator display label, or ``None``.
-
-    The name half of :func:`resolve_platform_option`. ``None`` where the platform
-    resolves to no emulator at all — a surface states THAT; it is never a name,
-    and least of all "Default", which says Tender picked one.
-    """
-    option = resolve_platform_option(options, override)
-    return option.label if option is not None else None
 
 
 def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:

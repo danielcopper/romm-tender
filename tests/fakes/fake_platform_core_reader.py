@@ -7,9 +7,11 @@ without wiring a real ``PlatformCoreReaderAdapter`` over a settings dict.
 
 from __future__ import annotations
 
+from domain.emulator_pick import StoredPick
+
 
 class FakePlatformCoreReader:
-    """Maps a platform slug to its configured core label, or ``None`` when absent.
+    """Maps a platform slug to its configured core label, answered as RetroDECK's pick, or ``None`` when absent.
 
     ``mapping`` is mutable so a test can seed a per-platform core after
     construction; ``calls`` records each queried slug.
@@ -19,6 +21,7 @@ class FakePlatformCoreReader:
         self.mapping: dict[str, str] = mapping if mapping is not None else {}
         self.calls: list[str] = []
 
-    def get_platform_core(self, platform_slug: str) -> str | None:
+    def get_platform_core(self, platform_slug: str) -> StoredPick | None:
         self.calls.append(platform_slug)
-        return self.mapping.get(platform_slug)
+        label = self.mapping.get(platform_slug)
+        return StoredPick(label=label, source="retrodeck") if label is not None else None

@@ -2,9 +2,8 @@
 
 A label is what ES-DE stores a choice by, unique within one system's catalogue;
 the source says whose catalogue that is, so a label that no longer exists there
-can be named with it (#2195 D5, D20). ``source`` is ``None`` on a pick stored
-before the source was recorded: nothing says which catalogue it came from, and
-it is read against the source the game starts through.
+can be named with it (#2195 D5, D20). A pick stored before sources were
+recorded was made RetroDECK's when the source was added.
 
 Pure compute — no I/O.
 """
@@ -12,14 +11,15 @@ Pure compute — no I/O.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
 class StoredPick:
-    """One stored emulator pick: its ``label`` and the kind of its emulator ``source``, ``None`` where unrecorded."""
+    """One stored emulator pick: its ``label`` and the kind of its emulator ``source``."""
 
     label: str
-    source: str | None
+    source: str
 
 
 def platform_pick(value: object) -> StoredPick | None:
@@ -32,9 +32,25 @@ def platform_pick(value: object) -> StoredPick | None:
         return None
     label = value.get("label")
     source = value.get("source")
-    if not isinstance(label, str) or not label or not (source is None or isinstance(source, str)):
+    if not isinstance(label, str) or not label or not isinstance(source, str) or not source:
         return None
     return StoredPick(label=label, source=source)
+
+
+def pick_for(pick: StoredPick | None, starting_source: str | None) -> StoredPick | None:
+    """*pick* while its source is the one games start through (*starting_source*), else ``None``.
+
+    A pick whose source is not that one is kept as it is stored, the default
+    applies meanwhile, and nothing is said of it; its label is only ever
+    checked against its own source's list (#2222 D5).
+    """
+    return pick if pick is not None and pick.source == starting_source else None
+
+
+def source_kind(answer: dict[str, Any]) -> str | None:
+    """The kind of the source an emulator-options *answer* came from, ``None`` where none answered."""
+    source = answer["source"]
+    return source["kind"] if source is not None else None
 
 
 def platform_pick_value(label: str, source: str) -> dict[str, str]:

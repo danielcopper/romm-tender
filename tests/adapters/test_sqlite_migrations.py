@@ -2607,7 +2607,7 @@ class Test039AddRomEmulatorOverrideSource:
         assert _user_version(db_path) == 38
         assert "emulator_override_source" not in _columns(db_path, "roms")
 
-    def test_a_pick_from_before_it_keeps_its_label_and_reads_no_source(self, tmp_path: Path):
+    def test_a_pick_from_before_it_keeps_its_label_and_becomes_retrodecks(self, tmp_path: Path):
         """The device's path: its database is at 038 when this rung arrives."""
         db_path = str(tmp_path / "romm_sync.db")
         apply_migrations(db_path, str(_only_migrations_through(tmp_path, 38)))
@@ -2627,5 +2627,25 @@ class Test039AddRomEmulatorOverrideSource:
             ).fetchone()
         finally:
             conn.close()
-        assert row == ("PCSX ReARMed", None)
+        assert row == ("PCSX ReARMed", "retrodeck")
         assert "emulator_override_source" not in _columns(db_path, "rom_installs")
+
+    def test_a_row_without_a_pick_keeps_no_source(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 38)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 2, 101)
+        finally:
+            conn.close()
+
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT emulator_override, emulator_override_source FROM roms WHERE rom_id = 2"
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row == (None, None)

@@ -63,6 +63,7 @@ from bootstrap import (
     wire_services,
 )
 from domain.app_directories import AppDirectories
+from domain.emulator_pick import StoredPick
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
 from domain.session_budget import EFFECTIVE_CEILING_KB
 from domain.sync_run_kind import SyncRunKind
@@ -198,7 +199,7 @@ class TestBootstrap:
         reader = result.callbacks.platform_core_reader
         assert reader.get_platform_core("snes") is None
         result.stores.settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}
-        assert reader.get_platform_core("snes") == "bsnes"
+        assert reader.get_platform_core("snes") == StoredPick("bsnes", "retrodeck")
 
     def test_state_bundle_carries_only_settings(self, tmp_path):
         """Post-cutover (#784) ``StateBundle`` holds only the live settings dict.
@@ -502,7 +503,7 @@ class TestBootstrapReadsOnlySettingsAtTheOldestVersionOrNewer:
         with caplog.at_level(logging.WARNING):
             result = _bootstrap_for(tmp_path)
 
-        expected = {**content, "version": 14, "platform_cores": {"snes": {"label": "bsnes", "source": None}}}
+        expected = {**content, "version": 14, "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}}}
         assert {key: result.stores.settings[key] for key in content} == expected
         assert {key: json.loads(path.read_text())[key] for key in content} == expected
         assert not [r for r in caplog.records if "settings.json" in r.getMessage()]

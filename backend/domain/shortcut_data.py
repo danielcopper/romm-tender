@@ -272,7 +272,7 @@ def build_shortcuts_data(
     *core_overrides* maps ``rom_id`` to the **already-resolved**
     :class:`EmulatorInvocation` the ROM launches with (its full active emulator,
     folding the per-game/per-platform override over
-    the es_systems default). Only ROMs that resolved to an emulator appear (the
+    the shipped default). Only ROMs that resolved to an emulator appear (the
     caller omits the ``(None, None)`` fallback); a ROM absent from the map follows
     the plain RetroDECK launch, a present ROM bakes its ``-e`` form into
     ``launch_options``. Required so a new bake site can never silently skip the

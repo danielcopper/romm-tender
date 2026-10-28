@@ -54,7 +54,7 @@ class TestChooseEmulator:
         assert (choice.option, choice.layer, choice.vanished) == (THIRD, GAME_PICK, None)
 
     def test_the_platform_pick_wins_over_the_default(self):
-        choice = choose_emulator(OPTIONS, game=None, platform=StoredPick("Other", None))
+        choice = choose_emulator(OPTIONS, game=None, platform=StoredPick("Other", "retrodeck"))
         assert (choice.option, choice.layer) == (OTHER, PLATFORM_PICK)
 
     def test_with_no_pick_the_shipped_default(self):
@@ -68,13 +68,15 @@ class TestChooseEmulator:
 
     def test_a_vanished_game_pick_gives_way_and_is_named(self):
         gone = StoredPick("Gone", "retrodeck")
-        choice = choose_emulator(OPTIONS, game=gone, platform=StoredPick("Other", None))
+        choice = choose_emulator(OPTIONS, game=gone, platform=StoredPick("Other", "retrodeck"))
         assert (choice.option, choice.layer) == (OTHER, PLATFORM_PICK)
         assert choice.vanished is not None
         assert (choice.vanished.pick, choice.vanished.layer) == (gone, GAME_PICK)
 
     def test_the_topmost_vanished_pick_is_the_one_named(self):
-        choice = choose_emulator(OPTIONS, game=StoredPick("Gone", None), platform=StoredPick("Also gone", None))
+        choice = choose_emulator(
+            OPTIONS, game=StoredPick("Gone", "retrodeck"), platform=StoredPick("Also gone", "retrodeck")
+        )
         assert (choice.option, choice.layer) == (SHIPPED, DEFAULT)
         assert choice.vanished is not None
         assert choice.vanished.layer == GAME_PICK
@@ -95,8 +97,8 @@ class TestStartPayload:
             "folder_entry": None,
         }
 
-    def test_an_entry_tender_cannot_bake_still_starts(self):
-        """The plain launch starts it; nothing words that (#2195 D7)."""
+    def test_an_entry_tender_cannot_bake_bakes_nothing_and_is_not_refused(self):
+        """Nothing stands in its way; it renders no invocation (#2195 D7)."""
         script = dataclasses.replace(
             classify_command("Shortcut", "%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%", kind=PROGRAM),
             declared_index=0,
@@ -145,25 +147,28 @@ class TestStartPayload:
 
 class TestVanishedPayload:
     def test_none_where_nothing_vanished(self):
-        assert vanished_payload(choose_emulator(OPTIONS, game=None, platform=None), answering_source="x") is None
+        assert vanished_payload(choose_emulator(OPTIONS, game=None, platform=None)) is None
 
     def test_the_pick_is_named_with_its_own_source_and_what_is_used_instead(self):
         choice = choose_emulator(OPTIONS, game=StoredPick("Gone", "emudeck"), platform=None)
-        assert vanished_payload(choice, answering_source="retrodeck") == {
+        assert vanished_payload(choice) == {
             "label": "Gone",
             "source": "emudeck",
             "layer": GAME_PICK,
             "used": "Shipped",
+            "used_layer": DEFAULT,
         }
 
-    def test_a_pick_from_before_sources_were_recorded_is_named_with_the_starting_source(self):
-        choice = choose_emulator(OPTIONS, game=StoredPick("Gone", None), platform=None)
-        payload = vanished_payload(choice, answering_source="retrodeck")
+    def test_a_platform_pick_used_instead_is_named_as_the_layer_used(self):
+        choice = choose_emulator(
+            OPTIONS, game=StoredPick("Gone", "retrodeck"), platform=StoredPick("Other", "retrodeck")
+        )
+        payload = vanished_payload(choice)
         assert payload is not None
-        assert payload["source"] == "retrodeck"
+        assert (payload["used"], payload["used_layer"]) == ("Other", PLATFORM_PICK)
 
-    def test_a_platform_pick_read_without_its_source_takes_the_one_stored_with_it(self):
-        choice = choose_emulator(OPTIONS, game=None, platform=StoredPick("Gone", None))
-        payload = vanished_payload(choice, answering_source="retrodeck", platform_source="emudeck")
+    def test_nothing_used_instead_names_no_layer(self):
+        choice = choose_emulator([], game=StoredPick("Gone", "retrodeck"), platform=None)
+        payload = vanished_payload(choice)
         assert payload is not None
-        assert (payload["source"], payload["layer"]) == ("emudeck", PLATFORM_PICK)
+        assert (payload["used"], payload["used_layer"]) == (None, None)
