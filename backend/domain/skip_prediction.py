@@ -32,6 +32,7 @@ def predict_unit_skip(
     fetched_count: int,
     registry_count: int,
     needs_backfill: bool,
+    needs_convergence: bool = False,
 ) -> bool:
     """Predict whether the wholesale-skip gate will skip a platform unit.
 
@@ -41,7 +42,9 @@ def predict_unit_skip(
     (``domain/platform_skip.stamp_can_match``), rows carrying the stamp's
     fetch generation are persisted (``fetched_count``,
     ``domain/fetch_generation.count_rows_for_skip``) and at least one row
-    is bound, and no ``sibling_group_key`` backfill is pending. The gate's
+    is bound, no ``sibling_group_key`` backfill is pending, and no sibling
+    group still holds more than one bound shortcut
+    (``domain/fetch_generation.convergence_pending``). The gate's
     one request (``domain/platform_skip.probe_verdict``) is
     deliberately NOT replayed — no network at plan time — so a platform
     with a ROM updated, added, removed or hidden since the stamp may be
@@ -56,32 +59,36 @@ def predict_unit_skip(
     must never feed the actual skip decision.
     """
     return (
-        stamp is not None and stamp_can_match(stamp) and fetched_count > 0 and registry_count > 0 and not needs_backfill
+        stamp is not None
+        and stamp_can_match(stamp)
+        and fetched_count > 0
+        and registry_count > 0
+        and not needs_backfill
+        and not needs_convergence
     )
 
 
 def collapsed_shortcut_count(rows: Iterable[tuple[str | None, bool]]) -> int:
     """Post-collapse shortcut count for one platform's persisted rows.
 
-    Mirrors the lane selection of ``collapse_sibling_groups`` (ADR-0021)
-    under the plan-time assumption that the next fetch matches the
-    persisted rows: a group with **bound** siblings is grandfathered — one
-    shortcut per bound sibling (§5, a pre-ADR-0021 library keeps its
-    duplicate shortcuts) — while a group with no binding anywhere mints
-    exactly one representative. Given every persisted row as
-    ``(sibling_group_key, is_bound)`` (bound = ``shortcut_app_id`` is set),
-    each non-``None`` group therefore counts ``max(1, bound rows in
-    group)``, and a keyless row is its own singleton (its real group is
-    unknown until the backfill fetch computes the key).
+    Mirrors ``collapse_sibling_groups`` (ADR-0021) under the plan-time
+    assumption that the next fetch matches the persisted rows: a group with
+    **bound** siblings keeps one shortcut, since a platform unit converges a
+    group holding several (``converge_bound_groups``, #2645), and a group
+    with no binding anywhere mints exactly one representative. Given every
+    persisted row as ``(sibling_group_key, is_bound)`` (bound =
+    ``shortcut_app_id`` is set), each non-``None`` group therefore counts
+    one, and a keyless row is its own singleton (its real group is unknown
+    until the backfill fetch computes the key).
     """
-    bound_by_key: dict[str, int] = {}
+    keys: set[str] = set()
     singletons = 0
-    for key, is_bound in rows:
+    for key, _is_bound in rows:
         if key is None:
             singletons += 1
         else:
-            bound_by_key[key] = bound_by_key.get(key, 0) + (1 if is_bound else 0)
-    return sum(max(1, bound) for bound in bound_by_key.values()) + singletons
+            keys.add(key)
+    return len(keys) + singletons
 
 
 def new_shortcut_count(rows: Iterable[tuple[str | None, bool]], *, unit_rom_count: int) -> int:

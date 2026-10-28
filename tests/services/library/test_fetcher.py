@@ -1376,6 +1376,58 @@ class TestIncrementalSkipFromPlatformStamp:
         assert not delta_calls  # no stamp → no probe; the guard rejects before any server call
 
 
+class TestAGroupWithSeveralShortcutsIsFetchedInFull:
+    """A platform holding a group with more than one bound row is not skipped until it has converged (#2645)."""
+
+    @pytest.mark.asyncio
+    async def test_two_bound_rows_of_one_group_refuse_the_skip_and_ask_romm_nothing(
+        self, make_library, fake_romm_api, caplog
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        uow = library.uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, rom_ids=(10, 11))
+        _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
+        _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:100:1")
+        for rom_id in (10, 11):
+            fake_romm_api.roms[rom_id] = {"id": rom_id, "platform_id": 1, "updated_at": "2024-01-01T00:00:00+00:00"}
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+
+        with caplog.at_level(logging.INFO):
+            result = await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert result is None
+        assert not [c for c in fake_romm_api.call_log if c[0] == "list_roms_newest_first"]
+        assert "holds more than one shortcut" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_bound_row_an_earlier_fetch_returned_still_refuses_the_skip(self, make_library, fake_romm_api):
+        """A version RomM no longer lists keeps an older generation, and converges as well (D1)."""
+        library = make_library(romm_api=fake_romm_api)
+        uow = library.uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new", rom_ids=(10,))
+        _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:100:1", fetch_id="run-old")
+        # RomM's answer matches the stamp: only the convergence holds the skip off.
+        fake_romm_api.roms[10] = {"id": 10, "platform_id": 1, "updated_at": "2024-01-01T00:00:00+00:00"}
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+
+        assert await library.sync._fetcher._try_unit_incremental_skip(unit) is None
+
+    @pytest.mark.asyncio
+    async def test_the_plan_predicts_no_skip_for_it(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        uow = library.uow
+        fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
+        library.settings["enabled_platforms"] = {"1": True}
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2)
+        _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
+        _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:100:1")
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert units[0].predicted_skip is False
+
+
 class TestStaleStampPartialGapRegression:
     """#1025 silent-gap: a stale stamp must never skip a platform left partially bound.
 
@@ -1701,9 +1753,9 @@ class TestPlanEstimates:
         assert units[0].predicted_skip is True
 
     @pytest.mark.asyncio
-    async def test_grandfathered_group_counts_each_bound_sibling(self, make_library, fake_romm_api):
-        """A pre-ADR-0021 group with two bound duplicates keeps both shortcuts
-        (§5), so the plan estimate prices 2, not one-per-group."""
+    async def test_a_group_with_two_bound_duplicates_counts_one_shortcut(self, make_library, fake_romm_api):
+        """A pre-ADR-0021 group with two bound duplicates converges to one
+        shortcut (#2645), so the plan estimate prices one per group."""
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
@@ -1715,7 +1767,7 @@ class TestPlanEstimates:
 
         units = await library.sync._fetcher.build_work_queue()
 
-        assert units[0].collapsed_count == 2
+        assert units[0].collapsed_count == 1
 
     @pytest.mark.asyncio
     async def test_never_synced_platform_predicts_no_skip_and_no_collapsed_count(self, make_library, fake_romm_api):

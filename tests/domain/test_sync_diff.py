@@ -25,6 +25,7 @@ from domain.sync_diff import (
     settle_asked_rows,
     should_include_in_platform_collection,
     sort_stale_rows,
+    with_kept_rows_rebound,
 )
 
 
@@ -1106,6 +1107,19 @@ class TestCollapseHandedTheConvergedRows:
         registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
         emitted = collapse_sibling_groups(members, registry, set(), complete_group_view=True, converged={1, 2})
         assert emitted == []
+
+
+class TestTheKeptRowFollowsARebind:
+    """``with_kept_rows_rebound`` — the row bound to the kept shortcut once the run commits."""
+
+    def test_a_kept_row_the_collapse_rebinds_names_the_row_it_moves_onto(self):
+        converged = [ConvergedBinding(2, 1002, 1, 1001)]
+        emitted = [{**_gsd(5), "rom_id": 1, BIND_ROM_ID_KEY: 5}]
+        assert with_kept_rows_rebound(converged, emitted) == [ConvergedBinding(2, 1002, 5, 1001)]
+
+    def test_a_kept_row_the_collapse_leaves_stays(self):
+        converged = [ConvergedBinding(2, 1002, 1, 1001)]
+        assert with_kept_rows_rebound(converged, [_gsd(1)]) == converged
 
 
 class TestGroupsToConverge:

@@ -203,6 +203,17 @@ class LocalLibraryReader:
                 if rom.shortcut_app_id is not None
             }
 
+    def do_read_installed_rom_ids(self, rom_ids: Collection[int]) -> set[int]:
+        """The ids among *rom_ids* holding an install record, by point lookups in one short read UoW.
+
+        The apply reads the installs of the ROMs it fetched with their launch
+        paths; this answers the bound rows its fetch left out, which the
+        convergence (``domain.sync_diff.converge_bound_groups``) ranks by their
+        install as well.
+        """
+        with self._uow_factory() as uow:
+            return {rom_id for rom_id in rom_ids if uow.rom_installs.get(rom_id) is not None}
+
     def do_read_resident_group_keys(self) -> dict[int, str]:
         """Read every persisted non-null ``sibling_group_key`` (``rom_id → key``).
 

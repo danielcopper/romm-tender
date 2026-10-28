@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     import asyncio
     from collections.abc import Mapping
 
+    from domain.sync_diff import ConvergedBinding
     from domain.sync_run_kind import SyncRunKind
 
 
@@ -251,6 +252,11 @@ class LibrarySyncStateBox:
     # by ``rom_id`` to its platform slug, for the finalize's
     # ``domain.sync_diff.rebuilt_rows_filed_as_kept``. Reset by ``try_begin_run``.
     run_skip_rebuilt_rows: dict[int, str] = field(default_factory=dict)
+    # Every bound row a platform unit of the apply converged
+    # (``domain.sync_diff.converge_bound_groups``), by ``rom_id``: the finalize
+    # of a run that was not stopped removes their shortcuts and unbinds them.
+    # Reset by ``try_begin_run``.
+    run_converged: dict[int, ConvergedBinding] = field(default_factory=dict)
     # Count of apply chunks emitted so far this run — the session-budget gate
     # skips its very first chunk (this counter still 0) so every run/resume makes
     # at least one chunk of forward progress before it can pause, never an
@@ -328,6 +334,7 @@ class LibrarySyncStateBox:
         self.run_listed_platform_slugs = None
         self.run_listed_platform_names = {}
         self.run_skip_rebuilt_rows = {}
+        self.run_converged = {}
         # Bounded stash lifetime: a heartbeat-timed-out chunk whose late ack
         # never arrived is dropped when the next run starts, so stale abandoned
         # data can never outlive one run (#1367).

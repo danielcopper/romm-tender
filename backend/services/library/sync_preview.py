@@ -23,6 +23,7 @@ from domain.sync_diff import (
     collapse_sibling_groups,
     compute_collection_diff,
     compute_platform_collection_diff,
+    converge_bound_groups,
     count_disabled_platform_removals,
     platform_breakdown,
     rebuilt_rows_filed_as_kept,
@@ -209,7 +210,22 @@ class SyncPreview:
             # complete here), and one only collections reach is the partial view a
             # collection unit has (#2536). A row a collection skip rebuilt in a
             # group a platform unit delivers is collapsed as that unit has it.
+            # A group holding more than one bound shortcut converges as the
+            # apply's platform unit converges it: over that unit's listing, so
+            # only on a platform the preview fetched in full (#2645).
             whole_groups = {sd.get("sibling_group_key") for sd in shortcuts_data if sd["rom_id"] in platform_rom_ids}
+            listed_ids = {rom["id"] for roms in full_fetched_platforms.values() for rom in roms}
+            preferred_region = self._settings.get("preferred_region", AUTO_REGION)
+            converged_ids = {
+                binding.rom_id
+                for binding in converge_bound_groups(
+                    [sd for sd in shortcuts_data if sd["rom_id"] in listed_ids],
+                    registry,
+                    set(installed_paths),
+                    platform_slugs=set(full_fetched_platforms),
+                    preferred_region=preferred_region,
+                )
+            }
             emitted, classify_skipped = collapse_counting_platform_rebinds(
                 shortcuts_data,
                 lambda entries: collapse_sibling_groups(
@@ -217,7 +233,8 @@ class SyncPreview:
                     registry,
                     set(installed_paths),
                     complete_group_view=whole_groups,
-                    preferred_region=self._settings.get("preferred_region", AUTO_REGION),
+                    preferred_region=preferred_region,
+                    converged=converged_ids,
                 ),
                 skipped_rom_ids=skipped_rom_ids,
                 platform_rom_ids=platform_rom_ids,
@@ -233,7 +250,7 @@ class SyncPreview:
             )
             # The marks are discarded: docs/architecture/backend-architecture.md,
             # "The stale removal keeps a game gone from RomM".
-            stale_rows = stale_rows_of(stale, registry)
+            stale_rows = stale_rows_of([rid for rid in stale if rid not in converged_ids], registry)
             removals, kept, _marks = await settle_stale_rows(
                 stale_rows,
                 ask_romm=self._fetcher.ask_romm_for_roms,
@@ -243,7 +260,7 @@ class SyncPreview:
                 collection_listed_rom_ids=collection_listed,
                 synced_group_keys=preview_group_keys(synced_rom_ids, resident_keys, all_roms),
             )
-            removed_ids = {row.rom_id for row in removals}
+            removed_ids = {row.rom_id for row in removals} | converged_ids
             kept_ids = {row.rom_id for row in kept}
             left_bound = [row for row in stale_rows if row.rom_id not in removed_ids and row.rom_id not in kept_ids]
             stale = [rid for rid in stale if rid in removed_ids]

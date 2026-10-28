@@ -400,6 +400,21 @@ def converge_bound_groups(
     return bindings
 
 
+def with_kept_rows_rebound(
+    converged: Sequence[ConvergedBinding], emitted: Sequence[dict[str, Any]]
+) -> list[ConvergedBinding]:
+    """*converged*, each ``kept_rom_id`` moved to the row :func:`collapse_sibling_groups` rebinds it onto in *emitted*.
+
+    The kept shortcut stays; a rebind entry keyed by the kept row moves its
+    binding onto the same dump under another id (``bind_rom_id``), and that row
+    is the one bound to the kept shortcut once the run commits.
+    """
+    targets = {entry["rom_id"]: entry[BIND_ROM_ID_KEY] for entry in emitted if BIND_ROM_ID_KEY in entry}
+    return [
+        binding._replace(kept_rom_id=targets.get(binding.kept_rom_id, binding.kept_rom_id)) for binding in converged
+    ]
+
+
 def _kept_rom_id(
     bound_ids: list[int],
     members_by_id: Mapping[int, dict[str, Any]],

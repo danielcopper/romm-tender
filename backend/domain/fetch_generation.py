@@ -5,12 +5,15 @@ generation its completion stamp recorded, answer which rows that fetch returned
 and which it did not. Anything that decides whether to skip belongs to the
 fetcher, and anything that writes a generation belongs to the reporter.
 :func:`gone_from_romm_ids` adds to that answer the rows carrying a gone-from-RomM
-mark, which no stamp can name.
+mark, which no stamp can name. :func:`convergence_pending` is the one skip input
+here that no generation gates.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
+from domain.sync_diff import groups_to_converge
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -58,6 +61,18 @@ def backfill_needed(rows: Sequence[Rom], fetch_id: str | None) -> bool:
     if not fetch_id:
         return any(rom.sibling_group_key is None for rom in rows)
     return any(rom.sibling_group_key is None and rom.last_fetch_id == fetch_id for rom in rows)
+
+
+def convergence_pending(rows: Sequence[Rom]) -> bool:
+    """Whether a sibling group among *rows* still holds more than one bound shortcut.
+
+    :func:`domain.sync_diff.groups_to_converge` over the bound rows' stored
+    keys: a platform holding such a group must be fetched in full, which is
+    where the apply converges it (#2645). Unlike :func:`backfill_needed` every
+    row counts, whatever its generation: a bound version RomM no longer lists
+    keeps an older one, and converges with its group all the same.
+    """
+    return bool(groups_to_converge(row.sibling_group_key for row in rows if row.shortcut_app_id is not None))
 
 
 def prune_candidate_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> set[int]:

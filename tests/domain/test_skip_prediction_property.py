@@ -3,9 +3,10 @@
 create-side complement ``new_shortcut_count``.
 
 The plan-time estimate kernel must mirror the LANE SELECTION of the real
-collapse (``domain.sync_diff.collapse_sibling_groups``, ADR-0021) — a group
-with bound siblings is grandfathered one-shortcut-per-bound-sibling (§5), an
-unbound group mints one representative. The hand-enumerated cases
+collapse (``domain.sync_diff.collapse_sibling_groups``, ADR-0021) after the
+convergence a platform unit runs first (``converge_bound_groups``, #2645) — a
+group with bound siblings keeps one shortcut, an unbound group mints one
+representative. The hand-enumerated cases
 (``test_skip_prediction.py``) pin specific shapes; the cross-check property
 here drives BOTH functions from the same sampled rows so the two can never
 drift apart again (the #1382/#1402 undercount class).
@@ -25,7 +26,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count
-from domain.sync_diff import collapse_sibling_groups
+from domain.sync_diff import collapse_sibling_groups, converge_bound_groups
 
 # One persisted row: (group key, bound?, installed?). A handful of key values
 # is enough — the interesting structure is how rows cluster into groups and
@@ -70,7 +71,14 @@ def test_estimate_matches_real_collapse_emission_count(rows):
     }
     installed_rom_ids = {rom_id for rom_id, (_key, _bound, installed) in enumerate(rows, start=1) if installed}
 
-    emitted = collapse_sibling_groups(shortcuts_data, registry, installed_rom_ids, complete_group_view=True)
+    converged = converge_bound_groups(shortcuts_data, registry, installed_rom_ids, platform_slugs={"n64"})
+    emitted = collapse_sibling_groups(
+        shortcuts_data,
+        registry,
+        installed_rom_ids,
+        complete_group_view=True,
+        converged={binding.rom_id for binding in converged},
+    )
     estimated = collapsed_shortcut_count((key, bound) for key, bound, _installed in rows)
 
     assert len(emitted) == estimated
@@ -87,8 +95,10 @@ def test_keyless_rows_add_one_singleton_each(rows, keyless):
 @given(rows=_rows, keyless=st.lists(st.booleans(), max_size=5), rom_count=st.integers(min_value=0, max_value=40))
 def test_creates_and_bound_rows_price_every_shortcut_exactly_once(rows, keyless, rom_count):
     """The seed's two terms partition the work: ``new_shortcut_count`` (creates)
-    plus the bound rows (updates) is exactly the shortcut count the persisted
-    rows collapse into, plus one create per server ROM no row is held for.
+    plus one bound shortcut per group holding a binding and per bound keyless
+    row (updates) is exactly the shortcut count the persisted rows collapse
+    into, plus one create per server ROM no row is held for. A group's further
+    bound rows are removals, since a group converges to one shortcut (#2645).
 
     This is what makes the seed safe in both directions at once. It cannot read
     SHORT — an unmirrored remainder is priced, so a never-synced platform
@@ -99,9 +109,11 @@ def test_creates_and_bound_rows_price_every_shortcut_exactly_once(rows, keyless,
     one of them as a phantom new shortcut (#1517).
     """
     all_rows = [(key, bound) for key, bound, _installed in rows] + [(None, bound) for bound in keyless]
-    bound_rows = sum(1 for _key, is_bound in all_rows if is_bound)
+    bound_shortcuts = len({key for key, is_bound in all_rows if is_bound and key is not None}) + sum(
+        1 for key, is_bound in all_rows if is_bound and key is None
+    )
     unmirrored = max(0, rom_count - len(all_rows))
 
     creates = new_shortcut_count(all_rows, unit_rom_count=rom_count)
 
-    assert creates + bound_rows == collapsed_shortcut_count(all_rows) + unmirrored
+    assert creates + bound_shortcuts == collapsed_shortcut_count(all_rows) + unmirrored

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from domain.collection_listing import collection_entry
 from domain.collection_owner import listing_is_own
-from domain.fetch_generation import backfill_needed, count_rows_for_skip
+from domain.fetch_generation import backfill_needed, convergence_pending, count_rows_for_skip
 from domain.platform_names import listed_platform_names
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_skip import probe_verdict, stamp_can_match
@@ -82,7 +82,8 @@ class _SkipBaseline(NamedTuple):
     ``fetched_count`` and ``needs_backfill`` read only the rows carrying the
     completion stamp's fetch generation: a row for a rom_id the server has
     dropped is never fetched again, so no fetch can fill in its group key, and
-    it may never hold the platform's skip off forever (#1504).
+    it may never hold the platform's skip off forever (#1504). ``needs_convergence``
+    reads every row (``domain/fetch_generation.convergence_pending``).
     """
 
     stamp: PlatformSyncState | None
@@ -90,6 +91,7 @@ class _SkipBaseline(NamedTuple):
     fetched_count: int
     persisted_count: int
     needs_backfill: bool
+    needs_convergence: bool
 
 
 @dataclass(frozen=True)
@@ -554,7 +556,8 @@ class LibraryFetcher:
         (``predict_unit_skip`` — a stamp present and not revoked
         (``stamp_for_skip``) that records what the gate compares RomM's answer
         with, rows carrying the stamp's fetch generation, bound rows, no
-        group-key backfill pending) and derive the persisted post-collapse
+        group-key backfill pending, no group holding more than one bound
+        shortcut) and derive the persisted post-collapse
         shortcut count (``collapsed_shortcut_count`` over the rows' sibling-group keys + bound
         flags). The collapsed count is emitted ONLY for slugs that carry a
         ``PlatformSyncState`` completion stamp the gate would read (#1412): such a
@@ -610,6 +613,7 @@ class LibraryFetcher:
                     fetched_count=count_rows_for_skip(all_rows, fetch_id),
                     registry_count=bound_count,
                     needs_backfill=backfill_needed(all_rows, fetch_id),
+                    needs_convergence=convergence_pending(all_rows),
                 )
                 collapsed = (
                     collapsed_shortcut_count(
@@ -655,6 +659,11 @@ class LibraryFetcher:
           gated for the same reason ``fetched_count`` is: a dropped row is never
           returned again, so no fetch can ever backfill it. Falls back to every
           row for a stamp written before the generation contract.
+        * ``needs_convergence`` — a sibling group among the rows still holds
+          more than one bound shortcut
+          (``domain/fetch_generation.convergence_pending``), which only a full
+          fetch converges (#2645). Not generation-gated: a bound version RomM
+          no longer lists converges too.
 
         Only one short read UoW is opened.
         """
@@ -683,6 +692,7 @@ class LibraryFetcher:
             fetched_count=count_rows_for_skip(all_rows, fetch_id),
             persisted_count=len(all_rows),
             needs_backfill=backfill_needed(all_rows, fetch_id),
+            needs_convergence=convergence_pending(all_rows),
         )
 
     @staticmethod
@@ -724,7 +734,8 @@ class LibraryFetcher:
         a revoked one, a stamp without a fetch start or a checksum (every stamp
         written before migration 031 — a one-time re-walk), no rows carrying
         the stamp's generation, no bound row, an un-backfilled row from that
-        generation, the request raised, or its answer does not match the stamp.
+        generation, a group holding more than one bound shortcut, the request
+        raised, or its answer does not match the stamp.
 
         This gate is the SOLE skip authority (ADR-0023). The plan-time
         ``predicted_skip`` rider (``_read_plan_estimates`` /
@@ -773,6 +784,12 @@ class LibraryFetcher:
         # such row carries a key this is a no-op and the skip resumes.
         if baseline.needs_backfill:
             self._logger.info(f"Per-unit fetch {platform_name}: version-metadata backfill needed — full fetch")
+            return None
+
+        # A sibling group still holding more than one bound shortcut converges
+        # only in a full fetch (#2645), whatever RomM answers.
+        if baseline.needs_convergence:
+            self._logger.info(f"Per-unit fetch {platform_name}: a game holds more than one shortcut — full fetch")
             return None
 
         try:
