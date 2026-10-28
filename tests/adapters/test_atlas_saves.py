@@ -37,6 +37,8 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CONFIG_UNREADABLE,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
     CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
+    CAVEAT_REDIRECT_OUTRANKED,
+    CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
     CAVEAT_SAVE_INSIDE_CONTENT,
     CAVEAT_SAVE_INSIDE_IMAGE,
     CAVEAT_SORTED_DIR_MISSING,
@@ -375,6 +377,55 @@ class TestTheFiveStates:
         )
 
         assert answer.state == SAVE_STATE_HOLE
+
+
+class TestNotesThatChangeNothing:
+    """Two notes the resolver states on a save answer, which leave Tender's answer as it was (#2644 D2)."""
+
+    def test_a_redirect_that_does_not_hold_here_leaves_the_files_synced(self, traces):
+        # Dolphin's ``-C`` key for a slot that holds no GCI folder, as the
+        # resolver's recorded machines state it.
+        outranked = Caveat(
+            code=CAVEAT_REDIRECT_OUTRANKED,
+            message="prose that may change freely",
+            data={
+                "token": "DOLPHIN",
+                "via": "flag",
+                "name": "-C",
+                "argument": "Dolphin.Core.GCIFolderBPathOverride=<dir>",
+                "file": "Dolphin.ini",
+                "key": "[Core] SlotB",
+            },
+        )
+
+        answer = _ask(_placement(files=("Game Title.srm",), stated=(outranked,)), traces)
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+        assert answer.syncable is True
+        assert answer.synced_names == ("Game Title.srm",)
+
+    def test_a_card_folder_another_core_writes_is_refused_as_shared(self, traces):
+        shared_with = Caveat(
+            code=CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
+            message="prose that may change freely",
+            data={"core": "pcsx2", "dir": "/bios/pcsx2/memcards"},
+        )
+
+        answer = _ask(
+            _placement(
+                files=("Mcd001.ps2",),
+                granularity=GRANULARITY_SHARED_CARD,
+                stated=(shared_with,),
+                directory="/bios/pcsx2/memcards",
+            ),
+            traces,
+            label="PCEE2",
+            emulator="PCEE2",
+        )
+
+        assert answer.state == SAVE_STATE_SHARED
+        assert answer.syncable is False
+        assert answer.synced_names == ()
 
 
 def _retrodeck_tree(

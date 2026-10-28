@@ -46,6 +46,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
+    CAVEAT_REDIRECT_OUTRANKED,
+    CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
     HEALTH_ISSUE_NOT_SET_UP,
     SavestateAbsence,
     SavestatePlacement,
@@ -73,6 +75,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
+
+
+# Notes on a save answer that change nothing Tender does (#2644 D2).
+# ``redirect-outranked`` says a route by which a launch's arguments or
+# environment would move the saves does not hold here, and Tender moves no save
+# that way. ``save-files-shared-with-core`` says another core writes the same
+# card folder; the two cores' save cards state that folder only as a shared
+# card, which is refused as shared whatever the note says.
+_NOTES_THAT_CHANGE_NOTHING = frozenset({CAVEAT_REDIRECT_OUTRANKED, CAVEAT_SAVE_FILES_SHARED_WITH_CORE})
 
 
 class AtlasSaveLocationAdapter:
