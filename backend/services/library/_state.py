@@ -100,10 +100,11 @@ class AbandonedChunk:
     chunk's fetched RomM rows (the ``metadatum`` source the recovery commit
     upserts). The whole-unit staging the commit also reads
     (``pending_sync`` / ``pending_all_roms`` / ``pending_cover_sources`` /
-    ``pending_followed_keys``) is kept live on the box, not copied here — this chunk's identity is what the
-    late ack keys on. Held on :class:`LibrarySyncStateBox` **outside** the
-    run-lifecycle state and cleared at the next run's start, so a frontend that
-    crashes and never acks just leaves inert data until the next run (#1367).
+    ``pending_followed_keys``) is kept live on the box, not copied here — this
+    chunk's identity is what the late ack keys on. Held on
+    :class:`LibrarySyncStateBox` **outside** the run-lifecycle state and cleared
+    at the next run's start, so a frontend that crashes and never acks just
+    leaves inert data until the next run (#1367).
     """
 
     run_id: str | None
@@ -491,10 +492,10 @@ class LibrarySyncStateBox:
         the stash (:meth:`take_abandoned_chunk`) rather than the now-dead
         active-unit path. The whole-unit staging (``pending_sync`` /
         ``pending_all_roms`` / ``pending_cover_sources`` /
-        ``pending_followed_keys``) is deliberately left live so the reporter's late-ack commit can still read it; it is
-        overwritten by the next run's first chunk. Only the heartbeat-timeout
-        branch stashes; a user cancel discards the chunk via
-        :meth:`clear_active_unit`.
+        ``pending_followed_keys``) is deliberately left live so the reporter's
+        late-ack commit can still read it; it is overwritten by the next run's
+        first chunk. Only the heartbeat-timeout branch stashes; a user cancel
+        discards the chunk via :meth:`clear_active_unit`.
         """
         self.abandoned_chunk = AbandonedChunk(
             run_id=self.current_sync_id,
