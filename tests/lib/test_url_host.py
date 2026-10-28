@@ -239,8 +239,8 @@ class TestWithHttpsAdded:
         ("url", "completed"),
         [
             ("romm.local", "https://romm.local"),
-            # urlsplit reads this as the scheme "romm.local"; the missing "://" says there is none.
             ("romm.local:8080", "https://romm.local:8080"),
+            ("romm.local:8080/romm", "https://romm.local:8080/romm"),
             ("192.168.1.5:8080/romm", "https://192.168.1.5:8080/romm"),
         ],
     )
@@ -249,6 +249,10 @@ class TestWithHttpsAdded:
 
     @pytest.mark.parametrize("url", ["http://romm.local", "https://romm.local", "ftp://romm.local", "://nohost"])
     def test_a_url_with_a_scheme_is_left_alone(self, url):
+        assert with_https_added(url) is None
+
+    @pytest.mark.parametrize("url", ["http:/romm.local", "https:/romm.local:8080", "ftp:/romm.local"])
+    def test_a_scheme_typed_with_one_slash_is_left_alone(self, url):
         assert with_https_added(url) is None
 
 

@@ -47,7 +47,7 @@ _HTTPS_ADDED_MESSAGE = (
 
 
 class SchemeMissing(NamedRefused):
-    """A server URL typed without a scheme, not saved; ``completed_url`` is it with ``https://`` in front."""
+    """A server URL typed without a scheme, not saved; its ``completed_url`` is that URL with ``https://`` in front."""
 
     reason = "scheme_missing"
 

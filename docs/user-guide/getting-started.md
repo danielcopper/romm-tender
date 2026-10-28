@@ -105,9 +105,9 @@ After installation, you need to connect the plugin to your RomM server:
 1. Open the QAM and find **Tender**
 2. Tap **Settings** in the menu, then **Connections** in the section list on the left
 3. Tap **Edit** next to **RomM URL**, enter your RomM server URL (e.g. `http://192.168.1.100:8080`) and press **OK**,
-   Enter or R2 to save it — a URL Tender does not take stays in the window, with the reason below it. A URL typed
-   without `http://` or `https://` comes back with `https://` in front; press **OK** again to save it, or change it to
-   `http://` first if your RomM answers only on http
+   Enter or R2 to save it — a URL Tender does not take stays in the window, with the reason below it. A URL typed with
+   no scheme at all (no `http://` or `https://` in front, e.g. `192.168.1.100:8080`) comes back with `https://` in
+   front; press **OK** again to save it, or change it to `http://` first if your RomM answers only on http
 4. Tap **Sign in**, enter your RomM username and password once, and confirm
 5. The **RomM Account** row shows **Signed in** on success. The plugin's main QAM panel has a **Connection** row that
    shows the live connection status whenever you open it — there is no separate test button

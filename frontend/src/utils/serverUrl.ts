@@ -4,9 +4,10 @@
  * Mirrors the scheme half of the backend's `lib.url_host.is_valid_server_url`:
  * a usable server URL carries an `http://` or `https://` scheme. The backend's
  * other check, a URL carrying a user name or password, has no copy here. The
- * frontend trims and rejects scheme-less / empty input before calling the
- * backend so a bad URL never reaches a network round-trip (and a leading space
- * never hides the "Allow Insecure SSL" toggle).
+ * sign-in handlers trim and reject scheme-less or empty input before calling
+ * the backend; the URL save does not, because the backend answers a
+ * scheme-less URL with its https:// completion. Trimming also keeps a leading
+ * space from hiding the "Allow Insecure SSL" toggle.
  */
 
 /** Trim surrounding whitespace from a user-entered server URL. */

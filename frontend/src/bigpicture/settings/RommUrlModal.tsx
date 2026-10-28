@@ -4,11 +4,11 @@
  * could not reach the backend — is shown under the field in amber with the
  * text kept for correcting, except that a URL typed without a scheme is
  * replaced by the one the backend completed it to, which the next OK saves.
- * Editing the text drops a shown refusal, and a
- * refusal that arrives after an edit is dropped too. A save that went through
- * closes the window even then, because the URL is stored. Cancel and B close it
- * without waiting for a save in flight, whose answer then reaches nothing in
- * the window. The save is the caller's, passed in.
+ * Editing the text drops a shown refusal, and a refusal that arrives after an
+ * edit is dropped too. A save that went through closes the window even then,
+ * because the URL is stored. Cancel and B close it without waiting for a save
+ * in flight, whose answer then reaches nothing in the window. The save is the
+ * caller's, passed in.
  */
 
 import { ChangeEvent, FC, useRef, useState } from "react";

@@ -102,12 +102,16 @@ def is_valid_server_url(url: str) -> bool:
 def with_https_added(url: str) -> str | None:
     """*url* with ``https://`` in front where it names no scheme at all, else ``None``.
 
-    A missing scheme is told by a missing ``://``, not by
+    A missing scheme is told by a missing ``:/``, not by
     ``urllib.parse.urlsplit``, which reads ``romm.local:8080`` as the scheme
-    ``romm.local``. Https, not http, because sign-in sends the RomM password to
-    this address: a wrong https only fails, a wrong http sends it unencrypted.
+    ``romm.local``. ``:/`` rather than ``://``, so a scheme typed with one slash
+    (``http:/romm.local``) is left to be refused as an invalid URL instead of
+    being completed to ``https://http:/romm.local``; a port followed by a path
+    (``romm.local:8080/romm``) holds no ``:/`` and is completed. Https, not
+    http, because sign-in sends the RomM password to this address: a wrong
+    https only fails, a wrong http sends it unencrypted.
     """
-    return None if "://" in url else f"https://{url}"
+    return None if ":/" in url else f"https://{url}"
 
 
 # urllib takes no credentials from an address, so none reaches RomM. With a

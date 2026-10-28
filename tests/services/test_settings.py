@@ -251,7 +251,9 @@ class TestSaveServerUrl:
         assert result["success"] is True
         assert settings["romm_url"] == "https://romm.local:8080"
 
-    @pytest.mark.parametrize("bad_url", ["ftp://romm.local", "romm://romm.local", "file:///romm"])
+    @pytest.mark.parametrize(
+        "bad_url", ["ftp://romm.local", "romm://romm.local", "file:///romm", "http:/romm.local", "ftp:/romm.local"]
+    )
     async def test_a_url_with_a_scheme_tender_does_not_accept_is_refused_as_before(
         self, service, settings, settings_persister, bad_url
     ):
