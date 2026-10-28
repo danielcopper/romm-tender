@@ -8,11 +8,11 @@ coverage==7.16.0
     # via pytest-cov
 execnet==2.1.2
     # via pytest-xdist
-grimp==3.16
+grimp==3.18
     # via import-linter
 hypothesis==6.167.1
     # via -r requirements-dev.txt
-import-linter==2.14
+import-linter==2.15
     # via -r requirements-dev.txt
 iniconfig==2.3.0
     # via pytest
