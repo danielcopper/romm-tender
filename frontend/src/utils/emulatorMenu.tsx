@@ -107,7 +107,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
 
   if (followSystem) {
     // The core the game falls back to with no per-game pin: the per-platform
-    // override when set, else the es_systems default. ✓ sits here when the game
+    // override when set, else the default. ✓ sits here when the game
     // already follows the system (no per-game pin). "System Override" stays
     // distinct from the "(default)" marker so the menu never shows two defaults.
     const fallbackName = platformCoreLabel ?? defaultEntry?.label ?? null;

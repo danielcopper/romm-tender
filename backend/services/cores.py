@@ -308,7 +308,7 @@ class CoreService:
 
         Mutates ``settings["platform_cores"]`` — stores *core_label* under
         *platform_slug* when non-empty, pops the slug when blank (revert to the
-        es_systems default) — and persists ``settings.json`` through the
+        default) — and persists ``settings.json`` through the
         injected persister. The persister holds the same live dict, so the fan-out
         that follows resolves the freshly-written value.
 

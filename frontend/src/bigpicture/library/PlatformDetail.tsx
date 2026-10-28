@@ -415,8 +415,8 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   const activeLabel = core ? core.active_core_label : null;
   const clause = emulatorClause(core ?? null);
   // The platform-level twin of the game page's `activeCoreIsDefault`, read off
-  // the payload's own `is_default`, which marks the entry holding the option
-  // `select_default_option` picks — whichever of its labels is stored. One
+  // the payload's own `is_default`, which marks the entry `default_option`
+  // takes. One
   // expression feeds the clause AND the icon, so the two cannot disagree — and
   // no active label is muted rather than gold, because no entry lists a null
   // label and "not the default" is not the same statement as "an override".

@@ -198,7 +198,7 @@ class LaunchingEmulator(Protocol):
     caller's question and chooses nothing itself; where the caller has no pick to
     state, ``None`` says so and the callee falls back in its own terms. The
     distinction is the one ``ActiveCoreResolver`` exists to make (a per-game pin
-    over the per-platform override over the es_systems default), and a common
+    over the per-platform override over the default), and a common
     type is exactly where it would go quiet: a ROM's pick handed to a
     platform-scoped answer, or the reverse, is well typed and wrong.
 
