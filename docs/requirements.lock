@@ -2,11 +2,11 @@
 #    uv pip compile docs/requirements.txt --python-version=3.12 --output-file=docs/requirements.lock
 babel==2.18.0
     # via mkdocs-material
-backrefs==8.0
+backrefs==8.1
     # via mkdocs-material
-certifi==2026.7.22
+certifi==2026.10.23
     # via requests
-charset-normalizer==3.5.1
+charset-normalizer==3.5.2
     # via requests
 click==8.5.0
     # via mkdocs
@@ -14,19 +14,19 @@ colorama==0.4.6
     # via mkdocs-material
 ghp-import==2.1.0
     # via mkdocs
-idna==3.19
+idna==3.20
     # via requests
 jinja2==3.1.6
     # via
     #   mkdocs
     #   mkdocs-material
-markdown==3.10.3
+markdown==3.11.2
     # via
     #   mdx-truly-sane-lists
     #   mkdocs
     #   mkdocs-material
     #   pymdown-extensions
-markupsafe==3.0.3
+markupsafe==3.0.4
     # via
     #   jinja2
     #   mkdocs
@@ -50,13 +50,13 @@ paginate==0.5.7
     # via mkdocs-material
 pathspec==1.1.1
     # via mkdocs
-platformdirs==4.11.5
+platformdirs==4.13.7
     # via mkdocs-get-deps
 pygments==2.21.0
     # via mkdocs-material
-pymdown-extensions==11.0.2
+pymdown-extensions==12.3
     # via mkdocs-material
-python-dateutil==2.9.0.post0
+python-dateutil==3.0.0
     # via ghp-import
 pyyaml==6.0.3
     # via
@@ -70,7 +70,9 @@ requests==2.34.2
     # via mkdocs-material
 six==1.17.0
     # via python-dateutil
-urllib3==2.7.0
+tzdata==2026.5
+    # via python-dateutil
+urllib3==2.8.0
     # via requests
 watchdog==6.0.0
     # via mkdocs

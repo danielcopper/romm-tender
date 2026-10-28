@@ -4,17 +4,17 @@ basedpyright==1.40.2
     # via -r requirements-dev.txt
 click==8.5.0
     # via import-linter
-coverage==7.16.0
+coverage==7.17.0
     # via pytest-cov
 execnet==2.1.2
     # via pytest-xdist
 grimp==3.18
     # via import-linter
-hypothesis==6.170.9
+hypothesis==6.170.12
     # via -r requirements-dev.txt
 import-linter==2.15
     # via -r requirements-dev.txt
-iniconfig==2.3.0
+iniconfig==2.3.1
     # via pytest
 markdown-it-py==4.2.0
     # via rich
@@ -24,7 +24,7 @@ nodejs-wheel-binaries==24.19.0
     # via basedpyright
 packaging==26.3
     # via pytest
-pluggy==1.6.0
+pluggy==1.7.0
     # via
     #   pytest
     #   pytest-cov
@@ -32,14 +32,14 @@ pygments==2.21.0
     # via
     #   pytest
     #   rich
-pytest==9.1.1
+pytest==9.2.0
     # via
     #   -r requirements-dev.txt
     #   pytest-asyncio
     #   pytest-cov
     #   pytest-timeout
     #   pytest-xdist
-pytest-asyncio==1.4.0
+pytest-asyncio==1.4.1
     # via -r requirements-dev.txt
 pytest-cov==7.1.0
     # via -r requirements-dev.txt
