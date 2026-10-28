@@ -644,9 +644,10 @@ Format: **invariant** — tier — enforced by.
   platform unit the run fetched in full, every bound row of such a group but the one
   `domain/sync_diff.py::converge_bound_groups` keeps is removed and unbound on a run that was not stopped — never sorted
   as stale, never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read
-  at the platform unit and again before the removal — with the preview counting the same removals, and no platform whose
-  rows still hold such a group is skipped. The removed-game cleanup's own proof marks and clears rows too, by its rule
-  in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  at the platform unit and again before the removal — with the preview counting the same removals unless a game starts
+  or quits between the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is
+  skipped. The removed-game cleanup's own proof marks and clears rows too, by its rule in
+  docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
   `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
