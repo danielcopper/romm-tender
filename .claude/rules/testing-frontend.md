@@ -28,8 +28,9 @@ omission — the package's types augment `vitest` for the whole program as soon 
 failing run is the check. Unmounting needs no import of its own: RTL's own `afterEach(cleanup)` does it, and the
 `afterEach` in `test-setup.ts` says why an unmount-time warning still fails its test.
 
-**A run on one worker needs `--pool=forks`** (`pnpm -C frontend test --maxWorkers=1 --pool=forks`). `test-setup.ts`
-refuses a single-worker run under the suite's vm pool from its second file on, and says why.
+**Never run with `--isolate=false`.** Under the `forks` and `threads` pools it lets a worker run several test files in
+one context, which `test-setup.ts` refuses, and says why; a run on one worker needs no other flag (`vitest.config.ts`
+says why).
 
 **`api/host` is stubbed for the whole suite, so no socket is ever opened in it.** `test-setup.ts` replaces the module
 wholesale: every `endpoint` declaration is a `vi.fn()` resolving to `undefined`, and the event pair routes through the
