@@ -37,6 +37,7 @@ from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import BIND_ROM_ID_KEY, platform_collection_name
 from domain.sync_stage import SyncStage
 from domain.version_metadata import VersionMetadata
+from services.library._followed_keys import record_followed_keys
 
 if TYPE_CHECKING:
     import asyncio
@@ -573,7 +574,8 @@ class SyncReporter:
         ADR-0006 two-pass: cover-file RENAME is filesystem I/O so it runs FIRST
         (outside any UoW); the final paths are collected, then one short write
         UoW upserts every ROM (Rom row first, cached metadata second — FK-safe),
-        so a ROM and its metadata land atomically.
+        so a ROM and its metadata land atomically. The same UoW writes the key
+        each row the unit's listing left out follows (``pending_followed_keys``).
 
         ``platform_stamp`` (set by :class:`ChunkDispatcher` on the final chunk of
         a platform unit, ADR-0023) is saved inside that same write UoW, so the
@@ -615,6 +617,7 @@ class SyncReporter:
                     self._persist_synced_rom(
                         uow, int(raw["id"]), binding, finalized, roms_by_id, fetch_id, delivered_through
                     )
+            record_followed_keys(uow, box.pending_followed_keys)
             if platform_stamp is not None:
                 uow.platform_sync_state.save(platform_stamp)
             if collection_stamp is not None:

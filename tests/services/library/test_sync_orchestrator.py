@@ -8079,6 +8079,318 @@ class TestAPlatformUnitIsKeyedAsThePreviewKeysIt:
         }
 
 
+class TestAGameKeepsItsKeyWhenTheVersionCarryingItIsNotListed:
+    """A game keeps its one shortcut when the version that carried its key is deleted or hidden in RomM (#2646).
+
+    GBA holds Golf. The first run binds RomM's default version, 30, and keys
+    every version by the id the game agrees on. Each case then deletes or hides
+    a version in RomM, or changes an id, and runs a preview and the apply it
+    would start, twice where the answer must hold on the next sync.
+    """
+
+    _apply = staticmethod(TestAPlatformUnitIsKeyedAsThePreviewKeysIt._apply)
+    _rows = staticmethod(TestAPlatformUnitIsKeyedAsThePreviewKeysIt._rows)
+
+    @staticmethod
+    def _golf(rom_id, region, sibling_ids, **ids):
+        stem = f"Golf ({region})"
+        return {
+            "id": rom_id,
+            "name": stem,
+            "fs_name": f"{stem}.zip",
+            "fs_name_no_ext": stem,
+            "updated_at": "2025-01-01T00:00:00+00:00",
+            "sibling_roms": [{"id": sibling} for sibling in sibling_ids],
+            **ids,
+        }
+
+    @classmethod
+    async def _bind(cls, library, fake_romm_api, emit, tmp_path, roms, *, installed=(), faves=()):
+        """Run the first apply over *roms*, the first RomM's default; install *installed*; *faves* in a collection."""
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=roms)
+        library.settings["enabled_platforms"] = {"2": True}
+        if faves:
+            _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=list(faves))
+            fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
+            library.settings["enabled_collections"] = {"standard": {"7": True}}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        cls._bind_what_the_unit_emits(library)
+        await cls._apply(library, emit, "run-1")
+        for rom_id in installed:
+            path = tmp_path / f"golf-{rom_id}.zip"
+            path.write_bytes(b"rom")
+            with library.uow:
+                library.uow.rom_installs.save(
+                    RomInstall.mark_installed(
+                        rom_id=rom_id,
+                        file_path=str(path),
+                        rom_dir=None,
+                        platform_slug="gba",
+                        system="gba",
+                        installed_at="2025-01-01T00:00:00",
+                    )
+                )
+
+    @staticmethod
+    def _bind_what_the_unit_emits(library):
+        box = library.sync._box
+
+        async def bind(_unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind
+
+    @classmethod
+    async def _sync(cls, library, emit, run_id):
+        """A preview's ``(new, changed, remove)``, then its apply's ``(sent, removed)`` and the rows it leaves."""
+        summary = (await library.sync.sync_preview())["summary"]
+        sent, removed = await cls._apply(library, emit, run_id)
+        counts = (summary["new_count"], summary["changed_count"], summary["remove_count"])
+        return counts, (sent, removed), cls._rows(library)
+
+    @staticmethod
+    def _p1_roms(golf):
+        return [
+            golf(30, "USA", [31], igdb_id=300, ss_id=7, rom_user={"is_main_sibling": True}),
+            golf(31, "Europe", [30], ss_id=7),
+        ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("installed", [(), (30,), (31,)], ids=["none", "deleted-installed", "survivor-installed"])
+    async def test_the_deleted_version_follows_its_game_and_keeps_the_one_shortcut(
+        self, make_library, fake_romm_api, emit, tmp_path, installed
+    ):
+        """D1: 30 alone carried the IGDB id and is deleted; 31 is keyed by its own ss id, and 30 follows it."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, emit, tmp_path, self._p1_roms(self._golf), installed=installed)
+        del fake_romm_api.roms[30]
+        fake_romm_api.roms[31]["sibling_roms"] = []
+
+        for run_id in ("run-2", "run-3"):
+            assert await self._sync(library, emit, run_id) == (
+                (0, 0, 0),
+                ([], []),
+                {30: (6030, "ss:7:2"), 31: (None, "ss:7:2")},
+            )
+
+    @pytest.mark.asyncio
+    async def test_a_hidden_version_its_game_still_names_keeps_the_game_s_key(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, emit, tmp_path, self._p1_roms(self._golf))
+        fake_romm_api.hidden_rom_ids = {30}
+
+        assert await self._sync(library, emit, "run-2") == (
+            (0, 0, 0),
+            ([], []),
+            {30: (6030, "igdb:300:2"), 31: (None, "igdb:300:2")},
+        )
+
+    @staticmethod
+    def _p5_roms(golf):
+        return [
+            golf(30, "USA", [31], ss_id=7, rom_user={"is_main_sibling": True}),
+            golf(31, "Europe", [30], ss_id=7),
+        ]
+
+    @staticmethod
+    def _hide_30_and_match_31(fake_romm_api):
+        fake_romm_api.hidden_rom_ids = {30}
+        fake_romm_api.roms[31].update(igdb_id=300, updated_at="2090-02-01T00:00:00+00:00")
+
+    @pytest.mark.asyncio
+    async def test_a_hidden_bound_version_takes_the_key_its_game_gains(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """30 is hidden and bound, 31 gains an IGDB id: 31's edge to 30 keys 30 with it (D1)."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, emit, tmp_path, self._p5_roms(self._golf))
+        self._hide_30_and_match_31(fake_romm_api)
+        rows = {30: (6030, "igdb:300:2"), 31: (None, "igdb:300:2")}
+
+        for run_id in ("run-2", "run-3"):
+            assert await self._sync(library, emit, run_id) == ((0, 0, 0), ([], []), rows)
+        fake_romm_api.hidden_rom_ids = set()
+        fake_romm_api.roms[30]["updated_at"] = "2090-03-01T00:00:00+00:00"
+        counts, (sent, removed), after = await self._sync(library, emit, "run-4")
+        assert (counts[0], counts[2], 31 in sent, removed, after) == (0, 0, False, [], rows)
+        assert counts[1] == len(sent)
+
+    @staticmethod
+    def _p4_roms(golf):
+        return [
+            golf(30, "USA", [31, 32], igdb_id=1, ss_id=5, rom_user={"is_main_sibling": True}),
+            golf(31, "Europe", [30, 32], ss_id=5),
+            golf(32, "Japan", [30, 31], ss_id=5),
+        ]
+
+    @staticmethod
+    def _hide_32_and_rematch_30(fake_romm_api):
+        fake_romm_api.hidden_rom_ids = {32}
+        fake_romm_api.roms[30].update(igdb_id=2, updated_at="2090-02-01T00:00:00+00:00")
+
+    @pytest.mark.asyncio
+    async def test_a_hidden_version_s_stale_summary_does_not_split_its_game(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """D3: 32 is hidden and still holds igdb:1, the summary 30 and 31 held; RomM re-matched 30 to igdb 2."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, emit, tmp_path, self._p4_roms(self._golf))
+        self._hide_32_and_rematch_30(fake_romm_api)
+        rows = {30: (6030, "igdb:2:2"), 31: (None, "igdb:2:2"), 32: (None, "igdb:2:2")}
+
+        for run_id in ("run-2", "run-3"):
+            assert await self._sync(library, emit, run_id) == ((0, 0, 0), ([], []), rows)
+        fake_romm_api.hidden_rom_ids = set()
+        fake_romm_api.roms[32]["updated_at"] = "2090-03-01T00:00:00+00:00"
+        assert await self._sync(library, emit, "run-4") == ((0, 0, 0), ([], []), rows)
+
+    @pytest.mark.asyncio
+    async def test_a_version_separated_from_its_listed_game_gets_a_shortcut_of_its_own(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, emit, tmp_path, self._p1_roms(self._golf))
+        fake_romm_api.roms[30].update(ss_id=9, sibling_roms=[], updated_at="2090-02-01T00:00:00+00:00")
+        fake_romm_api.roms[31]["sibling_roms"] = []
+
+        assert await self._sync(library, emit, "run-2") == (
+            (1, 0, 0),
+            ([31], []),
+            {30: (6030, "igdb:300:2"), 31: (6031, "ss:7:2")},
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_version_moved_into_another_game_leaves_the_deleted_version_its_key(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """31 held 30's key and joins 35's game, which held another: 30 follows neither."""
+        library = make_library(romm_api=fake_romm_api)
+        roms = [*self._p1_roms(self._golf), self._golf(35, "Japan", [], ss_id=8)]
+        await self._bind(library, fake_romm_api, emit, tmp_path, roms)
+        del fake_romm_api.roms[30]
+        fake_romm_api.roms[31].update(ss_id=8, sibling_roms=[{"id": 35}], updated_at="2090-02-01T00:00:00+00:00")
+        fake_romm_api.roms[35]["sibling_roms"] = [{"id": 31}]
+
+        assert await self._sync(library, emit, "run-2") == (
+            (0, 0, 0),
+            ([], []),
+            {30: (6030, "igdb:300:2"), 31: (None, "ss:8:2"), 35: (6035, "ss:8:2")},
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_game_split_in_two_leaves_the_deleted_version_its_key(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        roms = [
+            self._golf(30, "USA", [31, 32], igdb_id=300, rom_user={"is_main_sibling": True}),
+            self._golf(31, "Europe", [30, 32], ss_id=5),
+            self._golf(32, "Japan", [30, 31], moby_id=4),
+        ]
+        await self._bind(library, fake_romm_api, emit, tmp_path, roms)
+        del fake_romm_api.roms[30]
+        fake_romm_api.roms[31]["sibling_roms"] = []
+        fake_romm_api.roms[32]["sibling_roms"] = []
+
+        assert await self._sync(library, emit, "run-2") == (
+            (2, 0, 0),
+            ([31, 32], []),
+            {30: (6030, "igdb:300:2"), 31: (6031, "ss:5:2"), 32: (6032, "moby:4:2")},
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_duplicate_a_hidden_version_left_behind_converges(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """31 was minted beside hidden 30 by a sync without the rule; 30 now takes 31's key, and the two converge."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, emit, tmp_path, self._p5_roms(self._golf))
+        self._hide_30_and_match_31(fake_romm_api)
+        _seed_rom_row(
+            library,
+            31,
+            app_id=6031,
+            platform_slug="gba",
+            name="Golf (Europe)",
+            fs_name="Golf (Europe).zip",
+            sibling_group_key="igdb:300:2",
+        )
+
+        assert await self._sync(library, emit, "run-2") == (
+            (0, 0, 1),
+            ([], [30]),
+            {30: (None, "igdb:300:2"), 31: (6031, "igdb:300:2")},
+        )
+        assert await self._sync(library, emit, "run-3") == (
+            (0, 0, 0),
+            ([], []),
+            {30: (None, "igdb:300:2"), 31: (6031, "igdb:300:2")},
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_late_ack_of_a_timed_out_first_chunk_writes_the_followed_key(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, emit, tmp_path, self._p1_roms(self._golf))
+        del fake_romm_api.roms[30]
+        fake_romm_api.roms[31]["sibling_roms"] = []
+        dispatcher = library.chunk_dispatcher
+        del dispatcher._wait_for_unit_complete
+        dispatcher._sleeper = _ClockAdvancingSleeper(dispatcher._clock, 999.0)
+        box = library.sync._box
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        box.sync_last_heartbeat = library.sync._orchestrator._clock.monotonic()
+        await library.sync._orchestrator._do_sync_per_unit()
+        assert box.abandoned_chunk is not None
+        assert self._rows(library) == {30: (6030, "igdb:300:2"), 31: (None, "igdb:300:2")}
+        (frame,) = [call.args[1] for call in emit.call_args_list if call.args[0] == "sync_apply_unit"][-1:]
+
+        await library.sync.report_unit_results({}, frame["run_id"], frame["unit_id"], frame["chunk_index"])
+
+        assert self._rows(library) == {30: (6030, "ss:7:2"), 31: (None, "ss:7:2")}
+        self._bind_what_the_unit_emits(library)
+        assert await self._sync(library, emit, "run-3") == (
+            (0, 0, 0),
+            ([], []),
+            {30: (6030, "ss:7:2"), 31: (None, "ss:7:2")},
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("case", ["hidden-bound", "stale-summary"])
+    async def test_a_hidden_version_a_collection_still_lists_is_counted_as_the_apply_keys_it(
+        self, make_library, fake_romm_api, emit, tmp_path, case
+    ):
+        """A hidden version stays in a standard collection's listing, so the preview's union may hold it.
+
+        Faves is skipped as unchanged, so its skip hands the preview the stored
+        row of a bound member. GBA's unit keys the hidden version as a stored
+        row and commits before Faves rebuilds it; the preview keys it the same
+        way, so it counts what the apply sends.
+        """
+        library = make_library(romm_api=fake_romm_api)
+        if case == "hidden-bound":
+            roms, hidden, change = self._p5_roms(self._golf), 30, self._hide_30_and_match_31
+            key = "igdb:300:2"
+        else:
+            roms, hidden, change = self._p4_roms(self._golf), 32, self._hide_32_and_rematch_30
+            key = "igdb:2:2"
+        await self._bind(library, fake_romm_api, emit, tmp_path, roms, faves=[hidden])
+        change(fake_romm_api)
+
+        for run_id in ("run-2", "run-3"):
+            (new, changed, remove), (sent, removed), rows = await self._sync(library, emit, run_id)
+            assert (new, changed + new, remove) == (0, len(sent), len(removed))
+            assert (removed, {rom_id: row[0] for rom_id, row in rows.items()}) == (
+                [],
+                {rom["id"]: 6030 if rom["id"] == 30 else None for rom in roms},
+            )
+            assert {row[1] for row in rows.values()} == {key}
+
+
 class TestAGameWithSeveralShortcutsConverges:
     """A sibling group holding more than one bound shortcut keeps one (#2645 D1-D3).
 

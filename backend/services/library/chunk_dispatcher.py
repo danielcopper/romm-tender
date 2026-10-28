@@ -127,6 +127,7 @@ class ChunkDispatcher:
         cover_refreshes: list[dict[str, int]] | None = None,
         collection_member_ids: list[int] | None = None,
         fetch_started_at: str | None = None,
+        followed_keys: dict[int, str] | None = None,
     ) -> int:
         """Emit → wait → commit the unit's DELTA shortcuts one durable chunk at a time.
 
@@ -146,7 +147,9 @@ class ChunkDispatcher:
         in-session tile refreshes (the grid files are already updated; a Steam
         restart shows the rest), never to a run pause. ``confirmed_cover_sources``
         is the unit's ``rom_id → applied cover source`` map — the third of the
-        whole-unit staging dicts the reporter's commit reads. ``fetch_started_at``
+        whole-unit staging dicts the reporter's commit reads; ``followed_keys``
+        (the key each row the unit's listing left out follows) is the fourth,
+        which every chunk's commit writes. ``fetch_started_at``
         is when the unit's fetch started, which its final chunk's stamp records
         beside a checksum: of ``unit_roms``' ids for a platform, of the listing's
         ``rom_ids`` for a collection. Returns the running
@@ -160,11 +163,12 @@ class ChunkDispatcher:
         # binds only the delta's acked representatives). Staging stays whole-unit;
         # the apply is chunked below, so a mid-unit CEF crash forfeits only the
         # in-flight chunk, not every prior chunk. Written here rather than by the
-        # caller so these three fields have one production writer module from the
+        # caller so these four fields have one production writer module from the
         # moment they are staged to ``clear_active_unit``'s teardown.
         box.pending_sync = {e["rom_id"]: e for e in emitted}
         box.pending_all_roms = {sd["rom_id"]: sd for sd in shortcuts_data}
         box.pending_cover_sources = confirmed_cover_sources
+        box.pending_followed_keys = followed_keys or {}
         # One generation id per platform fetch. The run id serves: a platform is
         # fetched at most once per run, so it identifies this platform's fetch
         # uniquely, and every chunk of the unit shares it — unlike a clock reading,

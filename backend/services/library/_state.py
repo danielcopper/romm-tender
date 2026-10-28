@@ -99,8 +99,8 @@ class AbandonedChunk:
     run/unit/chunk identity a late ``report_unit_results`` must match, plus the
     chunk's fetched RomM rows (the ``metadatum`` source the recovery commit
     upserts). The whole-unit staging the commit also reads
-    (``pending_sync`` / ``pending_all_roms`` / ``pending_cover_sources``) is
-    kept live on the box, not copied here — this chunk's identity is what the
+    (``pending_sync`` / ``pending_all_roms`` / ``pending_cover_sources`` /
+    ``pending_followed_keys``) is kept live on the box, not copied here — this chunk's identity is what the
     late ack keys on. Held on :class:`LibrarySyncStateBox` **outside** the
     run-lifecycle state and cleared at the next run's start, so a frontend that
     crashes and never acks just leaves inert data until the next run (#1367).
@@ -161,6 +161,12 @@ class LibrarySyncStateBox:
     # ``ChunkDispatcher`` and reset with it; kept across the heartbeat-timeout
     # abandon window so a late ack still stamps the confirmed values.
     pending_cover_sources: dict[int, str] = field(default_factory=dict)
+    # The new key of every stored row the active unit's listing left out that
+    # follows its group (``domain.sibling_group.compute_group_keys_with_unfetched``).
+    # Every chunk's commit writes them, so the first commit that writes a member's
+    # new key writes them too, a late ack's included. Populated alongside
+    # ``pending_sync`` by ``ChunkDispatcher`` and reset with it.
+    pending_followed_keys: dict[int, str] = field(default_factory=dict)
     # The staged preview snapshot, between ``sync_preview`` and the apply that
     # consumes it. Written only through the preview-lifecycle verbs below.
     pending_delta: PreviewDelta | None = None
@@ -484,8 +490,8 @@ class LibrarySyncStateBox:
         and the unit/chunk id) so a late ``report_unit_results`` routes through
         the stash (:meth:`take_abandoned_chunk`) rather than the now-dead
         active-unit path. The whole-unit staging (``pending_sync`` /
-        ``pending_all_roms`` / ``pending_cover_sources``) is deliberately left
-        live so the reporter's late-ack commit can still read it; it is
+        ``pending_all_roms`` / ``pending_cover_sources`` /
+        ``pending_followed_keys``) is deliberately left live so the reporter's late-ack commit can still read it; it is
         overwritten by the next run's first chunk. Only the heartbeat-timeout
         branch stashes; a user cancel discards the chunk via
         :meth:`clear_active_unit`.
@@ -529,8 +535,9 @@ class LibrarySyncStateBox:
         """Tear down the active unit's in-flight dispatch state.
 
         Resets the chunk-coordination state: the emitted + all-ROM + cover-
-        fingerprint staging (``pending_sync`` / ``pending_all_roms`` /
-        ``pending_cover_sources``), the ack event (``unit_complete_event``), and
+        fingerprint + followed-key staging (``pending_sync`` /
+        ``pending_all_roms`` / ``pending_cover_sources`` /
+        ``pending_followed_keys``), the ack event (``unit_complete_event``), and
         the unit + chunk identity (``active_unit_id`` / ``active_chunk_index``).
         The single teardown for a unit that finished, was cancelled, or whose
         inter-chunk window closed. NOT called on the heartbeat-timeout branch —
@@ -542,6 +549,7 @@ class LibrarySyncStateBox:
         self.pending_sync = {}
         self.pending_all_roms = {}
         self.pending_cover_sources = {}
+        self.pending_followed_keys = {}
         self.unit_complete_event = None
         self.active_unit_id = None
         self.active_chunk_index = None

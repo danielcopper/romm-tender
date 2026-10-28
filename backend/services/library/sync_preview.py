@@ -32,13 +32,14 @@ from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.errors import Refused, classify_error
 from services.library._convergence import converge_unless_running
+from services.library._followed_keys import with_followed_keys
 from services.library._preview_union import collapse_counting_platform_rebinds
 from services.library._stale_rows import preview_group_keys, settle_stale_rows, stale_rows_of, with_kept_platform_names
 from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
 from services.library._unit_roms import (
     collection_membership_key,
     record_collection_membership,
-    stamp_component_group_keys,
+    stamp_preview_group_keys,
 )
 
 if TYPE_CHECKING:
@@ -175,20 +176,35 @@ class SyncPreview:
             core_overrides = await self._loop.run_in_executor(
                 None, self._shortcut_launch_resolver.do_build_core_overrides, all_roms, sources
             )
-            # Stamp each fresh ROM's component sibling-group key before the build so the
-            # collapse below groups games, not dumps. The preview union holds every member
-            # each enabled platform's listing returns; the DB's persisted keys seed a member
-            # edging into a resident sibling on a skipped platform.
-            resident_keys = await self._loop.run_in_executor(
-                None, self._local_library_reader.do_read_resident_group_keys
-            )
-            stamp_component_group_keys(all_roms, resident_keys)
-            shortcuts_data = build_shortcuts_data(all_roms, self._launcher_exe, installed_paths, core_overrides)
             platform_name_set = {u.name for u in work_queue if u.type == "platform"}
             slug_to_name = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
             registry, last_synced_platforms, last_synced_collections = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_preview_baseline, slug_to_name
             )
+            # Stamp each fresh ROM's component sibling-group key before the build so the
+            # collapse below groups games, not dumps. The preview union holds every member
+            # each enabled platform's listing returns; the DB's persisted keys seed a member
+            # edging into a resident sibling on a skipped platform. A platform fetched in
+            # full is a complete view, as its apply unit is, so the bound rows its listing
+            # left out — read off the registry, hence read first — follow their groups'
+            # keys, laid over the registry and the resident keys as the commit writes them.
+            resident_keys = await self._loop.run_in_executor(
+                None, self._local_library_reader.do_read_resident_group_keys
+            )
+            listed_ids = {rom["id"] for roms in full_fetched_platforms.values() for rom in roms}
+            followed_keys = stamp_preview_group_keys(
+                all_roms,
+                resident_keys,
+                listed_rom_ids=listed_ids,
+                unfetched_bound_ids={
+                    int(rid)
+                    for rid, reg in registry.items()
+                    if reg.get("platform_slug") in full_fetched_platforms and int(rid) not in listed_ids
+                },
+            )
+            registry = with_followed_keys(registry, followed_keys)
+            resident_keys.update(followed_keys)
+            shortcuts_data = build_shortcuts_data(all_roms, self._launcher_exe, installed_paths, core_overrides)
             # Enabled platforms whose skip only a fresh stamp can restore: no
             # stamp (#1416 — a late-ack-recovered platform is complete but
             # unstamped), or a full fetch here whose answer the stamp does not
@@ -217,7 +233,6 @@ class SyncPreview:
             # apply's platform unit converges it: over that unit's listing, so
             # only on a platform the preview fetched in full (#2645).
             whole_groups = {sd.get("sibling_group_key") for sd in shortcuts_data if sd["rom_id"] in platform_rom_ids}
-            listed_ids = {rom["id"] for roms in full_fetched_platforms.values() for rom in roms}
             preferred_region = self._settings.get("preferred_region", AUTO_REGION)
             converged_ids = {
                 binding.rom_id

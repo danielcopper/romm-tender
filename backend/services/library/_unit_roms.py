@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from domain.sibling_group import compute_component_group_keys
+from domain.sibling_group import compute_group_keys_with_unfetched
 from services.library._state import CollectionMembership
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+    from collections.abc import Set as AbstractSet
+
     from domain.work_unit import WorkUnit
 
 
@@ -42,20 +45,63 @@ def record_collection_membership(
         )
 
 
-def stamp_component_group_keys(roms: list[dict[str, Any]], resident_keys: dict[int, str]) -> None:
-    """Stamp each fresh ROM's component sibling-group key onto its raw dict.
+def stamp_component_group_keys(
+    roms: list[dict[str, Any]],
+    resident_keys: dict[int, str],
+    *,
+    complete_rom_ids: AbstractSet[int] = frozenset(),
+    unfetched_bound_ids: Collection[int] = (),
+) -> dict[int, str]:
+    """Stamp each fresh ROM's component sibling-group key onto its raw dict; answer the followed keys.
 
-    Delegates the whole decision to :func:`compute_component_group_keys` (the
-    pure kernel: union-find over ``sibling_roms`` edges + canonical-source
-    agreement) and writes the result back so the downstream
+    Delegates the whole decision to :func:`compute_group_keys_with_unfetched`
+    (the pure kernel: union-find over ``sibling_roms`` edges + canonical-source
+    agreement, and the stored rows a complete view did not fetch that follow
+    its groups) and writes the fresh keys back so the downstream
     :func:`build_shortcuts_data` / group collapse read the component key rather
     than a per-ROM coalesce-first key. A resident dict (one that already carries
     a key — an incremental-reconstructed row) is left untouched: the kernel
     returns no key for it. Mutates *roms* in place, matching the other in-place
     decorations (``platform_name``, popped ``files``) the fetch already applied.
+    Answers the new key of each stored row the view did not fetch that follows
+    its group, which the caller lays over what it reads and its commit writes.
     """
-    keys = compute_component_group_keys(roms, resident_keys)
+    keys = compute_group_keys_with_unfetched(
+        roms, resident_keys, complete_rom_ids=complete_rom_ids, unfetched_bound_ids=unfetched_bound_ids
+    )
     for rom in roms:
-        key = keys.get(int(rom["id"]))
+        key = keys.fresh.get(int(rom["id"]))
         if key is not None:
             rom["sibling_group_key"] = key
+    return keys.unfetched
+
+
+def stamp_preview_group_keys(
+    roms: list[dict[str, Any]],
+    resident_keys: dict[int, str],
+    *,
+    listed_rom_ids: AbstractSet[int],
+    unfetched_bound_ids: Collection[int],
+) -> dict[int, str]:
+    """Stamp the preview union's keys as the apply's units stamp them; answer the followed keys.
+
+    *listed_rom_ids* are the ROMs the listings of the platforms the preview
+    fetched in full returned. The apply keys each such platform's unit as a
+    complete view first, and every collection delivery after them, against the
+    keys those units committed; the rows a skip rebuilt it keys not at all. So
+    the listed ROMs are keyed first, every other ROM of the union after them. A
+    version hidden in RomM is left out of its platform's listing but not out of
+    a standard collection's, so the union can hold it: the listed ROMs are keyed
+    against its stored key, as their platform unit is.
+    """
+    listed = [rom for rom in roms if rom["id"] in listed_rom_ids]
+    followed_keys = stamp_component_group_keys(
+        listed, resident_keys, complete_rom_ids=listed_rom_ids, unfetched_bound_ids=unfetched_bound_ids
+    )
+    rest = [rom for rom in roms if rom["id"] not in listed_rom_ids]
+    for rom in rest:
+        if rom.get("sibling_group_key") is not None and rom["id"] in followed_keys:
+            rom["sibling_group_key"] = followed_keys[rom["id"]]
+    committed = {**resident_keys, **{rom["id"]: rom["sibling_group_key"] for rom in listed}, **followed_keys}
+    stamp_component_group_keys([rom for rom in rest if rom.get("sibling_group_key") is None], committed)
+    return followed_keys
