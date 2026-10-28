@@ -129,7 +129,7 @@ class TestOneMatch:
 
 
 class TestSeveralMatches:
-    def test_the_main_system_is_taken_not_a_regional_one(self):
+    def test_the_system_named_like_the_platform_is_taken_not_a_regional_one(self):
         answer = _answer(_on("sfc", "snes"), _on("snes"), _on("snesna", "snes"), platforms=("snes",))
 
         pick = pick_system([answer], "snes")
