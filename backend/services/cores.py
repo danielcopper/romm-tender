@@ -336,6 +336,28 @@ class CoreService:
         reverting to disc 1 / the m3u (a single-disc ROM bakes its ``file_path``
         unchanged).
         """
+        self._store_platform_pick(platform_slug, core_label)
+        rebake_items: list[dict[str, Any]] = []
+        for rom, install in self._installed_rows_following_the_platform(platform_slug):
+            emulator = self._active_core.active_emulator_for_rom(rom.rom_id)
+            invocation = resolve_emulator_invocation({}, emulator)
+            # Fold the ROM's persisted disc pick over the install so a
+            # per-platform core change re-bakes the pinned disc, not disc 1 /
+            # the m3u. A single-disc ROM resolves to its own file_path.
+            bake_path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
+            rebake_items.append(
+                {
+                    "app_id": rom.shortcut_app_id,
+                    "launch_options": build_launch_options(invocation, bake_path),
+                }
+            )
+        return rebake_items
+
+    def _store_platform_pick(self, platform_slug: str, core_label: str) -> None:
+        """Store *core_label* as the platform's pick, or drop the pick when blank, and persist it.
+
+        The previous value is put back where the save fails.
+        """
         platform_cores = self._settings["platform_cores"]
         previous = platform_cores.get(platform_slug)
         if core_label:
@@ -355,39 +377,24 @@ class CoreService:
             self._logger.error(f"Failed to set system core: {e}")
             raise Refused("save_failed", f"Save failed: {e}") from e
 
-        # Snapshot the installed+bound, non-overridden (rom, install) pairs in one
-        # short read UoW, then close it before resolving each ROM's active core:
-        # active_emulator_for_rom opens its own UoW, and the per-connection
-        # BEGIN IMMEDIATE write lock is not re-entrant — resolving inside the
-        # iteration UoW would block on the lock until busy_timeout then raise
-        # "database is locked" (#1134). This read UoW performs no writes.
+    def _installed_rows_following_the_platform(self, platform_slug: str) -> list[tuple[Rom, RomInstall]]:
+        """The installed, bound ROMs of *platform_slug* with no per-game pin, with their installs.
+
+        Read in one short UoW that is closed before any ROM's active core is
+        resolved: active_emulator_for_rom opens its own UoW, and the
+        per-connection BEGIN IMMEDIATE write lock is not re-entrant — resolving
+        inside the iteration UoW would block on the lock until busy_timeout then
+        raise "database is locked" (#1134). This read UoW performs no writes.
+        """
         pending: list[tuple[Rom, RomInstall]] = []
         with self._uow_factory() as uow:
             for rom in uow.roms.iter_by_platform(platform_slug):
-                if rom.emulator_override is not None:
-                    continue
-                if rom.shortcut_app_id is None:
+                if rom.emulator_override is not None or rom.shortcut_app_id is None:
                     continue
                 install = uow.rom_installs.get(rom.rom_id)
-                if install is None:
-                    continue
-                pending.append((rom, install))
-
-        rebake_items: list[dict[str, Any]] = []
-        for rom, install in pending:
-            emulator = self._active_core.active_emulator_for_rom(rom.rom_id)
-            invocation = resolve_emulator_invocation({}, emulator)
-            # Fold the ROM's persisted disc pick over the install so a
-            # per-platform core change re-bakes the pinned disc, not disc 1 /
-            # the m3u. A single-disc ROM resolves to its own file_path.
-            bake_path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
-            rebake_items.append(
-                {
-                    "app_id": rom.shortcut_app_id,
-                    "launch_options": build_launch_options(invocation, bake_path),
-                }
-            )
-        return rebake_items
+                if install is not None:
+                    pending.append((rom, install))
+        return pending
 
     async def set_system_core(self, platform_slug: str, core_label: str) -> dict[str, Any]:
         """Set or clear the per-platform core selection for a platform.

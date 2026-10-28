@@ -1123,8 +1123,9 @@ class TestAPickIsStoredWithItsSource:
         self, event_loop, service, core_info, settings, settings_persister
     ):
         core_info.source = None
+        call = service.set_system_core("snes", "bsnes")
         with pytest.raises(Refused) as refused:
-            event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
+            event_loop.run_until_complete(call)
         assert refused.value.reason == "core_unavailable"
         assert settings["platform_cores"] == {}
         assert settings_persister.save_count == 0
