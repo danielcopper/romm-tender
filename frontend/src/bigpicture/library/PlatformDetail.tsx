@@ -431,13 +431,21 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   // disagree — and no active label is muted rather than gold, because no entry
   // lists a null label and "not the default" is not the same statement as "an
   // override". Where Tender's default comes from a source games do not start
-  // through, no row lists it, and it is the default all the same (#2195 D24).
+  // through, no row lists it, and it is the default all the same; nothing the
+  // starting source states draws the clause red (#2195 D24).
+  const defaultElsewhere =
+    core?.tender_default !== undefined &&
+    core.tender_default !== null &&
+    core.tender_default.kind !== core.emulator_source?.kind;
   const activeEntry = entryForLabel(core?.emulators ?? [], activeLabel);
   const activeIsDefault =
     activeEntry === undefined
       ? activeLabel !== null && core?.tender_default?.label === activeLabel
       : activeEntry.is_default;
-  const coreColor = coreClauseColour(clause?.gamesCannotStart ?? false, activeLabel !== null && !activeIsDefault);
+  const coreColor = coreClauseColour(
+    (clause?.gamesCannotStart ?? false) && !defaultElsewhere,
+    activeLabel !== null && !activeIsDefault,
+  );
   const coreClause = clause === null ? null : { text: clause.text, color: coreColor };
   const systemClause = core?.platform_system ? platformSystemClause(core.platform_system) : null;
 

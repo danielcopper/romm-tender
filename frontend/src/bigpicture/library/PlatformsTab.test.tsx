@@ -1665,6 +1665,27 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("cannot start");
     });
 
+    it("draws no red where the other source's default could not be established either (#2195 D24)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [{ ...MGBA, is_default: true }, LRPS2_PCSX2],
+          source_defaults: [
+            { kind: "emudeck", default: null, chosen_in_frontend: null, reason: "path_unseen" },
+            { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
+          ],
+          tender_default: { kind: "emudeck", label: null },
+          active_core_label: null,
+          start: emulatorStart({ entry: null }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const clause = factPart(container, "no default");
+      expect(clause).toBeTruthy();
+      expect(clause!.style.color).toBe(GREY);
+    });
+
     it("says the platform's pick no longer exists and which default is used (#2195 D5)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
