@@ -42,3 +42,38 @@ export const WARNING_CARD_STYLE: CSSProperties = {
   borderLeft: `4px solid ${WARNING_COLOR}`,
   background: `${STEAM_CARD_BG} padding-box border-box`,
 };
+
+export const MODAL_CONTAINER_STYLE: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10000,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+export const BACKDROP_BUTTON_STYLE: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  backgroundColor: "rgba(0, 0, 0, 0.65)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
+  border: "none",
+  margin: 0,
+  padding: 0,
+  cursor: "default",
+};
+
+export const BUTTON_STYLE: CSSProperties = {
+  padding: "5px 12px",
+  fontSize: "12px",
+  fontWeight: 500,
+  borderRadius: "3px",
+  border: "1px solid rgba(255, 255, 255, 0.15)",
+  backgroundColor: "rgba(255, 255, 255, 0.08)",
+  color: "#ffffff",
+  cursor: "pointer",
+  transition: "all 0.15s ease",
+  outline: "none",
+  userSelect: "none",
+};

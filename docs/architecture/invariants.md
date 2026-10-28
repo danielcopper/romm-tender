@@ -962,12 +962,13 @@ Format: **invariant** — tier — enforced by.
   path writes over a save swapped under it, and the next sync uploads that over the other device's newer save without a
   conflict; one that keeps the file open writes the session into the copy moved aside
   ([A game that is running](save-file-sync-architecture.md#a-game-that-is-running)). The exempt paths run before the
-  start or after it: a conflict the launch check resolves is passed `before_start` from that one call site
-  (`gamepadLaunchPrompts.resolveConflicts`), never inferred. `tests/services/saves/test_running_game.py` pins the
-  sweep's skip and its sentence, each refused press and the same press with the game not running, the platform delete,
-  the follow on the status read, the local-save check and the platform count, the two exempt syncs, the conflict
-  resolved before a start, and the stop of a sweep's and a Sync Saves' sync of the started game with another game's
-  untouched; `tests/services/prune/test_planning.py::TestARunningGameIsLeftOut` the cleanup's skip before any probe and
+  start or after it: a conflict the launch check resolves is passed `before_start` from the launch prompts'
+  `resolveConflicts` — `gamepadLaunchPrompts`', and in the desktop dev build `desktopLaunchPrompts`' — never inferred.
+  `tests/services/saves/test_running_game.py` pins the sweep's skip and its sentence, each refused press and the same
+  press with the game not running, the platform delete, the follow on the status read, the local-save check and the
+  platform count, the two exempt syncs, the conflict resolved before a start, and the stop of a sweep's and a Sync
+  Saves' sync of the started game with another game's untouched;
+  `tests/services/prune/test_planning.py::TestARunningGameIsLeftOut` the cleanup's skip before any probe and
   `tests/services/prune/test_service.py::test_a_running_removed_game_is_left_as_it_is_and_offered_again` its re-check
   before the Steam action; `tests/contract/test_running_game.py` the sweep, Sync Saves, the platform delete and the two
   conflict resolutions, and

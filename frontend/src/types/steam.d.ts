@@ -158,6 +158,9 @@ declare var SteamUIStore:
       // Navigate to the running-app screen. Optional — absent on older SteamUI
       // builds, where the Resume path falls back to Navigation.Navigate("/apprunning").
       NavigateToRunningApp?(force?: boolean): void;
+      // Which of Steam's windows is its main UI — `utils/launchPromptRouter.ts`
+      // names the one value Tender reads.
+      MainInstanceUIMode?: number;
     }
   | null
   | undefined;
@@ -186,12 +189,14 @@ interface MobxGlobals {
 declare var __mobxGlobals: MobxGlobals | undefined;
 
 /**
- * Ambient typing for the one member of `react-dom/client` the desktop surface
- * imports (`Root`); `@types/react-dom` is not a dependency.
+ * Ambient typing for the members of `react-dom/client` Tender's code imports
+ * (`Root`, and `createRoot` in the desktop surface's tests); `@types/react-dom`
+ * is not a dependency.
  */
 declare module "react-dom/client" {
   export interface Root {
     render(children: React.ReactNode): void;
     unmount(): void;
   }
+  export function createRoot(container: Element | DocumentFragment): Root;
 }

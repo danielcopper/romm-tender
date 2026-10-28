@@ -6,7 +6,7 @@ page, and the rules every change to that page follows, are in
 [How the desktop surface adapts Steam's game page](../../../docs/architecture/desktop-dom-architecture.md).
 
 - `index.ts` — `startDesktopSurface` / `stopDesktopSurface`: the one place that decides what the navigation watcher
-  draws on a RomM game page.
+  draws on a RomM game page, and what the surface offers the launch watcher.
 - `desktopWindow.ts` — finding the desktop client window, and React's `createRoot`.
 - `navigationWatcher.ts` — watches the desktop client's location and DOM, adapts Steam's game page and mounts the views
   it is given (`DesktopGamePage`); it imports no view.
@@ -16,8 +16,12 @@ page, and the rules every change to that page follows, are in
 - `gameview/GameView.tsx` — what `index.ts` hands the watcher as the page's `gameView`: the page's cards in two columns.
   The About card (`gameview/AboutDetails.tsx`) is the one card so far; `gameview/MigrationBlockedCard.tsx` takes the
   columns' place while a RetroDECK migration is pending.
-- `gameview/styles.ts` — the play bar's glass and pinned colours, which `stickyPlayBarController.ts` applies, and the
-  cards' styles.
+- `launchPromptHost.tsx` — the dialogs for a start the launch watcher catches, offered through
+  `utils/launchPromptRouter.ts` and each drawn into the desktop window in a React root of its own.
+- `gameview/dialogs/` — those dialogs (`desktopLaunchPrompts`), the frame they are drawn in (`DesktopDialog`), and
+  `AskDialog`, the shape of one question.
+- `gameview/styles.ts` — the play bar's glass and pinned colours, which `stickyPlayBarController.ts` applies, the cards'
+  styles, and the dialog frame's backdrop and buttons.
 
 **Dev build only.** `rollup.config.js` builds the panel from `./src/index.tsx` — the module that mounts the bigpicture
 surface — and nothing there imports this directory, so `pnpm build`, `build:dev`, CI and the release tarball ship none

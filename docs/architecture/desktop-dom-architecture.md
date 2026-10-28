@@ -38,6 +38,45 @@ That window's document is a realm of its own, as the Quick Access view's is. Wha
 constructor such as `MutationObserver` or `ResizeObserver` is the trap in `CLAUDE.md`, "`instanceof` against a DOM
 global is false in QAM and desktop-client code".
 
+### Which window is Steam's main UI
+
+Measured in Steam's `SharedJSContext` on a Steam Deck in Desktop Mode:
+
+- `SteamUIStore.MainInstanceUIMode` reads **7** while the desktop client is the main window (`SP Desktop_uid0`) and
+  **4** while Big Picture is (`SP BPM_uid0`), and reads 7 again after leaving Big Picture.
+- Steam **replaces** the main window rather than layering one over the other: while Big Picture was open, no
+  `SP Desktop` popup was in `g_PopupManager.GetPopups()`, and after returning a **new** `SP Desktop_uid0` window
+  existed. A reference to the desktop window does not outlive a trip through Big Picture, which is why the navigation
+  watcher re-finds it.
+- With the desktop client closed to the tray, the mode stays 7, the `SP Desktop_uid0` popup still exists,
+  `MainWindowVisible` is true and the window's `document.hidden` is false. From JavaScript, a window hidden in the tray
+  cannot be told apart from an open one.
+- Game Mode was not measured. Tender reads every mode other than 7, and an unreadable `SteamUIStore`, as the desktop
+  client not being the main UI.
+
+## Dialogs for a start the launch watcher catches
+
+A start Tender's Play button did not make — Steam's own Play, a `steam://rungameid` link — is caught by the launch
+watcher (`frontend/src/utils/launchInterceptor.ts`), which may have questions to ask before the game starts. Which
+surface draws them is decided by `launchPromptsForThisStart` (`frontend/src/utils/launchPromptRouter.ts`): the desktop
+dialogs while `MainInstanceUIMode` is 7 and the desktop surface has offered them and has an open window, and Steam's
+gamepad modals otherwise. The desktop surface offers them from `startDesktopSurface` and withdraws them from
+`stopDesktopSurface` (`frontend/src/desktop/index.ts`), so a bundle without the desktop surface — every shipped one —
+always asks through the gamepad modals.
+
+Such a start comes with no Tender component to ask from, so `askInDesktopWindow`
+(`frontend/src/desktop/launchPromptHost.tsx`) draws each question into the body of the desktop window that exists at the
+moment it is asked: a container created with that window's own `document.createElement`, and a React root from
+`findReactClient`. Each question keeps a `DomRestorationLedger` of its own, which records the root, its container and
+the window's `pagehide` and `unload` listeners, and `restoreAll()` takes all of it away when the question settles. A
+question settles with the button pressed; with its dismissed answer when the dialog is left (`DesktopDialog`'s
+`onDismiss`), when its window goes, or when the surface is withdrawn; and with its dismissed answer, logged as a
+`desktop:` warning or error, when there is no open desktop window or `createRoot` to draw with, or when drawing it
+throws. Two starts caught together each draw a dialog of their own, one over the other, and Escape then dismisses both.
+
+**Known limitation:** because a tray-hidden desktop window looks open, a question for a start caught while the desktop
+client sits in the tray is drawn into a window nobody sees until Steam is opened again, and the start waits for it.
+
 ## Fiber, read-only (`frontend/src/desktop/watcher/fiberInspector.ts`)
 
 Where the DOM does not say which element is which, the watcher reads React's Fiber: the `__reactFiber$` (or

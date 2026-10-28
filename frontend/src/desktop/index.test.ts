@@ -4,11 +4,28 @@ import * as desktopWin from "./desktopWindow";
 import * as navigationWatcher from "./navigationWatcher";
 import { GameView } from "./gameview/GameView";
 import * as backend from "../api/backend";
+import { launchPromptsForThisStart } from "../utils/launchPromptRouter";
+import type { LaunchPrompts } from "../utils/launchVerdict";
 
 describe("the desktop surface", () => {
   afterEach(() => {
     stopDesktopSurface();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("offers the launch watcher its dialogs while it runs and withdraws them when it stops", () => {
+    const gamepad = {} as LaunchPrompts;
+    vi.stubGlobal("SteamUIStore", { MainInstanceUIMode: 7, SetRunningApp: vi.fn() });
+    vi.spyOn(desktopWin, "findDesktopWindow").mockReturnValue(window);
+    vi.spyOn(navigationWatcher, "startDesktopNavigationWatcher").mockImplementation(() => () => {});
+    expect(launchPromptsForThisStart(gamepad)).toBe(gamepad);
+
+    startDesktopSurface();
+    expect(launchPromptsForThisStart(gamepad)).not.toBe(gamepad);
+
+    stopDesktopSurface();
+    expect(launchPromptsForThisStart(gamepad)).toBe(gamepad);
   });
 
   it("starts the navigation watcher, which looks for the desktop window, and stops it again", () => {
