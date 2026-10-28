@@ -1665,6 +1665,29 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("cannot start");
     });
 
+    it("names the other source's default where the starting source lists no emulator, and says nothing of that (#2195 D24)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          source_defaults: [
+            { kind: "emudeck", default: "PicoDrive", chosen_in_frontend: null, reason: null },
+            { kind: "retrodeck", default: null, chosen_in_frontend: null, reason: "no_entry" },
+          ],
+          tender_default: { kind: "emudeck", label: "PicoDrive" },
+          active_core_label: "PicoDrive",
+          start: emulatorStart({ entry: "PicoDrive" }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const clause = factPart(container, "PicoDrive");
+      expect(clause).toBeTruthy();
+      expect(clause!.style.color).toBe(GREY);
+      expect(factPart(container, "no emulator")).toBeUndefined();
+      expect(container.textContent).not.toContain("will not launch");
+    });
+
     it("draws no red where the other source's default could not be established either (#2195 D24)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({

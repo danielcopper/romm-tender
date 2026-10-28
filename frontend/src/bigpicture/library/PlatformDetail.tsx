@@ -157,6 +157,12 @@ function noDefaultOffer(core: SystemCoreInfo): CoreOffer {
   return { kind: "blocked", reason: sentence, notice: sentence };
 }
 
+/** Whether Tender's default comes from a source games do not start through, under which no line of the starting
+ *  source stands (#2195 D24). */
+function defaultFromElsewhere(core: SystemCoreInfo): boolean {
+  return core.tender_default !== null && core.tender_default.kind !== core.emulator_source?.kind;
+}
+
 function coreOffer(core: CoreAnswer): CoreOffer {
   if (core === undefined) return { kind: "blocked", reason: "Reading the emulators for this platform…" };
   if (core === null) {
@@ -174,6 +180,10 @@ function coreOffer(core: CoreAnswer): CoreOffer {
   // found for system" and exits 1 (`libexec/run_game.sh`), so the games really
   // do not start.
   if (core.emulators.length === 0) {
+    // Under another source's default, nothing the starting source states stands under the header.
+    if (defaultFromElsewhere(core)) {
+      return { kind: "blocked", reason: "RetroDECK lists no emulator for this platform." };
+    }
     const none = "RetroDECK lists no emulator for this platform, so its games will not launch.";
     return { kind: "blocked", reason: none, notice: none };
   }
@@ -424,7 +434,12 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   // Steam", are the two ways this line loses a piece; both failures now say so
   // on the pane, and the in-flight one is a beat rather than a state.
   const activeLabel = core ? core.active_core_label : null;
-  const clause = emulatorClause(core ?? null);
+  const defaultElsewhere = core ? defaultFromElsewhere(core) : false;
+  // The other source's default is named even where the starting source lists none.
+  const clause =
+    defaultElsewhere && activeLabel !== null
+      ? { text: activeLabel, gamesCannotStart: false }
+      : emulatorClause(core ?? null);
   // The platform-level twin of the game page's `activeCoreIsDefault`, read off
   // the payload's own `is_default`, which marks the entry `default_option`
   // takes. One expression feeds the clause AND the icon, so the two cannot
@@ -433,10 +448,6 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   // override". Where Tender's default comes from a source games do not start
   // through, no row lists it, and it is the default all the same; nothing the
   // starting source states draws the clause red (#2195 D24).
-  const defaultElsewhere =
-    core?.tender_default !== undefined &&
-    core.tender_default !== null &&
-    core.tender_default.kind !== core.emulator_source?.kind;
   const activeEntry = entryForLabel(core?.emulators ?? [], activeLabel);
   const activeIsDefault =
     activeEntry === undefined

@@ -1506,7 +1506,8 @@ it, for the focused platform:
   longer exists in _source_; the default '_default_' is used", or "there is no default to use instead", D5), and every
   enabled source's own default with the user's choice in ES-DE where it differs (D4). Where Tender's default comes from
   a source games do not start through, none of the starting source's own lines stands under it — no refusal, no vanished
-  pick, no red — and the clause takes the default's colour (D24).
+  pick, no "lists no emulator", no red — and the clause names that default in the default's colour, also where the
+  starting source lists no emulator (D24).
 
   **The button is always rendered**, and opens a menu only when there is something to pick: the core read landed,
   RetroDECK was found, and there are at least two options, one of them a bakeable entry other than the one in effect —
