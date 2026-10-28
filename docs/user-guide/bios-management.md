@@ -270,6 +270,10 @@ reads them the way the core does, and lists the folder **one row per file**, lik
 - Where LRPS2's own settings name an image that is not in the folder, a neutral line says so, naming the emulator as the
   selector does — _ℹ LRPS2 / PCSX2's settings name scph10000.bin, which is not here — it uses another BIOS from this
   folder instead._ That is not a fault: LRPS2 falls back to the images it finds in the folder.
+- Where its core option names a file LRPS2 does not offer — one its own listing of the folder leaves out, such as a file
+  of the wrong size or one it does not recognise as a BIOS — a neutral line says that too: _ℹ The core option names
+  scph10000.bin, which LRPS2 / PCSX2 does not offer — it starts with a BIOS from this folder._ RetroArch never hands the
+  core that name, so LRPS2 starts with a BIOS from the folder instead, and the folder's own verdict stands.
 - A folder holding no image is red, exactly like a missing file, and it is what the red **BIOS** badge beside Play
   appears for. **Download required** then fetches one image — the first recognised one in your library, alphabetically —
   because one is all the emulator opens. While nothing lies in the folder and your library holds no file recognised for

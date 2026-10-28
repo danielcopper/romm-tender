@@ -3027,9 +3027,12 @@ resolver's own attribution keys — which they are, and why a row is matched aga
 its identity, is `adapters/atlas_firmware.py::_ATTRIBUTION_KEYS`'s; that is how LRPS2's
 `firmware-configured-image-missing` reaches its `pcsx2/bios` row. The row carries that one as `missing_configured_image`
 — the label of the emulator whose reading the row is and the file its `pcsx2_bios` option names — and it is never a
-verdict: LRPS2 lists the folder instead, so the folder's verdict is what the launch rests on. A caveat naming none of
-the keys is a statement about the place with no owner — a listing that failed is the case that matters — and it stays on
-the row, which is the permissive direction: the row keeps a cause it might not own rather than losing one it does.
+verdict: LRPS2 lists the folder instead, so the folder's verdict is what the launch rests on. Its sibling
+`firmware-configured-image-not-offered` — the option names a file the core does not offer, so RetroArch hands the core
+its default, the folder's listing — rides the same way as `configured_image_not_offered`, and is no verdict either
+([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D4, D7). A caveat naming none of the keys is a
+statement about the place with no owner — a listing that failed is the case that matters — and it stays on the row,
+which is the permissive direction: the row keeps a cause it might not own rather than losing one it does.
 
 **The level is the resolver's verdict for the launching emulator, and no count decides it.** `compute_bios_level` reads
 `requirements_met` off the emulator's entry (`CoreFirmwareVerdict`): met is `ok`, not met is `missing`, not established
