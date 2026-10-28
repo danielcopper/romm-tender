@@ -347,21 +347,23 @@ Format: **invariant** — tier — enforced by.
   value handed on through a parameter or a field of Tender's own name. Unseen by the classification test: whether a
   reading module that names a code reads it rightly. Prompt-only: an entry on `NOT_THE_RESOLVERS` is a name that means
   something else in its module, never a read of the resolver's answer; a code the resolver adds is classified by a
-  reading module rather than added to the list; Tender keeps no table of its own for anything the resolver answers (find
-  rules, launch command patterns, launch-file types, RomM regions); a join is on the resolver's keys (`declared`,
-  `(emulator, declared_index)`), never on `file_name` alone or a label; where the resolver gives no answer, Tender says
-  it could not be established and an emu-atlas issue asks for it; no decision is proposed that lets Tender work out a
-  fact the resolver states — because the resolver is slow, cannot answer yet, or another page already does it; and the
-  derivations and imports on today's lists stand until the issue that builds their kind's reading module removes them
-  ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D5): fixing one is not a finding, extending one or
-  copying it to a new page is. Without the rule, every layer after the adapter decides a fact of its own from the raw
-  answer, and the layers disagree: whether a file is required, whether a one-of group is met, whether a file is there,
-  which file a requirement means (one image under two spellings became two rows), and what a caveat code means, copied
-  into the backend and into the panel. The adapter turns the answer into Tender's own view, joined on the resolver's
-  keys; the panel receives Tender's own closed set of marks per row, group and emulator and words them; and a Tender
-  field that carries one of the watched names is renamed when the reading module of its kind is built
-  ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D1–D3). Which names and values are watched, and why
-  the others are not, is `WATCHED_NAMES` and `GENERIC_VALUES` in the script, and for the panel alone
+  reading module rather than added to the list — except a code of an answer no reading module reads yet
+  (`launch_command`'s refusals), which waits there with that answer's other codes until its reading module classifies
+  them ([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D1); Tender keeps no table of its own for
+  anything the resolver answers (find rules, launch command patterns, launch-file types, RomM regions); a join is on the
+  resolver's keys (`declared`, `(emulator, declared_index)`), never on `file_name` alone or a label; where the resolver
+  gives no answer, Tender says it could not be established and an emu-atlas issue asks for it; no decision is proposed
+  that lets Tender work out a fact the resolver states — because the resolver is slow, cannot answer yet, or another
+  page already does it; and the derivations and imports on today's lists stand until the issue that builds their kind's
+  reading module removes them ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D5): fixing one is not a
+  finding, extending one or copying it to a new page is. Without the rule, every layer after the adapter decides a fact
+  of its own from the raw answer, and the layers disagree: whether a file is required, whether a one-of group is met,
+  whether a file is there, which file a requirement means (one image under two spellings became two rows), and what a
+  caveat code means, copied into the backend and into the panel. The adapter turns the answer into Tender's own view,
+  joined on the resolver's keys; the panel receives Tender's own closed set of marks per row, group and emulator and
+  words them; and a Tender field that carries one of the watched names is renamed when the reading module of its kind is
+  built ([#2579](https://github.com/danielcopper/romm-tender/issues/2579) D1–D3). Which names and values are watched,
+  and why the others are not, is `WATCHED_NAMES` and `GENERIC_VALUES` in the script, and for the panel alone
   `PANEL_GENERIC_VALUES` in `frontend/eslint.config.js`. The checks hold the reading half of ADR-0042's first decision;
   the rest of it stays prose, the prompt-only part above
 - **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
