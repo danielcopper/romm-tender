@@ -289,8 +289,9 @@ holding more than one bound shortcut converges on the next sync
   at all.
 - **Where.** On a complete view only: the listing of a platform unit the run fetches in full, and in the preview the
   same listings. A platform whose rows still hold such a group is never skipped, so it is fetched in full once,
-  converges and skips again. A group one of whose shortcuts Steam lists as running is left out of that run (#2645 D5)
-  and its platform fetched in full again on the next.
+  converges and skips again. A group one of whose shortcuts Steam lists as running, when its platform unit converges or
+  when the finalize is about to remove a shortcut, is left out of that run (#2645 D5, D6) and its platform fetched in
+  full again on the next.
 - **How.** The other shortcuts are removals the preview counts and the finalize of a run that was not stopped makes,
   beside the stale ones; their rows are unbound, and every row's saves, playtime and install records stay. Before a
   shortcut goes, the panel carries over to the kept one the user's Steam collections, Favorites and Hidden (neither of

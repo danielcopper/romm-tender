@@ -643,11 +643,11 @@ Format: **invariant** — tier — enforced by.
   and any other answer writes nothing. Beside it, a group holding more than one bound shortcut converges (#2645): on a
   platform unit the run fetched in full, every bound row of such a group but the one
   `domain/sync_diff.py::converge_bound_groups` keeps is removed and unbound on a run that was not stopped — never sorted
-  as stale, never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running —
-  with the preview counting the same removals, and no platform whose rows still hold such a group is skipped. The
-  removed-game cleanup's own proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md,
-  "Discovery"** — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule
-  (`sort_stale_rows`, `settle_asked_rows`),
+  as stale, never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read
+  at the platform unit and again before the removal — with the preview counting the same removals, and no platform whose
+  rows still hold such a group is skipped. The removed-game cleanup's own proof marks and clears rows too, by its rule
+  in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
   run, a stopped run leaves the row asked at the next, a row its platform last delivered is removed unasked, and a row
@@ -712,7 +712,8 @@ Format: **invariant** — tier — enforced by.
   (`domain/fetch_generation.py::convergence_pending`, over the same `groups_to_converge`), and why the preview converges
   over the listings it fetched in full rather than over its union, where a skipped collection's rebuilt row would read
   as listed; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and `TestCollapseHandedTheConvergedRows` pin the
-  rule and the collapse's side of it, `TestAGroupWithARunningGameIsLeftOut` a group left out while it runs,
+  rule and the collapse's side of it, `TestAGroupWithARunningGameIsLeftOut` and `TestWithoutRunningGroups` a group left
+  out while it runs, at the unit and at the finalize,
   `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` the apply and the preview
   agreeing for every install state, an unlisted version and a game RomM lists no version of, the stopped run, the #1036
   guard, the row the kept shortcut moves onto and a running game left for the next sync,

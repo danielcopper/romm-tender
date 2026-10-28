@@ -722,10 +722,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   and any other answer writes nothing. Beside it, a group holding more than one bound shortcut converges (#2645): on a
   platform unit the run fetched in full, every bound row of such a group but the one
   `domain/sync_diff.py::converge_bound_groups` keeps is removed and unbound on a run that was not stopped — never sorted
-  as stale, never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running —
-  with the preview counting the same removals, and no platform whose rows still hold such a group is skipped. The
-  removed-game cleanup's own proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md,
-  "Discovery"** — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
+  as stale, never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read
+  at the platform unit and again before the removal — with the preview counting the same removals, and no platform whose
+  rows still hold such a group is skipped. The removed-game cleanup's own proof marks and clears rows too, by its rule
+  in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (among it the third run, the stopped run, the platform route and the fallback),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
@@ -745,8 +746,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   for a game RomM did not confirm, filed by the setting alone on both sides, and
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes` for a row whose
   game the run synced, asked about or not; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and
-  `TestCollapseHandedTheConvergedRows` for the convergence's rule and `TestAGroupWithARunningGameIsLeftOut` for a
-  running game, `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` and
+  `TestCollapseHandedTheConvergedRows` for the convergence's rule and `TestAGroupWithARunningGameIsLeftOut` and
+  `TestWithoutRunningGroups` for a running game,
+  `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` and
   `TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts` for the apply and the preview, and
   `tests/services/library/test_fetcher.py::TestAGroupWithSeveralShortcutsIsFetchedInFull` for the skip. Prompt-only: a
   new collapse caller on a complete view hands the collapse the convergence's losers (`converged=`); the collection

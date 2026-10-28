@@ -1000,7 +1000,10 @@ most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is th
   `LocalLibraryReader.do_read_installed_rom_ids`. A group one of whose bound shortcuts Steam lists as running is left
   out (#2645 D5): `services/library/_convergence.py::converge_unless_running` reads `RunningGames.running_rom_ids` — the
   reading the removed-game cleanup leaves a running game out by — only when a group would converge, in the apply's
-  platform unit and in the preview each at its own time. A platform whose rows hold such a group is never skipped
+  platform unit and in the preview each at its own time. The finalize of a run that converged something reads it once
+  more before it removes a shortcut, since the unit's reading may be minutes old by then, and
+  `domain/sync_diff.py::without_running_groups` leaves out every group one of whose shortcuts runs by then, the kept
+  one's included (#2645 D6). A platform whose rows hold such a group is never skipped
   (`domain/fetch_generation.py::convergence_pending`), so it is fetched in full on every sync until the game has
   converged, a game left out while it runs included. The collapse takes the losers (`converged=`), emits nothing for
   them and still counts their shortcuts as held, so no shortcut moves onto one in the same run. The run keeps them on
