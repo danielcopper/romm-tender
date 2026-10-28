@@ -2284,7 +2284,9 @@ A session's end on an open page is the one time Steam's value wins over a restor
 through `updatePlaytimeDisplay`, and the `romm_playtime_changed` signal it fires says whether the write also set
 `rt_last_time_played` to now (`lastPlayedWritten`), which only the session's end does. On such a signal the page drops
 the restored value it holds and shows Steam's, so LAST PLAYED names the session just played; on any other signal — the
-reconcile's own write, a bulk pass at load or after a sync — the restored value still wins.
+reconcile's own write, a bulk pass at load or after a sync — the restored value still wins. A session's end sets Steam's
+time and sends the signal even when the game's whole recorded total is under a minute, and then leaves the playtime as
+Steam shows it; any other write under a minute writes nothing and sends no signal.
 
 ## Save-Sync State — the `RomSaveSyncState` aggregate
 

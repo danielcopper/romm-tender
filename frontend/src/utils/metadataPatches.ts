@@ -120,8 +120,11 @@ export async function applyAllMetadata(signal?: AbortSignal): Promise<void> {
 
 /**
  * Write tracked playtime to Steam's native UI fields.
- * Sets minutes_playtime_forever and rt_last_time_played so Steam shows
- * actual play time instead of "Never Played" for RomM shortcuts.
+ * Sets minutes_playtime_forever, and with *updateLastPlayed* rt_last_time_played
+ * to now, so Steam shows actual play time instead of "Never Played" for RomM
+ * shortcuts. A total under a minute leaves the minutes as Steam shows them: a
+ * session's end then still sets the last-played time and signals, while any
+ * other write has nothing to write and signals nothing.
  * Returns true if the write succeeded, false if the overview wasn't available.
  */
 export function updatePlaytimeDisplay(appId: number, totalSeconds: number, updateLastPlayed = true): boolean {
@@ -136,12 +139,17 @@ export function updatePlaytimeDisplay(appId: number, totalSeconds: number, updat
   }
 
   const totalMinutes = Math.floor(totalSeconds / 60);
-  if (totalMinutes <= 0) return true; // Nothing to write, but not a failure
+  if (totalMinutes <= 0 && !updateLastPlayed) return true; // Nothing to write, but not a failure
 
-  const previous = writePlaytimeFields(overview, totalMinutes, updateLastPlayed);
+  const minutes = totalMinutes > 0 ? totalMinutes : null;
+  const previous = writePlaytimeFields(overview, minutes, updateLastPlayed);
+  const minutesPart =
+    minutes === null
+      ? `kept ${previous.minutes}min (total ${totalSeconds}s is under a minute)`
+      : `wrote ${minutes}min (was ${previous.minutes})`;
   detach(
     debugLog(
-      `updatePlaytimeDisplay: appId=${appId} wrote ${totalMinutes}min (was ${previous.minutes}), rt_last_time_played was ${previous.lastPlayed}`,
+      `updatePlaytimeDisplay: appId=${appId} ${minutesPart}, rt_last_time_played was ${previous.lastPlayed}${updateLastPlayed ? ", set to now" : ""}`,
     ),
   );
   // Single write-chokepoint for `minutes_playtime_forever` — emit a DOM signal

@@ -62,12 +62,13 @@ export interface PreviousPlaytime {
 
 /**
  * Write tracked playtime into the fields Steam's library shows, so a RomM
- * shortcut reads as played rather than "Never Played". Returns what the two
+ * shortcut reads as played rather than "Never Played". A `null`
+ * *totalMinutes* leaves the minutes as Steam shows them. Returns what the two
  * fields held beforehand, which is what the caller's debug line reports.
  */
 export function writePlaytimeFields(
   overview: SteamAppOverview,
-  totalMinutes: number,
+  totalMinutes: number | null,
   updateLastPlayed: boolean,
 ): PreviousPlaytime {
   const previous: PreviousPlaytime = {
@@ -75,7 +76,9 @@ export function writePlaytimeFields(
     lastPlayed: overview.rt_last_time_played,
   };
   stateTransaction(() => {
-    overview.minutes_playtime_forever = totalMinutes;
+    if (totalMinutes !== null) {
+      overview.minutes_playtime_forever = totalMinutes;
+    }
     if (updateLastPlayed) {
       overview.rt_last_time_played = Math.floor(Date.now() / 1000);
     }

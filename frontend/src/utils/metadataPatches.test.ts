@@ -266,6 +266,19 @@ describe("the romm_playtime_changed signal", () => {
     expect(signals.details).toEqual([{ appId: 100, lastPlayedWritten: true }]);
   });
 
+  it("sets last-played and says so at a session's end under a minute, leaving the minutes alone", () => {
+    const overview = { minutes_playtime_forever: 7, rt_last_time_played: 0 };
+    vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(overview as unknown as SteamAppOverview);
+    const signals = recordSignals();
+
+    updatePlaytimeDisplay(100, 37);
+    signals.stop();
+
+    expect(overview.rt_last_time_played).toBeGreaterThan(0);
+    expect(overview.minutes_playtime_forever).toBe(7);
+    expect(signals.details).toEqual([{ appId: 100, lastPlayedWritten: true }]);
+  });
+
   it("says it did not when the write left Steam's last-played time alone", () => {
     const overview = { minutes_playtime_forever: 0, rt_last_time_played: 0 };
     vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(overview as unknown as SteamAppOverview);

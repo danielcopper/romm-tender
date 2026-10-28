@@ -16,23 +16,23 @@ const APP_ID = 4242;
 const ROM_ID = 77;
 const NOW = new Date("2026-09-21T12:00:00Z");
 
-function steamOverview(rtLastTimePlayed: number): SteamAppOverview {
+function steamOverview(rtLastTimePlayed: number, minutes: number): SteamAppOverview {
   return {
     appid: APP_ID,
     display_name: "",
     strDisplayName: "",
     rt_last_time_played: rtLastTimePlayed,
-    minutes_playtime_forever: 60,
+    minutes_playtime_forever: minutes,
   };
 }
 
-/** The page open with RomM's last-played restored over Steam's *steamRt*. */
-async function openPage(restoredIso: string, steamRt: number) {
-  const ov = steamOverview(steamRt);
+/** The page open with RomM's last-played restored over Steam's *steamRt*, *totalSeconds* recorded. */
+async function openPage(restoredIso: string, steamRt: number, totalSeconds = 3600) {
+  const ov = steamOverview(steamRt, Math.floor(totalSeconds / 60));
   vi.stubGlobal("__mobxGlobals", undefined);
   vi.stubGlobal("appStore", { GetAppOverviewByAppID: vi.fn(() => ov), allApps: [] });
   vi.mocked(backend.reconcilePlaytime).mockResolvedValue({
-    total_seconds: 3600,
+    total_seconds: totalSeconds,
     session_count: 1,
     last_played: restoredIso,
     server_query_failed: false,
@@ -63,6 +63,19 @@ describe("LAST PLAYED across a session's end on an open game page", () => {
 
     expect(result.current.lastPlayed).toBe("Today");
     expect(result.current.playtime).toBe("2 Hours");
+  });
+
+  it("shows the session's end for a game played under a minute in all", async () => {
+    const twoDaysAgo = Math.floor(NOW.getTime() / 1000) - 2 * 86400;
+    const { result } = await openPage("2026-09-20T12:00:00Z", twoDaysAgo, 20);
+    await waitFor(() => expect(result.current.lastPlayed).toBe("Yesterday"));
+
+    act(() => {
+      updatePlaytimeDisplay(APP_ID, 37);
+    });
+
+    expect(result.current.lastPlayed).toBe("Today");
+    expect(result.current.playtime).toBe("None");
   });
 
   it("keeps a restored last-played newer than Steam's across any other write", async () => {
