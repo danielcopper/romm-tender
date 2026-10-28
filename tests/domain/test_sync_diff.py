@@ -7,14 +7,17 @@ import pytest
 from domain.sync_diff import (
     BIND_ROM_ID_KEY,
     ClassificationResult,
+    ConvergedBinding,
     StaleRow,
     StaleSort,
     classify_roms,
     collapse_sibling_groups,
     compute_collection_diff,
     compute_platform_collection_diff,
+    converge_bound_groups,
     gather_unbound_groups,
     group_keys_of,
+    groups_to_converge,
     platform_breakdown,
     platform_collection_name,
     rebuilt_rows_filed_as_kept,
@@ -781,6 +784,21 @@ def _greg(
     }
 
 
+def _converge_then_collapse(
+    members: list[dict[str, Any]], registry: dict[str, dict[str, Any]], installed_rom_ids: set[int]
+) -> tuple[list[dict[str, Any]], list[ConvergedBinding]]:
+    """A platform unit's collapse: the convergence over its listing *members*, then the collapse handed its losers."""
+    converged = converge_bound_groups(members, registry, installed_rom_ids, platform_slugs={"n64"})
+    emitted = collapse_sibling_groups(
+        members,
+        registry,
+        installed_rom_ids,
+        complete_group_view=True,
+        converged={binding.rom_id for binding in converged},
+    )
+    return emitted, converged
+
+
 class TestCollapseSiblingGroups:
     """``collapse_sibling_groups`` — one Steam shortcut per sibling group (ADR-0021)."""
 
@@ -832,10 +850,10 @@ class TestCollapseSiblingGroups:
         assert result.unchanged_ids == [1]
         assert result.stale == []
 
-    def test_grandfathered_multiple_bound_siblings_all_kept(self):
+    def test_multiple_bound_siblings_converge_to_the_one_the_chain_picks(self):
         # Two DIFFERENT-name siblings each already carry a shortcut (a pre-ADR-0021
-        # library). Both are still fetched → both stay emitted; no new shortcut for
-        # the unbound third sibling.
+        # library). Both are still fetched → the chain's pick stays emitted, the
+        # other goes on the removal list; no new shortcut for the unbound third.
         members = [
             _gsd(1, name="Game", fs_name="game.z64"),
             _gsd(2, name="Game JP", fs_name="game_jp.z64"),
@@ -845,9 +863,9 @@ class TestCollapseSiblingGroups:
             "1": _greg(1, app_id=1001, name="Game", fs_name="game.z64"),
             "2": _greg(2, app_id=1002, name="Game JP", fs_name="game_jp.z64"),
         }
-        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
-        assert sorted(e["rom_id"] for e in emitted) == [1, 2]
-        assert 3 not in {e["rom_id"] for e in emitted}
+        emitted, converged = _converge_then_collapse(members, registry, set())
+        assert [e["rom_id"] for e in emitted] == [1]
+        assert converged == [ConvergedBinding(2, 1002, 1, 1001)]
 
     def test_whole_group_vanished_is_stale(self):
         # The bound row's group has NO fetched member at all → collapse emits
@@ -889,7 +907,7 @@ class TestCollapseSiblingGroups:
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids={1}, complete_group_view=True)
         assert [(e["rom_id"], e[BIND_ROM_ID_KEY]) for e in emitted] == [(1, 2)]
 
-    def test_a_vanished_bound_sibling_beside_a_surviving_one_moves_onto_its_same_dump(self):
+    def test_a_vanished_bound_sibling_beside_a_surviving_one_converges_onto_the_surviving_one(self):
         members = [
             _gsd(2, name="Game (JP)", fs_name="game_jp.z64", fs_name_no_ext="game_jp"),
             _gsd(3, name="Game (USA)", fs_name="game_usa.z64", fs_name_no_ext="game_usa"),
@@ -898,8 +916,9 @@ class TestCollapseSiblingGroups:
             "1": _greg(1, app_id=1001, name="Game (USA)", fs_name="game_usa.z64"),
             "2": _greg(2, app_id=1002, name="Game (JP)", fs_name="game_jp.z64"),
         }
-        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
-        assert sorted((e["rom_id"], e.get(BIND_ROM_ID_KEY)) for e in emitted) == [(1, 3), (2, None)]
+        emitted, converged = _converge_then_collapse(members, registry, set())
+        assert [(e["rom_id"], e.get(BIND_ROM_ID_KEY)) for e in emitted] == [(2, None)]
+        assert converged == [ConvergedBinding(1, 1001, 2, 1002)]
 
     def test_server_reimport_fresh_rom_id_rides_rebind_lane_not_a_duplicate(self):
         # The #1366 clean re-import: a server switch / re-import reissues the
@@ -933,22 +952,25 @@ class TestCollapseSiblingGroups:
         # it just re-bound.
         assert select_stale_removals([(1, 1001)], {1001}) == []
 
-    def test_two_vanished_bound_siblings_both_keep_their_bindings(self):
-        # A group with TWO bound siblings (grandfathered), both vanished, and a
-        # survivor under another name: neither moves.
+    def test_of_two_vanished_bound_siblings_the_lowest_rom_id_keeps_its_binding(self):
+        # A group with TWO bound siblings, both vanished, and a survivor under
+        # another name: the lower rom_id keeps its shortcut, which does not move;
+        # the other is removed.
         members = [_gsd(5, name="Game (EU)", fs_name_no_ext="game_eu")]
         registry = {
             "1": _greg(1, app_id=1001, name="Game (USA)"),
             "2": _greg(2, app_id=1002, name="Game (JP)"),
         }
-        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        emitted, converged = _converge_then_collapse(members, registry, set())
         assert emitted == []
+        assert converged == [ConvergedBinding(2, 1002, 1, 1001)]
 
     def test_of_two_vanished_bound_siblings_of_one_dump_the_first_takes_it(self):
         members = [_gsd(5, fs_name_no_ext="game")]
         registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
-        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        emitted, converged = _converge_then_collapse(members, registry, set())
         assert [(e["rom_id"], e[BIND_ROM_ID_KEY]) for e in emitted] == [(1, 5)]
+        assert converged == [ConvergedBinding(2, 1002, 1, 1001)]
 
     def test_legacy_null_key_bound_row_grandfathered_via_fetched_key(self):
         # A bound row whose stored sibling_group_key is still NULL (pre-capture) is
@@ -966,6 +988,137 @@ class TestCollapseSiblingGroups:
         members = [_gsd(7, name="Homebrew", group_key="romm:7:1")]
         emitted = collapse_sibling_groups(members, registry={}, installed_rom_ids=set(), complete_group_view=True)
         assert [e["rom_id"] for e in emitted] == [7]
+
+
+class TestConvergeBoundGroups:
+    """``converge_bound_groups`` — a group holding more than one bound shortcut keeps one (#2645 D1, D3)."""
+
+    @staticmethod
+    def _kept(members, registry, installed=frozenset(), platform_slugs=frozenset({"n64"})):
+        converged = converge_bound_groups(members, registry, set(installed), platform_slugs=platform_slugs)
+        return [(binding.rom_id, binding.kept_rom_id) for binding in converged]
+
+    @pytest.mark.parametrize(
+        ("installed", "kept"), [((), 1), ((2,), 2), ((1,), 1), ((1, 2), 2)], ids=["none", "two", "one", "both"]
+    )
+    def test_an_installed_listed_version_keeps_the_shortcut_else_the_chain_s_pick(self, installed, kept):
+        # 1 is RomM's default; 2 is the USA dump, which the region ranking puts first
+        # among installed versions.
+        members = [
+            _gsd(1, fs_name_no_ext="game_jp", is_main_sibling=True, regions=["Japan"]),
+            _gsd(2, fs_name_no_ext="game_usa", regions=["USA"]),
+        ]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        removed = 2 if kept == 1 else 1
+        assert self._kept(members, registry, installed) == [(removed, kept)]
+
+    def test_an_installed_unlisted_version_beats_a_listed_one_not_installed(self):
+        members = [_gsd(2, fs_name_no_ext="game_jp")]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        assert self._kept(members, registry, {1}) == [(2, 1)]
+
+    def test_an_installed_listed_version_beats_an_installed_unlisted_one(self):
+        members = [_gsd(2, fs_name_no_ext="game_jp")]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        assert self._kept(members, registry, {1, 2}) == [(1, 2)]
+
+    def test_a_listed_version_with_a_file_beats_romm_s_default_without_one(self):
+        members = [
+            _no_file(_gsd(1, fs_name_no_ext="game_jp", is_main_sibling=True)),
+            _gsd(2, fs_name_no_ext="game_usa"),
+        ]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        assert self._kept(members, registry) == [(1, 2)]
+
+    def test_a_listed_version_without_a_file_beats_an_unlisted_one(self):
+        members = [_no_file(_gsd(2, fs_name_no_ext="game_jp"))]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        assert self._kept(members, registry) == [(1, 2)]
+
+    @pytest.mark.parametrize(("installed", "kept"), [((), 1), ((3,), 3)], ids=["none", "the-highest"])
+    def test_a_game_romm_no_longer_lists_at_all_keeps_its_installed_version_else_the_lowest_rom_id(
+        self, installed, kept
+    ):
+        members = [_gsd(9, group_key="other")]
+        registry = {str(rom_id): _greg(rom_id, app_id=1000 + rom_id) for rom_id in (1, 2, 3)}
+        removed = [rom_id for rom_id in (1, 2, 3) if rom_id != kept]
+        assert self._kept(members, registry, installed) == [(rom_id, kept) for rom_id in removed]
+
+    def test_the_binding_carries_both_app_ids(self):
+        members = [_gsd(1), _gsd(2)]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        assert converge_bound_groups(members, registry, set(), platform_slugs={"n64"}) == [
+            ConvergedBinding(rom_id=2, app_id=1002, kept_rom_id=1, kept_app_id=1001)
+        ]
+
+    def test_a_group_with_one_binding_converges_nothing(self):
+        members = [_gsd(1), _gsd(2)]
+        assert self._kept(members, {"1": _greg(1, app_id=1001)}) == []
+
+    def test_rows_without_a_group_key_are_never_one_group(self):
+        registry = {"1": _greg(1, app_id=1001, group_key=None), "2": _greg(2, app_id=1002, group_key=None)}
+        assert self._kept([], registry) == []
+
+    def test_a_listed_legacy_row_without_a_stored_key_joins_its_listed_group(self):
+        members = [_gsd(1, group_key="g1"), _gsd(2, group_key="g1")]
+        registry = {"1": _greg(1, app_id=1001, group_key=None), "2": _greg(2, app_id=1002)}
+        assert self._kept(members, registry) == [(2, 1)]
+
+    def test_a_platform_outside_the_view_converges_nothing(self):
+        registry = {
+            "1": _greg(1, app_id=1001, platform_slug="snes"),
+            "2": _greg(2, app_id=1002, platform_slug="snes"),
+        }
+        assert self._kept([], registry, platform_slugs={"n64"}) == []
+
+    def test_each_group_converges_on_its_own(self):
+        members = [_gsd(1, group_key="a"), _gsd(2, group_key="a"), _gsd(3, group_key="b"), _gsd(4, group_key="b")]
+        registry = {
+            "1": _greg(1, app_id=1001, group_key="a"),
+            "2": _greg(2, app_id=1002, group_key="a"),
+            "3": _greg(3, app_id=1003, group_key="b"),
+            "4": _greg(4, app_id=1004, group_key="b"),
+        }
+        assert sorted(self._kept(members, registry)) == [(2, 1), (4, 3)]
+
+
+class TestCollapseHandedTheConvergedRows:
+    """``collapse_sibling_groups(converged=...)``: a converged row emits nothing and still holds its shortcut."""
+
+    def test_a_converged_listed_row_is_not_emitted(self):
+        members = [_gsd(1), _gsd(2)]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        emitted = collapse_sibling_groups(members, registry, set(), complete_group_view=True, converged={2})
+        assert [e["rom_id"] for e in emitted] == [1]
+
+    def test_the_kept_shortcut_never_moves_onto_a_converged_row_in_the_same_run(self):
+        # 1 vanished but is installed, so it keeps the shortcut; 2 is the same dump
+        # and loses its own. Moving 1's shortcut onto 2 now would have the finalize,
+        # which unbinds 2, unbind the shortcut just moved onto it.
+        members = [_gsd(2, fs_name="game.z64", fs_name_no_ext="game")]
+        registry = {"1": _greg(1, app_id=1001, fs_name="game.z64"), "2": _greg(2, app_id=1002, fs_name="game.z64")}
+        emitted, converged = _converge_then_collapse(members, registry, {1})
+        assert converged == [ConvergedBinding(2, 1002, 1, 1001)]
+        assert emitted == []
+
+    def test_a_group_whose_bound_rows_all_converged_mints_no_shortcut(self):
+        members = [_gsd(1), _gsd(2)]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        emitted = collapse_sibling_groups(members, registry, set(), complete_group_view=True, converged={1, 2})
+        assert emitted == []
+
+
+class TestGroupsToConverge:
+    """``groups_to_converge`` — the keys more than one bound row carries; the skip gate asks it too."""
+
+    def test_a_key_two_bound_rows_carry_converges(self):
+        assert groups_to_converge(["a", "a", "b"]) == frozenset({"a"})
+
+    def test_no_key_carried_twice_converges_nothing(self):
+        assert groups_to_converge(["a", "b"]) == frozenset()
+
+    def test_rows_without_a_key_are_never_a_group(self):
+        assert groups_to_converge([None, None]) == frozenset()
 
 
 class TestCollapseSiblingGroupsCanonicalNaming:
@@ -1463,8 +1616,9 @@ class TestCollapseMembersWithoutAFile:
     def test_a_same_dump_holding_its_own_shortcut_takes_no_rebind(self):
         members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext="Game (USA)")]
         registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
-        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
-        assert sorted((e["rom_id"], BIND_ROM_ID_KEY in e) for e in emitted) == [(1, False), (2, False)]
+        emitted, converged = _converge_then_collapse(members, registry, set())
+        assert [(e["rom_id"], BIND_ROM_ID_KEY in e) for e in emitted] == [(2, False)]
+        assert converged == [ConvergedBinding(1, 1001, 2, 1002)]
 
     def test_of_two_same_dumps_with_a_file_the_chain_picks(self):
         members = [
@@ -1483,8 +1637,9 @@ class TestCollapseMembersWithoutAFile:
             _gsd(3, fs_name_no_ext="Game (USA)"),
         ]
         registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
-        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
-        assert sorted((e["rom_id"], e.get(BIND_ROM_ID_KEY)) for e in emitted) == [(1, 3), (2, None)]
+        emitted, converged = _converge_then_collapse(members, registry, set())
+        assert [(e["rom_id"], e.get(BIND_ROM_ID_KEY)) for e in emitted] == [(1, 3)]
+        assert converged == [ConvergedBinding(2, 1002, 1, 1001)]
 
     def test_an_installed_bound_member_without_a_file_stays_bound(self):
         members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext="Game (USA)")]
