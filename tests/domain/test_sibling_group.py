@@ -6,7 +6,9 @@ import itertools
 from typing import Any
 
 from domain.sibling_group import (
+    GroupKeys,
     compute_component_group_keys,
+    compute_group_keys_with_unfetched,
     compute_sibling_group_key,
     target_in_sibling_group,
 )
@@ -379,3 +381,139 @@ class TestComputeComponentGroupKeys:
         results = [compute_component_group_keys(list(p), {}) for p in itertools.permutations([a, b, c])]
         assert all(r == results[0] for r in results)
         assert results[0] == {1: "igdb:1001:57", 2: "igdb:1001:57", 3: "igdb:1001:57"}
+
+
+def _key(source: str, value: int) -> str:
+    return f"{source}:{value}:57"
+
+
+def _keys(
+    roms: list[dict[str, Any]],
+    resident_keys: dict[int, str],
+    *,
+    complete: set[int] | None = None,
+    unfetched_bound: tuple[int, ...] = (),
+) -> GroupKeys:
+    """Key *roms* as a complete view of every fresh ROM in it, unless *complete* names fewer."""
+    complete_ids = {rom["id"] for rom in roms} if complete is None else complete
+    return compute_group_keys_with_unfetched(
+        roms, resident_keys, complete_rom_ids=complete_ids, unfetched_bound_ids=unfetched_bound
+    )
+
+
+class TestComputeGroupKeysWithUnfetched:
+    """A complete view keys the stored rows it did not fetch with the group they follow (#2646 D1-D4)."""
+
+    def test_a_hidden_row_an_edge_reaches_takes_the_component_key(self):
+        # 40 is hidden in RomM: left out of the listing, still in 41's siblings. 41
+        # gains an igdb id, so the game's key moves to it, and 40 moves with it.
+        keys = _keys([_rom(41, igdb_id=1, ss_id=5, siblings=(40,))], {40: _key("ss", 5), 41: _key("ss", 5)})
+        assert keys == GroupKeys({41: _key("igdb", 1)}, {40: _key("igdb", 1)})
+
+    def test_a_partial_view_keys_as_compute_component_group_keys_and_follows_nothing(self):
+        roms = [_rom(41, igdb_id=1, ss_id=5, siblings=(40,))]
+        resident = {40: _key("ss", 5), 41: _key("ss", 5)}
+        keys = _keys(roms, resident, complete=set(), unfetched_bound=(40,))
+        assert keys == GroupKeys(compute_component_group_keys(roms, resident), {})
+
+    def test_a_row_reached_under_its_own_key_is_not_answered(self):
+        keys = _keys([_rom(41, ss_id=5, siblings=(40,))], {40: _key("ss", 5)}, unfetched_bound=(40,))
+        assert keys.unfetched == {}
+
+    def test_a_row_two_components_reach_under_two_keys_keeps_its_key(self):
+        roms = [_rom(41, igdb_id=1, siblings=(40,)), _rom(42, igdb_id=2, siblings=(40,))]
+        keys = _keys(roms, {40: _key("ss", 5)}, unfetched_bound=(40,))
+        assert keys == GroupKeys({41: _key("igdb", 1), 42: _key("igdb", 2)}, {})
+
+    def test_a_deleted_bound_row_follows_the_component_that_held_its_key(self):
+        # 1 alone carried the igdb id and is deleted; 2 is keyed by its own ss id now.
+        keys = _keys([_rom(2, ss_id=5)], {1: _key("igdb", 1), 2: _key("igdb", 1)}, unfetched_bound=(1,))
+        assert keys == GroupKeys({2: _key("ss", 5)}, {1: _key("ss", 5)})
+
+    def test_a_member_with_no_prior_key_does_not_stop_the_follow(self):
+        roms = [_rom(2, ss_id=5, siblings=(3,)), _rom(3, ss_id=5, siblings=(2,))]
+        keys = _keys(roms, {1: _key("igdb", 1), 2: _key("igdb", 1)}, unfetched_bound=(1,))
+        assert keys.unfetched == {1: _key("ss", 5)}
+
+    def test_a_row_not_bound_is_not_followed_without_an_edge(self):
+        keys = _keys([_rom(2, ss_id=5)], {1: _key("igdb", 1), 2: _key("igdb", 1)})
+        assert keys.unfetched == {}
+
+    def test_a_game_split_in_two_is_not_followed(self):
+        # 2 and 3 both held 1's key and are separate games now: neither is the one.
+        roms = [_rom(2, ss_id=5), _rom(3, moby_id=4)]
+        keys = _keys(roms, {1: _key("igdb", 1), 2: _key("igdb", 1), 3: _key("igdb", 1)}, unfetched_bound=(1,))
+        assert keys.unfetched == {}
+
+    def test_a_partial_carrier_is_not_followed(self):
+        keys = _keys([_rom(2, ss_id=5)], {1: _key("igdb", 1), 2: _key("igdb", 1)}, complete=set(), unfetched_bound=(1,))
+        assert keys.unfetched == {}
+
+    def test_a_carrier_the_gate_splits_is_not_followed(self):
+        roms = [_rom(2, igdb_id=7, ss_id=5, siblings=(3,)), _rom(3, igdb_id=8, ss_id=5, siblings=(2,))]
+        keys = _keys(roms, {1: _key("igdb", 1), 2: _key("igdb", 1), 3: _key("igdb", 1)}, unfetched_bound=(1,))
+        assert keys == GroupKeys({2: _key("igdb", 7), 3: _key("igdb", 8)}, {})
+
+    def test_a_version_moved_into_another_game_is_not_followed(self):
+        # 2 held 1's key and is now a version of 5's game: 5 held another key.
+        roms = [_rom(2, ss_id=8, siblings=(5,)), _rom(5, ss_id=8, siblings=(2,))]
+        keys = _keys(roms, {1: _key("igdb", 1), 2: _key("igdb", 1), 5: _key("ss", 8)}, unfetched_bound=(1,))
+        assert keys.unfetched == {}
+
+    def test_a_carrier_holding_another_value_at_the_stored_source_is_not_followed(self):
+        # RomM re-matched 2 to another IGDB game: 1's igdb:1 is not that game's.
+        keys = _keys([_rom(2, igdb_id=9, ss_id=5)], {1: _key("igdb", 1), 2: _key("igdb", 1)}, unfetched_bound=(1,))
+        assert keys == GroupKeys({2: _key("igdb", 9)}, {})
+
+    def test_a_romm_key_is_never_followed(self):
+        keys = _keys([_rom(2, ss_id=5)], {1: "romm:1:57", 2: "romm:1:57"}, unfetched_bound=(1,))
+        assert keys.unfetched == {}
+
+    def test_a_stale_summary_does_not_split_its_game(self):
+        # 30 is re-matched to igdb 2; hidden 32 still holds the igdb:1 summary the
+        # whole game held at the last sync. It is not counted, and 32 follows.
+        roms = [
+            _rom(30, igdb_id=2, ss_id=5, siblings=(31, 32)),
+            _rom(31, ss_id=5, siblings=(30, 32)),
+        ]
+        resident = {30: _key("igdb", 1), 31: _key("igdb", 1), 32: _key("igdb", 1)}
+        keys = _keys(roms, resident)
+        assert keys == GroupKeys({30: _key("igdb", 2), 31: _key("igdb", 2)}, {32: _key("igdb", 2)})
+
+    def test_a_stale_summary_still_splits_a_partial_view(self):
+        roms = [
+            _rom(30, igdb_id=2, ss_id=5, siblings=(31, 32)),
+            _rom(31, ss_id=5, siblings=(30, 32)),
+        ]
+        resident = {30: _key("igdb", 1), 31: _key("igdb", 1), 32: _key("igdb", 1)}
+        keys = _keys(roms, resident, complete=set())
+        assert keys == GroupKeys({30: _key("igdb", 2), 31: _key("ss", 5)}, {})
+
+    def test_a_stored_rows_own_other_key_still_splits_its_game(self):
+        # 32's igdb:1 is not the summary 30 held (igdb:2): it may be 32's own id.
+        keys = _keys([_rom(30, igdb_id=2, ss_id=5, siblings=(32,))], {30: _key("igdb", 2), 32: _key("igdb", 1)})
+        assert keys == GroupKeys({30: _key("igdb", 2)}, {})
+
+    def test_two_values_among_the_fetched_members_still_split_their_game(self):
+        roms = [_rom(20, igdb_id=1, ss_id=5, siblings=(21,)), _rom(21, igdb_id=2, ss_id=5, siblings=(20,))]
+        resident = {20: _key("igdb", 1), 21: _key("igdb", 1)}
+        assert _keys(roms, resident) == GroupKeys({20: _key("igdb", 1), 21: _key("igdb", 2)}, {})
+
+    def test_a_bridge_through_a_fetched_member_still_splits_its_game(self):
+        roms = [
+            _rom(20, igdb_id=1, ss_id=5, siblings=(21,)),
+            _rom(21, ss_id=5, moby_id=8, siblings=(20, 22)),
+            _rom(22, igdb_id=2, moby_id=8, siblings=(21,)),
+        ]
+        resident = {20: _key("igdb", 1), 21: _key("igdb", 1)}
+        assert _keys(roms, resident) == GroupKeys({20: _key("igdb", 1), 21: _key("ss", 5), 22: _key("igdb", 2)}, {})
+
+    def test_deterministic_under_input_permutation(self):
+        roms = [
+            _rom(30, igdb_id=2, ss_id=5, siblings=(31, 32)),
+            _rom(31, ss_id=5, siblings=(30, 32)),
+        ]
+        resident = {30: _key("igdb", 1), 31: _key("igdb", 1), 32: _key("igdb", 1)}
+        results = [_keys(list(p), resident) for p in itertools.permutations(roms)]
+        assert all(r == results[0] for r in results)
+        assert results[0].unfetched == {32: _key("igdb", 2)}

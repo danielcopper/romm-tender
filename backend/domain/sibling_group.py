@@ -12,20 +12,23 @@ a genuine cross-game bridge (two distinct values at the canonical source, smuggl
 in via a shared lower-priority id) refuses to merge and every member keeps its own
 solo key. An unmatched ROM with no edges is a solo group, exactly as on the server.
 
-:func:`compute_component_group_keys` is the component kernel used at sync time;
-:func:`compute_sibling_group_key` is the per-ROM coalesce-first fallback (a lone
-ROM, a bridged member, an un-edged incremental row) and the membership fallback in
-:mod:`services.version_switch`. :func:`target_in_sibling_group` is the single
-membership authority the version picker and the switch decide by. Pure compute, no
-I/O, stdlib only (see the ADR superseding ADR-0021 §1).
+:func:`compute_group_keys_with_unfetched` is the component kernel used at sync
+time, and :func:`compute_component_group_keys` the same over a view no component
+of which is complete; :func:`compute_sibling_group_key` is the per-ROM
+coalesce-first fallback (a lone ROM, a bridged member, an un-edged incremental
+row) and the membership fallback in :mod:`services.version_switch`.
+:func:`target_in_sibling_group` is the single membership authority the version
+picker and the switch decide by. Pure compute, no I/O, stdlib only (see the ADR
+superseding ADR-0021 §1).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection, Mapping
+    from collections.abc import Set as AbstractSet
 
 # (RomM dict field, key-source label) in RomM's coalesce order — the priority the
 # canonical-source pick walks, highest first. The label prefixes the key so two
@@ -143,17 +146,102 @@ def compute_component_group_keys(
       including members that lack the source. Multiple distinct values (a genuine
       cross-game bridge) or no source at all → every fresh member falls back to its
       own :func:`compute_sibling_group_key`.
+
+    The keying of a view no component of which is complete:
+    :func:`compute_group_keys_with_unfetched` with nothing complete.
+    """
+    return compute_group_keys_with_unfetched(
+        unit_roms, resident_keys, complete_rom_ids=frozenset(), unfetched_bound_ids=()
+    ).fresh
+
+
+class GroupKeys(NamedTuple):
+    """What :func:`compute_group_keys_with_unfetched` answers.
+
+    ``fresh`` is the key of every fresh ROM, as :func:`compute_component_group_keys`
+    answers it; ``unfetched`` the new key of every stored row the view did not
+    fetch whose group it follows.
+    """
+
+    fresh: dict[int, str]
+    unfetched: dict[int, str]
+
+
+class _StoredEdge(NamedTuple):
+    """A ``sibling_roms`` edge from a fresh *member* to a stored row *target* holding *key*."""
+
+    member: int
+    target: int
+    key: str
+
+
+def compute_group_keys_with_unfetched(
+    unit_roms: list[dict[str, Any]],
+    resident_keys: Mapping[int, str],
+    *,
+    complete_rom_ids: AbstractSet[int],
+    unfetched_bound_ids: Collection[int],
+) -> GroupKeys:
+    """Key a view's fresh ROMs, and every stored row the view did not fetch that follows its group.
+
+    *unit_roms* and *resident_keys* are :func:`compute_component_group_keys`' —
+    *resident_keys* the keys stored before this view is keyed, so a fresh member's
+    entry there is its **prior key**. A component is **complete** when every member
+    is in *complete_rom_ids*: the ROMs a platform listing returned, which holds
+    every version of a game RomM lists (a group is per-platform).
+    *unfetched_bound_ids* are the bound rows of those platforms the listings left
+    out — versions deleted or hidden in RomM, which RomM's answers do not tell
+    apart. A component that is not complete is keyed exactly as
+    :func:`compute_component_group_keys` keys it; a complete one, three ways more:
+
+    * Where its canonical source holds more than one value, a candidate equal to
+      the prior key of the member whose edge carried it is not counted — the
+      summary that member's group held at the last sync, not an id of the stored
+      row's own — and the gate judges again.
+    * A stored row one of its edges reaches takes its key, unless another
+      complete component's edge reaches the row under another key.
+    * A row of *unfetched_bound_ids* no edge reached takes its key where that
+      component is the one component a member of which held the row's stored key
+      as its prior key, every member holding a prior key held that one, and the
+      component holds no other value at the stored key's source. A ``romm:`` key
+      names no source and is never followed.
+
+    ``unfetched`` holds only rows whose key changes.
     """
     fresh_by_id, in_unit_resident = _partition_unit(unit_roms)
     resident_lookup: dict[int, str] = {int(k): v for k, v in resident_keys.items()}
     resident_lookup.update(in_unit_resident)
 
-    components, resident_candidates = _connect_components(fresh_by_id, resident_lookup)
+    components, stored_edges = _connect_components(fresh_by_id, resident_lookup)
 
-    result: dict[int, str] = {}
-    for member_ids in components.values():
-        _assign_component_keys(member_ids, fresh_by_id, resident_candidates, result)
-    return result
+    fresh: dict[int, str] = {}
+    reached: dict[int, set[str]] = {}
+    agreed: dict[int, tuple[str, dict[str, set[str]]]] = {}
+    for root, member_ids in components.items():
+        edges = [edge for member_id in member_ids for edge in stored_edges.get(member_id, [])]
+        complete = all(member_id in complete_rom_ids for member_id in member_ids)
+        values = _values_by_source(member_ids, fresh_by_id, edges)
+        if complete and _agreed_value(values) is None:
+            counted = [edge for edge in edges if edge.key != resident_lookup.get(edge.member)]
+            values = _values_by_source(member_ids, fresh_by_id, counted)
+        key = _assign_component_keys(member_ids, fresh_by_id, values, fresh)
+        if complete and key is not None:
+            agreed[root] = (key, values)
+            for edge in edges:
+                reached.setdefault(edge.target, set()).add(key)
+
+    unfetched = {
+        target: next(iter(keys))
+        for target, keys in reached.items()
+        if len(keys) == 1 and resident_lookup[target] not in keys
+    }
+    for rom_id in sorted(unfetched_bound_ids):
+        if rom_id in reached or rom_id in fresh_by_id or rom_id not in resident_lookup:
+            continue
+        followed = _followed_key(resident_lookup[rom_id], components, agreed, resident_lookup)
+        if followed is not None:
+            unfetched[rom_id] = followed
+    return GroupKeys(fresh, unfetched)
 
 
 def _partition_unit(unit_roms: list[dict[str, Any]]) -> tuple[dict[int, dict[str, Any]], dict[int, str]]:
@@ -180,25 +268,25 @@ def _partition_unit(unit_roms: list[dict[str, Any]]) -> tuple[dict[int, dict[str
 def _connect_components(
     fresh_by_id: dict[int, dict[str, Any]],
     resident_lookup: dict[int, str],
-) -> tuple[dict[int, list[int]], dict[int, list[tuple[str, str]]]]:
+) -> tuple[dict[int, list[int]], dict[int, list[_StoredEdge]]]:
     """Union fresh members over their ``sibling_roms`` edges into connected components.
 
-    Returns ``(components_by_root, resident_candidates)``: components maps each root
-    to its member ids, and ``resident_candidates`` maps a fresh member id to the
-    ``(source, value)`` candidates its edges into resident ROMs contribute.
-    Processing is sorted by ``rom_id`` so the partition is order-independent.
+    Returns ``(components_by_root, stored_edges)``: components maps each root to
+    its member ids, and ``stored_edges`` maps a fresh member id to its edges into
+    stored ROMs. Processing is sorted by ``rom_id`` so the partition is
+    order-independent.
     """
     fresh_ids = set(fresh_by_id)
     uf = _UnionFind(fresh_ids)
-    resident_candidates: dict[int, list[tuple[str, str]]] = {}
+    stored_edges: dict[int, list[_StoredEdge]] = {}
     for rom_id in sorted(fresh_ids):
         for sibling in fresh_by_id[rom_id].get("sibling_roms") or []:
-            _apply_edge(rom_id, sibling, fresh_ids, resident_lookup, uf, resident_candidates)
+            _apply_edge(rom_id, sibling, fresh_ids, resident_lookup, uf, stored_edges)
 
     components: dict[int, list[int]] = {}
     for rom_id in sorted(fresh_ids):
         components.setdefault(uf.find(rom_id), []).append(rom_id)
-    return components, resident_candidates
+    return components, stored_edges
 
 
 def _apply_edge(
@@ -207,14 +295,12 @@ def _apply_edge(
     fresh_ids: set[int],
     resident_lookup: dict[int, str],
     uf: _UnionFind,
-    resident_candidates: dict[int, list[tuple[str, str]]],
+    stored_edges: dict[int, list[_StoredEdge]],
 ) -> None:
-    """Apply one ``sibling_roms`` edge: union two fresh members, or record a candidate.
+    """Apply one ``sibling_roms`` edge: union two fresh members, or record an edge into a stored ROM.
 
     An edge between two fresh members unions them; an edge to a resident ROM (in-unit
-    or DB) parses that resident's key to a canonical candidate for ``rom_id``'s
-    component (a ``romm:`` fallback parses to ``None`` and contributes nothing); an
-    edge to an unknown ROM does neither.
+    or DB) is recorded for ``rom_id``; an edge to an unknown ROM does neither.
     """
     target_id = int(sibling.get("id", 0) or 0)
     if target_id <= 0 or target_id == rom_id:
@@ -222,18 +308,17 @@ def _apply_edge(
     if target_id in fresh_ids:
         uf.union(rom_id, target_id)
     elif target_id in resident_lookup:
-        parsed = _parse_group_key(resident_lookup[target_id])
-        if parsed is not None:
-            resident_candidates.setdefault(rom_id, []).append(parsed)
+        stored_edges.setdefault(rom_id, []).append(_StoredEdge(rom_id, target_id, resident_lookup[target_id]))
 
 
-def _assign_component_keys(
-    member_ids: list[int],
-    fresh_by_id: dict[int, dict[str, Any]],
-    resident_candidates: dict[int, list[tuple[str, str]]],
-    result: dict[int, str],
-) -> None:
-    """Pick one component's canonical source and stamp its members into *result*."""
+def _values_by_source(
+    member_ids: list[int], fresh_by_id: dict[int, dict[str, Any]], edges: list[_StoredEdge]
+) -> dict[str, set[str]]:
+    """Every value one component holds per source: its members' ids, and the candidates *edges* carry.
+
+    An edge into a stored row parses that row's key to a candidate; a ``romm:``
+    fallback key parses to none and contributes nothing.
+    """
     values_by_source: dict[str, set[str]] = {}
     for member_id in member_ids:
         rom = fresh_by_id[member_id]
@@ -241,21 +326,64 @@ def _assign_component_keys(
             value = rom.get(field)
             if value is not None:
                 values_by_source.setdefault(source, set()).add(str(value))
-        for source, value in resident_candidates.get(member_id, []):
-            values_by_source.setdefault(source, set()).add(value)
+    for edge in edges:
+        parsed = _parse_group_key(edge.key)
+        if parsed is not None:
+            values_by_source.setdefault(parsed[0], set()).add(parsed[1])
+    return values_by_source
 
+
+def _agreed_value(values_by_source: dict[str, set[str]]) -> tuple[str, str] | None:
+    """The canonical ``(source, value)`` of *values_by_source*; ``None`` without a source or with two values there."""
     canonical = next((source for _field, source in _META_ID_SOURCES if source in values_by_source), None)
-    values = values_by_source.get(canonical) if canonical is not None else None
-    if canonical is None or values is None or len(values) != 1:
+    if canonical is None or len(values_by_source[canonical]) != 1:
+        return None
+    return canonical, next(iter(values_by_source[canonical]))
+
+
+def _assign_component_keys(
+    member_ids: list[int],
+    fresh_by_id: dict[int, dict[str, Any]],
+    values_by_source: dict[str, set[str]],
+    result: dict[int, str],
+) -> str | None:
+    """Stamp one component's members into *result*; answer the component key, or ``None`` when it fell back."""
+    agreed = _agreed_value(values_by_source)
+    if agreed is None:
         # No metadata source, or a genuine cross-game bridge (conflicting values at
         # the canonical source) — no assumption-merge, each member keeps its own key.
         for member_id in member_ids:
             result[member_id] = compute_sibling_group_key(fresh_by_id[member_id])
-        return
-    value = next(iter(values))
+        return None
+    canonical, value = agreed
     for member_id in member_ids:
         platform_id = fresh_by_id[member_id].get("platform_id")
         result[member_id] = f"{canonical}:{value}:{platform_id}"
+    return result[member_ids[0]]
+
+
+def _followed_key(
+    stored_key: str,
+    components: dict[int, list[int]],
+    agreed: dict[int, tuple[str, dict[str, set[str]]]],
+    resident_lookup: dict[int, str],
+) -> str | None:
+    """The key a bound row the view left out follows, under :func:`compute_group_keys_with_unfetched`' rule."""
+    parsed = _parse_group_key(stored_key)
+    if parsed is None:
+        return None
+    carriers = [
+        root for root, member_ids in components.items() if any(resident_lookup.get(m) == stored_key for m in member_ids)
+    ]
+    if len(carriers) != 1 or carriers[0] not in agreed:
+        return None
+    if any(resident_lookup.get(m) not in (None, stored_key) for m in components[carriers[0]]):
+        return None
+    key, values = agreed[carriers[0]]
+    source, value = parsed
+    if key == stored_key or not values.get(source, {value}) <= {value}:
+        return None
+    return key
 
 
 def target_in_sibling_group(
