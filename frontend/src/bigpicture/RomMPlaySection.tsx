@@ -934,8 +934,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   }
 
   // Why the game's emulator cannot start it: Play is disabled, and the same
-  // sentence stands under the row. Not on a stranded panel, and not for a
-  // download whose file is missing, where the row says that instead.
+  // sentence stands in the row beside it, behind the warning sign. Not on a
+  // stranded panel, and not for a download whose file is missing, where the row
+  // says that instead.
   const emulatorRefusal =
     stranded || fileMissing || detail.emulatorStart === null
       ? null
@@ -989,6 +990,23 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       >
         {infoItems}
       </div>
+      {emulatorRefusal === null ? null : (
+        <div
+          data-testid="emulator-refusal"
+          style={{
+            flex: "1 1 0",
+            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "12px",
+            color: "#ffaa00",
+          }}
+        >
+          <FaExclamationTriangle size={12} style={{ flexShrink: 0 }} />
+          <span>{emulatorRefusal}</span>
+        </div>
+      )}
       {/* Gear icon buttons pushed to the far right; a stranded panel offers none */}
       {stranded ? null : (
         <div
@@ -1043,14 +1061,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // button drops back to "loading" and re-runs its init (#1682). A Fragment adds
   // no DOM node, so the row stays a direct child of the injected panel either way.
   const emulatorNote = activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
-  // The pick that no longer exists, why Play is refused, and the user's own
-  // choice in ES-DE — each said once, under the row.
+  // The pick that no longer exists and the user's own choice in ES-DE — each
+  // said once, under the row.
   const emulatorLines =
     stranded || fileMissing
       ? []
       : [
           detail.vanishedPick === null ? null : vanishedPickSentence(detail.vanishedPick),
-          emulatorRefusal,
           frontendChoiceSentence(detail.emulators, detail.activeCoreLabel),
         ].filter((line): line is string => line !== null);
   return (
