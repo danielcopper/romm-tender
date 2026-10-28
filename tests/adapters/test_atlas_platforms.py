@@ -112,7 +112,7 @@ def _ask(adapter: AtlasPlatformSystemsAdapter, ids: PlatformIds, slug: str, **kw
 
 
 class TestTheRealResolverOverARealTree:
-    def test_the_main_system_is_taken_not_a_regional_one(self, tmp_path, traces):
+    def test_the_system_named_like_the_platform_is_taken_not_a_regional_one(self, tmp_path, traces):
         platform = _ask(_real(tmp_path, traces), PlatformIds(igdb_id=19), "snes")
 
         assert (platform.state, platform.system, _kind(platform)) == (FOUND, "snes", "retrodeck")
