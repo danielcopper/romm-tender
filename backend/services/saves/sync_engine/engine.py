@@ -85,6 +85,7 @@ from services.saves.sync_engine._pre_launch import PreLaunchRuns, PreLaunchState
 from services.saves.sync_engine._result_message import summarize_sync_result
 from services.saves.sync_engine._running_game import RomSyncStops, RunningGameGuard, RunningSkips
 from services.saves.sync_engine._shape_refusal import ContentDirTally, live_save_answer, refuse_unsyncable
+from services.saves.sync_engine._sweep_step import sweep_reading, sweep_rom
 from services.saves.sync_engine._sweep_stop import SaveSweepIncomplete
 from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
 from services.saves.sync_engine.rollback import RollbackOrchestrator
@@ -618,19 +619,18 @@ class SyncEngine:
             self._log_debug(f"_run_rom_sync({rom_id}): slot not confirmed, skipping bulk sync")
             return 0, 0, [], []
         if save_answer is None:
-            # The whole-library sweep's per-ROM step: its one reading follows a
-            # moved directory and is then handed down.
-            if running_skips is not None and await self._running.is_running(rom_id):
-                running_skips.skip(rom_id, await self._running.name_of(rom_id))
-                self._log_debug(f"_run_rom_sync({rom_id}): its game is running, skipping bulk sync")
+            passed_over, save_answer = await sweep_reading(
+                rom_id,
+                running=self._running,
+                read_answer=functools.partial(self.read_save_answer, rom_id),
+                follow=functools.partial(self.follow_save_directory, rom_id, while_running=True),
+                running_skips=running_skips,
+                stop=stop,
+                content_dir_tally=content_dir_tally,
+                log_debug=self._log_debug,
+            )
+            if passed_over:
                 return 0, 0, [], []
-            save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-            if stop is not None and stop.stops_here():
-                raise SyncStopped
-            # Asked just above, under this lock; a start since then is the stop's.
-            await self.follow_save_directory(rom_id, save_answer, while_running=True)
-            if content_dir_tally is not None:
-                content_dir_tally.count(save_answer)
         core_so = await self._loop.run_in_executor(None, self.resolve_core, rom_id)
         default_slot = resolve_default_slot(self._settings)
         cleanup_limit = autocleanup_limit(self._settings)
@@ -1085,24 +1085,24 @@ class SyncEngine:
                     try:
                         for rom_id_int in rom_ids:
                             rom_count += 1
-                            with self._rom_stops.track(rom_id_int) as stop:
-                                try:
-                                    async with self.rom_lock(rom_id_int):
-                                        uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
-                                            rom_id_int,
-                                            device_id=device_id,
-                                            require_confirmed=True,
-                                            session_id=session_id,
-                                            session_counts=session_counts if session_id is not None else None,
-                                            content_dir_tally=content_dir_tally,
-                                            running_skips=running_skips,
-                                            stop=stop,
-                                        )
-                                except SyncStopped:
-                                    uploaded, downloaded, errors, conflicts = 0, 0, [], []
-                            if stop.stopped_the_sync():
-                                # Its game is starting: what moved before the stop counts.
-                                running_skips.skip(rom_id_int, await self._running.name_of(rom_id_int))
+                            sync = functools.partial(
+                                self._run_rom_sync,
+                                rom_id_int,
+                                device_id=device_id,
+                                require_confirmed=True,
+                                session_id=session_id,
+                                session_counts=session_counts if session_id is not None else None,
+                                content_dir_tally=content_dir_tally,
+                                running_skips=running_skips,
+                            )
+                            uploaded, downloaded, errors, conflicts = await sweep_rom(
+                                rom_id_int,
+                                stops=self._rom_stops,
+                                lock=self.rom_lock(rom_id_int),
+                                sync=sync,
+                                running=self._running,
+                                running_skips=running_skips,
+                            )
                             total_synced += uploaded + downloaded
                             total_errors.extend(errors)
                             all_conflicts.extend(conflicts)
