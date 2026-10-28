@@ -192,7 +192,9 @@ without a slot). Tap it to copy that save into another slot:
 - If the save can't be fetched onto your device, the copy fails and your active slot stays as it was.
 - If the save is copied onto your device but can't be uploaded to RomM, you're told so: the destination slot is active
   with the copied save, and the next sync uploads it. Where the destination slot already holds a save this device is not
-  up to date with, or one more than twice the copy's size, the next sync asks you which to keep instead.
+  up to date with, or one more than twice the copy's size, the next sync asks you which to keep instead. If another
+  device puts a different file of this game's save into that slot at the same moment, the next sync reports an error for
+  the copied file instead.
 
 Common uses: promote a save from the Manual archive into a named slot, or bring a save from one slot onto another so you
 can continue it there.
