@@ -341,7 +341,8 @@ predates the play-session read scope. When RomM is unreachable the displayed val
 
 The **LAST PLAYED** date on the detail page comes from this same cross-device history, so it stays correct after you
 move to a new device — where Steam would otherwise reset it and show every game as just played. Until the server has a
-recorded session for a game (or while RomM is unreachable), the date falls back to Steam's own last-played value.
+recorded session for a game (or while RomM is unreachable), the date falls back to Steam's own last-played value. When a
+session ends, the date shows it at once, also on a detail page that stayed open.
 
 Steam also tracks playtime natively for non-Steam shortcuts, so you'll see playtime in the standard Steam UI as well.
 

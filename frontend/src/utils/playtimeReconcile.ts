@@ -16,7 +16,8 @@ import { detach } from "./detach";
 interface PlaytimeState {
   lastPlayed: string;
   /** Restored cross-device `last_played` (ISO-8601) from `reconcile_playtime`,
-   *  or `null` until the server yields one. Preferred over Steam's device-local
+   *  or `null` until the server yields one and again once a session's end has
+   *  set Steam's value. Preferred over Steam's device-local
    *  `rt_last_time_played` when rendering LAST PLAYED (#1294). */
   restoredLastPlayed: string | null;
   playtime: string;
@@ -114,17 +115,24 @@ export function useGamePlaytime(appId: number, romId: number | null, logContext:
   // for this appId. Drives the displayed PLAYTIME / LAST PLAYED from the source
   // of truth (the overview) instead of a mount-only snapshot, so a session end
   // (handleGameStop) or a multi-device reconcile-on-view refreshes the value on
-  // the SAME mount — no navigate-away/back remount required.
+  // the SAME mount — no navigate-away/back remount required. A write that set
+  // Steam's last-played time itself (a session's end) is newer than anything
+  // restored before it, so it drops the restored value; any other write leaves
+  // it winning, since Steam's own value can be the "now" of a device cutover.
   useEffect(() => {
     const onPlaytimeChanged = (e: WindowEventMap["romm_playtime_changed"]) => {
       if (e.detail.appId !== appId) return;
       const ov = appStore.GetAppOverviewByAppID(appId);
       if (!ov) return;
-      setPlaytimeInfo((prev) => ({
-        ...prev,
-        playtime: formatPlaytime(ov.minutes_playtime_forever ?? 0),
-        lastPlayed: resolveLastPlayed(prev.restoredLastPlayed, ov.rt_last_time_played ?? 0),
-      }));
+      setPlaytimeInfo((prev) => {
+        const restoredLastPlayed = e.detail.lastPlayedWritten ? null : prev.restoredLastPlayed;
+        return {
+          ...prev,
+          restoredLastPlayed,
+          playtime: formatPlaytime(ov.minutes_playtime_forever ?? 0),
+          lastPlayed: resolveLastPlayed(restoredLastPlayed, ov.rt_last_time_played ?? 0),
+        };
+      });
     };
     globalThis.addEventListener("romm_playtime_changed", onPlaytimeChanged);
     return () => {

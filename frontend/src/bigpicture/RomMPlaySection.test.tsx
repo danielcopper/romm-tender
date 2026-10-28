@@ -2379,10 +2379,10 @@ describe("RomMPlaySection", () => {
       // Restored value adopted on reconcile.
       expect(container.textContent).toContain(shown(ourSecs));
 
-      // A later playtime signal (session end / bulk write) changes Steam's
-      // device-local rt to a DIFFERENT value and fires the chokepoint signal.
-      // The reactive handler must keep the restored value — Steam's synthesized
-      // rt must NOT win.
+      // A later playtime signal from a write that did not set Steam's
+      // last-played time itself (a bulk write, not a session's end) comes with
+      // Steam's device-local rt at a DIFFERENT value. The reactive handler must
+      // keep the restored value — Steam's synthesized rt must NOT win.
       stubAppStore({ [testAppId]: { rt_last_time_played: 1222222222, minutes_playtime_forever: 120 } });
       act(() => {
         globalThis.dispatchEvent(new CustomEvent("romm_playtime_changed", { detail: { appId: testAppId } }));

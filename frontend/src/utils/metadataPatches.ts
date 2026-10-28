@@ -9,6 +9,7 @@
  * over either.
  */
 import type { RomMetadata } from "../types";
+import type { RommPlaytimeChangedDetail } from "../types/events";
 import { debugLog, logInfo } from "../api/backend";
 import { detach } from "./detach";
 import { overviewFor, writeMetadataFields, writePlaytimeFields } from "./steamOverview";
@@ -148,7 +149,8 @@ export function updatePlaytimeDisplay(appId: number, totalSeconds: number, updat
   // overview and refresh on the same mount, instead of staying stale until a
   // navigate-away/back remount. Fires for session-end, reconcile-on-view, and
   // any future writer that routes through here.
-  globalThis.dispatchEvent(new CustomEvent("romm_playtime_changed", { detail: { appId } }));
+  const detail: RommPlaytimeChangedDetail = { appId, lastPlayedWritten: updateLastPlayed };
+  globalThis.dispatchEvent(new CustomEvent("romm_playtime_changed", { detail }));
   return true;
 }
 

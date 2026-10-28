@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { registerMetadataPatches, applyAllMetadata, applyAllPlaytime, updatePlaytimeDisplay } from "./metadataPatches";
 import type { RomMetadata } from "../types";
+import type { RommPlaytimeChangedDetail } from "../types/events";
 
 // RomMetadata has several required fields; build a full object and override the
 // few that applyDirectMutations actually reads (average_rating, steam_categories).
@@ -237,5 +238,43 @@ describe("updatePlaytimeDisplay", () => {
 
     expect(updatePlaytimeDisplay(100, Number.NaN, false)).toBe(false);
     expect(overview).toEqual({ minutes_playtime_forever: 12, rt_last_time_played: 34 });
+  });
+});
+
+describe("the romm_playtime_changed signal", () => {
+  beforeEach(() => {
+    vi.stubGlobal("__mobxGlobals", undefined);
+    vi.stubGlobal("appStore", { GetAppOverviewByAppID: vi.fn(), allApps: [] });
+  });
+
+  function recordSignals(): { details: RommPlaytimeChangedDetail[]; stop: () => void } {
+    const details: RommPlaytimeChangedDetail[] = [];
+    const listener = (e: WindowEventMap["romm_playtime_changed"]) => details.push(e.detail);
+    globalThis.addEventListener("romm_playtime_changed", listener);
+    return { details, stop: () => globalThis.removeEventListener("romm_playtime_changed", listener) };
+  }
+
+  it("says the write set Steam's last-played time when it did", () => {
+    const overview = { minutes_playtime_forever: 0, rt_last_time_played: 0 };
+    vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(overview as unknown as SteamAppOverview);
+    const signals = recordSignals();
+
+    updatePlaytimeDisplay(100, 600);
+    signals.stop();
+
+    expect(overview.rt_last_time_played).toBeGreaterThan(0);
+    expect(signals.details).toEqual([{ appId: 100, lastPlayedWritten: true }]);
+  });
+
+  it("says it did not when the write left Steam's last-played time alone", () => {
+    const overview = { minutes_playtime_forever: 0, rt_last_time_played: 0 };
+    vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(overview as unknown as SteamAppOverview);
+    const signals = recordSignals();
+
+    updatePlaytimeDisplay(100, 600, false);
+    signals.stop();
+
+    expect(overview.rt_last_time_played).toBe(0);
+    expect(signals.details).toEqual([{ appId: 100, lastPlayedWritten: false }]);
   });
 });

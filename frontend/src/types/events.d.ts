@@ -48,6 +48,9 @@ export interface RommSessionChangedDetail {
  */
 export interface RommPlaytimeChangedDetail {
   appId: number;
+  /** Whether this write also set the overview's `rt_last_time_played` to now,
+   *  as a session's end does. */
+  lastPlayedWritten: boolean;
 }
 
 declare global {

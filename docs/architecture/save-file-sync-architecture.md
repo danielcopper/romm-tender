@@ -2280,6 +2280,12 @@ no session for the ROM yet, or the reconcile ran local-only) the display falls b
 regression before any server data exists. This is display-only — Tender does not write the restored value back into
 Steam's `rt_last_time_played` (#1294).
 
+A session's end on an open page is the one time Steam's value wins over a restored one. Every playtime write goes
+through `updatePlaytimeDisplay`, and the `romm_playtime_changed` signal it fires says whether the write also set
+`rt_last_time_played` to now (`lastPlayedWritten`), which only the session's end does. On such a signal the page drops
+the restored value it holds and shows Steam's, so LAST PLAYED names the session just played; on any other signal — the
+reconcile's own write, a bulk pass at load or after a sync — the restored value still wins.
+
 ## Save-Sync State — the `RomSaveSyncState` aggregate
 
 Per-ROM save-sync state lives in SQLite — there is no JSON file. The per-ROM scalars are the `RomSaveSyncState`
