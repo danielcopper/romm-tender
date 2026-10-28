@@ -110,6 +110,9 @@ _ROW_KEYS = {
     "one_of",
     "fetch_for_required",
     "missing_configured_image",
+    # Not in a5777746: a core option naming a file in a declared folder that
+    # the core does not offer (#2644 D7).
+    "configured_image_not_offered",
     "supplied_by",
     "satisfied",
     "declared_kind",

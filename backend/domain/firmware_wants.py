@@ -214,6 +214,22 @@ class MissingConfiguredImage:
 
 
 @dataclass(frozen=True)
+class ConfiguredImageNotOffered:
+    """An emulator's core option names a file in its folder declaration that the core does not offer.
+
+    The frontend hands the core only a value it offered, so the core starts
+    with its default — a BIOS from the folder's own listing — and the folder's
+    verdict is what its launch rests on: it is the setting that is passed over,
+    never the requirement. ``emulator_label`` is the label of the entry the
+    row's reading came from and ``file_name`` the name the option holds —
+    either ``None`` where the answer did not state it.
+    """
+
+    emulator_label: str | None
+    file_name: str | None
+
+
+@dataclass(frozen=True)
 class RefusedDeclaration:
     """A declaration the resolver would not follow to a destination, and why.
 
@@ -481,7 +497,9 @@ class FirmwarePlacement:
 
     ``missing_configured_image`` is set where the emulator the reading came
     from is configured to open a file in this folder that is not there
-    (:class:`MissingConfiguredImage`). It is never a verdict either.
+    (:class:`MissingConfiguredImage`), and ``configured_image_not_offered``
+    where its core option names a file there the core does not offer
+    (:class:`ConfiguredImageNotOffered`). Neither is ever a verdict.
 
     On a folder declaration, ``folder_md5s`` are the checksums the packaged
     table files under the folder, which a library file is recognised as valid
@@ -520,6 +538,7 @@ class FirmwarePlacement:
     supplied_by: str | None = None
     checked: str | None = None
     missing_configured_image: MissingConfiguredImage | None = None
+    configured_image_not_offered: ConfiguredImageNotOffered | None = None
     emulator: str | None = None
     satisfied: bool | None = None
     place: str | None = None

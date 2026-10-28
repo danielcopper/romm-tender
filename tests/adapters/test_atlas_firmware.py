@@ -28,6 +28,7 @@ from _vendor.atlas import (
     CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
+    CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_CANDIDATE,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE,
     CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
@@ -98,6 +99,7 @@ from domain.firmware_wants import (
     LOCATING_UNESTABLISHED,
     SYSTEM_FIRMWARE_STATES,
     WANTED_UNKNOWN,
+    ConfiguredImageNotOffered,
     FirmwareWant,
     FolderFile,
     MissingConfiguredImage,
@@ -1679,6 +1681,46 @@ class TestFolderVerdicts:
         )
 
         assert placement.caveats == ()
+
+    def test_a_configured_name_the_core_does_not_offer_rides_with_the_emulators_label_and_leaves_the_verdict_alone(
+        self, adapter, monkeypatch
+    ):
+        """The core starts with a BIOS from its folder's listing, so the folder verdict stands (#2644 D4)."""
+        answer = _answer(
+            _core(
+                core_so="pcsx2_libretro.so",
+                label="LRPS2",
+                requirements=(self._folder(found=KIND_DIRECTORY, checked="unknown", contents_satisfied=True),),
+            ),
+            caveats=(
+                Caveat(
+                    code=CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED,
+                    message="the core does not offer the configured name",
+                    data={"core": "pcsx2", "key": "pcsx2_bios", "name": "scph10000.bin", "dir": f"{_ROOT}/pcsx2/bios"},
+                ),
+            ),
+        )
+        _detect(monkeypatch, _detecting(_Installation(answer)))
+
+        placement = adapter().placements[0]
+        assert placement.configured_image_not_offered == ConfiguredImageNotOffered("LRPS2", "scph10000.bin")
+        assert placement.missing_configured_image is None
+        assert placement.folder is not None
+        assert placement.folder.satisfied is True
+
+    def test_a_row_with_every_configured_name_offered_names_none(self, adapter, monkeypatch):
+        placement = self._placement(
+            adapter,
+            monkeypatch,
+            self._folder(found=KIND_DIRECTORY, checked="unknown", contents_satisfied=True),
+            Caveat(
+                code=CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
+                message="the configured name is stale",
+                data={"core": "pcsx2", "key": "pcsx2_bios", "name": "scph10000.bin", "dir": f"{_ROOT}/pcsx2/bios"},
+            ),
+        )
+
+        assert placement.configured_image_not_offered is None
 
 
 def _not_comparable(file_name: str) -> Caveat:

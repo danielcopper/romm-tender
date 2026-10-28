@@ -80,6 +80,7 @@ from _vendor.atlas import (
     CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
+    CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE,
     CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
     CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS,
@@ -109,6 +110,7 @@ from domain.firmware_wants import (
     NOTE_BIOS_UNCHOSEN,
     NOTE_IMAGES_TIED,
     NOTE_SEARCH_FOUND_NOTHING,
+    ConfiguredImageNotOffered,
     CoreFirmwareVerdict,
     EmulatorNote,
     FirmwareCatalogue,
@@ -915,6 +917,7 @@ def _placement_for(
         supplied_by=supplied.label if supplied is not None else None,
         checked=requirement.checked,
         missing_configured_image=_missing_configured_image(core, speaking),
+        configured_image_not_offered=_configured_image_not_offered(core, speaking),
         emulator=identity,
         satisfied=requirement.satisfied,
         place=place,
@@ -985,6 +988,22 @@ def _missing_configured_image(core: Any, speaking: tuple[Any, ...]) -> MissingCo
         if caveat.code == CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING:
             name = caveat.data.get("name")
             return MissingConfiguredImage(
+                emulator_label=core.label, file_name=name if isinstance(name, str) and name else None
+            )
+    return None
+
+
+def _configured_image_not_offered(core: Any, speaking: tuple[Any, ...]) -> ConfiguredImageNotOffered | None:
+    """The core option a row's statements name that the core does not offer, with the label of its emulator.
+
+    Read off the row's own statements as :func:`_missing_configured_image` is:
+    LRPS2's ``pcsx2_bios`` naming a file its listing drops, on its
+    ``pcsx2/bios`` row.
+    """
+    for caveat in speaking:
+        if caveat.code == CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED:
+            name = caveat.data.get("name")
+            return ConfiguredImageNotOffered(
                 emulator_label=core.label, file_name=name if isinstance(name, str) and name else None
             )
     return None

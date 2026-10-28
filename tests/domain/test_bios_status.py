@@ -35,6 +35,7 @@ from domain.firmware_wants import (
     DECLARED_DIRECTORY,
     WANTED_NEEDED,
     WANTED_OPTIONAL,
+    ConfiguredImageNotOffered,
     CoreFirmwareVerdict,
     FirmwareGroup,
     FirmwareOption,
@@ -481,6 +482,30 @@ class TestThePlayRowTokenCountsPlainFilesOnly:
         assert self._label(GROUP_UNKNOWN, plain=(True,)) == BIOS_LABEL_UNKNOWN
         assert self._label(GROUP_UNKNOWN) == BIOS_LABEL_UNKNOWN
         assert self._label(plain=(None, True)) == BIOS_LABEL_UNKNOWN
+
+
+class TestAConfiguredNameTheCoreDoesNotOfferChangesNothing:
+    """LRPS2 set to a file its listing drops starts with one from the folder — the verdict stands (#2644 D4)."""
+
+    _FOLDER = FirmwarePlacement(
+        file_name="bios",
+        relative_path="pcsx2/bios",
+        description="'pcsx2/bios' folder",
+        wants=(FirmwareWant(emulator="pcsx2_libretro.so", required=True),),
+        declared_kind=DECLARED_DIRECTORY,
+        caveats=("firmware-configured-image-not-offered",),
+        folder=FolderVerdict(satisfied=True, images=("SCPH-70004",)),
+        configured_image_not_offered=ConfiguredImageNotOffered("LRPS2", "scph10000.bin"),
+        emulator="pcsx2_libretro.so",
+        satisfied=True,
+    )
+
+    def test_the_row_carries_the_setting_and_keeps_its_verdict(self):
+        entry = build_file_entry("bios", True, "/bios/pcsx2/bios", self._FOLDER, True, "pcsx2_libretro.so")
+
+        assert entry.configured_image_not_offered == {"emulator_label": "LRPS2", "file_name": "scph10000.bin"}
+        assert entry.missing_configured_image is None
+        assert entry.satisfied is True
 
 
 class TestAStaleConfiguredNameChangesNothing:
