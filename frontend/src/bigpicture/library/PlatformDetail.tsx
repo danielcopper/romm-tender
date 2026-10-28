@@ -54,6 +54,7 @@ import {
   Muted,
   NOTE_FONT,
   RED,
+  SELECTION_ACCENT,
   SectionTitle,
   type ScopedStatus,
 } from "../layout/pane";
@@ -495,6 +496,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
                 emulatorSource: offer.core.emulator_source,
                 emulatorPlatformSystem: offer.core.platform_system,
                 activeLabel: offer.core.active_core_label,
+                activeColor: SELECTION_ACCENT,
                 // Null on purpose: this pane IS the platform level, so marking
                 // an entry "(system)" would restate where the reader already is.
                 platformCoreLabel: null,

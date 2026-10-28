@@ -32,7 +32,7 @@ import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
-import { Muted } from "./layout/pane";
+import { Muted, SELECTION_ACCENT } from "./layout/pane";
 import { activeEmulatorNote } from "../utils/emulatorInstallation";
 import { useTriggerHandler } from "./emulatorStepping";
 import { useBumperHandler, usePlayRowRef } from "./tabStepping";
@@ -697,6 +697,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         emulatorSource: detail.emulatorSource,
         emulatorPlatformSystem: detail.emulatorPlatformSystem,
         activeLabel: detail.activeCoreLabel,
+        activeColor: SELECTION_ACCENT,
         platformCoreLabel: detail.platformCoreLabel,
         followSystem: {
           hasGameOverride: detail.hasGameOverride,

@@ -15,11 +15,19 @@ import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
 
 // The builder returns a <Menu> element; walk its child MenuItem elements without
 // rendering (the @decky/ui Menu/MenuItem are stubs). A MenuItem carries its label
-// as a string child; MenuSeparators have no string child and are filtered out.
+// as a string child, or the active entry's inside one coloured span;
+// MenuSeparators have no child and are filtered out.
 interface Item {
   text: string;
+  color: string | undefined;
   disabled: boolean;
   onClick: (() => void) | undefined;
+}
+function labelOf(child: unknown): { text: string; color: string | undefined } | null {
+  if (typeof child === "string") return { text: child, color: undefined };
+  const span = child as ReactElement<{ children?: unknown; style?: { color?: string } }> | null;
+  if (typeof span?.props.children !== "string") return null;
+  return { text: span.props.children, color: span.props.style?.color };
 }
 function items(menu: unknown): Item[] {
   const el = menu as ReactElement<{ children?: unknown }>;
@@ -29,8 +37,10 @@ function items(menu: unknown): Item[] {
     .filter(Boolean);
   return kids
     .map((k) => k as ReactElement<{ children?: unknown; disabled?: boolean; onClick?: () => void }>)
-    .filter((k) => typeof k.props.children === "string")
-    .map((k) => ({ text: k.props.children as string, disabled: !!k.props.disabled, onClick: k.props.onClick }));
+    .flatMap((k) => {
+      const label = labelOf(k.props.children);
+      return label === null ? [] : [{ ...label, disabled: !!k.props.disabled, onClick: k.props.onClick }];
+    });
 }
 
 function baseConfig(overrides: Partial<EmulatorMenuConfig> = {}): EmulatorMenuConfig {
@@ -41,6 +51,7 @@ function baseConfig(overrides: Partial<EmulatorMenuConfig> = {}): EmulatorMenuCo
     emulatorSource: { kind: "retrodeck", starts_games: true },
     emulatorPlatformSystem: null,
     activeLabel: null,
+    activeColor: "#1a9fff",
     platformCoreLabel: null,
     onPick: vi.fn(),
     ...overrides,
@@ -213,6 +224,19 @@ describe("buildEmulatorMenu", () => {
   it("checkmarks the follow-system item when the game already follows the system", () => {
     const menu = buildEmulatorMenu(baseConfig({ followSystem: { hasGameOverride: false, onFollowSystem: vi.fn() } }));
     expect(items(menu).find((i) => i.text.startsWith("Use System Override"))!.text).toContain("✓");
+  });
+
+  it("draws only the entry that starts in the selection colour, the follow-system item left plain", () => {
+    const menu = buildEmulatorMenu(
+      baseConfig({ activeLabel: "VBA-M", followSystem: { hasGameOverride: false, onFollowSystem: vi.fn() } }),
+    );
+    const colours = Object.fromEntries(items(menu).map((i) => [i.text, i.color]));
+    expect(colours).toEqual({
+      "Switching cores may affect save compatibility": undefined,
+      "Use System Override (mGBA) ✓": undefined,
+      "mGBA (default)": undefined,
+      "VBA-M ✓": "#1a9fff",
+    });
   });
 
   it("omits the follow-system item on the platform detail (no followSystem)", () => {

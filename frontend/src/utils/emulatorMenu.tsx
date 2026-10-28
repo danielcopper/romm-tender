@@ -48,8 +48,10 @@ export interface EmulatorMenuConfig {
   emulatorDataReason: EmulatorDataReason | null;
   emulatorSource: AnsweringSource | null;
   emulatorPlatformSystem: PlatformSystemAnswer | null;
-  /** The active emulator's label — marked with a checkmark. */
+  /** The active emulator's label — marked with a checkmark, its text drawn in `activeColor`. */
   activeLabel: string | null;
+  /** The colour the active emulator's text is drawn in: the surface's selection accent. */
+  activeColor: string;
   /** The per-platform override label — marked "(system)". Null in the platform
    *  detail, where the reader already is at the system level. */
   platformCoreLabel: string | null;
@@ -81,7 +83,10 @@ function emulatorEntryLabel(e: EmulatorOption, isActive: boolean, isPlatformCore
 
 /** Build the `<Menu>` element for `showContextMenu`. */
 export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
-  const { emulators, emulatorDataAvailable, activeLabel, platformCoreLabel, followSystem, onPick } = config;
+  const { emulators, emulatorDataAvailable, activeLabel, activeColor, platformCoreLabel, followSystem, onPick } =
+    config;
+  const entryText = (text: string, isActive: boolean): ReactNode =>
+    isActive ? <span style={{ color: activeColor }}>{text}</span> : text;
 
   if (!emulatorDataAvailable) {
     return (
@@ -131,7 +136,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     if (!e.bakeable) {
       children.push(
         <MenuItem key={key} disabled={true}>
-          {`${emulatorEntryLabel(e, isActive, isPlatformCore)} — ${reasonCopy(e.reason)}`}
+          {entryText(`${emulatorEntryLabel(e, isActive, isPlatformCore)} — ${reasonCopy(e.reason)}`, isActive)}
         </MenuItem>,
       );
       continue;
@@ -140,7 +145,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     const noteSuffix = note === null ? "" : ` — ${note}`;
     children.push(
       <MenuItem key={key} onClick={() => onPick(e.label)}>
-        {`${emulatorEntryLabel(e, isActive, isPlatformCore)}${noteSuffix}`}
+        {entryText(`${emulatorEntryLabel(e, isActive, isPlatformCore)}${noteSuffix}`, isActive)}
       </MenuItem>,
     );
   }

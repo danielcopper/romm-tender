@@ -4572,10 +4572,10 @@ describe("RomMPlaySection", () => {
       expect(items[0]!.props.disabled).toBe(true);
       // The reset item carries the ✓ (no per-game override) and the fallback
       // label is the shipped default (no per-platform override set).
-      expect(items[1]!.props.children).toBe("Use System Override (Snes9x) ✓");
+      expect(itemText(items[1]!)).toBe("Use System Override (Snes9x) ✓");
       // The active default core ALSO carries the ✓ (in effect).
-      expect(items[2]!.props.children).toBe("Snes9x (default) ✓");
-      expect(items[3]!.props.children).toBe("BlastEm");
+      expect(itemText(items[2]!)).toBe("Snes9x (default) ✓");
+      expect(itemText(items[3]!)).toBe("BlastEm");
     });
 
     it("showCoreMenu marks the pinned non-default core with ✓ (not the default entry, not the reset item) (#945/#211)", async () => {
@@ -4617,11 +4617,11 @@ describe("RomMPlaySection", () => {
       });
       expect(items).toHaveLength(4);
       // A per-game core is pinned → the reset item has NO ✓ …
-      expect(items[1]!.props.children).toBe("Use System Override (Snes9x)");
+      expect(itemText(items[1]!)).toBe("Use System Override (Snes9x)");
       // … the default entry has no ✓ …
-      expect(items[2]!.props.children).toBe("Snes9x (default)");
+      expect(itemText(items[2]!)).toBe("Snes9x (default)");
       // … and only the pinned core carries it.
-      expect(items[3]!.props.children).toBe("BlastEm ✓");
+      expect(itemText(items[3]!)).toBe("BlastEm ✓");
     });
 
     it("showCoreMenu marks the per-platform override core with (system), and only that core (#954)", async () => {
@@ -4666,9 +4666,9 @@ describe("RomMPlaySection", () => {
       });
       expect(items).toHaveLength(4);
       // The per-platform override core carries (system); a different core does not.
-      expect(items[3]!.props.children).toBe("BlastEm (system)");
-      expect(items[2]!.props.children).toBe("Snes9x (default) ✓");
-      expect(items[2]!.props.children).not.toContain("(system)");
+      expect(itemText(items[3]!)).toBe("BlastEm (system)");
+      expect(itemText(items[2]!)).toBe("Snes9x (default) ✓");
+      expect(itemText(items[2]!)).not.toContain("(system)");
     });
 
     it("Use System Override fallback label is the per-platform override when one is set (#211)", async () => {
@@ -4711,7 +4711,7 @@ describe("RomMPlaySection", () => {
         emulatorStart: null,
         vanishedPick: null,
       });
-      expect(items[1]!.props.children).toBe("Use System Override (BlastEm) ✓");
+      expect(itemText(items[1]!)).toBe("Use System Override (BlastEm) ✓");
     });
 
     it("following the system: BOTH the reset item AND the resolved active core carry ✓ (#211)", async () => {
@@ -4754,12 +4754,12 @@ describe("RomMPlaySection", () => {
         emulatorStart: null,
         vanishedPick: null,
       });
-      expect(items[1]!.props.children).toContain("✓");
-      expect(items[1]!.props.children).toBe("Use System Override (BlastEm) ✓");
+      expect(itemText(items[1]!)).toContain("✓");
+      expect(itemText(items[1]!)).toBe("Use System Override (BlastEm) ✓");
       // The resolved active core carries (system) + ✓.
-      expect(items[3]!.props.children).toBe("BlastEm (system) ✓");
+      expect(itemText(items[3]!)).toBe("BlastEm (system) ✓");
       // The default (not active) carries neither.
-      expect(items[2]!.props.children).toBe("Snes9x (default)");
+      expect(itemText(items[2]!)).toBe("Snes9x (default)");
     });
 
     it("per-game core pinned: only the pinned core carries ✓, the reset item does not (#211)", async () => {
@@ -4801,9 +4801,9 @@ describe("RomMPlaySection", () => {
         emulatorStart: null,
         vanishedPick: null,
       });
-      expect(items[1]!.props.children).not.toContain("✓");
-      expect(items[1]!.props.children).toBe("Use System Override (BlastEm)");
-      expect(items[3]!.props.children).toBe("BlastEm (system) ✓");
+      expect(itemText(items[1]!)).not.toContain("✓");
+      expect(itemText(items[1]!)).toBe("Use System Override (BlastEm)");
+      expect(itemText(items[3]!)).toBe("BlastEm (system) ✓");
     });
 
     it("showSteamMenu Properties → SteamClient.Apps.OpenAppSettingsDialog(appId, 'general')", async () => {
@@ -6145,6 +6145,15 @@ async function openRomMMenuAndGetItems(_appId: number): Promise<MenuItemElement[
   const el = calls[calls.length - 1]?.[0] as ReactElement | undefined;
   if (!el) throw new Error("No context menu shown");
   return getMenuItemsFromElement(el).filter(isMenuItem);
+}
+
+/** A menu item's text, read through the coloured span the entry that starts is drawn in. */
+function itemText(item: MenuItemElement): unknown {
+  const child = item.props.children;
+  if (typeof child === "object" && child !== null && "props" in child) {
+    return (child as ReactElement<{ children?: unknown }>).props.children;
+  }
+  return child;
 }
 
 async function openCoreMenuAndGetItems(_appId: number): Promise<MenuItemElement[]> {

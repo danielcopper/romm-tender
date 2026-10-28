@@ -985,7 +985,7 @@ Each core in the list below can show up to three markers, one per role:
 - **(default)** — the platform's default: the emulator RetroDECK ships as its default.
 - **(system)** — the per-platform core you picked in [Library › Platforms](#per-platform-library-platforms-tab) (stored
   in Tender's settings). Absent when the platform has no per-platform override.
-- **✓** (checkmark) — the core this game actually launches with right now.
+- **✓** (checkmark) — the core this game actually launches with right now, its name in blue.
 
 The three roles are independent, so a single core can carry more than one marker: "(default) (system)" when your
 per-platform pick happens to equal the default, or "(system) ✓" when the per-platform core is also the one the game
