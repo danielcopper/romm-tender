@@ -361,6 +361,7 @@ def converge_bound_groups(
     *,
     platform_slugs: AbstractSet[str],
     preferred_region: str = AUTO_REGION,
+    running_rom_ids: AbstractSet[int] = frozenset(),
 ) -> list[ConvergedBinding]:
     """Every bound row of *platform_slugs* whose group keeps another row's shortcut (#2645).
 
@@ -380,6 +381,10 @@ def converge_bound_groups(
     RomM from one deleted there, so an unlisted version is ranked by its
     install alone. Every other bound row of the group is answered, in
     ``rom_id`` order.
+
+    A group one of whose bound rows is in *running_rom_ids* is left out: its
+    shortcut is not removed under a game Steam lists as running, and the group
+    converges on a later run (#2645 D5).
     """
     members_by_id = {sd["rom_id"]: sd for sd in listed}
     bound_by_group = _bound_rows_by_group(
@@ -390,6 +395,8 @@ def converge_bound_groups(
     bindings: list[ConvergedBinding] = []
     for key in sorted(converging):
         bound = sorted(bound_by_group[key], key=lambda item: item[0])
+        if any(rom_id in running_rom_ids for rom_id, _reg in bound):
+            continue
         kept_id = _kept_rom_id([rom_id for rom_id, _reg in bound], members_by_id, installed_rom_ids, preferred_region)
         kept_app_id = int(dict(bound)[kept_id]["app_id"])
         bindings.extend(

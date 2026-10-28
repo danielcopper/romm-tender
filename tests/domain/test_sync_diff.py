@@ -1085,6 +1085,29 @@ class TestConvergeBoundGroups:
         assert sorted(self._kept(members, registry)) == [(2, 1), (4, 3)]
 
 
+class TestAGroupWithARunningGameIsLeftOut:
+    """``converge_bound_groups(running_rom_ids=...)`` — a group one of whose shortcuts runs waits (#2645 D5)."""
+
+    @staticmethod
+    def _converged(running):
+        members = [_gsd(1, group_key="a"), _gsd(2, group_key="a"), _gsd(3, group_key="b"), _gsd(4, group_key="b")]
+        registry = {
+            "1": _greg(1, app_id=1001, group_key="a"),
+            "2": _greg(2, app_id=1002, group_key="a"),
+            "3": _greg(3, app_id=1003, group_key="b"),
+            "4": _greg(4, app_id=1004, group_key="b"),
+        }
+        converged = converge_bound_groups(members, registry, set(), platform_slugs={"n64"}, running_rom_ids=running)
+        return sorted((binding.rom_id, binding.kept_rom_id) for binding in converged)
+
+    @pytest.mark.parametrize("running", [{1}, {2}], ids=["the-kept-one", "the-other"])
+    def test_a_running_shortcut_leaves_its_group_as_it_is_and_the_others_converge(self, running):
+        assert self._converged(running) == [(4, 3)]
+
+    def test_a_running_rom_outside_every_group_changes_nothing(self):
+        assert self._converged({9}) == [(2, 1), (4, 3)]
+
+
 class TestCollapseHandedTheConvergedRows:
     """``collapse_sibling_groups(converged=...)``: a converged row emits nothing and still holds its shortcut."""
 
