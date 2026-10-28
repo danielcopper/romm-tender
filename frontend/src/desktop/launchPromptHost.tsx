@@ -87,5 +87,5 @@ export function offerDesktopLaunchPrompts(): void {
 /** Withdraw the offer and settle every open question with its dismissed answer. */
 export function withdrawDesktopLaunchPrompts(): void {
   setDesktopLaunchPrompts(null);
-  for (const dismiss of [...openQuestions]) dismiss();
+  for (const dismiss of openQuestions) dismiss();
 }

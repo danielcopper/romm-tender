@@ -84,7 +84,7 @@ export function dialogButtonStyle(tone: DialogButtonTone, disabled = false): CSS
 }
 
 export const DesktopDialog: FC<DesktopDialogProps> = ({ titleId, title, onDismiss, children }) => {
-  const boxRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     boxRef.current?.focus();
@@ -112,9 +112,9 @@ export const DesktopDialog: FC<DesktopDialogProps> = ({ titleId, title, onDismis
         style={BACKDROP_BUTTON_STYLE}
         onClick={() => onDismiss?.()}
       />
-      <div
+      <dialog
         ref={boxRef}
-        role="dialog"
+        open
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
@@ -125,7 +125,7 @@ export const DesktopDialog: FC<DesktopDialogProps> = ({ titleId, title, onDismis
           {title}
         </h2>
         {children}
-      </div>
+      </dialog>
     </div>
   );
 };

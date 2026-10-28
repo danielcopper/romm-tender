@@ -18,28 +18,17 @@ describe("DesktopOfflineDriftDialog", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
-  it("calls onChoice with 'start_anyway' when clicking Start Anyway", () => {
+  it.each([
+    ["Start Anyway", "start_anyway"],
+    ["Retry connection", "retry"],
+    ["Cancel", "cancel"],
+    ["Close dialog", "cancel"],
+  ])("answers %s with %s", (label, choice) => {
     const onChoice = vi.fn();
     render(<DesktopOfflineDriftDialog onChoice={onChoice} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Anyway" }));
-    expect(onChoice).toHaveBeenCalledWith("start_anyway");
-  });
-
-  it("calls onChoice with 'retry' when clicking Retry connection", () => {
-    const onChoice = vi.fn();
-    render(<DesktopOfflineDriftDialog onChoice={onChoice} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Retry connection" }));
-    expect(onChoice).toHaveBeenCalledWith("retry");
-  });
-
-  it("calls onChoice with 'cancel' when clicking Cancel", () => {
-    const onChoice = vi.fn();
-    render(<DesktopOfflineDriftDialog onChoice={onChoice} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(onChoice).toHaveBeenCalledWith("cancel");
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    expect(onChoice).toHaveBeenCalledExactlyOnceWith(choice);
   });
 
   it("calls onChoice with 'cancel' on Escape key", () => {
@@ -56,13 +45,5 @@ describe("DesktopOfflineDriftDialog", () => {
 
     fireEvent.keyDown(window, { key: "Enter" });
     expect(onChoice).not.toHaveBeenCalled();
-  });
-
-  it("calls onChoice with 'cancel' on backdrop click", () => {
-    const onChoice = vi.fn();
-    render(<DesktopOfflineDriftDialog onChoice={onChoice} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
-    expect(onChoice).toHaveBeenCalledWith("cancel");
   });
 });
