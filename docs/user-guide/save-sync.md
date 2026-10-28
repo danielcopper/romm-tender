@@ -74,7 +74,7 @@ them, and a save swapped under it would be written over by the game, or sent to 
 newer one. The game's saves sync before it starts and after you quit it, as always. Tender asks Steam over the same
 connection it loads its panel through; when it cannot ask, it treats no game as running. A game Steam does not list yet,
 in the moment after you start it, does not count either, and a RetroDECK home migration moves a game's saves whether it
-runs or not. In between:
+runs or not. While a game runs:
 
 - **Sync All Saves Now** syncs every other game and names the one it left out: "_\<game\>_ was skipped because it is
   running".

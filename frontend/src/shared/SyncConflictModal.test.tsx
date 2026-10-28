@@ -163,6 +163,26 @@ describe("SyncConflictModal", () => {
   // Layer C — SyncConflictModalHost stateful wrapper.
   // ---------------------------------------------------------------------------
   describe("SyncConflictModalHost — where the conflict is resolved", () => {
+    it("hands handleConflicts' place on to each conflict's dialog", async () => {
+      vi.mocked(backend.resolveSyncConflict).mockResolvedValue({ success: true });
+      const conflict = makeConflict();
+      detach(handleConflicts([conflict], { beforeStart: true }));
+      const { container } = render(lastShownElement());
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Keep Local"));
+      });
+      await flushAsync();
+
+      expect(backend.resolveSyncConflict).toHaveBeenCalledWith(
+        conflict.rom_id,
+        conflict.filename,
+        conflict.server_save_id,
+        "keep_local",
+        true,
+      );
+    });
+
     it("tells the backend a conflict resolved from the launch check is resolved before the start", async () => {
       vi.mocked(backend.resolveSyncConflict).mockResolvedValue({ success: true });
       const conflict = makeConflict();

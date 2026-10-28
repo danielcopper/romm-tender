@@ -421,7 +421,10 @@ def _recorded(svc) -> str | None:
 
 
 class TestNoFollowWhileTheGameRuns:
-    """D8: the automatic follow does nothing for a running game; the syncs before a start and after a game follow."""
+    """D8: the automatic follow does nothing for a running game; the exempt paths follow while it is listed.
+
+    The exempt paths are the syncs before a start and after a game, and a conflict resolved before a start (D9).
+    """
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -459,8 +462,12 @@ class TestNoFollowWhileTheGameRuns:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "sync",
-        [lambda svc: svc.pre_launch_sync(_ROM), lambda svc: svc.post_exit_sync(_ROM)],
-        ids=["before-a-start", "after-a-game"],
+        [
+            lambda svc: svc.pre_launch_sync(_ROM),
+            lambda svc: svc.post_exit_sync(_ROM),
+            lambda svc: svc.resolve_sync_conflict(_ROM, "game42.srm", 100, "keep_local", before_start=True),
+        ],
+        ids=["before-a-start", "after-a-game", "conflict-resolved-before-a-start"],
     )
     async def test_the_syncs_before_a_start_and_after_a_game_follow_while_it_is_listed(self, tmp_path, sync):
         svc, _fake, _games = _service(tmp_path, _ROM)
