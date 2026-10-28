@@ -7499,7 +7499,11 @@ class TestThePreviewFilesAGameRommDidNotConfirmAsTheApplyDoes:
     async def test_the_preview_counts_what_the_apply_writes(
         self, make_library, fake_romm_api, emit, monkeypatch, answer, gba_listed, platform_groups
     ):
-        """Where RomM no longer lists GBA, its collection is named from the name the first run cached."""
+        """The preview and the apply agree on the platform collections.
+
+        With platform groups on and GBA no longer listed, its collection is
+        named from the name the first run cached.
+        """
         library = make_library(romm_api=fake_romm_api)
         await self._bind_20_and_30(library, fake_romm_api, platform_groups=platform_groups)
         fake_romm_api.get_rom_once_side_effect_by_id[20] = answer
@@ -7521,6 +7525,51 @@ class TestThePreviewFilesAGameRommDidNotConfirmAsTheApplyDoes:
         assert platform_collection_diff == applied
         with library.uow as uow:
             assert uow.roms.get(20).shortcut_app_id == 6020
+
+
+class TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes:
+    """The preview counts the platform collection of a row whose game the run synced as the apply files it (#2490 D3).
+
+    GBA's sync is off. Faves holds Golf (USA), 20, which the first run binds;
+    a version switch then moves that shortcut onto Golf (Europe), 22, which no
+    collection lists. The second run delivers 20 through Faves and leaves 22
+    bound, since its game was synced, whether or not RomM is asked about 22.
+    No entry the preview emits is on GBA, so 22 is the only row that keeps
+    GBA's collection. Each case runs the preview, then the apply it would start.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("faves_fetched", [False, True], ids=["faves-skipped", "faves-fetched"])
+    @pytest.mark.parametrize("route", [None, "collection"], ids=["not-asked", "asked"])
+    @pytest.mark.parametrize("platform_groups", [True, False], ids=["platform-groups-on", "platform-groups-off"])
+    async def test_the_preview_counts_what_the_apply_writes(
+        self, make_library, fake_romm_api, emit, monkeypatch, faves_fetched, route, platform_groups
+    ):
+        """A route of ``collection`` on 22 has RomM asked about it; without one it is not asked."""
+        switched = TestAVersionSwitchedOffTheCollectionsMember
+        library = make_library(romm_api=fake_romm_api)
+        library.settings["collection_create_platform_groups"] = platform_groups
+        await switched._bind_20_then_switch_to_22(library, fake_romm_api)
+        if route is not None:
+            switched._record_on_22(library, route=route)
+        if faves_fetched:
+            switched._fetch_faves_again(fake_romm_api)
+        fake_romm_api.call_log.clear()
+
+        (
+            _faves_skips,
+            platform_collection_diff,
+            applied,
+            platform_app_ids,
+        ) = await TestThePreviewNamesAPlatformCollectionAsTheApplyDoes._preview_then_apply(library, emit, monkeypatch)
+
+        asked = [args for name, args, _kwargs in fake_romm_api.call_log if name == "get_rom_once"]
+        assert ((22,) in asked) is (route is not None)
+        assert platform_app_ids == ({"GBA": [6020]} if platform_groups else {})
+        assert platform_collection_diff == {"has_changes": False, "added_count": 0, "removed_count": 0}
+        assert platform_collection_diff == applied
+        with library.uow as uow:
+            assert uow.roms.get(22).shortcut_app_id == 6020
 
 
 class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:

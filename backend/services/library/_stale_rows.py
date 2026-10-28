@@ -74,9 +74,7 @@ async def settle_stale_rows(
     filed in its platform's collection only where the platform-groups setting
     files every bound row. Neither list holds a row whose game the run synced
     (*synced_group_keys*) on a platform the run did not read either, though
-    RomM is asked about it where it would be asked about any other row. The
-    preview reads the rows in neither list as the ones the run leaves bound
-    (``compute_platform_collection_diff``'s *left_bound_rows*).
+    RomM is asked about it where it would be asked about any other row.
     """
     sort = sort_stale_rows(
         rows,

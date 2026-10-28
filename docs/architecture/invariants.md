@@ -636,7 +636,7 @@ Format: **invariant** — tier — enforced by.
   unasked when it does; a row with no recorded route is asked only when the collections' last completed members list it;
   a kept row stays in its platform's Steam collection, and so does a bound row a collection's skip rebuilt on a platform
   the run read whole without returning it (#2549 D1), and, with platform groups on, every other row the run leaves
-  bound, a game RomM did not confirm included (#2490 D2); the preview counts exactly the removals and the platform
+  bound, a row RomM did not confirm included (#2490 D2, D3); the preview counts exactly the removals and the platform
   collections the apply makes; and of the two, only the apply records what the stale removal established on the row
   (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM itself clears the mark,
   and any other answer writes nothing. The removed-game cleanup's own proof marks and clears rows too, by its rule in
@@ -688,35 +688,40 @@ Format: **invariant** — tier — enforced by.
   naming a platform collection alike where a platform's slug and name differ. A row RomM was asked about and did not
   return stays bound, and so does one whose game the run synced on a platform it did not read, so the apply's end-of-run
   scan, which files every bound row through `domain/sync_diff.py::platform_collection_name`, files either where platform
-  groups are on; no fetched entry carries such a row, so the preview hands each stale row the stale removal neither
-  removes nor keeps to `compute_platform_collection_diff` (`left_bound_rows`), which files it through the same function
-  (#2490 D3).
+  groups are on. No emitted entry carries such a row, so the preview passes `compute_platform_collection_diff` every
+  stale row the stale removal neither removes nor keeps (`left_bound_rows`), and the diff files each through the same
+  function (#2490 D3).
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameRommDidNotConfirmAsTheApplyDoes` pins the
   two agreeing for a 404 and for an answer that establishes nothing, with platform groups on and off, on a platform RomM
   still lists and on one it no longer lists, and
   `tests/domain/test_sync_diff.py::TestComputePlatformCollectionDiff::test_a_row_left_bound_is_filed_by_the_setting_alone`
-  the diff's rule. The rule spans the domain sort, the reader, the reporter's commit, the chunk dispatcher, the
-  fetcher's exact-id question (`LibraryFetcher.ask_romm_for_roms`), the orchestrator and the preview, and the preview
-  and the apply each read it — through `services/library/_stale_rows.py::settle_stale_rows` with the same group keys,
-  which is prompt-only, as is that the chunk dispatcher names the unit's kind on every commit, that the listing comes
-  off the run state, and that the preview names every platform collection its diff counts by the name the names
-  `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
-  entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same
-  lookup in `compute_platform_collection_diff` — which must agree with `SyncReporter._names_with_bound_platforms_kept`,
-  that the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps, and that both pick the
-  rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`. **What breaks without it:**
-  a kept row the preview counts as a removal offers Apply on every preview; a game only a collection delivers loses its
-  shortcut on every sync after a switch to a version the collection does not list; a kept version never asked about
-  keeps a mark RomM disproved, or never gets the one the cleanup needs; a removal on a platform read whole takes a game
-  gone from RomM out of Steam with its playtime and collections; a rule read off the collection stamps alone removes a
-  game gone from RomM at the second run after its collection dropped it; a platform RomM stopped listing loses every
-  shortcut as if it had been turned off; a kept row left out of the platform's collection drops out of it, or keeps its
-  game under a collection renamed to the slug; a game hidden in RomM leaves its platform's collection whenever the
-  collection that lists it is skipped; a preview that names a platform collection by an entry's own `platform_name`
-  counts one added — the slug beside the name — that the apply never makes, and offers Apply on every preview; a preview
-  that files only the kept rows counts the platform collection of a game RomM did not confirm as removed with platform
-  groups on, which the apply keeps, on every preview; and a mark a preview wrote, or an answer that established nothing
-  set or cleared, would offer the cleanup a game RomM still serves or hide one it no longer does
+  the diff's rule;
+  `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameTheRunSyncedAsTheApplyDoes` pins the two
+  agreeing for a row whose game the run synced on a platform it did not read, the only row on that platform once a
+  version switch moved the shortcut onto it, whether RomM is asked about it or not, the collection skipped or fetched,
+  with platform groups on and off. The rule spans the domain sort, the reader, the reporter's commit, the chunk
+  dispatcher, the fetcher's exact-id question (`LibraryFetcher.ask_romm_for_roms`), the orchestrator and the preview,
+  and the preview and the apply each read it — through `services/library/_stale_rows.py::settle_stale_rows` with the
+  same group keys, which is prompt-only, as is that the chunk dispatcher names the unit's kind on every commit, that the
+  listing comes off the run state, and that the preview names every platform collection its diff counts by the name the
+  names `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an
+  emitted entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the
+  same lookup in `compute_platform_collection_diff` — which must agree with
+  `SyncReporter._names_with_bound_platforms_kept`; that the preview hands that diff every stale row `settle_stale_rows`
+  neither removes nor keeps; and that both pick the rebuilt rows they file as kept through
+  `domain/sync_diff.py::rebuilt_rows_filed_as_kept`. **What breaks without it:** a kept row the preview counts as a
+  removal offers Apply on every preview; a game only a collection delivers loses its shortcut on every sync after a
+  switch to a version the collection does not list; a kept version never asked about keeps a mark RomM disproved, or
+  never gets the one the cleanup needs; a removal on a platform read whole takes a game gone from RomM out of Steam with
+  its playtime and collections; a rule read off the collection stamps alone removes a game gone from RomM at the second
+  run after its collection dropped it; a platform RomM stopped listing loses every shortcut as if it had been turned
+  off; a kept row left out of the platform's collection drops out of it, or keeps its game under a collection renamed to
+  the slug; a game hidden in RomM leaves its platform's collection whenever the collection that lists it is skipped; a
+  preview that names a platform collection by an entry's own `platform_name` counts one added — the slug beside the name
+  — that the apply never makes, and offers Apply on every preview; with platform groups on, a preview that files only
+  the kept rows counts as removed the platform collection of a game RomM did not confirm, which the apply keeps, and
+  offers Apply on every preview; and a mark a preview wrote, or an answer that established nothing set or cleared, would
+  offer the cleanup a game RomM still serves or hide one it no longer does
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

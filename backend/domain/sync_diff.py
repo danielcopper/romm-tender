@@ -790,9 +790,9 @@ def compute_platform_collection_diff(
     keeps whatever the setting, named through the same *platform_names*.
     *left_bound_rows* are the other stale rows the run leaves bound — one RomM
     was asked about and did not return, or one whose game the run synced. Each
-    is filed by :func:`platform_collection_name` over its own ``rom_id``, which
-    *platform_rom_ids* does not hold, as the apply's end-of-run scan files every
-    bound row, so only the platform-groups setting files one.
+    is filed by :func:`platform_collection_name` over its own ``rom_id``, as the
+    apply's end-of-run scan files every bound row. A stale row is in no
+    *platform_rom_ids* set, so with a set only *create_platform_groups* files it.
     """
     future_platforms = {platform_names.get(slug, slug) for slug in kept_platform_slugs}
     for row in left_bound_rows:

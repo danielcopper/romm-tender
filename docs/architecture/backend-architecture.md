@@ -969,16 +969,17 @@ most one **new** Steam shortcut; the sibling row holding `shortcut_app_id` is th
   outside them a bound row is still on (`SyncReporter._names_with_bound_platforms_kept`), so a cancelled or paused run
   in between does not rename the collection to the slug. The preview reads the same name (`do_read_kept_platform_names`,
   through `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. A row RomM was
-  asked about and did not return keeps its shortcut without being a kept row, and so does one whose game the run synced:
-  each stays bound, so it is in its platform's Steam collection exactly where platform groups are on, since the apply's
-  end-of-run scan files every bound row through `domain/sync_diff.py::platform_collection_name`, and the preview files
-  each stale row it neither removes nor keeps through the same function (#2490 D3). Its platform-collection diff names
-  every platform it counts as the apply does, by the listed name, or, for a platform the listing does not name that a
-  kept row, a row left bound or an emitted entry is on, that cached name, else the slug — an emitted entry and a row
-  left bound through `platform_collection_name`, a kept row by the same lookup — never by the `platform_name` an entry
-  carries, which a collection's skip fills with the slug and a collection's fetch with RomM's display name (#2558 D1).
-  Its per-platform table is named by the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync leaves the
-  routes in place. The preview asks the same question for the same rows, through the same
+  asked about and did not return keeps its shortcut without being one of the kept rows `settle_stale_rows` answers, and
+  so does one whose game the run synced on a platform the run did not read: each stays bound, so it is in its platform's
+  Steam collection exactly where platform groups are on, since the apply's end-of-run scan files every bound row through
+  `domain/sync_diff.py::platform_collection_name`, and the preview files each stale row it neither removes nor keeps
+  through the same function (#2490 D3). The preview's platform-collection diff names every platform it counts as the
+  apply does, by the listed name, or, for a platform the listing does not name that a kept row, a row left bound or an
+  emitted entry is on, the name the `platform_names` cache holds, else the slug — an emitted entry and a row left bound
+  through `platform_collection_name`, a kept row by the same lookup — never by the `platform_name` an entry carries,
+  which a collection's skip fills with the slug and a collection's fetch with RomM's display name (#2558 D1). The
+  preview's per-platform table is named by the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync
+  leaves the routes in place. The preview asks the same question for the same rows, through the same
   `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. Both
   judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
   apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes
