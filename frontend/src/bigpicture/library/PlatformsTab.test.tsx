@@ -1646,6 +1646,7 @@ describe("Library › Platforms", () => {
             { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
           ],
           tender_default: { kind: "emudeck", label: "PicoDrive" },
+          default_elsewhere: true,
           active_core_label: "PicoDrive",
         }),
       );
@@ -1689,6 +1690,7 @@ describe("Library › Platforms", () => {
             { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
           ],
           tender_default: { kind: "emudeck", label: "PicoDrive" },
+          default_elsewhere: true,
           active_core_label: "PicoDrive",
           start: emulatorStart({ entry: "PicoDrive" }),
         }),
@@ -1711,6 +1713,7 @@ describe("Library › Platforms", () => {
             { kind: "retrodeck", default: null, chosen_in_frontend: null, reason: "no_entry" },
           ],
           tender_default: { kind: "emudeck", label: "PicoDrive" },
+          default_elsewhere: true,
           active_core_label: "PicoDrive",
           start: emulatorStart({ entry: "PicoDrive" }),
         }),
@@ -1725,6 +1728,61 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("will not launch");
     });
 
+    it("draws a standing pick that cannot start in red with another source first, never gold (#2195 D23, D24)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [{ ...VBA, bakeable: false, reason: "not_installed" }, MGBA],
+          source_defaults: [
+            { kind: "emudeck", default: "PicoDrive", chosen_in_frontend: null, reason: null },
+            { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
+          ],
+          tender_default: { kind: "emudeck", label: "PicoDrive" },
+          default_elsewhere: false,
+          active_core_label: "VBA Next",
+          start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "VBA Next" }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const clause = factPart(container, "VBA Next");
+      expect(clause).toBeTruthy();
+      expect(clause!.style.color).toBe(RED);
+      expect(container.textContent).toContain("VBA Next is not installed, so these games cannot start.");
+    });
+
+    it("reads nothing off the starting source's rows under another source's default, though a row shares its name (#2195 D24)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [
+            { ...MGBA, is_default: true },
+            { ...VBA, label: "PicoDrive", is_default: false, reason: "path_unseen" },
+          ],
+          source_defaults: [
+            { kind: "emudeck", default: "PicoDrive", chosen_in_frontend: null, reason: null },
+            { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
+          ],
+          tender_default: { kind: "emudeck", label: "PicoDrive" },
+          default_elsewhere: true,
+          active_core_label: "PicoDrive",
+          start: emulatorStart({ entry: "PicoDrive" }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const clause = factPart(container, "PicoDrive");
+      expect(clause).toBeTruthy();
+      expect(clause!.style.color).toBe(GREY);
+      expect(container.textContent).not.toContain("could not be established");
+      act(() => {
+        fireEvent.click(coreButton(container)!);
+      });
+      const calls = vi.mocked(showContextMenu).mock.calls;
+      const menu = render(calls[calls.length - 1]![0] as ReactElement);
+      expect(menu.container.textContent).not.toContain("✓");
+    });
+
     it("draws no red where the other source's default could not be established either (#2195 D24)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
@@ -1734,6 +1792,7 @@ describe("Library › Platforms", () => {
             { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
           ],
           tender_default: { kind: "emudeck", label: null },
+          default_elsewhere: true,
           active_core_label: null,
           start: emulatorStart({ entry: null }),
         }),

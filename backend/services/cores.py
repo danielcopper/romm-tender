@@ -214,7 +214,9 @@ class CoreService:
         user's order with the entry it ships as default for the platform, the
         one the user chose in it inside ES-DE where that differs, and why there
         is no default where there is none; ``tender_default`` names the source
-        and entry Tender's default is, ``None`` where no source offers one.
+        and entry Tender's default is, ``None`` where no source offers one;
+        ``default_elsewhere`` is whether that default, with nothing picked,
+        comes from a source games do not start through (#2195 D24).
 
         Distinct from :meth:`get_platform_core_info`, which answers the same
         question for one ROM and layers that ROM's ``emulator_override`` on top;
@@ -260,6 +262,7 @@ class CoreService:
                 for entry in source_defaults
             ],
             "tender_default": tender_default,
+            "default_elsewhere": elsewhere,
         }
 
     def _source_defaults(

@@ -218,6 +218,7 @@ async def test_get_system_core_info_payload_shape(harness):
         "vanished_pick",
         "source_defaults",
         "tender_default",
+        "default_elsewhere",
     }
     assert result["emulator_data_available"] is True
     assert result["emulators"] == [_MGBA_ENTRY, _VBA_NEXT_ENTRY]

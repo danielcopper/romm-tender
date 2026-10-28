@@ -350,6 +350,7 @@ class TestGetSystemCoreInfo:
                 {"kind": "retrodeck", "default": "Snes9x", "chosen_in_frontend": None, "reason": None},
             ],
             "tender_default": {"kind": "retrodeck", "label": "Snes9x"},
+            "default_elsewhere": False,
         }
 
     def test_answers_for_a_platform_with_no_synced_rom(self, event_loop, service, uow, core_info):
@@ -1289,6 +1290,27 @@ class TestEverySourcesDefault:
         assert result["active_core_label"] == "PicoDrive"
         assert result["start"] == {"state": "starts", "reason": None, "entry": "PicoDrive", "folder_entry": None}
         assert result["vanished_pick"] is None
+        assert result["default_elsewhere"] is True
+
+    def test_with_emudeck_first_a_standing_pick_that_cannot_start_says_so(self, event_loop):
+        """A pick is no default from elsewhere: its own refusal stands (#2195 D23, D24)."""
+        missing = dataclasses.replace(
+            standalone_option("%EMULATOR_X% %ROM%", "Missing", status="needs_setup", reason="not_installed"),
+            declared_index=0,
+        )
+        core_info = _TwoSourceCoreInfo(
+            order=("emudeck", "retrodeck"),
+            lists={"retrodeck": [missing], "emudeck": self._EMUDECK},
+        )
+        settings = {"platform_cores": {"mastersystem": {"label": "Missing", "source": "retrodeck"}}}
+
+        result = event_loop.run_until_complete(
+            _service_over(core_info, settings=settings, event_loop=event_loop).get_system_core_info("mastersystem")
+        )
+
+        assert result["active_core_label"] == "Missing"
+        assert result["start"]["state"] == "cannot_start"
+        assert result["default_elsewhere"] is False
 
     def test_with_retrodeck_first_its_own_lines_stand(self, event_loop):
         """The control: the same RetroDECK list first in the order says its default cannot start."""
@@ -1306,6 +1328,7 @@ class TestEverySourcesDefault:
         )
 
         assert result["start"]["state"] == "cannot_start"
+        assert result["default_elsewhere"] is False
 
 
 class TestAPickWhileItsSourceIsSwitchedOff:

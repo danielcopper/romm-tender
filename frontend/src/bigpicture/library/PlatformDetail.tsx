@@ -159,12 +159,6 @@ function noDefaultOffer(core: SystemCoreInfo): CoreOffer {
   return { kind: "blocked", reason: sentence, notice: sentence };
 }
 
-/** Whether Tender's default comes from a source games do not start through, under which no line of the starting
- *  source stands (#2195 D24). */
-function defaultFromElsewhere(core: SystemCoreInfo): boolean {
-  return core.tender_default !== null && core.tender_default.kind !== core.emulator_source?.kind;
-}
-
 function coreOffer(core: CoreAnswer): CoreOffer {
   if (core === undefined) return { kind: "blocked", reason: "Reading the emulators for this platform…" };
   if (core === null) {
@@ -183,7 +177,7 @@ function coreOffer(core: CoreAnswer): CoreOffer {
   // do not start.
   if (core.emulators.length === 0) {
     // Under another source's default, nothing the starting source states stands under the header.
-    if (defaultFromElsewhere(core)) {
+    if (core.default_elsewhere) {
       return { kind: "blocked", reason: "RetroDECK lists no emulator for this platform." };
     }
     const none = "RetroDECK lists no emulator for this platform, so its games will not launch.";
@@ -229,7 +223,7 @@ const CoreNotice: FC<{ row: PlatformRow; state: PlatformsPageState; offer: CoreO
   <>
     {core?.vanished_pick && <Muted>{vanishedPickSentence(core.vanished_pick)}</Muted>}
     {offer.notice !== undefined && <Muted>{offer.notice}</Muted>}
-    {core && <ActiveEmulatorNote core={core} />}
+    {core && !core.default_elsewhere && <ActiveEmulatorNote core={core} />}
     <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="core" />
   </>
 );
@@ -443,7 +437,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   // Steam", are the two ways this line loses a piece; both failures now say so
   // on the pane, and the in-flight one is a beat rather than a state.
   const activeLabel = core ? core.active_core_label : null;
-  const defaultElsewhere = core ? defaultFromElsewhere(core) : false;
+  const defaultElsewhere = core?.default_elsewhere ?? false;
   // The other source's default is named even where the starting source lists none.
   const clause =
     defaultElsewhere && activeLabel !== null
@@ -455,13 +449,10 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   // disagree — and no active label is muted rather than gold, because no entry
   // lists a null label and "not the default" is not the same statement as "an
   // override". Where Tender's default comes from a source games do not start
-  // through, no row lists it, and it is the default all the same; nothing the
-  // starting source states draws the clause red (#2195 D24).
-  const activeEntry = entryForLabel(core?.emulators ?? [], activeLabel);
-  const activeIsDefault =
-    activeEntry === undefined
-      ? activeLabel !== null && core?.tender_default?.label === activeLabel
-      : activeEntry.is_default;
+  // through (the backend's verdict), the rows are the starting source's and say
+  // nothing about it: it is the default, and nothing they state draws the
+  // clause red (#2195 D24).
+  const activeIsDefault = defaultElsewhere || (entryForLabel(core?.emulators ?? [], activeLabel)?.is_default ?? false);
   const coreColor = coreClauseColour(
     (clause?.gamesCannotStart ?? false) && !defaultElsewhere,
     activeLabel !== null && !activeIsDefault,
@@ -504,6 +495,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
                 emulatorPlatformSystem: offer.core.platform_system,
                 activeLabel: offer.core.active_core_label,
                 activeColor: SELECTION_ACCENT,
+                markActive: !offer.core.default_elsewhere,
                 // Null on purpose: this pane IS the platform level, so marking
                 // an entry "(system)" would restate where the reader already is.
                 platformCoreLabel: null,

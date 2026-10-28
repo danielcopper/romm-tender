@@ -705,7 +705,9 @@ no refusal, no vanished pick, no red (D24). **`source_defaults`** names every en
 the entry it ships first for the platform, the user's choice in it inside ES-DE where that differs, or why there is none
 (its list's refusal, `no_entry`, or the shipped entry's not-established note); the page shows only the ES-DE choices
 from it (D25), and Tender's default is derived from it: **`tender_default`** names the source and entry Tender's default
-is. `start` and `vanished_pick` are the platform's own, as on the game page. The identically-named field
+is, and **`default_elsewhere`** whether, with nothing picked, that default comes from a source games do not start
+through — D24's verdict, which the panel reads rather than works out, and under which it reads nothing off the starting
+source's rows. `start` and `vanished_pick` are the platform's own, as on the game page. The identically-named field
 `get_platform_firmware_status` carries per platform is the label of `resolve_firmware_option`: the pick while its label
 exists, else the shipped default whatever its state, since an emulator that cannot start still declares the firmware it
 would need.

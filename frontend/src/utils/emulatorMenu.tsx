@@ -52,6 +52,9 @@ export interface EmulatorMenuConfig {
   activeLabel: string | null;
   /** The colour the active emulator's text is drawn in: the surface's selection accent. */
   activeColor: string;
+  /** False where the emulator in effect is none of these rows — a default from a source games do not start through
+   *  (#2195 D24) — so no row carries the checkmark. */
+  markActive?: boolean;
   /** The per-platform override label — marked "(system)". Null in the platform
    *  detail, where the reader already is at the system level. */
   platformCoreLabel: string | null;
@@ -131,7 +134,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     const key = `emu-${e.label}`;
     // The active marker sits on the ACTIVE emulator: the default-marked entry
     // when nothing overrides, otherwise the one the active label names.
-    const isActive = activeIsDefault ? e.is_default : e.label === activeLabel;
+    const isActive = config.markActive !== false && (activeIsDefault ? e.is_default : e.label === activeLabel);
     const isPlatformCore = platformCore === e;
     if (!e.bakeable) {
       children.push(

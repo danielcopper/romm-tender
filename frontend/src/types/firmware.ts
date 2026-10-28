@@ -514,7 +514,9 @@ export interface CoreInfo {
  * source offers one, or the one it offers could not be established installed. `start` and
  * `vanished_pick` are as on {@link CoreInfo}, for the platform's own choice.
  * `source_defaults` is every enabled source in the user's order with its own
- * default; `tender_default` the source and entry Tender's default is.
+ * default; `tender_default` the source and entry Tender's default is;
+ * `default_elsewhere` whether, with nothing picked, that default comes from a
+ * source games do not start through (#2195 D24) — the one home of that verdict.
  *
  * There is no `success`, for the reason its sibling has none: the endpoint has
  * no in-band failure to report. What can go wrong — no emulator list from the
@@ -535,6 +537,7 @@ export interface SystemCoreInfo {
   vanished_pick: VanishedPick | null;
   source_defaults: SourceDefault[];
   tender_default: { kind: string; label: string | null } | null;
+  default_elsewhere: boolean;
 }
 
 /**

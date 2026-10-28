@@ -88,6 +88,7 @@ export function systemCoreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemC
     vanished_pick: null,
     source_defaults: [],
     tender_default: null,
+    default_elsewhere: false,
     ...overrides,
   };
 }
