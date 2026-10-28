@@ -173,8 +173,9 @@ Three actions:
   (your unchanged local file gets the new version) and the modal won't reappear.
 
 The modal blocks the Play action until you choose. If a post-exit sync detects a conflict you'll see a toast — the modal
-opens the next time you tap Play, where it blocks launch until resolved. There is no longer a separate "pending
-conflicts" list on the settings page.
+opens the next time you tap Play, where it blocks launch until resolved. If **Sync Save Files** in the **RomM Actions**
+menu finds a conflict, you'll see a toast and the Play button turns into **Resolve Conflict**; tap it to open the modal
+and resolve the conflict there. There is no longer a separate "pending conflicts" list on the settings page.
 
 ## Copying a Save to Another Slot
 
