@@ -57,6 +57,7 @@ class Rom:
     artwork_checked_at: float | None = None
     ra_id: int | None = None
     emulator_override: str | None = None
+    emulator_override_source: str | None = None
     selected_disc: str | None = None
     applied_launch_options: str | None = None
     last_fetch_id: str | None = None
@@ -246,23 +247,27 @@ class Rom:
         """Stamp the resolved RetroAchievements id."""
         self.ra_id = ra_id
 
-    def pin_emulator_override(self, label: str) -> None:
-        """Pin a per-game emulator/core override to the core *label*.
+    def pin_emulator_override(self, label: str, *, source: str) -> None:
+        """Pin a per-game emulator/core override to the core *label* of the emulator source *source*.
 
         Stores the LABEL the user chose (e.g. ``"PCSX ReARMed"``), not a
         resolved ``.so`` — the ``.so`` is resolved live at launch-bake time, so
-        the override survives RetroDECK/ES-DE default changes. A blank or
-        whitespace-only *label* is meaningless and raises ``ValueError``; clear
-        the override with :meth:`clear_emulator_override` instead.
+        the override survives RetroDECK/ES-DE default changes — and the kind of
+        the source whose catalogue it was chosen from, so a label that later
+        disappears from it can be named with it. A blank or whitespace-only
+        *label* is meaningless and raises ``ValueError``; clear the override
+        with :meth:`clear_emulator_override` instead.
         """
         stripped = label.strip()
         if not stripped:
             raise ValueError("emulator_override label must not be empty")
         self.emulator_override = stripped
+        self.emulator_override_source = source
 
     def clear_emulator_override(self) -> None:
         """Drop the per-game override so the ROM follows the system default."""
         self.emulator_override = None
+        self.emulator_override_source = None
 
     def pin_selected_disc(self, filename: str) -> None:
         """Pin the multi-disc launch target to the disc named *filename*.

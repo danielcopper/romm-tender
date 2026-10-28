@@ -1674,12 +1674,12 @@ class TestTheRealMachineAnswers:
     """
 
     def _answer(self, machine: Any, system: str, extension: str, traces: list[str]):
-        from adapters.atlas_catalogue import _classify_entry, _declared_order
-        from domain.emulator_commands import select_default_option
+        from adapters.atlas_catalogue import _classify_entry
+        from domain.emulator_commands import default_option
 
         content_path = f"/tmp/Games/{system}/Game Title{extension}"
-        entries = _declared_order(machine.emulators_for(system, content_path=content_path).entries)
-        default = select_default_option([_classify_entry(entry) for entry in entries])
+        entries = machine.emulators_for(system, content_path=content_path).entries
+        default = default_option([_classify_entry(entry, chosen_in_frontend=False) for entry in entries])
         adapter = AtlasSaveLocationAdapter(
             sources=_sources(lambda home, held: [machine], traces), log_debug=traces.append
         )

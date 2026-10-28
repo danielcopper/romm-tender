@@ -32,6 +32,9 @@ class FakeSourcesReading:
     def answering_installation(self) -> Any:
         return self._installations.get(self.answering.kind) if self.answering is not None else None
 
+    def installation(self, kind: str) -> Any:
+        return self._installations.get(kind)
+
     def remember(self, question: Hashable, ask: Callable[[], _T]) -> _T:
         if question not in self._answers:
             self._answers[question] = ask()

@@ -211,6 +211,9 @@ class CoreInfoProvider(Protocol):
     (:class:`EmulatorSourcesReader`). *reading* is a run's one reading, handed
     down so a run that asks the same question for many games asks it once;
     without one, the call takes a fresh reading of its own.
+    ``get_emulator_options`` asked with *content_path* answers for one game,
+    whose own choice in ES-DE it then marks, and asked with *source* answers
+    for that detected source instead of the answering one.
 
     ``get_active_core`` stays libretro-only — the first libretro command a
     system declares, bakeable or not. It is carried and currently read by nothing
@@ -229,7 +232,18 @@ class CoreInfoProvider(Protocol):
         self, system_name: str, *, reading: SourcesReading | None = None
     ) -> EmulatorInvocation | None: ...
 
-    def get_emulator_options(self, system_name: str, *, reading: SourcesReading | None = None) -> dict[str, Any]: ...
+    def get_emulator_options(
+        self,
+        system_name: str,
+        *,
+        reading: SourcesReading | None = None,
+        content_path: str | None = None,
+        source: str | None = None,
+    ) -> dict[str, Any]: ...
+
+    def sources_reading(self) -> SourcesReading:
+        """A fresh reading of the emulator sources, for a call that asks every source in the user's order."""
+        ...
 
 
 class EmulatorSourcesReader(Protocol):
@@ -355,10 +369,10 @@ class PlatformCoreReader(Protocol):
     """Read seam for Tender's own per-platform core selection.
 
     Exposes the ``settings.json`` ``platform_cores`` map (RomM platform
-    slug → core label) so the resolver can layer a user-chosen
-    platform-wide core over the es_systems default without reading the
-    retired ES-DE gamelist. Returns the stored core label for a slug, or
-    ``None`` when the platform has no selection of Tender's own.
+    slug → the stored pick) so the resolver can layer a user-chosen
+    platform-wide core over the default without reading the retired ES-DE
+    gamelist. Returns the stored label for a slug, or ``None`` when the
+    platform has no selection of Tender's own.
     """
 
     def get_platform_core(self, platform_slug: str) -> str | None: ...

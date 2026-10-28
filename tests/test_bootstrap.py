@@ -197,7 +197,7 @@ class TestBootstrap:
         result = _bootstrap_for(tmp_path)
         reader = result.callbacks.platform_core_reader
         assert reader.get_platform_core("snes") is None
-        result.stores.settings["platform_cores"]["snes"] = "bsnes"
+        result.stores.settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}
         assert reader.get_platform_core("snes") == "bsnes"
 
     def test_state_bundle_carries_only_settings(self, tmp_path):
@@ -487,7 +487,7 @@ class TestBootstrapReadsOnlySettingsAtTheOldestVersionOrNewer:
         path.write_text(json.dumps(content))
         return path
 
-    def test_a_file_at_version_13_loads_unchanged(self, tmp_path, caplog):
+    def test_a_file_at_version_13_loads_with_its_settings_kept_and_its_picks_given_no_source(self, tmp_path, caplog):
         content = {
             "version": 13,
             "romm_url": "https://romm.example",
@@ -495,14 +495,16 @@ class TestBootstrapReadsOnlySettingsAtTheOldestVersionOrNewer:
             "enabled_collections": {"standard": {"1": True}, "smart": {}, "virtual": {"v": True}},
             "default_slot": "slot-a",
             "log_level": "debug",
+            "platform_cores": {"snes": "bsnes"},
         }
         path = self._seed(tmp_path, content)
 
         with caplog.at_level(logging.WARNING):
             result = _bootstrap_for(tmp_path)
 
-        assert {key: result.stores.settings[key] for key in content} == content
-        assert {key: json.loads(path.read_text())[key] for key in content} == content
+        expected = {**content, "version": 14, "platform_cores": {"snes": {"label": "bsnes", "source": None}}}
+        assert {key: result.stores.settings[key] for key in content} == expected
+        assert {key: json.loads(path.read_text())[key] for key in content} == expected
         assert not [r for r in caplog.records if "settings.json" in r.getMessage()]
 
     @pytest.mark.parametrize(

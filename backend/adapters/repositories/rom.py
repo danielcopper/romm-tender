@@ -76,6 +76,7 @@ _SELECT_COLUMNS = ", ".join(
     (
         *_SYNC_COLUMNS,
         "emulator_override",
+        "emulator_override_source",
         "selected_disc",
         "applied_launch_options",
         "chosen_sgdb_id",
@@ -107,6 +108,7 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
         artwork_checked_at=row["artwork_checked_at"],
         ra_id=row["ra_id"],
         emulator_override=row["emulator_override"],
+        emulator_override_source=row["emulator_override_source"],
         selected_disc=row["selected_disc"],
         applied_launch_options=row["applied_launch_options"],
         sibling_group_key=row["sibling_group_key"],
@@ -198,16 +200,17 @@ class SqliteRomRepository(BaseRepository):
             ),
         )
 
-    def set_emulator_override(self, rom_id: int, label: str | None) -> None:
-        """Write (or clear) the per-game emulator override for ``rom_id``.
+    def set_emulator_override(self, rom_id: int, label: str | None, source: str | None) -> None:
+        """Write (or clear) the per-game emulator override for ``rom_id``, with its emulator source.
 
         ``label`` is the core label to pin, or ``None`` to store SQL NULL
-        (follow the system default). This is the only write path for the column
-        — the sync UPSERT in :meth:`save` never touches it.
+        (follow the system default); ``source`` the kind of the emulator source
+        it was chosen from, ``None`` with no pick. This is the only write path
+        for the two columns — the sync UPSERT in :meth:`save` never touches them.
         """
         self._conn.execute(
-            "UPDATE roms SET emulator_override = ? WHERE rom_id = ?",
-            (label, rom_id),
+            "UPDATE roms SET emulator_override = ?, emulator_override_source = ? WHERE rom_id = ?",
+            (label, source, rom_id),
         )
 
     def get_all_emulator_overrides(self) -> dict[int, str]:

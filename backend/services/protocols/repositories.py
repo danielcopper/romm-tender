@@ -111,11 +111,12 @@ class RomRepository(Protocol):
         """
         ...
 
-    def set_emulator_override(self, rom_id: int, label: str | None) -> None:
-        """Pin (or clear with ``None``) the per-game emulator override for *rom_id*.
+    def set_emulator_override(self, rom_id: int, label: str | None, source: str | None) -> None:
+        """Pin (or clear with ``None``) the per-game emulator override for *rom_id*, with its emulator source.
 
-        The only write path for ``emulator_override``; the sync upsert in
-        :meth:`save` never touches it, so a re-sync preserves the pin.
+        The only write path for ``emulator_override`` and
+        ``emulator_override_source``; the sync upsert in :meth:`save` never
+        touches them, so a re-sync preserves the pin.
         """
         ...
 

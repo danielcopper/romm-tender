@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 from _factories import (
@@ -16,13 +17,17 @@ from _factories import (
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_emulator_sources import FakeSourcesReading
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
 
 from domain.disc_selection import Disc
+from domain.emulator_choice import DEFAULT, EmulatorChoice, ResolvedEmulator, VanishedPick
 from domain.emulator_commands import options_to_payload
+from domain.emulator_pick import StoredPick
+from domain.emulator_sources import ArrangedSource
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -181,7 +186,7 @@ class TestGetPlatformCoreInfo:
         _seed_rom(uow, rom_id=42, platform_slug="snes")
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
         assert result == {
-            "emulators": options_to_payload(core_info.options),
+            "emulators": options_to_payload(core_info.get_emulator_options("snes")["options"]),
             "emulator_data_available": True,
             "emulator_data_reason": None,
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
@@ -190,6 +195,8 @@ class TestGetPlatformCoreInfo:
             "active_core_label": "Snes9x",
             "platform_core_label": None,
             "has_game_override": False,
+            "start": {"state": "starts", "reason": None, "entry": "Snes9x", "folder_entry": None},
+            "vanished_pick": None,
         }
 
     def test_unknown_rom_returns_empty(self, event_loop, service, core_info):
@@ -206,6 +213,8 @@ class TestGetPlatformCoreInfo:
             "active_core_label": None,
             "platform_core_label": None,
             "has_game_override": False,
+            "start": {"state": "no_entry", "reason": None, "entry": None, "folder_entry": None},
+            "vanished_pick": None,
         }
         assert core_info.emulator_options_calls == []
 
@@ -223,7 +232,7 @@ class TestGetPlatformCoreInfo:
         # platform_cores) surfaces as platform_core_label so the menu can mark
         # the system-level selection distinctly from the active core (#954).
         _seed_rom(uow, rom_id=42, platform_slug="snes")
-        settings["platform_cores"]["snes"] = "bsnes"
+        settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
         assert result["platform_core_label"] == "bsnes"
 
@@ -328,12 +337,18 @@ class TestGetSystemCoreInfo:
     def test_happy_path(self, event_loop, service, core_info):
         result = event_loop.run_until_complete(service.get_system_core_info("snes"))
         assert result == {
-            "emulators": options_to_payload(core_info.options),
+            "emulators": options_to_payload(core_info.get_emulator_options("snes")["options"]),
             "emulator_data_available": True,
             "emulator_data_reason": None,
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
             "platform_system": {"state": "found", "source": "retrodeck", "system": "snes", "platform": "snes"},
             "active_core_label": "Snes9x",
+            "start": {"state": "starts", "reason": None, "entry": "Snes9x", "folder_entry": None},
+            "vanished_pick": None,
+            "source_defaults": [
+                {"kind": "retrodeck", "default": "Snes9x", "chosen_in_frontend": None, "reason": None},
+            ],
+            "tender_default": {"kind": "retrodeck", "label": "Snes9x"},
         }
 
     def test_answers_for_a_platform_with_no_synced_rom(self, event_loop, service, uow, core_info):
@@ -341,10 +356,10 @@ class TestGetSystemCoreInfo:
         # a platform the user has never synced still gets its picker.
         assert list(uow.roms.iter_all()) == []
         result = event_loop.run_until_complete(service.get_system_core_info("snes"))
-        assert result["emulators"] == options_to_payload(core_info.options)
+        assert result["emulators"] == options_to_payload(core_info.get_emulator_options("snes")["options"])
 
     def test_per_platform_override_wins_over_the_default(self, event_loop, service, settings):
-        settings["platform_cores"]["snes"] = "bsnes"
+        settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}
         result = event_loop.run_until_complete(service.get_system_core_info("snes"))
         assert result["active_core_label"] == "bsnes"
 
@@ -604,7 +619,7 @@ class TestSetSystemCore:
     def test_writes_label_to_settings_and_persists(self, event_loop, service, settings, settings_persister):
         result = event_loop.run_until_complete(service.set_system_core("snes", "Snes9x"))
         assert result["success"] is True
-        assert settings["platform_cores"] == {"snes": "Snes9x"}
+        assert settings["platform_cores"] == {"snes": {"label": "Snes9x", "source": "retrodeck"}}
         assert settings_persister.save_count == 1
 
     def test_empty_core_label_clears_settings_entry(self, event_loop, service, settings, settings_persister):
@@ -694,7 +709,7 @@ class TestSetSystemCore:
             event_loop.run_until_complete(setting)
 
         assert raised.value is failure
-        assert settings["platform_cores"] == {"snes": "bsnes"}
+        assert settings["platform_cores"] == {"snes": {"label": "bsnes", "source": "retrodeck"}}
         assert settings_persister.save_count == 1
 
 
@@ -910,7 +925,7 @@ def _retire_rom_between_transactions(uow: FakeUnitOfWork, core_info: FakeCoreInf
     """
     get_emulator_options = core_info.get_emulator_options
 
-    def retiring(system_name, *, reading=None):
+    def retiring(system_name, *, reading=None, content_path=None, source=None):
         with uow:
             uow.roms.delete(rom_id)
         return get_emulator_options(system_name, reading=reading)
@@ -929,7 +944,7 @@ def _move_platform_between_transactions(
     """
     get_emulator_options = core_info.get_emulator_options
 
-    def resyncing(system_name, *, reading=None):
+    def resyncing(system_name, *, reading=None, content_path=None, source=None):
         with uow:
             _seed_rom(uow, rom_id=rom_id, platform_slug=platform_slug, shortcut_app_id=99)
         return get_emulator_options(system_name, reading=reading)
@@ -1083,3 +1098,164 @@ class TestTheCoreWriteLeases:
 
         assert uow.roms.get(42).emulator_override is None
         assert prune_conflicts.conflicting_operations == 0
+
+
+# ── a pick's source, a vanished pick, and every source's default (#2195 D4, D5, D20) ─
+
+
+class TestAPickIsStoredWithItsSource:
+    def test_a_game_pick_records_the_source_its_list_came_from(self, event_loop, service, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="snes")
+        assert event_loop.run_until_complete(service.set_game_core(42, "bsnes"))["success"] is True
+        rom = uow.roms.get(42)
+        assert (rom.emulator_override, rom.emulator_override_source) == ("bsnes", "retrodeck")
+
+    def test_clearing_a_game_pick_drops_its_source(self, event_loop, service, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="snes")
+        event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
+        event_loop.run_until_complete(service.clear_game_core(42))
+        rom = uow.roms.get(42)
+        assert (rom.emulator_override, rom.emulator_override_source) == (None, None)
+
+    def test_a_platform_pick_with_no_source_answering_is_refused_and_not_written(
+        self, event_loop, service, core_info, settings, settings_persister
+    ):
+        core_info.source = None
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
+        assert refused.value.reason == "core_unavailable"
+        assert settings["platform_cores"] == {}
+        assert settings_persister.save_count == 0
+
+
+class TestAVanishedPick:
+    def test_a_game_pick_whose_label_is_gone_is_named_with_its_source_and_the_default_used(
+        self, event_loop, service, uow, active_core
+    ):
+        _seed_rom(uow, rom_id=42, platform_slug="snes", emulator_override="Gone")
+        snes9x = libretro_option("snes9x_libretro", "Snes9x")
+        active_core.resolved[42] = ResolvedEmulator(
+            choice=EmulatorChoice(
+                option=snes9x, layer=DEFAULT, vanished=VanishedPick(pick=StoredPick("Gone", None), layer="game")
+            ),
+            options=[snes9x],
+            invocation=None,
+            folder_unstartable=False,
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["vanished_pick"] == {"label": "Gone", "source": "retrodeck", "layer": "game", "used": "Snes9x"}
+
+    def test_a_platform_pick_whose_label_is_gone_is_named_on_the_platform_page(self, event_loop, service, settings):
+        settings["platform_cores"]["snes"] = {"label": "Gone-o-Tron", "source": "emudeck"}
+
+        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+
+        assert result["vanished_pick"] == {
+            "label": "Gone-o-Tron",
+            "source": "emudeck",
+            "layer": "platform",
+            "used": "Snes9x",
+        }
+        assert result["active_core_label"] == "Snes9x"
+
+
+class _TwoSourceCoreInfo(FakeCoreInfoProvider):
+    """RetroDECK and EmuDeck, in the order and with the switches a test states, each with its own list."""
+
+    def __init__(self, *, order: tuple[str, ...], off: tuple[str, ...] = (), lists: dict[str, Any]) -> None:
+        super().__init__(options=lists["retrodeck"])
+        self._order = order
+        self._off = off
+        self._lists = lists
+
+    def sources_reading(self) -> FakeSourcesReading:
+        return FakeSourcesReading(
+            tuple(
+                ArrangedSource(kind=kind, enabled=kind not in self._off, starts_games=kind == "retrodeck")
+                for kind in self._order
+            ),
+            {},
+        )
+
+    def get_emulator_options(self, system_name: str, *, source: str | None = None, **kwargs: Any) -> dict[str, Any]:
+        answer = super().get_emulator_options(system_name, **kwargs)
+        if source is None:
+            return answer
+        listed = self._lists[source]
+        if listed is None:
+            return {"available": False, "options": [], "reason": "sealed", "source": {"kind": source}}
+        return {"available": True, "options": listed, "reason": None, "source": {"kind": source}}
+
+
+def _service_over(core_info: FakeCoreInfoProvider, **parts: Any) -> CoreService:
+    return CoreService(
+        config=CoreServiceConfig(
+            loop=parts["event_loop"],
+            logger=logging.getLogger("test_cores"),
+            core_info=core_info,
+            platform_systems=FakePlatformSystems(),
+            settings={"platform_cores": {}},
+            settings_persister=FakeSettingsPersister(),
+            uow_factory=FakeUnitOfWorkFactory(uow=FakeUnitOfWork()),
+            active_core=FakeActiveCoreResolver(),
+            disc_resolver=FakeDiscResolver(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=_make_prune_conflicts()),
+        ),
+    )
+
+
+def _declared(*options: Any) -> list[Any]:
+    return [dataclasses.replace(option, declared_index=index) for index, option in enumerate(options)]
+
+
+class TestEverySourcesDefault:
+    """The platform page names Tender's default and each source's own (#2195 D4)."""
+
+    _RETRODECK: ClassVar[list[Any]] = _declared(libretro_option("genesis_plus_gx_libretro", "Genesis Plus GX"))
+    _EMUDECK: ClassVar[list[Any]] = [
+        *_declared(libretro_option("picodrive_libretro", "PicoDrive")),
+    ]
+
+    def test_with_emudeck_first_tenders_default_is_emudecks(self, event_loop):
+        gearsystem = dataclasses.replace(
+            libretro_option("gearsystem_libretro", "Gearsystem"), declared_index=1, chosen_in_frontend=True
+        )
+        core_info = _TwoSourceCoreInfo(
+            order=("emudeck", "retrodeck"),
+            lists={"retrodeck": self._RETRODECK, "emudeck": [gearsystem, *self._EMUDECK]},
+        )
+
+        result = event_loop.run_until_complete(
+            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem")
+        )
+
+        assert result["tender_default"] == {"kind": "emudeck", "label": "PicoDrive"}
+        assert result["active_core_label"] == "PicoDrive"
+        assert result["source_defaults"] == [
+            {"kind": "emudeck", "default": "PicoDrive", "chosen_in_frontend": "Gearsystem", "reason": None},
+            {"kind": "retrodeck", "default": "Genesis Plus GX", "chosen_in_frontend": None, "reason": None},
+        ]
+
+    def test_a_source_switched_off_is_left_out_and_one_that_cannot_answer_says_why(self, event_loop):
+        core_info = _TwoSourceCoreInfo(
+            order=("emudeck", "retrodeck"),
+            lists={"retrodeck": self._RETRODECK, "emudeck": None},
+        )
+
+        result = event_loop.run_until_complete(
+            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem")
+        )
+
+        assert result["source_defaults"] == [
+            {"kind": "emudeck", "default": None, "chosen_in_frontend": None, "reason": "sealed"},
+            {"kind": "retrodeck", "default": "Genesis Plus GX", "chosen_in_frontend": None, "reason": None},
+        ]
+        assert result["tender_default"] == {"kind": "retrodeck", "label": "Genesis Plus GX"}
+
+        core_info._off = ("emudeck",)
+        result = event_loop.run_until_complete(
+            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem")
+        )
+        assert [entry["kind"] for entry in result["source_defaults"]] == ["retrodeck"]

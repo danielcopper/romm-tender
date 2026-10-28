@@ -84,6 +84,10 @@ class SourcesReading(Protocol):
         """The resolver's handle for :attr:`answering`, or ``None``."""
         ...
 
+    def installation(self, kind: str) -> Any:
+        """The resolver's handle for the detected source of *kind*, or ``None``."""
+        ...
+
     def remember[T](self, question: Hashable, ask: Callable[[], T]) -> T:
         """The answer to *question* through this reading, asked on its first use only."""
         ...

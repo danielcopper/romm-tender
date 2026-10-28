@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_commands import CORE, PROGRAM, EmulatorOption
+from domain.emulator_sources import ArrangedSource
 from domain.shortcut_data import EmulatorInvocation
+from fakes.fake_emulator_sources import FakeSourcesReading
 
 if TYPE_CHECKING:
     from domain.emulator_sources import SourcesReading
@@ -90,6 +93,12 @@ class FakeCoreInfoProvider:
     ``available`` mirrors the adapter's "was the catalogue readable?" flag, and
     ``reason`` / ``source`` the two fields the adapter answers beside it.
 
+    A test lists ``options`` in the order the source declares them, so an option
+    seeded without a ``declared_index`` is answered with its place in the list
+    as one, and the first is the default as the adapter would read it.
+    ``options_calls`` records the ``content_path`` and ``source`` each
+    ``get_emulator_options`` call was asked with.
+
     ``readings`` and ``default_readings`` record the reading each
     ``get_emulator_options`` and ``get_default_emulator`` call was handed
     (``None`` for a call that asks fresh). ``active_core_calls`` and
@@ -132,6 +141,7 @@ class FakeCoreInfoProvider:
         self.emulator_options_calls: list[str] = []
         self.readings: list[SourcesReading | None] = []
         self.default_readings: list[SourcesReading | None] = []
+        self.options_calls: list[dict[str, str | None]] = []
 
     @property
     def available_cores(self) -> list[dict[str, Any]]:
@@ -161,12 +171,26 @@ class FakeCoreInfoProvider:
             return core_invocation(core_so, label)
         return None
 
-    def get_emulator_options(self, system_name: str, *, reading: SourcesReading | None = None) -> dict[str, Any]:
+    def sources_reading(self) -> FakeSourcesReading:
+        return FakeSourcesReading((ArrangedSource(kind="retrodeck", enabled=True, starts_games=True),), {})
+
+    def get_emulator_options(
+        self,
+        system_name: str,
+        *,
+        reading: SourcesReading | None = None,
+        content_path: str | None = None,
+        source: str | None = None,
+    ) -> dict[str, Any]:
         self.emulator_options_calls.append(system_name)
         self.readings.append(reading)
+        self.options_calls.append({"content_path": content_path, "source": source})
         return {
             "available": self.available,
-            "options": self.options,
+            "options": [
+                option if option.declared_index is not None else replace(option, declared_index=index)
+                for index, option in enumerate(self.options)
+            ],
             "reason": None if self.available else self.reason,
             "source": self.source,
         }

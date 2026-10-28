@@ -13,6 +13,10 @@ from typing import Any
 # converted but replaced by the defaults.
 OLDEST_SETTINGS_VERSION = 13
 
+# The version from which a per-platform emulator pick is stored as its label and
+# its emulator source rather than as a bare label.
+PLATFORM_PICK_SOURCE_VERSION = 14
+
 _JSON_KINDS: dict[type, str] = {
     dict: "object",
     list: "array",
@@ -51,8 +55,23 @@ def unreadable_settings(data: object) -> str | None:
 def migrate_settings(data: dict[str, Any]) -> dict[str, Any]:
     """Bring *data* from any settings schema this release reads to the current version.
 
-    *data* is one :func:`unreadable_settings` has no objection to. No version
-    after :data:`OLDEST_SETTINGS_VERSION` exists yet, so there is no step to
-    take. Value semantics — the caller's dict is never mutated.
+    *data* is one :func:`unreadable_settings` has no objection to. Value
+    semantics — the caller's dict is never mutated.
+
+    Version 14 stores each per-platform emulator pick as ``{"label",
+    "source"}``. A bare label from before carries ``None`` for its source,
+    since nothing recorded which catalogue it came from; a value that is no
+    label is dropped, as it named no pick. The step stays in every later release
+    and is safe to run again: it converts only a file older than 14.
     """
-    return dict(data)
+    migrated = dict(data)
+    if migrated["version"] < PLATFORM_PICK_SOURCE_VERSION:
+        picks = migrated.get("platform_cores")
+        if isinstance(picks, dict):
+            migrated["platform_cores"] = {
+                slug: {"label": label, "source": None}
+                for slug, label in picks.items()
+                if isinstance(label, str) and label
+            }
+        migrated["version"] = PLATFORM_PICK_SOURCE_VERSION
+    return migrated

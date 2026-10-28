@@ -240,7 +240,7 @@ def _labels(adapter: AtlasCatalogueAdapter, system: str = "ps3") -> list[str]:
 
 
 class TestDeclaredOrder:
-    """ES-DE's own selections never move Tender's default (ADR-0012)."""
+    """ES-DE's own selections never move Tender's default (ADR-0012); the rows keep the resolver's order."""
 
     def test_a_promoted_entry_does_not_become_the_default(self, traces):
         # The answer is in EFFECTIVE order: the user's gamelist promotion put the
@@ -259,7 +259,7 @@ class TestDeclaredOrder:
         )
         adapter = _adapter(installation, traces)
 
-        assert _labels(adapter) == ["RPCS3", "RPCS3 Firmware", "RPCS3 Directory"]
+        assert _labels(adapter) == ["RPCS3 Directory", "RPCS3", "RPCS3 Firmware"]
         assert adapter.get_default_emulator("ps3") == EmulatorInvocation.run_game(
             "%EMULATOR_RPCS3% %ROM%", "RPCS3", launcher=_LAUNCHER
         )
@@ -285,15 +285,21 @@ class TestDeclaredOrder:
 
     def test_a_skipped_declared_position_is_ordered_not_indexed(self, traces):
         # ES-DE's own walk skips a position where an empty-text <command> holds
-        # one, so the values are ascending but need not start at 0 or be dense.
+        # one, so the values are ascending but need not start at 0 or be dense:
+        # the default is the lowest, not the 0.
         installation = _Installation(
             catalogue=_answer(
-                _entry(label="Third", command="%EMULATOR_C% %ROM%", declared_index=5),
                 _entry(label="First", command="%EMULATOR_A% %ROM%", declared_index=1),
                 _entry(label="Second", command="%EMULATOR_B% %ROM%", declared_index=4),
+                _entry(label="Third", command="%EMULATOR_C% %ROM%", declared_index=5),
             )
         )
-        assert _labels(_adapter(installation, traces)) == ["First", "Second", "Third"]
+        adapter = _adapter(installation, traces)
+
+        assert _labels(adapter) == ["First", "Second", "Third"]
+        assert adapter.get_default_emulator("ps3") == EmulatorInvocation.run_game(
+            "%EMULATOR_A% %ROM%", "First", launcher=_LAUNCHER
+        )
 
     def test_an_entry_with_no_declared_position_is_never_the_default(self, traces):
         # The derived enumeration: no layer declared these, so none has a shipped
@@ -312,15 +318,6 @@ class TestDeclaredOrder:
         assert [option.label for option in result["options"]] == ["mGBA", "VBA-M"]
         assert all(option.status == "unbakeable" for option in result["options"])
         assert adapter.get_default_emulator("gba") is None
-
-    def test_an_undeclared_entry_sorts_behind_every_declared_one(self, traces):
-        installation = _Installation(
-            catalogue=_answer(
-                _entry(label="Derived", command="", declared_index=None),
-                _entry(label="Declared", command="%EMULATOR_A% %ROM%", declared_index=0),
-            )
-        )
-        assert _labels(_adapter(installation, traces)) == ["Declared", "Derived"]
 
     def test_an_undeclared_entry_says_so_in_the_log(self, traces):
         # "No default" is not a bug in this one shape, so the log has to be able
@@ -574,7 +571,7 @@ def _launch(availability: Availability, *codes: str, launcher: Launcher | None =
 class TestTheResolversAvailability:
     """Whether what an entry launches is there is the resolver's ``availability``, libretro cores included."""
 
-    def test_a_standalone_the_resolver_states_not_installed_is_withheld_and_loses_the_default(self, traces):
+    def test_a_standalone_the_resolver_states_not_installed_is_withheld_and_stays_the_default(self, traces):
         installation = _Installation(
             catalogue=_answer(
                 _entry(
@@ -590,12 +587,8 @@ class TestTheResolversAvailability:
 
         options = adapter.get_emulator_options("switch")["options"]
         assert (options[0].status, options[0].reason) == ("needs_setup", "not_installed")
-        assert adapter.get_default_emulator("switch") == EmulatorInvocation.run_game(
-            f"%EMULATOR_RETROARCH% -L {_CORES}/yuzu_libretro.so %ROM%",
-            "Yuzu",
-            "yuzu_libretro.so",
-            core_so="yuzu_libretro",
-        )
+        # Nothing later is taken instead (#2195 D7): the default bakes nothing.
+        assert adapter.get_default_emulator("switch") is None
 
     def test_a_libretro_core_the_resolver_states_not_installed_is_withheld(self, traces):
         installation = _Installation(
@@ -992,6 +985,100 @@ class TestWhichSourceAnswers:
         adapter = _adapter(None, traces, sources=_sources([emudeck], traces))
 
         assert adapter.get_emulator_options("psx")["source"] == {"kind": "emudeck", "starts_games": False}
+
+
+class _AskedInstallation(_Installation):
+    """An installation that records the content path each catalogue question was asked with."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.content_paths: list[str | None] = []
+
+    def emulators_for(self, system: str, *, content_path: str | None = None) -> CatalogueAnswer:
+        self.content_paths.append(content_path)
+        return super().emulators_for(system, content_path=content_path)
+
+
+class TestTheChoiceMadeInEsDe:
+    """The entry the user chose inside ES-DE is marked where it is not the shipped default (#2195 D7)."""
+
+    def _chosen(self, traces, *entries: EmulatorEntry) -> list[tuple[str, bool]]:
+        installation = _Installation(catalogue=_answer(*entries))
+        options = _adapter(installation, traces).get_emulator_options("mastersystem")["options"]
+        return [(option.label, option.chosen_in_frontend) for option in options]
+
+    def test_a_promoted_entry_is_marked_and_stays_out_of_the_default(self, traces):
+        installation = _Installation(
+            catalogue=_answer(
+                _libretro(label="Gearsystem", core="gearsystem_libretro", declared_index=2, selection="gamelist"),
+                _libretro(label="Genesis Plus GX", core="genesis_plus_gx_libretro", declared_index=0),
+            )
+        )
+        adapter = _adapter(installation, traces)
+
+        options = adapter.get_emulator_options("mastersystem")["options"]
+        assert [(o.label, o.chosen_in_frontend, o.declared_index) for o in options] == [
+            ("Gearsystem", True, 2),
+            ("Genesis Plus GX", False, 0),
+        ]
+        default = adapter.get_default_emulator("mastersystem")
+        assert default is not None
+        assert default.label == "Genesis Plus GX"
+
+    def test_choosing_the_shipped_default_in_es_de_marks_nothing(self, traces):
+        assert self._chosen(
+            traces,
+            _libretro(label="Genesis Plus GX", core="genesis_plus_gx_libretro", declared_index=0, selection="gamelist"),
+            _libretro(label="Gearsystem", core="gearsystem_libretro", declared_index=1),
+        ) == [("Genesis Plus GX", False), ("Gearsystem", False)]
+
+    def test_no_selection_marks_nothing(self, traces):
+        assert self._chosen(
+            traces,
+            _libretro(label="Genesis Plus GX", core="genesis_plus_gx_libretro", declared_index=0),
+            _libretro(label="Gearsystem", core="gearsystem_libretro", declared_index=1),
+        ) == [("Genesis Plus GX", False), ("Gearsystem", False)]
+
+    def test_a_game_s_question_carries_its_path_and_is_asked_apart(self, traces):
+        installation = _AskedInstallation(
+            catalogue=_answer(_libretro(label="Gearsystem", core="gearsystem_libretro", declared_index=0))
+        )
+        adapter = _adapter(installation, traces)
+        reading = adapter.sources_reading()
+
+        adapter.get_emulator_options("mastersystem", reading=reading)
+        adapter.get_emulator_options("mastersystem", reading=reading, content_path="/roms/mastersystem/a.sms")
+        adapter.get_emulator_options("mastersystem", reading=reading, content_path="/roms/mastersystem/a.sms")
+
+        assert installation.content_paths == [None, "/roms/mastersystem/a.sms"]
+
+
+class TestEachSourceAnswersForItself:
+    """A named source is asked in place of the answering one, for the page that shows every source's default."""
+
+    def test_a_named_source_answers_with_its_own_list(self, traces):
+        retrodeck = _Installation(catalogue=_answer(_libretro(label="mGBA", core="mgba_libretro", declared_index=0)))
+        emudeck = _Installation(
+            catalogue=_answer(_libretro(label="VBA-M", core="vbam_libretro", declared_index=0)), kind="emudeck"
+        )
+        adapter = _adapter(None, traces, sources=_sources([retrodeck, emudeck], traces))
+
+        answer = adapter.get_emulator_options("gba", source="emudeck")
+
+        assert [option.label for option in answer["options"]] == ["VBA-M"]
+        assert answer["source"] == {"kind": "emudeck", "starts_games": False}
+        assert retrodeck.catalogue_calls == []
+
+    def test_a_source_not_detected_answers_unavailable(self, traces):
+        retrodeck = _Installation(catalogue=_answer(_libretro(label="mGBA", core="mgba_libretro", declared_index=0)))
+        adapter = _adapter(None, traces, sources=_sources([retrodeck], traces))
+
+        assert adapter.get_emulator_options("gba", source="emudeck") == {
+            "available": False,
+            "options": [],
+            "reason": "unavailable",
+            "source": None,
+        }
 
 
 # --- The real resolver, over a fabricated RetroDECK deploy -------------------

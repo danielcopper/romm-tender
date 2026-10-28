@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from domain.emulator_choice import DEFAULT, EmulatorChoice, ResolvedEmulator
+from domain.emulator_commands import CORE, PROGRAM, EmulatorOption
 from fakes.fake_core_info_provider import core_invocation
 
 if TYPE_CHECKING:
@@ -32,6 +34,10 @@ class FakeActiveCoreResolver:
     **standalone** emulator (PCSX2, RPCS3, …), pass an explicit
     ``default_emulator`` and/or ``per_rom_emulator`` map — those take precedence
     over the tuple projection.
+
+    :meth:`resolve_rom` answers that same invocation as the default layer's
+    choice of a bakeable entry, or no entry where it is ``None``; ``resolved``
+    maps a ``rom_id`` to the answer a test states instead.
     """
 
     def __init__(
@@ -51,6 +57,7 @@ class FakeActiveCoreResolver:
         self.calls: list[int] = []
         self.emulator_calls: list[int] = []
         self.emulator_readings: list[SourcesReading | None] = []
+        self.resolved: dict[int, ResolvedEmulator | None] = {}
 
     def active_core_for_rom(self, rom_id: int) -> tuple[str | None, str | None]:
         self.calls.append(rom_id)
@@ -72,3 +79,23 @@ class FakeActiveCoreResolver:
             # tuple-configured test gets the identity its core would really have.
             return core_invocation(core_so, label, f"{core_so}.so")
         return None
+
+    def resolve_rom(self, rom_id: int, *, reading: SourcesReading | None = None) -> ResolvedEmulator | None:
+        if rom_id in self.resolved:
+            return self.resolved[rom_id]
+        invocation = self.active_emulator_for_rom(rom_id, reading=reading)
+        option = (
+            None
+            if invocation is None
+            else EmulatorOption(
+                label=invocation.label or "",
+                kind=CORE if invocation.core_so is not None else PROGRAM,
+                core_so=invocation.core_so,
+                command=invocation.command or "",
+                status="bakeable",
+                reason=None,
+                emulator=invocation.emulator,
+            )
+        )
+        choice = EmulatorChoice(option=option, layer=DEFAULT if option is not None else None, vanished=None)
+        return ResolvedEmulator(choice=choice, options=[], invocation=invocation, folder_unstartable=False)

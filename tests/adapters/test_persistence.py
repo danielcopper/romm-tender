@@ -84,8 +84,8 @@ class TestLocking:
 class TestSettingsSchema:
     """Schema-level expectations for the settings defaults + version stamp."""
 
-    def test_settings_version_is_13(self):
-        assert _SETTINGS_VERSION == 13
+    def test_settings_version_is_14(self):
+        assert _SETTINGS_VERSION == 14
 
     def test_default_settings_default_slot_is_autosave(self):
         # New ROMs adopt "autosave" (the slot name the official RomM clients use),
@@ -119,7 +119,6 @@ class TestSettingsSchema:
         assert result["emulator_source_order"] == []
         assert result["emulator_sources_off"] == []
         assert result["version"] == 13
-        assert _SETTINGS_VERSION == 13
 
     def test_default_settings_carry_virtual_collection_bucket(self):
         # The ownership-carrying first kind is ``standard`` (v13, renamed from the
@@ -180,7 +179,7 @@ class TestVersionStampingOnSave:
         with open(settings_path) as f:
             loaded = json.load(f)
         assert loaded["version"] == _SETTINGS_VERSION
-        assert loaded["version"] == 13
+        assert loaded["version"] == 14
 
 
 # ── Loading edge cases ─────────────────────────────────────────────────────────
@@ -601,13 +600,25 @@ class TestClockInjection:
 
 class TestPlatformCoreReaderAdapter:
     def test_returns_label_for_configured_platform(self):
-        reader = PlatformCoreReaderAdapter({"platform_cores": {"snes": "bsnes", "gba": "mGBA"}})
+        reader = PlatformCoreReaderAdapter(
+            {
+                "platform_cores": {
+                    "snes": {"label": "bsnes", "source": "retrodeck"},
+                    "gba": {"label": "mGBA", "source": None},
+                }
+            }
+        )
         assert reader.get_platform_core("snes") == "bsnes"
         assert reader.get_platform_core("gba") == "mGBA"
 
     def test_returns_none_for_absent_platform(self):
         reader = PlatformCoreReaderAdapter({"platform_cores": {"snes": "bsnes"}})
         assert reader.get_platform_core("psx") is None
+
+    def test_a_value_that_is_not_a_label_with_its_source_is_no_pick(self):
+        reader = PlatformCoreReaderAdapter({"platform_cores": {"snes": "bsnes", "gba": {"label": ""}}})
+        assert reader.get_platform_core("snes") is None
+        assert reader.get_platform_core("gba") is None
 
     def test_returns_none_when_map_empty(self):
         reader = PlatformCoreReaderAdapter({"platform_cores": {}})
@@ -624,5 +635,5 @@ class TestPlatformCoreReaderAdapter:
         reader = PlatformCoreReaderAdapter(settings)
         assert reader.get_platform_core("snes") is None
         # Mutate the same dict the adapter holds.
-        settings["platform_cores"]["snes"] = "bsnes"  # type: ignore[index]
+        settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}  # type: ignore[index]
         assert reader.get_platform_core("snes") == "bsnes"

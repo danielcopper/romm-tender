@@ -8,14 +8,14 @@ launch-bake site draws from this seam so the read-path core never diverges from
 the launched core.
 
 Precedence (three layers, then the plain launch): DB ``emulator_override`` (top)
-→ ``settings.json`` per-platform core → the live es_systems default → ``None``.
-An ES-DE ``<alternativeEmulator>`` or ``<altemulator>`` never moves that default
-— the promotion is discarded where the catalogue is read (ADR-0012) — and there
-is no offline snapshot below the live default. A pinned per-game or
-per-platform label that no longer resolves to a bakeable emulator degrades to
-the next layer rather than raising — so a stale label never blocks a read or
-bakes a bogus ``-e`` override. The per-game/per-platform label may name a
-**standalone** emulator (not just a libretro core); it resolves the same way.
+→ ``settings.json`` per-platform core → the default, the entry the source ships
+first → ``None`` (:func:`domain.emulator_choice.choose_emulator`). An ES-DE
+``<alternativeEmulator>`` or ``<altemulator>`` never moves that default
+(ADR-0012). A stored label stands while it names an entry, whatever that
+entry's state: one Tender cannot bake starts through the plain launch, and one
+that cannot start is refused at Play. Only a label that no longer exists gives
+way to the next layer, with a warning. The per-game/per-platform label may name
+a **standalone** emulator (not just a libretro core); it resolves the same way.
 """
 
 from __future__ import annotations
@@ -23,9 +23,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.emulator_commands import label_to_invocation
+from domain.emulator_choice import DEFAULT, ResolvedEmulator, choose_emulator
+from domain.emulator_commands import option_for_label, option_to_invocation
+from domain.emulator_pick import StoredPick
 from domain.rom_files import folder_boot_root
-from domain.shortcut_data import RUN_GAME, EmulatorInvocation
+from domain.shortcut_data import DIRECT, RUN_GAME, EmulatorInvocation
 
 if TYPE_CHECKING:
     import logging
@@ -76,24 +78,23 @@ class ActiveCoreResolver:
     ) -> EmulatorInvocation | None:
         """Return the :class:`EmulatorInvocation` the ROM ``rom_id`` will launch with.
 
-        The launch-bake seam. Reads the ROM's ``platform_slug`` +
-        ``emulator_override`` once, then applies the three-layer precedence:
+        The launch-bake seam, the invocation half of :meth:`resolve_rom`.
+        ``None`` is the plain launch: where the ROM's entry cannot be baked,
+        where it has no entry, including when ``es_systems.xml`` cannot be read
+        and when the platform has no switched-on system in the answering source.
+        """
+        resolved = self.resolve_rom(rom_id, reading=reading)
+        return resolved.invocation if resolved is not None else None
 
-        1. Per-game DB ``emulator_override`` (an emulator LABEL from the picker,
-           libretro OR standalone) → its invocation when the label resolves to a
-           bakeable command.
-        2. Per-platform ``settings.json`` core (also a LABEL, libretro OR
-           standalone) → its invocation when it resolves.
-        3. The live es_systems default via ``get_default_emulator`` — the first
-           safely-bakeable command, which may itself be standalone (PCSX2, RPCS3,
-           Dolphin, …) or libretro.
+    def resolve_rom(self, rom_id: int, *, reading: SourcesReading | None = None) -> ResolvedEmulator | None:
+        """Return the ROM ``rom_id``'s emulator choice and what it bakes to, or ``None`` with no system to ask.
 
-        Returns ``None`` when the platform has no resolvable emulator at all —
-        including when ``es_systems.xml`` cannot be read, and when the platform
-        has no switched-on system in the answering source — so the caller bakes
-        the plain launch and lets RetroDECK resolve the emulator. A stale
-        per-game/per-platform label is never fatal — it degrades to the next
-        layer with a WARNING.
+        Reads the ROM's ``platform_slug`` + ``emulator_override`` once, then
+        applies the three-layer precedence
+        (:func:`domain.emulator_choice.choose_emulator`). The default layer's
+        invocation is the catalogue's own (``get_default_emulator``); a stored
+        pick renders its entry. A pick whose label no longer exists is passed
+        over with a WARNING.
 
         Final step: a resolved emulator program (no RetroArch core) whose
         install is a folder-boot layout (PS3 — ``…/PS3_GAME/USRDIR/EBOOT.BIN``) is rewritten
@@ -107,7 +108,8 @@ class ActiveCoreResolver:
         a non-folder install, or a program that carries no launcher (which
         launchers the reading hands on is
         ``adapters/atlas_catalogue.py::_sandbox_launcher``'s rule) all leave the
-        invocation unchanged.
+        invocation unchanged, and a folder-boot install left without the direct
+        form is ``folder_unstartable``.
 
         *reading* is a run's one reading of the emulator sources, handed down so
         a run resolving many ROMs asks each catalogue question once; a call
@@ -123,45 +125,55 @@ class ActiveCoreResolver:
         if system is None:
             return None
         options = self._core_info.get_emulator_options(system, reading=reading)["options"]
-        emulator = self._resolve_by_precedence(rom, rom_id, system, options, reading)
-        return self._maybe_folder_boot_direct(emulator, install, rom_id)
+        game = (
+            StoredPick(label=rom.emulator_override, source=rom.emulator_override_source)
+            if rom.emulator_override is not None
+            else None
+        )
+        platform_label = (
+            None
+            if game is not None and option_for_label(options, game.label) is not None
+            else self._platform_core_reader.get_platform_core(rom.platform_slug)
+        )
+        choice = choose_emulator(
+            options,
+            game=game,
+            platform=StoredPick(label=platform_label, source=None) if platform_label is not None else None,
+        )
+        self._warn_vanished(game, platform_label, options, rom, system)
+        if choice.layer in (DEFAULT, None):
+            emulator = self._core_info.get_default_emulator(system, reading=reading)
+        else:
+            emulator = option_to_invocation(choice.option)
+        invocation = self._maybe_folder_boot_direct(emulator, install, rom_id)
+        folder = install is not None and folder_boot_root(install.file_path, install.rom_dir) is not None
+        return ResolvedEmulator(
+            choice=choice,
+            options=options,
+            invocation=invocation,
+            folder_unstartable=folder and (invocation is None or invocation.form != DIRECT),
+        )
 
-    def _resolve_by_precedence(
-        self, rom: Rom, rom_id: int, system: str, options: list[EmulatorOption], reading: SourcesReading | None
-    ) -> EmulatorInvocation | None:
-        """Apply the per-game → per-platform → system-default precedence chain.
-
-        Returns the resolved :class:`EmulatorInvocation` before the folder-boot
-        rewrite. A stale per-game/per-platform label warns and degrades to the
-        next layer; the bottom is the live es_systems default (or ``None``).
-        """
-        override = rom.emulator_override
-        if override is not None:
-            invocation = label_to_invocation(options, override)
-            if invocation is not None:
-                return invocation
+    def _warn_vanished(
+        self, game: StoredPick | None, platform_label: str | None, options: list[EmulatorOption], rom: Rom, system: str
+    ) -> None:
+        """Warn for each stored label the precedence passed over because no entry carries it any more."""
+        if game is not None and option_for_label(options, game.label) is None:
             self._logger.warning(
                 "active_core_resolver: per-game override '%s' for rom_id=%s no longer resolves on %s; "
                 "degrading to the per-platform/system default",
-                override,
-                rom_id,
+                game.label,
+                rom.rom_id,
                 system,
             )
-
-        platform_label = self._platform_core_reader.get_platform_core(rom.platform_slug)
-        if platform_label is not None:
-            invocation = label_to_invocation(options, platform_label)
-            if invocation is not None:
-                return invocation
+        if platform_label is not None and option_for_label(options, platform_label) is None:
             self._logger.warning(
                 "active_core_resolver: per-platform core '%s' for %s (rom_id=%s) no longer resolves; "
                 "degrading to the system default",
                 platform_label,
                 rom.platform_slug,
-                rom_id,
+                rom.rom_id,
             )
-
-        return self._core_info.get_default_emulator(system, reading=reading)
 
     def _maybe_folder_boot_direct(
         self, emulator: EmulatorInvocation | None, install: RomInstall | None, rom_id: int

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     from domain.artwork_slot import ArtworkSlot
     from domain.disc_selection import Disc
+    from domain.emulator_choice import ResolvedEmulator
     from domain.emulator_commands import LaunchingEmulator
     from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
@@ -289,6 +290,8 @@ class ActiveCoreReader(Protocol):
     def active_emulator_for_rom(
         self, rom_id: int, *, reading: SourcesReading | None = None
     ) -> EmulatorInvocation | None: ...
+
+    def resolve_rom(self, rom_id: int, *, reading: SourcesReading | None = None) -> ResolvedEmulator | None: ...
 
 
 class DiscResolver(Protocol):

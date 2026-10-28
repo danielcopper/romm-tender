@@ -290,31 +290,42 @@ class TestAssignRaId:
 class TestPinEmulatorOverride:
     def test_sets_label(self):
         rom = _make_rom()
-        rom.pin_emulator_override("PCSX ReARMed")
+        rom.pin_emulator_override("PCSX ReARMed", source="retrodeck")
         assert rom.emulator_override == "PCSX ReARMed"
 
     def test_strips_surrounding_whitespace(self):
         rom = _make_rom()
-        rom.pin_emulator_override("  PCSX ReARMed  ")
+        rom.pin_emulator_override("  PCSX ReARMed  ", source="retrodeck")
         assert rom.emulator_override == "PCSX ReARMed"
 
     def test_empty_label_raises(self):
         rom = _make_rom()
         with pytest.raises(ValueError, match="emulator_override label must not be empty"):
-            rom.pin_emulator_override("")
+            rom.pin_emulator_override("", source="retrodeck")
         assert rom.emulator_override is None
 
     def test_whitespace_only_label_raises(self):
         rom = _make_rom()
         with pytest.raises(ValueError, match="emulator_override label must not be empty"):
-            rom.pin_emulator_override("   ")
+            rom.pin_emulator_override("   ", source="retrodeck")
         assert rom.emulator_override is None
+
+
+class TestThePickRecordsItsSource:
+    """A per-game pick carries the emulator source it was chosen from (#2195 D20)."""
+
+    def test_a_pin_records_its_source_and_a_clear_drops_it(self):
+        rom = _make_rom()
+        rom.pin_emulator_override("PCSX ReARMed", source="emudeck")
+        assert (rom.emulator_override, rom.emulator_override_source) == ("PCSX ReARMed", "emudeck")
+        rom.clear_emulator_override()
+        assert (rom.emulator_override, rom.emulator_override_source) == (None, None)
 
 
 class TestClearEmulatorOverride:
     def test_clear_after_pin_sets_none(self):
         rom = _make_rom()
-        rom.pin_emulator_override("PCSX ReARMed")
+        rom.pin_emulator_override("PCSX ReARMed", source="retrodeck")
         rom.clear_emulator_override()
         assert rom.emulator_override is None
 

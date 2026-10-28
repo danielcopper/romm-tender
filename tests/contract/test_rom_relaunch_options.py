@@ -19,8 +19,8 @@ from domain.rom_install import RomInstall
 
 from ._seed import seed_component_launcher, seed_es_find_rules, seed_es_systems, seed_install, seed_rom
 
-# A ps3 system whose first bakeable command is RPCS3 Directory (Standalone): the
-# shortcut form is un-bakeable (skipped), so the Directory command is the default.
+# A ps3 system as RetroDECK ships it: the shortcut form is its default and cannot
+# be baked, and RPCS3 Directory (Standalone) is the entry that starts a folder.
 _PS3_ES_SYSTEMS_XML = """\
 <?xml version="1.0"?>
 <systemList>
@@ -81,23 +81,24 @@ async def test_unknown_rom_returns_none(harness):
     assert item is None
 
 
-async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
-    """A PS3 folder game bakes the direct sandbox invocation (ADR-0019 / #1212).
+# The shell the shortcut form runs, found where the deploy keeps it, so that the
+# resolver states that form startable rather than its installation unestablished.
+_PS3_AND_SHELL_FIND_RULES_XML = _PS3_ES_FIND_RULES_XML.replace(
+    "</ruleList>",
+    """  <emulator name="OS-SHELL">
+    <rule type="staticpath">
+      <entry>/app/retrodeck/components/osshell/component_launcher.sh</entry>
+    </rule>
+  </emulator>
+</ruleList>""",
+)
 
-    The install's ``file_path`` stays the ``…/PS3_GAME/USRDIR/EBOOT.BIN`` launch
-    file (the ADR-0008 anchor), but the folder-boot rewrite bakes a
-    ``flatpak run --nosocket=wayland --command=<launcher>`` command that runs RPCS3 directly inside
-    the sandbox over the game FOLDER — bypassing ``run_game.sh``, which would
-    reinterpret the directory as an ES-DE "directory as a file" and never boot
-    it. Drives the real bake seam (es_systems + es_find_rules + the on-disk
-    component launcher, through the resolver's launch lookup) over real files
-    under tmp_path.
-    """
+
+def _seed_ps3_folder_game(harness, rom_id: int, *, find_rules: str = _PS3_ES_FIND_RULES_XML):
+    """A PS3 game installed as a folder and bound to a shortcut, over RetroDECK's ps3 catalogue."""
     seed_es_systems(harness, _PS3_ES_SYSTEMS_XML)
-    seed_es_find_rules(harness, _PS3_ES_FIND_RULES_XML)
+    seed_es_find_rules(harness, find_rules)
     launcher = seed_component_launcher(harness, "rpcs3")
-
-    rom_id = 55
     seed_rom(harness, rom_id, platform_slug="ps3", shortcut_app_id=rom_id)
     rom_dir = harness.tmp_path / "retrodeck" / "roms" / "ps3" / "MyGame"
     eboot = rom_dir / "PS3_GAME" / "USRDIR" / "EBOOT.BIN"
@@ -114,6 +115,41 @@ async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
                 installed_at="2026-01-01T00:00:00",
             )
         )
+    return rom_dir, launcher
+
+
+async def test_a_ps3_folder_game_whose_default_cannot_start_a_folder_says_which_entry_can(harness):
+    """The shipped default cannot start a folder, and nothing else is taken by itself (#2195 D21)."""
+    _seed_ps3_folder_game(harness, 56, find_rules=_PS3_AND_SHELL_FIND_RULES_XML)
+    seed_component_launcher(harness, "osshell")
+
+    info = await harness.endpoints.get_platform_core_info(56)
+
+    assert info["active_core_label"] == "RPCS3 Shortcut (Standalone)"
+    assert info["start"] == {
+        "state": "cannot_start",
+        "reason": "folder_install",
+        "entry": "RPCS3 Shortcut (Standalone)",
+        "folder_entry": "RPCS3 Directory (Standalone)",
+    }
+
+
+async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
+    """A PS3 folder game with RPCS3 Directory chosen bakes the direct sandbox invocation (ADR-0019 / #1212).
+
+    The install's ``file_path`` stays the ``…/PS3_GAME/USRDIR/EBOOT.BIN`` launch
+    file (the ADR-0008 anchor), but the folder-boot rewrite bakes a
+    ``flatpak run --nosocket=wayland --command=<launcher>`` command that runs RPCS3 directly inside
+    the sandbox over the game FOLDER — bypassing ``run_game.sh``, which would
+    reinterpret the directory as an ES-DE "directory as a file" and never boot
+    it. Drives the real bake seam (es_systems + es_find_rules + the on-disk
+    component launcher, through the resolver's launch lookup) over real files
+    under tmp_path.
+    """
+    rom_id = 55
+    rom_dir, launcher = _seed_ps3_folder_game(harness, rom_id)
+    with harness.uow_factory() as uow:
+        uow.roms.set_emulator_override(rom_id, "RPCS3 Directory (Standalone)", "retrodeck")
 
     item = await harness.endpoints.get_rom_relaunch_options(rom_id)
 

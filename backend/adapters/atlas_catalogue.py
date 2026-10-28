@@ -18,15 +18,16 @@ answering one. A panel call takes a fresh reading per question; a run that asks
 the same questions for many games hands its one reading in, and every answer
 is then asked once for the whole run.
 
-**Its entry order is the EFFECTIVE one, and Tender wants the declared one.**
-A gamelist ``<altemulator>`` or a system-level ``<alternativeEmulator>`` promotes
-an entry to the front of the answer, and Tender keeps the gamelist off every
-launch path (ADR-0012). The shipped position survives promotion as
-``declared_index``, so ordering by it recovers exactly the order ES-DE's own file
-declares — which is what ADR-0020's "first safely-bakeable command in document
-order" is a rule about. Never ``entries[0]``, and never an assumption that index
-0 exists: upstream mirrors ES-DE's own walk, where an empty-text ``<command>``
-holds a position without yielding an entry and a duplicate label takes none.
+**Its entry order is the EFFECTIVE one, and the default is the declared
+first.** A gamelist ``<altemulator>`` or a system-level ``<alternativeEmulator>``
+promotes an entry to the front of the answer. The rows are listed in that order,
+with the promoted entry marked as the user's choice in ES-DE, while the default
+is the entry the source ships first, read off ``declared_index``, which
+promotion never touches — a choice made in ES-DE never moves Tender's launch
+(ADR-0012). Never ``entries[0]`` for the default, and never an assumption that
+index 0 exists: upstream mirrors ES-DE's own walk, where an empty-text
+``<command>`` holds a position without yielding an entry and a duplicate label
+takes none.
 
 **It never logs, and it raises on its own invariant violations** rather than
 returning a degraded answer. Caveats are its whole degradation channel, and their
@@ -86,8 +87,8 @@ from domain.emulator_commands import (
     NOT_INSTALLED,
     PROGRAM,
     classify_command,
+    default_option,
     option_to_invocation,
-    select_default_option,
 )
 from domain.emulator_sources import (
     CATALOGUE_INVALID,
@@ -203,6 +204,14 @@ def _source_payload(reading: SourcesReading) -> dict[str, Any] | None:
     return {"kind": answering.kind, "starts_games": answering.starts_games}
 
 
+def _named_source_payload(reading: SourcesReading, kind: str) -> dict[str, Any] | None:
+    """The detected source of *kind* as the picker answer names it, or ``None`` where none is detected."""
+    named = next((source for source in reading.sources if source.kind == kind), None)
+    if named is None:
+        return None
+    return {"kind": named.kind, "starts_games": named.starts_games}
+
+
 def _refusal_reason(answer: Any) -> str:
     """Which refusal a refused catalogue answer is, as the page words it."""
     codes = set(_caveat_codes(answer))
@@ -273,7 +282,7 @@ def _sandbox_launcher(entry: Any) -> str | None:
     return launcher.path
 
 
-def _classify_entry(entry: Any) -> EmulatorOption:
+def _classify_entry(entry: Any, *, chosen_in_frontend: bool) -> EmulatorOption:
     """*entry* classified for bakeability, with everything the resolver states about it in Tender's words."""
     return classify_command(
         entry.label,
@@ -285,7 +294,23 @@ def _classify_entry(entry: Any) -> EmulatorOption:
         installation=_installation(entry),
         launcher=_sandbox_launcher(entry),
         start_script_runs_nothing=_start_script_runs_nothing(entry),
+        declared_index=entry.declared_index,
+        chosen_in_frontend=chosen_in_frontend,
     )
+
+
+def _frontend_choice(entries: tuple[Any, ...]) -> Any:
+    """The entry the user chose inside ES-DE where it is not the one the source ships first, or ``None``.
+
+    A choice puts the entry it names first in the answer and states it in that
+    entry's ``selection``; choosing the shipped default changes nothing a
+    surface needs to show.
+    """
+    if not entries or entries[0].selection is None:
+        return None
+    declared = [entry.declared_index for entry in entries if entry.declared_index is not None]
+    first = entries[0]
+    return None if declared and first.declared_index == min(declared) else first
 
 
 def catalogue_refused(answer: Any) -> bool:
@@ -302,26 +327,6 @@ def catalogue_refused(answer: Any) -> bool:
     return not _CATALOGUE_REFUSALS.isdisjoint(_caveat_codes(answer))
 
 
-def _declared_order(entries: tuple[Any, ...]) -> list[Any]:
-    """The answer's entries in the order the declaring layer ships them.
-
-    The answer arrives in effective order, where a user's promotion may put a
-    higher declared position first; ``declared_index`` is the shipped one, which
-    promotion never touches. Sorting on it is what turns the effective order back
-    into the declared one that ADR-0020's default rule is written about.
-
-    An entry with no declared position sorts last, in the order the answer gave
-    it. That is the derived enumeration (``emulator-list-derived``): no layer
-    declared it, so it has no shipped place to sort by. Such an entry cannot
-    become the default even from the back of the list, because a derived entry
-    carries an EMPTY command, which the classifier reads as ``no_rom_target``.
-    """
-    return sorted(
-        entries,
-        key=lambda entry: (entry.declared_index is None, entry.declared_index or 0),
-    )
-
-
 class AtlasCatalogueAdapter:
     """Resolves the emulators a frontend catalogue declares, live, through the vendored resolver.
 
@@ -332,7 +337,7 @@ class AtlasCatalogueAdapter:
     Resolution is system-layer only; Tender's own per-platform and per-game
     selections are layered on top by
     :class:`services.active_core_resolver.ActiveCoreResolver`, not here — and
-    ES-DE's own selections are ignored, which is what ``_declared_order`` is for.
+    ES-DE's own selections are shown beside the default, never taken for it.
 
     Keeps no answer of its own. Every answer is asked through a reading of the
     emulator sources and kept by that reading alone: the one a caller hands in,
@@ -355,7 +360,7 @@ class AtlasCatalogueAdapter:
     ) -> tuple[str | None, str | None]:
         """Resolve the system-layer libretro active core for a system.
 
-        The first libretro entry in declared order, as ``(core_so, label)``.
+        The libretro entry with the lowest declared position, as ``(core_so, label)``.
         Libretro-only by design — this feeds the firmware layer's system-level
         BIOS filter, which keys on a RetroArch core, not the launch-layer default
         (which may be a standalone emulator). ``(None, None)`` when the system
@@ -379,23 +384,24 @@ class AtlasCatalogueAdapter:
         answer = self._catalogue_answer(system_name, self._reading(reading))
         if answer is None or catalogue_refused(answer):
             return (None, None)
-        for entry in _declared_order(answer.entries):
-            if entry.kind == KIND_LIBRETRO and entry.core_so:
-                return (_own_core_so(entry.core_so), entry.label)
-        return (None, None)
+        cores = [
+            entry
+            for entry in answer.entries
+            if entry.kind == KIND_LIBRETRO and entry.core_so and entry.declared_index is not None
+        ]
+        first = min(cores, key=lambda entry: entry.declared_index, default=None)
+        return (None, None) if first is None else (_own_core_so(first.core_so), first.label)
 
     def get_default_emulator(
         self, system_name: str, *, reading: SourcesReading | None = None
     ) -> EmulatorInvocation | None:
         """Resolve the system-layer default **emulator** (libretro OR standalone).
 
-        The first *safely-bakeable* entry in declared order
-        (:func:`domain.emulator_commands.select_default_option`) rendered into an
-        :class:`EmulatorInvocation` — a libretro core or a standalone emulator,
-        whichever the catalogue declares first that Tender can bake. Returns
-        ``None`` when nothing is bakeable (or the catalogue could not be read);
-        the caller bakes the plain RetroDECK launch and lets RetroDECK resolve the
-        emulator itself.
+        The default (:func:`domain.emulator_commands.default_option`, the entry
+        the source ships first) rendered into an :class:`EmulatorInvocation` — a
+        libretro core or a standalone emulator. Returns ``None`` when that entry
+        cannot be baked, when there is no default, or when the catalogue could not
+        be read; the caller bakes the plain RetroDECK launch.
 
         Keeps the read-path/launch-path invariant: the resolved emulator is both
         what the ROM launches with and what derived values key on.
@@ -403,9 +409,16 @@ class AtlasCatalogueAdapter:
         result = self.get_emulator_options(system_name, reading=reading)
         if not result["available"]:
             return None
-        return option_to_invocation(select_default_option(result["options"]))
+        return option_to_invocation(default_option(result["options"]))
 
-    def get_emulator_options(self, system_name: str, *, reading: SourcesReading | None = None) -> dict[str, Any]:
+    def get_emulator_options(
+        self,
+        system_name: str,
+        *,
+        reading: SourcesReading | None = None,
+        content_path: str | None = None,
+        source: str | None = None,
+    ) -> dict[str, Any]:
         """Return every catalogue entry for a system, classified for bakeability.
 
         Returns ``{"available", "options", "reason", "source"}``. ``available``
@@ -419,8 +432,10 @@ class AtlasCatalogueAdapter:
         ``unavailable`` for a refusal. ``source`` is the answering source's ``{"kind",
         "starts_games"}``, ``None`` where none answers.
 
-        ``options`` is in DECLARED order, so the first bakeable entry is the
-        system default. What an entry launches, the core it loads and that
+        ``options`` is in the order the resolver gives: a choice the user made
+        inside ES-DE first, marked ``chosen_in_frontend``, the rest as declared.
+        Asked with *content_path*, a game's own choice in ES-DE counts too. The
+        default is the entry with the lowest ``declared_index``. What an entry launches, the core it loads and that
         core's path are the resolver's ``kind``, ``core_so`` and ``core_path``,
         and an entry it states ``run_game.sh`` would run nothing for is not
         bakeable. Whether what an entry launches is there is the resolver's
@@ -431,18 +446,28 @@ class AtlasCatalogueAdapter:
         by itself. Each entry's launcher is the one the resolver states. A
         system the catalogue does not declare yields ``available: True`` with
         an empty list.
+
+        *source* names a detected source to ask instead of the answering one,
+        for a surface that shows every source's own default; ``source`` in the
+        answer is then that one, and a kind not detected answers
+        ``unavailable`` with no source.
         """
         reading = self._reading(reading)
-        source = _source_payload(reading)
-        if source is None:
-            return _unavailable(reading.no_answer_reason(), None)
-        answer = self._catalogue_answer(system_name, reading)
+        payload = _source_payload(reading) if source is None else _named_source_payload(reading, source)
+        if payload is None:
+            return _unavailable(reading.no_answer_reason() if source is None else CATALOGUE_UNAVAILABLE, None)
+        answer = self._catalogue_answer(system_name, reading, content_path=content_path, source=source)
         if answer is None:
-            return _unavailable(CATALOGUE_UNAVAILABLE, source)
+            return _unavailable(CATALOGUE_UNAVAILABLE, payload)
         if catalogue_refused(answer):
-            return _unavailable(_refusal_reason(answer), source)
-        options = [_classify_entry(entry) for entry in _declared_order(answer.entries)]
-        return {"available": True, "options": options, "reason": None, "source": source}
+            return _unavailable(_refusal_reason(answer), payload)
+        chosen = _frontend_choice(answer.entries)
+        options = [_classify_entry(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]
+        return {"available": True, "options": options, "reason": None, "source": payload}
+
+    def sources_reading(self) -> SourcesReading:
+        """A fresh reading of the emulator sources, for a call that asks every source in the user's order."""
+        return self._sources.read()
 
     def system_supports_m3u(self, system_name: str) -> bool:
         """True iff the catalogue lists ``.m3u`` as a supported extension for *system_name*.
@@ -529,32 +554,36 @@ class AtlasCatalogueAdapter:
             self._log_debug(f"[catalogue] resolver failed on {subject}: {exc!r}")
             return None
 
-    def _installation(self, reading: SourcesReading) -> Any:
-        """The answering source's installation, or ``None`` where no source answers."""
+    def _installation(self, reading: SourcesReading, source: str | None = None) -> Any:
+        """The installation of *source*, or of the answering source; ``None`` where there is none."""
+        if source is not None:
+            return reading.installation(source)
         installation = reading.answering_installation()
         if installation is None:
             self._log_debug(f"[catalogue] no emulator source answers ({reading.no_answer_reason()})")
         return installation
 
-    def _catalogue_answer(self, system_name: str, reading: SourcesReading) -> Any:
+    def _catalogue_answer(
+        self, system_name: str, reading: SourcesReading, *, content_path: str | None = None, source: str | None = None
+    ) -> Any:
         """The catalogue's answer for *system_name* through *reading*, or ``None`` with nothing to ask.
 
-        Asked without a content path: a per-game ``<altemulator>`` would promote
-        an entry Tender ignores anyway (ADR-0012), and the answer is the
-        system's rather than one game's.
+        Asked with *content_path* where a caller names one game: the answer then
+        states that game's own choice in ES-DE (``<altemulator>``) as well.
         """
-        installation = self._installation(reading)
+        installation = self._installation(reading, source)
         if installation is None:
             return None
+        subject = f"emulators_for({system_name!r})"
 
         def ask() -> Any:
-            answer = self._ask(lambda: installation.emulators_for(system_name), f"emulators_for({system_name!r})")
+            answer = self._ask(lambda: installation.emulators_for(system_name, content_path=content_path), subject)
             if answer is not None:
                 self._trace(system_name, f"entries={len(answer.entries)}", answer)
                 self._trace_undeclared(system_name, answer.entries)
             return answer
 
-        return reading.remember(("emulators_for", system_name), ask)
+        return reading.remember(("emulators_for", system_name, content_path, source), ask)
 
     def _systems_answer(self, reading: SourcesReading) -> Any:
         """Every system the catalogue declares through *reading*, or ``None`` with nothing to ask."""

@@ -95,10 +95,11 @@ class FakeRomRepository:
             rom.platform_slug for rom in self._roms.values() if rom.platform_slug and rom.shortcut_app_id is not None
         }
 
-    def set_emulator_override(self, rom_id: int, label: str | None) -> None:
+    def set_emulator_override(self, rom_id: int, label: str | None, source: str | None = None) -> None:
         rom = self._roms.get(rom_id)
         if rom is not None:
             rom.emulator_override = label
+            rom.emulator_override_source = source
 
     def get_all_emulator_overrides(self) -> dict[int, str]:
         return {

@@ -42,7 +42,7 @@ class TestUnreadableSettings:
 
 
 class TestMigrateSettings:
-    def test_a_file_at_version_13_is_returned_unchanged(self):
+    def test_a_file_at_version_13_gets_each_pick_with_no_source_and_keeps_the_rest(self):
         data = {
             "version": 13,
             "romm_url": "http://example.com",
@@ -54,7 +54,24 @@ class TestMigrateSettings:
             "romm_api_token_source": "minted",
             "enabled_collections": {"standard": {"1": True}, "smart": {}, "virtual": {}},
         }
+        assert migrate_settings(data) == {
+            **data,
+            "version": 14,
+            "platform_cores": {"snes": {"label": "bsnes", "source": None}},
+        }
+
+    def test_a_value_that_names_no_pick_is_dropped(self):
+        data = {"version": 13, "platform_cores": {"snes": "bsnes", "gba": "", "nes": 7}}
+        assert migrate_settings(data)["platform_cores"] == {"snes": {"label": "bsnes", "source": None}}
+
+    def test_a_file_at_version_14_is_returned_unchanged(self):
+        data = {"version": 14, "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}}}
         assert migrate_settings(data) == data
+
+    def test_running_it_twice_changes_nothing_more(self):
+        data = {"version": 13, "platform_cores": {"snes": "bsnes"}}
+        once = migrate_settings(data)
+        assert migrate_settings(once) == once
 
     def test_the_callers_dict_is_not_the_one_returned(self):
         data = {"version": 13, "romm_url": "http://example.com"}

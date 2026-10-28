@@ -580,7 +580,7 @@ class TestFsSizeBytes:
 class TestEmulatorOverride:
     def test_round_trips_via_get(self, uow: SqliteUnitOfWork):
         uow.roms.save(_rom(1))
-        uow.roms.set_emulator_override(1, "PCSX ReARMed")
+        uow.roms.set_emulator_override(1, "PCSX ReARMed", "retrodeck")
 
         loaded = uow.roms.get(1)
         assert loaded is not None
@@ -594,8 +594,8 @@ class TestEmulatorOverride:
 
     def test_setting_none_writes_sql_null(self, uow: SqliteUnitOfWork):
         uow.roms.save(_rom(1))
-        uow.roms.set_emulator_override(1, "PCSX ReARMed")
-        uow.roms.set_emulator_override(1, None)
+        uow.roms.set_emulator_override(1, "PCSX ReARMed", "retrodeck")
+        uow.roms.set_emulator_override(1, None, None)
 
         loaded = uow.roms.get(1)
         assert loaded is not None
@@ -609,11 +609,28 @@ class TestEmulatorOverride:
         uow.roms.save(_rom(1))
         uow.roms.save(_rom(2))
         uow.roms.save(_rom(3))
-        uow.roms.set_emulator_override(1, "PCSX ReARMed")
-        uow.roms.set_emulator_override(3, "Beetle PSX HW")
+        uow.roms.set_emulator_override(1, "PCSX ReARMed", "retrodeck")
+        uow.roms.set_emulator_override(3, "Beetle PSX HW", "retrodeck")
 
         overrides = uow.roms.get_all_emulator_overrides()
         assert overrides == {1: "PCSX ReARMed", 3: "Beetle PSX HW"}
+
+    def test_the_source_round_trips_beside_the_label(self, uow: SqliteUnitOfWork):
+        uow.roms.save(_rom(1))
+        uow.roms.set_emulator_override(1, "PCSX ReARMed", "emudeck")
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert (loaded.emulator_override, loaded.emulator_override_source) == ("PCSX ReARMed", "emudeck")
+
+    def test_a_pick_from_before_its_source_was_recorded_reads_none(self, uow: SqliteUnitOfWork):
+        uow.roms.save(_rom(1))
+        assert uow._conn is not None
+        uow._conn.execute("UPDATE roms SET emulator_override = 'PCSX ReARMed' WHERE rom_id = 1")
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert (loaded.emulator_override, loaded.emulator_override_source) == ("PCSX ReARMed", None)
 
     def test_get_all_overrides_empty_when_none_pinned(self, uow: SqliteUnitOfWork):
         uow.roms.save(_rom(1))
@@ -628,7 +645,7 @@ class TestResyncPreservesOverride:
     def test_pin_survives_resync_and_identity_still_updates(self, uow: SqliteUnitOfWork):
         rom_id = 1
         uow.roms.save(_rom(rom_id, app_id=100))
-        uow.roms.set_emulator_override(rom_id, "PCSX ReARMed")
+        uow.roms.set_emulator_override(rom_id, "PCSX ReARMed", "retrodeck")
 
         # A normal library re-sync: fresh Rom, no override, changed identity.
         resynced = _rom(rom_id, app_id=200)
@@ -701,7 +718,7 @@ class TestResyncPreservesSelectedDisc:
         """Both per-game deviations survive a re-sync independently."""
         rom_id = 1
         uow.roms.save(_rom(rom_id, app_id=100))
-        uow.roms.set_emulator_override(rom_id, "Beetle PSX HW")
+        uow.roms.set_emulator_override(rom_id, "Beetle PSX HW", "retrodeck")
         uow.roms.set_selected_disc(rom_id, "FF7 (Disc 3).cue")
 
         uow.roms.save(_rom(rom_id, app_id=200))

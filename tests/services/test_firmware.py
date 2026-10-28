@@ -33,7 +33,7 @@ from fakes.system_time import FakeClock
 from adapters.firmware_file import FirmwareFileAdapter
 from domain.bios_file import BiosFile
 from domain.bios_status import BiosFileEntry
-from domain.emulator_commands import EmulatorOption, option_to_invocation, select_default_option
+from domain.emulator_commands import EmulatorOption, default_option, option_to_invocation
 from domain.firmware_cache import FirmwareCacheEntry
 from domain.firmware_store import StoredFirmware
 from domain.firmware_wants import (
@@ -1891,12 +1891,12 @@ class TestGetFirmwareStatus:
         assert dc_plat["emulators"] == [
             {
                 "label": "Flycast",
-                "labels": ["Flycast"],
-                "name": "Flycast",
                 "kind": "core",
                 "core_so": "flycast_libretro",
                 "emulator": _id("flycast_libretro"),
+                "declared_index": 0,
                 "is_default": True,
+                "chosen_in_frontend": False,
                 "bakeable": True,
                 "reason": None,
             }
@@ -3371,13 +3371,12 @@ class _DeclaredDefaultCoreInfo(FakeCoreInfoProvider):
     ``active_core`` tuple, which carries no identity — and the identity is the
     one field a firmware answer is keyed on, so a fixture on the bare fake
     resolves an unpinned ROM to a ``None`` where production resolves it to an
-    emulator. The live adapter renders the first bakeable OPTION instead
+    emulator. The live adapter renders the default OPTION instead
     (``AtlasCatalogueAdapter.get_default_emulator``), identity and all.
     """
 
     def get_default_emulator(self, system_name: str, *, reading: Any = None) -> EmulatorInvocation | None:
-        self.emulator_options_calls.append(system_name)
-        return option_to_invocation(select_default_option(self.options))
+        return option_to_invocation(default_option(self.get_emulator_options(system_name)["options"]))
 
 
 def _psx_platform_service(
@@ -3659,8 +3658,8 @@ class TestOnePlatformOneEmulator:
             assert (payload["console_needs_image"], payload["bios_level"]) == (False, "ok")
 
     @pytest.mark.asyncio
-    async def test_a_pin_that_no_longer_bakes_degrades_rather_than_answering_for_it(self):
-        """A ``needs_setup`` emulator is not a pick — the platform falls back to its default."""
+    async def test_a_pin_that_cannot_be_baked_stands_and_is_answered_for(self):
+        """A pick stands whatever its state (#2195 D23) — the answer is about it, not the default."""
         fw = _psx_platform_service(
             platform_core="Vita3K (Standalone)",
             options=[
@@ -3675,8 +3674,8 @@ class TestOnePlatformOneEmulator:
         page = await fw.check_platform_bios("psx")
 
         platform = entries["psx"]
-        assert platform["active_core_label"] == _PSX_DEFAULT_LABEL
-        assert platform["active_core"] == _id(_PSX_CORE)
+        assert platform["active_core_label"] == "Vita3K (Standalone)"
+        assert platform["active_core"] is None
         assert _emulator_dependent(platform) == _emulator_dependent(page)
 
     @pytest.mark.parametrize("platform_core", _PLATFORM_PICKS)
@@ -7582,7 +7581,7 @@ class TestOneEntryPerEmulator:
 
     @pytest.mark.asyncio
     async def test_a_pick_that_is_not_installed_is_the_launching_entry_marked_so(self, tmp_path):
-        """Nothing bakes: the plain launch starts RetroDECK's first emulator, so the answer is about it."""
+        """A pick stands whatever its state (#2195 D23), so the answer is about it, marked not installed."""
         options = [
             self._not_installed(libretro_option(_YABASANSHIRO, "YabaSanshiro")),
             self._not_installed(libretro_option(_KRONOS, "Kronos")),
@@ -7592,10 +7591,10 @@ class TestOneEntryPerEmulator:
         page = await fw.check_platform_bios("saturn")
 
         entries = [(e["emulator"], e["launching"], e["installed"]) for e in page["emulator_tabs"]]
-        assert entries == [(_id(_YABASANSHIRO), True, False), (_id(_KRONOS), False, False)]
+        assert entries == [(_id(_KRONOS), True, False), (_id(_YABASANSHIRO), False, False)]
         # The header and its counts are that emulator's: its file, where it opens it.
-        assert page["active_core_label"] == "YabaSanshiro"
-        assert _rows(page)["saturn_bios.bin"]["declared_path"] == "saturn_bios.bin"
+        assert page["active_core_label"] == "Kronos"
+        assert _rows(page)["saturn_bios.bin"]["declared_path"] == "kronos/saturn_bios.bin"
 
     @pytest.mark.asyncio
     async def test_an_installed_emulators_entry_says_so(self, tmp_path):

@@ -50,23 +50,23 @@ _GBA_FIRMWARE = [
 
 _MGBA_ENTRY = {
     "label": "mGBA",
-    "labels": ["mGBA"],
-    "name": "mGBA",
     "kind": "core",
     "core_so": "mgba_libretro",
     "emulator": "mgba_libretro.so",
+    "declared_index": 0,
     "is_default": True,
+    "chosen_in_frontend": False,
     "bakeable": True,
     "reason": None,
 }
 _VBA_NEXT_ENTRY = {
     "label": "VBA Next",
-    "labels": ["VBA Next"],
-    "name": "VBA Next",
     "kind": "core",
     "core_so": "vba_next_libretro",
     "emulator": "vba_next_libretro.so",
+    "declared_index": 1,
     "is_default": False,
+    "chosen_in_frontend": False,
     "bakeable": True,
     "reason": None,
 }
@@ -83,7 +83,7 @@ async def test_clear_game_core_bakes_post_clear_core_not_old_pin(harness):
     seed_es_systems(harness)
     seed_install(harness, 42, system="gba", platform_slug="gba", file_name="pokemon.gba")
     with harness.uow_factory() as uow:
-        uow.roms.set_emulator_override(42, "VBA Next")
+        uow.roms.set_emulator_override(42, "VBA Next", "retrodeck")
 
     result = await harness.endpoints.clear_game_core(42)
 
@@ -118,7 +118,7 @@ async def test_set_system_core_rebakes_only_unpinned_rom(harness):
     seed_install(harness, 1, system="gba", platform_slug="gba", file_name="a.gba")
     seed_install(harness, 2, system="gba", platform_slug="gba", file_name="b.gba")
     with harness.uow_factory() as uow:
-        uow.roms.set_emulator_override(2, "mGBA")
+        uow.roms.set_emulator_override(2, "mGBA", "retrodeck")
 
     result = await harness.endpoints.set_system_core("gba", "VBA Next")
 
@@ -174,6 +174,8 @@ async def test_get_platform_core_info_payload_shape(harness):
         "active_core_label",
         "platform_core_label",
         "has_game_override",
+        "start",
+        "vanished_pick",
     }
     assert result["emulator_data_available"] is True
     assert result["emulators"] == [_MGBA_ENTRY, _VBA_NEXT_ENTRY]
@@ -212,6 +214,10 @@ async def test_get_system_core_info_payload_shape(harness):
         "emulator_source",
         "platform_system",
         "active_core_label",
+        "start",
+        "vanished_pick",
+        "source_defaults",
+        "tender_default",
     }
     assert result["emulator_data_available"] is True
     assert result["emulators"] == [_MGBA_ENTRY, _VBA_NEXT_ENTRY]
@@ -366,14 +372,14 @@ async def test_a_detected_installation_without_a_catalogue_reads_nothing_off_the
     assert result["active_core_label"] is None
 
 
-async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(harness):
-    """An emulator the resolver states not installed is withheld, end to end over real files.
+async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cannot_start(harness):
+    """An emulator the resolver states not installed is withheld from picking, and stays the default (#2195 D7).
 
     Ryubing is declared first and is the only standalone; its component launcher
     is not in the seeded deploy, so the picker must show it ``needs_setup`` /
-    ``not_installed`` and the default must fall through to the libretro entry
-    behind it. Drives the real catalogue read and the resolver's own launch
-    lookup over the seeded find rules.
+    ``not_installed``. Nothing behind it is taken instead: the platform names
+    Ryubing and says it cannot start. Drives the real catalogue read and the
+    resolver's own launch lookup over the seeded find rules.
     """
     seed_es_systems(harness, _SWITCH_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)
@@ -384,28 +390,34 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
     assert result["emulators"] == [
         {
             "label": "Ryubing (Standalone)",
-            "labels": ["Ryubing (Standalone)"],
-            "name": "Ryubing (Standalone)",
             "kind": "program",
             "core_so": None,
             "emulator": "RYUBING",
-            "is_default": False,
+            "declared_index": 0,
+            "is_default": True,
+            "chosen_in_frontend": False,
             "bakeable": False,
             "reason": "not_installed",
         },
         {
             "label": "Yuzu",
-            "labels": ["Yuzu"],
-            "name": "Yuzu",
             "kind": "core",
             "core_so": "yuzu_libretro",
             "emulator": "yuzu_libretro.so",
-            "is_default": True,
+            "declared_index": 1,
+            "is_default": False,
+            "chosen_in_frontend": False,
             "bakeable": True,
             "reason": None,
         },
     ]
-    assert result["active_core_label"] == "Yuzu"
+    assert result["active_core_label"] == "Ryubing (Standalone)"
+    assert result["start"] == {
+        "state": "cannot_start",
+        "reason": "not_installed",
+        "entry": "Ryubing (Standalone)",
+        "folder_entry": None,
+    }
 
 
 async def test_the_same_standalone_is_the_default_once_its_component_is_there(harness):
