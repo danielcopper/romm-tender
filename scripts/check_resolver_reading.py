@@ -140,6 +140,7 @@ GENERIC_VALUES: dict[str, str] = {
     "directory": "the word for a folder, in adoption, saves and the panel",
     "empty": "the artwork and update-output words for nothing there",
     "file": "the word for a file, in adoption, deletion and the panel",
+    "firmware": "Tender's word for BIOS files, and RomM's platform field",
     "igdb": "a metadata database RomM keys platforms and collections by",
     "list": "the panel's id for a page's list pane",
     "missing": "the word for a file or folder not there, in adoption, migration and the panel",

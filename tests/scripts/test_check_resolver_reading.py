@@ -156,6 +156,7 @@ _GENERIC_WHEN_WRITTEN = frozenset(
         "directory",
         "empty",
         "file",
+        "firmware",
         "igdb",
         "list",
         "missing",
