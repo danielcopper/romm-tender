@@ -158,9 +158,10 @@ def compute_component_group_keys(
 class GroupKeys(NamedTuple):
     """What :func:`compute_group_keys_with_unfetched` answers.
 
-    ``fresh`` is the key of every fresh ROM, as :func:`compute_component_group_keys`
-    answers it; ``unfetched`` the new key of every stored row the view did not
-    fetch whose group it follows.
+    ``fresh`` is the key of every fresh ROM — :func:`compute_component_group_keys`'
+    answer, but where a complete component's stale summary was not counted;
+    ``unfetched`` the new key of every stored row the view did not fetch whose
+    group it follows.
     """
 
     fresh: dict[int, str]
@@ -194,10 +195,11 @@ def compute_group_keys_with_unfetched(
     apart. A component that is not complete is keyed exactly as
     :func:`compute_component_group_keys` keys it; a complete one, three ways more:
 
-    * Where its canonical source holds more than one value, a candidate equal to
-      the prior key of the member whose edge carried it is not counted — the
-      summary that member's group held at the last sync, not an id of the stored
-      row's own — and the gate judges again.
+    * Where its canonical source holds more than one value and every member
+      holding a prior key held the same one — the component's own key at the
+      last sync — a candidate equal to that key is not counted: it is the
+      summary the stored row shared with the component, not an id of the row's
+      own. The gate then judges again.
     * A stored row one of its edges reaches takes its key, unless another
       complete component's edge reaches the row under another key.
     * A row of *unfetched_bound_ids* no edge reached takes its key where that
@@ -221,8 +223,9 @@ def compute_group_keys_with_unfetched(
         edges = [edge for member_id in member_ids for edge in stored_edges.get(member_id, [])]
         complete = all(member_id in complete_rom_ids for member_id in member_ids)
         values = _values_by_source(member_ids, fresh_by_id, edges)
-        if complete and _agreed_value(values) is None:
-            counted = [edge for edge in edges if edge.key != resident_lookup.get(edge.member)]
+        prior_keys = {resident_lookup[m] for m in member_ids if m in resident_lookup}
+        if complete and _agreed_value(values) is None and len(prior_keys) == 1:
+            counted = [edge for edge in edges if edge.key not in prior_keys]
             values = _values_by_source(member_ids, fresh_by_id, counted)
         key = _assign_component_keys(member_ids, fresh_by_id, values, fresh)
         if complete and key is not None:

@@ -146,18 +146,20 @@ fresh member was keyed apart from it the same way, or the agreement gate split t
 A platform unit's listing is therefore a complete view of the rows it leaves out as well, and a component every member
 of which it listed (`domain/sibling_group.compute_group_keys_with_unfetched`) is keyed three ways more:
 
-- **A stale summary is not counted.** Where the gate would split the component, a candidate equal to the stored key of
-  the member whose edge carried it — the summary that member's group held at the last sync, not an id of the stored
-  row's own — is left out and the gate judges again. A stored row holding another value still splits the component.
+- **A stale summary is not counted.** Where the gate would split the component and every member holding a stored key
+  held the same one — the component's own key at the last sync — a candidate equal to that key is left out: it is the
+  summary the stored row shared with the component, not an id of the row's own. The gate then judges again. A stored row
+  holding another value still splits the component, and so does one whose key is the summary of only some members, as
+  where RomM newly links two games.
 - **A row an edge reaches takes the component's key**, unless another component's edge reaches it under another key.
 - **A bound row no edge reaches follows** the one component a member of which held the row's stored key at the last
   sync, where every member holding a stored key held that one and the component holds no other value at the stored key's
   source. A `romm:` key is never followed. The bound row keeps its shortcut on the version that is gone, as ADR-0021
   §2's amendment has it; no second one is minted.
 
-The apply and the preview lay those keys over the bound-row registry before the convergence and the collapse, and every
-chunk's commit writes them (`Rom.follow_group`). The preview treats only the platforms it fetched in full as complete,
-the platform units the apply fetches, and keys their listings before every other ROM of its union, against the keys they
+The apply and the preview lay those keys over the bound-row registry before the convergence and the collapse, and the
+commit writes them (`Rom.follow_group`). The preview treats only the platforms it fetched in full as complete, the
+platform units the apply fetches, and keys their listings before every other ROM of its union, against the keys they
 commit, as the apply's collection units are keyed after its platform units. A collection unit's keying is unchanged: it
 is not a complete view.
 

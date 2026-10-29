@@ -494,6 +494,23 @@ class TestComputeGroupKeysWithUnfetched:
         keys = _keys([_rom(30, igdb_id=2, ss_id=5, siblings=(32,))], {30: _key("igdb", 2), 32: _key("igdb", 1)})
         assert keys == GroupKeys({30: _key("igdb", 2)}, {})
 
+    def test_two_games_a_new_shared_id_links_keep_their_hidden_versions_apart(self):
+        # 10 and 20 are hidden and each still holds its own game's key; RomM now
+        # links 11 and 21 through a shared ss id. Neither summary is the
+        # component's own, so both are counted and the gate splits it.
+        roms = [_rom(11, ss_id=5, siblings=(10, 21)), _rom(21, ss_id=5, siblings=(20, 11))]
+        resident = {10: _key("igdb", 1), 11: _key("igdb", 1), 20: _key("igdb", 2), 21: _key("igdb", 2)}
+        keys = _keys(roms, resident, unfetched_bound=(10, 20))
+        assert keys == GroupKeys(compute_component_group_keys(roms, resident), {})
+
+    def test_a_bridge_with_one_end_hidden_still_splits_its_game(self):
+        # 11 held igdb:1 with hidden 10; it now also links 21, which holds igdb 2
+        # and held its own game's key.
+        roms = [_rom(11, ss_id=5, siblings=(10, 21)), _rom(21, igdb_id=2, ss_id=5, siblings=(11,))]
+        resident = {10: _key("igdb", 1), 11: _key("igdb", 1), 21: _key("igdb", 2)}
+        keys = _keys(roms, resident, unfetched_bound=(10,))
+        assert keys == GroupKeys({11: _key("ss", 5), 21: _key("igdb", 2)}, {})
+
     def test_two_values_among_the_fetched_members_still_split_their_game(self):
         roms = [_rom(20, igdb_id=1, ss_id=5, siblings=(21,)), _rom(21, igdb_id=2, ss_id=5, siblings=(20,))]
         resident = {20: _key("igdb", 1), 21: _key("igdb", 1)}
