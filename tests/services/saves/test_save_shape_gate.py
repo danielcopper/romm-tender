@@ -669,7 +669,8 @@ class TestOnlyBesideTheContentGetsTheContentDirectorySkip:
         assert isinstance(result, dict)
 
         assert result.get("reason") != "savefiles_in_content_dir"
-        assert "skipped" not in result["message"]
+        assert "beside the game file" not in result["message"]
+        assert result["message"].endswith("; 1 game(s) skipped — their saves cannot be synced")
 
     @pytest.mark.asyncio
     async def test_a_syncable_save_beside_the_content_still_gets_the_content_directory_skip(self, tmp_path):

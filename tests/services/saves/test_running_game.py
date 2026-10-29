@@ -107,7 +107,7 @@ class TestTheSweepPassesARunningGameOver:
         assert result["success"] is True
         assert result["synced"] == 1
         assert result["skipped_running"] == [{"rom_id": 1, "name": "rom-1"}]
-        assert result["message"] == "Synced 1 save(s) across 2 ROM(s); rom-1 was skipped because it is running"
+        assert result["message"] == "Synced 1 save(s) across 1 ROM(s); rom-1 was skipped because it is running"
 
     @pytest.mark.asyncio
     async def test_it_asks_when_it_reaches_the_game_not_when_the_sweep_starts(self, tmp_path):

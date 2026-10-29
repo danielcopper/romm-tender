@@ -84,11 +84,13 @@ negotiate session's inventory rather than letting either take a second. The slot
 take one each as well, the setup info handing it to its local probe and the slot choice to its migration. "Ask live" is
 a rule about operations, not about layers.
 
-The whole-library sweep is the exception, at **two per ROM**. It posts one device-wide inventory before its per-ROM loop
-begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any ROM's run
-exists to hand one to, and each run then takes its own. Reusing the inventory's readings would mean carrying a per-run
-map of them across the loop, which is a cache in everything but name on the one path where nothing is launched
-afterwards; the sweep is a background operation and pays the second reading instead.
+The whole-library sweep is the exception, at **two per confirmed ROM**. It posts one device-wide inventory before its
+per-ROM loop begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any
+ROM's run exists to hand one to, and each run then takes its own. Reusing the inventory's readings would mean carrying a
+per-run map of them across the loop, which is a cache in everything but name on the one path where nothing is launched
+afterwards; the sweep is a background operation and pays the second reading instead. A ROM whose slot is not confirmed
+costs one: the sweep reads its answer too, to tell a game not set up from one whose saves cannot be synced, and asks
+RomM nothing about it ([#2151](https://github.com/danielcopper/romm-tender/issues/2151)).
 
 The two per-platform loops — `count_platform_saves` and `delete_platform_saves` — take one per **installed** ROM on that
 platform, so their cost grows with the platform's installed games. Nothing is cached: the correctness rule is that every

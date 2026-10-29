@@ -84,7 +84,7 @@ from services.saves.sync_engine._gate import (
 from services.saves.sync_engine._pre_launch import PreLaunchRuns, PreLaunchState, stopped_refusal
 from services.saves.sync_engine._result_message import summarize_sync_result
 from services.saves.sync_engine._running_game import RomSyncStops, RunningGameGuard, RunningSkips
-from services.saves.sync_engine._shape_refusal import ContentDirTally, live_save_answer, refuse_unsyncable
+from services.saves.sync_engine._shape_refusal import SweepTally, live_save_answer, refuse_unsyncable
 from services.saves.sync_engine._sweep_step import sweep_reading, sweep_rom
 from services.saves.sync_engine._sweep_stop import SaveSweepIncomplete
 from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
@@ -561,7 +561,7 @@ class SyncEngine:
         session_id: int | None = None,
         session_counts: list[int] | None = None,
         save_answer: SaveAnswer | None = None,
-        content_dir_tally: ContentDirTally | None = None,
+        sweep_tally: SweepTally | None = None,
         running_skips: RunningSkips | None = None,
         stop: SyncStop | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
@@ -583,20 +583,21 @@ class SyncEngine:
         no per-game save file set is short-circuited one level down, inside
         ``do_sync_rom_saves``, which is where the answer is already resolved: the
         single-ROM entry points check it themselves so they can name the skip in
-        their result, and that backstop is what makes the rule hold for the
-        whole-library sweep, whose one result has no room to say which ROM was
-        passed over. It does count the ROMs held back because their save sits
-        beside their content, into *content_dir_tally*, so that result can still
-        say that much.
+        their result, and the whole-library sweep passes such a ROM over before
+        the matrix, counting it by the refusal's reason into *sweep_tally*, so
+        its one result can say how many it held back and why. The backstop
+        keeps the rule for any path that reaches the matrix without either.
 
         When *require_confirmed* is set (the bulk ``sync_all_saves`` sweep), a ROM
         whose slot the user has not confirmed is skipped entirely — no transfer,
         no write — so a never-configured ROM's possibly-stale local save can't be
         auto-uploaded into the default slot and overwrite another device's newer
-        progress (#1055). The single-ROM entry points leave it unset. The
-        sweep also passes over a ROM whose game is running, into
-        *running_skips*, and ends one whose *stop* was asked before it follows
-        a moved save directory with :class:`SyncStopped`.
+        progress (#1055); its answer is still read, so *sweep_tally* can tell a
+        game not set up from one that cannot be. The single-ROM entry points
+        leave it unset. The sweep also passes over a ROM whose game is running,
+        into *running_skips*, ends one whose *stop* was asked before it follows
+        a moved save directory with :class:`SyncStopped`, and counts each ROM it
+        compared with RomM into *sweep_tally*.
 
         Detection is always the local ``compute_sync_action`` matrix
         (``do_sync_rom_saves``); ADR-0017 collapsed the old routing fork. A
@@ -614,18 +615,16 @@ class SyncEngine:
             self._log_debug(f"_run_rom_sync({rom_id}): ROM not installed, skipping")
             return 0, 0, [], []
         save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
-        if require_confirmed and not save_state.slot_confirmed:
-            self._log_debug(f"_run_rom_sync({rom_id}): slot not confirmed, skipping bulk sync")
-            return 0, 0, [], []
         if save_answer is None:
             passed_over, save_answer = await sweep_reading(
                 rom_id,
+                confirmed=save_state.slot_confirmed or not require_confirmed,
                 running=self._running,
                 read_answer=functools.partial(self.read_save_answer, rom_id),
                 follow=functools.partial(self.follow_save_directory, rom_id, while_running=True),
                 running_skips=running_skips,
                 stop=stop,
-                content_dir_tally=content_dir_tally,
+                tally=sweep_tally,
                 log_debug=self._log_debug,
             )
             if passed_over:
@@ -664,6 +663,8 @@ class SyncEngine:
                     ),
                 )
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                if sweep_tally is not None:
+                    sweep_tally.count_compared(stop)
             finally:
                 synced = uploaded + downloaded
                 if own_session_id is not None:
@@ -985,10 +986,6 @@ class SyncEngine:
                 "conflicts": list(conflicts),
             }
 
-    def _first_retroarch_rom(self, rom_ids: list[int]) -> int | None:
-        """The first of *rom_ids* that launches with a RetroArch core, or ``None``."""
-        return next((rom_id for rom_id in rom_ids if self.resolve_core(rom_id) is not None), None)
-
     def _installed_rom_ids(self) -> list[int]:
         """Read the installed-ROM ids from the rom_installs aggregate (WS3)."""
         with self._uow_factory() as uow:
@@ -1069,7 +1066,7 @@ class SyncEngine:
                 with self._save_file_store.hash_memo_scope():
                     session_id = await self._bulk_pre_negotiate(device_id)
                     session_counts = [0, 0]
-                    content_dir_tally = ContentDirTally()
+                    sweep_tally = SweepTally()
                     running_skips = RunningSkips()
 
                     total_synced = 0
@@ -1091,7 +1088,7 @@ class SyncEngine:
                                 require_confirmed=True,
                                 session_id=session_id,
                                 session_counts=session_counts if session_id is not None else None,
-                                content_dir_tally=content_dir_tally,
+                                sweep_tally=sweep_tally,
                                 running_skips=running_skips,
                             )
                             uploaded, downloaded, errors, conflicts = await sweep_rom(
@@ -1125,28 +1122,18 @@ class SyncEngine:
                         if session_id is not None:
                             await self._close_negotiate_session(session_id, session_counts[0], session_counts[1])
 
-                if not content_dir_tally.answered:
-                    # No ROM had a confirmed slot, so the sweep read none. One
-                    # RetroArch game's reading still says whether saves are
-                    # written beside the content, instead of a bare "Synced 0";
-                    # a standalone emulator's answer would say nothing about it.
-                    probe = await self._loop.run_in_executor(None, self._first_retroarch_rom, rom_ids)
-                    if probe is not None:
-                        content_dir_tally.count(
-                            await self._loop.run_in_executor(None, live_save_answer, self._rom_info, probe)
-                        )
-                content_dir_tally.refuse_if_all_beside_content(roms_checked=rom_count)
+                sweep_tally.refuse_if_all_beside_content(roms_checked=rom_count)
                 conflicts_count = len(all_conflicts)
-                msg = content_dir_tally.annotate(
+                msg = sweep_tally.annotate(
                     summarize_sync_result(
-                        f"Synced {total_synced} save(s) across {rom_count} ROM(s)",
+                        f"Synced {total_synced} save(s) across {sweep_tally.compared} ROM(s)",
                         synced=total_synced,
                         errors=total_errors,
                         conflicts=conflicts_count,
                     )
                 )
                 return {
-                    "success": len(total_errors) == 0,
+                    "success": len(total_errors) == 0 and not sweep_tally.failed,
                     "message": running_skips.annotate(msg),
                     "synced": total_synced,
                     "conflicts": conflicts_count,

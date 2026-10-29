@@ -1059,15 +1059,13 @@ not make. Every other answer anchored there (a save **inside** the content file 
 writes discarded, nothing named) is not this case: `SaveAnswer.in_content_directory` reads the syncable rule itself, so
 such an answer gets its own save-shape refusal and its own explanation on the status read. The single-ROM sync entry
 points refuse with the benign skip (`{success: false, reason: "savefiles_in_content_dir", …}` — the game still launches,
-no error); the whole-library sweep passes such a ROM over inside its run and, where every ROM it read saves beside its
-content, refuses with the same skip, or otherwise counts the ROMs it held back in its message. A sweep that read no ROM
-at all, because none has a confirmed slot, asks the resolver about the first installed ROM (in `rom_id` order) that
-launches with a RetroArch core, and refuses with the skip where that one saves beside its content; with no such ROM it
-reports as before. The secondary write endpoints (rollback, slot switch, conflict resolve, the slot choice with or
-without a migration, copy to slot) refuse with the same reason. `get_save_status` carries the additive
-`savefiles_in_content_dir: true` flag, so the game-detail play section shows a banner saying the saves are written
-beside the game file, and naming RetroArch's setting only as the usual cause — only while save sync is enabled, since
-the banner is about getting save sync to work.
+no error); the whole-library sweep, which reads every installed ROM's answer whether its slot is confirmed or not,
+passes such a ROM over inside its run and, where every ROM it read saves beside its content, refuses with the same skip,
+or otherwise counts the ROMs it held back in its message ([Manual sync all](#manual-sync-all)). The secondary write
+endpoints (rollback, slot switch, conflict resolve, the slot choice with or without a migration, copy to slot) refuse
+with the same reason. `get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so the game-detail
+play section shows a banner saying the saves are written beside the game file, and naming RetroArch's setting only as
+the usual cause — only while save sync is enabled, since the banner is about getting save sync to work.
 
 **Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
 the saves directory), while "Sort Saves **Into Folders by Content Directory**" controls the **layout within** the saves
@@ -2002,9 +2000,22 @@ User-initiated from the "Sync All Saves Now" button in Save Sync settings.
    first-sync auto-seed path, where the user decides.
 3. Per-rom asyncio.Lock prevents collision with concurrent pre-launch / post-exit syncs. Under it, a confirmed ROM whose
    game is running is passed over and named ([A game that is running](#a-game-that-is-running)).
-4. Reports total synced count and number of pending conflicts. Conflicts surface via the modal individually at each
-   game's next pre-launch sync. Skipped (unconfirmed) ROMs contribute zero synced / zero conflicts; `roms_checked` stays
-   the count of installed ROMs iterated.
+4. Every other ROM's save answer is read live, the never-configured ones' too, and asked through the refusal every sync
+   uses (`refuse_unsyncable`); a ROM it refuses is passed over before anything is asked of RomM, and counted by the
+   refusal's reason (`SweepTally`, `services/saves/sync_engine/_shape_refusal.py`), never by a list of save states. A
+   never-configured ROM the refusal lets through counts as not set up; one it refuses counts by its reason, since it can
+   no longer be set up ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). A never-configured ROM is
+   neither asked about Steam nor followed into a moved save directory.
+5. Reports total synced count and number of pending conflicts. Conflicts surface via the modal individually at each
+   game's next pre-launch sync. The line's "across N ROM(s)" counts the ROMs whose saves were compared with RomM, those
+   already in step included; a ROM passed over is not counted, nor is one whose start stopped its comparison (it is
+   named as running). After it, one clause per reason that occurred, in this order, each with its count: "N game(s) not
+   set up for save sync", "N game(s) skipped — their saves cannot be synced" (`save_shape_unsupported`), one "N game(s)
+   skipped — the saves folder _path_ does not exist" per missing saves root (`saves_root_missing`), "N game(s) skipped —
+   their saves are written beside the game file" (`savefiles_in_content_dir`), then the running games by name. A missing
+   saves root fails the run (`success: false`), as it fails a single game's sync; every other skip is benign
+   ([#2151](https://github.com/danielcopper/romm-tender/issues/2151)). `roms_checked` stays the count of installed ROMs
+   iterated; the panel does not read it.
 
 ### A game that is running
 
