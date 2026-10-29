@@ -229,6 +229,54 @@ describe("SlotSetupWizard", () => {
     });
   });
 
+  describe("a game whose saves no sync carries, while RomM is held unreachable (#2153 D6, D7)", () => {
+    const message = "Save sync is unavailable: saves are written to the game's content directory.";
+
+    it("shows its reason under 'Save Sync', with no buttons, asking only whether it can sync", async () => {
+      setRommConnectionState("offline");
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
+        available: false,
+        reason: "savefiles_in_content_dir",
+        message,
+      });
+
+      const { container } = render(<SlotSetupWizard {...defaultProps({ romId: 8 })} />);
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSaveSyncAvailability)).toHaveBeenCalledWith(8);
+      expect(vi.mocked(backend.getSaveSetupInfo)).not.toHaveBeenCalled();
+      expect(container.textContent).toContain(message);
+      expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("Save Sync");
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+    });
+
+    it("keeps the unreachable notice and Retry for a game that can sync", async () => {
+      setRommConnectionState("offline");
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({ available: true });
+
+      const { container, getByText } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSaveSetupInfo)).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("RomM server is not reachable");
+      expect(getByText("Retry")).not.toBeNull();
+    });
+
+    it("reads 'Save Sync' above the reason online too (D7)", async () => {
+      const actual = await vi.importActual<typeof import("../utils/saveSetup")>("../utils/saveSetup");
+      vi.mocked(applyWizardInitialSetupResult).mockImplementation(actual.applyWizardInitialSetupResult);
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(
+        makeSetupInfo({ recommended_action: "sync_unavailable", reason: "savefiles_in_content_dir", message }),
+      );
+
+      const { container } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("Save Sync");
+      expect(container.textContent).not.toContain("Save Slot Setup");
+    });
+  });
+
   describe("fetch error path", () => {
     it("renders the error banner + Retry when getSaveSetupInfo rejects", async () => {
       vi.mocked(backend.getSaveSetupInfo).mockRejectedValue(new Error("boom"));

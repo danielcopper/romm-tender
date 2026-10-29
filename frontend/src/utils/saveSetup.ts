@@ -1,8 +1,9 @@
 /**
  * Pure decision logic and branch handlers for "what should the caller do with
- * a SaveSetupInfo response?". Two callers consume the same three-way outcome:
- * the wizard (`SlotSetupWizard`) and the launch gate
- * (`ensureTrackingConfiguredBigPicture` in `launchGateOps.ts`). Anything that lives
+ * a SaveSetupInfo response?". Three callers consume the same outcome: the
+ * wizard (`SlotSetupWizard`), the launch gate
+ * (`ensureTrackingConfiguredBigPicture` in `launchGateOps.ts`) and the launch
+ * watcher's cold start (`launchInterceptor.ts`). Anything that lives
  * here can be unit-tested without rendering the component or stubbing React.
  *
  * The "server_unreachable", "not_found", "romm_refused" and
@@ -13,9 +14,10 @@
  * identically and differ only in copy.
  *
  * "sync_unavailable" is a game whose saves no sync carries: nothing is set up
- * for it on either route. A start goes ahead without a word, because the sync
- * before it already passes such a game over, and the wizard shows the
- * backend's sentence in place of the slot choice.
+ * for it on any route. A start goes ahead without a word, because the sync
+ * before it already passes such a game over, or asks first where the saves
+ * folder is missing, and the wizard shows the backend's sentence in place of
+ * the slot choice.
  */
 
 import type { SaveSetupInfo } from "../types";

@@ -453,6 +453,10 @@ class SaveService:
         """Get info needed for the first-sync setup wizard."""
         return await self._slots.get_save_setup_info(rom_id)
 
+    async def get_save_sync_availability(self, rom_id: int) -> dict[str, Any]:
+        """Whether a slot can be set up for this game at all, asking RomM nothing."""
+        return await self._slots.get_save_sync_availability(rom_id)
+
     async def confirm_slot_choice(
         self,
         rom_id: int,

@@ -168,6 +168,19 @@ interface SaveSetupSlotInfo {
   latest_updated_at: string | null;
 }
 
+/** A reason a game's sync is refused with by its save answer alone (backend `refuse_unsyncable`). */
+export type SyncRefusalReason = WireReasonSubset<
+  "save_shape_unsupported" | "savefiles_in_content_dir" | "saves_root_missing"
+>;
+
+/** Whether a slot can be set up for a game at all, asked without RomM (backend `get_save_sync_availability`). */
+export interface SaveSyncAvailability {
+  available: boolean;
+  // Present only where `available` is false: the refusal the game's sync is refused with.
+  reason?: SyncRefusalReason;
+  message?: string;
+}
+
 export interface SaveSetupInfo {
   has_local_saves: boolean;
   local_files: Array<{ filename: string; size: number }>;
@@ -199,7 +212,7 @@ export interface SaveSetupInfo {
   // boolean rather than the enum.
   server_query_failed?: boolean;
   // Present with "sync_unavailable" only: the reason the game's sync is refused with.
-  reason?: WireReasonSubset<"save_shape_unsupported" | "savefiles_in_content_dir" | "saves_root_missing">;
+  reason?: SyncRefusalReason;
   // Present with "romm_refused" (what RomM answered, worded by `classify_error`)
   // and with "sync_unavailable" (the sentence the game's sync is refused with).
   message?: string;

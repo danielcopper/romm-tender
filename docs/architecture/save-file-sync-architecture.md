@@ -477,8 +477,8 @@ The wizard confirms a slot through `confirm_slot_choice(rom_id, chosen_slot, mig
   of that game raises (`refuse_unsyncable`, `services/saves/sync_engine/_shape_refusal.py`): `savefiles_in_content_dir`,
   `save_shape_unsupported` or `saves_root_missing`. A save written beside the game file has no exception: the plain
   confirm writes no file, but a slot set up for a sync that never runs is the thing refused
-  ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). A game confirmed before this keeps its mark; every
-  sync refuses it by the live answer, and the slot choice is still there once the emulator's setting changes back.
+  ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). A game already marked as set up keeps its mark;
+  every sync refuses it by the live answer, and the slot choice is still there once the emulator's setting changes back.
 
 ### Not yet implemented
 
@@ -998,15 +998,21 @@ Before save sync can operate for a game, the user must choose which slot to trac
 
 A game whose saves no sync carries has no slot to set up, wherever its saves are. `get_save_setup_info` takes one live
 reading of the save answer and asks it through the refusal every sync uses (`refuse_unsyncable`); where that refuses, it
-answers `recommended_action: "sync_unavailable"` with the refusal's `reason` and `message`, and asks RomM nothing — no
-device registration, no listing. A game that syncs answers as before, its local probe reading that same answer
-([#2153](https://github.com/danielcopper/romm-tender/issues/2153)).
+answers `recommended_action: "sync_unavailable"` with the refusal's `reason` and `message` — and its finding, source
+kind and emulator label where it carries them, so the panel words it as it does a press on the same game — and asks RomM
+nothing: no device registration, no listing. A game that syncs answers by the table above, its local probe reading that
+same answer ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). `get_save_sync_availability` asks the
+same refusal alone, with nothing else read and nothing asked of RomM, and answers `{available: true}` or
+`{available: false}` with those fields: the question the SAVES tab asks while it holds RomM as unreachable.
 
 ### Where the check happens
 
 - **Game detail page (SAVES tab):** shows wizard instead of save list when `slot_confirmed=false`. For a game whose
-  saves no sync carries it shows the sentence the sync refuses with, and no slot buttons; such an answer asked RomM
-  nothing, so it does not feed the shared connection state either.
+  saves no sync carries it shows the sentence the sync refuses with under the title "Save Sync", and no slot buttons;
+  such an answer asked RomM nothing, so it does not feed the shared connection state either. Where the panel already
+  holds RomM as unreachable, the tab skips the setup info, whose retry ladder would only wait the outage out, and asks
+  `get_save_sync_availability` instead: a game that cannot sync shows its reason the same way, and a game that can keeps
+  the unreachable notice and its Retry.
 - **Play button:** checks before launch. If not configured and server has saves, redirects to SAVES tab. If no server
   saves, auto-configures with default. A game whose saves no sync carries starts with no setup step and no toast, also
   where RomM holds saves for it: the sync before the start passes it over, or asks first where the saves folder is

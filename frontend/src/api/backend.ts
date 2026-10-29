@@ -46,6 +46,7 @@ import type {
   AchievementProgress,
   SaveSlotSummary,
   SaveSetupInfo,
+  SaveSyncAvailability,
   SlotSavesResponse,
   SwitchSlotResponse,
   SlotDeleteInfo,
@@ -1443,6 +1444,8 @@ export const isSaveTrackingConfigured = endpoint<[number], { configured: boolean
   "is_save_tracking_configured",
 );
 export const getSaveSetupInfo = endpoint<[number], SaveSetupInfo>("get_save_setup_info");
+// Asks RomM nothing: the wizard's question while the panel holds RomM as unreachable (#2153 D6).
+export const getSaveSyncAvailability = endpoint<[number], SaveSyncAvailability>("get_save_sync_availability");
 // confirm_slot_choice(rom_id, chosen_slot, migrate, migrate_from_slot, use_server_on_conflict):
 // `chosen_slot` must be a non-empty named slot — legacy `slot:null` confirmation
 // is retired (#1276), so an empty/`null` target is rejected by the backend's

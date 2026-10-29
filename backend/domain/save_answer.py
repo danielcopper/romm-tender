@@ -405,7 +405,8 @@ def save_shape_message(answer: SaveAnswer) -> str:
     folder instead, and no source: the table of source names lives only in the
     panel (``sourceName``), which words every answer it receives from the
     finding the refusal carries. The sentence stands where nothing rewords it —
-    the toast after a game exits.
+    the toast after a game exits — and Sync All's clause names the folder with
+    the same words (:func:`saves_folder_missing`).
     """
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
         return f"Save sync is unavailable: {saves_folder_missing(answer.missing_saves_root)}."

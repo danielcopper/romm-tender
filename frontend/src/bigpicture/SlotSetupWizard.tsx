@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, FC, ChangeEvent, KeyboardEvent } from "react";
 import { showToast } from "../utils/toast";
 import { DialogButton, ConfirmModal, ModalRoot, TextField, showModal } from "@decky/ui";
-import { getSaveSetupInfo, confirmSlotChoice, logError } from "../api/backend";
+import { getSaveSetupInfo, getSaveSyncAvailability, confirmSlotChoice, logError } from "../api/backend";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import {
   applyWizardInitialSetupResult,
@@ -23,7 +23,7 @@ import {
   settleServerLoad,
 } from "../utils/connectionState";
 import { formatBytes } from "../utils/formatters";
-import type { SaveSetupInfo, SlotMigrationConflict } from "../types";
+import type { SaveSetupInfo, SaveSyncAvailability, SlotMigrationConflict } from "../types";
 import { detach } from "../utils/detach";
 import { ConnectingIndicator } from "./saves/ConnectingIndicator";
 import { displaySlot } from "../utils/saveHelpers";
@@ -511,18 +511,35 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
   useEffect(() => {
     let cancelled = false;
 
+    const holdOffline = async () => {
+      setLoading(true);
+      setError(null);
+      setUnavailable(null);
+      let availability: SaveSyncAvailability | null = null;
+      try {
+        availability = await getSaveSyncAvailability(romId);
+      } catch (e) {
+        logError(`SlotSetupWizard availability check failed: ${e}`);
+      }
+      if (cancelled) return;
+      if (availability?.available === false) {
+        setUnavailable(availability.message ?? "");
+      } else {
+        offlineHeldRef.current = true;
+        setError(SERVER_UNREACHABLE_WIZARD_MESSAGE);
+      }
+      setLoading(false);
+    };
+
     const fetchInfo = async () => {
       // Known-offline fast path (#1345): getSaveSetupInfo runs the backend
       // retry+backoff ladder, so on a known-unreachable server every saves-tab
       // re-open would hang "Connecting to RomM…" for ~13s before falling back to
-      // the retry view. Skip the call and render the unreachable state instantly;
-      // offlineHeldRef arms the reconnect auto-reload below.
+      // the retry view. Skip that call: ask only whether the game can sync at
+      // all, which needs no RomM (#2153 D6), and otherwise render the
+      // unreachable state; offlineHeldRef arms the reconnect auto-reload below.
       if (getRommConnectionState() === "offline") {
-        offlineHeldRef.current = true;
-        if (!cancelled) {
-          setError(SERVER_UNREACHABLE_WIZARD_MESSAGE);
-          setLoading(false);
-        }
+        await holdOffline();
         return;
       }
 
@@ -643,11 +660,11 @@ export const SlotSetupWizard: FC<SlotSetupWizardProps> = ({ romId, onComplete })
     );
   }
 
-  // A game whose saves no sync carries: the backend's sentence, and no slot to choose (#2153 D2).
+  // A game whose saves no sync carries: the backend's sentence, and no slot to choose (#2153 D2, D7).
   if (unavailable !== null) {
     return (
       <div style={{ padding: "0 0 12px" }}>
-        <div className="romm-panel-section-title">Save Slot Setup</div>
+        <div className="romm-panel-section-title">Save Sync</div>
         <div className="romm-panel-muted" style={{ fontSize: "12px" }}>
           {unavailable}
         </div>

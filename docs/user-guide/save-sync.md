@@ -114,9 +114,11 @@ standalone emulator's saves as untested. The answers that keep save sync off, st
 among them, are listed under
 [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).
 
-A game whose saves save sync leaves alone has no save slot to set up. Play starts it without asking, and its SAVES tab
-says why its saves are not synced instead of offering slots. When the emulator's answer changes so that its saves can be
-synced, the slot setup appears by itself.
+A game whose saves Tender cannot sync has no save slot to set up: Play starts it without a setup step, and its **Saves**
+tab says why instead of offering slots (a game you set up earlier reads "No saves found"). Where the reason is a saves
+folder that does not exist, Play still asks before starting the game on the saves on the device, while **Sync before
+launch** is on and RomM can be reached. When the emulator's settings change so that its saves can be synced, the slot
+setup appears by itself.
 
 ## Settings
 

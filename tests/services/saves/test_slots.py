@@ -1539,6 +1539,46 @@ class TestAGameWhoseSavesCannotSync:
         assert not any(c[0] in ("list_saves", "download_save_content", "upload_save") for c in fake.call_log)
 
     @pytest.mark.asyncio
+    async def test_the_setup_info_carries_the_finding_the_panel_words_the_refusal_from(self, tmp_path):
+        svc, _fake, reader = _unsyncable(tmp_path, "shared")
+        reader.answer_with(
+            "gba",
+            saves_root_missing_answer(path=_MISSING_ROOT, emulator="mGBA", content_installed=True, source="retrodeck"),
+        )
+
+        result = await svc.get_save_setup_info(42)
+
+        assert result["recommended_action"] == "sync_unavailable"
+        assert result["finding"] == {"code": "saves-root-missing", "data": {"path": _MISSING_ROOT}}
+        assert result["source"] == "retrodeck"
+        assert result["emulator"] == "mGBA"
+        assert "synced" not in result
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("kind", "reason", "message"), _UNSYNCABLE)
+    async def test_the_availability_answers_the_same_refusal_asking_romm_nothing(self, tmp_path, kind, reason, message):
+        svc, fake, reader = _unsyncable(tmp_path, kind)
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["available"] is False
+        assert result["reason"] == reason
+        assert result["message"] == message
+        assert fake.call_log == []
+        assert len(reader.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_the_availability_of_a_game_that_syncs_asks_romm_nothing(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _install_rom(svc, tmp_path)
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result == {"available": True}
+        assert fake.call_log == []
+
+    @pytest.mark.asyncio
     async def test_a_game_already_set_up_keeps_its_slot(self, tmp_path):
         svc, _fake, _reader = _unsyncable(tmp_path, "shared")
         _seed_save_state_dict(svc, 42, {"active_slot": "desktop", "slot_confirmed": True})
