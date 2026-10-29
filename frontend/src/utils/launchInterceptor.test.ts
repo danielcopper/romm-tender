@@ -1724,6 +1724,25 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("save-setup fetch failed"));
     });
 
+    it("ensureTrackingConfigured: a game whose saves no sync carries proceeds and confirms nothing (#2153)", async () => {
+      const ops = await captureOps();
+
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({ configured: false, active_slot: null });
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValueOnce({
+        has_local_saves: false,
+        local_files: [],
+        server_slots: [],
+        default_slot: "slot1",
+        slot_confirmed: false,
+        active_slot: null,
+        recommended_action: "sync_unavailable",
+        reason: "savefiles_in_content_dir",
+        message: "Save sync is unavailable: saves are written to the game's content directory.",
+      });
+      expect(await ops.ensureTrackingConfigured()).toBe("proceed");
+      expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+    });
+
     it("ensureTrackingConfigured: an auto-adopt confirmSlotChoice throw logs and still proceeds", async () => {
       const ops = await captureOps();
 

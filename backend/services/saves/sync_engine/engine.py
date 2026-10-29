@@ -527,12 +527,11 @@ class SyncEngine:
         """
         return await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
 
-    def content_dir_blocked(self, rom_id: int, answer: SaveAnswer | None, where: str) -> bool:
+    def _content_dir_blocked(self, rom_id: int, answer: SaveAnswer | None, where: str) -> bool:
         """Whether *answer* places this ROM's save beside the game's content.
 
-        The entry gate of the conflict resolution and the slot-choice migration,
-        so neither writes into a directory the sync leaves alone. Public
-        (peer-called by the slot setup). An uninstalled ROM (``None``) is not
+        The entry gate of the conflict resolution, so it does not write into a
+        directory the sync leaves alone. An uninstalled ROM (``None``) is not
         blocked here; its caller's not-installed branch owns that case.
         """
         blocked = answer is not None and answer.in_content_directory
@@ -1210,7 +1209,7 @@ class SyncEngine:
             # or file write.
             save_answer = await self.read_save_answer(rom_id_int)
             await self.follow_save_directory(rom_id_int, save_answer, while_running=before_start)
-            if self.content_dir_blocked(rom_id_int, save_answer, "resolve_sync_conflict"):
+            if self._content_dir_blocked(rom_id_int, save_answer, "resolve_sync_conflict"):
                 raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR)
             return await self._rollback.resolve(
                 rom_id_int,

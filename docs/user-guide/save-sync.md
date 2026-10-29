@@ -114,6 +114,10 @@ standalone emulator's saves as untested. The answers that keep save sync off, st
 among them, are listed under
 [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).
 
+A game whose saves save sync leaves alone has no save slot to set up. Play starts it without asking, and its SAVES tab
+says why its saves are not synced instead of offering slots. When the emulator's answer changes so that its saves can be
+synced, the slot setup appears by itself.
+
 ## Settings
 
 Open **Save Sync** from the main QAM page to configure sync behavior.

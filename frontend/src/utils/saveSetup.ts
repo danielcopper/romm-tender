@@ -11,6 +11,11 @@
  * call site MUST NOT treat an empty `server_slots` array as authoritative on any
  * of them or it risks clobbering real server saves on first sync. They hold
  * identically and differ only in copy.
+ *
+ * "sync_unavailable" is a game whose saves no sync carries: nothing is set up
+ * for it on either route. A start goes ahead without a word, because the sync
+ * before it already passes such a game over, and the wizard shows the
+ * backend's sentence in place of the slot choice.
  */
 
 import type { SaveSetupInfo } from "../types";
@@ -20,6 +25,7 @@ export type SaveSetupOutcome =
   | { kind: "not_found" }
   | { kind: "romm_refused"; message: string }
   | { kind: "device_not_registered" }
+  | { kind: "sync_unavailable"; message: string }
   | { kind: "auto_confirm"; slot: string }
   | { kind: "needs_user_choice" };
 
@@ -41,6 +47,9 @@ export function resolveSaveSetupOutcome(info: SaveSetupInfo): SaveSetupOutcome {
   // hold.
   if (info.recommended_action === "device_not_registered") {
     return { kind: "device_not_registered" };
+  }
+  if (info.recommended_action === "sync_unavailable") {
+    return { kind: "sync_unavailable", message: info.message ?? "" };
   }
   // Either the backend marked the response as "auto_confirm_default", or the
   // server is reachable but reports no saves on either side — both are safe
@@ -136,6 +145,9 @@ export async function applyLaunchGateSetupOutcome(
   outcome: SaveSetupOutcome,
   deps: LaunchGateSetupDeps,
 ): Promise<"proceed" | "abort"> {
+  // No slot is set up for a game whose saves no sync carries, and nothing is
+  // asked of the user: the start goes on (#2153 D1).
+  if (outcome.kind === "sync_unavailable") return "proceed";
   if (outcome.kind === "server_unreachable") {
     deps.toast(SERVER_UNREACHABLE_TOAST_BODY);
     deps.dispatchSavesTab();
@@ -194,6 +206,8 @@ export interface WizardSetupDeps {
     useServerOnConflict: boolean,
   ) => Promise<{ success?: boolean; message?: string } | undefined>;
   setError: (message: string | null) => void;
+  /** Shows the sentence a game whose saves no sync carries is refused with, in place of the slot choice. */
+  setUnavailable: (message: string) => void;
   setConfirming: (confirming: boolean) => void;
   setInfo: (info: SaveSetupInfo) => void;
   logError: (message: string) => void;
@@ -226,6 +240,10 @@ export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps:
   }
   if (result.recommended_action === "device_not_registered") {
     deps.setError(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+    return;
+  }
+  if (result.recommended_action === "sync_unavailable") {
+    deps.setUnavailable(result.message ?? "");
     return;
   }
   if (result.recommended_action === "auto_confirm_default") {
@@ -262,6 +280,7 @@ export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps:
  *  WizardSetupDeps because retry never auto-confirms. */
 export interface WizardRetryDeps {
   setError: (message: string | null) => void;
+  setUnavailable: (message: string) => void;
   setLoading: (loading: boolean) => void;
   setInfo: (info: SaveSetupInfo) => void;
 }
@@ -288,6 +307,11 @@ export function applyWizardRetrySetupResult(result: SaveSetupInfo, deps: WizardR
   }
   if (result.recommended_action === "device_not_registered") {
     deps.setError(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+    deps.setLoading(false);
+    return;
+  }
+  if (result.recommended_action === "sync_unavailable") {
+    deps.setUnavailable(result.message ?? "");
     deps.setLoading(false);
     return;
   }

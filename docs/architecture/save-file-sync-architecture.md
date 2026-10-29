@@ -472,6 +472,13 @@ The wizard confirms a slot through `confirm_slot_choice(rom_id, chosen_slot, mig
   `migrate_from_slot` (`null` = the legacy `slot:null` **source**) is copied into the named `chosen_slot`, as "Migrating
   legacy saves into a named slot" above describes; no server save is deleted from the source. This is how legacy saves
   reach a named slot now that legacy is no longer a confirmable target.
+- **A game whose saves no sync carries is never confirmed**, with or without a migration. Under the ROM's `rom_lock`,
+  before anything is confirmed, the call takes one live reading of the save answer and refuses with the refusal a sync
+  of that game raises (`refuse_unsyncable`, `services/saves/sync_engine/_shape_refusal.py`): `savefiles_in_content_dir`,
+  `save_shape_unsupported` or `saves_root_missing`. A save written beside the game file has no exception: the plain
+  confirm writes no file, but a slot set up for a sync that never runs is the thing refused
+  ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). A game confirmed before this keeps its mark; every
+  sync refuses it by the live answer, and the slot choice is still there once the emulator's setting changes back.
 
 ### Not yet implemented
 
@@ -989,11 +996,21 @@ Before save sync can operate for a game, the user must choose which slot to trac
 | D        | --        | --                        | Manual slot switch in game detail              |
 | E        | Has saves | Has saves in default slot | Wizard: track default or use different slot    |
 
+A game whose saves no sync carries has no slot to set up, wherever its saves are. `get_save_setup_info` takes one live
+reading of the save answer and asks it through the refusal every sync uses (`refuse_unsyncable`); where that refuses, it
+answers `recommended_action: "sync_unavailable"` with the refusal's `reason` and `message`, and asks RomM nothing — no
+device registration, no listing. A game that syncs answers as before, its local probe reading that same answer
+([#2153](https://github.com/danielcopper/romm-tender/issues/2153)).
+
 ### Where the check happens
 
-- **Game detail page (SAVES tab):** shows wizard instead of save list when `slot_confirmed=false`
+- **Game detail page (SAVES tab):** shows wizard instead of save list when `slot_confirmed=false`. For a game whose
+  saves no sync carries it shows the sentence the sync refuses with, and no slot buttons; such an answer asked RomM
+  nothing, so it does not feed the shared connection state either.
 - **Play button:** checks before launch. If not configured and server has saves, redirects to SAVES tab. If no server
-  saves, auto-configures with default.
+  saves, auto-configures with default. A game whose saves no sync carries starts with no setup step and no toast, also
+  where RomM holds saves for it: the sync before the start passes it over, or asks first where the saves folder is
+  missing. The launch watcher's cold start confirms nothing for it either.
 
 ## Save File Discovery
 
@@ -1020,13 +1037,15 @@ first. Any answer a sync would not carry — no emulator resolved, nothing the r
 even where its directory is known, a save inside the content file, one written beside it, a missing saves root, a place
 not read from the emulator's own settings — gives no directory to sync in (`SaveAnswer.sync_directory` is empty), and
 none is supplied by a guess: the sync backstop, the status probe and the prune projection skip, and copy-to-slot,
-rollback, slot switch, the slot-choice migration and conflict resolution refuse — with `savefiles_in_content_dir` for an
-answer beside the content (next section), otherwise with `save_shape_unsupported` and the answer's own explanation. A
-place not read from the settings also carries the resolver's finding, the source's kind and the emulator's label, which
-the panel words the refusal from ([The seven save states](save-sync-coverage.md#the-seven-save-states)). Two notes the
-resolver states change nothing here: `redirect-outranked`, since Tender reads no redirect route and moves no save by a
-launch's flags, environment or working directory, and `save-files-shared-with-core`, which stands beside a card folder
-the two PlayStation 2 libretro cores share and so on an answer already refused as shared
+rollback, slot switch and conflict resolution refuse — with `savefiles_in_content_dir` for an answer beside the content
+(next section), otherwise with `save_shape_unsupported` and the answer's own explanation. The slot choice, with or
+without a migration, refuses as a sync of the game does, a missing saves root with `saves_root_missing`
+([Confirming a slot](#confirming-a-slot-confirm_slot_choice)). A place not read from the settings also carries the
+resolver's finding, the source's kind and the emulator's label, which the panel words the refusal from
+([The seven save states](save-sync-coverage.md#the-seven-save-states)). Two notes the resolver states change nothing
+here: `redirect-outranked`, since Tender reads no redirect route and moves no save by a launch's flags, environment or
+working directory, and `save-files-shared-with-core`, which stands beside a card folder the two PlayStation 2 libretro
+cores share and so on an answer already refused as shared
 ([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D2).
 
 ### Saves written next to the content (`savefiles_in_content_dir`)
@@ -1044,10 +1063,11 @@ no error); the whole-library sweep passes such a ROM over inside its run and, wh
 content, refuses with the same skip, or otherwise counts the ROMs it held back in its message. A sweep that read no ROM
 at all, because none has a confirmed slot, asks the resolver about the first installed ROM (in `rom_id` order) that
 launches with a RetroArch core, and refuses with the skip where that one saves beside its content; with no such ROM it
-reports as before. The secondary write endpoints (rollback, slot switch, conflict resolve, slot-choice migration, copy
-to slot) refuse with the same reason. `get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so
-the game-detail play section shows a banner saying the saves are written beside the game file, and naming RetroArch's
-setting only as the usual cause — only while save sync is enabled, since the banner is about getting save sync to work.
+reports as before. The secondary write endpoints (rollback, slot switch, conflict resolve, the slot choice with or
+without a migration, copy to slot) refuse with the same reason. `get_save_status` carries the additive
+`savefiles_in_content_dir: true` flag, so the game-detail play section shows a banner saying the saves are written
+beside the game file, and naming RetroArch's setting only as the usual cause — only while save sync is enabled, since
+the banner is about getting save sync to work.
 
 **Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
 the saves directory), while "Sort Saves **Into Folders by Content Directory**" controls the **layout within** the saves
@@ -1895,7 +1915,8 @@ The Play button's path:
 2. Migration: a pending RetroDECK migration blocks the start, and the button returns to Play; the page already says why.
 3. Launch target: `get_installed_rom`. A download with nothing the system can boot is blocked with a toast.
 4. Save tracking: `is_save_tracking_configured`. When it is not set up, `get_save_setup_info` decides between an
-   automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press.
+   automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press — or,
+   for a game whose saves no sync carries (`sync_unavailable`), neither: the press goes on with nothing set up.
 5. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
 7. Online: `pre_launch_sync`, with the button on "Syncing saves..." — past its limit, the "Waiting for Save Sync"
@@ -2007,11 +2028,11 @@ over `RunningRomIdsFn`; what counts as running, and how long a reading may take,
   running. Quit it first."): Sync Saves (with `synced=0`), a slot switch, a copy to a slot, a version restore, a slot
   delete, Delete Local Saves, a conflict resolution, and the setup wizard's migration of legacy saves. Each asks before
   it follows a moved save directory or touches a file, so a refused press writes nothing. A slot confirmation without a
-  migration writes no save and is not refused. The launch check's conflict dialog resolves before the start and says so
-  (`before_start`, from `gamepadLaunchPrompts.resolveConflicts`), so it is not refused where Steam still lists a start
-  the launch watcher cancelled for the check; a conflict resolved anywhere else — the Play button's Resolve, a copy or a
-  restore — is. A version switch's sync before the switch is a Sync Saves and is refused the same way; the panel shows
-  its message.
+  migration writes no save and is not refused while the game runs. The launch check's conflict dialog resolves before
+  the start and says so (`before_start`, from `gamepadLaunchPrompts.resolveConflicts`), so it is not refused where Steam
+  still lists a start the launch watcher cancelled for the check; a conflict resolved anywhere else — the Play button's
+  Resolve, a copy or a restore — is. A version switch's sync before the switch is a Sync Saves and is refused the same
+  way; the panel shows its message.
 - **Deleting all local saves of a platform** leaves a running game's saves and record alone, deletes the rest, and names
   it in `message` and `skipped_running`; its `N ROM(s)` leaves the ROMs it passed over out. `count_platform_saves` still
   counts the running game's files, so the button's number is what the delete removes once the game has been quit.

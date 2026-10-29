@@ -20,9 +20,10 @@ if TYPE_CHECKING:
 class SaveShapeUnsupported(NamedRefused):
     """The emulator's save is not a per-game file set this program can carry.
 
-    Every save write outside the sync (slot switch, rollback, slot-choice
-    migration) raises it for a missing saves root too, with that answer's own
-    message; a sync refuses that one with ``saves_root_missing`` instead.
+    Every save write outside the sync (slot switch, rollback) raises it for a
+    missing saves root too, with that answer's own message; a sync, and the
+    slot choice that would set one up, refuse that one with
+    ``saves_root_missing`` instead.
     """
 
     reason = "save_shape_unsupported"

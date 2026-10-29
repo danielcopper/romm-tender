@@ -4,7 +4,7 @@
  * Anything related to RomM save synchronization lives here.
  */
 
-import type { RommErrorReason } from "./reasons";
+import type { RommErrorReason, WireReasonSubset } from "./reasons";
 
 export interface SaveSyncSettings {
   save_sync_enabled: boolean;
@@ -184,19 +184,24 @@ export interface SaveSetupInfo {
   // for any other answer RomM gave, worded in `message`, and
   // "device_not_registered" where the device could not be registered for a
   // reason other than an unreachable RomM (backend `SyncEngine.live_device_id`),
-  // so nothing was listed. See backend
-  // `get_save_setup_info`.
+  // so nothing was listed. "sync_unavailable" is no failure: the game's saves
+  // are ones no sync carries, so there is no slot to set up and nothing was
+  // asked of RomM. See backend `get_save_setup_info`.
   recommended_action:
     | "auto_confirm_default"
     | "show_wizard"
     | "server_unreachable"
     | "not_found"
     | "romm_refused"
-    | "device_not_registered";
+    | "device_not_registered"
+    | "sync_unavailable";
   // True whenever that query failed, any way — for call sites routing on a
   // boolean rather than the enum.
   server_query_failed?: boolean;
-  // Present with "romm_refused" only: what RomM answered, worded by `classify_error`.
+  // Present with "sync_unavailable" only: the reason the game's sync is refused with.
+  reason?: WireReasonSubset<"save_shape_unsupported" | "savefiles_in_content_dir" | "saves_root_missing">;
+  // Present with "romm_refused" (what RomM answered, worded by `classify_error`)
+  // and with "sync_unavailable" (the sentence the game's sync is refused with).
   message?: string;
 }
 

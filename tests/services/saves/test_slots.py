@@ -8,6 +8,7 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
+from domain.save_answer import SaveAnswer, saves_root_missing_answer
 from domain.save_backup import BACKUP_DIR_NAME, BACKUP_RETENTION
 from lib.errors import (
     NotInstalled,
@@ -1429,6 +1430,128 @@ class TestConfirmSlotChoice:
         assert result["active_slot"] == "default"
 
 
+_SHARED_CARD = SaveAnswer(
+    state="shared",
+    unestablished=None,
+    emulator="PCSX2 (Standalone)",
+    directory="/saves/ps2/pcsx2/memcards",
+    backing_directory=None,
+    granularity="shared-card",
+    needs=(),
+    components=(),
+    caveats=(),
+    content_installed=True,
+)
+_SHARED_CARD_MESSAGE = (
+    "Save sync is unavailable: this emulator keeps one save card that all games share. (PCSX2 (Standalone))"
+)
+_MISSING_ROOT = "/run/media/deck/sd/retrodeck/saves"
+
+
+def _unsyncable(tmp_path, kind: str):
+    """A wired service whose installed rom 42 answers *kind*, with a local save and a server slot beside it."""
+    beside = kind == "beside_content"
+    svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=beside))
+    svc._config.settings["save_sync_enabled"] = True
+    _install_rom(svc, tmp_path)
+    _create_save(tmp_path)
+    fake.saves[1] = _server_save(save_id=1, slot="desktop")
+    reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+    if kind == "shared":
+        reader.answer_with("gba", _SHARED_CARD)
+    elif kind == "saves_root_missing":
+        reader.answer_with(
+            "gba", saves_root_missing_answer(path=_MISSING_ROOT, emulator="mGBA", content_installed=True)
+        )
+    return svc, fake, reader
+
+
+_UNSYNCABLE = [
+    pytest.param("shared", "save_shape_unsupported", _SHARED_CARD_MESSAGE, id="shared-card"),
+    pytest.param(
+        "beside_content",
+        "savefiles_in_content_dir",
+        "Save sync is unavailable: saves are written to the game's content directory.",
+        id="beside-the-game-file",
+    ),
+    pytest.param(
+        "saves_root_missing",
+        "saves_root_missing",
+        f"Save sync is unavailable: the saves folder {_MISSING_ROOT} does not exist.",
+        id="saves-folder-missing",
+    ),
+]
+
+
+class TestAGameWhoseSavesCannotSync:
+    """#2153: no slot is set up for a game whose saves no sync would carry, from Play or from the wizard."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("kind", "reason", "message"), _UNSYNCABLE)
+    async def test_the_setup_info_answers_that_sync_is_unavailable_with_the_refusal(
+        self, tmp_path, kind, reason, message
+    ):
+        svc, fake, reader = _unsyncable(tmp_path, kind)
+
+        result = await svc.get_save_setup_info(42)
+
+        assert result["recommended_action"] == "sync_unavailable"
+        assert result["reason"] == reason
+        assert result["message"] == message
+        assert result["server_slots"] == []
+        assert result["slot_confirmed"] is False
+        # Asked of nothing but the machine: no registration, no listing, one reading.
+        assert fake.call_log == []
+        assert len(reader.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_the_setup_info_of_a_game_that_syncs_reads_the_answer_once_and_lists_the_server(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        fake.saves[1] = _server_save(save_id=1, slot="desktop")
+
+        result = await svc.get_save_setup_info(42)
+
+        assert result["recommended_action"] == "show_wizard"
+        assert "reason" not in result
+        assert [entry["filename"] for entry in result["local_files"]] == ["pokemon.srm"]
+        assert len(cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls) == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("migrate", [False, True], ids=["plain", "migration"])
+    @pytest.mark.parametrize(("kind", "reason", "message"), _UNSYNCABLE)
+    async def test_confirming_a_slot_is_refused_and_leaves_it_unconfirmed(
+        self, tmp_path, kind, reason, message, migrate
+    ):
+        svc, fake, _reader = _unsyncable(tmp_path, kind)
+        _set_device_id(svc, "dev-1")
+        confirming = svc.confirm_slot_choice(42, "default", migrate, "desktop" if migrate else None)
+
+        with pytest.raises(Refused) as refused:
+            await confirming
+
+        assert refused.value.reason == reason
+        assert refused.value.message == message
+        assert _get_save_state(svc, 42) is None
+        assert not any(c[0] in ("list_saves", "download_save_content", "upload_save") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_game_already_set_up_keeps_its_slot(self, tmp_path):
+        svc, _fake, _reader = _unsyncable(tmp_path, "shared")
+        _seed_save_state_dict(svc, 42, {"active_slot": "desktop", "slot_confirmed": True})
+        confirming = svc.confirm_slot_choice(42, "default")
+
+        with pytest.raises(SaveShapeUnsupported):
+            await confirming
+
+        state = _require_save_state(svc, 42)
+        assert state.slot_confirmed is True
+        assert state.active_slot == "desktop"
+
+
 class TestGetSlotSaves:
     """Tests for get_slot_saves — lightweight server save listing by slot."""
 
@@ -2656,7 +2779,7 @@ class TestSlotsContentDirGate:
 
     @pytest.mark.asyncio
     async def test_confirm_slot_choice_migration_refused_on_content_dir(self, tmp_path):
-        """Migration path is refused (no upload/delete) but the slot still confirms."""
+        """Migration path is refused (no upload/delete), and the slot is not confirmed (#2153 D4)."""
         svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "dev-1")
@@ -2674,12 +2797,11 @@ class TestSlotsContentDirGate:
         assert not any(c[0] in ("upload_save", "delete_server_saves", "list_saves") for c in fake.call_log), (
             fake.call_log
         )
-        # The slot confirmation itself (a metadata flip, no file write) still persisted.
-        assert _require_save_state(svc, 42).slot_confirmed is True
+        assert _get_save_state(svc, 42) is None
 
     @pytest.mark.asyncio
     async def test_confirm_slot_choice_migration_refused_with_no_save_directory(self, tmp_path):
-        """The same refusal as the content-directory one: no migration I/O, slot still confirmed."""
+        """The same refusal as the content-directory one: no migration I/O, slot not confirmed."""
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "dev-1")
@@ -2692,26 +2814,26 @@ class TestSlotsContentDirGate:
         with pytest.raises(SaveShapeUnsupported) as refused:
             await confirming
 
-        assert refused.value.details == {}
+        assert refused.value.details == {"synced": 0}
         assert not any(c[0] in ("upload_save", "delete_server_saves", "list_saves") for c in fake.call_log), (
             fake.call_log
         )
-        assert _require_save_state(svc, 42).slot_confirmed is True
+        assert _get_save_state(svc, 42) is None
 
     @pytest.mark.asyncio
-    async def test_confirm_slot_choice_no_migration_not_gated_on_content_dir(self, tmp_path):
-        """The non-migration path writes no files, so it is never gated."""
+    async def test_confirm_slot_choice_no_migration_refused_on_content_dir(self, tmp_path):
+        """The non-migration path is refused the same way, though it writes no file (#2153 D4)."""
         svc, _ = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
 
-        result = await svc.confirm_slot_choice(42, "default")
+        confirming = svc.confirm_slot_choice(42, "default")
 
-        # No migration requested → no gate, slot confirmed normally.
-        assert result["success"] is True
-        assert "reason" not in result
-        assert _require_save_state(svc, 42).slot_confirmed is True
+        with pytest.raises(SavefilesInContentDir):
+            await confirming
+
+        assert _get_save_state(svc, 42) is None
 
 
 class TestDeleteSlot:

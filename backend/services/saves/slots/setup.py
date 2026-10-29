@@ -20,10 +20,10 @@ from domain.save_backup import BACKUP_RETENTION
 from domain.save_slot import save_in_slot
 from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, classify_error
 from services.saves._helpers import newest_server_saves_by_target
-from services.saves._messages import MIGRATION_LOCAL_FILES_FAILED, SAVE_SYNC_IN_CONTENT_DIR
-from services.saves._refusals import SavefilesInContentDir, shape_refusal
+from services.saves._messages import MIGRATION_LOCAL_FILES_FAILED
 from services.saves._save_state import read_save_state, read_save_state_or_new, write_save_state
 from services.saves._settings import autocleanup_limit, resolve_default_slot
+from services.saves.sync_engine._shape_refusal import refuse_unsyncable
 
 if TYPE_CHECKING:
     import asyncio
@@ -123,6 +123,25 @@ class SetupWizard:
             **extra,
         }
 
+    @staticmethod
+    def _sync_unavailable(
+        refusal: Refused, *, game_state: RomSaveSyncState | None, default_slot: str
+    ) -> dict[str, Any]:
+        """The setup answer for a game whose saves no sync would carry: the refusal, and no slot to choose."""
+        slot_confirmed = bool(game_state.slot_confirmed) if game_state else False
+        return {
+            "has_local_saves": False,
+            "local_files": [],
+            "server_slots": [],
+            "default_slot": default_slot,
+            "slot_confirmed": slot_confirmed,
+            "active_slot": game_state.active_slot if (game_state and slot_confirmed) else None,
+            "recommended_action": "sync_unavailable",
+            "server_query_failed": False,
+            "reason": refusal.reason,
+            "message": refusal.message,
+        }
+
     def _listing_failure(self, rom_id: int, exc: Exception) -> tuple[str, str | None]:
         """The ``recommended_action`` a failed server-saves query answers, and the message ``romm_refused`` carries."""
         if isinstance(exc, RommNotFoundError):
@@ -161,11 +180,25 @@ class SetupWizard:
         ``SyncEngine.live_device_id`` refuses, and the query is not sent. All
         of them hold the wizard identically — only the copy and the frontend's
         reachability verdict differ (#1570).
+
+        A game whose saves no sync would carry answers ``sync_unavailable``
+        instead, with the ``reason`` and ``message`` its sync is refused with,
+        and nothing else: there is no slot to set up, so neither the device
+        registration nor the listing is asked for. That is decided off one
+        live reading of the save answer, the one the local probe uses too.
         """
         rom_id = int(rom_id)
+        game_state = await self._loop.run_in_executor(None, read_save_state, self._uow_factory, rom_id)
+        default_slot = resolve_default_slot(self._settings)
+        save_answer = await self._sync_engine.read_save_answer(rom_id)
+        try:
+            refuse_unsyncable(save_answer)
+        except Refused as refusal:
+            self._log_debug(f"get_save_setup_info({rom_id}): save sync unavailable ({refusal.reason})")
+            return self._sync_unavailable(refusal, game_state=game_state, default_slot=default_slot)
 
         # Local saves
-        local_files = self._rom_info.find_save_files(rom_id)
+        local_files = self._rom_info.find_save_files(rom_id, save_answer=save_answer)
         local_file_info = []
         for lf in local_files:
             path = lf["path"]
@@ -177,8 +210,6 @@ class SetupWizard:
         # and the first post-confirmation sync could clobber real server
         # saves the user already had. Surface a distinct recommendation so
         # the frontend can hold the wizard and offer a retry instead.
-        game_state = await self._loop.run_in_executor(None, read_save_state, self._uow_factory, rom_id)
-        default_slot = resolve_default_slot(self._settings)
         try:
             device_id = await self._sync_engine.live_device_id()
         except Refused as e:
@@ -300,19 +331,17 @@ class SetupWizard:
         content into the slot and leaves the sources in the read-only legacy
         bucket (#1478).
 
-        When a migration is requested but the save is written beside the game
-        file (#239, ``SavefilesInContentDir``), or is any other answer a sync
-        would not carry (``SaveShapeUnsupported``), the migration is refused
-        before any download; the slot confirmation itself — a non-destructive
-        metadata flip — is still persisted before the refusal is raised. The
-        non-migration path is never gated (no file write).
+        A game whose saves no sync would carry is refused on both paths, before
+        anything is confirmed, with the refusal its sync raises
+        (``refuse_unsyncable``): there is no slot to set up for it.
 
-        Before anything is confirmed, a migration refuses with ``game_running``
-        while the game runs, with ``NotInstalled``, or, once the local checks
-        have passed, as ``SyncEngine.live_device_id`` does. A RomM error before
-        the apply phase propagates, and a save on this device that cannot be
-        read or written, or a saves folder that cannot be created, refuses with
-        ``migration_failed``; either way nothing is confirmed.
+        Before anything is confirmed, a migration also refuses with
+        ``game_running`` while the game runs, with ``NotInstalled``, or, once
+        the local checks have passed, as ``SyncEngine.live_device_id`` does. A
+        RomM error before the apply phase propagates, and a save on this device
+        that cannot be read or written, or a saves folder that cannot be
+        created, refuses with ``migration_failed``; either way nothing is
+        confirmed.
         """
         rom_id = int(rom_id)
         # Legacy ``slot:null`` confirmation is retired (#1276): a slot must carry
@@ -335,6 +364,7 @@ class SetupWizard:
 
             # Non-migration path: a plain, non-destructive metadata flip.
             if not migrate:
+                refuse_unsyncable(await self._sync_engine.read_save_answer(rom_id))
                 save_state.confirm_slot(normalized_slot)
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"success": True, "needs_conflict_resolution": False, "message": "Slot confirmed"}
@@ -342,17 +372,9 @@ class SetupWizard:
             # A migration writes the game's saves, so it is refused while the
             # game runs; the slot is not confirmed either, so the wizard stays open.
             await self._sync_engine.refuse_while_running(rom_id)
-            # The emulator writes this game's save beside its content, which the
-            # sync leaves alone, so the migration's writes could not take effect.
-            # Refuse before any download; the slot itself is still confirmed (a
-            # non-destructive metadata flip).
             save_answer = await self._sync_engine.read_save_answer(rom_id)
             await self._sync_engine.follow_save_directory(rom_id, save_answer)
-            if self._sync_engine.content_dir_blocked(rom_id, save_answer, "confirm_slot_choice"):
-                self._log_debug(f"confirm_slot_choice: rom {rom_id} saves beside its content; skipping migration")
-                save_state.confirm_slot(normalized_slot)
-                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-                raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR)
+            refuse_unsyncable(save_answer)
 
             # Migration preconditions, checked BEFORE any confirm or mutation so
             # a precondition failure holds the wizard open (no half-state) and the
@@ -362,13 +384,6 @@ class SetupWizard:
             )
             if not info:
                 raise NotInstalled("ROM is not installed")
-            # Any other answer a sync would not carry is refused for what it is,
-            # and the slot is confirmed all the same.
-            if info["save_answer"].sync_directory is None:
-                self._log_debug(f"confirm_slot_choice: rom {rom_id} has no save a sync could carry; skipping migration")
-                save_state.confirm_slot(normalized_slot)
-                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-                raise shape_refusal(info["save_answer"])
 
             # Asked only once the local checks above have passed, so a ROM they
             # refuse never costs a registration request.

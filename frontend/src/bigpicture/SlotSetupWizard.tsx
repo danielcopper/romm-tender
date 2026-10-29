@@ -470,6 +470,12 @@ function buildServerSlotsColumn(
   return children;
 }
 
+/** What a setup answer says of RomM's reachability: `null` for one that asked RomM nothing. */
+function reachabilityOf(result: SaveSetupInfo): boolean | null {
+  if (result.recommended_action === "sync_unavailable") return null;
+  return result.recommended_action !== "server_unreachable";
+}
+
 /** Owns the wizard's setup-info lifecycle: the initial load, the reconnect
  *  auto-reload, and the manual Retry — the three paths that share
  *  `offlineHeldRef` and the loading/error state. Kept as a hook so the component
@@ -480,6 +486,9 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The sentence a game whose saves no sync carries is refused with; set, it
+  // stands in place of the slot choice.
+  const [unavailable, setUnavailable] = useState<string | null>(null);
   // Bumped to force a re-fetch — the reconnect auto-reload uses it to re-run the
   // load effect once the shared connection store flips back to connected (#1345).
   const [reloadKey, setReloadKey] = useState(0);
@@ -487,6 +496,17 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
   // server_unreachable result). Gates the reconnect auto-reload so a benign
   // checking→connected transition never re-fetches, and guards against loops.
   const offlineHeldRef = useRef(false);
+
+  // Feed the shared store (#1345): a server_unreachable result is a definitive
+  // offline signal; any other result that asked RomM proves the server
+  // answered — including a `not_found`, which still holds the wizard but leaves
+  // the reconnect gate disarmed (#1570).
+  const feedReachability = (result: SaveSetupInfo) => {
+    const reachable = reachabilityOf(result);
+    if (reachable === null) return;
+    reportServerReachable(reachable);
+    offlineHeldRef.current = !reachable;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -519,22 +539,18 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
       setServerRetryProgress(null);
       setLoading(true);
       setError(null);
+      setUnavailable(null);
       try {
         const result = await getSaveSetupInfo(romId);
         if (cancelled) return;
-        // Feed the shared store (#1345): a server_unreachable result is a
-        // definitive offline signal; any other resolved result proves the
-        // server answered — including a `not_found`, which still holds the
-        // wizard but leaves the reconnect gate disarmed (#1570). A throw is a
-        // bridge/unknown error, not a verdict — the catch leaves the store
-        // untouched.
-        const reachable = result.recommended_action !== "server_unreachable";
-        reportServerReachable(reachable);
-        offlineHeldRef.current = !reachable;
+        // A throw is a bridge/unknown error, not a verdict — the catch leaves
+        // the store untouched.
+        feedReachability(result);
         await applyWizardInitialSetupResult(result, {
           romId,
           confirmSlotChoice,
           setError,
+          setUnavailable,
           setConfirming,
           setInfo,
           logError,
@@ -581,6 +597,7 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
   // applyWizardRetrySetupResult); shares offlineHeldRef with the load above.
   const retry = () => {
     setError(null);
+    setUnavailable(null);
     setLoading(true);
     // A fresh load, so it claims the shared store before touching it and hands
     // it back when it settles — see fetchInfo above for both halves.
@@ -591,11 +608,10 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
         (result) => {
           // Same conservative feed as the initial load (#1345): the manual
           // Retry re-probes reachability, so a server_unreachable result
-          // re-arms offline and any other result reports the server back.
-          const reachable = result.recommended_action !== "server_unreachable";
-          reportServerReachable(reachable);
-          offlineHeldRef.current = !reachable;
-          applyWizardRetrySetupResult(result, { setError, setLoading, setInfo });
+          // re-arms offline and any other result that asked RomM reports the
+          // server back.
+          feedReachability(result);
+          applyWizardRetrySetupResult(result, { setError, setUnavailable, setLoading, setInfo });
         },
         (e) => {
           setError(`Failed: ${e}`);
@@ -605,11 +621,14 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
       .finally(() => settleServerLoad(load));
   };
 
-  return { info, loading, confirming, error, setConfirming, setError, retry };
+  return { info, loading, confirming, error, unavailable, setConfirming, setError, retry };
 }
 
 export const SlotSetupWizard: FC<SlotSetupWizardProps> = ({ romId, onComplete }) => {
-  const { info, loading, confirming, error, setConfirming, setError, retry } = useSaveSetupInfo(romId, onComplete);
+  const { info, loading, confirming, error, unavailable, setConfirming, setError, retry } = useSaveSetupInfo(
+    romId,
+    onComplete,
+  );
 
   const handleConfirm = createConfirmHandler({ romId, setConfirming, setError, onComplete });
 
@@ -620,6 +639,18 @@ export const SlotSetupWizard: FC<SlotSetupWizardProps> = ({ romId, onComplete })
       <div style={{ padding: "0 0 12px" }}>
         <div className="romm-panel-section-title">Save Slot Setup</div>
         <ConnectingIndicator label={confirming ? "Setting up" : "Connecting to RomM"} />
+      </div>
+    );
+  }
+
+  // A game whose saves no sync carries: the backend's sentence, and no slot to choose (#2153 D2).
+  if (unavailable !== null) {
+    return (
+      <div style={{ padding: "0 0 12px" }}>
+        <div className="romm-panel-section-title">Save Slot Setup</div>
+        <div className="romm-panel-muted" style={{ fontSize: "12px" }}>
+          {unavailable}
+        </div>
       </div>
     );
   }

@@ -28,8 +28,9 @@ assumption, this page reflects the audit.
 
 Where Tender cannot carry a game's saves, it says so when you start a sync yourself: **Sync Save Files**, a slot switch,
 copying a save to another slot and restoring an older version all answer with the reason. The sync before a game starts
-and the one after it exits pass such a game over without a message, and the game's **Saves** tab reads "No saves found".
-There are five reasons, and they mean different things:
+and the one after it exits pass such a game over without a message. The game's **Saves** tab gives the reason in place
+of a save slot to set up; for a game whose slot was set up before, it reads "No saves found". There are five reasons,
+and they mean different things:
 
 - **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
   would copy other games' progress onto this one's record, so Tender leaves it alone.

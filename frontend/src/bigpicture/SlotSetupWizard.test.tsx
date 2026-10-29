@@ -206,6 +206,29 @@ describe("SlotSetupWizard", () => {
     });
   });
 
+  describe("a game whose saves no sync carries (#2153 D2)", () => {
+    const message =
+      "Save sync is unavailable: this emulator keeps one save card that all games share. (PCSX2 (Standalone))";
+
+    it("shows the sentence its sync is refused with and no slot buttons, and confirms nothing", async () => {
+      const actual = await vi.importActual<typeof import("../utils/saveSetup")>("../utils/saveSetup");
+      vi.mocked(applyWizardInitialSetupResult).mockImplementation(actual.applyWizardInitialSetupResult);
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(
+        makeSetupInfo({ recommended_action: "sync_unavailable", reason: "save_shape_unsupported", message }),
+      );
+      setRommConnectionState("checking");
+
+      const { container } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(message);
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+      expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+      // Nothing was asked of RomM, so the answer says nothing about whether it is reachable.
+      expect(getRommConnectionState()).toBe("checking");
+    });
+  });
+
   describe("fetch error path", () => {
     it("renders the error banner + Retry when getSaveSetupInfo rejects", async () => {
       vi.mocked(backend.getSaveSetupInfo).mockRejectedValue(new Error("boom"));

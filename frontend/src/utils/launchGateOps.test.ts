@@ -478,6 +478,23 @@ describe("ensureTrackingConfiguredBigPicture", () => {
     expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });
   });
 
+  it("a game whose saves no sync carries starts with no setup step and no toast, though RomM holds saves (#2153 D1)", async () => {
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+    vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(
+      setupInfo({
+        recommended_action: "sync_unavailable",
+        reason: "save_shape_unsupported",
+        message: "Save sync is unavailable: this emulator keeps one save card that all games share.",
+        server_slots: [{ slot: "slot1", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" }],
+      }),
+    );
+
+    expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("proceed");
+    expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+    expect(toaster.toast).not.toHaveBeenCalled();
+    expect(tabSwitch).not.toHaveBeenCalled();
+  });
+
   it("a throw from a side effect after the read is not swallowed into proceed", async () => {
     vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
     vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(setupInfo());
