@@ -262,6 +262,44 @@ describe("SlotSetupWizard", () => {
       expect(getByText("Retry")).not.toBeNull();
     });
 
+    it("keeps the unreachable notice and Retry where the question itself fails", async () => {
+      setRommConnectionState("offline");
+      vi.mocked(backend.getSaveSyncAvailability).mockRejectedValue(new Error("bridge down"));
+
+      const { container, getByText } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("RomM server is not reachable");
+      expect(getByText("Retry")).not.toBeNull();
+    });
+
+    it("loads online when RomM comes back while the question is still being answered", async () => {
+      setRommConnectionState("offline");
+      let answerAvailability!: (availability: { available: boolean }) => void;
+      vi.mocked(backend.getSaveSyncAvailability).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            answerAvailability = resolve;
+          }),
+      );
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(makeSetupInfo());
+
+      const { container } = render(<SlotSetupWizard {...defaultProps({ romId: 6 })} />);
+      await flushAsync();
+      await act(async () => {
+        reportServerReachable(true);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        answerAvailability({ available: true });
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSaveSetupInfo)).toHaveBeenCalledWith(6);
+      expect(container.textContent).not.toContain("RomM server is not reachable");
+    });
+
     it("reads 'Save Sync' above the reason online too (D7)", async () => {
       const actual = await vi.importActual<typeof import("../utils/saveSetup")>("../utils/saveSetup");
       vi.mocked(applyWizardInitialSetupResult).mockImplementation(actual.applyWizardInitialSetupResult);

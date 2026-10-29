@@ -476,6 +476,17 @@ function reachabilityOf(result: SaveSetupInfo): boolean | null {
   return result.recommended_action !== "server_unreachable";
 }
 
+/** Whether a slot can be set up for the game at all, asked without RomM; `null` where the question failed, which the
+ *  caller treats as a game that can sync. */
+async function readAvailabilityOffline(romId: number): Promise<SaveSyncAvailability | null> {
+  try {
+    return await getSaveSyncAvailability(romId);
+  } catch (e) {
+    logError(`SlotSetupWizard availability check failed: ${e}`);
+    return null;
+  }
+}
+
 /** Owns the wizard's setup-info lifecycle: the initial load, the reconnect
  *  auto-reload, and the manual Retry — the three paths that share
  *  `offlineHeldRef` and the loading/error state. Kept as a hook so the component
@@ -515,17 +526,13 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
       setLoading(true);
       setError(null);
       setUnavailable(null);
-      let availability: SaveSyncAvailability | null = null;
-      try {
-        availability = await getSaveSyncAvailability(romId);
-      } catch (e) {
-        logError(`SlotSetupWizard availability check failed: ${e}`);
-      }
+      // Armed before the reading, so a reconnect while it runs cancels this run and reloads online.
+      offlineHeldRef.current = true;
+      const availability = await readAvailabilityOffline(romId);
       if (cancelled) return;
       if (availability?.available === false) {
         setUnavailable(availability.message ?? "");
       } else {
-        offlineHeldRef.current = true;
         setError(SERVER_UNREACHABLE_WIZARD_MESSAGE);
       }
       setLoading(false);
