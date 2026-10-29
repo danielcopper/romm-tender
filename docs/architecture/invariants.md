@@ -708,14 +708,15 @@ Format: **invariant** — tier — enforced by.
   agreeing for a row whose game the run synced on a platform it did not read, the only bound row on that platform once a
   version switch moved the shortcut onto it, whether RomM is asked about it or not, the collection skipped or fetched,
   with platform groups on and off. The convergence keeps a game whose bindings the stale sort would keep one by one from
-  keeping two shortcuts for good: it judges a group over a platform unit's whole listing and its platform's bound rows,
-  the rows the listing leaves out included, which is why only a fetched platform unit converges, why the gate refuses
-  the skip on the stored keys of every bound row whatever its generation
-  (`domain/fetch_generation.py::convergence_pending`, over the same `groups_to_converge`), and why the preview converges
-  over the listings it fetched in full rather than over its union, where a skipped collection's rebuilt row would read
-  as listed; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and `TestCollapseHandedTheConvergedRows` pin the
-  rule and the collapse's side of it, `TestAGroupWithARunningGameIsLeftOut` and `TestWithoutRunningGroups` a group left
-  out while it runs, at the unit and at the finalize,
+  keeping two shortcuts for good wherever a platform unit reads the game's platform (a game only collections bring in,
+  its platform turned off, and a game on a platform RomM no longer lists keep theirs): it judges a group over a platform
+  unit's whole listing and its platform's bound rows, the rows the listing leaves out included, which is why only a
+  fetched platform unit converges, why the gate refuses the skip on the stored keys of every bound row whatever its
+  generation (`domain/fetch_generation.py::convergence_pending`, over the same `groups_to_converge`), and why the
+  preview converges over the listings it fetched in full rather than over its union, where a skipped collection's
+  rebuilt row would read as listed; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and
+  `TestCollapseHandedTheConvergedRows` pin the rule and the collapse's side of it, `TestAGroupWithARunningGameIsLeftOut`
+  and `TestWithoutRunningGroups` a group left out while it runs, at the unit and at the finalize,
   `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` the apply and the preview
   agreeing for every install state, an unlisted version and a game RomM lists no version of, the stopped run, the #1036
   guard, the row the kept shortcut moves onto and a running game left for the next sync,

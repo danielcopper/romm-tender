@@ -1030,10 +1030,11 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   the row its game keeps once the run commits (`with_kept_rows_rebound`), and the reporter unbinds them with the stale
   rows. A stopped run removes nothing. The preview runs the same rule over the listings of the platform units it fetched
   in full and counts the losers as removals. A collection unit never converges and never sees a loser: it leaves out
-  every member a platform unit synced and every member no listing returns. The panel carries each loser's Steam state
-  over before the removal (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removed appIds through
-  `report_converged_removals`, which resets their Steam Input setting and deletes their grid images, and leaves the
-  per-ROM cover cache.
+  every member a platform unit synced and every member no listing returns. So two games keep their shortcuts for good: a
+  game only collections bring in, its platform turned off, and a game on a platform RomM no longer lists — no platform
+  unit reads that platform, so nothing converges it. The panel carries each loser's Steam state over before the removal
+  (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removed appIds through `report_converged_removals`,
+  which resets their Steam Input setting and deletes their grid images, and leaves the per-ROM cover cache.
 - **Downstream group semantics.** The incremental-skip gate compares RomM's whole visible id set — every sibling, bound
   or unbound — with the checksum the completion stamp recorded (#743), so skip parity on platforms with sibling groups
   holds. The **backfill gate reads the stamp's fetch generation**: a NULL `sibling_group_key` forces a full fetch only
