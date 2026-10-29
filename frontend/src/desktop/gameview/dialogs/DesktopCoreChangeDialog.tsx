@@ -1,7 +1,6 @@
 /**
- * The desktop client's core-change prompt, asked before a start when the
- * launch check's core comparison (`checkCoreChange`) answers that the core
- * changed. `shared/CoreChangeModal` is its gamepad drawing.
+ * The desktop drawing of `LaunchPrompts.confirmCoreChange` (`utils/launchVerdict.ts`).
+ * `shared/CoreChangeModal` is its gamepad drawing.
  */
 
 import type { FC } from "react";

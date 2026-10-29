@@ -1,7 +1,6 @@
 /**
- * The desktop client's offline-drift prompt, asked before a start when RomM
- * is unreachable and the local save has unsynced changes. Its gamepad drawing
- * is `shared/OfflineDriftModal`.
+ * The desktop drawing of `LaunchPrompts.askOfflineDrift` (`utils/launchVerdict.ts`).
+ * `shared/OfflineDriftModal` is its gamepad drawing.
  */
 
 import type { FC } from "react";

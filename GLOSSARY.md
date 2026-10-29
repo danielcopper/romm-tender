@@ -1348,20 +1348,19 @@ surface** (see **Surface**). _Avoid_: _Desktop Mode_, which on a Steam Deck is t
 
 The **navigation watcher** (`frontend/src/desktop/navigationWatcher.ts`) is what the desktop surface adapts Steam's game
 page with: it finds the **desktop client**'s window, follows its route to a RomM shortcut's game page, and adapts that
-page in passes. The **restoration ledger** (`DomRestorationLedger`) is the record of every change it makes to Steam's
-page, so that leaving the page gives each one back; the launch prompt host (`frontend/src/desktop/launchPromptHost.tsx`)
-keeps one per question and gives it back when the question settles. Detail:
+page in passes. The **restoration ledger** (`DomRestorationLedger`) is the record of every change the desktop surface
+makes to Steam's desktop window, so each can be given back. Detail:
 [How the desktop surface adapts Steam's game page](docs/architecture/desktop-dom-architecture.md). _Avoid_: _DOM
 coordinator_, _desktop supervisor_ (earlier names for the watcher).
 
 ### Shared (UI layer)
 
 UI that belongs to both surfaces, in `frontend/src/shared/` — today the launch prompts (sync conflict, offline drift,
-core change, fallback launch), which appear over Big Picture, and over Steam's desktop client wherever the desktop
-surface does not draw its own (`launchPromptsForThisStart`). It sits **below** the surfaces: the surfaces and
-`index.tsx` import it; it imports `api/`, `utils/` and `types/`; `utils/` and `api/` may not import it. Not to be
-confused with the **shared** save state, where one card or file holds many games' progress (see **Save state**), or with
-the shared state a module store holds for everything subscribed to it (see **Game-detail store**).
+core change, fallback launch, unchecked source, sync wait), which appear over Big Picture, and over Steam's desktop
+client wherever the desktop surface does not draw its own. It sits **below** the surfaces: the surfaces and `index.tsx`
+import it; it imports `api/`, `utils/` and `types/`; `utils/` and `api/` may not import it. Not to be confused with the
+**shared** save state, where one card or file holds many games' progress (see **Save state**), or with the shared state
+a module store holds for everything subscribed to it (see **Game-detail store**).
 
 ### Quick Access entry / entry marker / tab glyph
 

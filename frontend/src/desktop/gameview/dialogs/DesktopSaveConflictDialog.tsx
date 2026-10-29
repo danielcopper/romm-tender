@@ -1,8 +1,8 @@
 /**
- * The desktop client's save-conflict dialog: one conflicting file, both sides,
- * and Keep Local / Use Server / Cancel. The resolution runs from inside the
- * dialog, so anything short of a resolution that landed is shown here and the
- * user can retry or cancel; a resolution closes it only once it has landed.
+ * The desktop drawing of one conflict `LaunchPrompts.resolveConflicts` walks
+ * (`utils/launchVerdict.ts`). The resolution runs from inside the dialog, so
+ * anything short of a resolution that landed is shown here and the user can
+ * retry or cancel; a resolution closes it only once it has landed.
  * `shared/SyncConflictModal` is its gamepad drawing.
  */
 

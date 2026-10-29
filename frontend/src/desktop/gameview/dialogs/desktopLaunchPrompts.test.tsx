@@ -11,15 +11,24 @@ import type { AskDialog } from "./askDialog";
 import type { SyncConflict } from "../../../types";
 
 /**
- * An `ask` that answers each question with the next of `answers`, and records
- * what it was asked: the dismissal answer and the dialog it would draw.
+ * An `ask` that answers each question the way its dialog would: it calls the
+ * drawn element's own `onChoice` or `onDone` with the next of `answers`, and
+ * settles with whatever that hands to the `resolve` the prompt gave it. It
+ * records what it was asked: the dismissal answer and the dialog it drew.
  */
 function scriptedAsk(answers: unknown[]): { ask: AskDialog; asked: { dismissed: unknown; dialog: ReactNode }[] } {
   const asked: { dismissed: unknown; dialog: ReactNode }[] = [];
-  const ask = (<T,>(dismissed: T, render: (resolve: (value: T) => void) => ReactNode): Promise<T> => {
-    asked.push({ dismissed, dialog: render(() => undefined) });
-    return Promise.resolve(answers.shift() as T);
-  }) as AskDialog;
+  const ask = (<T,>(dismissed: T, render: (resolve: (value: T) => void) => ReactNode): Promise<T> =>
+    new Promise<T>((resolve) => {
+      const dialog = render(resolve);
+      asked.push({ dismissed, dialog });
+      const props = isValidElement<{ onChoice?: (value: unknown) => void; onDone?: (value: unknown) => void }>(dialog)
+        ? dialog.props
+        : {};
+      const answer = props.onChoice ?? props.onDone;
+      if (!answer) throw new Error("the dialog has no onChoice or onDone");
+      answer(answers.shift());
+    })) as AskDialog;
   return { ask, asked };
 }
 
@@ -34,19 +43,22 @@ const typeOf = (node: ReactNode): unknown => (isValidElement(node) ? node.type :
 const conflict = (filename: string): SyncConflict => ({ filename }) as SyncConflict;
 
 describe("desktopLaunchPrompts", () => {
-  it("asks the core-change question through its dialog, dismissed as a no", async () => {
-    const { ask, asked } = scriptedAsk([true]);
+  it.each([true, false])(
+    "asks the core-change question through its dialog, dismissed as a no (answered %s)",
+    async (choice) => {
+      const { ask, asked } = scriptedAsk([choice]);
 
-    expect(await desktopLaunchPrompts(ask).confirmCoreChange("Old", "New")).toBe(true);
-    expect(asked).toHaveLength(1);
-    expect(first(asked).dismissed).toBe(false);
-    expect(typeOf(first(asked).dialog)).toBe(DesktopCoreChangeDialog);
-    const { dialog } = first(asked);
-    expect(isValidElement<{ oldLabel?: string; newLabel?: string }>(dialog) && dialog.props).toMatchObject({
-      oldLabel: "Old",
-      newLabel: "New",
-    });
-  });
+      expect(await desktopLaunchPrompts(ask).confirmCoreChange("Old", "New")).toBe(choice);
+      expect(asked).toHaveLength(1);
+      expect(first(asked).dismissed).toBe(false);
+      expect(typeOf(first(asked).dialog)).toBe(DesktopCoreChangeDialog);
+      const { dialog } = first(asked);
+      expect(isValidElement<{ oldLabel?: string; newLabel?: string }>(dialog) && dialog.props).toMatchObject({
+        oldLabel: "Old",
+        newLabel: "New",
+      });
+    },
+  );
 
   it("asks the offline-drift question through its dialog, dismissed as a cancel", async () => {
     const { ask, asked } = scriptedAsk(["retry"]);
@@ -56,23 +68,29 @@ describe("desktopLaunchPrompts", () => {
     expect(typeOf(first(asked).dialog)).toBe(DesktopOfflineDriftDialog);
   });
 
-  it("asks the fallback question through its dialog with the sync's message, dismissed as a no", async () => {
-    const { ask, asked } = scriptedAsk([true]);
+  it.each([true, false])(
+    "asks the fallback question through its dialog with the sync's message, dismissed as a no (answered %s)",
+    async (choice) => {
+      const { ask, asked } = scriptedAsk([choice]);
 
-    expect(await desktopLaunchPrompts(ask).confirmFallbackLaunch("Server said no")).toBe(true);
-    expect(first(asked).dismissed).toBe(false);
-    expect(typeOf(first(asked).dialog)).toBe(DesktopFallbackLaunchDialog);
-    const { dialog } = first(asked);
-    expect(isValidElement<{ message?: string }>(dialog) && dialog.props.message).toBe("Server said no");
-  });
+      expect(await desktopLaunchPrompts(ask).confirmFallbackLaunch("Server said no")).toBe(choice);
+      expect(first(asked).dismissed).toBe(false);
+      expect(typeOf(first(asked).dialog)).toBe(DesktopFallbackLaunchDialog);
+      const { dialog } = first(asked);
+      expect(isValidElement<{ message?: string }>(dialog) && dialog.props.message).toBe("Server said no");
+    },
+  );
 
-  it("asks the unchecked-source question through its dialog, dismissed as a no", async () => {
-    const { ask, asked } = scriptedAsk([true]);
+  it.each([true, false])(
+    "asks the unchecked-source question through its dialog, dismissed as a no (answered %s)",
+    async (choice) => {
+      const { ask, asked } = scriptedAsk([choice]);
 
-    expect(await desktopLaunchPrompts(ask).confirmUncheckedSource()).toBe(true);
-    expect(first(asked).dismissed).toBe(false);
-    expect(typeOf(first(asked).dialog)).toBe(DesktopUncheckedSourceDialog);
-  });
+      expect(await desktopLaunchPrompts(ask).confirmUncheckedSource()).toBe(choice);
+      expect(first(asked).dismissed).toBe(false);
+      expect(typeOf(first(asked).dialog)).toBe(DesktopUncheckedSourceDialog);
+    },
+  );
 
   it("asks the sync-wait question through its dialog with the reason, dismissed as a cancel", async () => {
     const { ask, asked } = scriptedAsk(["play_anyway"]);

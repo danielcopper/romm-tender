@@ -7,6 +7,8 @@ import { fireEvent, screen } from "@testing-library/react";
 import * as backend from "../api/backend";
 import * as desktopWindow from "./desktopWindow";
 import { askInDesktopWindow, offerDesktopLaunchPrompts, withdrawDesktopLaunchPrompts } from "./launchPromptHost";
+import { desktopLaunchPrompts } from "./gameview/dialogs/desktopDialogs";
+import { OFFLINE_DRIFT_RETRY_LABEL } from "../utils/launchPromptWording";
 import { launchPromptsForThisStart } from "../utils/launchPromptRouter";
 import type { LaunchPrompts } from "../utils/launchVerdict";
 
@@ -95,6 +97,34 @@ describe("askInDesktopWindow", () => {
     });
     await expect(answer).resolves.toBe("dismissed");
     expect(drawnThere()).toBe(false);
+    expect(lines(backend.logWarn)).toEqual([
+      "desktop: a launch question was answered as dismissed because its window went",
+    ]);
+    await desktop.happyDOM.close();
+  });
+
+  it("dismisses a dialog on an Escape pressed in its own window, and not on one pressed in the panel's", async () => {
+    const desktop = new HappyWindow();
+    vi.mocked(desktopWindow.findDesktopWindow).mockReturnValue(desktop as unknown as Window);
+    let answer: Promise<"start_anyway" | "retry" | "cancel"> | undefined;
+    act(() => {
+      answer = desktopLaunchPrompts(askInDesktopWindow).askOfflineDrift();
+    });
+    let settled = false;
+    void answer?.then(() => {
+      settled = true;
+    });
+
+    act(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    act(() => {
+      desktop.dispatchEvent(new desktop.KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    await expect(answer).resolves.toBe("cancel");
     await desktop.happyDOM.close();
   });
 
@@ -111,6 +141,9 @@ describe("askInDesktopWindow", () => {
 
     await expect(answer).resolves.toBe("dismissed");
     expect(hosts()).toHaveLength(0);
+    expect(lines(backend.logWarn)).toEqual([
+      "desktop: a launch question was answered as dismissed because its window went",
+    ]);
   });
 
   it("stops listening for the window going once the question is answered", async () => {
@@ -128,6 +161,42 @@ describe("askInDesktopWindow", () => {
 
     const removed = removeSpy.mock.calls.map(([type]) => type);
     expect(removed).toEqual(expect.arrayContaining(["pagehide", "unload"]));
+  });
+
+  it("unmounts an answered dialog, so its Escape listener goes with it", async () => {
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    let answer: Promise<"start_anyway" | "retry" | "cancel"> | undefined;
+    act(() => {
+      answer = desktopLaunchPrompts(askInDesktopWindow).askOfflineDrift();
+    });
+    expect(removeSpy).not.toHaveBeenCalledWith("keydown", expect.anything());
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: OFFLINE_DRIFT_RETRY_LABEL }));
+    });
+    await expect(answer).resolves.toBe("retry");
+
+    expect(removeSpy.mock.calls.map(([type]) => type)).toContain("keydown");
+  });
+
+  it("logs an answer that arrives after its question was dismissed, and drops it", async () => {
+    let late: ((value: string) => void) | undefined;
+    let answer: Promise<string> | undefined;
+    act(() => {
+      answer = askInDesktopWindow("dismissed", (resolve) => {
+        late = resolve;
+        return <span>Resolving</span>;
+      });
+    });
+    act(() => withdrawDesktopLaunchPrompts());
+    await expect(answer).resolves.toBe("dismissed");
+
+    late?.("keep_local");
+
+    expect(lines(backend.logWarn)).toEqual([
+      "desktop: a launch question was answered as dismissed because the desktop dialogs were withdrawn",
+      "desktop: a launch question was answered after it had been dismissed, so the answer was dropped: keep_local",
+    ]);
   });
 
   it("answers a closed window's question dismissed at once", async () => {
@@ -155,6 +224,21 @@ describe("askInDesktopWindow", () => {
     await expect(askYes()).resolves.toBe("dismissed");
     expect(lines(backend.logWarn)).toEqual([
       "desktop: a launch question had nothing to draw into (window=open, createRoot=missing), so it was answered as dismissed",
+    ]);
+  });
+
+  it.each([
+    ["the desktop window", desktopWindow.findDesktopWindow],
+    ["React's client module", desktopWindow.findReactClient],
+  ])("answers dismissed when looking for %s throws", async (_what, lookup) => {
+    vi.mocked(lookup).mockImplementation(() => {
+      throw new Error("lookup boom");
+    });
+
+    await expect(askYes()).resolves.toBe("dismissed");
+    expect(hosts()).toHaveLength(0);
+    expect(lines(backend.logError)).toEqual([
+      "desktop: could not look for a window to draw a launch question into, so it was answered as dismissed: Error: lookup boom",
     ]);
   });
 
@@ -203,6 +287,9 @@ describe("askInDesktopWindow", () => {
 
     await expect(answer).resolves.toBe("dismissed");
     expect(hosts()).toHaveLength(0);
+    expect(lines(backend.logWarn)).toEqual([
+      "desktop: a launch question was answered as dismissed because its window unloaded",
+    ]);
   });
 
   it("dismisses both of two open launch dialogs on one Escape", async () => {
@@ -244,6 +331,7 @@ describe("askInDesktopWindow", () => {
 
     await expect(answer).resolves.toBe("cancel");
     expect(hosts()).toHaveLength(0);
+    expect(lines(backend.logWarn)).toEqual([]);
   });
 });
 
@@ -283,5 +371,9 @@ describe("offering the desktop dialogs to the launch watcher", () => {
     await expect(second).resolves.toBe("no");
     expect(hosts()).toHaveLength(0);
     expect(launchPromptsForThisStart(gamepad)).toBe(gamepad);
+    expect(lines(backend.logWarn)).toEqual([
+      "desktop: a launch question was answered as dismissed because the desktop dialogs were withdrawn",
+      "desktop: a launch question was answered as dismissed because the desktop dialogs were withdrawn",
+    ]);
   });
 });

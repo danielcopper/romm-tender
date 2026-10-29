@@ -1,7 +1,6 @@
 /**
- * The desktop client's sync-wait prompt, asked once a start's pre-launch sync
- * has run past the launch check's limit. `shared/SyncWaitModal` is its gamepad
- * drawing.
+ * The desktop drawing of `LaunchPrompts.askSyncWait` (`utils/launchVerdict.ts`).
+ * `shared/SyncWaitModal` is its gamepad drawing.
  */
 
 import { useEffect, useState, type FC } from "react";

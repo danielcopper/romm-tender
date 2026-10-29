@@ -69,10 +69,15 @@ Such a start comes with no Tender component to ask from, so `askInDesktopWindow`
 moment it is asked: a container created with that window's own `document.createElement`, and a React root from
 `findReactClient`. Each question keeps a `DomRestorationLedger` of its own, which records the root, its container and
 the window's `pagehide` and `unload` listeners, and `restoreAll()` takes all of it away when the question settles. A
-question settles with the button pressed; with its dismissed answer when the dialog is left (`DesktopDialog`'s
-`onDismiss`), when its window goes, or when the surface is withdrawn; and with its dismissed answer, logged as a
-`desktop:` warning or error, when there is no open desktop window or `createRoot` to draw with, or when drawing it
-throws. Two starts caught together each draw a dialog of their own, one over the other, and Escape then dismisses both.
+question settles with the button pressed, or with its dismissed answer: unlogged when the dialog is left
+(`DesktopDialog`'s `onDismiss`), and logged as a `desktop:` warning or error naming why when its window goes or unloads,
+when the surface is withdrawn, when there is no open desktop window or `createRoot` to draw with, or when looking for
+them or drawing it throws. A dismissal the host makes itself does not wait for a request the dialog has in flight: when
+the save-conflict dialog's window goes, or the surface is withdrawn, while its resolution is running, the start is
+cancelled, the resolution still lands and shows its toast, and its answer, arriving after the question settled, is
+logged as a `desktop:` warning and dropped, so the announcement a start makes once its conflicts are resolved
+(`announceSaveSync`) is not made. Two starts caught together each draw a dialog of their own, one over the other, and
+Escape then dismisses both.
 
 **Known limitation:** because a tray-hidden desktop window looks open, a question for a start caught while the desktop
 client sits in the tray is drawn into a window nobody sees until Steam is opened again, and the start waits for it.

@@ -3,7 +3,7 @@ import * as backend from "../api/backend";
 import { launchPromptsForThisStart, setDesktopLaunchPrompts, steamUIModeIsDesktop } from "./launchPromptRouter";
 import type { LaunchPrompts } from "./launchVerdict";
 
-vi.mock("../api/backend", () => ({ debugLog: vi.fn(() => Promise.resolve()) }));
+vi.mock("../api/backend", () => ({ debugLog: vi.fn(() => Promise.resolve()), logError: vi.fn() }));
 
 const DESKTOP_MODE = 7;
 const BIG_PICTURE_MODE = 4;
@@ -29,6 +29,7 @@ const lastDebugLine = (): string => String(vi.mocked(backend.debugLog).mock.last
 afterEach(() => {
   setDesktopLaunchPrompts(null);
   vi.mocked(backend.debugLog).mockClear();
+  vi.mocked(backend.logError).mockClear();
 });
 
 describe("steamUIModeIsDesktop", () => {
@@ -95,6 +96,9 @@ describe("launchPromptsForThisStart", () => {
     });
     expect(launchPromptsForThisStart(gamepad)).toBe(gamepad);
     expect(lastDebugLine()).toBe("Launch prompts: gamepad — the desktop surface threw: Error: boom");
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+      "desktop: the desktop surface threw while offering its launch prompts: Error: boom",
+    );
   });
 
   it("asks through the gamepad modals when the store is absent", () => {

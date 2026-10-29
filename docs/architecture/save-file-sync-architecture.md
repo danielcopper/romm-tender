@@ -1844,10 +1844,11 @@ limit of its own: `SyncEngine.pre_launch_sync` waits for the device gate and for
 free ([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D1). When it has not answered within
 `SERVER_CALL_LIMIT_MS`, `runPreLaunchSync` (`frontend/src/utils/launchGateOps.ts`) asks `pre_launch_sync_state` what it
 is doing — within `LOCAL_CALL_LIMIT_MS`, where no answer, like a failed read, is "Tender is not answering" — and puts
-the "Waiting for Save Sync" question (`LaunchPrompts.askSyncWait`, drawn by `frontend/src/shared/SyncWaitModal.tsx`). It
-names the reason: another save sync holds the device (Sync All Saves Now, the sync after a game, a manual sync, or the
-sync of another start; `GateHolder`, `services/saves/sync_engine/_gate.py`), something else is busy with this game's
-saves (its `rom_lock`), this game's own sync is running, or Tender is not answering. Its three answers:
+the "Waiting for Save Sync" question (`LaunchPrompts.askSyncWait`, drawn by the start's prompts —
+`frontend/src/shared/SyncWaitModal.tsx` on the gamepad surface). It names the reason: another save sync holds the device
+(Sync All Saves Now, the sync after a game, a manual sync, or the sync of another start; `GateHolder`,
+`services/saves/sync_engine/_gate.py`), something else is busy with this game's saves (its `rom_lock`), this game's own
+sync is running, or Tender is not answering. Its three answers:
 
 - **Wait** waits `SYNC_WAIT_MORE_MS` (15 s) more. A sync that answers within it is acted on as one that answered within
   the first limit — the game starts, or the conflict or fallback dialog asks. One that does not brings the question

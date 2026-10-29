@@ -1,7 +1,6 @@
 /**
- * The desktop client's fallback-launch prompt, asked before a start when the
- * pre-launch sync failed without surfacing a conflict, or the check got no
- * answer in time. `shared/FallbackLaunchModal` is its gamepad drawing.
+ * The desktop drawing of `LaunchPrompts.confirmFallbackLaunch` (`utils/launchVerdict.ts`).
+ * `shared/FallbackLaunchModal` is its gamepad drawing.
  */
 
 import type { FC } from "react";

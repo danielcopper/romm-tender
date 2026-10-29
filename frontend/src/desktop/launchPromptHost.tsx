@@ -11,12 +11,12 @@ import type { ReactNode } from "react";
 import { logError, logWarn } from "../api/backend";
 import { setDesktopLaunchPrompts } from "../utils/launchPromptRouter";
 import type { LaunchPrompts } from "../utils/launchVerdict";
-import { findDesktopWindow, findReactClient } from "./desktopWindow";
+import { findDesktopWindow, findReactClient, type ReactClientModule } from "./desktopWindow";
 import { desktopLaunchPrompts } from "./gameview/dialogs/desktopDialogs";
 import type { AskDialog } from "./gameview/dialogs/askDialog";
 import { DomRestorationLedger } from "./watcher/restorationLedger";
 
-const openQuestions = new Set<() => void>();
+const openQuestions = new Set<(why: string) => void>();
 
 function windowState(win: Window | undefined): "none" | "closed" | "open" {
   if (!win) return "none";
@@ -27,8 +27,17 @@ export const askInDesktopWindow: AskDialog = <T,>(
   dismissed: T,
   render: (resolve: (value: T) => void) => ReactNode,
 ): Promise<T> => {
-  const win = findDesktopWindow();
-  const client = findReactClient();
+  let win: Window | undefined;
+  let client: ReactClientModule | undefined;
+  try {
+    win = findDesktopWindow();
+    client = findReactClient();
+  } catch (e) {
+    logError(
+      `desktop: could not look for a window to draw a launch question into, so it was answered as dismissed: ${String(e)}`,
+    );
+    return Promise.resolve(dismissed);
+  }
   if (!win || win.closed || !client) {
     logWarn(
       `desktop: a launch question had nothing to draw into (window=${windowState(win)}, createRoot=${client ? "found" : "missing"}), so it was answered as dismissed`,
@@ -43,16 +52,29 @@ export const askInDesktopWindow: AskDialog = <T,>(
     const settle = (value: T): void => {
       if (settled) return;
       settled = true;
-      openQuestions.delete(dismiss);
+      openQuestions.delete(dismissBecause);
       ledger.restoreAll();
       outer(value);
     };
-    const dismiss = (): void => settle(dismissed);
+    const answer = (value: T): void => {
+      if (settled) {
+        logWarn(
+          `desktop: a launch question was answered after it had been dismissed, so the answer was dropped: ${String(value)}`,
+        );
+        return;
+      }
+      settle(value);
+    };
+    const dismissBecause = (why: string): void => {
+      if (settled) return;
+      logWarn(`desktop: a launch question was answered as dismissed because ${why}`);
+      settle(dismissed);
+    };
     const failed = (e: unknown): void => {
       logError(`desktop: could not draw a launch question, so it was answered as dismissed: ${String(e)}`);
       // React reports a render error from inside its own work loop; the root is
       // unmounted once that has unwound.
-      queueMicrotask(dismiss);
+      queueMicrotask(() => settle(dismissed));
     };
 
     const host = doc.createElement("div");
@@ -61,10 +83,10 @@ export const askInDesktopWindow: AskDialog = <T,>(
       doc.body.appendChild(host);
       const root = client.createRoot(host, { onUncaughtError: failed });
       ledger.recordRoot(root, host);
-      ledger.addListener(win, "pagehide", dismiss);
-      ledger.addListener(win, "unload", dismiss);
-      openQuestions.add(dismiss);
-      root.render(render(settle));
+      ledger.addListener(win, "pagehide", () => dismissBecause("its window went"));
+      ledger.addListener(win, "unload", () => dismissBecause("its window unloaded"));
+      openQuestions.add(dismissBecause);
+      root.render(render(answer));
     } catch (e) {
       logError(`desktop: could not draw a launch question, so it was answered as dismissed: ${String(e)}`);
       settle(dismissed);
@@ -87,5 +109,5 @@ export function offerDesktopLaunchPrompts(): void {
 /** Withdraw the offer and settle every open question with its dismissed answer. */
 export function withdrawDesktopLaunchPrompts(): void {
   setDesktopLaunchPrompts(null);
-  for (const dismiss of openQuestions) dismiss();
+  for (const dismissBecause of openQuestions) dismissBecause("the desktop dialogs were withdrawn");
 }

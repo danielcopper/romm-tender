@@ -1314,14 +1314,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the `display: contents` wrapper around the selected row, never on the row; and a wide page that opens on a non-first
   row without `ListDetail` places the mark itself, the same way, and gives that row `preferredFocus` too, only while
   `EntryPreferenceContext` holds
-- **Every change the desktop surface's navigation watcher makes to Steam's page goes through the restoration ledger, and
-  is given back on leaving the page whenever the ledger holds anything — a pass that threw partway included** (dev build
-  only) — test + prompt-only — `frontend/src/desktop/navigationWatcher.test.ts`, "every change it makes is given back":
-  the `style` attribute of every element on a page, recorded before the watcher starts, is what it was after passes from
-  Steam's mutations and from a change to the set of RomM shortcuts, a scroll and a resize, and leaving the page, with
-  both views handed and with none; and "gives back what a pass changed before it threw" for a pass that threw partway.
-  Prompt-only: a write to anything but `style` — a class, another attribute, a node moved — and a change to an element
-  the test's page does not hold
+- **Every change the desktop surface makes to Steam's desktop window goes through a restoration ledger and is given
+  back: the navigation watcher's on leaving the page whenever the ledger holds anything — a pass that threw partway
+  included — and each launch question's when the question settles** (dev build only) — test + prompt-only —
+  `frontend/src/desktop/navigationWatcher.test.ts`, "every change it makes is given back": the `style` attribute of
+  every element on a page, recorded before the watcher starts, is what it was after passes from Steam's mutations and
+  from a change to the set of RomM shortcuts, a scroll and a resize, and leaving the page, with both views handed and
+  with none; and "gives back what a pass changed before it threw" for a pass that threw partway;
+  `frontend/src/desktop/launchPromptHost.test.tsx`: a question's container is gone from the window's body however it
+  settles, a second window's included, and once it is answered the window's `pagehide` and `unload` listeners and its
+  dialog's `keydown` listener are removed. Prompt-only: a write to anything but `style` — a class, another attribute, a
+  node moved — and a change to an element the test's page does not hold
 - **No code under `frontend/src/desktop/` names one of Steam's minified class hashes** (dev build only) — check —
   `frontend/eslint.config.js` (`no-restricted-syntax` over string literals, regex literals and template parts,
   `NO_CLASS_HASHES`; test files left out), kept live by `frontend/src/eslintNoClassHashes.test.ts`. Unseen by it: a hash

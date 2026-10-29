@@ -1,7 +1,6 @@
 /**
- * The desktop client's unchecked-source prompt, asked before a start when the
- * launch check could not tell whether the source that would start the game is
- * switched off. `shared/UncheckedSourceModal` is its gamepad drawing.
+ * The desktop drawing of `LaunchPrompts.confirmUncheckedSource` (`utils/launchVerdict.ts`).
+ * `shared/UncheckedSourceModal` is its gamepad drawing.
  */
 
 import type { FC } from "react";

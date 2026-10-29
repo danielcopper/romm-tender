@@ -112,10 +112,11 @@ A frontend change and a backend change are therefore the same step: Ctrl-C, and 
 ## Why the window is remembered rather than read
 
 Steam does not come back in the window it was shut down from: a plain start after a shutdown opens the desktop client,
-even when windowed Big Picture was open before. So the restart has to be told which window to open, and asking the
-running Steam does not answer it — `SteamUIStore.m_mainInstanceUIMode` describes Steam's main instance, not the window
-on screen, and reads as the desktop client while a windowed Big Picture is open; which display a window sits on is
-KWin's to know, not Steam's. Remembering the last explicit choice needs no detection and comes out the same every time.
+even when windowed Big Picture was open before. So the restart has to be told which window to open, and the running
+Steam cannot answer all of it: which display a window sits on is KWin's to know, not Steam's. What Steam's main-UI mode
+reads in each of its windows is recorded in
+[Which window is Steam's main UI](../architecture/desktop-dom-architecture.md#which-window-is-steams-main-ui).
+Remembering the last explicit choice needs no detection and comes out the same every time.
 
 The memory is one plain-text file per machine, `${XDG_STATE_HOME:-~/.local/state}/tender-dev/steam-window`:
 

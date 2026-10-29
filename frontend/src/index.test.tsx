@@ -43,6 +43,9 @@ import {
 } from "./api/backend";
 import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
 import { registerLaunchInterceptor } from "./utils/launchInterceptor";
+import { setDesktopLaunchPrompts } from "./utils/launchPromptRouter";
+import type { LaunchPrompts } from "./utils/launchVerdict";
+import { gamepadLaunchPrompts } from "./shared/launchPrompts";
 import { getSettingsResetState, setSettingsResetState } from "./utils/settingsResetStore";
 import { getQamEntryPositionState, setQamEntryPositionState } from "./utils/qamEntryPositionStore";
 import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "./utils/updateNoticeStore";
@@ -470,6 +473,23 @@ describe("index.tsx — launcher relocation at panel load", () => {
 
     expect(getLauncherState().relocated).toBe(false);
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("shortcut store exploded"));
+  });
+});
+
+describe("index.tsx — which prompts the launch watcher asks through", () => {
+  afterEach(() => setDesktopLaunchPrompts(null));
+
+  it("hands the watcher the gamepad modals in Big Picture and the desktop surface's prompts in the desktop client", () => {
+    vi.mocked(registerLaunchInterceptor).mockClear();
+    panelFactory();
+    const promptsForThisStart = vi.mocked(registerLaunchInterceptor).mock.calls[0]![0];
+    const desktop: LaunchPrompts = { ...gamepadLaunchPrompts };
+    setDesktopLaunchPrompts(() => desktop);
+
+    vi.stubGlobal("SteamUIStore", { MainInstanceUIMode: 4 });
+    expect(promptsForThisStart()).toBe(gamepadLaunchPrompts);
+    vi.stubGlobal("SteamUIStore", { MainInstanceUIMode: 7 });
+    expect(promptsForThisStart()).toBe(desktop);
   });
 });
 

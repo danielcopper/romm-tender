@@ -5,7 +5,7 @@
  * asks here once.
  */
 
-import { debugLog } from "../api/backend";
+import { debugLog, logError } from "../api/backend";
 import { detach } from "./detach";
 import type { LaunchPrompts } from "./launchVerdict";
 
@@ -26,7 +26,8 @@ export function steamUIModeIsDesktop(): boolean {
   try {
     return SteamUIStore?.MainInstanceUIMode === DESKTOP_UI_MODE;
   } catch {
-    // An undeclared `SteamUIStore` throws ReferenceError, as does a getter that throws.
+    // `?.` does not guard an undeclared global: an absent `SteamUIStore` throws a
+    // ReferenceError, and a getter may throw too.
     return false;
   }
 }
@@ -60,6 +61,7 @@ export function launchPromptsForThisStart(fallback: LaunchPrompts): LaunchPrompt
   try {
     desktop = desktopProvider();
   } catch (e) {
+    logError(`desktop: the desktop surface threw while offering its launch prompts: ${e}`);
     pick("gamepad", `the desktop surface threw: ${e}`);
     return fallback;
   }
