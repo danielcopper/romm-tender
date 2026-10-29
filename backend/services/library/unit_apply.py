@@ -277,7 +277,7 @@ class UnitApplier:
         # others.
         installed = set(installed_paths)
         converged: list[ConvergedBinding] = []
-        if complete_view and unit.slug:
+        if complete_view:
             installed |= await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_installed_rom_ids, unlisted
             )

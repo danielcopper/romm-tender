@@ -32,8 +32,11 @@ def with_followed_keys(
 def record_followed_keys(uow: UnitOfWork, followed_keys: Mapping[int, str]) -> None:
     """Give each stored row *followed_keys* names the key it follows, in the open write *uow*.
 
-    A row no longer stored is skipped. Writing a key the row already holds
-    changes nothing, so every chunk of a unit may write the same keys.
+    Every chunk's commit of a unit calls it with the unit's staged keys, a late
+    ack's included, so the first commit that writes a member's new key writes
+    these too: a row written only after its game's members would no longer be
+    followed by the next sync. Writing a key the row already holds changes
+    nothing. A row no longer stored is skipped.
     """
     for rom_id, key in followed_keys.items():
         rom = uow.roms.get(rom_id)

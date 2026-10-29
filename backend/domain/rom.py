@@ -38,10 +38,10 @@ class Rom:
     (region/language/revision variants), how large it is, and whether there is
     anything to download. They are set at construction from the fetch and
     refreshed on every sync (they ride the sync UPSERT, unlike the user-pin
-    ``emulator_override`` / ``selected_disc``). Two have a verb:
-    :meth:`record_fs_size_bytes`, as an install records the size RomM stated
-    between syncs, and :meth:`follow_group`, as a sync that does not fetch the
-    ROM keys it with the group it follows.
+    ``emulator_override`` / ``selected_disc``). Two have a verb. An install
+    records the size RomM stated between syncs through
+    :meth:`record_fs_size_bytes`, and a sync that does not fetch the ROM gives it
+    the key of the group it follows through :meth:`follow_group`.
     """
 
     rom_id: int

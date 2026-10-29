@@ -148,8 +148,8 @@ class ChunkDispatcher:
         restart shows the rest), never to a run pause. ``confirmed_cover_sources``
         is the unit's ``rom_id → applied cover source`` map — the third of the
         whole-unit staging dicts the reporter's commit reads; ``followed_keys``
-        (the key each row the unit's listing left out follows) is the fourth,
-        which every chunk's commit writes. ``fetch_started_at``
+        (the key each row the unit's listing left out follows) is the fourth
+        (when it is written: ``record_followed_keys``). ``fetch_started_at``
         is when the unit's fetch started, which its final chunk's stamp records
         beside a checksum: of ``unit_roms``' ids for a platform, of the listing's
         ``rom_ids`` for a collection. Returns the running

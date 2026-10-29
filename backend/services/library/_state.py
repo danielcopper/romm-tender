@@ -163,10 +163,9 @@ class LibrarySyncStateBox:
     # abandon window so a late ack still stamps the confirmed values.
     pending_cover_sources: dict[int, str] = field(default_factory=dict)
     # The new key of every stored row the active unit's listing left out that
-    # follows its group (``domain.sibling_group.compute_group_keys_with_unfetched``).
-    # Every chunk's commit writes them, so the first commit that writes a member's
-    # new key writes them too, a late ack's included. Populated alongside
-    # ``pending_sync`` by ``ChunkDispatcher`` and reset with it.
+    # follows its group (``domain.sibling_group.compute_group_keys_with_unfetched``),
+    # which the commits write (``services.library._followed_keys.record_followed_keys``).
+    # Populated alongside ``pending_sync`` by ``ChunkDispatcher`` and reset with it.
     pending_followed_keys: dict[int, str] = field(default_factory=dict)
     # The staged preview snapshot, between ``sync_preview`` and the apply that
     # consumes it. Written only through the preview-lifecycle verbs below.

@@ -88,8 +88,10 @@ def stamp_preview_group_keys(
     *listed_rom_ids* are the ROMs the listings of the platforms the preview
     fetched in full returned. The apply keys each such platform's unit as a
     complete view first, and every collection delivery after them, against the
-    keys those units committed; the rows a skip rebuilt it keys not at all. So
-    the listed ROMs are keyed first, every other ROM of the union after them. A
+    keys those units committed. A row a collection's skip rebuilt it keys not at
+    all, but rebuilds from the stored row after the platform units committed, so
+    such a row takes the key it follows here. So the listed ROMs are keyed first,
+    every other ROM of the union after them. A
     version hidden in RomM is left out of its platform's listing but not out of
     a standard collection's, so the union can hold it: the listed ROMs are keyed
     against its stored key, as their platform unit is.

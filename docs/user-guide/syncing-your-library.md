@@ -531,17 +531,19 @@ and with the platforms and collections you turned on or off. Existing shortcuts 
 
 When the version a shortcut is bound to is no longer available on RomM — deleted there, or hidden from your RomM user,
 which RomM answers the same way — the shortcut **stays bound to it**, installed or not, with its name, launch command,
-artwork and playtime, and in its platform's Steam collection. The game's other versions stay with it under that one
-shortcut, also when the version that is gone was the one that carried the game's match in RomM: the sync gives them no
-second shortcut. Tender cannot tell that case from a version RomM separates from the game while the version it was
-matched through is hidden, so such a version stays with the game, without a shortcut of its own, until the hidden one is
-listed again. The exception is a game that also has another shortcut: then the two converge to one, as described under
-[Multiple versions of a game](#multiple-versions-of-a-game). A Steam collection made from a RomM collection keeps a
-hidden version, since RomM still lists it there, and drops a deleted one, which RomM no longer lists. That holds when
-the game still has other versions on RomM and when every version of it is gone. The game's page says the version is no
-longer available and what that means for a downloaded copy; to play another version, choose it in the
-[version picker](managing-games.md#the-switch-version-control), and to remove the game, use
+artwork and playtime, and in its platform's Steam collection. The exception is a game that also has another shortcut:
+then the two converge to one, as described under [Multiple versions of a game](#multiple-versions-of-a-game). A Steam
+collection made from a RomM collection keeps a hidden version, since RomM still lists it there, and drops a deleted one,
+which RomM no longer lists. That holds when the game still has other versions on RomM and when every version of it is
+gone. The game's page says the version is no longer available and what that means for a downloaded copy; to play another
+version, choose it in the [version picker](managing-games.md#the-switch-version-control), and to remove the game, use
 [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm).
+
+On a platform you sync, the game's other versions stay with that shortcut, also when the version that is gone was the
+one that carried the game's match in RomM: the sync gives them no second shortcut. Tender cannot tell that case from a
+version RomM separates from the game while the version it was matched through is hidden, so such a version stays with
+the game, without a shortcut of its own, until the hidden one is listed again. A hidden version RomM matched to another
+game likewise stays with this one while it is hidden, and moves to its own game once it is listed again.
 
 A platform RomM no longer lists at all is gone from RomM rather than turned off, even while it is still on in Tender:
 its games keep their shortcuts and their place in its Steam collection, each game's page says the game is no longer

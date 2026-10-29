@@ -47,11 +47,12 @@ class VersionMetadata:
         The empty string names no state, and raises ``ValueError`` — "no group
         derived yet" stays ``None`` (unknown), never an empty string. Exactly
         that one value: no format or whitespace rule is applied, so a key is
-        stored as given. This is the only route by which a **new** key enters
-        the ``Rom`` aggregate (loading a stored row via
-        ``adapters.repositories.rom._row_to_rom`` validates nothing), so
-        guarding the write direction here is what lets the residency readers ask
-        ``is not None`` and mean it.
+        stored as given. A **new** key enters the ``Rom`` aggregate by two
+        routes: through here, and through ``Rom.follow_group``, which refuses an
+        empty key itself and is how a row a complete view leaves out takes its
+        key (loading a stored row via ``adapters.repositories.rom._row_to_rom``
+        validates nothing). Guarding the write direction on both is what lets
+        the residency readers ask ``is not None`` and mean it.
         """
         if self.sibling_group_key == "":
             raise ValueError("sibling_group_key must not be empty")

@@ -8366,10 +8366,12 @@ class TestAGameKeepsItsKeyWhenTheVersionCarryingItIsNotListed:
     ):
         """A hidden version stays in a standard collection's listing, so the preview's union may hold it.
 
-        Faves is skipped as unchanged, so its skip hands the preview the stored
-        row of a bound member. GBA's unit keys the hidden version as a stored
+        Faves is skipped as unchanged, and its skip hands the preview the stored
+        row of a bound member: hidden-bound's 30. GBA's unit keys 30 as a stored
         row and commits before Faves rebuilds it; the preview keys it the same
-        way, so it counts what the apply sends.
+        way, so it counts what the apply sends. A skip rebuilds no unbound row,
+        so stale-summary's hidden 32 never reaches the union and that case
+        holds the platform path's parity only.
         """
         library = make_library(romm_api=fake_romm_api)
         if case == "hidden-bound":
