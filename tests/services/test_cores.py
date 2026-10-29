@@ -28,6 +28,7 @@ from domain.emulator_choice import DEFAULT, EmulatorChoice, ResolvedEmulator, Va
 from domain.emulator_commands import options_to_payload
 from domain.emulator_pick import StoredPick
 from domain.emulator_sources import ArrangedSource
+from domain.launchability import NEEDS_INSTALLING, Launchability
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -197,6 +198,7 @@ class TestGetPlatformCoreInfo:
             "platform_core_label": None,
             "has_game_override": False,
             "start": {"state": "starts", "reason": None, "entry": "Snes9x", "folder_entry": None},
+            "launch": None,
             "vanished_pick": None,
         }
 
@@ -215,6 +217,7 @@ class TestGetPlatformCoreInfo:
             "platform_core_label": None,
             "has_game_override": False,
             "start": {"state": "no_entry", "reason": None, "entry": None, "folder_entry": None},
+            "launch": None,
             "vanished_pick": None,
         }
         assert core_info.emulator_options_calls == []
@@ -1454,4 +1457,60 @@ class TestGetEmulatorLaunches:
         active_core.resolved[42] = None
 
         assert event_loop.run_until_complete(service.get_emulator_launches(42)) == []
+        assert core_info.launchability_calls == []
+
+
+class TestTheChosenEntrysLaunch:
+    """The page's core read carries whether the game starts with the entry it starts with (#2195 D2, D26)."""
+
+    _SHORTCUT = standalone_option("%EMULATOR_OS-SHELL% %ROM%", "RPCS3 Shortcut (Standalone)")
+    _DIRECTORY = standalone_option("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
+
+    def test_an_installed_game_is_asked_about_with_its_chosen_entry_alone(
+        self, event_loop, service, core_info, active_core, uow
+    ):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(
+            uow,
+            rom_id=42,
+            file_path="/roms/ps3/Puppeteer/Puppeteer.pkg",
+            rom_dir="/roms/ps3/Puppeteer",
+            platform_slug="ps3",
+        )
+        active_core.resolved[42] = _resolved(self._SHORTCUT, self._DIRECTORY, chosen=self._DIRECTORY)
+        core_info.launch_verdicts["RPCS3 Directory (Standalone)"] = Launchability(
+            state=NEEDS_INSTALLING,
+            entry="RPCS3 Directory (Standalone)",
+            system="ps3",
+            file="Puppeteer.pkg",
+            extension=".pkg",
+            install_in=("RPCS3 Game Serial (Standalone)",),
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert core_info.launchability_calls == [
+            ("ps3", "/roms/ps3/Puppeteer/Puppeteer.pkg", "RPCS3 Directory (Standalone)")
+        ]
+        assert result["launch"]["state"] == NEEDS_INSTALLING
+        assert result["launch"]["install_in"] == ["RPCS3 Game Serial (Standalone)"]
+
+    def test_a_game_with_no_chosen_entry_asks_nothing(self, event_loop, service, core_info, active_core, uow):
+        # No default and no pick: the start is refused for that already (#2195 D7).
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._SHORTCUT, self._DIRECTORY)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["launch"] is None
+        assert core_info.launchability_calls == []
+
+    def test_a_game_that_is_not_installed_asks_nothing(self, event_loop, service, core_info, active_core, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["launch"] is None
         assert core_info.launchability_calls == []

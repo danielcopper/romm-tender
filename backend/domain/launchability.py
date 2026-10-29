@@ -36,8 +36,8 @@ NO_SOURCE = "no_source"
 class Launchability:
     """One file's verdict for one entry, with what each state's sentence names.
 
-    ``file`` is the file's name and ``extension`` the token compared, as the
-    resolver states it. ``starts_from`` is the system's accept-list, read for
+    ``system`` is the system it was asked as, ``file`` the file's name and
+    ``extension`` the token compared, as the resolver states it. ``starts_from`` is the system's accept-list, read for
     :data:`NOT_A_LAUNCH_FILE`; ``other_entries`` the labels of the system's
     entries established to start the file, read for :data:`NOT_THIS_EMULATOR`;
     ``install_in`` the emulators that install it, ``None`` on every state but
@@ -50,6 +50,7 @@ class Launchability:
 
     state: str
     entry: str | None
+    system: str
     file: str
     extension: str
     starts_from: tuple[str, ...] = ()
@@ -64,6 +65,7 @@ class Launchability:
         return {
             "state": self.state,
             "entry": self.entry,
+            "system": self.system,
             "file": self.file,
             "extension": self.extension,
             "starts_from": list(self.starts_from),

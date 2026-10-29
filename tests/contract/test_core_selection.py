@@ -175,6 +175,7 @@ async def test_get_platform_core_info_payload_shape(harness):
         "platform_core_label",
         "has_game_override",
         "start",
+        "launch",
         "vanished_pick",
     }
     assert result["emulator_data_available"] is True

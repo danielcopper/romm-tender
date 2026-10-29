@@ -385,13 +385,14 @@ def _installer_name(installer: Any) -> str:
     return installer.entry.label if installer.entry is not None else installer.emulator
 
 
-def _launchability(answer: Any, *, content_path: str, label: str | None) -> Launchability:
+def _launchability(answer: Any, *, system: str, content_path: str, label: str | None) -> Launchability:
     """*answer* in Tender's words."""
     state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED)
     codes = set(_caveat_codes(answer))
     return Launchability(
         state=state,
         entry=label,
+        system=system,
         file=os.path.basename(content_path),
         extension=answer.extension,
         starts_from=tuple(answer.accepted),
@@ -617,6 +618,7 @@ class AtlasCatalogueAdapter:
             return Launchability(
                 state=LAUNCH_NOT_ESTABLISHED,
                 entry=label,
+                system=system_name,
                 file=os.path.basename(content_path),
                 extension="",
                 reason=NO_SOURCE,
@@ -632,9 +634,13 @@ class AtlasCatalogueAdapter:
         answer = reading.remember(("launchable", system_name, content_path, label), ask)
         if answer is None:
             return Launchability(
-                state=LAUNCH_NOT_ESTABLISHED, entry=label, file=os.path.basename(content_path), extension=""
+                state=LAUNCH_NOT_ESTABLISHED,
+                entry=label,
+                system=system_name,
+                file=os.path.basename(content_path),
+                extension="",
             )
-        return _launchability(answer, content_path=content_path, label=label)
+        return _launchability(answer, system=system_name, content_path=content_path, label=label)
 
     # -- helpers -------------------------------------------------------------
 

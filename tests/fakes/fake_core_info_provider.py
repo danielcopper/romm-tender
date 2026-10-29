@@ -211,6 +211,7 @@ class FakeCoreInfoProvider:
         return Launchability(
             state=STARTS,
             entry=label,
+            system=system_name,
             file=os.path.basename(content_path),
             extension=os.path.splitext(content_path)[1],
         )
