@@ -2013,8 +2013,9 @@ User-initiated from the "Sync All Saves Now" button in Save Sync settings.
    set up for save sync", "N game(s) skipped — their saves cannot be synced" (`save_shape_unsupported`), one "N game(s)
    skipped — the saves folder _path_ does not exist" per missing saves root (`saves_root_missing`), "N game(s) skipped —
    their saves are written beside the game file" (`savefiles_in_content_dir`), then the running games by name. A missing
-   saves root fails the run (`success: false`), as it fails a single game's sync; every other skip is benign
-   ([#2151](https://github.com/danielcopper/romm-tender/issues/2151)). `roms_checked` stays the count of installed ROMs
+   saves root fails the run (`success: false`), as it fails a single game's sync, and so would any other refusal that is
+   no benign skip, counted among the games whose saves cannot be synced; every other skip is benign
+   ([#2151](https://github.com/danielcopper/romm-tender/issues/2151)). `roms_checked` is the count of installed ROMs
    iterated; the panel does not read it.
 
 ### A game that is running
@@ -2031,10 +2032,11 @@ over `RunningRomIdsFn`; what counts as running, and how long a reading may take,
 - **Sync All Saves Now** asks for each confirmed ROM when it reaches it, before it follows a moved save directory, and
   passes a running game over: nothing of it is listed, moved or written. Its follow takes no second reading
   (`while_running`): it asked a moment before, under the same lock, and a start since is the stop's (below). The rest
-  sync, `success` is decided by their errors alone, and the answer names the games passed over — in `message`,
-  "_\<game\>_ was skipped because it is running", and in `skipped_running` (`[{rom_id, name}]`). A ROM the sweep would
-  not sync anyway, one whose slot is not confirmed, is not named. The partial answer of a sweep the server stops partway
-  names them in its `message` only, since a partial failure's extras are what was done.
+  sync, `success` is decided by their errors and by whether a saves folder was missing
+  ([Manual sync all](#manual-sync-all)), and the answer names the games passed over — in `message`, "_\<game\>_ was
+  skipped because it is running", and in `skipped_running` (`[{rom_id, name}]`). A ROM the sweep would not sync anyway,
+  one whose slot is not confirmed, is not named. The partial answer of a sweep the server stops partway names them in
+  its `message` only, since a partial failure's extras are what was done.
 - **A press on the running game's page is refused** with `game_running`, whose message names the game ("_\<game\>_ is
   running. Quit it first."): Sync Saves (with `synced=0`), a slot switch, a copy to a slot, a version restore, a slot
   delete, Delete Local Saves, a conflict resolution, and the setup wizard's migration of legacy saves. Each asks before

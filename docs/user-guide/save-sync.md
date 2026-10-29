@@ -155,11 +155,11 @@ This only covers games you've already set up save sync for (games whose save slo
 configured yet are left untouched, so a stale local save can't accidentally overwrite newer progress from another
 device.
 
-The line it answers with, "Synced _N_ save(s) across _M_ ROM(s)", counts the games whose saves it compared with RomM,
-those already in step included. After it, it says how many games it skipped and why, one reason at a time: games not set
-up for save sync, games whose saves cannot be synced, games whose saves folder does not exist (naming the folder), games
-whose saves are written beside the game file, and, by name, games that are running. A missing saves folder makes the
-sync fail, as syncing that one game would; every other skip is no error.
+In the line it answers with, "Synced _N_ save(s) across _M_ ROM(s)", _M_ counts the games whose saves it compared with
+RomM, those already in step included. After it, it says how many games it skipped and why, one reason at a time: games
+not set up for save sync, games whose saves cannot be synced, games whose saves folder does not exist (naming the
+folder), games whose saves are written beside the game file, and, by name, games that are running. A missing saves
+folder makes the sync fail, as syncing that one game would; every other skip is no error.
 
 ## Resolving Conflicts
 

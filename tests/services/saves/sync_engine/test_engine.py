@@ -1505,7 +1505,7 @@ class TestSaveSyncContentDirGate:
         assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_a_game_with_no_retroarch_core_is_asked_too(self, tmp_path):
+    async def test_one_unconfirmed_game_beside_its_content_names_the_content_directory(self, tmp_path):
         svc, _fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")

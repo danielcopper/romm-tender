@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 import pytest
 
 from domain.emulator_sources import SourceFinding
+from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import (
     BENIGN_SYNC_SKIP_REASONS,
     SAVE_SHAPE_UNSUPPORTED_REASON,
@@ -42,6 +43,7 @@ from tests.services.saves._helpers import (
     _install_rom,
     _seed_save_state_dict,
     _server_save,
+    _stored_device_id,
     _uow,
     make_service,
 )
@@ -433,13 +435,12 @@ class TestTheRefusalIsASkipAndNotAFailure:
 
     @pytest.mark.asyncio
     async def test_the_whole_library_sweep_passes_a_refusing_rom_over(self, tmp_path):
-        """The sweep's own backstop, reached only by a ROM the sweep would otherwise sync.
+        """The sweep's pass-over of a ROM it would otherwise sync, by the refusal a sync of it raises.
 
-        The slot must be CONFIRMED: ``sync_all_saves`` runs with
-        ``require_confirmed=True`` and skips an unconfirmed ROM before the
-        matrix is ever entered, so without this the test would pass over a
-        service with no backstop at all. The control below is the other half —
-        the same setup with a syncable answer must write state.
+        The slot is CONFIRMED, so the ROM reaches the step that asks the
+        refusal rather than being counted as never set up. The control below
+        is the other half — the same setup with a syncable answer must write
+        state. The matrix's own backstop is pinned directly, below.
         """
         svc, _store, fake = _service(tmp_path, _refusing("hole"))
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
@@ -447,7 +448,7 @@ class TestTheRefusalIsASkipAndNotAFailure:
         result = await svc.sync_all_saves()
         assert isinstance(result, dict)
 
-        # The backstop's own effect: the run stops BEFORE the server round-trip.
+        # The pass-over's own effect: the run stops BEFORE the server round-trip.
         # Downstream is redundantly safe — a refusing answer carries no names, so
         # nothing would be probed or grouped even without it — which is exactly
         # why the assertion has to be that the server was never asked.
@@ -465,6 +466,42 @@ class TestTheRefusalIsASkipAndNotAFailure:
 
         assert [call for call in fake.call_log if call[0] == "list_saves"] != []
         assert _saved_files(svc) != {}
+
+    @pytest.mark.parametrize("state", _REFUSING_STATES)
+    def test_the_matrix_backstop_asks_romm_nothing_for_a_refusing_answer(self, tmp_path, state: str):
+        """The backstop itself, reached directly, as a path that refused nothing before it would reach it.
+
+        Every entry point and the sweep refuse such an answer first, so only a
+        direct call shows the backstop still stops the run before the server
+        round-trip.
+        """
+        answer = _refusing(state)
+        svc, _store, fake = _service(tmp_path, answer)
+
+        result = svc._sync_engine.do_sync_rom_saves(
+            42,
+            RomSaveSyncState(active_slot="default", slot_confirmed=True),
+            _stored_device_id(svc),
+            None,
+            save_answer=answer,
+        )
+
+        assert result == (0, 0, [], [])
+        assert [call for call in fake.call_log if call[0] == "list_saves"] == []
+
+    def test_the_matrix_backstop_control_lists_the_server_for_a_syncable_answer(self, tmp_path):
+        answer = _syncable(str(tmp_path / "saves" / "gba"))
+        svc, _store, fake = _service(tmp_path, answer)
+
+        svc._sync_engine.do_sync_rom_saves(
+            42,
+            RomSaveSyncState(active_slot="default", slot_confirmed=True),
+            _stored_device_id(svc),
+            None,
+            save_answer=answer,
+        )
+
+        assert [call for call in fake.call_log if call[0] == "list_saves"] != []
 
 
 def _anchored_in_the_rom_folder(tmp_path, **overrides: Any) -> SaveAnswer:

@@ -14,6 +14,9 @@ from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.save_answer import SaveAnswer, saves_root_missing_answer
+from lib.errors import Refused
+from services.saves.sync_engine import _shape_refusal
+from services.saves.sync_engine._shape_refusal import SweepTally
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -71,8 +74,8 @@ def _beside_the_game_file(tmp_path, system: str, rom_id: int) -> SaveAnswer:
     )
 
 
-def _missing_root() -> SaveAnswer:
-    return saves_root_missing_answer(path=_MISSING_ROOT, emulator="mGBA", content_installed=True)
+def _missing_root(path: str = _MISSING_ROOT) -> SaveAnswer:
+    return saves_root_missing_answer(path=path, emulator="mGBA", content_installed=True)
 
 
 class TestTheLineCountsWhatItComparedAndNamesWhatItSkipped:
@@ -159,3 +162,48 @@ class TestAMissingSavesFolder:
         assert result["success"] is False
         assert result["synced"] == 1
         assert result["errors"] == []
+
+    @pytest.mark.asyncio
+    async def test_two_missing_folders_each_get_a_clause_in_the_line_s_order(self, tmp_path):
+        other_root = "/run/media/deck/other-sd/retrodeck/saves"
+        svc, _fake = _service(tmp_path, 7)
+        _game(svc, tmp_path, 1, "gba", confirmed=True, save=True)  # compared
+        _game(svc, tmp_path, 2, "nes", confirmed=False, save=True)  # not set up
+        _game(svc, tmp_path, 3, "ps2", confirmed=True)  # cannot be synced
+        _game(svc, tmp_path, 4, "gbc", confirmed=True)  # one missing folder
+        _game(svc, tmp_path, 5, "gg", confirmed=False)  # another missing folder
+        _game(svc, tmp_path, 6, "gb", confirmed=True)  # beside the game file
+        _game(svc, tmp_path, 7, "n64", confirmed=True)  # running
+        _reader(svc).answer_with("ps2", _SHARED_CARD)
+        _reader(svc).answer_with("gbc", _missing_root())
+        _reader(svc).answer_with("gg", _missing_root(other_root))
+        _reader(svc).answer_with("gb", _beside_the_game_file(tmp_path, "gb", 6))
+
+        result = await svc.sync_all_saves()
+
+        assert isinstance(result, dict)
+        assert result["message"] == (
+            "Synced 1 save(s) across 1 ROM(s)"
+            "; 1 game(s) not set up for save sync"
+            "; 1 game(s) skipped — their saves cannot be synced"
+            f"; 1 game(s) skipped — the saves folder {_MISSING_ROOT} does not exist"
+            f"; 1 game(s) skipped — the saves folder {other_root} does not exist"
+            "; 1 game(s) skipped — their saves are written beside the game file"
+            "; rom-7 was skipped because it is running"
+        )
+        assert result["success"] is False
+
+
+class TestARefusalTheTallyDoesNotKnow:
+    def test_a_failing_reason_other_than_a_missing_folder_is_unsyncable_and_fails_the_run(self, monkeypatch):
+        def refuse(_answer: SaveAnswer | None) -> None:
+            raise Refused("a_reason_nobody_knows_yet", "Save sync is unavailable for a reason added later.")
+
+        monkeypatch.setattr(_shape_refusal, "refuse_unsyncable", refuse)
+        tally = SweepTally()
+
+        assert tally.passes_over(_SHARED_CARD) is True
+        assert tally.failed is True
+        assert tally.annotate("Synced 0 save(s) across 0 ROM(s)") == (
+            "Synced 0 save(s) across 0 ROM(s); 1 game(s) skipped — their saves cannot be synced"
+        )

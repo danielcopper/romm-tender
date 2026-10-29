@@ -729,9 +729,10 @@ class MatrixExecutor:
         answer_dir = answer.sync_directory
         # The backstop every sync path crosses. A refusing answer, and a save
         # beside the content, pair their names with a ``None`` directory, so
-        # nothing is probed and no state is written — the sweep has no room in
-        # its one result to say which ROM was passed over, and the per-ROM entry
-        # points have already named the skip.
+        # nothing is probed and no state is written — the per-ROM entry points
+        # and the whole-library sweep have already refused or passed such a ROM
+        # over; this is the backstop for any path that reaches the matrix
+        # without either.
         if answer_dir is None:
             self._log_debug(f"do_sync_rom_saves({rom_id}): no per-game save set Tender syncs, skipping")
             return 0, 0, [], []

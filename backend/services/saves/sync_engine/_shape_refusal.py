@@ -42,6 +42,10 @@ if TYPE_CHECKING:
     from services.saves.rom_info import RomInfoService
 
 
+# The reason a sync is refused with while its saves root is missing: a failure, not a skip.
+SAVES_ROOT_MISSING_REASON = "saves_root_missing"
+
+
 def live_save_answer(rom_info: RomInfoService, rom_id: int) -> SaveAnswer | None:
     """This ROM's save answer, read live, or ``None`` when it is not installed.
 
@@ -81,7 +85,7 @@ def refuse_unsyncable(answer: SaveAnswer | None) -> None:
     if answer.in_content_directory:
         raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR, synced=0)
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
-        raise Refused("saves_root_missing", save_shape_message(answer), **save_finding_details(answer), synced=0)
+        raise Refused(SAVES_ROOT_MISSING_REASON, save_shape_message(answer), **save_finding_details(answer), synced=0)
     if not answer.syncable:
         raise shape_refusal(answer, synced=0)
 
@@ -105,6 +109,7 @@ class SweepTally:
     cannot_sync: int = 0
     beside_content: int = 0
     missing_roots: dict[str | None, int] = field(default_factory=dict)
+    other_failures: int = 0
 
     def passes_over(self, answer: SaveAnswer | None) -> bool:
         """Record one ROM's reading; whether a sync of it would be refused, counted by the refusal's reason."""
@@ -114,16 +119,21 @@ class SweepTally:
         try:
             refuse_unsyncable(answer)
         except Refused as refusal:
-            if refusal.reason == SAVE_SYNC_CONTENT_DIR_REASON:
-                self.beside_content += 1
-            elif refusal.reason in BENIGN_SYNC_SKIP_REASONS:
-                self.cannot_sync += 1
-            else:
-                # The one refusal that is a failure: a missing saves root.
-                root = answer.missing_saves_root
-                self.missing_roots[root] = self.missing_roots.get(root, 0) + 1
+            self._count_refusal(refusal.reason, answer)
             return True
         return False
+
+    def _count_refusal(self, reason: str, answer: SaveAnswer) -> None:
+        """Count one refused ROM by *reason*; a failing reason other than a missing root counts as unsyncable."""
+        if reason == SAVE_SYNC_CONTENT_DIR_REASON:
+            self.beside_content += 1
+        elif reason == SAVES_ROOT_MISSING_REASON:
+            root = answer.missing_saves_root
+            self.missing_roots[root] = self.missing_roots.get(root, 0) + 1
+        else:
+            self.cannot_sync += 1
+            if reason not in BENIGN_SYNC_SKIP_REASONS:
+                self.other_failures += 1
 
     def count_unconfirmed(self, answer: SaveAnswer | None) -> None:
         """Record a ROM whose slot is not confirmed: by its refusal where it has one, otherwise as not set up."""
@@ -138,7 +148,7 @@ class SweepTally:
     @property
     def failed(self) -> bool:
         """Whether a ROM was passed over for a reason that fails the sweep, as it fails a single ROM's sync."""
-        return bool(self.missing_roots)
+        return bool(self.missing_roots) or self.other_failures > 0
 
     def refuse_if_all_beside_content(self, *, roms_checked: int) -> None:
         """Raise the content-directory skip when every ROM the sweep read saves beside its content.

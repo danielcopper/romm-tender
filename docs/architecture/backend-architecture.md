@@ -3597,12 +3597,13 @@ dict literal with a literal `False`, `0` or `None` `success`, calls `error_respo
 answer — event payloads included — or does not parse. A result with a `success` field of its own that never reaches the
 wire: a failed one is built through its type (`MutationOutcome(success=False, …)`) and passes. Two results compute a
 failing `success` outside `main.py`, and the gate does not see them: the save-sync results — a completed sync with
-per-file errors answers `"success": len(errors) == 0` (#2205 D10) — and the removed-game cleanup's `prune_complete`
-event; no third one is added. The two documented carve-outs (discriminated-status unions — a `status` key with no
-`success`; and partial-success payloads carrying an additive `server_query_failed` / `recommended_action` flag) carry no
-`success` key, so the gate passes them. The routing slugs come from `lib.list_result.ErrorCode` (the Lean enum) plus
-bespoke plain-string reasons for non-server-reachability guards, raised as the `lib/list_result.py` module docstring
-says. The script's docstring names what it cannot see, a computed `success` first.
+per-file errors answers `"success": len(errors) == 0` (#2205 D10), and Sync All answers `false` too where it passed a
+game over for a missing saves folder (#2151 D4) — and the removed-game cleanup's `prune_complete` event; no third one is
+added. The two documented carve-outs (discriminated-status unions — a `status` key with no `success`; and
+partial-success payloads carrying an additive `server_query_failed` / `recommended_action` flag) carry no `success` key,
+so the gate passes them. The routing slugs come from `lib.list_result.ErrorCode` (the Lean enum) plus bespoke
+plain-string reasons for non-server-reachability guards, raised as the `lib/list_result.py` module docstring says. The
+script's docstring names what it cannot see, a computed `success` first.
 
 ### 5. Background-task gate
 
