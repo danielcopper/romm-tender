@@ -223,10 +223,8 @@ def compute_group_keys_with_unfetched(
         edges = [edge for member_id in member_ids for edge in stored_edges.get(member_id, [])]
         complete = all(member_id in complete_rom_ids for member_id in member_ids)
         values = _values_by_source(member_ids, fresh_by_id, edges)
-        prior_keys = {resident_lookup[m] for m in member_ids if m in resident_lookup}
-        if complete and _agreed_value(values) is None and len(prior_keys) == 1:
-            counted = [edge for edge in edges if edge.key not in prior_keys]
-            values = _values_by_source(member_ids, fresh_by_id, counted)
+        if complete:
+            values = _without_stale_summary(values, member_ids, fresh_by_id, edges, resident_lookup)
         key = _assign_component_keys(member_ids, fresh_by_id, values, fresh)
         if complete and key is not None:
             agreed[root] = (key, values)
@@ -238,12 +236,8 @@ def compute_group_keys_with_unfetched(
         for target, keys in reached.items()
         if len(keys) == 1 and resident_lookup[target] not in keys
     }
-    for rom_id in sorted(unfetched_bound_ids):
-        if rom_id in reached or rom_id in fresh_by_id or rom_id not in resident_lookup:
-            continue
-        followed = _followed_key(resident_lookup[rom_id], components, agreed, resident_lookup)
-        if followed is not None:
-            unfetched[rom_id] = followed
+    unreached = [rom_id for rom_id in unfetched_bound_ids if rom_id not in reached and rom_id not in fresh_by_id]
+    unfetched.update(_followed_keys(unreached, components, agreed, resident_lookup))
     return GroupKeys(fresh, unfetched)
 
 
@@ -365,13 +359,53 @@ def _assign_component_keys(
     return result[member_ids[0]]
 
 
+def _without_stale_summary(
+    values_by_source: dict[str, set[str]],
+    member_ids: list[int],
+    fresh_by_id: dict[int, dict[str, Any]],
+    edges: list[_StoredEdge],
+    resident_lookup: dict[int, str],
+) -> dict[str, set[str]]:
+    """A complete component's *values_by_source*, its stale summary not counted.
+
+    The summary is the one key every member holding a prior key held; it is not
+    counted only where the gate would otherwise split the component
+    (:func:`compute_group_keys_with_unfetched`).
+    """
+    prior_keys = {resident_lookup[m] for m in member_ids if m in resident_lookup}
+    if _agreed_value(values_by_source) is not None or len(prior_keys) != 1:
+        return values_by_source
+    return _values_by_source(member_ids, fresh_by_id, [edge for edge in edges if edge.key not in prior_keys])
+
+
+def _followed_keys(
+    rom_ids: Collection[int],
+    components: dict[int, list[int]],
+    agreed: dict[int, tuple[str, dict[str, set[str]]]],
+    resident_lookup: dict[int, str],
+) -> dict[int, str]:
+    """The key each bound row of *rom_ids*, which no edge reached, follows; a row that follows none is left out."""
+    followed: dict[int, str] = {}
+    for rom_id in sorted(rom_ids):
+        key = _followed_key(rom_id, components, agreed, resident_lookup)
+        if key is not None:
+            followed[rom_id] = key
+    return followed
+
+
 def _followed_key(
-    stored_key: str,
+    rom_id: int,
     components: dict[int, list[int]],
     agreed: dict[int, tuple[str, dict[str, set[str]]]],
     resident_lookup: dict[int, str],
 ) -> str | None:
-    """The key a bound row the view left out follows, under :func:`compute_group_keys_with_unfetched`' rule."""
+    """The key the bound row *rom_id* the view left out follows, under :func:`compute_group_keys_with_unfetched`' rule.
+
+    ``None`` where the row holds no stored key, or follows no component.
+    """
+    stored_key = resident_lookup.get(rom_id)
+    if stored_key is None:
+        return None
     parsed = _parse_group_key(stored_key)
     if parsed is None:
         return None
