@@ -843,12 +843,13 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   it fetched in full, is a complete view: RomM leaves a version deleted there, or hidden from the user, out of it, and
   answers the two the same way. The stamp then also answers the new key of each stored row the listing left out that
   follows its group — a row an edge of the group reaches, and a bound row whose stored key a member of the group held at
-  the last sync — and does not count the stale summary such a row carries where it alone would split the group (the
-  rules: ADR-0022's amendment). The apply and the preview lay those keys over the bound-row registry before the
-  convergence and the collapse (`services/library/_followed_keys.py`), and the commit writes them (`Rom.follow_group`;
-  which commit, above under the chunked apply), so a game whose version carrying its canonical id is deleted keeps its
-  one shortcut on that version, and a hidden version takes the key its game moves to. The preview reads its registry
-  before it stamps, since the bound rows a listing left out are read off it. A collection unit's keying is unchanged.
+  the last sync — and, where every member holding a stored key held the same one, does not count that key as such a
+  row's summary when it alone would split the group (the rules: ADR-0022's amendment). The apply and the preview lay
+  those keys over the bound-row registry before the convergence and the collapse (`services/library/_followed_keys.py`),
+  and the commit writes them (`Rom.follow_group`; which commit, above under the chunked apply), so a game whose version
+  carrying its canonical id is deleted keeps its one shortcut on that version, and a hidden version takes the key its
+  game moves to. The preview reads its registry before it stamps, since the bound rows a listing left out are read off
+  it. A collection unit's keying is unchanged.
 - **The collapse happens at the same `build_shortcuts_data` boundary in both paths**
   (`domain/sync_diff.py::collapse_sibling_groups`). Preview and apply build the full per-ROM shortcut list, then
   collapse it to one entry per group against the bound-row registry (preview reads

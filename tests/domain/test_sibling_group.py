@@ -480,6 +480,13 @@ class TestComputeGroupKeysWithUnfetched:
         keys = _keys(roms, resident)
         assert keys == GroupKeys({30: _key("igdb", 2), 31: _key("igdb", 2)}, {32: _key("igdb", 2)})
 
+    def test_a_stale_summary_a_new_version_reaches_is_not_counted(self):
+        # 33 is new since the last sync and holds no stored key; its edge reaches
+        # hidden 32, whose igdb:1 is the key 30, the one member holding a key, held.
+        roms = [_rom(30, igdb_id=2, ss_id=5, siblings=(33,)), _rom(33, ss_id=5, siblings=(30, 32))]
+        keys = _keys(roms, {30: _key("igdb", 1), 32: _key("igdb", 1)})
+        assert keys == GroupKeys({30: _key("igdb", 2), 33: _key("igdb", 2)}, {32: _key("igdb", 2)})
+
     def test_a_stale_summary_still_splits_a_partial_view(self):
         roms = [
             _rom(30, igdb_id=2, ss_id=5, siblings=(31, 32)),

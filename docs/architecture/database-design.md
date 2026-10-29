@@ -537,11 +537,11 @@ its platform's incremental-skip to fall through to a full fetch, so one sync bac
 real key or NULL and never an empty string. That is not the new guard's doing: the later re-key (`011`) NULLed every
 pre-existing value, and `extract_version_metadata`'s coalesce has replaced an empty one with a computed key on every
 write since. `VersionMetadata.__post_init__` rejects an empty key on one of the two routes by which a **new** key enters
-the aggregate, and `Rom.follow_group` — the other, by which a row a complete view leaves out takes its key — refuses one
-itself: the write direction; `_row_to_rom` (`adapters/repositories/rom.py`) loads a stored row verbatim and validates
-nothing — which is what lets the **residency** readers ("does this row carry a key?") test `is not None` rather than
-truthiness. The **coalesces** that use the key else fall back to a computed one keep `or`, and must not be swept along
-with them.
+the aggregate, and `Rom.follow_group`, the other, by which a row a complete view leaves out takes its key, refuses one
+itself. That guard on the write direction (`_row_to_rom` in `adapters/repositories/rom.py` loads a stored row verbatim
+and validates nothing) is what lets the **residency** readers ("does this row carry a key?") test `is not None` rather
+than truthiness. The **coalesces** that use the key else fall back to a computed one keep `or`, and must not be swept
+along with them.
 
 `009_add_last_session_start_monotonic.sql` (`user_version = 9`) adds a nullable `last_session_start_monotonic REAL`
 column to `rom_playtime` ([#1148](https://github.com/danielcopper/romm-tender/issues/1148)). It stores the
