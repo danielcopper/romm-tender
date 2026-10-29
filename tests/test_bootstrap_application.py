@@ -31,6 +31,7 @@ _REPAIRS = [
     "create_tender_folder",
     "detect_retrodeck_path_change",
     "report_missing_installs",
+    "name_ps3_folders",
     "reconcile_orphaned_sync_runs",
     "prune_orphaned_artwork_cache",
     "prune_orphaned_staging_artwork",
@@ -119,6 +120,7 @@ class _Recorded:
                 report_missing_installs=self._step("report_missing_installs"),
                 reconcile_orphaned_sync_runs=self._step("reconcile_orphaned_sync_runs"),
             ),
+            ps3_folder_naming_service=MagicMock(name_ps3_folders=self._step("name_ps3_folders")),
             sgdb_service=MagicMock(prune_orphaned_artwork_cache=self._step("prune_orphaned_artwork_cache")),
             artwork_service=MagicMock(
                 prune_orphaned_staging_artwork=self._step("prune_orphaned_staging_artwork"),
