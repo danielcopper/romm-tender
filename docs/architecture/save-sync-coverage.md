@@ -80,8 +80,9 @@ that counts them; when, and how, is
 **Cost.** A live reading is a full read of the machine per ROM, and the first ask about a core also runs that core's
 probe. A single-ROM sync and a status read each take one, whether or not the ROM's slot is confirmed: the sync's entry
 gate reads the answer to decide whether to refuse at all, and hands that same reading both to the matrix and to the
-negotiate session's inventory rather than letting either take a second. "Ask live" is a rule about operations, not about
-layers.
+negotiate session's inventory rather than letting either take a second. The slot setup's setup info and its slot choice
+take one each as well, the setup info handing it to its local probe and the slot choice to its migration. "Ask live" is
+a rule about operations, not about layers.
 
 The whole-library sweep is the exception, at **two per ROM**. It posts one device-wide inventory before its per-ROM loop
 begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any ROM's run

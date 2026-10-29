@@ -217,29 +217,32 @@ export interface WizardSetupDeps {
   isCancelled: () => boolean;
 }
 
+/** The banner a wizard held on a failed server-saves query shows, or `null` for an answer that holds nothing.
+ *  Each of them holds: auto-confirming the default with an unproven server state could overwrite real server saves
+ *  the user already had on the first post-confirmation sync, so the user retries instead. */
+function heldWizardMessage(result: SaveSetupInfo): string | null {
+  switch (result.recommended_action) {
+    case "server_unreachable":
+      return SERVER_UNREACHABLE_WIZARD_MESSAGE;
+    case "not_found":
+      return NOT_FOUND_WIZARD_MESSAGE;
+    case "romm_refused":
+      return rommRefusedWizardMessage(result.message ?? "");
+    case "device_not_registered":
+      return DEVICE_NOT_REGISTERED_WIZARD_MESSAGE;
+    default:
+      return null;
+  }
+}
+
 /** Apply the initial `getSaveSetupInfo` result inside `SlotSetupWizard`'s
  *  fetch effect. Routes server_unreachable to a held-wizard error banner,
  *  auto_confirm_default through a backend confirm, and everything else into
  *  the per-slot picker by calling `setInfo`. */
 export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps: WizardSetupDeps): Promise<void> {
-  if (result.recommended_action === "server_unreachable") {
-    // Hold the wizard — auto-confirming default with an unknown server state
-    // could overwrite real server saves the user already had on first
-    // post-confirmation sync. Surface the error so the user can retry once
-    // the server is reachable.
-    deps.setError(SERVER_UNREACHABLE_WIZARD_MESSAGE);
-    return;
-  }
-  if (result.recommended_action === "not_found") {
-    deps.setError(NOT_FOUND_WIZARD_MESSAGE);
-    return;
-  }
-  if (result.recommended_action === "romm_refused") {
-    deps.setError(rommRefusedWizardMessage(result.message ?? ""));
-    return;
-  }
-  if (result.recommended_action === "device_not_registered") {
-    deps.setError(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+  const held = heldWizardMessage(result);
+  if (held !== null) {
+    deps.setError(held);
     return;
   }
   if (result.recommended_action === "sync_unavailable") {
@@ -290,23 +293,9 @@ export interface WizardRetryDeps {
  *  branch — retry is user-initiated and never auto-fires a destructive
  *  setup. */
 export function applyWizardRetrySetupResult(result: SaveSetupInfo, deps: WizardRetryDeps): void {
-  if (result.recommended_action === "server_unreachable") {
-    deps.setError(SERVER_UNREACHABLE_WIZARD_MESSAGE);
-    deps.setLoading(false);
-    return;
-  }
-  if (result.recommended_action === "not_found") {
-    deps.setError(NOT_FOUND_WIZARD_MESSAGE);
-    deps.setLoading(false);
-    return;
-  }
-  if (result.recommended_action === "romm_refused") {
-    deps.setError(rommRefusedWizardMessage(result.message ?? ""));
-    deps.setLoading(false);
-    return;
-  }
-  if (result.recommended_action === "device_not_registered") {
-    deps.setError(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+  const held = heldWizardMessage(result);
+  if (held !== null) {
+    deps.setError(held);
     deps.setLoading(false);
     return;
   }
