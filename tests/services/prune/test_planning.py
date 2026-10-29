@@ -139,6 +139,15 @@ class TestRefusals:
         assert not isinstance(result, GroupPlan)
         assert result["reason"] == "multiple_bindings"
 
+    async def test_two_shortcuts_in_one_group_say_how_to_get_back_to_one(self):
+        rows = [_rom(1, app_id=0x8001), _rom(2, app_id=0x8002)]
+        result, _ = await _plan(rows, {1: "vanished", 2: "vanished"})
+        assert not isinstance(result, GroupPlan)
+        assert result["message"] == (
+            "This game has more than one shortcut in Steam, so it was left as it is. "
+            "Delete either of them in Steam, run a sync, then scan again."
+        )
+
     async def test_an_active_download_refuses_the_group_before_any_probe(self):
         rows = [_rom(1)]
         planner, liveness = _planner(rows, {1: "vanished"}, active_downloads={1})

@@ -506,8 +506,12 @@ switch it. A bound vanished version whose game still has a live version is kept 
 the options. In a game the dialog did not show as gone entirely, a group whose only confirmed-gone row is that one has
 nothing to do: the group is reported skipped as `shortcut_version_kept`, _The version this game's shortcut is on is kept
 while another version is on RomM; switch versions first._, rather than with the answer that blames the options. Once the
-user has switched away from it, it is an unbound gone version, removed like any other. A group with multiple bound
-shortcuts is skipped unchanged.
+user has switched away from it, it is an unbound gone version, removed like any other. A group with more than one bound
+shortcut is skipped unchanged as `multiple_bindings`, _This game has more than one shortcut in Steam, so it was left as
+it is. Delete either of them in Steam, run a sync, then scan again._: a run carries one shortcut through a group's
+removal, so with two it could leave a live shortcut with no row. Neither the cleanup nor a sync removes such a shortcut
+where the convergence does not reach the game, and a sync's start is where Tender unbinds a shortcut deleted in Steam
+([Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#sync-start-reconcile-of-steam-ui-deleted-shortcuts)).
 
 Removing a fully vanished game's shortcut requires a claimed action and live Steam confirmation. An attempted but
 unconfirmed removal is reported as ambiguous and its local rows are retained for reconciliation. A fully vanished

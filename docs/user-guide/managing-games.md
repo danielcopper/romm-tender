@@ -206,15 +206,17 @@ version is a line under its row.
 The modal loads the rest of the list by itself, one page after another, and the confirm button refuses until every entry
 has arrived, saying how many have. If a page fails to load, the modal says why and offers **Retry loading**, beside the
 confirm button, which carries on from the entries already loaded. The confirmation run checks every exact RomM id again.
-Only a confirmed 404 can be removed. Offline, timeout, authentication, server, malformed-response, active-download, and
-ambiguous multi-shortcut cases are skipped and reported without deleting data. A run never removes more than the
-dialog's counts: a version it finds still on RomM is kept, and where it finds every version of a game gone but the game
-holds a version the dialog did not offer for removal, it leaves the whole game as it is and says _Another version of
-this game is gone from RomM too. Scan again to review it._ A game the dialog showed as gone entirely is removed whole or
-not at all: where the check finds one of its versions on RomM again, the run leaves it as it is and says _A version of
-this game is back on RomM. Scan again to review it._ A game Steam lists as running — starting, running or exiting — is
-left as it is too, its shortcut, its files and its saves, with _This game is running, so it was left as it is. Quit it
-and scan again to remove it._ Either way the next scan lists every version the run found gone.
+Only a confirmed 404 can be removed. Offline, timeout, authentication, server, malformed-response and active-download
+cases are skipped and reported without deleting data. A game with more than one Steam shortcut is skipped too, with
+_This game has more than one shortcut in Steam, so it was left as it is. Delete either of them in Steam, run a sync,
+then scan again._ A run never removes more than the dialog's counts: a version it finds still on RomM is kept, and where
+it finds every version of a game gone but the game holds a version the dialog did not offer for removal, it leaves the
+whole game as it is and says _Another version of this game is gone from RomM too. Scan again to review it._ A game the
+dialog showed as gone entirely is removed whole or not at all: where the check finds one of its versions on RomM again,
+the run leaves it as it is and says _A version of this game is back on RomM. Scan again to review it._ A game Steam
+lists as running — starting, running or exiting — is left as it is too, its shortcut, its files and its saves, with
+_This game is running, so it was left as it is. Quit it and scan again to remove it._ Either way the next scan lists
+every version the run found gone.
 
 The confirmation options apply to this run only:
 

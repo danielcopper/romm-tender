@@ -1234,7 +1234,7 @@ class TestSwitchVersion:
         refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
         assert (refused.reason, refused.message) == (
             "bound_elsewhere",
-            "Version 2 is already used by another shortcut.",
+            "This version is on another shortcut of this game — switch that shortcut to another version first.",
         )
         assert _romm_call_ids(romm, "get_rom_once") == []
 

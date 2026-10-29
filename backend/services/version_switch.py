@@ -65,6 +65,9 @@ _NOT_IN_GROUP_MESSAGE = (
     "This version's metadata match conflicts with this game's — fix the match in RomM to switch to it."
 )
 _VERSION_VANISHED_MESSAGE = "This version is no longer available on RomM."
+_BOUND_ELSEWHERE_MESSAGE = (
+    "This version is on another shortcut of this game — switch that shortcut to another version first."
+)
 
 
 class VersionVanished(NamedRefused):
@@ -716,7 +719,7 @@ class VersionSwitchService:
         ):
             raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
         if ctx.target_app_id is not None and ctx.target_app_id != app_id:
-            raise Refused("bound_elsewhere", f"Version {target_rom_id} is already used by another shortcut.")
+            raise Refused("bound_elsewhere", _BOUND_ELSEWHERE_MESSAGE)
         if not ctx.target_playable:
             raise NoFileOnRomm(NO_FILE_ON_ROMM_MESSAGE)
         await self._refuse_stranding_saves(ctx, allow_stranded)
@@ -903,7 +906,7 @@ class VersionSwitchService:
             ):
                 raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
             if target.shortcut_app_id is not None and target.shortcut_app_id != app_id:
-                raise Refused("bound_elsewhere", f"Version {target_rom_id} is already used by another shortcut.")
+                raise Refused("bound_elsewhere", _BOUND_ELSEWHERE_MESSAGE)
             previous_app_id = target.shortcut_app_id
             target.bind_shortcut(app_id)
             uow.roms.save(target)

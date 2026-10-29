@@ -91,6 +91,10 @@ class GroupPlannerConfig:
 
 # The result names the group's game beside its message (``results.group_result``).
 GAME_RUNNING_MESSAGE = "This game is running, so it was left as it is. Quit it and scan again to remove it."
+_MULTIPLE_SHORTCUTS_MESSAGE = (
+    "This game has more than one shortcut in Steam, so it was left as it is. "
+    "Delete either of them in Steam, run a sync, then scan again."
+)
 
 
 def _unproven_refusal(reasons: set[str], unproven_count: int) -> tuple[str, str]:
@@ -228,9 +232,7 @@ class GroupPlanner:
         """Name the group's bound row, or refuse a group nothing may act on yet."""
         bound = [row for row in rows if row.shortcut_app_id is not None]
         if len(bound) > 1:
-            return None, self._results.group_result(
-                rows, "skipped", "multiple_bindings", "The group has multiple shortcuts."
-            )
+            return None, self._results.group_result(rows, "skipped", "multiple_bindings", _MULTIPLE_SHORTCUTS_MESSAGE)
         if self._active_downloads() & group_ids:
             return None, self._results.group_result(
                 rows, "skipped", "download_in_progress", "Cancel active downloads first."
