@@ -153,6 +153,7 @@
     "launch-command-rom-root-unestablished",
     "launch-command-second-shell-unsafe",
     "launch-command-shell-syntax",
+    "launch-environment-unpinned",
     "launch-path-assumed",
     "launch-path-unestablished",
     "launch-resolution-unsupported",
