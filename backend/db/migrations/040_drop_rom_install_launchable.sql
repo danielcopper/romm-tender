@@ -1,0 +1,17 @@
+-- =============================================================================
+-- 040_drop_rom_install_launchable.sql — a game's launchability is asked, not
+-- stored
+-- #2195 (D13, D26, D28)
+-- =============================================================================
+--
+--   * rom_installs.launchable — dropped. Whether a file starts is the
+--     resolver's answer, asked for one game when its page, its emulator menu or
+--     a press on Play reads it, with the entry Tender starts it through; a
+--     stored yes or no would go stale with the emulator choice and the
+--     resolver's next release. The sync writes the start command for every
+--     installed game whatever its launchability.
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 40.
+-- -----------------------------------------------------------------------------
+ALTER TABLE rom_installs DROP COLUMN launchable;

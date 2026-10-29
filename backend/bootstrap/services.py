@@ -51,6 +51,7 @@ from services.platform_systems import PlatformSystemService, PlatformSystemServi
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
 from services.prune_leases import PruneLeaseService, PruneLeaseServiceConfig
+from services.ps3_folder_naming import Ps3FolderNamingService, Ps3FolderNamingServiceConfig
 from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
@@ -159,6 +160,7 @@ class ServicesBundle:
     version_switch_service: VersionSwitchService
     connection_service: ConnectionService
     startup_healing_service: StartupHealingService
+    ps3_folder_naming_service: Ps3FolderNamingService
     shortcut_relocation_service: ShortcutRelocationService
     shortcut_file_service: ShortcutFileService
     update_check_service: UpdateCheckService
@@ -523,10 +525,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
 
     rom_install_recorder = RomInstallRecorder(
         config=RomInstallRecorderConfig(
-            logger=cfg.runtime.logger,
             clock=cfg.runtime.clock,
             uow_factory=cfg.callbacks.uow_factory,
-            system_extensions=cfg.callbacks.system_extensions,
             active_core=active_core_resolver,
             disc_resolver=disc_launch_resolver,
         ),
@@ -758,6 +758,14 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
+    ps3_folder_naming_service = Ps3FolderNamingService(
+        config=Ps3FolderNamingServiceConfig(
+            uow_factory=cfg.callbacks.uow_factory,
+            file_store=cfg.adapters.download_file_store,
+            logger=cfg.runtime.logger,
+        ),
+    )
+
     shortcut_relocation_service = ShortcutRelocationService(
         config=ShortcutRelocationServiceConfig(
             launcher_exe=cfg.launcher.path,
@@ -964,6 +972,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         version_switch_service=version_switch_service,
         connection_service=connection_service,
         startup_healing_service=startup_healing_service,
+        ps3_folder_naming_service=ps3_folder_naming_service,
         shortcut_relocation_service=shortcut_relocation_service,
         shortcut_file_service=shortcut_file_service,
         update_check_service=update_check_service,

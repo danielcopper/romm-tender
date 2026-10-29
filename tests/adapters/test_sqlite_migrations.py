@@ -90,8 +90,8 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 033_add_artwork_slot_choices + 034_clear_firmware_cache_filed_by_folder
 # + 035_add_artwork_slot_handovers + 036_add_firmware_store
 # + 037_add_rom_artwork_checked_at + 038_add_last_sync_content_size
-# + 039_add_rom_emulator_override_source).
-_SHIPPED_VERSION = 39
+# + 039_add_rom_emulator_override_source + 040_drop_rom_install_launchable).
+_SHIPPED_VERSION = 40
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -1566,9 +1566,9 @@ class Test023AddRomInstallLaunchable:
     def test_adds_launchable_to_rom_installs_only(self, tmp_path: Path):
         db_path = str(tmp_path / "romm_sync.db")
 
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 23)))
 
-        assert _user_version(db_path) == _SHIPPED_VERSION
+        assert _user_version(db_path) == 23
         assert "launchable" in _columns(db_path, "rom_installs")
         assert "launchable" not in _columns(db_path, "roms")
 
@@ -1599,7 +1599,7 @@ class Test023AddRomInstallLaunchable:
         finally:
             conn.close()
 
-        assert apply_migrations(db_path) == _SHIPPED_VERSION
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 23))) == 23
 
         conn = sqlite3.connect(db_path)
         try:
@@ -1610,7 +1610,7 @@ class Test023AddRomInstallLaunchable:
 
     def test_launchable_zero_round_trips(self, tmp_path: Path):
         db_path = str(tmp_path / "romm_sync.db")
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 23)))
 
         conn = sqlite3.connect(db_path, isolation_level=None)
         try:
@@ -2649,3 +2649,41 @@ class Test039AddRomEmulatorOverrideSource:
         finally:
             conn.close()
         assert row == (None, None)
+
+
+class Test040DropRomInstallLaunchable:
+    """040 — drops rom_installs.launchable: a game's launchability is asked, not stored (#2195 D13)."""
+
+    def test_the_column_is_there_before_it(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 39)))
+
+        assert _user_version(db_path) == 39
+        assert "launchable" in _columns(db_path, "rom_installs")
+
+    def test_an_install_from_before_it_keeps_everything_but_the_column(self, tmp_path: Path):
+        """The device's path: its database is at 039 when this rung arrives, an unlaunchable row among it."""
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 39)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 7, 100)
+            conn.execute(
+                "INSERT INTO rom_installs "
+                "(rom_id, file_path, rom_dir, platform_slug, system, installed_at, launchable) "
+                "VALUES (7, '/roms/ps3/Game/game.pkg', '/roms/ps3/Game', 'ps3', 'ps3', '2026-07-20T10:00:00', 0)"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        assert "launchable" not in _columns(db_path, "rom_installs")
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT rom_id, file_path, rom_dir, platform_slug, system, installed_at FROM rom_installs"
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row == (7, "/roms/ps3/Game/game.pkg", "/roms/ps3/Game", "ps3", "ps3", "2026-07-20T10:00:00")

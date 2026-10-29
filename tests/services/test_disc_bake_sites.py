@@ -58,7 +58,6 @@ def _seed_multi_disc(
     rom_id: int,
     selected_disc: str | None,
     app_id: int | None = 99,
-    launchable: bool = True,
 ) -> None:
     with uow:
         uow.roms.save(
@@ -79,7 +78,6 @@ def _seed_multi_disc(
                 platform_slug="psx",
                 system="psx",
                 installed_at="2026-01-01T00:00:00+00:00",
-                launchable=launchable,
             )
         )
         if selected_disc is not None:
@@ -134,21 +132,6 @@ class TestLibrarySyncBakeSite:
         resolver = self._launch_resolver(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
         # file_path is disc 1 (not an m3u) → default resolves to disc 1.
         assert resolver.do_scan_installed_paths(FakeEmulatorSources().read()) == {1: _DISC1_PATH}
-
-    def test_scan_installed_paths_maps_an_unlaunchable_install_to_the_empty_path(self, disc_resolver):
-        # The ROM stays IN the map — it IS downloaded, and collapse_sibling_groups
-        # reads the key set to pick a group's representative — but carries no
-        # launch path, so build_shortcuts_data emits the empty launch command (#1652).
-        uow = FakeUnitOfWork()
-        _seed_multi_disc(uow, rom_id=1, selected_disc=_DISC2, launchable=False)
-        resolver = self._launch_resolver(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
-        assert resolver.do_scan_installed_paths(FakeEmulatorSources().read()) == {1: ""}
-
-    def test_read_installed_paths_maps_an_unlaunchable_install_to_the_empty_path(self, disc_resolver):
-        uow = FakeUnitOfWork()
-        _seed_multi_disc(uow, rom_id=1, selected_disc=_DISC2, launchable=False)
-        resolver = self._launch_resolver(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
-        assert resolver.do_read_installed_paths({1}, FakeEmulatorSources().read()) == {1: ""}
 
 
 class _CountingInstallation:
@@ -263,10 +246,8 @@ class TestInstallRecorderBakeSite:
 
         return RomInstallRecorder(
             config=RomInstallRecorderConfig(
-                logger=logging.getLogger("test_disc_bake"),
                 clock=FakeClock(),
                 uow_factory=uow_factory,
-                system_extensions=lambda system_name, reading=None: frozenset(),
                 active_core=FakeActiveCoreResolver(default=(None, None)),
                 disc_resolver=disc_resolver,
             )
@@ -286,13 +267,3 @@ class TestInstallRecorderBakeSite:
         recorder = self._recorder(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
         _app_id, launch_options = recorder.do_resolve_launch_bake(1, {}, _DISC1_PATH)
         assert launch_options.endswith(f"'{_DISC1_PATH}'")
-
-    def test_resolve_launch_bake_returns_the_empty_command_for_an_unlaunchable_install(self, disc_resolver):
-        # download_complete's re-bake reads through the same seam, so the freshly
-        # downloaded ROM's shortcut gets no launch command either (#1652).
-        uow = FakeUnitOfWork()
-        _seed_multi_disc(uow, rom_id=1, selected_disc=_DISC2, app_id=1234, launchable=False)
-        recorder = self._recorder(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
-        app_id, launch_options = recorder.do_resolve_launch_bake(1, {}, _DISC1_PATH)
-        assert app_id == 1234
-        assert launch_options == ""

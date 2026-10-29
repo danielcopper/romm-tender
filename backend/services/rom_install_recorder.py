@@ -1,9 +1,10 @@
 """RomInstallRecorder — the one writer of an install record and its shortcut bake.
 
 Owns everything between "the ROM's files are in place" and "Steam can launch
-them": the launchable verdict, the ``rom_installs`` upsert, the launch command
-resolved from the ROM's persisted core and disc pick, and the applied-state memo
-the next sync's delta apply reads back.
+them": the ``rom_installs`` upsert, the launch command resolved from the ROM's
+persisted core and disc pick, and the applied-state memo the next sync's delta
+apply reads back. Whether the file starts is not decided here: the command is
+written whatever the answer, which the game page asks for (#2195 D26, D28).
 
 Both routes to an installed ROM go through here — a completed download and an
 adoption of content Tender did not download — so the row and the launch
@@ -19,19 +20,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.rom_files import is_launchable_target
 from domain.rom_install import RomInstall
 from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Callable
 
     from services.protocols import (
         ActiveCoreReader,
         Clock,
         DiscResolver,
-        SystemSupportedExtensionsFn,
         UnitOfWorkFactory,
     )
 
@@ -43,14 +41,11 @@ class RomInstallRecorderConfig:
     The shared ``active_core`` resolver answers which emulator the ROM will
     launch with and ``disc_resolver`` which disc of a multi-disc set, so the
     per-game core override and the persisted disc pick survive
-    uninstall → reinstall and are honoured on adoption too. ``system_extensions``
-    is the live per-system ES-DE accept-list the launchable verdict reads.
+    uninstall → reinstall and are honoured on adoption too.
     """
 
-    logger: logging.Logger
     clock: Clock
     uow_factory: UnitOfWorkFactory
-    system_extensions: SystemSupportedExtensionsFn
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
 
@@ -59,10 +54,8 @@ class RomInstallRecorder:
     """Writes the ``rom_installs`` row an install is, and the bake behind it."""
 
     def __init__(self, *, config: RomInstallRecorderConfig) -> None:
-        self._logger = config.logger
         self._clock = config.clock
         self._uow_factory = config.uow_factory
-        self._system_extensions = config.system_extensions
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
 
@@ -89,13 +82,6 @@ class RomInstallRecorder:
         Returns ``(file_path, None)`` on success or ``(None, error)`` when the
         invariant rejects the data.
         """
-        # Recorded, never acted on: an unlaunchable install keeps its files and
-        # its row, and only the shortcut's launch command is withheld. Refusing
-        # the install instead would delete a package the user's remaining option
-        # is to install by hand in the emulator (#1582, #1652).
-        launchable = is_launchable_target(file_path, rom_dir, self._system_extensions(system))
-        if not launchable:
-            self._logger.warning(f"No launch target for rom_id={rom_id}: {system} cannot launch '{file_path}'")
         try:
             install = RomInstall.mark_installed(
                 rom_id=int(rom_id),
@@ -104,7 +90,6 @@ class RomInstallRecorder:
                 platform_slug=rom_detail.get("platform_slug", ""),
                 system=system,
                 installed_at=self._clock.now().isoformat(),
-                launchable=launchable,
             )
         except ValueError as e:
             cleanup()

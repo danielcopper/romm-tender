@@ -64,6 +64,7 @@ class Application:
         # The one edge between steps; why it exists is bootstrap/startup.py's.
         if steps.run("detect_retrodeck_path_change", services.migration_service.detect_retrodeck_path_change):
             steps.run("report_missing_installs", services.startup_healing_service.report_missing_installs)
+        steps.run("name_ps3_folders", services.ps3_folder_naming_service.name_ps3_folders)
         steps.run("reconcile_orphaned_sync_runs", services.startup_healing_service.reconcile_orphaned_sync_runs)
         # No save-sync orphan prune: roms rows are permanent identity anchors
         # and saves/playtime survive a ROM leaving RomM (ADR-0007).

@@ -208,7 +208,6 @@ WATCHED_NAMES = frozenset(
 
 # Module -> the codes and names it reads today, outside a reading module. Only shrinks.
 READERS_TODAY: dict[str, frozenset[str]] = {
-    "adapters/repositories/rom_install.py": frozenset({"launchable"}),
     "domain/bios_status.py": frozenset(
         {
             "caveats",
@@ -289,7 +288,6 @@ READERS_TODAY: dict[str, frozenset[str]] = {
             "saves-root-missing",
         }
     ),
-    "services/downloads/service.py": frozenset({"launchable"}),
     "services/firmware/downloads.py": frozenset({"satisfied"}),
     "services/firmware/emulator_answers.py": frozenset(
         {

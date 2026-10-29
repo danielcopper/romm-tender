@@ -159,18 +159,11 @@ def _direct_launch_args(command: str) -> str:
 def build_launch_options(invocation: str, path: str) -> str:
     """Compose the Steam shortcut launch command from *invocation* and ROM *path*.
 
-    An empty *path* means the ROM has **no launch target**, and yields the empty
+    An empty *path* means the ROM is **not downloaded**, and yields the empty
     launch command. Composing one anyway would hand the emulator an empty
-    argument — the silent failure this rule exists to prevent.
-
-    **An empty launch command means two different things, and nothing may infer
-    which.** A ROM that is *not downloaded* and one that is *downloaded but not
-    launchable* (``RomInstall.launchable is False``, resolved to ``""`` by the
-    disc-resolver seam every bake site draws its path from) produce the same
-    empty string, and at the Steam-shortcut layer the two are indistinguishable:
-    the shortcut holds ``""`` either way. Only the data layer separates them —
-    no ``rom_installs`` row versus a row with ``launchable = 0``. Never read
-    emptiness as "not downloaded"; ask the install record.
+    argument — the silent failure this rule exists to prevent. A downloaded ROM
+    always has a path, whether or not its file starts: that is asked when its
+    page reads it (#2195 D26, D28).
 
     Empty is the established uninstalled state, not a new one invented here:
     ``addShortcut`` leaves a new shortcut's options untouched when the command
@@ -263,11 +256,7 @@ def build_shortcuts_data(
 
     *installed_paths* maps ``rom_id`` to the resolved on-disk launch path. An
     installed ROM gets a full launch command in ``launch_options``; a ROM absent
-    from the map gets ``""`` (empty placeholder) until it is downloaded. An
-    installed ROM the system cannot launch (``RomInstall.launchable is False``)
-    stays IN the map — it is downloaded, and the sibling-group representative
-    choice reads the key set — but maps to the empty path, which
-    :func:`build_launch_options` renders as the same empty placeholder.
+    from the map gets ``""`` (empty placeholder) until it is downloaded.
 
     *core_overrides* maps ``rom_id`` to the **already-resolved**
     :class:`EmulatorInvocation` the ROM launches with (its full active emulator,

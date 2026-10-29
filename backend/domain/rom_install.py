@@ -7,10 +7,8 @@ for folder-backed ROMs (a multi-file ROM, or a single zip unpacked into a
 folder) — it is ``None`` for a single file kept as it arrived, which lives as a
 bare file in the shared system directory and owns no folder. The
 denormalized ``platform_slug``/``system`` let the home migration and the save
-answer read this record without joining the registry. ``launchable`` records whether the system
-can act on that launch file at all — a download whose content the emulator
-cannot boot (a PS3 ``.pkg`` installer) is still a real install with real files
-on disk, it just has no launch target to bake.
+answer read this record without joining the registry. Whether that launch file
+starts is not recorded: it is the resolver's answer, asked when it is read.
 """
 
 from __future__ import annotations
@@ -28,11 +26,6 @@ class RomInstall:
     platform_slug: str
     system: str
     installed_at: str
-    # Defaults to True so an install whose launchability was never assessed —
-    # a row written before the column existed, a test fixture — keeps the
-    # launch command it already had. Unlaunchable is a proven verdict, never
-    # an absence of one.
-    launchable: bool = True
 
     @classmethod
     def mark_installed(
@@ -44,15 +37,11 @@ class RomInstall:
         platform_slug: str,
         system: str,
         installed_at: str,
-        launchable: bool = True,
     ) -> RomInstall:
         """Record a freshly downloaded ROM installed at ISO timestamp ``installed_at``.
 
         ``rom_dir`` is the dedicated per-ROM directory for a folder-backed
         (multi-file) ROM, or ``None`` for a single-file ROM that owns no folder.
-        ``launchable`` is the caller's verdict on whether the system can act on
-        ``file_path`` (``domain.rom_files.is_launchable_target``); ``False``
-        records a real install with no launch target.
         """
         if rom_id <= 0:
             raise ValueError("rom_id must be positive")
@@ -63,11 +52,10 @@ class RomInstall:
             platform_slug=platform_slug,
             system=system,
             installed_at=installed_at,
-            launchable=launchable,
         )
 
     def relocate(self, new_rom_dir: str | None, new_file_path: str) -> None:
-        """Move the install to a new launch file and per-ROM directory (RetroDECK home migration).
+        """Move the install to a new launch file and per-ROM directory (a RetroDECK home move, a PS3 folder's rename).
 
         ``new_rom_dir`` stays ``None`` for a single-file ROM; a folder-backed
         ROM carries its relocated dedicated directory.

@@ -588,7 +588,6 @@ class DownloadService:
             "system": install.system,
             "platform_slug": install.platform_slug,
             "installed_at": install.installed_at,
-            "launchable": install.launchable,
         }
         return entry
 

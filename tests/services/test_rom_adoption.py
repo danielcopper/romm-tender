@@ -180,12 +180,8 @@ class Harness:
         self.system_extensions: dict[str, frozenset[str]] = {}
         self.recorder = RomInstallRecorder(
             config=RomInstallRecorderConfig(
-                logger=logging.getLogger("test_rom_adoption"),
                 clock=self.clock,
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
-                system_extensions=lambda system_name, reading=None: self.system_extensions.get(
-                    system_name, frozenset()
-                ),
                 active_core=FakeActiveCoreResolver(default=(None, None)),
                 disc_resolver=FakeDiscResolver(),
             ),
@@ -591,17 +587,17 @@ class TestAdopt:
 
         assert set(h.store.files) == before
 
-    async def test_the_launchable_verdict_uses_the_live_accept_list(self, h):
-        h.seed_rom()
+    async def test_a_file_the_system_does_not_start_still_gets_its_launch_command(self, h):
+        # Whether it starts is asked when the game's page reads it (#2195 D26, D28).
+        h.seed_rom(app_id=1042)
         h.system_extensions = {"snes": frozenset({".sfc", ".smc"})}
         h.stage_detail(_single_file_detail(name="Game.pkg"))
         h.store.files["/roms/snes/Game.pkg"] = b"x"
 
-        await h.service.adopt_existing_rom(_ROM_ID)
+        result = await h.service.adopt_existing_rom(_ROM_ID)
 
-        install = h.uow.rom_installs.get(_ROM_ID)
-        assert install is not None
-        assert install.launchable is False
+        assert h.uow.rom_installs.get(_ROM_ID) is not None
+        assert result["launch_options"].endswith("'/roms/snes/Game.pkg'")
 
     async def test_a_launchable_adopted_install_bakes_the_launch_command(self, h):
         h.seed_rom(app_id=1042)

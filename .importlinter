@@ -171,6 +171,7 @@ modules =
     services.playtime
     services.prune
     services.prune_leases
+    services.ps3_folder_naming
     services.relaunch_options_resolver
     services.rom_adoption
     services.rom_install_recorder

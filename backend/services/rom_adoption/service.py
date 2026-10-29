@@ -712,8 +712,7 @@ class RomAdoptionService:
         No ``.m3u`` is generated and nothing is renamed: the directory is
         recorded as it stands, so the ES-DE collapse a downloaded ROM gets does
         not apply here. Falls back to the directory itself when it holds no
-        files, which the recorder's launchable check then reads as a folder-boot
-        or unlaunchable target.
+        files.
         """
         files = self._download_file_store.scan_files_with_sizes(target.path)
         detected = detect_launch_file(files, self._m3u_support(target.system))

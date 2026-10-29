@@ -37,8 +37,8 @@ class RomInstallRecorder(Protocol):
 
     Both a completed download and an adoption reach an install through here, so
     the row an adoption writes is derived by exactly the rules a download's is —
-    ``file_path``, ``rom_dir``, ``system`` and the launchable verdict — rather
-    than by a second implementation free to drift from it (ADR-0028).
+    ``file_path``, ``rom_dir`` and ``system`` — rather than by a second
+    implementation free to drift from it (ADR-0028).
 
     Synchronous throughout: every method opens a short write Unit of Work, so
     callers on the event loop offload via ``loop.run_in_executor``.
@@ -308,9 +308,7 @@ class DiscResolver(Protocol):
     single-file ROM); :meth:`resolve_bake_path` resolves the pin over that list;
     :meth:`resolve_for_install` is the bake-site convenience that does both. A
     non-multi-disc ROM resolves to its own ``file_path`` unchanged; a stale pin
-    degrades to the default with a WARNING rather than raising; an install the
-    system cannot launch (``launchable is False``) resolves to ``""``, which
-    every bake site renders as the empty launch command. ``reading`` is a run's
+    degrades to the default with a WARNING rather than raising. ``reading`` is a run's
     one reading of the emulator sources, handed down so the accept-list a
     folder-backed ROM is enumerated against is asked once per system per run.
     """

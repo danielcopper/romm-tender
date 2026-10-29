@@ -448,10 +448,8 @@ class TestBuildShortcutsData:
         assert result[1]["launch_options"] == ""
 
     def test_installed_rom_with_no_launch_target_gets_empty_launch_options(self):
-        # The install resolved to the empty path (launchable is False, #1652). It
-        # is still IN the map — it IS downloaded — but its shortcut carries the
-        # same empty launch command an un-downloaded ROM's does, never a command
-        # composed around a bare "".
+        # A ROM in the map with the empty path gets the same empty launch command
+        # an un-downloaded ROM's does, never a command composed around a bare "".
         roms = [{"id": 1, "name": "Sealed In A PKG"}]
         result = build_shortcuts_data(roms, _LAUNCHER, {1: ""}, {})
         assert result[0]["launch_options"] == ""
