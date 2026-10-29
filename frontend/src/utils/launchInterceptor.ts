@@ -25,24 +25,20 @@ import {
   refreshMigrationState,
   getInstalledRom,
   getCachedGameDetail,
-  isSaveTrackingConfigured,
-  getSaveSetupInfo,
-  confirmSlotChoice,
   getVersionList,
   logInfo,
   logError,
 } from "../api/backend";
 import { setMigrationStatus } from "./migrationStore";
 import { getAppIdRomIdMapSnapshot, readGameRunning, refreshAppIdMap } from "./sessionManager";
-import { markLaunchSkipped, consumeLaunchSkip, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
-import { makeLaunchGateOps } from "./launchGateOps";
+import { markLaunchSkipped, consumeLaunchSkip, SERVER_CALL_LIMIT_MS } from "./launchGate";
+import { ensureTrackingConfiguredSilently, makeLaunchGateOps } from "./launchGateOps";
 import { runGateLoop, type LaunchPrompts } from "./launchVerdict";
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
-import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
 import { detach } from "./detach";
 import { tellStrandedPress } from "./strandedPanelStore";
 import { strandedPanelSentence } from "./strandedPanelWording";
-import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
+import { TimeoutError, withTimeout } from "./withTimeout";
 import { boundAvailabilityOf, type BoundAvailability } from "./vanishedBinding";
 import { emulatorRefusalForRom } from "./emulatorStart";
 
@@ -60,48 +56,6 @@ interface CancelledStart {
 const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.";
 
 const WATCHER_TAG = "Watcher";
-
-/**
- * Watcher variant of the tracking-setup gate. On a cold grid launch there is no
- * game page open, so — unlike the Play button — this MUST NOT route the user
- * to the saves tab. Instead it silently auto-adopts the default/recommended
- * slot (via `confirmSlotChoice`) and proceeds. A direct launch is never blocked
- * on a setup ANSWER — every answer proceeds (the gate op below maps this to
- * "proceed"); any failure (server unreachable, needs-user-choice, a thrown
- * error) is swallowed.
- * A call that gets no answer within its limit is not a failure: its
- * `TimeoutError` reaches the gate.
- */
-async function ensureTrackingConfiguredWatcher(romId: number): Promise<void> {
-  const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, (e) => {
-    logError(`Watcher tracking check failed (assuming configured): ${e}`);
-    return { configured: true };
-  });
-  if (trackingResult.configured) return;
-
-  const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, (e) => {
-    // Network/backend failure — never block a direct launch on setup.
-    logError(`Watcher save-setup fetch failed (proceeding unconfigured): ${e}`);
-    return null;
-  });
-  if (setupInfo === null) return;
-
-  // Reuse the shared outcome handler with a no-op saves-tab dispatch and a
-  // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
-  // other (abort) branch is irrelevant here because the watcher never aborts a
-  // direct launch on tracking — an unconfigured slot the user can't resolve on
-  // a cold launch must still let the game start (the next visit to the game
-  // page's saves tab configures it).
-  await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
-    rid: romId,
-    confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),
-    toast: () => undefined,
-    dispatchSavesTab: () => undefined,
-  }).catch((e: unknown) => {
-    rethrowTimeout(e);
-    logError(`Watcher auto-adopt slot failed (proceeding): ${e}`);
-  });
-}
 
 /** Relaunch a previously-cancelled launch. Marks the appId as skipped FIRST so
  *  this RunGame doesn't re-enter the watcher and re-gate. Used directly only for
@@ -159,10 +113,9 @@ async function runWatcherGate(start: CancelledStart, romId: number, prompts: Lau
   const ops = makeLaunchGateOps(romId, {
     tag: WATCHER_TAG,
     toastSyncResult: false,
-    ensureTrackingConfigured: async (): Promise<"proceed"> => {
-      await ensureTrackingConfiguredWatcher(romId);
-      return "proceed";
-    },
+    // A start the watcher catches may come from no game page at all: the library
+    // grid, a `steam://` link.
+    ensureTrackingConfigured: () => ensureTrackingConfiguredSilently(romId, WATCHER_TAG),
     confirmCoreChange: prompts.confirmCoreChange,
     confirmUncheckedStartingSource: prompts.confirmUncheckedSource,
     askSyncWait: prompts.askSyncWait,

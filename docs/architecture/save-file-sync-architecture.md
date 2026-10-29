@@ -1866,13 +1866,13 @@ parts are the migration check, the starting-source check, a fresh reachability p
 sync itself (`runPreLaunchSync`) and what each verdict means: a switched-off source toasts, resolved conflicts announce
 the save change to the page and then launch. A path supplies only what is its own:
 
-| Supplied by the path               | Play button                                                                                                                      | Launch watcher                                     |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Prompts (`LaunchPrompts`)          | `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`)                                                                  | chosen once per start (below)                      |
-| Tracking setup                     | `ensureTrackingConfiguredBigPicture` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | adopts a default silently and always proceeds      |
-| Toast for a sync that moved saves  | yes                                                                                                                              | no                                                 |
-| A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                                   | nothing of its own; a pending migration is toasted |
-| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | fails open: the game starts (bare relaunch)        |
+| Supplied by the path               | Play button                                                                                                                      | Launch watcher                                                                     |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Prompts (`LaunchPrompts`)          | `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`)                                                                  | chosen once per start (below)                                                      |
+| Tracking setup                     | `ensureTrackingConfiguredBigPicture` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | `ensureTrackingConfiguredSilently` — adopts a default silently and always proceeds |
+| Toast for a sync that moved saves  | yes                                                                                                                              | no                                                                                 |
+| A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                                   | nothing of its own; a pending migration is toasted                                 |
+| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | fails open: the game starts (bare relaunch)                                        |
 
 The watcher has no surface of its own, so `index.tsx` hands it a function rather than a set of prompts:
 `() => launchPromptsForThisStart(gamepadLaunchPrompts)` (`frontend/src/utils/launchPromptRouter.ts`), which it calls
