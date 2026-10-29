@@ -46,7 +46,7 @@ class TestADownloadDisplaces:
     def test_a_sibling_with_no_install_is_not_displaced(self):
         assert supersede_siblings(_APP_ID, [(_rom(2, None), None)], None) == SiblingSupersede((), ())
 
-    def test_a_grandfathered_sibling_with_its_own_shortcut_is_not_displaced(self):
+    def test_a_sibling_bound_to_another_shortcut_is_not_displaced(self):
         siblings = [(_rom(2, 800), _install(2, "/roms/gba/old.gba"))]
 
         assert supersede_siblings(_APP_ID, siblings, None) == SiblingSupersede((), ())
@@ -79,7 +79,7 @@ class TestAnAdoptionDisplaces:
 
         assert supersede_siblings(_APP_ID, siblings, _TARGET) == SiblingSupersede(removed=(2,), handed_over=())
 
-    def test_a_grandfathered_sibling_at_the_adopted_path_is_neither_removed_nor_handed_over(self):
+    def test_a_sibling_bound_to_another_shortcut_at_the_adopted_path_is_neither_removed_nor_handed_over(self):
         siblings = [(_rom(2, 800), _install(2, _TARGET))]
 
         assert supersede_siblings(_APP_ID, siblings, _TARGET) == SiblingSupersede((), ())

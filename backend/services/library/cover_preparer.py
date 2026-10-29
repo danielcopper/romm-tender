@@ -89,11 +89,11 @@ class CoverPreparer:
         """Download artwork for the shortcuts about to be emitted and stamp each
         emitted entry's ``cover_path`` in place.
 
-        Only the ROMs that actually get a shortcut (representatives + grandfathered
-        siblings) are fetched — no eager covers for versions with no shortcut. A
-        rebind entry pulls its cover from the representative it binds
-        (``BIND_ROM_ID_KEY``), whose raw dict is the one present in *unit_roms*.
-        A no-op when nothing is emitted.
+        Only the ROMs that actually get a shortcut (new representatives and the
+        bound siblings that keep theirs) are fetched — no eager covers for
+        versions with no shortcut. A rebind entry pulls its cover from the
+        representative it binds (``BIND_ROM_ID_KEY``), whose raw dict is the one
+        present in *unit_roms*. A no-op when nothing is emitted.
 
         Returns the confirmed cover fingerprints — ``rom_id → applied cover
         source`` for every ROM whose cache the download resolved (fresh

@@ -208,7 +208,7 @@ def _unit_with_rebinds(draw: st.DrawFn) -> tuple[list[dict[str, Any]], list[dict
     """Generate a (emitted, shortcuts_data, chunk_size) that includes REBIND lanes.
 
     Each group is emitted via one of three lanes — ``new`` (one representative),
-    ``grandfather`` (a subset of members), or ``rebind`` (a synthetic entry whose
+    ``bound`` (a subset of members), or ``rebind`` (a synthetic entry whose
     ``rom_id`` is a VANISHED sibling absent from shortcuts_data, carrying a
     ``bind_rom_id`` pointing at a member representative that IS present). A group's
     key is either a real key (keyed lane) or ``None`` (keyless lane), so the
@@ -228,10 +228,10 @@ def _unit_with_rebinds(draw: st.DrawFn) -> tuple[list[dict[str, Any]], list[dict
         member_ids = list(range(next_rid, next_rid + n_members))
         next_rid += n_members
         shortcuts_data.extend(_sd(rid, key) for rid in member_ids)
-        lane = draw(st.sampled_from(["new", "grandfather", "rebind"]))
+        lane = draw(st.sampled_from(["new", "bound", "rebind"]))
         if lane == "new":
             emitted.append(_sd(member_ids[0], key))
-        elif lane == "grandfather":
+        elif lane == "bound":
             n_emit = draw(st.integers(min_value=1, max_value=n_members))
             emitted.extend(_sd(rid, key) for rid in member_ids[:n_emit])
         else:  # rebind: a vanished sibling emitted, bind target = a present member

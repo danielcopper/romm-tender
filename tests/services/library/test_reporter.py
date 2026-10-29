@@ -1117,7 +1117,7 @@ class TestGroupAwareCommit:
         `_persist_synced_rom` fallback (`existing.shortcut_app_id`) is load-bearing.
 
         Regression guard for the single most dangerous line in #1296: a
-        grandfathered group has rom 11 already bound (app 7777) while rom 10 is the
+        group holding two shortcuts has rom 11 already bound (app 7777) while rom 10 is the
         emitted representative bound this cycle (app 9001). Only rom 10 is acked, so
         the commit must PRESERVE rom 11's 7777 from the existing row — the broken
         `binding.get(rom_id)` variant (no existing fallback) would silently unbind
@@ -1126,7 +1126,7 @@ class TestGroupAwareCommit:
         this one seeds the prior binding and only passes with it.
         """
         uow = library.uow
-        # rom 11 already carries a shortcut (grandfathered duplicate of group "g").
+        # rom 11 already carries a shortcut (a second shortcut of group "g").
         _seed_rom(uow, 11, app_id=7777, platform_slug="n64", name="Game (JP)", group_key="g")
         box = library.sync._box
         rep = {

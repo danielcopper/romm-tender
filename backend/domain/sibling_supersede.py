@@ -35,7 +35,8 @@ def supersede_siblings(
 
     *shortcut_app_id* is the binding of the version being installed. A sibling
     with no install is not displaced, and neither is one bound to a different
-    shortcut: a grandfathered duplicate with its own Steam entry (ADR-0021 §5).
+    shortcut: a second shortcut of the same game, which still launches that
+    sibling's files.
     Every other installed sibling is removed, unless its install is recorded at
     *adopted_path* — the content an adoption is about to record as its own.
     Removing that one would delete the very file being adopted, so it hands its

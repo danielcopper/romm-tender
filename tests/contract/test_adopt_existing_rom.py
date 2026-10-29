@@ -175,9 +175,9 @@ async def test_adopting_supersedes_the_group_s_other_installed_version(harness):
 
 
 async def test_adopting_leaves_a_sibling_bound_to_a_different_shortcut_alone(harness):
-    # ADR-0021 §5: a grandfathered duplicate has its own Steam entry and is never
-    # superseded. The selection rule lives behind the seam — this pins that
-    # adoption inherits it rather than reimplementing it.
+    # A sibling bound to another shortcut of the game is never superseded, since
+    # that shortcut still launches it. The selection rule lives behind the seam —
+    # this pins that adoption inherits it rather than reimplementing it.
     seed_group_member(harness, _ROM_ID, group_key=_GROUP, shortcut_app_id=700)
     sibling_path = seed_group_member(
         harness, 42, group_key=_GROUP, shortcut_app_id=800, installed=True, file_name="sibling.gba"

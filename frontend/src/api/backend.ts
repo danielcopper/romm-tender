@@ -1096,7 +1096,7 @@ export interface SwitchVersionUnsyncedSaves {
 /**
  * Other canonical `{success, reason, message}` failures — `not_found` (unknown
  * appId), `not_in_group` (the target's metadata match conflicts with this game's),
- * `bound_elsewhere` (a grandfathered duplicate),
+ * `bound_elsewhere` (another shortcut of this game is on the target),
  * `invalid_target` (a server-only target the aggregate rejects),
  * `download_in_progress` (a group download is running — cancel it first),
  * `version_vanished` (RomM definitively no longer has the target),

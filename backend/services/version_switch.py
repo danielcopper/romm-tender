@@ -633,8 +633,8 @@ class VersionSwitchService:
         uninstalled target (the ADR-0009 placeholder). Guards, each a raised
         refusal: unknown appId → ``not_found``; any group member has an active
         download → ``download_in_progress`` (cancel it first); target outside the
-        group → ``not_in_group``; target bound to a *different* shortcut
-        (grandfathered duplicate, ADR-0021 §5) → ``bound_elsewhere``; a target RomM
+        group → ``not_in_group``; target bound to a *different* shortcut of the
+        game, which would be left with no version → ``bound_elsewhere``; a target RomM
         holds no file for that is not installed here → :class:`NoFileOnRomm`, read
         from the stored column for a local target and from the fetched detail for a
         server-only one; a server-only target whose detail the aggregate rejects →

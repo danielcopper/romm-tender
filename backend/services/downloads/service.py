@@ -306,8 +306,9 @@ class DownloadService:
 
         # At most one downloaded version per shortcut binding (#1298): strip a
         # sibling install bound to this shortcut (or unbound) before this one
-        # lands — a grandfathered sibling with its own shortcut is exempt. A
-        # removal failure aborts the download so the invariant stays honest.
+        # lands — a sibling bound to another shortcut of the game is exempt,
+        # since that shortcut still launches it. A removal failure aborts the
+        # download so the invariant stays honest.
         #
         # Ordering is load-bearing at both ends. AFTER the gate, because the
         # supersede deletes another version's files: refusing afterwards would

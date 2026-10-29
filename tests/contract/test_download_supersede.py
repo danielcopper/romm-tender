@@ -4,7 +4,7 @@ Driven frontend-shaped: ``startDownload = endpoint<[number], ...>``. Starting a
 download for a version whose sibling group already has ANOTHER version on disk
 strips that install FIRST (files + ``rom_installs`` row; saves untouched, per
 ADR-0007), then the download proceeds — the "at most one downloaded version per
-group" rule. A grandfathered sibling (its own Steam shortcut) is never touched.
+group" rule. A sibling bound to another shortcut of the game is never touched.
 
 Drives the real ``DownloadService`` → ``RomRemovalService`` wiring (the real
 ``LateBinding`` that closes their construction cycle) over real SQLite + real
@@ -69,9 +69,9 @@ async def test_start_download_supersedes_installed_sibling(harness):
         assert uow.rom_installs.get(2) is not None  # the new version downloaded
 
 
-async def test_start_download_keeps_grandfathered_sibling(harness):
+async def test_start_download_keeps_a_sibling_bound_to_another_shortcut(harness):
     """A sibling with its own separate Steam shortcut is never removed."""
-    # rom 1: grandfathered — bound to its OWN shortcut (99), on disk.
+    # rom 1: bound to ANOTHER shortcut (99), on disk.
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=99, installed=True, file_name="old.gba")
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=_APP_ID)
     _seed_server_rom(harness, 2, fs_name="new.gba")
@@ -81,7 +81,7 @@ async def test_start_download_keeps_grandfathered_sibling(harness):
 
     await _drain_background_tasks()
     with harness.uow_factory() as uow:
-        assert uow.rom_installs.get(1) is not None  # grandfathered kept
+        assert uow.rom_installs.get(1) is not None  # the other shortcut's version kept
         assert uow.rom_installs.get(2) is not None
 
 

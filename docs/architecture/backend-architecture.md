@@ -923,12 +923,12 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   after the member ranked first by the _pure_ order (prerelease demotion > region priority > revision > alphabetical >
   `rom_id`), ignoring the installed/binding/default filters — so a Japanese default still binds Japan but the shortcut
   carries the USA name (never majority voting: two Japan dumps + one USA yields the USA name). This is mint-time only:
-  the name is sticky forever after (ADR-0021 §2), so a rebind/grandfathered entry carries the persisted bound name
-  verbatim and a live shortcut is never renamed. The appId is minted from the canonical name by the frontend
-  `AddShortcut`; the DB binding lands on the representative `rom_id`; the reporter is agnostic to the name↔rom mismatch
-  (it binds on `rom_id` + the acked appId, and persists each sibling's own RomM name from `pending_all_roms`).
-  `preferred_region` is read from settings by `sync_preview` and `unit_apply` and threaded into every collapse call site
-  (preview + apply) as the same value within a run.
+  the name is sticky forever after (ADR-0021 §2), so a bound or rebind entry carries the persisted bound name verbatim
+  and a live shortcut is never renamed. The appId is minted from the canonical name by the frontend `AddShortcut`; the
+  DB binding lands on the representative `rom_id`; the reporter is agnostic to the name↔rom mismatch (it binds on
+  `rom_id` + the acked appId, and persists each sibling's own RomM name from `pending_all_roms`). `preferred_region` is
+  read from settings by `sync_preview` and `unit_apply` and threaded into every collapse call site (preview + apply) as
+  the same value within a run.
 - **A version gone from RomM stays bound; only the same dump takes its binding**
   ([ADR-0021](../adr/0021-sibling-group-one-shortcut-binding-active-version.md) §2's amendment). A bound sibling that
   vanished from the server emits nothing and keeps its binding, its shortcut, name and launch command, installed or not;
@@ -2069,24 +2069,26 @@ the kept file is there for the retry.
 member of the ROM's sibling group so a game keeps at most one copy on disk. `_conflicting_sibling_install_ids` reads the
 group in one short UoW (indexed `iter_by_group_key`), and `supersede_siblings` (`domain/sibling_supersede.py`) picks the
 members that are installed **and** either unbound or bound to the _same_ shortcut — a member bound to a **different**
-shortcut (a grandfathered duplicate, ADR-0021 §5) is exempt and never removed. An adoption runs the same supersede and
-passes the path it is about to record as `adopted_path`: a picked member whose install is recorded at that path is
-**handed over** instead of removed — its `rom_installs` row is deleted in that same UoW and its files are left as they
-are, because they are the content being adopted. A download passes no path, since what sits at its target is either
-refused by the occupancy gate or, on an explicit replace, overwritten, so a member recorded there is superseded like any
-other. Each superseded install goes through the canonical `RomRemovalService.remove_rom_unchecked` (files +
-`rom_installs` row; **saves untouched** per ADR-0007), the membership UoW closed first so the removal's own UoW does not
-nest (ADR-0006); a removal refused with `NotInstalled` raced clean and is skipped, any other refusal propagates and
-aborts the download so the invariant stays honest. A superseded or handed-over sibling's _paused_ queue entry is evicted
-(`DownloadQueue.evict_if_paused`) so a stale `.tmp` can't later resume into a second install. `resume_download`
-additionally refuses (`superseded`, entry dropped) when a switch has moved the group's binding to a different member
-since the pause — it won't re-download a version the picker has already left. The in-progress claim is taken before the
-ROM detail is fetched and given back on every way out but a started download, a cancelled start included, so a
-concurrent `start_download` for the same rom is rejected rather than racing past it and a failed start never leaves the
-ROM "Already downloading". Of what the start's steps raise, an `OSError` (a disk that cannot be read or prepared) is
-refused there with `download_start_failed`; a RomM error and a refusal pass on to `Endpoints` unchanged — such as the
-platform's system refusal (`no_platform_system`, `platform_system_off`, or the RomM classifier's reason where the
-platform listing could not be read) and RetroDECK's folder refusal — and anything else is a bug.
+shortcut (a second shortcut of the same game, which a game keeps only where the sync has not converged it yet or never
+reaches it — Sibling groups, "Convergence") is exempt and never removed, because that shortcut still launches it. An
+adoption runs the same supersede and passes the path it is about to record as `adopted_path`: a picked member whose
+install is recorded at that path is **handed over** instead of removed — its `rom_installs` row is deleted in that same
+UoW and its files are left as they are, because they are the content being adopted. A download passes no path, since
+what sits at its target is either refused by the occupancy gate or, on an explicit replace, overwritten, so a member
+recorded there is superseded like any other. Each superseded install goes through the canonical
+`RomRemovalService.remove_rom_unchecked` (files + `rom_installs` row; **saves untouched** per ADR-0007), the membership
+UoW closed first so the removal's own UoW does not nest (ADR-0006); a removal refused with `NotInstalled` raced clean
+and is skipped, any other refusal propagates and aborts the download so the invariant stays honest. A superseded or
+handed-over sibling's _paused_ queue entry is evicted (`DownloadQueue.evict_if_paused`) so a stale `.tmp` can't later
+resume into a second install. `resume_download` additionally refuses (`superseded`, entry dropped) when a switch has
+moved the group's binding to a different member since the pause — it won't re-download a version the picker has already
+left. The in-progress claim is taken before the ROM detail is fetched and given back on every way out but a started
+download, a cancelled start included, so a concurrent `start_download` for the same rom is rejected rather than racing
+past it and a failed start never leaves the ROM "Already downloading". Of what the start's steps raise, an `OSError` (a
+disk that cannot be read or prepared) is refused there with `download_start_failed`; a RomM error and a refusal pass on
+to `Endpoints` unchanged — such as the platform's system refusal (`no_platform_system`, `platform_system_off`, or the
+RomM classifier's reason where the platform listing could not be read) and RetroDECK's folder refusal — and anything
+else is a bug.
 
 #### ConnectionService notes
 

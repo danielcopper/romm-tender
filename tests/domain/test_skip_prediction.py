@@ -128,9 +128,8 @@ class TestNewShortcutCount:
         rows = [("g:a", True), ("g:a", False), ("g:a", False)]
         assert new_shortcut_count(rows, unit_rom_count=3) == 0
 
-    def test_grandfathered_group_creates_nothing(self):
-        # Two independently-bound duplicates (ADR-0021 §5) keep both shortcuts;
-        # neither is new.
+    def test_a_group_with_two_bound_shortcuts_creates_nothing(self):
+        # Two bound shortcuts in one group are no new shortcut either.
         rows = [("g:a", True), ("g:a", True), ("g:a", False)]
         assert new_shortcut_count(rows, unit_rom_count=3) == 0
 

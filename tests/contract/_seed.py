@@ -173,7 +173,7 @@ def seed_group_member(
     self-bound ROM), this sets ``sibling_group_key`` and takes an explicit
     ``shortcut_app_id`` so a version-switch / #1298 supersede contract test can
     build a real multi-version group (bound representative / unbound install /
-    grandfathered separate shortcut). Returns the install file path when
+    a sibling bound to another shortcut). Returns the install file path when
     ``installed`` (its stem is the save-file basename the drift/sync discovery
     derives — ``find_save_files`` keys off the install path, not the roms row),
     else ``None``.

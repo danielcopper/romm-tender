@@ -185,8 +185,9 @@ class SyncReporter:
     ) -> tuple[dict[str, list[int]], dict[str, int]]:
         """One pass over the bound rows: platform buckets + each group's bound appId.
 
-        When a group carries several bound rows (grandfathered duplicates) the
-        smallest rom_id's binding wins, deterministically.
+        When a group still carries several bound rows (a game the convergence
+        has not reached yet, or never reaches) the smallest rom_id's binding
+        wins, so the filing stays the same from run to run.
 
         Platform display names are grouped **case-insensitively** (keyed by
         :func:`domain.collection_name.fold_collection_name`, first-seen original

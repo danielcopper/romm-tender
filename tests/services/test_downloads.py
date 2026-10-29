@@ -112,7 +112,7 @@ def _seed_group_member(
 
     Unlike ``_seed_rom`` this sets ``sibling_group_key`` and takes an explicit
     ``shortcut_app_id`` so a #1298 supersede test can build a real multi-version
-    group (bound rep / unbound install / grandfathered separate shortcut).
+    group (bound rep / unbound install / a sibling bound to another shortcut).
     """
     with uow:
         uow.roms.save(
@@ -6614,12 +6614,12 @@ class TestSiblingSupersedeSelection:
 
         assert downloads.service._conflicting_sibling_install_ids(1) == [2]
 
-    def test_skips_grandfathered_and_uninstalled(self, downloads):
+    def test_skips_a_sibling_bound_to_another_shortcut_and_an_uninstalled_one(self, downloads):
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)  # X, bound rep
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)  # → selected
         _seed_group_member(
             downloads.uow, 3, group_key=_SUPERSEDE_GROUP, app_id=99, installed=True
-        )  # grandfathered → skip
+        )  # bound to another shortcut → skip
         _seed_group_member(
             downloads.uow, 4, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False
         )  # not on disk → skip

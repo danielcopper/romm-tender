@@ -976,10 +976,10 @@ class TestCollapseSiblingGroups:
         assert [(e["rom_id"], e[BIND_ROM_ID_KEY]) for e in emitted] == [(1, 5)]
         assert converged == [ConvergedBinding(2, 1002, 1, 1001)]
 
-    def test_legacy_null_key_bound_row_grandfathered_via_fetched_key(self):
+    def test_legacy_null_key_bound_row_is_kept_via_fetched_key(self):
         # A bound row whose stored sibling_group_key is still NULL (pre-capture) is
-        # grouped by its FETCHED key, so it is grandfathered (kept), never churned
-        # into a delete + recreate.
+        # grouped by its FETCHED key, so it is kept, never churned into a
+        # delete + recreate.
         members = [_gsd(1, name="Game", group_key="igdb:42:7")]
         registry = {"1": _greg(1, app_id=1001, name="Game", group_key=None)}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
@@ -1226,9 +1226,9 @@ class TestCollapseSiblingGroupsCanonicalNaming:
         assert emitted[0]["rom_id"] == 2
         assert emitted[0]["name"] == "German Name"
 
-    def test_grandfathered_bound_sibling_keeps_persisted_name_no_rename(self):
+    def test_bound_sibling_keeps_persisted_name_no_rename(self):
         # A bound group must never be renamed by canonical naming — the emitted
-        # grandfathered entry carries the fetched member's own name, matching the
+        # bound entry carries the fetched member's own name, matching the
         # persisted registry name, so classify reads it as unchanged (no churn).
         members = [
             _gsd(1, name="Japan Name", fs_name_no_ext="game_japan", regions=["Japan"]),
