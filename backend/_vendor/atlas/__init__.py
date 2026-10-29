@@ -65,7 +65,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.29.0"  # x-release-please-version
+__version__ = "0.31.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -187,6 +187,7 @@ from .installations import (
     Health,
     InstallationRoot,
     InstallationRootName,
+    Installer,
     LaunchabilityAnswer,
     LaunchCommandAnswer,
     PlatformSystemMatch,
@@ -254,6 +255,7 @@ from .find_rules import (
     CAVEAT_FRONTEND_BUILD_UNPINNED,
     CAVEAT_FRONTEND_BUILD_SEALED,
     CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
+    CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED,
     CAVEAT_LAUNCH_COMMAND_ARGUMENT_BROKEN,
     CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS,
     CAVEAT_LAUNCH_COMMAND_DESKTOP_FILE,
@@ -339,6 +341,7 @@ from .launch_command import (
     VARIANT_APPIMAGE,
     VARIANT_FLATPAK,
     VARIANT_NATIVE,
+    DistributionVariable,
     EnvironmentVariable,
     Injection,
     InjectionOutcome,
@@ -866,12 +869,14 @@ __all__ = [
     "CAVEAT_PLATFORM_UNKNOWN",
     "CAVEAT_PLATFORM_SCRAPING_IGNORED",
     "LaunchabilityAnswer",
+    "Installer",
     "LaunchCommandAnswer",
     "LaunchCommand",
     "LaunchProgram",
     "LauncherScript",
     "LauncherStep",
     "EnvironmentVariable",
+    "DistributionVariable",
     "WorkingFolder",
     "Injection",
     "LAUNCH_VERDICTS",
@@ -1382,6 +1387,7 @@ __all__ = [
     "CAVEAT_FRONTEND_BUILD_UNPINNED",
     "CAVEAT_FRONTEND_BUILD_SEALED",
     "CAVEAT_LAUNCHER_SCRIPT_UNPINNED",
+    "CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED",
     "CAVEAT_LAUNCH_COMMAND_PLACEHOLDER_UNKNOWN",
     "CAVEAT_LAUNCH_COMMAND_ARGUMENT_BROKEN",
     "CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS",

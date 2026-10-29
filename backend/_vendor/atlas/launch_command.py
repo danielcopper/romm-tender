@@ -373,6 +373,25 @@ class LauncherScript:
 
 
 @dataclass(frozen=True, slots=True)
+class DistributionVariable:
+    """One variable the distribution's own start provides and the program reads, inherited rather than set by the
+    command — a caller that starts the program outside that start passes it itself.
+    """
+
+    name: str
+    """The variable's name, as the start file and the program spell it."""
+    value: str | None
+    """Its value as the start sets it — ``null`` where the start computes it rather than writes it (a line that is no
+    literal), or where the setting it comes from is not there as a string."""
+    set_by: str
+    """The start file and line that set it, in the sandbox's spelling (``/app/libexec/all_vars.sh:49``) — the file
+    alone where it holds no line that sets it."""
+    provided: bool
+    """Whether this installation provides it: the start file defines it, and a path it names is there as the sandbox
+    reaches it — ``false`` where it is not, or where atlas cannot see it."""
+
+
+@dataclass(frozen=True, slots=True)
 class LaunchCommand:
     """The command the frontend would run for one file, taken apart."""
 
@@ -388,6 +407,10 @@ class LaunchCommand:
     """Every ``%INJECT%`` ES-DE resolved, in the order it resolved them — empty where the command has none."""
     launcher_script: LauncherScript | None = None
     """The EmuDeck launcher script the command runs, ``null`` where it runs none."""
+    distribution_environment: tuple[DistributionVariable, ...] | None = None
+    """What the program reads from its distribution's own start, in the order it first reads it — empty where it
+    needs nothing beyond the command and a normal user session, ``null`` where that is not stated (a program no
+    reading is pinned for, ``launch-environment-unpinned``)."""
 
 
 TooLarge = Literal["too-large"]

@@ -264,7 +264,8 @@ disc decides the region of a group the console region selects. An `inventory` qu
 launch.
 
 `launchable_query` carries `system` and `content_path`, both required — a verdict without a file has no extension to
-judge, and one without a system has no accept-list to judge it by — and takes no `label`.
+judge, and one without a system has no accept-list to judge it by — and may name the entry to judge by its `label`, as
+`launch_command_query` names its entry; without one the entry that would run is judged.
 
 `savefile_query`, `savestate_query`, `screenshot_query`, `texture_query`, `mod_query` and `soft_patch_query` carry a
 non-empty subset of `content_path` (the content the launch is for), `core_so` (the core's `.so` file name) and

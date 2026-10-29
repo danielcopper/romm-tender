@@ -3719,6 +3719,7 @@
           "alternatives": [
             "Azahar (Standalone)"
           ],
+          "installers": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -3732,6 +3733,153 @@
                 "core_file": "citra_libretro.dll",
                 "label": "Citra",
                 "system": "n3ds"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-a-label-judges-the-sibling-it-names",
+      "rationale": "EmuDeck's n3ds overlay of entry-route-a-foreign-core-row-refuses-before-any-card, whose first row hands RetroArch a Windows core and takes no file at all. Asked with label 'Azahar (Standalone)', the question is about the standalone row a caller starts the game through: its own loader was read and takes .3ds, so the verdict is launchable with that row as the entry, and no alternatives, which only entry-not-accepted carries. The sealed bundled layer is stated as on the unlabelled answer.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\ndoInstallESDE=true\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>n3ds</name>\n    <fullname>Nintendo 3DS</fullname>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .3DS .cci .CCI</extension>\n    <command label=\"Citra\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\\citra_libretro.dll %ROM%</command>\n    <command label=\"Azahar (Standalone)\">%EMULATOR_AZAHAR% %ROM%</command>\n    <platform>n3ds</platform>\n    <theme>n3ds</theme>\n  </system>\n</systemList>\n",
+          "/home/deck/Emulation/roms/n3ds/Game.3ds": ""
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "launchable_query": {
+          "installation": "emudeck",
+          "system": "n3ds",
+          "content_path": "/home/deck/Emulation/roms/n3ds/Game.3ds",
+          "label": "Azahar (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".3ds",
+          "accepted": [
+            ".3ds",
+            ".3DS",
+            ".cci",
+            ".CCI"
+          ],
+          "entry": {
+            "system": "n3ds",
+            "label": "Azahar (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "AZAHAR",
+            "declared_index": 1,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "caveats": [
+            {
+              "code": "emulator-catalogue-sealed",
+              "data": {
+                "system": "n3ds"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-sealed-emudeck-refuses-a-label-no-derived-entry-carries",
+      "rationale": "EmuDeck with its bundled layer sealed and an overlay declaring nothing: gba is a system only the installed mGBA core declares, so launchability answers unknown on the sealed statement alone, with no entry judged. The launch command answers such a system from the entries derived from the cores and refuses a label none of them carries; launchability looks the label up in the same place and refuses it the same way, launch-command-label-unknown beside the sealed statement. A label the derived entry carries, mGBA, leaves the answer as it is without one.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\ndoInstallESDE=true\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\nlibretro_directory = \"/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/cores\"\nlibretro_info_path = \"/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/cores\"\n",
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n</systemList>\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/cores/mgba_libretro.info": "corename = \"mGBA\"\nsystemname = \"Game Boy Advance\"\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Emulation/roms",
+          "/home/deck/ROMs"
+        ],
+        "cores": {
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/cores/mgba_libretro.so": {
+            "library_name": "mGBA"
+          }
+        },
+        "launchable_query": {
+          "installation": "emudeck",
+          "system": "gba",
+          "content_path": "/home/deck/Emulation/roms/gba/Game.gba",
+          "label": "VBA-M"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "unknown",
+          "extension": ".gba",
+          "accepted": [],
+          "entry": null,
+          "alternatives": [],
+          "installers": null,
+          "caveats": [
+            {
+              "code": "emulator-catalogue-sealed",
+              "data": {
+                "system": "gba"
+              }
+            },
+            {
+              "code": "launch-command-label-unknown",
+              "data": {
+                "system": "gba",
+                "label": "VBA-M"
               }
             }
           ]
@@ -16753,6 +16901,7 @@
             ]
           },
           "alternatives": [],
+          "installers": null,
           "caveats": []
         }
       }
@@ -16832,6 +16981,7 @@
             ]
           },
           "alternatives": [],
+          "installers": null,
           "caveats": [
             {
               "code": "emulator-config-missing",
@@ -16893,6 +17043,7 @@
           ],
           "entry": null,
           "alternatives": [],
+          "installers": null,
           "caveats": []
         }
       }
@@ -16941,6 +17092,31 @@
           ],
           "entry": null,
           "alternatives": [],
+          "installers": [
+            {
+              "emulator": "RPCS3",
+              "entry": {
+                "system": "ps3",
+                "label": "RPCS3",
+                "kind": "standalone",
+                "core_so": null,
+                "emulator": "RPCS3",
+                "declared_index": 0,
+                "selection": null,
+                "availability": "unestablished",
+                "launcher": null,
+                "core_path": null,
+                "caveats": [
+                  {
+                    "code": "find-rules-unreadable",
+                    "data": {
+                      "layer": "bundled"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
           "caveats": []
         }
       }
@@ -16995,6 +17171,424 @@
           ],
           "entry": null,
           "alternatives": [],
+          "installers": [
+            {
+              "emulator": "RPCS3",
+              "entry": {
+                "system": "ps3",
+                "label": "RPCS3",
+                "kind": "standalone",
+                "core_so": null,
+                "emulator": "RPCS3",
+                "declared_index": 0,
+                "selection": null,
+                "availability": "unestablished",
+                "launcher": null,
+                "core_path": null,
+                "caveats": [
+                  {
+                    "code": "find-rules-unreadable",
+                    "data": {
+                      "layer": "bundled"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "an-installable-3ds-archive-names-both-installers",
+      "rationale": "A .cia is a CTR importable archive: Azahar refuses to boot one and offers to install it, and AzaharPlus does the same, so the verdict is needs-installation with both installers in the record's order. This catalogue is RetroDECK's shape: Azahar (Standalone) is declared and its component launcher is there, so its entry is stated, startable; AzaharPlus stands only inside a comment, which declares nothing, so its entry is null.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>n3ds</name>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .3DS .3dsx .3DSX .app .APP .axf .AXF .cci .CCI .cxi .CXI .desktop .elf .ELF .z3dsx .Z3DSX .zcci .ZCCI .zcxi .ZCXI .7z .7Z .zip .ZIP</extension>\n    <command label=\"Azahar (Standalone)\">%EMULATOR_AZAHAR% %ROM%</command>\n    <!-- <command label=\"AzaharPlus (Standalone)\">%EMULATOR_AZAHARPLUS% %ROM%</command> -->\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"AZAHAR\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/azahar/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/azahar/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "n3ds",
+          "content_path": "/mnt/sd/retrodeck/roms/n3ds/Game.cia"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "needs-installation",
+          "extension": ".cia",
+          "accepted": [
+            ".3ds",
+            ".3DS",
+            ".3dsx",
+            ".3DSX",
+            ".app",
+            ".APP",
+            ".axf",
+            ".AXF",
+            ".cci",
+            ".CCI",
+            ".cxi",
+            ".CXI",
+            ".desktop",
+            ".elf",
+            ".ELF",
+            ".z3dsx",
+            ".Z3DSX",
+            ".zcci",
+            ".ZCCI",
+            ".zcxi",
+            ".ZCXI",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": null,
+          "alternatives": [],
+          "installers": [
+            {
+              "emulator": "AZAHAR",
+              "entry": {
+                "system": "n3ds",
+                "label": "Azahar (Standalone)",
+                "kind": "standalone",
+                "core_so": null,
+                "emulator": "AZAHAR",
+                "declared_index": 0,
+                "selection": null,
+                "availability": "startable",
+                "launcher": {
+                  "path": "/app/retrodeck/components/azahar/component_launcher.sh",
+                  "replacement_command": null,
+                  "app_id": "net.retrodeck.retrodeck",
+                  "rule": "staticpath",
+                  "entry": "/app/retrodeck/components/azahar/component_launcher.sh"
+                },
+                "core_path": null,
+                "caveats": []
+              }
+            },
+            {
+              "emulator": "AZAHARPLUS",
+              "entry": null
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-vita-application-archive-is-installed-by-vita3k",
+      "rationale": "A .vpk is a PS Vita application archive: Vita3K installs it and boots the installed title, while the psvita entry itself starts an installed title by its id and the accept-list carries .psvita alone. The verdict names Vita3K with its declared, startable entry.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psvita</name>\n    <path>%ROMPATH%/psvita</path>\n    <extension>.psvita</extension>\n    <command label=\"Vita3K (Standalone)\">%EMULATOR_VITA3K% -r %INJECT%=%BASENAME%.psvita</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"VITA3K\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/vita3k/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/vita3k/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "psvita",
+          "content_path": "/mnt/sd/retrodeck/roms/psvita/Game.vpk"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "needs-installation",
+          "extension": ".vpk",
+          "accepted": [
+            ".psvita"
+          ],
+          "entry": null,
+          "alternatives": [],
+          "installers": [
+            {
+              "emulator": "VITA3K",
+              "entry": {
+                "system": "psvita",
+                "label": "Vita3K (Standalone)",
+                "kind": "standalone",
+                "core_so": null,
+                "emulator": "VITA3K",
+                "declared_index": 0,
+                "selection": null,
+                "availability": "startable",
+                "launcher": {
+                  "path": "/app/retrodeck/components/vita3k/component_launcher.sh",
+                  "replacement_command": null,
+                  "app_id": "net.retrodeck.retrodeck",
+                  "rule": "staticpath",
+                  "entry": "/app/retrodeck/components/vita3k/component_launcher.sh"
+                },
+                "core_path": null,
+                "caveats": []
+              }
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "an-installer-declared-but-not-installed-says-so-in-its-entry",
+      "rationale": "An .edat is a PSN content license RPCS3 copies into its exdata folder. The ps3 system declares two RPCS3 entries and the installer's entry is the first in the frontend's order; RPCS3's component launcher is not there, so that entry is not-installed with emulator-not-found — the availability travels inside the entry, and the verdict is still needs-installation.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps3</name>\n    <path>%ROMPATH%/ps3</path>\n    <extension>.desktop .iso .ISO .ps3 .PS3 .ps3dir .PS3DIR</extension>\n    <command label=\"RPCS3 Directory (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n    <command label=\"RPCS3 ISO (Standalone)\">%EMULATOR_RPCS3% --no-gui %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"RPCS3\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n</ruleList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "ps3",
+          "content_path": "/mnt/sd/retrodeck/roms/ps3/Game.edat"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "needs-installation",
+          "extension": ".edat",
+          "accepted": [
+            ".desktop",
+            ".iso",
+            ".ISO",
+            ".ps3",
+            ".PS3",
+            ".ps3dir",
+            ".PS3DIR"
+          ],
+          "entry": null,
+          "alternatives": [],
+          "installers": [
+            {
+              "emulator": "RPCS3",
+              "entry": {
+                "system": "ps3",
+                "label": "RPCS3 Directory (Standalone)",
+                "kind": "standalone",
+                "core_so": null,
+                "emulator": "RPCS3",
+                "declared_index": 0,
+                "selection": null,
+                "availability": "not-installed",
+                "launcher": null,
+                "core_path": null,
+                "caveats": [
+                  {
+                    "code": "emulator-not-found",
+                    "data": {
+                      "emulator_token": "RPCS3",
+                      "searched": [
+                        "/app/retrodeck/components/rpcs3/component_launcher.sh"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-ps4-package-has-no-installer-here",
+      "rationale": "A PS4 .pkg is the content's distribution form and has to be extracted first, but shadPS4, the only ps4 emulator either distribution sets up, removed its package installer. On EmuDeck's ps4 overlay, which accepts .desktop alone, the verdict is needs-installation with an empty installers list: the right file, and nothing here installs it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\ntoolsPath=\"$HOME/Emulation/tools\"\ndoInstallESDE=true\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\n",
+          "/home/deck/Applications/ES-DE.AppImage": {
+            "status": "invalid-text",
+            "size": 119537664
+          },
+          "/home/deck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>ps4</name>\n    <path>%ROMPATH%/ps4/shortcuts</path>\n    <extension>.desktop</extension>\n    <command label=\"ShadPS4 Shortcuts (Standalone)\">%EMULATOR_SHADPS4% %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/ROMs"
+        ],
+        "appimages": {
+          "/home/deck/Applications/ES-DE.AppImage": {
+            "usr/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"SHADPS4\">\n        <rule type=\"systempath\">\n            <entry>shadps4</entry>\n        </rule>\n        <rule type=\"staticpath\">\n            <entry>~/Applications/Shadps4-qt*.AppImage</entry>\n        </rule>\n    </emulator>\n</ruleList>\n",
+            "usr/bin/es-de": {
+              "status": "invalid-text"
+            }
+          }
+        },
+        "launchable_query": {
+          "installation": "emudeck",
+          "system": "ps4",
+          "content_path": "/home/deck/Emulation/roms/ps4/Game.pkg"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "needs-installation",
+          "extension": ".pkg",
+          "accepted": [
+            ".desktop"
+          ],
+          "entry": null,
+          "alternatives": [],
+          "installers": [],
+          "caveats": [
+            {
+              "code": "emulator-catalogue-sealed",
+              "data": {
+                "system": "ps4"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-catalogue-accepting-a-3ds-archive-meets-azahars-refusal",
+      "rationale": "A custom catalogue adds .cia to the n3ds accept-list, so the frontend scans the file and no install-first record is consulted. Azahar's loader card no longer lists .cia — booting one only offers to install it — so the entry that would run is established not to read it: entry-not-accepted, with no other entry to offer, and installers null as on every verdict but needs-installation.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>n3ds</name>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .3DS .3dsx .3DSX .app .APP .axf .AXF .cci .CCI .cxi .CXI .desktop .elf .ELF .z3dsx .Z3DSX .zcci .ZCCI .zcxi .ZCXI .7z .7Z .zip .ZIP</extension>\n    <command label=\"Azahar (Standalone)\">%EMULATOR_AZAHAR% %ROM%</command>\n    <!-- <command label=\"AzaharPlus (Standalone)\">%EMULATOR_AZAHARPLUS% %ROM%</command> -->\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"AZAHAR\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/azahar/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/azahar/component_launcher.sh": "#!/bin/bash\n",
+          "/mnt/sd/retrodeck/ES-DE/custom_systems/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>n3ds</name>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .cia</extension>\n    <command label=\"Azahar (Standalone)\">%EMULATOR_AZAHAR% %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "n3ds",
+          "content_path": "/mnt/sd/retrodeck/roms/n3ds/Game.cia"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".cia",
+          "accepted": [
+            ".3ds",
+            ".cia"
+          ],
+          "entry": {
+            "system": "n3ds",
+            "label": "Azahar (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "AZAHAR",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/azahar/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/azahar/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
           "caveats": []
         }
       }
@@ -17042,6 +17636,7 @@
           "accepted": [],
           "entry": null,
           "alternatives": [],
+          "installers": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -17055,7 +17650,7 @@
     },
     {
       "name": "the-default-entry-refuses-what-the-system-list-accepts",
-      "rationale": "The n3ds accept-list carries .zip on account of the libretro entries, and the entry that would run — Azahar, the declared default, a standalone — is recorded as reading no archive container at all: its own loader takes .cia/.cci/.3dsx/.cxi/.3ds and z-variants, and no RetroArch stands in front of a standalone to pick a file out of a zip. The union says yes, the machine then does nothing — issue #66's founding case. The verdict is entry-not-accepted, the entry is the finding, and alternatives names Citra: its core does not claim zip either, but RetroArch opens the container for it and picks a matching file out (task_content.c:1325-1358 @ a79435a).",
+      "rationale": "The n3ds accept-list carries .zip on account of the libretro entries, and the entry that would run — Azahar, the declared default, a standalone — is recorded as reading no archive container at all: its own loader takes .cci/.3dsx/.cxi/.3ds and their z-variants, and no RetroArch stands in front of a standalone to pick a file out of a zip. The union says yes, the machine then does nothing — issue #66's founding case. The verdict is entry-not-accepted, the entry is the finding, and alternatives names Citra: its core does not claim zip either, but RetroArch opens the container for it and picks a matching file out (task_content.c:1325-1358 @ a79435a).",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -17124,7 +17719,232 @@
           "alternatives": [
             "Citra"
           ],
+          "installers": null,
           "caveats": []
+        }
+      }
+    },
+    {
+      "name": "a-label-judges-the-entry-it-names",
+      "rationale": "The machine of the-default-entry-refuses-what-the-system-list-accepts, asked about the entry a caller starts the game through rather than the one ES-DE would pick (#715). Without the label the default Azahar is judged and refuses the zip; with label Citra the verdict is Citra's own: RetroArch opens the container for it, so the file launches through that entry, with archive-contents-unread stating what atlas does not read inside. The entry is chosen exactly as launch_command chooses it, so a caller asking both questions with one label is told about one entry.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>n3ds</name>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .cci .zip .7z</extension>\n    <command label=\"Azahar\">%EMULATOR_AZAHAR% %ROM%</command>\n    <command label=\"Citra\">retroarch -L /app/cores/citra_libretro.so %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/citra_libretro.so": {
+            "library_name": "Citra",
+            "valid_extensions": "3ds|3dsx|cia|elf",
+            "block_extract": false
+          }
+        },
+        "launchable_query": {
+          "system": "n3ds",
+          "content_path": "/mnt/sd/retrodeck/roms/n3ds/Game.zip",
+          "label": "Citra"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".zip",
+          "accepted": [
+            ".3ds",
+            ".cci",
+            ".zip",
+            ".7z"
+          ],
+          "entry": {
+            "system": "n3ds",
+            "label": "Citra",
+            "kind": "libretro",
+            "core_so": "citra_libretro.so",
+            "emulator": "citra_libretro.so",
+            "declared_index": 1,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "launch-path-unestablished",
+                "data": {
+                  "path": "retroarch"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "caveats": [
+            {
+              "code": "archive-contents-unread",
+              "data": {
+                "entry": "Citra",
+                "extension": ".zip"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-label-naming-a-refusing-entry-is-the-finding-and-the-others-the-remedy",
+      "rationale": "The same n3ds entries declared the other way round: Citra first, so the entry that would run takes the zip and an unlabelled question answers launchable. Label Azahar names the standalone, recorded as opening no archive, so the verdict about it is entry-not-accepted with Azahar as the entry. alternatives keeps its rule — the other declared entries established to take the file — and the other entries are every entry but the named one, so Citra, declared before it and the one ES-DE would pick, is the remedy.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>n3ds</name>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .cci .zip .7z</extension>\n    <command label=\"Citra\">retroarch -L /app/cores/citra_libretro.so %ROM%</command>\n    <command label=\"Azahar\">%EMULATOR_AZAHAR% %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/citra_libretro.so": {
+            "library_name": "Citra",
+            "valid_extensions": "3ds|3dsx|cia|elf",
+            "block_extract": false
+          }
+        },
+        "launchable_query": {
+          "system": "n3ds",
+          "content_path": "/mnt/sd/retrodeck/roms/n3ds/Game.zip",
+          "label": "Azahar"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".zip",
+          "accepted": [
+            ".3ds",
+            ".cci",
+            ".zip",
+            ".7z"
+          ],
+          "entry": {
+            "system": "n3ds",
+            "label": "Azahar",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "AZAHAR",
+            "declared_index": 1,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [
+            "Citra"
+          ],
+          "installers": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "an-unknown-label-refuses-the-launchability-verdict",
+      "rationale": "A label no n3ds entry carries ('Citra (Standalone)' is not 'Citra': ES-DE matches a label exactly) is refused the way launch_command refuses it: launch-command-label-unknown with the system and the label, and no entry. The verdict is unknown rather than any judgment of the file, whatever its extension: the caller named an entry this system does not have, and a verdict about another entry would answer a question nobody asked. accepted still carries the system's list, which is read before any entry is chosen.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>n3ds</name>\n    <path>%ROMPATH%/n3ds</path>\n    <extension>.3ds .cci .zip .7z</extension>\n    <command label=\"Azahar\">%EMULATOR_AZAHAR% %ROM%</command>\n    <command label=\"Citra\">retroarch -L /app/cores/citra_libretro.so %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/citra_libretro.so": {
+            "library_name": "Citra",
+            "valid_extensions": "3ds|3dsx|cia|elf",
+            "block_extract": false
+          }
+        },
+        "launchable_query": {
+          "system": "n3ds",
+          "content_path": "/mnt/sd/retrodeck/roms/n3ds/Game.zip",
+          "label": "Citra (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "unknown",
+          "extension": ".zip",
+          "accepted": [
+            ".3ds",
+            ".cci",
+            ".zip",
+            ".7z"
+          ],
+          "entry": null,
+          "alternatives": [],
+          "installers": null,
+          "caveats": [
+            {
+              "code": "launch-command-label-unknown",
+              "data": {
+                "system": "n3ds",
+                "label": "Citra (Standalone)"
+              }
+            }
+          ]
         }
       }
     },
@@ -17197,6 +18017,7 @@
             ]
           },
           "alternatives": [],
+          "installers": null,
           "caveats": [
             {
               "code": "archive-contents-unread",
@@ -17278,6 +18099,7 @@
             ]
           },
           "alternatives": [],
+          "installers": null,
           "caveats": [
             {
               "code": "entry-format-unclaimed",
@@ -17353,6 +18175,7 @@
             ]
           },
           "alternatives": [],
+          "installers": null,
           "caveats": [
             {
               "code": "entry-format-unestablished",
@@ -17433,6 +18256,73 @@
               "code": "emulator-list-derived",
               "data": {
                 "system": "gba"
+              }
+            },
+            {
+              "code": "arrangement-unverified",
+              "data": {
+                "kind": "bare_retroarch_flatpak"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a-bare-retroarch-refuses-a-label-no-derived-entry-carries",
+      "rationale": "A bare RetroArch has no catalogue, so launchability answers unknown beside emulator-catalogue-unavailable with or without a label. The launch command still looks a label up among the entries derived from the installed cores, and refuses one none of them carries; the launchability question refuses the same label the same way, so a caller is told once, by both questions, that the entry it named is not here. The mGBA core derives the only gba entry, and VBA-M is not it.",
+      "input": {
+        "home": "/home/user",
+        "files": {
+          "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"~/saves\"\nlibretro_directory = \"/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores\"\nlibretro_info_path = \"/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores\"\n",
+          "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores/mgba_libretro.info": "display_name = \"Nintendo - Game Boy Advance (mGBA)\"\ncorename = \"mGBA\"\nsystemname = \"Game Boy Advance\"\nsystemid = \"game_boy_advance\"\nfirmware_count = \"0\"\n",
+          "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores/gambatte_libretro.info": "display_name = \"Nintendo - Game Boy Color (Gambatte)\"\ncorename = \"Gambatte\"\nsystemname = \"Nintendo - Game Boy Color\"\nfirmware_count = \"0\"\n"
+        },
+        "cores": {
+          "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores/mgba_libretro.so": {
+            "library_name": "mGBA"
+          },
+          "/home/user/.var/app/org.libretro.RetroArch/config/retroarch/cores/gambatte_libretro.so": {
+            "library_name": "Gambatte"
+          }
+        },
+        "launchable_query": {
+          "system": "gba",
+          "content_path": "/home/deck/roms/gba/Game.gba",
+          "label": "VBA-M"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "bare_retroarch_flatpak",
+            "label": "RetroArch (Flatpak)",
+            "kinds": [
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/user/.var/app/org.libretro.RetroArch/config/retroarch",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "unknown",
+          "extension": ".gba",
+          "accepted": [],
+          "entry": null,
+          "alternatives": [],
+          "installers": null,
+          "caveats": [
+            {
+              "code": "emulator-catalogue-unavailable",
+              "data": {
+                "arrangement": "retroarch"
+              }
+            },
+            {
+              "code": "launch-command-label-unknown",
+              "data": {
+                "system": "gba",
+                "label": "VBA-M"
               }
             },
             {

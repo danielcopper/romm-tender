@@ -287,10 +287,10 @@ class EveryInstallation:
         return self._ask(lambda installation: installation.rom_locations())
 
     def launchable(
-        self, system: str, content_path: str
+        self, system: str, content_path: str, *, label: str | None = None
     ) -> tuple[InstallationAnswer[LaunchabilityAnswer], ...]:
         """Whether each installation launches this file as *system* content, and why not."""
-        return self._ask(lambda installation: installation.launchable(system, content_path))
+        return self._ask(lambda installation: installation.launchable(system, content_path, label=label))
 
     def launch_command(
         self, system: str, content_path: str, *, label: str | None = None

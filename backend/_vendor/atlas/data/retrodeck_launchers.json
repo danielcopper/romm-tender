@@ -1,0 +1,328 @@
+{
+  "schema": 1,
+  "spec": "The RetroDECK component launchers ES-DE can run, each pinned by the git blob hash of its deployed copy, and the variables it reads that RetroDECK's own start provides, in the order it first reads them. A variable is defined in one start file (variables), pinned by its own blob hash (start_files); a launcher's pin covers the start file of every variable it reads. Values are read live, never packaged: a 'line' variable from its assignment in the start file, a 'paths' variable from retrodeck.json's paths, which conf_read exports under the key's own name at line. Read by atlas.launch_environment; held against the deployed Flatpak by tests/test_launch_environment_tripwire.py.",
+  "retrodeck": {
+    "version": "0.10.10b",
+    "start": "bin/retrodeck:40 sources /app/libexec/global.sh; global.sh:16-18 sources logger.sh and :116-118 all_vars.sh under allexport; conf_read (other_functions.sh:148-190, called at global.sh:198 and :210) exports every key of retrodeck.json's paths and options; global.sh:231-233 sources every component's component_functions.sh under allexport (source_component_functions, other_functions.sh:1370-1424); start_esde (retrodeck/components/es-de/component_functions.sh:9-12) runs ES-DE's launcher in a child bash, and ES-DE hands each command to /bin/sh, so every export reaches a component launcher"
+  },
+  "start_files": {
+    "/app/libexec/all_vars.sh": "0c35a813969f3cdd743f532ce172579554f6d8ed",
+    "/app/libexec/other_functions.sh": "baa8c4db17def688a93881cdb42aa35c005d497d",
+    "/app/retrodeck/components/xroar/component_functions.sh": "2285df84dd2f2fec481b5f3d956fa29e397e00e7"
+  },
+  "variables": {
+    "rd_shared_libs": {
+      "defined_in": "/app/libexec/all_vars.sh",
+      "from": "line"
+    },
+    "DEFAULT_LD_LIBRARY_PATH": {
+      "defined_in": "/app/libexec/all_vars.sh",
+      "from": "line"
+    },
+    "bios_path": {
+      "defined_in": "/app/libexec/other_functions.sh",
+      "from": "paths",
+      "line": 156
+    },
+    "screenshots_path": {
+      "defined_in": "/app/libexec/other_functions.sh",
+      "from": "paths",
+      "line": 156
+    },
+    "saves_path": {
+      "defined_in": "/app/libexec/other_functions.sh",
+      "from": "paths",
+      "line": 156
+    },
+    "roms_path": {
+      "defined_in": "/app/libexec/other_functions.sh",
+      "from": "paths",
+      "line": 156
+    },
+    "xroar_config": {
+      "defined_in": "/app/retrodeck/components/xroar/component_functions.sh",
+      "from": "line"
+    }
+  },
+  "launchers": [
+    {
+      "launcher": "/app/retrodeck/components/azahar/component_launcher.sh",
+      "blob": "3d6ca0535cde6ee04c5e333a07bf0ec86b30bda5",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/azahar/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/azahar/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/cemu/component_launcher.sh",
+      "blob": "1571bad932cab758aa5686c42f1d7a9ced28d250",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/cemu/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/cemu/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/dolphin/component_launcher.sh",
+      "blob": "00c1fea51d1afaf2541ae45fe3259b6f8682aa65",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/dolphin/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/dolphin/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/duckstation/component_launcher.sh",
+      "blob": "ff8780ab0c5570f7fcd7771460a1d05a06205cd8",
+      "reads": []
+    },
+    {
+      "launcher": "/app/retrodeck/components/es-de/component_launcher.sh",
+      "blob": "cceaed72e906807a3e11e138ebc1fe40fd1637d4",
+      "reads": []
+    },
+    {
+      "launcher": "/app/retrodeck/components/flips/component_launcher.sh",
+      "blob": "8fe64341c9fa0fef56e28d3e9dab48c479dc9286",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/flips/component_launcher.sh:9"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/flips/component_launcher.sh:9"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/gzdoom/component_launcher.sh",
+      "blob": "11945612c6c5e9ff6e781d47b684a40b747381b8",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/gzdoom/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/gzdoom/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/mame/component_launcher.sh",
+      "blob": "81fd1f03288b221482dac96361eb8db2593785f8",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/mame/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/mame/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/melonds/component_launcher.sh",
+      "blob": "0ae0f382df507233046d50055c04f63681148ac9",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/melonds/component_launcher.sh:7-9"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/melonds/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/openbor/component_launcher.sh",
+      "blob": "a215a9429fb412db0af9b8b56bfae7b462d8f3fe",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/openbor/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/openbor/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/pcsx2/component_launcher.sh",
+      "blob": "af909e0ee9fddf68532b43212bb1c14dd54bb43a",
+      "reads": []
+    },
+    {
+      "launcher": "/app/retrodeck/components/pico-8/component_launcher.sh",
+      "blob": "7e1a55eb5f9dfe81ef9038736537f1c9fc34a9e5",
+      "reads": [
+        {
+          "name": "bios_path",
+          "citation": "components/pico-8/component_launcher.sh:3"
+        },
+        {
+          "name": "screenshots_path",
+          "citation": "components/pico-8/component_launcher.sh:3"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/portmaster/component_launcher.sh",
+      "blob": "e16d379dd1ddffec7b56578245ff75a78f22c1b3",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/portmaster/component_launcher.sh:3"
+        },
+        {
+          "name": "roms_path",
+          "citation": "components/portmaster/component_launcher.sh:11"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/ppsspp/component_launcher.sh",
+      "blob": "9dcbcfedeed22d3d96e280f4d9cf4785e45b0e1e",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/ppsspp/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/primehack/component_launcher.sh",
+      "blob": "e1406053bb5e934babe49911a850a7576caf20aa",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/primehack/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/primehack/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/retroarch/component_launcher.sh",
+      "blob": "19288c97771720ae0232f5becd227bbe88020297",
+      "reads": [
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/retroarch/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/rpcs3/component_launcher.sh",
+      "blob": "d87c54430b1aebcf4093bcd1be27774e7ecd868e",
+      "reads": [
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/rpcs3/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/ruffle/component_launcher.sh",
+      "blob": "a0cd2fb9461e4a6e7a4fb1712d6385d2ad47f0f5",
+      "reads": [
+        {
+          "name": "saves_path",
+          "citation": "components/ruffle/component_launcher.sh:12"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/solarus/component_launcher.sh",
+      "blob": "30ad904e4a28d34d48de3600ef5d0934a5391493",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/solarus/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/solarus/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/steam-rom-manager/component_launcher.sh",
+      "blob": "b84afbcf059368d9e146fdc15e48a131d74bc22c",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/steam-rom-manager/component_launcher.sh:8"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/steam-rom-manager/component_launcher.sh:8"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/vita3k/component_launcher.sh",
+      "blob": "a3fca80b2c6831396f8a1f37ba1db40762c9d3f6",
+      "reads": [
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/vita3k/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/xemu/component_launcher.sh",
+      "blob": "91ee2765b48deb128eaea9fab2e452eaeb4bcb4b",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/xemu/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/xemu/component_launcher.sh:7"
+        }
+      ]
+    },
+    {
+      "launcher": "/app/retrodeck/components/xroar/component_launcher.sh",
+      "blob": "12f36bd146b7d93f93f48960b07d31a946b82829",
+      "reads": [
+        {
+          "name": "rd_shared_libs",
+          "citation": "components/xroar/component_launcher.sh:7"
+        },
+        {
+          "name": "DEFAULT_LD_LIBRARY_PATH",
+          "citation": "components/xroar/component_launcher.sh:7"
+        },
+        {
+          "name": "xroar_config",
+          "citation": "components/xroar/component_launcher.sh:14"
+        }
+      ]
+    }
+  ]
+}

@@ -121,7 +121,7 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
     "rom-location": (lambda target, args: target.rom_location(args.system), rom_placement_contract),
     "rom-locations": (lambda target, _args: target.rom_locations(), rom_locations_contract),
     "launchable": (
-        lambda target, args: target.launchable(args.system, args.content),
+        lambda target, args: target.launchable(args.system, args.content, label=args.label),
         launchable_contract,
     ),
     "launch-command": (
@@ -344,6 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     launch.add_argument("system", help="system id, e.g. dreamcast")
     launch.add_argument("content", help="path of the content file")
+    launch.add_argument("--label", help="the catalogue entry's label; default: the entry that would run")
 
     command = commands.add_parser(
         "launch-command",

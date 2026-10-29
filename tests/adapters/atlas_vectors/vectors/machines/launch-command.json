@@ -86,9 +86,18 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -179,9 +188,18 @@
             ],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -352,9 +370,18 @@
               "created_if_missing": true
             },
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/mame/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -444,9 +471,18 @@
               "created_if_missing": true
             },
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -542,9 +578,18 @@
                 "outcome": "injected"
               }
             ],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/xemu/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -634,9 +679,18 @@
                 "outcome": "absent"
               }
             ],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/xemu/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -973,13 +1027,21 @@
                 "outcome": "injected"
               }
             ],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
           "caveats": [
             {
               "code": "launch-command-placeholder-unknown",
               "data": {
                 "placeholder": "%RPCS3_GAMEID%"
+              }
+            },
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/rpcs3/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
           ]
@@ -1317,9 +1379,18 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/usr/bin/bash",
+                "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+              }
+            }
+          ]
         }
       }
     },
@@ -1408,9 +1479,18 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -1503,9 +1583,18 @@
               "created_if_missing": true
             },
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/mame/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -1598,9 +1687,18 @@
               "created_if_missing": true
             },
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/mame/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -1747,9 +1845,18 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/bin/bash",
+                "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+              }
+            }
+          ]
         }
       }
     },
@@ -2066,13 +2173,21 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
           "caveats": [
             {
               "code": "launch-command-argument-broken",
               "data": {
                 "placeholder": "%ROMRAW%"
+              }
+            },
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
           ]
@@ -2167,9 +2282,18 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/usr/bin/bash",
+                "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+              }
+            }
+          ]
         }
       }
     },
@@ -2943,9 +3067,18 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -3037,9 +3170,18 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/xemu/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -3209,9 +3351,18 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
-          "caveats": []
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
+              }
+            }
+          ]
         }
       }
     },
@@ -3539,13 +3690,21 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
           "caveats": [
             {
               "code": "launch-command-argument-broken",
               "data": {
                 "placeholder": "%ROM%"
+              }
+            },
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
           ]
@@ -3638,13 +3797,21 @@
               "created_if_missing": true
             },
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": null
           },
           "caveats": [
             {
               "code": "launch-path-unestablished",
               "data": {
                 "path": "/etc/emu"
+              }
+            },
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+                "blob": "a9bf588e2f88457fdf73ac7361ef1d596fb81453"
               }
             }
           ]
@@ -4013,7 +4180,8 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -4133,7 +4301,8 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -4937,7 +5106,8 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -5134,7 +5304,8 @@
             "environment": [],
             "working_folder": null,
             "injections": [],
-            "launcher_script": null
+            "launcher_script": null,
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -5779,7 +5950,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -6239,7 +6411,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -6699,7 +6872,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -7156,7 +7330,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -7620,7 +7795,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -8887,7 +9063,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -9345,7 +9522,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -9803,7 +9981,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -10263,7 +10442,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -10782,7 +10962,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -11301,7 +11482,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -11822,7 +12004,8 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
@@ -12340,13 +12523,749 @@
                 }
               ],
               "pinned_at": "863ab69d81f66a4c9c0cf65bf642fb96ccc4ca2c"
-            }
+            },
+            "distribution_environment": []
           },
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
               "data": {
                 "system": "switch"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "launch-command-a-pinned-launcher-states-what-it-reads-from-retrodecks-start",
+      "rationale": "Dolphin's component launcher, the deployed 0.10.10b text, is pinned, and so is all_vars.sh, the start file that defines both variables it reads at line 7: rd_shared_libs, the literal /app/retrodeck/components/shared-libs at all_vars.sh:49, provided because the deploy holds that folder, and DEFAULT_LD_LIBRARY_PATH, which all_vars.sh:54 computes from ${LD_LIBRARY_PATH} rather than writes, so its value is null and the line alone provides it. The command itself is the one ES-DE runs and needs no note.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/home/deck/retrodeck\", \"saves_path\": \"/home/deck/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gc</name><path>%ROMPATH%/gc</path><extension>.iso</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MAME\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/mame/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"XEMU\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RPCS3\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"OS-SHELL\">\n        <rule type=\"systempath\">\n            <entry>bash</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"EMPTYPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"BLANKPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|   </entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MISSING\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/missing/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/component_version": "retrodeck-main-20260926-172324\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n\n# Setting component name and path based on the directory name\ncomponent_name=\"$(basename \"$(dirname \"$(readlink -f \"${BASH_SOURCE[0]}\")\")\")\"\ncomponent_path=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\" )\" && pwd)\"\n\nexport LD_LIBRARY_PATH=\"$rd_shared_libs:$rd_shared_libs/org.gnome.Platform/49/:${DEFAULT_LD_LIBRARY_PATH}\"\n\nlog i \"RetroDECK is now launching $component_name\"\nlog d \"Library path is: $LD_LIBRARY_PATH\"\nlog d \"QT plugin path is: $QT_PLUGIN_PATH\"\n\ncase \"${XDG_CURRENT_DESKTOP}\" in\n    *GNOME*|*gnome*|*XFCE*)\n        export QT_QPA_PLATFORMTHEME=gtk2\n        log d \"QT_QPA_PLATFORMTHEME is set to: $QT_QPA_PLATFORMTHEME\"\n        ;;\nesac\n\nexec \"$component_path/bin/dolphin-emu\" \"$@\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/mame/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/xemu/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/rpcs3/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mgba_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mame_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/libexec/all_vars.sh": "#!/bin/bash\n\n# Static variables\nrd_conf=\"$XDG_CONFIG_HOME/retrodeck/retrodeck.json\"                                                            # RetroDECK config file path\nrd_conf_backup=\"$XDG_CONFIG_HOME/retrodeck/retrodeck.bak\"                                                     # Backup of RetroDECK config file from update\nrd_core_files=\"/app/retrodeck/config/retrodeck\"                                                                           # Folder with RetroDECK reference and helper files\nrd_defaults=\"$rd_core_files/retrodeck.json\"                                                            # A default RetroDECK config file\nrd_update_patch=\"$XDG_CONFIG_HOME/retrodeck/rd_update.patch\"                                                  # A static location for the temporary patch file used during retrodeck.cfg updates\nbios_checklist=\"$rd_core_files/reference_lists/bios.json\"                                    # A config file listing BIOS file information that can be verified\ninput_validation=\"$rd_core_files/reference_lists/input_validation.cfg\"                                # A config file listing valid CLI inputs\nfinit_options_list=\"$rd_core_files/reference_lists/finit_options_list.cfg\"                            # A config file listing available optional installs during finit\nsplashscreen_dir=\"/app/retrodeck/graphics/extra_splashes\"                                   # The default location of extra splash screens\ncurrent_splash_file=\"$XDG_CONFIG_HOME/ES-DE/resources/graphics/splash.svg\"                                    # The active splash file that will be shown on boot\ndefault_splash_file=\"/app/retrodeck/graphics/splash.svg\"                               # The default RetroDECK splash screen\n# TODO: instead of this maybe we can iterate the features.json\nmulti_user_emulator_config_dirs=\"$rd_core_files/reference_lists/multi_user_emulator_config_dirs.cfg\"  # A list of emulator config folders that can be safely linked/unlinked entirely in multi-user mode\nrd_es_themes=\"/app/share/es-de/themes\"                                                                   # The directory where themes packaged with RetroDECK are stored\nrd_lockfile=\"$XDG_CONFIG_HOME/retrodeck/.lock\"                                                                   # Where the lockfile is located\nsd_sdcard_default_path=\"/run/media/mmcblk0p1\"                                                                        # Steam Deck SD default path\nhard_version=\"$(cat '/app/retrodeck/version')\"                                                           # hardcoded version (in the readonly filesystem)\nrd_repo=\"https://github.com/RetroDECK/RetroDECK\"                                                         # The URL of the main RetroDECK GitHub repo\nes_themes_list=\"https://gitlab.com/es-de/themes/themes-list/-/raw/master/themes.json\"                    # The URL of the ES-DE 2.0 themes list\nremote_network_target_1=\"https://flathub.org\"                                                            # The URL of a common internet target for testing network access\nremote_network_target_2=\"$rd_repo\"                                                                       # The URL of a common internet target for testing network access\nremote_network_target_3=\"https://one.one.one.one\"                                                        # The URL of a common internet target for testing network access\nhelper_files_path=\"$rd_core_files/helper_files\"                                                     # The parent folder of RetroDECK documentation files for deployment\nrd_metainfo=\"/app/share/metainfo/net.retrodeck.retrodeck.metainfo.xml\"                                   # The shipped metainfo XML file for this version\nra_cheevos_api_url=\"https://retroachievements.org/dorequest.php\"                                                 # API URL for RetroAchievements.org\npresets_dir=\"$rd_core_files/presets\"                                                                  # Repository for all system preset config files\ngit_organization_name=\"RetroDECK\"                                                                        # The name of the organization in our git repository such as GitHub\ncooker_repository_name=\"Cooker\"                                                                          # The name of the cooker repository under RetroDECK organization\nmain_repository_name=\"RetroDECK\"                                                                         # The name of the main repository under RetroDECK organization\nfeatures=\"$rd_core_files/reference_lists/features.json\"                                               # A file where all the RetroDECK and component capabilities are kept for querying\nfolder_iconsets_dir=\"$XDG_CONFIG_HOME/retrodeck/graphics/folder-iconsets\"\n\n# API-related file locations\n\nrd_api_dir=\"$XDG_CONFIG_HOME/retrodeck/api\"\nREQUEST_PIPE=\"$rd_api_dir/retrodeck_api_pipe\"\nPID_FILE=\"$rd_api_dir/retrodeck_api_server.pid\"\nrd_api_socket=\"$rd_api_dir/retrodeck_api_server.sock\"\n\n# File lock file for multi-threaded write operations to the same file\n\nrd_file_lock=\"$rd_api_dir/retrodeck_file_lock\"\n\n# Base dir for all installed RetroDECK components\nrd_components=\"/app/retrodeck/components\"\nrd_shared_libs=\"/app/retrodeck/components/shared-libs\"\nrd_shared_libs_kde_path=\"/app/retrodeck/components/shared-libs/org.kde.Platform\"\nrd_shared_libs_gnome_path=\"/app/retrodeck/components/shared-libs/org.gnome.Platform\"\nrd_shared_libs_freedesktop_path=\"/app/retrodeck/components/shared-libs/org.freedesktop.Platform\" \nruntime_dir=\"${XDG_RUNTIME_DIR:-/tmp}/retrodeck\"\nDEFAULT_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso": ""
+        },
+        "dirs": [
+          "/home/deck/retrodeck/saves",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/shared-libs"
+        ],
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/cores": "/app/retrodeck/components/retroarch/cores"
+        },
+        "launch_command_query": {
+          "system": "gc",
+          "content_path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "launch_command": {
+          "entry": {
+            "system": "gc",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "command": {
+            "program": {
+              "variant": "flatpak",
+              "app_id": "net.retrodeck.retrodeck",
+              "command": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "path": null
+            },
+            "arguments": [
+              "-b",
+              "-e",
+              "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso"
+            ],
+            "environment": [],
+            "working_folder": null,
+            "injections": [],
+            "launcher_script": null,
+            "distribution_environment": [
+              {
+                "name": "rd_shared_libs",
+                "value": "/app/retrodeck/components/shared-libs",
+                "set_by": "/app/libexec/all_vars.sh:49",
+                "provided": true
+              },
+              {
+                "name": "DEFAULT_LD_LIBRARY_PATH",
+                "value": null,
+                "set_by": "/app/libexec/all_vars.sh:54",
+                "provided": true
+              }
+            ]
+          },
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "launch-command-a-start-variable-naming-a-folder-the-deploy-lacks-is-not-provided",
+      "rationale": "The same pinned Dolphin launcher and all_vars.sh, on a deploy without /app/retrodeck/components/shared-libs: rd_shared_libs still has its value and the line that sets it, and is not provided, because the folder it names is not there; DEFAULT_LD_LIBRARY_PATH names no folder and stays provided.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/home/deck/retrodeck\", \"saves_path\": \"/home/deck/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gc</name><path>%ROMPATH%/gc</path><extension>.iso</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MAME\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/mame/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"XEMU\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RPCS3\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"OS-SHELL\">\n        <rule type=\"systempath\">\n            <entry>bash</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"EMPTYPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"BLANKPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|   </entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MISSING\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/missing/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/component_version": "retrodeck-main-20260926-172324\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n\n# Setting component name and path based on the directory name\ncomponent_name=\"$(basename \"$(dirname \"$(readlink -f \"${BASH_SOURCE[0]}\")\")\")\"\ncomponent_path=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\" )\" && pwd)\"\n\nexport LD_LIBRARY_PATH=\"$rd_shared_libs:$rd_shared_libs/org.gnome.Platform/49/:${DEFAULT_LD_LIBRARY_PATH}\"\n\nlog i \"RetroDECK is now launching $component_name\"\nlog d \"Library path is: $LD_LIBRARY_PATH\"\nlog d \"QT plugin path is: $QT_PLUGIN_PATH\"\n\ncase \"${XDG_CURRENT_DESKTOP}\" in\n    *GNOME*|*gnome*|*XFCE*)\n        export QT_QPA_PLATFORMTHEME=gtk2\n        log d \"QT_QPA_PLATFORMTHEME is set to: $QT_QPA_PLATFORMTHEME\"\n        ;;\nesac\n\nexec \"$component_path/bin/dolphin-emu\" \"$@\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/mame/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/xemu/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/rpcs3/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mgba_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mame_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/libexec/all_vars.sh": "#!/bin/bash\n\n# Static variables\nrd_conf=\"$XDG_CONFIG_HOME/retrodeck/retrodeck.json\"                                                            # RetroDECK config file path\nrd_conf_backup=\"$XDG_CONFIG_HOME/retrodeck/retrodeck.bak\"                                                     # Backup of RetroDECK config file from update\nrd_core_files=\"/app/retrodeck/config/retrodeck\"                                                                           # Folder with RetroDECK reference and helper files\nrd_defaults=\"$rd_core_files/retrodeck.json\"                                                            # A default RetroDECK config file\nrd_update_patch=\"$XDG_CONFIG_HOME/retrodeck/rd_update.patch\"                                                  # A static location for the temporary patch file used during retrodeck.cfg updates\nbios_checklist=\"$rd_core_files/reference_lists/bios.json\"                                    # A config file listing BIOS file information that can be verified\ninput_validation=\"$rd_core_files/reference_lists/input_validation.cfg\"                                # A config file listing valid CLI inputs\nfinit_options_list=\"$rd_core_files/reference_lists/finit_options_list.cfg\"                            # A config file listing available optional installs during finit\nsplashscreen_dir=\"/app/retrodeck/graphics/extra_splashes\"                                   # The default location of extra splash screens\ncurrent_splash_file=\"$XDG_CONFIG_HOME/ES-DE/resources/graphics/splash.svg\"                                    # The active splash file that will be shown on boot\ndefault_splash_file=\"/app/retrodeck/graphics/splash.svg\"                               # The default RetroDECK splash screen\n# TODO: instead of this maybe we can iterate the features.json\nmulti_user_emulator_config_dirs=\"$rd_core_files/reference_lists/multi_user_emulator_config_dirs.cfg\"  # A list of emulator config folders that can be safely linked/unlinked entirely in multi-user mode\nrd_es_themes=\"/app/share/es-de/themes\"                                                                   # The directory where themes packaged with RetroDECK are stored\nrd_lockfile=\"$XDG_CONFIG_HOME/retrodeck/.lock\"                                                                   # Where the lockfile is located\nsd_sdcard_default_path=\"/run/media/mmcblk0p1\"                                                                        # Steam Deck SD default path\nhard_version=\"$(cat '/app/retrodeck/version')\"                                                           # hardcoded version (in the readonly filesystem)\nrd_repo=\"https://github.com/RetroDECK/RetroDECK\"                                                         # The URL of the main RetroDECK GitHub repo\nes_themes_list=\"https://gitlab.com/es-de/themes/themes-list/-/raw/master/themes.json\"                    # The URL of the ES-DE 2.0 themes list\nremote_network_target_1=\"https://flathub.org\"                                                            # The URL of a common internet target for testing network access\nremote_network_target_2=\"$rd_repo\"                                                                       # The URL of a common internet target for testing network access\nremote_network_target_3=\"https://one.one.one.one\"                                                        # The URL of a common internet target for testing network access\nhelper_files_path=\"$rd_core_files/helper_files\"                                                     # The parent folder of RetroDECK documentation files for deployment\nrd_metainfo=\"/app/share/metainfo/net.retrodeck.retrodeck.metainfo.xml\"                                   # The shipped metainfo XML file for this version\nra_cheevos_api_url=\"https://retroachievements.org/dorequest.php\"                                                 # API URL for RetroAchievements.org\npresets_dir=\"$rd_core_files/presets\"                                                                  # Repository for all system preset config files\ngit_organization_name=\"RetroDECK\"                                                                        # The name of the organization in our git repository such as GitHub\ncooker_repository_name=\"Cooker\"                                                                          # The name of the cooker repository under RetroDECK organization\nmain_repository_name=\"RetroDECK\"                                                                         # The name of the main repository under RetroDECK organization\nfeatures=\"$rd_core_files/reference_lists/features.json\"                                               # A file where all the RetroDECK and component capabilities are kept for querying\nfolder_iconsets_dir=\"$XDG_CONFIG_HOME/retrodeck/graphics/folder-iconsets\"\n\n# API-related file locations\n\nrd_api_dir=\"$XDG_CONFIG_HOME/retrodeck/api\"\nREQUEST_PIPE=\"$rd_api_dir/retrodeck_api_pipe\"\nPID_FILE=\"$rd_api_dir/retrodeck_api_server.pid\"\nrd_api_socket=\"$rd_api_dir/retrodeck_api_server.sock\"\n\n# File lock file for multi-threaded write operations to the same file\n\nrd_file_lock=\"$rd_api_dir/retrodeck_file_lock\"\n\n# Base dir for all installed RetroDECK components\nrd_components=\"/app/retrodeck/components\"\nrd_shared_libs=\"/app/retrodeck/components/shared-libs\"\nrd_shared_libs_kde_path=\"/app/retrodeck/components/shared-libs/org.kde.Platform\"\nrd_shared_libs_gnome_path=\"/app/retrodeck/components/shared-libs/org.gnome.Platform\"\nrd_shared_libs_freedesktop_path=\"/app/retrodeck/components/shared-libs/org.freedesktop.Platform\" \nruntime_dir=\"${XDG_RUNTIME_DIR:-/tmp}/retrodeck\"\nDEFAULT_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso": ""
+        },
+        "dirs": [
+          "/home/deck/retrodeck/saves",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/cores": "/app/retrodeck/components/retroarch/cores"
+        },
+        "launch_command_query": {
+          "system": "gc",
+          "content_path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "launch_command": {
+          "entry": {
+            "system": "gc",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "command": {
+            "program": {
+              "variant": "flatpak",
+              "app_id": "net.retrodeck.retrodeck",
+              "command": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "path": null
+            },
+            "arguments": [
+              "-b",
+              "-e",
+              "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso"
+            ],
+            "environment": [],
+            "working_folder": null,
+            "injections": [],
+            "launcher_script": null,
+            "distribution_environment": [
+              {
+                "name": "rd_shared_libs",
+                "value": "/app/retrodeck/components/shared-libs",
+                "set_by": "/app/libexec/all_vars.sh:49",
+                "provided": false
+              },
+              {
+                "name": "DEFAULT_LD_LIBRARY_PATH",
+                "value": null,
+                "set_by": "/app/libexec/all_vars.sh:54",
+                "provided": true
+              }
+            ]
+          },
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "launch-command-retroarchs-launcher-reads-only-the-default-library-path",
+      "rationale": "RetroArch's component launcher, the deployed text, reads one variable from the start, DEFAULT_LD_LIBRARY_PATH at line 7 — no rd_shared_libs — so the list carries that one variable, computed at all_vars.sh:54 and stated with no value.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/home/deck/retrodeck\", \"saves_path\": \"/home/deck/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gba</name><path>%ROMPATH%/gba</path><extension>.gba</extension>\n    <command label=\"mGBA\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MAME\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/mame/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"XEMU\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RPCS3\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"OS-SHELL\">\n        <rule type=\"systempath\">\n            <entry>bash</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"EMPTYPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"BLANKPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|   </entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MISSING\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/missing/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/component_version": "retrodeck-main-20260926-172324\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n\n# Setting component name and path based on the directory name\ncomponent_name=\"$(basename \"$(dirname \"$(readlink -f \"${BASH_SOURCE[0]}\")\")\")\"\ncomponent_path=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\" )\" && pwd)\"\n\nexport LD_LIBRARY_PATH=\"${DEFAULT_LD_LIBRARY_PATH}\"\nexport QT_PLUGIN_PATH=\"${QT_PLUGIN_PATH}\"\nexport QT_QPA_PLATFORM_PLUGIN_PATH=\"${QT_QPA_PLATFORM_PLUGIN_PATH}\"\n\nlog i \"RetroDECK is now launching $component_name\"\nlog d \"Library path is: $LD_LIBRARY_PATH\"\nlog d \"QT plugin path is: $QT_PLUGIN_PATH\"\n\nlog i \"RetroDECK is now launching $component_name\"\n\nexec \"$component_path/bin/retroarch\" \"$@\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/mame/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/xemu/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/rpcs3/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mgba_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mame_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/libexec/all_vars.sh": "#!/bin/bash\n\n# Static variables\nrd_conf=\"$XDG_CONFIG_HOME/retrodeck/retrodeck.json\"                                                            # RetroDECK config file path\nrd_conf_backup=\"$XDG_CONFIG_HOME/retrodeck/retrodeck.bak\"                                                     # Backup of RetroDECK config file from update\nrd_core_files=\"/app/retrodeck/config/retrodeck\"                                                                           # Folder with RetroDECK reference and helper files\nrd_defaults=\"$rd_core_files/retrodeck.json\"                                                            # A default RetroDECK config file\nrd_update_patch=\"$XDG_CONFIG_HOME/retrodeck/rd_update.patch\"                                                  # A static location for the temporary patch file used during retrodeck.cfg updates\nbios_checklist=\"$rd_core_files/reference_lists/bios.json\"                                    # A config file listing BIOS file information that can be verified\ninput_validation=\"$rd_core_files/reference_lists/input_validation.cfg\"                                # A config file listing valid CLI inputs\nfinit_options_list=\"$rd_core_files/reference_lists/finit_options_list.cfg\"                            # A config file listing available optional installs during finit\nsplashscreen_dir=\"/app/retrodeck/graphics/extra_splashes\"                                   # The default location of extra splash screens\ncurrent_splash_file=\"$XDG_CONFIG_HOME/ES-DE/resources/graphics/splash.svg\"                                    # The active splash file that will be shown on boot\ndefault_splash_file=\"/app/retrodeck/graphics/splash.svg\"                               # The default RetroDECK splash screen\n# TODO: instead of this maybe we can iterate the features.json\nmulti_user_emulator_config_dirs=\"$rd_core_files/reference_lists/multi_user_emulator_config_dirs.cfg\"  # A list of emulator config folders that can be safely linked/unlinked entirely in multi-user mode\nrd_es_themes=\"/app/share/es-de/themes\"                                                                   # The directory where themes packaged with RetroDECK are stored\nrd_lockfile=\"$XDG_CONFIG_HOME/retrodeck/.lock\"                                                                   # Where the lockfile is located\nsd_sdcard_default_path=\"/run/media/mmcblk0p1\"                                                                        # Steam Deck SD default path\nhard_version=\"$(cat '/app/retrodeck/version')\"                                                           # hardcoded version (in the readonly filesystem)\nrd_repo=\"https://github.com/RetroDECK/RetroDECK\"                                                         # The URL of the main RetroDECK GitHub repo\nes_themes_list=\"https://gitlab.com/es-de/themes/themes-list/-/raw/master/themes.json\"                    # The URL of the ES-DE 2.0 themes list\nremote_network_target_1=\"https://flathub.org\"                                                            # The URL of a common internet target for testing network access\nremote_network_target_2=\"$rd_repo\"                                                                       # The URL of a common internet target for testing network access\nremote_network_target_3=\"https://one.one.one.one\"                                                        # The URL of a common internet target for testing network access\nhelper_files_path=\"$rd_core_files/helper_files\"                                                     # The parent folder of RetroDECK documentation files for deployment\nrd_metainfo=\"/app/share/metainfo/net.retrodeck.retrodeck.metainfo.xml\"                                   # The shipped metainfo XML file for this version\nra_cheevos_api_url=\"https://retroachievements.org/dorequest.php\"                                                 # API URL for RetroAchievements.org\npresets_dir=\"$rd_core_files/presets\"                                                                  # Repository for all system preset config files\ngit_organization_name=\"RetroDECK\"                                                                        # The name of the organization in our git repository such as GitHub\ncooker_repository_name=\"Cooker\"                                                                          # The name of the cooker repository under RetroDECK organization\nmain_repository_name=\"RetroDECK\"                                                                         # The name of the main repository under RetroDECK organization\nfeatures=\"$rd_core_files/reference_lists/features.json\"                                               # A file where all the RetroDECK and component capabilities are kept for querying\nfolder_iconsets_dir=\"$XDG_CONFIG_HOME/retrodeck/graphics/folder-iconsets\"\n\n# API-related file locations\n\nrd_api_dir=\"$XDG_CONFIG_HOME/retrodeck/api\"\nREQUEST_PIPE=\"$rd_api_dir/retrodeck_api_pipe\"\nPID_FILE=\"$rd_api_dir/retrodeck_api_server.pid\"\nrd_api_socket=\"$rd_api_dir/retrodeck_api_server.sock\"\n\n# File lock file for multi-threaded write operations to the same file\n\nrd_file_lock=\"$rd_api_dir/retrodeck_file_lock\"\n\n# Base dir for all installed RetroDECK components\nrd_components=\"/app/retrodeck/components\"\nrd_shared_libs=\"/app/retrodeck/components/shared-libs\"\nrd_shared_libs_kde_path=\"/app/retrodeck/components/shared-libs/org.kde.Platform\"\nrd_shared_libs_gnome_path=\"/app/retrodeck/components/shared-libs/org.gnome.Platform\"\nrd_shared_libs_freedesktop_path=\"/app/retrodeck/components/shared-libs/org.freedesktop.Platform\" \nruntime_dir=\"${XDG_RUNTIME_DIR:-/tmp}/retrodeck\"\nDEFAULT_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}\n"
+        },
+        "dirs": [
+          "/home/deck/retrodeck/saves",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/cores": "/app/retrodeck/components/retroarch/cores"
+        },
+        "launch_command_query": {
+          "system": "gba",
+          "content_path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gba/My Game (USA).gba"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "launch_command": {
+          "entry": {
+            "system": "gba",
+            "label": "mGBA",
+            "kind": "libretro",
+            "core_so": "mgba_libretro.so",
+            "emulator": "mgba_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/retroarch/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/retroarch/component_launcher.sh"
+            },
+            "core_path": "/var/config/retroarch/cores/mgba_libretro.so",
+            "caveats": []
+          },
+          "command": {
+            "program": {
+              "variant": "flatpak",
+              "app_id": "net.retrodeck.retrodeck",
+              "command": "/app/retrodeck/components/retroarch/component_launcher.sh",
+              "path": null
+            },
+            "arguments": [
+              "-L",
+              "/var/config/retroarch/cores/mgba_libretro.so",
+              "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gba/My Game (USA).gba"
+            ],
+            "environment": [],
+            "working_folder": null,
+            "injections": [],
+            "launcher_script": null,
+            "distribution_environment": [
+              {
+                "name": "DEFAULT_LD_LIBRARY_PATH",
+                "value": null,
+                "set_by": "/app/libexec/all_vars.sh:54",
+                "provided": true
+              }
+            ]
+          },
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "launch-command-a-start-file-other-than-the-pinned-one-states-no-environment",
+      "rationale": "Dolphin's launcher is pinned, but the all_vars.sh the deploy holds is not the file its reading rests on (one line more): the command is still answered, the field is null, and launch-environment-unpinned names the launcher, its hash, the start file and the hash it has instead.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/home/deck/retrodeck\", \"saves_path\": \"/home/deck/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>gc</name><path>%ROMPATH%/gc</path><extension>.iso</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MAME\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/mame/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"XEMU\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RPCS3\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"OS-SHELL\">\n        <rule type=\"systempath\">\n            <entry>bash</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"EMPTYPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"BLANKPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|   </entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MISSING\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/missing/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/component_version": "retrodeck-main-20260926-172324\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n\n# Setting component name and path based on the directory name\ncomponent_name=\"$(basename \"$(dirname \"$(readlink -f \"${BASH_SOURCE[0]}\")\")\")\"\ncomponent_path=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\" )\" && pwd)\"\n\nexport LD_LIBRARY_PATH=\"$rd_shared_libs:$rd_shared_libs/org.gnome.Platform/49/:${DEFAULT_LD_LIBRARY_PATH}\"\n\nlog i \"RetroDECK is now launching $component_name\"\nlog d \"Library path is: $LD_LIBRARY_PATH\"\nlog d \"QT plugin path is: $QT_PLUGIN_PATH\"\n\ncase \"${XDG_CURRENT_DESKTOP}\" in\n    *GNOME*|*gnome*|*XFCE*)\n        export QT_QPA_PLATFORMTHEME=gtk2\n        log d \"QT_QPA_PLATFORMTHEME is set to: $QT_QPA_PLATFORMTHEME\"\n        ;;\nesac\n\nexec \"$component_path/bin/dolphin-emu\" \"$@\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/mame/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/xemu/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/rpcs3/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mgba_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mame_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/libexec/all_vars.sh": "#!/bin/bash\n\n# Static variables\nrd_conf=\"$XDG_CONFIG_HOME/retrodeck/retrodeck.json\"                                                            # RetroDECK config file path\nrd_conf_backup=\"$XDG_CONFIG_HOME/retrodeck/retrodeck.bak\"                                                     # Backup of RetroDECK config file from update\nrd_core_files=\"/app/retrodeck/config/retrodeck\"                                                                           # Folder with RetroDECK reference and helper files\nrd_defaults=\"$rd_core_files/retrodeck.json\"                                                            # A default RetroDECK config file\nrd_update_patch=\"$XDG_CONFIG_HOME/retrodeck/rd_update.patch\"                                                  # A static location for the temporary patch file used during retrodeck.cfg updates\nbios_checklist=\"$rd_core_files/reference_lists/bios.json\"                                    # A config file listing BIOS file information that can be verified\ninput_validation=\"$rd_core_files/reference_lists/input_validation.cfg\"                                # A config file listing valid CLI inputs\nfinit_options_list=\"$rd_core_files/reference_lists/finit_options_list.cfg\"                            # A config file listing available optional installs during finit\nsplashscreen_dir=\"/app/retrodeck/graphics/extra_splashes\"                                   # The default location of extra splash screens\ncurrent_splash_file=\"$XDG_CONFIG_HOME/ES-DE/resources/graphics/splash.svg\"                                    # The active splash file that will be shown on boot\ndefault_splash_file=\"/app/retrodeck/graphics/splash.svg\"                               # The default RetroDECK splash screen\n# TODO: instead of this maybe we can iterate the features.json\nmulti_user_emulator_config_dirs=\"$rd_core_files/reference_lists/multi_user_emulator_config_dirs.cfg\"  # A list of emulator config folders that can be safely linked/unlinked entirely in multi-user mode\nrd_es_themes=\"/app/share/es-de/themes\"                                                                   # The directory where themes packaged with RetroDECK are stored\nrd_lockfile=\"$XDG_CONFIG_HOME/retrodeck/.lock\"                                                                   # Where the lockfile is located\nsd_sdcard_default_path=\"/run/media/mmcblk0p1\"                                                                        # Steam Deck SD default path\nhard_version=\"$(cat '/app/retrodeck/version')\"                                                           # hardcoded version (in the readonly filesystem)\nrd_repo=\"https://github.com/RetroDECK/RetroDECK\"                                                         # The URL of the main RetroDECK GitHub repo\nes_themes_list=\"https://gitlab.com/es-de/themes/themes-list/-/raw/master/themes.json\"                    # The URL of the ES-DE 2.0 themes list\nremote_network_target_1=\"https://flathub.org\"                                                            # The URL of a common internet target for testing network access\nremote_network_target_2=\"$rd_repo\"                                                                       # The URL of a common internet target for testing network access\nremote_network_target_3=\"https://one.one.one.one\"                                                        # The URL of a common internet target for testing network access\nhelper_files_path=\"$rd_core_files/helper_files\"                                                     # The parent folder of RetroDECK documentation files for deployment\nrd_metainfo=\"/app/share/metainfo/net.retrodeck.retrodeck.metainfo.xml\"                                   # The shipped metainfo XML file for this version\nra_cheevos_api_url=\"https://retroachievements.org/dorequest.php\"                                                 # API URL for RetroAchievements.org\npresets_dir=\"$rd_core_files/presets\"                                                                  # Repository for all system preset config files\ngit_organization_name=\"RetroDECK\"                                                                        # The name of the organization in our git repository such as GitHub\ncooker_repository_name=\"Cooker\"                                                                          # The name of the cooker repository under RetroDECK organization\nmain_repository_name=\"RetroDECK\"                                                                         # The name of the main repository under RetroDECK organization\nfeatures=\"$rd_core_files/reference_lists/features.json\"                                               # A file where all the RetroDECK and component capabilities are kept for querying\nfolder_iconsets_dir=\"$XDG_CONFIG_HOME/retrodeck/graphics/folder-iconsets\"\n\n# API-related file locations\n\nrd_api_dir=\"$XDG_CONFIG_HOME/retrodeck/api\"\nREQUEST_PIPE=\"$rd_api_dir/retrodeck_api_pipe\"\nPID_FILE=\"$rd_api_dir/retrodeck_api_server.pid\"\nrd_api_socket=\"$rd_api_dir/retrodeck_api_server.sock\"\n\n# File lock file for multi-threaded write operations to the same file\n\nrd_file_lock=\"$rd_api_dir/retrodeck_file_lock\"\n\n# Base dir for all installed RetroDECK components\nrd_components=\"/app/retrodeck/components\"\nrd_shared_libs=\"/app/retrodeck/components/shared-libs\"\nrd_shared_libs_kde_path=\"/app/retrodeck/components/shared-libs/org.kde.Platform\"\nrd_shared_libs_gnome_path=\"/app/retrodeck/components/shared-libs/org.gnome.Platform\"\nrd_shared_libs_freedesktop_path=\"/app/retrodeck/components/shared-libs/org.freedesktop.Platform\" \nruntime_dir=\"${XDG_RUNTIME_DIR:-/tmp}/retrodeck\"\nDEFAULT_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}\nrd_extra=\"/app/extra\"\n",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso": ""
+        },
+        "dirs": [
+          "/home/deck/retrodeck/saves",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/shared-libs"
+        ],
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/cores": "/app/retrodeck/components/retroarch/cores"
+        },
+        "launch_command_query": {
+          "system": "gc",
+          "content_path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "launch_command": {
+          "entry": {
+            "system": "gc",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "command": {
+            "program": {
+              "variant": "flatpak",
+              "app_id": "net.retrodeck.retrodeck",
+              "command": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "path": null
+            },
+            "arguments": [
+              "-b",
+              "-e",
+              "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/gc/Game.iso"
+            ],
+            "environment": [],
+            "working_folder": null,
+            "injections": [],
+            "launcher_script": null,
+            "distribution_environment": null
+          },
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+                "blob": "00c1fea51d1afaf2541ae45fe3259b6f8682aa65",
+                "start_file": "/app/libexec/all_vars.sh",
+                "start_blob": "d11ab7a84ca58845fbb78483b79e147e5a47253c"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "launch-command-pico-8-reads-its-folders-from-retrodecks-configuration",
+      "rationale": "PICO-8's component launcher reads two folders from RetroDECK's configuration, which conf_read exports at other_functions.sh:156 — its reading rests on that start file, pinned by hash, and not on all_vars.sh. bios_path is set and the folder is there, so it is provided; screenshots_path is not in retrodeck.json's paths, so it has no value and is not provided.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/home/deck/retrodeck\", \"bios_path\": \"/home/deck/retrodeck/bios\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>pico8</name><path>%ROMPATH%/pico8</path><extension>.p8</extension>\n    <command label=\"PICO-8 (Standalone)\">%EMULATOR_PICO-8% -run %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MAME\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/mame/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"XEMU\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RPCS3\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"OS-SHELL\">\n        <rule type=\"systempath\">\n            <entry>bash</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"EMPTYPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"BLANKPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|   </entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MISSING\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/missing/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PICO-8\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/pico-8/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/component_version": "retrodeck-main-20260926-172324\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/mame/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/xemu/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/rpcs3/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mgba_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mame_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/pico-8/component_launcher.sh": "#!/bin/bash\n\nexec \"$bios_path/pico-8/pico8\" -desktop_path \"$screenshots_path\" \"$@\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/libexec/other_functions.sh": {
+            "git-blob": "baa8c4db17def688a93881cdb42aa35c005d497d"
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/pico8/Game.p8": ""
+        },
+        "dirs": [
+          "/home/deck/retrodeck/saves",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/cores": "/app/retrodeck/components/retroarch/cores"
+        },
+        "launch_command_query": {
+          "system": "pico8",
+          "content_path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/pico8/Game.p8"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "launch_command": {
+          "entry": {
+            "system": "pico8",
+            "label": "PICO-8 (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "PICO-8",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/pico-8/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/pico-8/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "run-game-differs",
+                "data": {
+                  "run_game_path": ""
+                }
+              }
+            ]
+          },
+          "command": {
+            "program": {
+              "variant": "flatpak",
+              "app_id": "net.retrodeck.retrodeck",
+              "command": "/app/retrodeck/components/pico-8/component_launcher.sh",
+              "path": null
+            },
+            "arguments": [
+              "-run",
+              "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/pico8/Game.p8"
+            ],
+            "environment": [],
+            "working_folder": null,
+            "injections": [],
+            "launcher_script": null,
+            "distribution_environment": [
+              {
+                "name": "bios_path",
+                "value": "/home/deck/retrodeck/bios",
+                "set_by": "/app/libexec/other_functions.sh:156",
+                "provided": true
+              },
+              {
+                "name": "screenshots_path",
+                "value": null,
+                "set_by": "/app/libexec/other_functions.sh:156",
+                "provided": false
+              }
+            ]
+          },
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "launch-command-a-configured-folder-that-is-not-there-is-not-provided",
+      "rationale": "PICO-8's launcher again, with both folders set in retrodeck.json: bios_path names a folder that is there and is provided, screenshots_path one that is not, and is stated with its value and not provided.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/home/deck/retrodeck\", \"bios_path\": \"/home/deck/retrodeck/bios\", \"screenshots_path\": \"/home/deck/retrodeck/screenshots\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>pico8</name><path>%ROMPATH%/pico8</path><extension>.p8</extension>\n    <command label=\"PICO-8 (Standalone)\">%EMULATOR_PICO-8% -run %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MAME\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/mame/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"XEMU\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RPCS3\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"OS-SHELL\">\n        <rule type=\"systempath\">\n            <entry>bash</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"EMPTYPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"BLANKPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|   </entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MISSING\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/missing/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PICO-8\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/pico-8/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/component_version": "retrodeck-main-20260926-172324\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/mame/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/xemu/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/rpcs3/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mgba_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mame_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/pico-8/component_launcher.sh": "#!/bin/bash\n\nexec \"$bios_path/pico-8/pico8\" -desktop_path \"$screenshots_path\" \"$@\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/libexec/other_functions.sh": {
+            "git-blob": "baa8c4db17def688a93881cdb42aa35c005d497d"
+          },
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/pico8/Game.p8": ""
+        },
+        "dirs": [
+          "/home/deck/retrodeck/saves",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/cores": "/app/retrodeck/components/retroarch/cores"
+        },
+        "launch_command_query": {
+          "system": "pico8",
+          "content_path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/pico8/Game.p8"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "launch_command": {
+          "entry": {
+            "system": "pico8",
+            "label": "PICO-8 (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "PICO-8",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/pico-8/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/pico-8/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "run-game-differs",
+                "data": {
+                  "run_game_path": ""
+                }
+              }
+            ]
+          },
+          "command": {
+            "program": {
+              "variant": "flatpak",
+              "app_id": "net.retrodeck.retrodeck",
+              "command": "/app/retrodeck/components/pico-8/component_launcher.sh",
+              "path": null
+            },
+            "arguments": [
+              "-run",
+              "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/pico8/Game.p8"
+            ],
+            "environment": [],
+            "working_folder": null,
+            "injections": [],
+            "launcher_script": null,
+            "distribution_environment": [
+              {
+                "name": "bios_path",
+                "value": "/home/deck/retrodeck/bios",
+                "set_by": "/app/libexec/other_functions.sh:156",
+                "provided": true
+              },
+              {
+                "name": "screenshots_path",
+                "value": "/home/deck/retrodeck/screenshots",
+                "set_by": "/app/libexec/other_functions.sh:156",
+                "provided": false
+              }
+            ]
+          },
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "launch-command-a-program-named-by-its-bare-name-has-no-hash-to-pin",
+      "rationale": "After a leading env the program is bash, named as the command writes it with Dolphin's launcher as its first argument, and the sandbox's PATH resolves it at launch: no file atlas can hash, so no reading is pinned for it — the command is answered, the field is null, and launch-environment-unpinned names the program and carries no blob, since none was taken.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/home/deck/retrodeck\", \"saves_path\": \"/home/deck/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/home/deck/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system><name>ports</name><path>%ROMPATH%/ports</path><extension>.sh</extension>\n    <command label=\"Dolphin through bash\">env TERM=xterm bash %EMULATOR_DOLPHIN% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MAME\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/mame/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"XEMU\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RPCS3\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/rpcs3/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"OS-SHELL\">\n        <rule type=\"systempath\">\n            <entry>bash</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"EMPTYPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"BLANKPIPE\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/xemu/component_launcher.sh|   </entry>\n        </rule>\n    </emulator>\n    <emulator name=\"MISSING\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/missing/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/component_version": "retrodeck-main-20260926-172324\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/runtime/org.kde.Platform/x86_64/6.11/active/files/bin/bash": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/mame/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/xemu/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/rpcs3/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mgba_libretro.so": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/cores/mame_libretro.so": "",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/ports/Game.sh": ""
+        },
+        "dirs": [
+          "/home/deck/retrodeck/saves",
+          "/home/deck/retrodeck/bios",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "symlinks": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/cores": "/app/retrodeck/components/retroarch/cores"
+        },
+        "launch_command_query": {
+          "system": "ports",
+          "content_path": "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/ports/Game.sh"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/home/deck/retrodeck",
+            "health": []
+          }
+        ],
+        "launch_command": {
+          "entry": {
+            "system": "ports",
+            "label": "Dolphin through bash",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "command": {
+            "program": {
+              "variant": "flatpak",
+              "app_id": "net.retrodeck.retrodeck",
+              "command": "bash",
+              "path": null
+            },
+            "arguments": [
+              "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs/ports/Game.sh"
+            ],
+            "environment": [
+              {
+                "name": "TERM",
+                "value": "xterm"
+              }
+            ],
+            "working_folder": null,
+            "injections": [],
+            "launcher_script": null,
+            "distribution_environment": null
+          },
+          "caveats": [
+            {
+              "code": "launch-environment-unpinned",
+              "data": {
+                "path": "bash"
               }
             }
           ]

@@ -136,6 +136,7 @@ from .find_rules import (
     CAVEAT_FRONTEND_BUILD_UNPINNED,
     CAVEAT_FRONTEND_BUILD_SEALED,
     CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
+    CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED,
     CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN,
     CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
     Availability,
@@ -158,12 +159,14 @@ from .launch import (
 from .launch_command import (
     TOO_LARGE,
     CommandInputs,
+    DistributionVariable,
     LaunchCommand,
     LauncherScript,
     LauncherStep,
     TooLarge,
     take_apart,
 )
+from .launch_environment import SOURCE_PATHS, environment_rules, line_variable, paths_variable
 from .launcher_scripts import (
     BACKEND_ROOT,
     EMULATION_ROOT,
@@ -18667,6 +18670,8 @@ class SystemPlatformsAnswer:
 # nothing here will launch it. "needs-installation" is that same 'no' with its
 # reason from world knowledge: the format is real content for the platform,
 # and an installation step has to run before anything can launch (a PSN .pkg).
+# It is the one verdict that names the emulators that install the file
+# (issue #717), because it is the one whose remedy is an emulator's.
 # "unknown" is a statement about the look, never about the file: the system is
 # not one this catalogue declares, or the catalogue could not be read — a
 # client that treated it as either of the other two would be told something
@@ -18723,6 +18728,26 @@ _ENTRY_UNESTABLISHED = "unestablished"
 
 
 @dataclass(frozen=True, slots=True)
+class Installer:
+    """One emulator that installs a file the ``needs-installation`` verdict was given for (issue #717).
+
+    The emulator is named by the install-first record, which is world
+    knowledge; the entry is read off this machine's catalogue, so a client
+    can say "install it in RPCS3 first" and check that RPCS3 is there in one
+    step.
+    """
+
+    emulator: str
+    """The installing emulator, by the token ES-DE's own commands spell it with (the ``X`` of ``%EMULATOR_X%``) — the
+    spelling a standalone catalogue entry's ``emulator`` carries, so the two join on it.
+    """
+    entry: EmulatorEntry | None = None
+    """The system's declared entry that runs this emulator, with its availability — the one the frontend's own
+    selection hierarchy puts first where several do — and ``None`` where the system declares none.
+    """
+
+
+@dataclass(frozen=True, slots=True)
 class LaunchabilityAnswer:
     """Whether one file launches as one system's content here — and why not, when not.
 
@@ -18736,6 +18761,8 @@ class LaunchabilityAnswer:
     where the entry *is* the finding. ``alternatives`` travels with the
     latter alone: the labels of the declared entries established to take the
     file, which is one of the two remedies that verdict leaves open.
+    ``installers`` travels with ``needs-installation`` alone, whose remedy it
+    is, and is ``None`` on every other verdict.
     """
 
     verdict: str
@@ -18756,11 +18783,25 @@ class LaunchabilityAnswer:
     """The labels of the declared entries established to take this file — one of the two
     remedies the entry-not-accepted verdict leaves open, and empty on every other.
     """
+    installers: tuple[Installer, ...] | None = None
+    """The emulators that install this file, in the order the install-first record names them — on the
+    needs-installation verdict alone, where an empty tuple says that no emulator RetroDECK or EmuDeck sets up
+    installs it, and ``None`` on every other.
+    """
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
     """Every degradation of this answer, stated structurally so a client branches on the
     code rather than on prose.
     """
+
+    def __post_init__(self) -> None:
+        # None and the empty tuple are two statements: "not this verdict's
+        # question" and "nothing here installs it". Only needs-installation
+        # asks the question, so every other verdict carries None.
+        if (self.installers is not None) != (self.verdict == VERDICT_NEEDS_INSTALLATION):
+            raise ValueError(
+                "LaunchabilityAnswer: installers stand exactly where the verdict is needs-installation"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -20696,7 +20737,7 @@ def _launch_command_with_caveats(
 def _chosen_entry(
     entries: tuple[EmulatorEntry, ...], label: str | None, system: str
 ) -> EmulatorEntry | Caveat | None:
-    """The entry a launch command is asked of: the one *label* names, or the frontend's first.
+    """The entry a launch command or a launchability verdict is about: the one *label* names, or the frontend's first.
 
     ``None`` where there are no entries at all — the catalogue answer's own
     caveats say why — and ``launch-command-label-unknown`` where there are and
@@ -20942,10 +20983,13 @@ def _launchability_verdict(
     entries: tuple[EmulatorEntry, ...],
     complete: bool,
     core_info_for: "Callable[[EmulatorEntry], CoreInfo | None]",
-) -> tuple[str, EmulatorEntry | None, tuple[str, ...], tuple[str, ...], tuple[Caveat, ...]]:
+    label: str | None,
+) -> tuple[
+    str, EmulatorEntry | None, tuple[str, ...], tuple[Installer, ...] | None, tuple[str, ...], tuple[Caveat, ...]
+]:
     """One (declaration, extension) pair's verdict — shared by every ES-DE-driven handle.
 
-    Returns ``(verdict, entry, alternatives, sources, own caveats)``.
+    Returns ``(verdict, entry, alternatives, installers, sources, own caveats)``.
     Module-level for the reason :func:`_entries_from` is: the match is
     ES-DE's, not an arrangement's, and two copies of it are how "launchable
     here" and "launchable there" would silently mean different comparisons.
@@ -20956,6 +21000,23 @@ def _launchability_verdict(
     the union over every entry, and the machine then does nothing at all. The
     other declared entries are judged only then, because ``alternatives`` is
     that verdict's remedy and nobody else's read.
+
+    A ``needs-installation`` verdict names the emulators its record says
+    install the file, each with the system's entry that runs it
+    (:func:`_installers`). *label* plays no part in that: the remedy is to
+    install the file, whichever entry the caller would start it through.
+
+    The entry judged is the one *label* names, or without one the entry that
+    would run — chosen by :func:`_chosen_entry`, the choice the launch command
+    makes, so the two questions can never judge different entries for one
+    label. On a system ES-DE loads, a label none of *entries* carries refuses
+    the verdict with that helper's ``launch-command-label-unknown``, whatever
+    the extension: the caller named an entry this system does not have, and a
+    verdict about another entry, or about none, would answer a question nobody
+    asked. A system no layer declares, or one ES-DE skips, is answered below
+    before any label is looked up; where a sealed read leaves an undeclared
+    system to the entries derived from the installed cores, the handle looks
+    the label up among those itself (:meth:`EmuDeck._derived_label_refusal`).
 
     The unknowns split three ways and only one earns ``system-unknown``: a
     catalogue read **completely** that declares no such system. An incomplete
@@ -20968,11 +21029,12 @@ def _launchability_verdict(
     """
     if declaration is None:
         if not complete:
-            return VERDICT_UNKNOWN, None, (), (), ()
+            return VERDICT_UNKNOWN, None, (), None, (), ()
         return (
             VERDICT_UNKNOWN,
             None,
             (),
+            None,
             (),
             (
                 Caveat(
@@ -20989,6 +21051,7 @@ def _launchability_verdict(
             VERDICT_UNKNOWN,
             None,
             (),
+            None,
             (),
             (
                 Caveat(
@@ -21000,6 +21063,9 @@ def _launchability_verdict(
                 ),
             ),
         )
+    entry = _chosen_entry(entries, label, system)
+    if isinstance(entry, Caveat):
+        return VERDICT_UNKNOWN, None, (), None, (), (entry,)
     if extension in declaration.extensions:
         match_source = (
             f"accept-list match: the file yields {extension!r} (its name from the last dot, "
@@ -21007,33 +21073,35 @@ def _launchability_verdict(
             "<extension> list declares that exact token (the scan compares exactly, "
             "SystemData.cpp:669)"
         )
-        entry = entries[0] if entries else None
         if entry is None:
-            return VERDICT_LAUNCHABLE, None, (), (match_source,), ()
+            return VERDICT_LAUNCHABLE, None, (), None, (match_source,), ()
         stance, entry_sources, entry_caveats = _entry_reading(
             entry, extension=extension, core_info_for=core_info_for
         )
         if stance == _ENTRY_REFUSES:
             alternatives = tuple(
                 other.label
-                for other in entries[1:]
-                if _entry_reading(other, extension=extension, core_info_for=core_info_for)[0]
+                for other in entries
+                if other is not entry
+                and _entry_reading(other, extension=extension, core_info_for=core_info_for)[0]
                 == _ENTRY_ACCEPTS
             )
             return (
                 VERDICT_ENTRY_NOT_ACCEPTED,
                 entry,
                 alternatives,
+                None,
                 (match_source, *entry_sources),
                 entry_caveats,
             )
-        return VERDICT_LAUNCHABLE, entry, (), (match_source, *entry_sources), entry_caveats
+        return VERDICT_LAUNCHABLE, entry, (), None, (match_source, *entry_sources), entry_caveats
     record = lookup_install_first(system, extension)
     if record is not None:
         return (
             VERDICT_NEEDS_INSTALLATION,
             None,
             (),
+            _installers(record.installers, entries),
             (f"install-first format {extension!r} for {system}: {record.statement} — {record.source}",),
             (),
         )
@@ -21041,6 +21109,7 @@ def _launchability_verdict(
         VERDICT_NOT_ACCEPTED,
         None,
         (),
+        None,
         (
             f"the file yields {extension!r} and the system's <extension> list "
             f"({' '.join(declaration.extensions)}) carries no such token — the comparison is "
@@ -21048,6 +21117,22 @@ def _launchability_verdict(
             "file and nothing here launches it",
         ),
         (),
+    )
+
+
+def _installers(emulators: tuple[str, ...], entries: tuple[EmulatorEntry, ...]) -> tuple[Installer, ...]:
+    """Each installing emulator with the system's entry that runs it, ``None`` where it declares none.
+
+    *entries* are in the frontend's effective order — the selection
+    hierarchy :func:`_entries_from` applies, per-game override first — so
+    where several entries run one emulator, the first one found is the one
+    that hierarchy ranks first. The match is on the entry's ``emulator``,
+    which spells a standalone entry by the same ``%EMULATOR_X%`` token the
+    record does.
+    """
+    return tuple(
+        Installer(emulator, next((entry for entry in entries if entry.emulator == emulator), None))
+        for emulator in emulators
     )
 
 
@@ -21652,7 +21737,11 @@ class _CatalogueQueries:
         command carries the launcher script it runs, with the script's steps,
         or is refused where no reading is pinned for that script and the files
         it rests on (``launcher-script-unpinned``); a bare RetroArch has no
-        frontend catalogue at all.
+        frontend catalogue at all. A command carries what its program reads
+        from the distribution's own start (``distribution_environment``):
+        RetroDECK's through the reading pinned for its component launcher,
+        ``null`` beside ``launch-environment-unpinned`` where none is, and
+        EmuDeck's empty.
         """
         if not os.path.isabs(content_path):
             raise ValueError(f"content_path must be an absolute path, got {content_path!r}")
@@ -21662,7 +21751,7 @@ class _CatalogueQueries:
         )
 
     @one_question
-    def launchable(self, system: str, content_path: str) -> LaunchabilityAnswer:
+    def launchable(self, system: str, content_path: str, *, label: str | None = None) -> LaunchabilityAnswer:
         """Whether *content_path* launches as *system* content here — and why not, when not.
 
         The positive half is a read: the frontend's own accept-list for the
@@ -21678,6 +21767,9 @@ class _CatalogueQueries:
         - ``needs-installation`` — the format is real content for the platform
           and an installation step has to run before anything launches (a PSN
           ``.pkg``): recorded world knowledge, cited in the sources.
+          ``installers`` names the emulators that install it, each with the
+          system's entry that runs it — empty where no emulator RetroDECK or
+          EmuDeck sets up installs it.
         - ``unknown`` — the system is not one this catalogue declares, or the
           catalogue could not be read: a statement about the look, never about
           the file, and never collapsed into either 'no'.
@@ -21687,8 +21779,21 @@ class _CatalogueQueries:
         command per *emulator*, so a file the list accepts may still be one
         the entry that runs cannot read (issue #66 tracks resolving that per
         entry).
+
+        *label* names the entry to judge instead of the one that would run —
+        a caller that starts the game through an entry of its own choice asks
+        about that entry. It is chosen the way :meth:`launch_command` chooses
+        it, and the verdict, ``entry`` and ``alternatives`` are then about the
+        named entry: ``alternatives`` names the other entries established to
+        take the file. On a system ES-DE loads, a label the system's entries
+        do not carry answers ``unknown`` with ``launch-command-label-unknown``,
+        the refusal :meth:`launch_command` gives it. Where the entries are
+        derived from the installed cores — a bare RetroArch's, and those of a
+        system only the cores declare while EmuDeck's bundled layer is
+        sealed — a label none of them carries is refused the same way, beside
+        the unknown verdict that answer always states.
         """
-        answer, version = self._launchable_answer(system, content_path)
+        answer, version = self._launchable_answer(system, content_path, label)
         return _launchable_with_caveats(
             answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
         )
@@ -21723,18 +21828,20 @@ class _CatalogueQueries:
         return CatalogueAnswer(caveats=(*self.health().issues, self._catalogue_absence())), None
 
     def _launchable_answer(
-        self, system: str, content_path: str
+        self, system: str, content_path: str, label: str | None
     ) -> tuple[LaunchabilityAnswer, str | None]:
         # The accept-list lives in the catalogue this arrangement does not
         # have, so the verdict is unknown for the same reason the entry list
         # is empty — the refusal is the catalogue question's own, worn by
-        # this answer's shape.
+        # this answer's shape. A label is looked up the way the launch command
+        # looks it up, so one no entry carries is refused here as there.
         answer, version = self._catalogue_answer(system, content_path=content_path)
+        chosen = _chosen_entry(answer.entries, label, system)
         return (
             LaunchabilityAnswer(
                 verdict=VERDICT_UNKNOWN,
                 extension=esde_extension(content_path),
-                caveats=answer.caveats,
+                caveats=(*answer.caveats, *((chosen,) if isinstance(chosen, Caveat) else ())),
             ),
             version,
         )
@@ -21840,6 +21947,49 @@ def _script_unpinned(path: str, helper: str | None = None) -> Caveat:
     )
 
 
+def _environment_unpinned(
+    program: str, blob: str | None, start_file: str | None = None, start_blob: str | None = None
+) -> Caveat:
+    """The note beside a RetroDECK command whose program no reading of RetroDECK's start is pinned for — the program
+    itself, or *start_file*, a start file the reading rests on that is not the one it was made from.
+
+    A hash atlas could not take — a program that is no file it can hash, a
+    start file the sandbox does not show — is left out of the data, as a value
+    nothing was read for is everywhere else.
+    """
+    data = {"path": program}
+    if blob is not None:
+        data["blob"] = blob
+    if start_file is None:
+        return Caveat(
+            CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED,
+            f"the command runs {program}, and atlas states what a program reads from RetroDECK's own start only for a "
+            "component launcher its reading is pinned to — none is pinned for this one, so what it needs beyond the "
+            "command is not stated",
+            data,
+        )
+    data["start_file"] = start_file
+    if start_blob is not None:
+        data["start_blob"] = start_blob
+    return Caveat(
+        CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED,
+        f"the command runs {program}, whose reading of RetroDECK's start is pinned together with the start files that "
+        f"define what it reads, and {start_file} is not the file that reading was made from — what the program needs "
+        "beyond the command is not stated",
+        data,
+    )
+
+
+def _sandbox_directory(view: _SandboxLaunchView) -> Callable[[str], bool]:
+    """Whether the sandbox shows a directory at a path — a miss and what atlas cannot see alike are no."""
+    return lambda path: view.is_directory(path) == PROBE_HIT
+
+
+def _sandbox_path_exists(view: _SandboxLaunchView) -> Callable[[str], bool]:
+    """Whether the sandbox shows a directory or a file at a path — a miss and what atlas cannot see alike are no."""
+    return lambda path: PROBE_HIT in (view.is_directory(path), view.regular_file(path))
+
+
 def _not_set_up(marker_issues: tuple[Caveat, ...]) -> Caveat | None:
     """The ``not-set-up`` finding among one marker read's issues, or ``None``."""
     return next((issue for issue in marker_issues if issue.code == HEALTH_ISSUE_NOT_SET_UP), None)
@@ -21880,6 +22030,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         # The one parse this handle keeps between questions: each find-rules
         # file's, under the stat stamp it was read at.
         self._find_rules_files = _FindRulesFiles(machine)
+        self._blob_hashes = _BlobHashes(machine)
 
     def _marker_path(self) -> str:
         return os.path.join(self._home, RETRODECK_JSON_SUFFIX)
@@ -22810,7 +22961,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         )
 
     def _launchable_answer(
-        self, system: str, content_path: str
+        self, system: str, content_path: str, label: str | None
     ) -> tuple[LaunchabilityAnswer, str | None]:
         """RetroDECK's launchability answer — the same snapshot its catalogue answer takes.
 
@@ -22855,13 +23006,14 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             self._cfg_sandbox,
             findings=self._cfg_findings,
         )
-        verdict, entry, alternatives, sources, own = _launchability_verdict(
+        verdict, entry, alternatives, installers, sources, own = _launchability_verdict(
             system=system,
             extension=extension,
             declaration=declaration,
             entries=entries,
             complete=True,
             core_info_for=core_reader,
+            label=label,
         )
         return (
             LaunchabilityAnswer(
@@ -22870,6 +23022,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
                 accepted=declaration.extensions if declaration is not None else (),
                 entry=entry,
                 alternatives=alternatives,
+                installers=installers,
                 sources=(
                     _CATALOGUE_SOURCE_EXCLUSIVE if exclusive else self._CATALOGUE_SOURCE,
                     *core_reader.sources,
@@ -22942,7 +23095,66 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             rom_directory=self._launch_rom_directory(),
         )
         taken = take_apart(chosen.command, inputs, view)
-        return LaunchCommandAnswer(chosen, taken.command, sources, (*caveats, *taken.caveats)), version
+        command, unpinned = self._with_distribution_environment(taken.command, view, config)
+        return LaunchCommandAnswer(chosen, command, sources, (*caveats, *taken.caveats, *unpinned)), version
+
+    def _with_distribution_environment(
+        self, command: LaunchCommand | None, view: _SandboxLaunchView, config: Mapping[str, Any]
+    ) -> tuple[LaunchCommand | None, tuple[Caveat, ...]]:
+        """*command* with what its program reads from RetroDECK's start — or as it is, with the note that this is
+        not stated (:meth:`_distribution_environment`).
+        """
+        if command is None:
+            return None, ()
+        stated = self._distribution_environment(command.program.command or "", view, config)
+        if isinstance(stated, Caveat):
+            return command, (stated,)
+        return cast(LaunchCommand, _dc_replace(command, distribution_environment=stated)), ()
+
+    def _distribution_environment(
+        self, program: str, view: _SandboxLaunchView, config: Mapping[str, Any]
+    ) -> tuple[DistributionVariable, ...] | Caveat:
+        """What *program* reads from RetroDECK's start, read through the launcher pinned for it — the note where none is.
+
+        The program is matched by the git blob hash of the file the sandbox
+        shows at its path; every start file the reading rests on — the one that
+        defines each variable the launcher reads — must hash to its pin, or the
+        first that does not is named. A program that is no file atlas can hash
+        (a bare name, a path the sandbox does not show) is pinned by nothing.
+        The values are read live: a start file's own line, and RetroDECK's
+        configuration for the folders ``conf_read`` exports from it.
+        """
+        rules = environment_rules()
+        blob = self._sandbox_blob(program, view)
+        rule = rules.by_blob.get(blob or "")
+        if rule is None:
+            return _environment_unpinned(program, blob)
+        for start_file, pin in rules.pins(rule).items():
+            found = self._sandbox_blob(start_file, view)
+            if found != pin:
+                return _environment_unpinned(program, blob, start_file, found)
+        texts: dict[str, str | None] = {}
+        stated: list[DistributionVariable] = []
+        for read in rule.reads:
+            variable = rules.variables[read.name]
+            if variable.source == SOURCE_PATHS:
+                stated.append(paths_variable(read.name, variable, config.get("paths"), _sandbox_directory(view)))
+                continue
+            if variable.defined_in not in texts:
+                texts[variable.defined_in] = self._sandbox_text(variable.defined_in, view)
+            text = texts[variable.defined_in]
+            stated.append(line_variable(read.name, variable.defined_in, text, _sandbox_path_exists(view)))
+        return tuple(stated)
+
+    def _sandbox_blob(self, path: str, view: _SandboxLaunchView) -> str | None:
+        """The git blob hash of the file the sandbox shows at *path* — ``None`` where it shows none atlas can hash."""
+        host = view.host_path(path)
+        return None if host is None else self._blob_hashes.hash(host)
+
+    def _sandbox_text(self, path: str, view: _SandboxLaunchView) -> str | None:
+        """The text of the file the sandbox shows at *path* — ``None`` where it shows none atlas can read."""
+        host = view.host_path(path)
+        return None if host is None else self._machine.read_text(host).text
 
     def _deployed_esde_build(self) -> str | None:
         """The ES-DE build the running deploy states, ``None`` where no deploy runs or the file cannot be read."""
@@ -25089,7 +25301,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
 
 
     def _launchable_answer(
-        self, system: str, content_path: str
+        self, system: str, content_path: str, label: str | None
     ) -> tuple[LaunchabilityAnswer, str | None]:
         """EmuDeck's launchability answer — the same snapshot its catalogue answer takes.
 
@@ -25099,7 +25311,10 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         alone rather than claiming the frontend knows no such system. An
         overlay-declared system answers fully — per ES-DE's merge semantics
         the overlay replaces a same-name bundled system entirely, so its
-        accept-list is exactly what the frontend uses.
+        accept-list is exactly what the frontend uses. A label on a system
+        only the installed cores declare is looked up among the entries
+        derived from them (:meth:`_derived_label_refusal`), where the launch
+        command looks it up.
         """
         extension = esde_extension(content_path)
         version = self._observed_backend_head()
@@ -25124,13 +25339,14 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         core_reader = _EntryCoreReader(
             self._machine, self._companion_cfg_path(), self._cfg_sandbox
         )
-        verdict, entry, alternatives, sources, own = _launchability_verdict(
+        verdict, entry, alternatives, installers, sources, own = _launchability_verdict(
             system=system,
             extension=extension,
             declaration=declaration,
             entries=entries,
             complete=snapshot.complete,
             core_info_for=core_reader,
+            label=label,
         )
         return (
             LaunchabilityAnswer(
@@ -25139,15 +25355,37 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 accepted=declaration.extensions if declaration is not None else (),
                 entry=entry,
                 alternatives=alternatives,
+                installers=installers,
                 sources=(
                     self._catalogue_provenance(snapshot.exclusive),
                     *core_reader.sources,
                     *sources,
                 ),
-                caveats=(*snapshot.findings, *snapshot.tail, *own, *anchor.caveats),
+                caveats=(
+                    *snapshot.findings,
+                    *snapshot.tail,
+                    *own,
+                    *self._derived_label_refusal(snapshot, system, label),
+                    *anchor.caveats,
+                ),
             ),
             version,
         )
+
+    def _derived_label_refusal(self, snapshot: _EsdeSnapshot, system: str, label: str | None) -> tuple[Caveat, ...]:
+        """The refusal of a label no core-derived entry carries, on a system only the installed cores declare.
+
+        The sealed snapshot's verdict on such a system is unknown with no entry
+        judged, and the launch command answers it from the derived entries
+        (:meth:`_derived_launch_command`) — so a label is looked up among them
+        here too, and one none of them carries is refused as there. Anywhere
+        else the verdict helper has already looked the label up.
+        """
+        if label is None or system in snapshot.by_system or snapshot.complete:
+            return ()
+        entries, _ = _derived_catalogue_entries(self, self._derived_context(snapshot), system)
+        chosen = _chosen_entry(entries, label, system)
+        return (chosen,) if isinstance(chosen, Caveat) else ()
 
     def _launch_command_answer(
         self, system: str, content_path: str, label: str | None
@@ -25221,8 +25459,10 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         )
         taken = take_apart(chosen.command, inputs, view)
         command = taken.command
-        if command is not None and launcher is not None:
-            command = cast(LaunchCommand, _dc_replace(command, launcher_script=launcher))
+        if command is not None:
+            # EmuDeck's builds and launcher scripts need nothing from a start of
+            # EmuDeck's own beyond the command and the user's session.
+            command = cast(LaunchCommand, _dc_replace(command, launcher_script=launcher, distribution_environment=()))
         return LaunchCommandAnswer(chosen, command, sources, (*caveats, *taken.caveats)), version
 
     def _launcher_script_answer(
@@ -26873,18 +27113,27 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         )
 
     def _launchable_answer(
-        self, system: str, content_path: str
+        self, system: str, content_path: str, label: str | None
     ) -> tuple[LaunchabilityAnswer, str | None]:
         # The derived entries do not change this refusal: the accept-list is
         # catalogue knowledge, and no core's self-declaration states which
         # files a frontend would scan — the verdict stays a statement about
-        # the look.
-        cfg_status = self._machine.read_text(self._cfg_path()).status
+        # the look. A label is the one reason to enumerate them: the launch
+        # command looks a label up among the derived entries, so one none of
+        # them carries is refused here as there.
+        if label is None:
+            health = self._health_from(self._machine.read_text(self._cfg_path()).status)
+            refusal: tuple[Caveat, ...] = ()
+        else:
+            context, health = self._derived_context()
+            entries = _derived_catalogue_entries(self, context, system)[0] if context.cores_read else ()
+            chosen = _chosen_entry(entries, label, system)
+            refusal = (chosen,) if isinstance(chosen, Caveat) else ()
         return (
             LaunchabilityAnswer(
                 verdict=VERDICT_UNKNOWN,
                 extension=esde_extension(content_path),
-                caveats=(*self._health_from(cfg_status).issues, self._catalogue_absence()),
+                caveats=(*health.issues, self._catalogue_absence(), *refusal),
             ),
             None,
         )
@@ -27109,7 +27358,9 @@ class Installation(Protocol):
 
     def emulators_for(self, system: str, *, content_path: str | None = None) -> CatalogueAnswer: ...
 
-    def launchable(self, system: str, content_path: str) -> LaunchabilityAnswer: ...
+    def launchable(
+        self, system: str, content_path: str, *, label: str | None = None
+    ) -> LaunchabilityAnswer: ...
 
     def launch_command(
         self, system: str, content_path: str, *, label: str | None = None

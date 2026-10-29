@@ -1253,6 +1253,7 @@
             "caveats": []
           },
           "alternatives": [],
+          "installers": null,
           "caveats": [
             {
               "code": "entry-format-unestablished",

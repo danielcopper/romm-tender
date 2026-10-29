@@ -8,7 +8,8 @@ before anything can launch. That fact is written nowhere on the machine, so
 it lives here: marked, versioned, cited, keyed by the atlas system id and the
 exact extension token ES-DE would derive. The resolver consults it only where
 the extension is already outside the machine's own accept-list — a read is
-never overridden by a table.
+never overridden by a table. Each record names the emulators that install the
+format (issue #717), so the verdict can name them as data rather than prose.
 """
 
 from __future__ import annotations
@@ -19,16 +20,23 @@ from typing import Any
 
 from ._data import packaged_text
 
-FORMATS_SCHEMA = 1
+FORMATS_SCHEMA = 2
 
 
 @dataclass(frozen=True, slots=True)
 class InstallFirstFormat:
-    """One format that needs an installation step before anything can launch."""
+    """One format that needs an installation step before anything can launch.
+
+    ``installers`` are the emulators that install it, each by the token ES-DE's
+    own commands spell it with (the ``X`` of ``%EMULATOR_X%``), in the
+    record's order. Empty is a statement of its own: the format has to be
+    installed, and nothing a supported distribution sets up installs it.
+    """
 
     system: str
     extension: str
     statement: str
+    installers: tuple[str, ...]
     source: str
 
 
@@ -89,14 +97,28 @@ def _format(system: str, extension: str, entry: Any, at: str) -> InstallFirstFor
         # derived extension starts with the dot it was cut at, and the
         # bare-dot sentinel names "no extension", which is not a format.
         raise ValueError(f"{at}: an extension token starts with '.' and names one")
-    if not isinstance(entry, dict) or set(entry) != {"statement", "source"}:
-        raise ValueError(f"{at}: an entry names exactly 'statement' and 'source', got {entry!r}")
+    if not isinstance(entry, dict) or set(entry) != {"statement", "installers", "source"}:
+        raise ValueError(
+            f"{at}: an entry names exactly 'statement', 'installers' and 'source', got {entry!r}"
+        )
     return InstallFirstFormat(
         system=system,
         extension=extension,
         statement=_expect_str(entry["statement"], f"{at}: statement"),
+        installers=_installers(entry["installers"], f"{at}: installers"),
         source=_expect_str(entry["source"], f"{at}: source"),
     )
+
+
+def _installers(value: Any, where: str) -> tuple[str, ...]:
+    """The installing emulators' tokens — a list, possibly empty, each named once."""
+    if not isinstance(value, list):
+        raise ValueError(f"{where}: expected a list of emulator tokens, got {value!r}")
+    tokens = tuple(_expect_str(token, where) for token in value)
+    if len(set(tokens)) != len(tokens):
+        # A repeated token would state one installer twice in the verdict.
+        raise ValueError(f"{where}: a token is listed twice in {list(tokens)!r}")
+    return tokens
 
 
 def load_standalone_launch(text: str | None = None) -> tuple[StandaloneLaunchCard, ...]:

@@ -148,6 +148,10 @@ CAVEAT_FRONTEND_BUILD_SEALED = "frontend-build-sealed"
 ES-DE's today): not established, and the capability is the runtime's, never the machine's — ``frontend-build-unpinned``
 is a build read and not pinned, or one the binary does not state."""
 CAVEAT_LAUNCHER_SCRIPT_UNPINNED = "launcher-script-unpinned"
+# A note beside an answered command (#574): the program is no launcher whose
+# reading of its distribution's start is pinned — the program itself, or a start
+# file that reading rests on — so what it needs from that start is not stated.
+CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED = "launch-environment-unpinned"
 # The two notes beside a command that is answered: a placeholder ES-DE leaves
 # in the command as written, and a value ES-DE's own substitution would break,
 # answered as the value instead.
