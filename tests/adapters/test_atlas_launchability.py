@@ -19,6 +19,8 @@ from _vendor.atlas import (
     CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
+    CAVEAT_ROM_PATH_UNDECLARED,
+    CAVEAT_SYSTEM_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
     VERDICT_NEEDS_INSTALLATION,
@@ -275,6 +277,14 @@ class TestEachVerdictInTendersWords:
         )
 
         assert (result.state, result.reason) == (NOT_ESTABLISHED, CATALOGUE_UNREAD)
+
+    @pytest.mark.parametrize("code", [CAVEAT_SYSTEM_UNKNOWN, CAVEAT_ROM_PATH_UNDECLARED])
+    def test_each_code_saying_the_system_is_not_declared_is_worded_so(self, code, traces):
+        result, _ = _ask(
+            LaunchabilityAnswer(verdict=VERDICT_UNKNOWN, extension=".z64", caveats=(_caveat(code),)), traces
+        )
+
+        assert (result.state, result.reason) == (NOT_ESTABLISHED, SYSTEM_UNKNOWN)
 
     def test_an_unknown_verdict_with_no_code_tender_words_names_no_reason(self, traces):
         result, _ = _ask(
