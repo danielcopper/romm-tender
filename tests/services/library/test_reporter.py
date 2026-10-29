@@ -1807,6 +1807,28 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Faves": [1001]}
 
     @pytest.mark.asyncio
+    async def test_romm_collection_group_fallback_takes_the_smallest_bound_rom_id(self, library, emit):
+        """A group still holding two shortcuts files an unbound sibling under the
+        shortcut of its smallest bound rom_id, so the filing does not move between runs."""
+
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
+        _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game (JP)", group_key="g")
+        _seed_rom(uow, 3, app_id=3003, platform_slug="n64", name="Game (EU)", group_key="g")
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={
+                ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[2], kind="standard")
+            },
+            pending_platform_rom_ids={1, 3},
+            platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
+        )
+
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        assert payload["romm_collection_app_ids"] == {"Faves": [1001]}
+
+    @pytest.mark.asyncio
     async def test_romm_collection_dedups_group_members_onto_one_shortcut(self, library, emit):
         """A collection holding several siblings of one group yields the group's
         single shortcut appId once, not duplicated."""
