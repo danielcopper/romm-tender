@@ -31,6 +31,7 @@ from domain.emulator_choice import (
 )
 from domain.emulator_commands import default_option, label_to_invocation, options_to_payload, shipped_default
 from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
+from domain.rom_files import folder_boot_root
 from domain.shortcut_data import (
     EmulatorInvocation,
     build_launch_options,
@@ -42,6 +43,7 @@ if TYPE_CHECKING:
     import asyncio
     import logging
 
+    from domain.emulator_choice import ResolvedEmulator
     from domain.platform_system import PlatformSystem
     from domain.rom import Rom
     from domain.rom_install import RomInstall
@@ -192,6 +194,50 @@ class CoreService:
             ),
             "vanished_pick": vanished_payload(choice),
         }
+
+    async def get_emulator_launches(self, rom_id: int) -> list[dict[str, Any]]:
+        """Whether each emulator entry of ``rom_id``'s system starts the game's installed file.
+
+        One verdict per entry, in the order the picker lists them, each asked
+        with that entry's label (:meth:`~services.protocols.CoreInfoProvider.launchability`)
+        — those not established included — so the emulator menu shows which
+        entries can start the game and why the others cannot (#2195 D22, D29).
+        Empty for a ROM that is not installed or has no system to ask.
+        Asked when the menu is opened, for one game: a verdict may read its
+        entry's core, which the first time costs a probe (#2195 D26).
+        """
+        return await self._loop.run_in_executor(None, self._emulator_launches_io, rom_id)
+
+    def _emulator_launches_io(self, rom_id: int) -> list[dict[str, Any]]:
+        question = self._launch_question(rom_id)
+        if question is None:
+            return []
+        system, path, resolved = question
+        reading = self._core_info.sources_reading()
+        return [
+            self._core_info.launchability(system, path, label=option.label, reading=reading).payload()
+            for option in resolved.options
+        ]
+
+    def _launch_question(self, rom_id: int) -> tuple[str, str, ResolvedEmulator] | None:
+        """The system, the path and the emulator resolution a launchability question for ``rom_id`` is asked with.
+
+        The path is the one the shortcut starts — the disc pick folded over the
+        install — except for a game kept as a folder, whose folder is asked about
+        as ES-DE scans it (#2195 D11). ``None`` for a ROM that is not installed
+        or has no system to ask.
+        """
+        rom, install = self._read_rom_and_install(rom_id)
+        if rom is None or install is None:
+            return None
+        resolved = self._active_core.resolve_rom(rom_id)
+        if resolved is None:
+            return None
+        if install.rom_dir is not None and folder_boot_root(install.file_path, install.rom_dir) is not None:
+            path = install.rom_dir
+        else:
+            path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
+        return (install.system, path, resolved)
 
     async def get_system_core_info(self, platform_slug: str) -> dict[str, Any]:
         """Return the emulators available for *platform_slug* + the active one.

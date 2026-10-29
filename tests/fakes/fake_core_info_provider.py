@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_commands import CORE, PROGRAM, EmulatorOption
 from domain.emulator_sources import ArrangedSource
+from domain.launchability import STARTS, Launchability
 from domain.shortcut_data import EmulatorInvocation
 from fakes.fake_emulator_sources import FakeSourcesReading
 
@@ -142,6 +144,10 @@ class FakeCoreInfoProvider:
         self.readings: list[SourcesReading | None] = []
         self.default_readings: list[SourcesReading | None] = []
         self.options_calls: list[dict[str, str | None]] = []
+        # The verdict ``launchability`` answers for each label it is asked
+        # with; a label it does not hold starts its file. Each call is recorded.
+        self.launch_verdicts: dict[str, Launchability] = {}
+        self.launchability_calls: list[tuple[str, str, str]] = []
 
     @property
     def available_cores(self) -> list[dict[str, Any]]:
@@ -194,3 +200,17 @@ class FakeCoreInfoProvider:
             "reason": None if self.available else self.reason,
             "source": self.source,
         }
+
+    def launchability(
+        self, system_name: str, content_path: str, *, label: str, reading: SourcesReading | None = None
+    ) -> Launchability:
+        self.launchability_calls.append((system_name, content_path, label))
+        verdict = self.launch_verdicts.get(label)
+        if verdict is not None:
+            return verdict
+        return Launchability(
+            state=STARTS,
+            entry=label,
+            file=os.path.basename(content_path),
+            extension=os.path.splitext(content_path)[1],
+        )

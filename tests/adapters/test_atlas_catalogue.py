@@ -806,12 +806,18 @@ class TestTheLauncher:
 
 
 class TestAcceptList:
-    def test_the_declared_extensions_arrive_lowercased(self, traces):
+    def test_the_declared_extensions_arrive_verbatim(self, traces):
+        # ES-DE compares them case-exactly (#2195 D3), so a list naming only
+        # ``.M3U`` does not take the ``.m3u`` a download writes.
         installation = _Installation(placement=RomPlacement(dir="/roms/psx", extensions=(".CUE", ".chd", ".M3U")))
         adapter = _adapter(installation, traces)
 
-        assert adapter.get_supported_extensions("psx") == frozenset({".cue", ".chd", ".m3u"})
-        assert adapter.system_supports_m3u("psx") is True
+        assert adapter.get_supported_extensions("psx") == frozenset({".CUE", ".chd", ".M3U"})
+        assert adapter.system_supports_m3u("psx") is False
+
+    def test_a_system_listing_m3u_says_so(self, traces):
+        installation = _Installation(placement=RomPlacement(dir="/roms/psx", extensions=(".cue", ".m3u", ".M3U")))
+        assert _adapter(installation, traces).system_supports_m3u("psx") is True
 
     def test_a_system_without_m3u_says_so(self, traces):
         installation = _Installation(placement=RomPlacement(dir="/roms/switch", extensions=(".nsp", ".xci")))

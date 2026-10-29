@@ -442,6 +442,33 @@ export interface EmulatorStart {
 }
 
 /**
+ * Whether one installed game's file starts with one emulator entry, as the
+ * resolver answers it (#2195 D2). `needs_installing`, `not_a_launch_file` and
+ * `not_this_emulator` refuse a start; `starts` and `not_established` let it go
+ * ahead. `entry` is the label it was asked with and `file` the file's name;
+ * `starts_from` is the system's extension list (for `not_a_launch_file`),
+ * `other_entries` the entries established to start the file (for
+ * `not_this_emulator`), and `install_in` the emulators that install it — for
+ * `needs_installing` alone, empty where none is known, `null` otherwise.
+ * `reason` says why a verdict was `not_established`, `null` where nothing
+ * Tender words was named. `contents_unread` says the file is an archive whose
+ * contents were not read; `format_unestablished` that whether the entry reads
+ * this format was not established.
+ */
+export interface GameLaunch {
+  state: "starts" | "needs_installing" | "not_a_launch_file" | "not_this_emulator" | "not_established";
+  entry: string | null;
+  file: string;
+  extension: string;
+  starts_from: string[];
+  other_entries: string[];
+  install_in: string[] | null;
+  reason: "system_unknown" | "entry_unknown" | "catalogue_unread" | "no_source" | null;
+  contents_unread: boolean;
+  format_unestablished: boolean;
+}
+
+/**
  * A stored pick whose label no longer exists in its source: `label`, the kind
  * of that `source`, the `layer` it was stored on, and the entry `used`
  * instead, `null` where there is none.

@@ -209,6 +209,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # Read-only library / sync state queries.
     "get_cached_game_detail",
     "get_platform_core_info",
+    "get_emulator_launches",
     "get_system_core_info",
     "count_platform_saves",
     # What the resolver knows a library file's content as: a read of its tables

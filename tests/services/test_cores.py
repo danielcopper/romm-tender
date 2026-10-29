@@ -1367,3 +1367,91 @@ class TestAPickWhileItsSourceIsSwitchedOff:
         on = event_loop.run_until_complete(service.get_platform_core_info(42))
 
         assert on["platform_core_label"] == "bsnes"
+
+
+# ── get_emulator_launches (whether each entry starts the installed game) ──
+
+
+def _resolved(*options: Any, chosen: Any | None = None) -> ResolvedEmulator:
+    return ResolvedEmulator(
+        choice=EmulatorChoice(option=chosen, layer=DEFAULT if chosen is not None else None, vanished=None),
+        options=list(options),
+        invocation=None,
+        folder_unstartable=False,
+    )
+
+
+class TestGetEmulatorLaunches:
+    """Each entry's verdict, asked with its own label, for the emulator menu (#2195 D22, D29)."""
+
+    _RPCS3_SHORTCUT = standalone_option("%EMULATOR_OS-SHELL% %ROM%", "RPCS3 Shortcut (Standalone)")
+    _RPCS3_DIRECTORY = standalone_option("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
+
+    def test_every_entry_is_asked_with_its_own_label_about_the_installed_file(
+        self, event_loop, service, core_info, active_core, uow
+    ):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._RPCS3_SHORTCUT, self._RPCS3_DIRECTORY)
+
+        result = event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        assert [entry["entry"] for entry in result] == ["RPCS3 Shortcut (Standalone)", "RPCS3 Directory (Standalone)"]
+        assert core_info.launchability_calls == [
+            ("ps3", "/roms/ps3/Game.iso", "RPCS3 Shortcut (Standalone)"),
+            ("ps3", "/roms/ps3/Game.iso", "RPCS3 Directory (Standalone)"),
+        ]
+
+    def test_a_game_kept_as_a_folder_is_asked_about_its_folder(self, event_loop, service, core_info, active_core, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(
+            uow,
+            rom_id=42,
+            file_path="/roms/ps3/Game.ps3/PS3_GAME/USRDIR/EBOOT.BIN",
+            rom_dir="/roms/ps3/Game.ps3",
+            platform_slug="ps3",
+        )
+        active_core.resolved[42] = _resolved(self._RPCS3_DIRECTORY)
+
+        event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        assert core_info.launchability_calls == [("ps3", "/roms/ps3/Game.ps3", "RPCS3 Directory (Standalone)")]
+
+    def test_a_multi_disc_game_is_asked_about_the_disc_it_starts(
+        self, event_loop, service, core_info, active_core, disc_resolver, uow
+    ):
+        _seed_rom(uow, rom_id=42, platform_slug="psx", selected_disc="Game (Disc 2).cue")
+        _seed_install(
+            uow,
+            rom_id=42,
+            file_path="/roms/psx/Game/Game (Disc 1).cue",
+            rom_dir="/roms/psx/Game",
+            platform_slug="psx",
+        )
+        disc_resolver.set_discs(
+            "/roms/psx/Game",
+            [
+                Disc(filename="Game (Disc 1).cue", path="/roms/psx/Game/Game (Disc 1).cue", label="Disc 1", index=1),
+                Disc(filename="Game (Disc 2).cue", path="/roms/psx/Game/Game (Disc 2).cue", label="Disc 2", index=2),
+            ],
+        )
+        active_core.resolved[42] = _resolved(libretro_option("swanstation_libretro", "SwanStation"))
+
+        event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        assert core_info.launchability_calls == [("psx", "/roms/psx/Game/Game (Disc 2).cue", "SwanStation")]
+
+    def test_a_game_that_is_not_installed_asks_nothing(self, event_loop, service, core_info, active_core, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._RPCS3_DIRECTORY)
+
+        assert event_loop.run_until_complete(service.get_emulator_launches(42)) == []
+        assert core_info.launchability_calls == []
+
+    def test_a_game_with_no_system_to_ask_asks_nothing(self, event_loop, service, core_info, active_core, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
+        active_core.resolved[42] = None
+
+        assert event_loop.run_until_complete(service.get_emulator_launches(42)) == []
+        assert core_info.launchability_calls == []

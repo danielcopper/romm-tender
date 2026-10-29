@@ -3,8 +3,9 @@
 The single place the vendored `emu-atlas <https://github.com/danielcopper/emu-atlas>`_
 resolver is asked what a frontend's catalogue declares for a system: the emulator
 list behind the picker, the system-layer default the launch bakes, the libretro
-core the firmware filter keys on, and the accept-list a candidate file is matched
-against. Services see :class:`domain.emulator_commands.EmulatorOption` values and
+core the firmware filter keys on, the accept-list a candidate file is matched
+against, and whether one game's file starts with the entry Tender starts it
+through. Services see :class:`domain.emulator_commands.EmulatorOption` values and
 plain sets and never an atlas type — ``domain/`` may not import ``_vendor`` at
 all (the ``domain-stdlib-only`` contract), so the vocabulary and the resolver
 have to meet at an adapter.
@@ -46,12 +47,16 @@ caveat list that is not empty.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
     AVAILABILITY_NOT_INSTALLED,
     AVAILABILITY_STARTABLE,
+    CAVEAT_ARCHIVE_CONTENTS_UNREAD,
+    CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
     CAVEAT_COMMAND_REWRITTEN_AT_START,
+    CAVEAT_CORE_FILE_FOREIGN,
     CAVEAT_CORE_NOT_INSTALLED,
     CAVEAT_CORE_RULES_MISSING,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
@@ -60,19 +65,28 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
     CAVEAT_EMULATOR_NOT_FOUND,
     CAVEAT_EMULATOR_RULES_MISSING,
+    CAVEAT_ENTRY_FORMAT_UNCLAIMED,
+    CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
     CAVEAT_FIND_RULES_REWRITTEN_AT_START,
     CAVEAT_FIND_RULES_UNREADABLE,
+    CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN,
     CAVEAT_LAUNCH_PATH_ASSUMED,
     CAVEAT_LAUNCH_PATH_UNESTABLISHED,
     CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
     CAVEAT_LAUNCHER_SCRIPT_MISSING,
     CAVEAT_PROGRAM_NOT_FOUND,
+    CAVEAT_ROM_PATH_UNDECLARED,
     CAVEAT_RUN_GAME_DIFFERS,
+    CAVEAT_SYSTEM_UNKNOWN,
     HEALTH_ISSUE_CATALOGUE_INVALID,
     HEALTH_ISSUE_NOT_SET_UP,
     KIND_LIBRETRO,
     KIND_RETROARCH_FOREIGN_CORE,
     KIND_STANDALONE,
+    VERDICT_ENTRY_NOT_ACCEPTED,
+    VERDICT_LAUNCHABLE,
+    VERDICT_NEEDS_INSTALLATION,
+    VERDICT_NOT_ACCEPTED,
 )
 
 from adapters.atlas_identity import emulator_identity
@@ -96,6 +110,18 @@ from domain.emulator_sources import (
     CATALOGUE_SEALED,
     CATALOGUE_UNAVAILABLE,
 )
+from domain.launchability import (
+    CATALOGUE_UNREAD,
+    ENTRY_UNKNOWN,
+    NEEDS_INSTALLING,
+    NO_SOURCE,
+    NOT_A_LAUNCH_FILE,
+    NOT_THIS_EMULATOR,
+    STARTS,
+    SYSTEM_UNKNOWN,
+    Launchability,
+)
+from domain.launchability import NOT_ESTABLISHED as LAUNCH_NOT_ESTABLISHED
 from domain.shortcut_data import RETRODECK_APP_ID
 
 if TYPE_CHECKING:
@@ -185,6 +211,38 @@ _CORE_SO_SUFFIX = ".so"
 # The resolver's word for what an entry launches, in Tender's. A word this map
 # does not hold reads as a program of its own.
 _KINDS = {KIND_LIBRETRO: CORE, KIND_STANDALONE: PROGRAM, KIND_RETROARCH_FOREIGN_CORE: FOREIGN_CORE}
+
+# The launchability verdicts, each in Tender's word. A verdict this map does not
+# hold reads as not established — the resolver's own rule for a value a client
+# does not know, and its ``unknown`` is exactly that.
+_LAUNCH_STATES = {
+    VERDICT_LAUNCHABLE: STARTS,
+    VERDICT_NEEDS_INSTALLATION: NEEDS_INSTALLING,
+    VERDICT_NOT_ACCEPTED: NOT_A_LAUNCH_FILE,
+    VERDICT_ENTRY_NOT_ACCEPTED: NOT_THIS_EMULATOR,
+}
+
+# Why a verdict could not be established, in Tender's word, the first code
+# found winning. A label the system's entries do not carry is the caller's own
+# question going wrong, so it is named before what the catalogue says of the
+# system; ``rom-path-undeclared`` beside ``system-unknown`` says the same
+# system is not one the frontend declares.
+_NOT_ESTABLISHED_LAUNCH_BECAUSE = (
+    (CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN, ENTRY_UNKNOWN),
+    (CAVEAT_SYSTEM_UNKNOWN, SYSTEM_UNKNOWN),
+    (CAVEAT_ROM_PATH_UNDECLARED, SYSTEM_UNKNOWN),
+)
+
+# Codes a launchability answer carries that change nothing Tender says.
+# ``entry-format-unclaimed`` stands on a verdict that lets the file start:
+# RetroArch hands a direct load to the core whatever it claims. A foreign core's
+# refusal (``core-file-foreign``) is the entry-not-accepted verdict it stands
+# beside, worded as that verdict. ``arrangement-version-drifted`` says the
+# installation's version is not the one the reading is pinned to, on every
+# answer, and is no statement about the file.
+_LAUNCH_NOTES_UNWORDED = frozenset(
+    {CAVEAT_ENTRY_FORMAT_UNCLAIMED, CAVEAT_CORE_FILE_FOREIGN, CAVEAT_ARRANGEMENT_VERSION_DRIFTED}
+)
 
 
 def _unavailable(reason: str, source: dict[str, Any] | None) -> dict[str, Any]:
@@ -311,6 +369,38 @@ def _frontend_choice(entries: tuple[Any, ...]) -> Any:
     declared = [entry.declared_index for entry in entries if entry.declared_index is not None]
     first = entries[0]
     return None if declared and first.declared_index == min(declared) else first
+
+
+def _launch_reason(answer: Any) -> str | None:
+    """Why *answer*'s verdict could not be established, in Tender's word, or ``None`` where Tender words none."""
+    codes = set(_caveat_codes(answer))
+    reason = next((reason for code, reason in _NOT_ESTABLISHED_LAUNCH_BECAUSE if code in codes), None)
+    if reason is None and catalogue_refused(answer):
+        return CATALOGUE_UNREAD
+    return reason
+
+
+def _installer_name(installer: Any) -> str:
+    """The emulator that installs a file: the system's entry that runs it, else the emulator as the resolver says it."""
+    return installer.entry.label if installer.entry is not None else installer.emulator
+
+
+def _launchability(answer: Any, *, content_path: str, label: str | None) -> Launchability:
+    """*answer* in Tender's words."""
+    state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED)
+    codes = set(_caveat_codes(answer))
+    return Launchability(
+        state=state,
+        entry=label,
+        file=os.path.basename(content_path),
+        extension=answer.extension,
+        starts_from=tuple(answer.accepted),
+        other_entries=tuple(answer.alternatives),
+        install_in=None if answer.installers is None else tuple(_installer_name(i) for i in answer.installers),
+        reason=_launch_reason(answer) if state == LAUNCH_NOT_ESTABLISHED else None,
+        contents_unread=CAVEAT_ARCHIVE_CONTENTS_UNREAD in codes,
+        format_unestablished=CAVEAT_ENTRY_FORMAT_UNESTABLISHED in codes,
+    )
 
 
 def catalogue_refused(answer: Any) -> bool:
@@ -496,20 +586,55 @@ class AtlasCatalogueAdapter:
         return system_name in answer.systems
 
     def get_supported_extensions(self, system_name: str, *, reading: SourcesReading | None = None) -> frozenset[str]:
-        """Return the extensions the catalogue accepts for *system_name* (lowercased).
+        """Return the extensions the catalogue accepts for *system_name*, verbatim.
 
         Reads the same per-system declaration ES-DE consults, so a caller can
         intersect it with the disc-image set and never offer a disc the emulator
-        cannot launch. The tokens arrive verbatim, both cases listed where the
-        file lists both, so they are lowercased here to make membership checks
-        case-insensitive. Returns an empty frozenset for an unknown system or when
-        the catalogue could not be read (default-safe: the caller falls back to
-        the full disc set).
+        cannot launch. The tokens are ES-DE's own, both cases listed where the
+        file lists both, and ES-DE compares them case-exactly. Returns an empty
+        frozenset for an unknown system or when the catalogue could not be read
+        (default-safe: the caller falls back to the full disc set).
         """
         placement = self._rom_location(system_name, self._reading(reading))
         if placement is None:
             return frozenset()
-        return frozenset(token.lower() for token in placement.extensions)
+        return frozenset(placement.extensions)
+
+    def launchability(
+        self, system_name: str, content_path: str, *, label: str, reading: SourcesReading | None = None
+    ) -> Launchability:
+        """Whether *content_path* starts as *system_name*'s content with the entry *label* names.
+
+        The verdict is the answering source's, asked with the entry Tender
+        starts the game through, so it is about that entry rather than the one
+        ES-DE would choose. Where no source answers, the verdict is not
+        established for that reason; where the resolver could not be asked, it
+        is not established with no reason named.
+        """
+        reading = self._reading(reading)
+        installation = self._installation(reading)
+        if installation is None:
+            return Launchability(
+                state=LAUNCH_NOT_ESTABLISHED,
+                entry=label,
+                file=os.path.basename(content_path),
+                extension="",
+                reason=NO_SOURCE,
+            )
+
+        def ask() -> Any:
+            subject = f"launchable({system_name!r}, label={label!r})"
+            answer = self._ask(lambda: installation.launchable(system_name, content_path, label=label), subject)
+            if answer is not None:
+                self._trace(system_name, f"verdict={answer.verdict}", answer)
+            return answer
+
+        answer = reading.remember(("launchable", system_name, content_path, label), ask)
+        if answer is None:
+            return Launchability(
+                state=LAUNCH_NOT_ESTABLISHED, entry=label, file=os.path.basename(content_path), extension=""
+            )
+        return _launchability(answer, content_path=content_path, label=label)
 
     # -- helpers -------------------------------------------------------------
 

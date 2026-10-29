@@ -28,6 +28,7 @@ import type {
   BiosStatus,
   BiosFileStatus,
   CoreInfo,
+  GameLaunch,
   SystemCoreInfo,
   RomMetadata,
   SaveSyncSettings,
@@ -903,6 +904,8 @@ export const clearGameCore = endpoint<[number], GameCoreApplyResult>("clear_game
 // core reflects the per-game DB override when one is pinned, else the platform
 // default.
 export const getPlatformCoreInfo = endpoint<[number], CoreInfo>("get_platform_core_info");
+/** Whether each emulator entry starts the installed game, for its emulator menu (#2195 D22). */
+export const getEmulatorLaunches = endpoint<[number], GameLaunch[]>("get_emulator_launches");
 // The platform-keyed twin (#1815): the Library page's Platforms detail asks it
 // once per selected platform. Distinct from getPlatformCoreInfo, which layers a
 // ROM's own pin on top and so cannot answer for a platform with no synced ROM.

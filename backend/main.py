@@ -232,6 +232,10 @@ class Endpoints:
         return await self._services.core_service.get_platform_core_info(rom_id)
 
     @route
+    async def get_emulator_launches(self, rom_id):
+        return await self._services.core_service.get_emulator_launches(rom_id)
+
+    @route
     async def get_system_core_info(self, platform_slug):
         return await self._services.core_service.get_system_core_info(platform_slug)
 

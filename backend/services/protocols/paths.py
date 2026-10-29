@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from domain.emulator_pick import StoredPick
     from domain.emulator_sources import ArrangedSource, SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue, SourceCatalogues
+    from domain.launchability import Launchability
     from domain.platform_system import PlatformIds, PlatformSystem
     from domain.retrodeck_folders import FolderRefused, MoveRoots
     from domain.rom_install import RomInstall
@@ -223,6 +224,9 @@ class CoreInfoProvider(Protocol):
     it judges by come off one choice. The launch-layer default
     (``get_default_emulator``) and the full picker (``get_emulator_options``) are
     emulator-kind-aware (libretro OR standalone).
+
+    ``launchability`` answers for one game's file and one entry, asked when
+    that game's page or emulator menu is read, never for a list of games.
     """
 
     def get_active_core(
@@ -245,6 +249,10 @@ class CoreInfoProvider(Protocol):
     def sources_reading(self) -> SourcesReading:
         """A fresh reading of the emulator sources, for a call that asks every source in the user's order."""
         ...
+
+    def launchability(
+        self, system_name: str, content_path: str, *, label: str, reading: SourcesReading | None = None
+    ) -> Launchability: ...
 
 
 class EmulatorSourcesReader(Protocol):
