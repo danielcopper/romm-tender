@@ -292,6 +292,28 @@ class TestGetVersionList:
         assert by_id[2]["is_default"] is True
         assert by_id[1]["is_default"] is False
 
+    def test_a_member_on_another_shortcut_is_marked_bound_elsewhere_and_stays_switchable(
+        self, event_loop, service, uow, romm
+    ):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        _seed_rom(uow, rom_id=2, app_id=777)
+        _seed_rom(uow, rom_id=3, app_id=None)
+        romm.roms[1] = {"id": 1, "sibling_roms": []}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert {rom_id: row["bound_elsewhere"] for rom_id, row in by_id.items()} == {1: False, 2: True, 3: False}
+        assert by_id[2]["switchable"] is True
+
+    def test_a_server_only_version_is_never_bound_elsewhere(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 5, "fs_name_no_ext": "Game (Japan)"}]}
+        romm.roms[5] = {"id": 5, "platform_id": 57, "fs_name_no_ext": "Game (Japan)"}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert (by_id[5]["synced"], by_id[5]["bound_elsewhere"]) == (False, False)
+
     def test_server_only_stub_marked_unsynced(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",))
         romm.roms[1] = {

@@ -179,6 +179,17 @@ describe("executeVersionSwitch", () => {
     expect(setSwitching).not.toHaveBeenCalled();
   });
 
+  it("no-ops for a version another shortcut of this game is on, installed or not", async () => {
+    for (const target of [
+      { ...mockTarget, bound_elsewhere: true },
+      { ...mockTarget, bound_elsewhere: true, installed: false },
+    ]) {
+      await executeVersionSwitch({ appId: 100, target, leaseOwner, askUnsyncedSaves, setSwitching });
+    }
+    expect(backend.switchVersion).not.toHaveBeenCalled();
+    expect(setSwitching).not.toHaveBeenCalled();
+  });
+
   it("switches version successfully without soft-block", async () => {
     vi.mocked(backend.switchVersion).mockResolvedValueOnce({
       success: true,

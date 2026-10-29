@@ -69,6 +69,12 @@ a not-yet-synced version whose match conflicts, are both shown (so you know they
 either would move the shortcut onto a different game. To make one selectable, fix its metadata match in RomM so it
 agrees with this game's, then re-sync.
 
+A version another Steam shortcut of the same game is on is dimmed too, labelled _"On another shortcut of this game"_,
+and cannot be selected: moving it onto this shortcut would leave the other one with no version. A game has a second
+shortcut only until a sync leaves it one, or for good where only a collection brings it in or RomM no longer lists its
+platform ([Multiple versions of a game](syncing-your-library.md#multiple-versions-of-a-game)). To use that version here,
+switch the other shortcut to another version first.
+
 A retained local version that RomM has positively confirmed it no longer has is also shown dimmed, with the separate
 label _"No longer available on RomM"_, and it cannot be switched to: selecting it instead opens the cleanup confirmation
 described under [Cleaning up versions removed from RomM](#cleaning-up-versions-removed-from-romm). Its **active** and

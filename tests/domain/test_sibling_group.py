@@ -10,6 +10,7 @@ from domain.sibling_group import (
     compute_component_group_keys,
     compute_group_keys_with_unfetched,
     compute_sibling_group_key,
+    target_bound_elsewhere,
     target_in_sibling_group,
 )
 
@@ -186,6 +187,19 @@ class TestTargetInSiblingGroupLocal:
             )
             is False
         )
+
+
+class TestTargetBoundElsewhere:
+    """A target is bound elsewhere when another shortcut of the game is on it."""
+
+    def test_an_unbound_target_is_not_bound_elsewhere(self):
+        assert target_bound_elsewhere(target_app_id=None, app_id=100) is False
+
+    def test_a_target_on_the_asking_shortcut_is_not_bound_elsewhere(self):
+        assert target_bound_elsewhere(target_app_id=100, app_id=100) is False
+
+    def test_a_target_on_another_shortcut_is_bound_elsewhere(self):
+        assert target_bound_elsewhere(target_app_id=777, app_id=100) is True
 
 
 class TestTargetInSiblingGroupServerOnly:

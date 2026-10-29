@@ -18,7 +18,8 @@ of which is complete; :func:`compute_sibling_group_key` is the per-ROM
 coalesce-first fallback (a lone ROM, a bridged member, an un-edged incremental
 row) and the membership fallback in :mod:`services.version_switch`.
 :func:`target_in_sibling_group` is the single membership authority the version
-picker and the switch decide by. Pure compute, no I/O, stdlib only (see the ADR
+picker and the switch decide by, and :func:`target_bound_elsewhere` the single
+authority on a target another shortcut of the game is on. Pure compute, no I/O, stdlib only (see the ADR
 superseding ADR-0021 §1).
 """
 
@@ -469,3 +470,14 @@ def target_in_sibling_group(
     source, value = parsed
     target_value = target_ids.get(_FIELD_BY_SOURCE[source])
     return target_value is None or str(target_value) == value
+
+
+def target_bound_elsewhere(*, target_app_id: int | None, app_id: int) -> bool:
+    """Whether a switch target is bound to a shortcut other than *app_id*.
+
+    Shared by the version picker's per-version ``bound_elsewhere`` flag
+    (``get_version_list``) and ``switch_version``'s ``bound_elsewhere`` guard,
+    so the picker never offers a target the switch refuses. Moving such a target
+    onto *app_id* would leave the other shortcut with no version.
+    """
+    return target_app_id is not None and target_app_id != app_id

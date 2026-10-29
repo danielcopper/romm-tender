@@ -1016,7 +1016,10 @@ export const selectDisc = endpoint<[number, string | null], SelectDiscResult>("s
  * this list load. The retained row stays visible but cannot be selected.
  * `no_file` marks a version RomM holds no file for: it is never the default,
  * and the row is selectable only when the version is installed here. The
- * backend always sends it; absent reads as having a file.
+ * backend always sends it; absent reads as having a file. `bound_elsewhere`
+ * marks a version another shortcut of this game is on — switch_version refuses
+ * it by the same rule — so the row is never selectable; the backend always
+ * sends it, and absent reads as on no other shortcut.
  */
 export interface VersionInfo {
   rom_id: number;
@@ -1033,6 +1036,7 @@ export interface VersionInfo {
   switchable: boolean;
   vanished: boolean;
   no_file?: boolean;
+  bound_elsewhere?: boolean;
 }
 
 /**

@@ -63,6 +63,9 @@ const BADGE_COLORS: Record<"accent" | "muted" | "good", { bg: string; fg: string
 /** The label a row (or a singleton binding) carries once RomM 404s its exact id. */
 const VANISHED_HINT = "No longer available on RomM";
 
+/** The label of a row another shortcut of this game is on. */
+const BOUND_ELSEWHERE_HINT = "On another shortcut of this game";
+
 /** Accessible name of the trash affordance that opens the cleanup confirmation. */
 const REMOVE_LOCAL_DATA_LABEL = "Remove local data";
 
@@ -301,6 +304,9 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
 
   const rowAvailabilityHint = (v: VersionInfo): ReactNode => {
     if (v.vanished) return <AvailabilityHint text={VANISHED_HINT} />;
+    // Ahead of the no-file label: an installed version without a file is
+    // otherwise selectable, so that label alone would read as an offer.
+    if (v.bound_elsewhere) return <AvailabilityHint text={BOUND_ELSEWHERE_HINT} />;
     if (v.no_file) return <AvailabilityHint text={NO_FILE_ON_ROMM_LABEL} />;
     if (!v.switchable) return <AvailabilityHint text="conflicting metadata match in RomM" />;
     return null;
@@ -336,7 +342,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
                   width: "100%",
                   color: v.active ? ACTIVE_ACCENT : undefined,
                   // Unavailable/conflicting rows stay visible as retained context,
-                  // but are dimmed until RomM offers a usable target.
+                  // but are dimmed while they cannot be switched to.
                   opacity: isSelectable(v) ? undefined : 0.55,
                 }}
               >

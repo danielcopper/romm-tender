@@ -122,9 +122,11 @@ export function fetchVersionCovers(
 
 /**
  * Whether a row can be switched to. A version RomM holds no file for can only
- * be played from a local copy, so it is offered only where one is installed.
+ * be played from a local copy, so it is offered only where one is installed. A
+ * version another shortcut of this game is on is never offered.
  */
-export const isSelectable = (v: VersionInfo): boolean => !v.vanished && v.switchable && !(v.no_file && !v.installed);
+export const isSelectable = (v: VersionInfo): boolean =>
+  !v.vanished && v.switchable && !v.bound_elsewhere && !(v.no_file && !v.installed);
 
 /** Switch the app to *target*, asking about any saves the switch would strand. */
 export async function executeVersionSwitch(options: VersionSwitchOptions): Promise<void> {
@@ -141,8 +143,8 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
 
   // An unselectable row is rendered disabled, and this guard makes a click on
   // one a no-op (defense-in-depth), so switch_version's rejection — of a
-  // sibling in another local group (#1359), or of one with no file — can never
-  // reach a toast.
+  // sibling in another local group (#1359), of one another shortcut is on, or of
+  // one with no file — can never reach a toast.
   if (target.active || !isSelectable(target)) return;
 
   setSwitching?.(true);

@@ -115,6 +115,7 @@ async def test_get_version_list_happy_shape(harness):
         "switchable",
         "vanished",
         "no_file",
+        "bound_elsewhere",
         "active",
         "is_default",
     }
@@ -457,6 +458,21 @@ async def test_switch_version_not_in_group_failure_shape(harness):
     assert result["success"] is False
     assert result["reason"] == "not_in_group"
     assert "error" not in result
+
+
+async def test_get_version_list_marks_the_version_the_switch_refuses_as_bound_elsewhere(harness):
+    """The list marks the version another shortcut is on, and the switch refuses exactly that one."""
+    _seed_rom(harness, rom_id=1, app_id=_APP_ID)
+    _seed_rom(harness, rom_id=2, app_id=777)
+    _seed_rom(harness, rom_id=3, app_id=None)
+    harness.romm.roms[1] = {"id": 1, "sibling_roms": []}
+
+    listed = await harness.endpoints.get_version_list(_APP_ID)
+    marked = {v["rom_id"]: v["bound_elsewhere"] for v in listed["versions"]}
+    assert marked == {1: False, 2: True, 3: False}
+
+    refused = await harness.endpoints.switch_version(_APP_ID, 2, False)
+    assert refused["reason"] == "bound_elsewhere"
 
 
 async def test_switch_version_bound_elsewhere_failure_shape(harness):

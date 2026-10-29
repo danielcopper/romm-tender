@@ -41,7 +41,7 @@ from domain.rom import Rom
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
 from domain.save_stranding import STRANDING_NONE
 from domain.shortcut_data import extract_version_metadata
-from domain.sibling_group import compute_sibling_group_key, target_in_sibling_group
+from domain.sibling_group import compute_sibling_group_key, target_bound_elsewhere, target_in_sibling_group
 from domain.sibling_resolution import AUTO_REGION, fs_name_stem, resolve_group_representative
 from domain.version_metadata import VersionMetadata
 from lib.errors import NamedRefused, Refused, RommNotFoundError
@@ -127,6 +127,7 @@ class _MemberView:
     is_main_sibling: bool
     installed: bool
     has_file: bool
+    bound_elsewhere: bool
 
 
 @dataclass(frozen=True)
@@ -380,6 +381,7 @@ class VersionSwitchService:
                     is_main_sibling=r.is_main_sibling,
                     installed=uow.rom_installs.get(r.rom_id) is not None,
                     has_file=r.has_file_on_disk,
+                    bound_elsewhere=target_bound_elsewhere(target_app_id=r.shortcut_app_id, app_id=app_id),
                 )
                 for r in rows
             ]
@@ -439,8 +441,12 @@ class VersionSwitchService:
         ``no_file`` marks a version RomM holds no file for — the stored column for
         a local row, the fetched detail for a server-only one. It is never the
         default either, and ``switch_version`` refuses a switch to it unless it is
-        installed (``no_file_on_romm``). A single-version group renders no picker
-        while preserving its bound/server verdicts.
+        installed (``no_file_on_romm``). ``bound_elsewhere`` marks a version another
+        shortcut of the game is on, by :func:`target_bound_elsewhere`, the rule
+        ``switch_version`` refuses such a target by; it says nothing about
+        membership, so ``switchable`` stays the membership verdict. A
+        single-version group renders no picker while preserving its bound/server
+        verdicts.
         """
         entries: list[dict[str, Any]] = [
             {
@@ -455,6 +461,7 @@ class VersionSwitchService:
                 "installed": m.installed,
                 "vanished": m.rom_id in vanished_ids,
                 "no_file": not m.has_file,
+                "bound_elsewhere": m.bound_elsewhere,
                 # Members share the bound key by construction (iter_by_group_key),
                 # so they are always switchable — routed through the shared
                 # predicate to keep a single authority.
@@ -533,6 +540,9 @@ class VersionSwitchService:
             # positive server statement, so a server-only stub is live.
             "vanished": False,
             "no_file": not has_file_on_romm(detail if detail is not None else stub),
+            # A local stub sits in another group, which the switch refuses as
+            # ``not_in_group`` before it asks whether the stub is bound elsewhere.
+            "bound_elsewhere": False,
             "switchable": target_in_sibling_group(
                 bound_group_key=local.group_key,
                 target_group_key=stub_local_group_keys.get(rom_id) if target_is_local else None,
@@ -718,7 +728,7 @@ class VersionSwitchService:
             target_is_server_sibling=False,
         ):
             raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
-        if ctx.target_app_id is not None and ctx.target_app_id != app_id:
+        if target_bound_elsewhere(target_app_id=ctx.target_app_id, app_id=app_id):
             raise Refused("bound_elsewhere", _BOUND_ELSEWHERE_MESSAGE)
         if not ctx.target_playable:
             raise NoFileOnRomm(NO_FILE_ON_ROMM_MESSAGE)
@@ -905,7 +915,7 @@ class VersionSwitchService:
                 target_is_server_sibling=False,
             ):
                 raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
-            if target.shortcut_app_id is not None and target.shortcut_app_id != app_id:
+            if target_bound_elsewhere(target_app_id=target.shortcut_app_id, app_id=app_id):
                 raise Refused("bound_elsewhere", _BOUND_ELSEWHERE_MESSAGE)
             previous_app_id = target.shortcut_app_id
             target.bind_shortcut(app_id)

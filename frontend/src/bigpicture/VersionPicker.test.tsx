@@ -14,7 +14,7 @@ import { createElement, type ReactNode } from "react";
 import { toaster } from "../api/host";
 import { VersionPicker } from "./VersionPicker";
 import * as backend from "../api/backend";
-import type { VersionList } from "../api/backend";
+import type { VersionList, VersionInfo } from "../api/backend";
 import { getRommConnectionState, setRommConnectionState } from "../utils/connectionState";
 import { emitHostEvent } from "../test-utils/host-event-bus";
 import type { DownloadCompleteEvent } from "../types";
@@ -572,6 +572,60 @@ describe("VersionPicker — versions RomM holds no file for (#2196)", () => {
     expect(row.getAttribute("aria-disabled")).toBeNull();
     await clickRow(menu.container, "Game (Japan)");
     expect(backend.switchVersion).toHaveBeenCalledWith(APP_ID, 2, false);
+  });
+});
+
+describe("VersionPicker — versions on another shortcut of this game", () => {
+  beforeEach(() => {
+    captured.menu = null;
+    vi.mocked(backend.getVersionList).mockReset();
+    vi.mocked(backend.switchVersion)
+      .mockReset()
+      .mockResolvedValue({ success: false, reason: "bound_elsewhere", message: "refused" });
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+    vi.mocked(toaster.toast).mockReset();
+    vi.mocked(openRemovedGamesCleanupModal).mockReset().mockResolvedValue(true);
+  });
+
+  function listWithJapanOnAnotherShortcut(overrides: Partial<VersionInfo>): VersionList {
+    const versions = (multiVersionList().versions ?? []).map((v) =>
+      v.rom_id === 2 ? { ...v, bound_elsewhere: true, ...overrides } : { ...v },
+    );
+    return multiVersionList({ versions });
+  }
+
+  it("lists it disabled, dimmed and labelled, and never offers the switch", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(listWithJapanOnAnotherShortcut({}));
+
+    const { menu } = await renderAndOpen();
+
+    const row = within(menu.container)
+      .getAllByRole("menuitem")
+      .find((i) => i.textContent.includes("Game (Japan)"))!;
+    expect(row.textContent).toContain("On another shortcut of this game");
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    expect((row.firstElementChild as HTMLElement | null)?.style.opacity).toBe("0.55");
+    expect(within(row).queryByLabelText("Remove local data")).toBeNull();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(backend.switchVersion).not.toHaveBeenCalled();
+    expect(toaster.toast).not.toHaveBeenCalled();
+  });
+
+  it("keeps it unselectable where it is installed here and RomM holds no file for it", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(
+      listWithJapanOnAnotherShortcut({ installed: true, no_file: true }),
+    );
+
+    const { menu } = await renderAndOpen();
+
+    const row = within(menu.container)
+      .getAllByRole("menuitem")
+      .find((i) => i.textContent.includes("Game (Japan)"))!;
+    expect(row.textContent).toContain("On another shortcut of this game");
+    expect(row.textContent).not.toContain("No file on RomM");
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    await clickRow(menu.container, "Game (Japan)");
+    expect(backend.switchVersion).not.toHaveBeenCalled();
   });
 });
 
