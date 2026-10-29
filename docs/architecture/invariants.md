@@ -348,9 +348,10 @@ Format: **invariant** — tier — enforced by.
   reading module that names a code reads it rightly. Prompt-only: an entry on `NOT_THE_RESOLVERS` is a name that means
   something else in its module, never a read of the resolver's answer; a code the resolver adds is classified by a
   reading module rather than added to the list — except a code of an answer no reading module reads yet
-  (`launch_command`'s refusals), which waits there with that answer's other codes until its reading module classifies
-  them ([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D1); Tender keeps no table of its own for
-  anything the resolver answers (find rules, launch command patterns, launch-file types, RomM regions); a join is on the
+  (`launch_command`'s codes), which waits there with that answer's other codes until its reading module classifies them
+  ([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D1,
+  [#2658](https://github.com/danielcopper/romm-tender/issues/2658) D1); Tender keeps no table of its own for anything
+  the resolver answers (find rules, launch command patterns, launch-file types, RomM regions); a join is on the
   resolver's keys (`declared`, `(emulator, declared_index)`), never on `file_name` alone or a label; where the resolver
   gives no answer, Tender says it could not be established and an emu-atlas issue asks for it; no decision is proposed
   that lets Tender work out a fact the resolver states — because the resolver is slow, cannot answer yet, or another
