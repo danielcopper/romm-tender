@@ -2,8 +2,8 @@
 
 The home for clearing a ROM's Steam-shortcut binding: the user-driven
 removal flows (the frontend removes shortcuts via SteamClient, this service
-unbinds the rows), the removals a sync made, once the frontend saw their
-shortcuts gone (#2653), and the sync-start reconcile against Steam's live shortcut
+unbinds the rows), the removals a sync made that the frontend saw gone from
+Steam, and the sync-start reconcile against Steam's live shortcut
 set (a shortcut the user deleted through Steam's own UI is unbound so the next
 sync recreates it — #1046). Unbinding clears ``shortcut_app_id`` and keeps the
 row and its per-ROM children (ADR-0007), never deletes. Every unbind here but a
@@ -285,15 +285,14 @@ class ShortcutRemovalService:
     async def report_sync_removals(
         self, stale_removals: list[dict[str, Any]], converged_removals: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        """Called by the frontend with the shortcuts a sync removed that it saw gone from Steam (#2653).
+        """Called by the frontend with the shortcuts a sync removed that it saw gone from Steam.
 
-        Each removal is ``{"rom_id", "app_id"}``. Its row is unbound only while it
-        still holds that appId; the run's finalize kept the binding, so a removal
-        never reported is emitted again by the next run, or unbound by its start
-        reconcile where the shortcut is gone. A converged removal also has its
-        Steam Input setting reset and its grid images deleted, as a removal the
-        user starts does; each ROM keeps its cover cache, since its game keeps
-        another shortcut.
+        Each removal is ``{"rom_id", "app_id"}``; its row is unbound only while it
+        still holds that appId. A converged removal also has its Steam Input
+        setting reset and its grid images deleted, as a removal the user starts
+        does, and keeps its cover cache, since its game keeps another shortcut. A
+        removal never reported: docs/architecture/steam-non-steam-shortcuts.md,
+        "A removal the panel did not finish".
         """
         stale = [(int(entry["rom_id"]), int(entry["app_id"])) for entry in stale_removals]
         converged = [(int(entry["rom_id"]), int(entry["app_id"])) for entry in converged_removals]

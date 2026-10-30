@@ -731,9 +731,11 @@ Format: **invariant** — tier — enforced by.
   a later run bound again), the next run's stale removal or convergence emits it again while the shortcut is in Steam,
   and the next sync's start reconcile unbinds it where the shortcut is gone and only the report was lost; the preview,
   which runs after that reconcile, counts what the apply then does. The finalize's collection maps, name cache and
-  terminal count treat the row as unbound already. `TestARemovalThePanelDidNotReport` in
-  `tests/services/library/test_sync_orchestrator.py` pins both ways for a stale and a converged removal, preview
-  included, `tests/services/test_shortcut_removal.py::TestReportSyncRemovals` the report, and
+  terminal count treat the row as unbound already, and it settles the row's stamps whatever its binding, since the
+  report can land before it. `TestARemovalThePanelDidNotReport` in `tests/services/library/test_sync_orchestrator.py`
+  pins both ways for a stale and a converged removal, preview included, `TestAReportThatLandsBeforeTheFinalize` there a
+  platform and a collection turned off and back on with the report landing first,
+  `tests/services/test_shortcut_removal.py::TestReportSyncRemovals` the report, and
   `frontend/src/utils/syncRemovalReport.test.ts`, `frontend/src/utils/steamShortcuts.test.ts` ("shortcutsGoneFromSteam")
   and `frontend/src/index.test.tsx`'s `sync_stale` listener the panel's side; that the panel reports from the tail's
   `finally`, and only what Steam no longer lists, is prompt-only. The rule spans the domain sort, the reader, the

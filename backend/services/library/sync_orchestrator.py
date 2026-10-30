@@ -132,8 +132,7 @@ class FinalizeOutcome:
 
     Carries the run finalizer's collection maps (the completed-run ``SyncRun`` write
     needs their keys), the rows whose shortcut the run removes (the terminal
-    frame counts them as gone, though they stay bound until the frontend reports
-    the removal) and the two session-budget surfacing values computed at
+    frame counts them as gone) and the two session-budget surfacing values computed at
     finalize (``interrupt_reason`` / ``restart_recommended``), so the orchestrator
     can persist the terminal ``SyncRun`` status FIRST and only THEN emit
     ``sync_complete`` from these — the "emit last" ordering that closes the
@@ -540,10 +539,9 @@ class SyncOrchestrator:
         # Stale ROMs: any bound ROM in the registry whose rom_id wasn't
         # seen by any processed unit. Only meaningful on a non-cancelled run
         # — a partial run can't tell "stale" from "didn't get to it yet".
-        # Each entry carries the ROM's ``shortcut_app_id``; the row keeps it
-        # until the frontend reports the shortcut gone (#2653), so a removal
-        # never reported is emitted again by the next run, or unbound by that
-        # run's start reconcile where the shortcut is gone.
+        # Each entry carries the ROM's ``shortcut_app_id``, which the row keeps
+        # until the panel's report (docs/architecture/steam-non-steam-shortcuts.md,
+        # "A removal the panel did not finish").
         # ``committed_app_ids`` (every appId this run bound, across both commit
         # paths) is excluded so a new rom_id reusing an old appId is never
         # wrongly removed (#1036). Of the rest, only a game outside what the

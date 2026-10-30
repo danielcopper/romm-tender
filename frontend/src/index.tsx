@@ -944,10 +944,9 @@ const tender = definePanel(() => {
   });
 
   // ``sync_stale`` arrives after every unit finishes — remove each stale
-  // shortcut by the ``app_id`` its row is bound to. The row keeps that binding
-  // until the report in the ``finally`` below says the shortcut is gone
-  // (#2653), so a removal this tail does not finish — cut short, or not made
-  // by Steam — is made again by the next sync.
+  // shortcut by the ``app_id`` its row is bound to, and report what Steam no
+  // longer lists from the ``finally`` (docs/architecture/steam-non-steam-shortcuts.md,
+  // "A removal the panel did not finish").
   addEventListener<SyncStaleData>("sync_stale", (data: SyncStaleData) => {
     if (!Array.isArray(data.remove) || data.remove.length === 0) return;
     // Collect the valid app_ids and record the "removed" delta for each UP FRONT —

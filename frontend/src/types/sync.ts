@@ -573,8 +573,7 @@ export interface SyncRemoval {
 export interface SyncStaleData {
   /**
    * Bound stale ROMs to remove from Steam, each with the `app_id` its row is
-   * bound to. The row keeps that binding until the panel reports the shortcut
-   * gone (`report_sync_removals`, #2653). Unbound stale ROMs are excluded —
+   * bound to. Unbound stale ROMs are excluded —
    * they have no Steam shortcut to remove. An entry the convergence made
    * (#2645) also names the shortcut its game keeps (`kept_rom_id`,
    * `kept_app_id`), which the panel carries the removed one's state over to

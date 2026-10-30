@@ -1731,7 +1731,7 @@ class TestGetSyncStatsResumeInputs:
 
 
 class TestFinalizePerUnitRun:
-    """RunFinalizer.finalize_per_unit_run (stale unbind + sync_collections) and the
+    """RunFinalizer.finalize_per_unit_run (the removed rows' stamps + sync_collections) and the
     separate emit_sync_complete (terminal sync_complete + progress frame, emitted
     LAST by the orchestrator after the SyncRun write, #39)."""
 
@@ -2445,7 +2445,7 @@ class TestFinalizePerUnitRun:
         """finalize_per_unit_run + emit_sync_complete never touch the run lifecycle (#1202).
 
         The IDLE/None reset lives in the orchestrator's single run-scoped
-        ``finally: box.finish_run(run_id)``; the run finalizer only unbinds/collects and
+        ``finally: box.finish_run(run_id)``; the run finalizer only settles stamps, collects and
         emits, leaving ``sync_state`` / ``current_sync_id`` untouched.
         """
 
