@@ -75,7 +75,7 @@ function heldRead(): { read: () => Promise<GameLaunch[]>; answer: (list: GameLau
 }
 
 function row(container: HTMLElement, label: string): HTMLButtonElement {
-  const found = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith(label));
+  const found = [...container.querySelectorAll("button")].find((b) => b.textContent.startsWith(label));
   if (found === undefined) throw new Error(`no row ${label}`);
   return found;
 }
