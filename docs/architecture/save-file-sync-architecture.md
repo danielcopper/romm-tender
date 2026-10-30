@@ -1979,7 +1979,8 @@ The Play button's path:
 3. Starting source: `check_start_source`. A source switched off blocks the start; where the source could not be checked,
    the user decides, and Cancel ends the press. Whether the game's file starts with its emulator is not a step of the
    check: the page has already decided whether Play can be pressed
-   ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D32).
+   ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D32), and where the page's own check failed, the
+   press asks again before the gate runs ([Launch-target validation](backend-architecture.md#launch-target-validation)).
 4. Save tracking: `is_save_tracking_configured`. When it is not set up, `get_save_setup_info` decides between an
    automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press — or,
    for a game whose saves no sync carries (`sync_unavailable`), neither: the press goes on with nothing set up.
