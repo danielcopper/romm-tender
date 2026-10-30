@@ -1729,10 +1729,12 @@ false (`_build_save_schema`). So a copy reads the gate off its listing before it
 
 Read in RomM's source at 5.3.0: both `POST /api/saves` (`add_save`) and `PUT /api/saves/{id}` (`update_save`) bump
 `save.updated_at` to the server's NOW **and**, for a request that names a device — every upload Tender sends does —
-upsert the calling device's `device_save_sync.last_synced_at = updated_at`. Both build their response **after** that
-upsert, so the body's `device_syncs` shows us `is_current = true` (equality counts) the moment it returns. The skip
-logic is fail-open regardless: a response that proves us current skips the ack, anything else (including a bare body)
-still sends the idempotent ack.
+upsert the calling device's `device_save_sync.last_synced_at = updated_at`. From 5.4 that row also holds the
+`content_hash` the request names, which every upload Tender sends carries
+([A download is acknowledged once placed, never marked at the GET](#a-download-is-acknowledged-once-placed-never-marked-at-the-get)).
+Both build their response **after** that upsert, so the body's `device_syncs` shows us `is_current = true` (equality
+counts) the moment it returns. The skip logic is fail-open regardless: a response that proves us current skips the ack,
+anything else (including a bare body) still sends the idempotent ack.
 
 This makes the dedicated `POST /api/saves/{id}/downloaded` ack **redundant on the normal upload path** — the upload
 skips it when the upload response already shows this device `is_current` (`SaveTransfer.upload_save_file`, #1458),
@@ -1757,7 +1759,12 @@ the upload.
 
 `GET /api/saves/{id}/content?device_id=X&optimistic=true` (`optimistic` defaults to `true`) upserts `device_save_sync`
 for the calling device with `last_synced_at = save.updated_at` when it answers the GET, before the file is anywhere on
-this device. `POST /api/saves/{id}/downloaded` writes the same row, so `is_current` reads the same after either.
+this device, recording the save's hash as the row's server hash and no device hash. `POST /api/saves/{id}/downloaded`
+writes the row by the `content_hash` its body names (RomM 5.4.0 and 5.4.1, `confirm_download`; RomM 5.3 reads no hash
+and always stamps `updated_at`). A row that holds a server hash and no device hash — what an optimistic GET leaves, and
+what every upload an older Tender sent without a hash left — keeps its own `last_synced_at` and server hash and takes
+the named hash, so the device stays exactly as current as that row was. Any other row, and a device with none, is
+stamped with `updated_at`: with both hashes where the named one equals the save's own, with neither where it does not.
 
 `download_save_content` in `adapters/romm/romm_api.py` always passes `device_id`, and every download passes
 `optimistic=false` (`SaveTransfer.download_save_file`). The mark at the GET records this device current before the file
@@ -1769,13 +1776,27 @@ with `POST /api/saves/{id}/downloaded`, through the retry strategy, only once th
 per download ([#2664](https://github.com/danielcopper/romm-tender/issues/2664) D1, D2). Two downloads send no
 acknowledgement: a version restore's and a copy to a slot's, whose upload right after records this device on RomM
 itself. There an acknowledgement could only add a failure: their callers catch only a local `OSError` from the download,
-so one that failed would end the operation before that upload, and the next sync would upload the copied save into the
-slot still active.
+so one that failed would end the operation before that upload, and the next sync would upload the downloaded save into
+the slot still active.
 
-An acknowledgement that fails raises its RomM error with the file in place, its backup kept and nothing recorded
-([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D8): the sync reports the file as an error, a slot
-switch counts it among the downloads that failed (`switch_incomplete`), and Use Server answers that error. The next sync
-finds the file identical to a head this device is not current on, and adopts and acknowledges it (rows 11a and 12a).
+Every acknowledgement names the content hash of the file this device holds — the download it placed, the local file an
+adopt records, the file an upload sent — computed as RomM computes a save's `content_hash`
+(`SaveFileStore.content_hash`: the MD5 of the bytes, or of a zip's entries)
+([#2664](https://github.com/danielcopper/romm-tender/issues/2664) D4). Every upload and in-place update names the hash
+of the file it sends as the `content_hash` query parameter, which RomM records as the row's device hash (D5), so a row
+Tender leaves no longer has the shape above. A row an older Tender left still takes the first acknowledgement without
+moving its sync time, so where RomM's answer to an acknowledgement still shows this device not current,
+`SaveTransfer._acknowledge` sends exactly one more, which RomM then records (D6); an answer that does not name the
+device says nothing either way and is taken as it is. Measured on RomM 5.4.1, after another client replaced a save in
+place: a download and one acknowledgement with the hash leave this device current where its upload carried the hash, and
+a second acknowledgement is needed where it did not.
+
+An acknowledgement that fails — a RomM error, or a second answer that still shows this device not current
+(`RommAcknowledgementNotTaken`, which `classify_error` answers `server_error`) — raises with the file in place, its
+backup kept and nothing recorded ([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D8): the sync reports
+the file as an error, a slot switch counts it among the downloads that failed (`switch_incomplete`), and Use Server
+answers that error. The next sync finds the file identical to a head this device is not current on, and adopts and
+acknowledges it (rows 11a and 12a).
 
 `download_save(save_id, dest_path)` names no device: it fetches a server copy to compare
 (`SaveTransfer.fetch_server_copy`) and records nothing.

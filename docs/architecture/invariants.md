@@ -2001,13 +2001,16 @@ Format: **invariant** — tier — enforced by.
   acknowledgement RomM keeps the device not current on that head, so a baseline recorded anyway would make the next
   local edit read as one under a head that moved past it — a conflict no other device caused — while recording nothing
   leaves the next sync to decide the same adopt again. One step holds the order: `SaveTransfer.adopt_server_head`
-  (`services/saves/save_transfer.py`) confirms through the retry strategy and records only once that succeeded. Two
-  callers take it: `MatrixExecutor._dispatch_skip` (`services/saves/sync_engine/matrix.py`), which lets a failure reach
-  `_dispatch_sync_action` to be reported as that file's error, and `RollbackOrchestrator._resolve_conflict_keep_local`
-  (`sync_engine/rollback.py`), which lets a failure end the resolution. `SaveTransfer.record_server_head` records
-  without confirming, for an adopt the core does not mark; `StatusService._partition_outcomes`
-  (`services/saves/status/service.py`) records only such an adopt, because showing a page never writes to RomM. Enforced
-  by `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
+  (`services/saves/save_transfer.py`) confirms through the retry strategy and records only once that succeeded — once
+  RomM's answer no longer shows this device not current, after at most one more acknowledgement
+  (`SaveTransfer._acknowledge`; `docs/architecture/save-file-sync-architecture.md`, "A download is acknowledged once
+  placed, never marked at the GET"). Two callers take it: `MatrixExecutor._dispatch_skip`
+  (`services/saves/sync_engine/matrix.py`), which lets a failure reach `_dispatch_sync_action` to be reported as that
+  file's error, and `RollbackOrchestrator._resolve_conflict_keep_local` (`sync_engine/rollback.py`), which lets a
+  failure end the resolution. `SaveTransfer.record_server_head` records without confirming, for an adopt the core does
+  not mark; `StatusService._partition_outcomes` (`services/saves/status/service.py`) records only such an adopt, because
+  showing a page never writes to RomM. Enforced by
+  `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
   `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges`,
   `tests/services/saves/sync_engine/test_keep_local.py::TestKeepLocalAdoptsAsTheSyncDoes` and
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`
