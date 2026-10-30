@@ -20,6 +20,7 @@ from domain.sync_stage import SyncStage
 if TYPE_CHECKING:
     import asyncio
     from collections.abc import Awaitable, Callable, Collection, Mapping
+    from collections.abc import Set as AbstractSet
 
     from domain.rom import GoneEvidence, Rom
     from services.library._state import CollectionMembership, LibrarySyncStateBox
@@ -71,6 +72,7 @@ class RunFinalizer:
         pending_platform_rom_ids: set[int] | None,
         pending_collection_memberships: dict[tuple[str, str], CollectionMembership],
         platform_names: dict[str, str],
+        removed_rom_ids: AbstractSet[int] = frozenset(),
     ) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
         """Build platform_app_ids and romm_collection_app_ids from ``uow.roms``.
 
@@ -93,10 +95,16 @@ class RunFinalizer:
         label under ``by_label`` (#1539), a standard collection's name alone; see
         :meth:`_resolve_collection_memberships`). The platform loop still excludes
         rows whose ``shortcut_app_id`` is ``None``.
+
+        A row in *removed_rom_ids* counts as unbound throughout: the run removes
+        its shortcut, and the row keeps the binding only until the frontend
+        reports it gone (#2653).
         """
-        platform_app_ids, group_bound_app_id = self._scan_bound_rows(uow, pending_platform_rom_ids, platform_names)
+        platform_app_ids, group_bound_app_id = self._scan_bound_rows(
+            uow, pending_platform_rom_ids, platform_names, removed_rom_ids
+        )
         romm_collection_app_ids = self._resolve_collection_memberships(
-            uow, pending_collection_memberships, group_bound_app_id
+            uow, pending_collection_memberships, group_bound_app_id, removed_rom_ids
         )
         return platform_app_ids, romm_collection_app_ids
 
@@ -105,6 +113,7 @@ class RunFinalizer:
         uow: UnitOfWork,
         pending_platform_rom_ids: set[int] | None,
         platform_names: dict[str, str],
+        removed_rom_ids: AbstractSet[int] = frozenset(),
     ) -> tuple[dict[str, list[int]], dict[str, int]]:
         """One pass over the bound rows: platform buckets + each group's bound appId.
 
@@ -126,7 +135,7 @@ class RunFinalizer:
         platform_app_ids_by_fold: dict[str, list[int]] = {}
         group_bound: dict[str, tuple[int, int]] = {}
         for rom in uow.roms.iter_all():
-            if rom.shortcut_app_id is None:
+            if rom.shortcut_app_id is None or rom.rom_id in removed_rom_ids:
                 continue
             display = platform_collection_name(
                 rom.rom_id, rom.platform_slug, pending_platform_rom_ids, platform_names, create_groups
@@ -154,6 +163,7 @@ class RunFinalizer:
         uow: UnitOfWork,
         pending_collection_memberships: dict[tuple[str, str], CollectionMembership],
         group_bound_app_id: dict[str, int],
+        removed_rom_ids: AbstractSet[int],
     ) -> dict[str, list[int]]:
         """Resolve each collection's member rom_ids to de-duplicated appIds, UNION by key.
 
@@ -196,19 +206,21 @@ class RunFinalizer:
             app_ids = app_ids_by_fold.setdefault(fold, [])
             seen = seen_by_fold.setdefault(fold, set())
             for rid in membership.rom_ids:
-                app_id = self._member_app_id(uow, rid, group_bound_app_id)
+                app_id = self._member_app_id(uow, rid, group_bound_app_id, removed_rom_ids)
                 if app_id is not None and app_id not in seen:
                     seen.add(app_id)
                     app_ids.append(app_id)
         return {display_key_by_fold[fold]: app_ids for fold, app_ids in app_ids_by_fold.items() if app_ids}
 
     @staticmethod
-    def _member_app_id(uow: UnitOfWork, rid: int, group_bound_app_id: dict[str, int]) -> int | None:
+    def _member_app_id(
+        uow: UnitOfWork, rid: int, group_bound_app_id: dict[str, int], removed_rom_ids: AbstractSet[int] = frozenset()
+    ) -> int | None:
         """A member's appId: its own binding, else its sibling group's bound appId."""
         rom = uow.roms.get(rid)
         if rom is None:
             return None
-        if rom.shortcut_app_id is not None:
+        if rom.shortcut_app_id is not None and rid not in removed_rom_ids:
             return rom.shortcut_app_id
         if rom.sibling_group_key is None:
             return None
@@ -225,14 +237,15 @@ class RunFinalizer:
         processed_platform_slugs: frozenset[str],
         gone_marks: Mapping[int, GoneEvidence | None],
     ) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
-        """Unbind stale ROMs, refresh the name cache, and build collection maps.
+        """Settle the removed ROMs' stamps, refresh the name cache, and build collection maps.
 
         By the time this runs, every per-unit ``commit_unit_results``
         has already upserted its ROMs into ``uow.roms``, so we only need
-        to: (1) unbind the stale ROMs (clear ``shortcut_app_id``, keeping
-        the row per ADR-0007 — never delete), revoke the skip of the
-        platforms :meth:`finalize_per_unit_run` says to and delete the stamp of
-        every collection whose member set holds an unbound ROM, (2) refresh the offline
+        to: (1) revoke the skip of the platforms :meth:`finalize_per_unit_run`
+        says to and delete the stamp of every collection whose member set holds
+        a ROM whose shortcut the run removes — such a row keeps its binding until
+        the frontend reports the shortcut gone (#2653), and (2) and (3) treat it
+        as unbound already — (2) refresh the offline
         ``platform_slug → name`` cache — the run's listed names plus
         each bound platform's kept name
         (:meth:`_names_with_bound_platforms_kept`) — and
@@ -242,27 +255,25 @@ class RunFinalizer:
         and the synced platform/collection lists live on the ``SyncRun``
         record :class:`SyncRunRecorder` writes — they are not persisted here.
 
-        Everything happens inside one write UoW so the unbind, the revocations,
-        the stamp deletions, the cache refresh and the reads commit atomically.
+        Everything happens inside one write UoW so the revocations, the stamp
+        deletions, the cache refresh and the reads commit atomically.
         """
         with self._uow_factory() as uow:
-            unbound_rom_ids: set[int] = set()
-            unprocessed_slugs_unbound: set[str] = set()
+            removed_rom_ids: set[int] = set()
+            unprocessed_slugs_removed: set[str] = set()
             for rid in stale_rom_ids or []:
                 rom = uow.roms.get(rid)
                 if rom is None or rom.shortcut_app_id is None:
                     continue
-                rom.unbind_shortcut()
-                uow.roms.save(rom)
-                unbound_rom_ids.add(rom.rom_id)
+                removed_rom_ids.add(rom.rom_id)
                 if rom.platform_slug not in processed_platform_slugs:
-                    unprocessed_slugs_unbound.add(rom.platform_slug)
-            for slug in unprocessed_slugs_unbound:
+                    unprocessed_slugs_removed.add(rom.platform_slug)
+            for slug in unprocessed_slugs_removed:
                 uow.platform_sync_state.revoke_skip(slug)
-            uow.collection_sync_state.delete_intersecting(unbound_rom_ids)
+            uow.collection_sync_state.delete_intersecting(removed_rom_ids)
             self._write_gone_marks(uow, gone_marks)
 
-            names = self._names_with_bound_platforms_kept(uow, platform_names)
+            names = self._names_with_bound_platforms_kept(uow, platform_names, removed_rom_ids)
             uow.kv_config.set(PLATFORM_NAMES_KEY, json.dumps(names))
 
             return self._build_collection_app_ids(
@@ -270,6 +281,7 @@ class RunFinalizer:
                 pending_platform_rom_ids,
                 pending_collection_memberships,
                 names,
+                removed_rom_ids,
             )
 
     @staticmethod
@@ -286,8 +298,12 @@ class RunFinalizer:
             uow.roms.save(rom)
 
     @staticmethod
-    def _names_with_bound_platforms_kept(uow: UnitOfWork, platform_names: dict[str, str]) -> dict[str, str]:
+    def _names_with_bound_platforms_kept(
+        uow: UnitOfWork, platform_names: dict[str, str], removed_rom_ids: AbstractSet[int] = frozenset()
+    ) -> dict[str, str]:
         """*platform_names*, plus the cached name of every platform outside it that a bound row is still on.
+
+        A row in *removed_rom_ids* counts as unbound: the run removes its shortcut.
 
         A platform RomM no longer lists keeps its games, and its Steam collection
         is found by this name: written over with the listed names alone, the
@@ -299,7 +315,9 @@ class RunFinalizer:
         outside = {
             rom.platform_slug
             for rom in uow.roms.iter_all()
-            if rom.shortcut_app_id is not None and rom.platform_slug not in platform_names
+            if rom.shortcut_app_id is not None
+            and rom.rom_id not in removed_rom_ids
+            and rom.platform_slug not in platform_names
         }
         return {**{slug: kept[slug] for slug in outside if slug in kept}, **platform_names}
 
@@ -313,24 +331,25 @@ class RunFinalizer:
         processed_platform_slugs: Collection[str],
         gone_marks: Mapping[int, GoneEvidence | None] | None = None,
     ):
-        """Unbind stale ROMs, rebuild Steam-collection maps, and emit ``sync_collections``.
+        """Settle the removed ROMs' stamps, rebuild Steam-collection maps, and emit ``sync_collections``.
 
         Stale-removal is emitted separately by the orchestrator via
         ``sync_stale`` so the frontend can apply removals before
         collections are recomputed. ``stale_rom_ids`` (default ``None`` =
-        unbind nothing) have their Steam-shortcut binding cleared in the
-        ``roms`` table (the row survives) before collections are built,
-        keeping the backend registry in sync with the frontend removals.
+        none) are the rows whose shortcut the run removes, stale and converged
+        alike. Each keeps its binding until the frontend reports the shortcut
+        gone (``ShortcutRemovalService.report_sync_removals``, #2653), and the
+        maps and the name cache built here leave it out as though it were unbound.
         ``platform_names`` is the ``platform_slug → name`` map of every
         platform the run's listing named, synced or not, cached for the offline
         ``roms``-derived queries.
 
         ``processed_platform_slugs`` names the platform units this run
-        processed, skipped and fetched alike. A stale unbind on any other
+        processed, skipped and fetched alike. A stale removal on any other
         platform — one whose sync is turned off, or one RomM no longer lists —
         revokes that platform's skip; a processed platform keeps its skip. A
-        stale unbind also deletes the stamp of every collection whose member
-        set holds the unbound ROM, with no processed set to consult. Why, and why a platform's
+        stale removal also deletes the stamp of every collection whose member
+        set holds the removed ROM, with no processed set to consult. Why, and why a platform's
         stamp itself stays, is in docs/architecture/backend-architecture.md,
         "Incremental skip".
 
@@ -374,6 +393,7 @@ class RunFinalizer:
         *,
         platform_app_ids: dict[str, list[int]],
         romm_collection_app_ids: dict[str, list[int]],
+        removed_rom_ids: AbstractSet[int] = frozenset(),
         total_games: int,
         cancelled: bool,
         interrupt_reason: str | None,
@@ -422,7 +442,7 @@ class RunFinalizer:
         if cancelled:
             await self._emit_cancelled_frame(total_games=total_games, interrupt_reason=interrupt_reason)
         else:
-            total = await self._loop.run_in_executor(None, self._count_bound_roms)
+            total = await self._loop.run_in_executor(None, self._count_bound_roms, removed_rom_ids)
             await self._emit_progress(
                 SyncStage.DONE,
                 current=total,
@@ -465,7 +485,14 @@ class RunFinalizer:
             running=False,
         )
 
-    def _count_bound_roms(self) -> int:
-        """Count ROMs that still carry a Steam-shortcut binding."""
+    def _count_bound_roms(self, removed_rom_ids: AbstractSet[int] = frozenset()) -> int:
+        """Count ROMs that carry a Steam-shortcut binding, a row in *removed_rom_ids* as unbound.
+
+        The run removes those rows' shortcuts; each keeps its binding until the
+        frontend reports the shortcut gone (#2653).
+        """
         with self._uow_factory() as uow:
-            return uow.roms.count_bound()
+            pending = sum(
+                1 for rid in removed_rom_ids if (rom := uow.roms.get(rid)) and rom.shortcut_app_id is not None
+            )
+            return uow.roms.count_bound() - pending
