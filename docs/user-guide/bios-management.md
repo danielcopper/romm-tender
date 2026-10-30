@@ -419,10 +419,11 @@ and the row you focus is the one the right-hand pane describes.
     page, and the same whichever emulator is chosen. The line under each name reads _not required_ where the emulator
     the platform launches with was read and nothing asks for the file, or _need not established_ where nothing could
     answer for it. Once the page is shown, Tender asks what each of these files is, one at a time: the row reads
-    _Checking…_ until the answer arrives, then _Recognised as_ every name the file is known under, or _Not recognised_.
-    That answer only labels the row; it changes no colour and no count. A file of these that Tender downloaded reads _In
-    Tender's firmware store, used by no emulator_, and is linked as soon as an emulator asks for it. Its rows offer
-    **Download** and **Delete** like any other
+    _Checking…_ until the answer arrives, with a spinner beside it on the row whose file is being asked about, then
+    _Recognised as_ every name the file is known under, or _Not recognised_. That answer only labels the row; it changes
+    no colour and no count. A file of these that Tender downloaded reads _In Tender's firmware store, used by no
+    emulator_, and is linked as soon as an emulator asks for it. Its rows offer **Download** and **Delete** like any
+    other
 
 <!-- Screenshot: Library › Platforms with a platform selected, its core button above the BIOS table -->
 

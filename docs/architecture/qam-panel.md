@@ -838,26 +838,33 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 ### Waiting
 
 **Every state in which the panel waits on work shows the throbber** — the spinning ring Play shows while it checks saves
-— left of the label that says what is under way; the label keeps its words. One component draws it,
+— left of the label that says what is under way; the label keeps its words. One module draws it,
 `frontend/src/shared/Throbber.tsx`: `ThrobberLabel` beside a label, which leaves the label a text child of its control
 so that a button's text and accessible name stay the label's alone, and `Throbber` by itself where a place lays it out —
-a loading row, a count slot, a picker's grid. Its rules are put into whichever document it mounts in, the Quick Access
-view, Steam's game page, a modal or the start-up failure page alike (`frontend/src/utils/throbberStyle.ts`), because
-each of those has stylesheets of its own. Play's own throbbers keep their markup, which also carries Steam's
-`appActionButtonClasses.Throbber`; the shared one leaves that class out, since every rule Steam's stylesheet holds for
-it is scoped under Steam's own play button and draws nothing anywhere else.
+a loading row, a count slot, a picker's grid. Two places draw the `romm-throbber` span themselves, both on the game
+page, where the play row's sheet is present: Play's own throbbers, and the line under an emulator menu entry while
+whether that emulator can start the game is still being read (`frontend/src/utils/emulatorMenu.tsx`).
+
+The throbber puts its rules into the document it is drawn in (`Throbber.tsx`, with
+`frontend/src/utils/throbberStyle.ts`), because the panel's code runs in a different document from the ones it draws
+into — the Quick Access view's, Steam's game page's. Play's own throbbers also carry Steam's
+`appActionButtonClasses.Throbber`; the shared one leaves that class out, because it draws nothing outside Steam's own
+play button: in Steam's `sp.css` on the device, every rule for `appActionButtonClasses.Throbber` is scoped under the
+play button's two classes (measured 2026-10-30).
 
 A line that says both what is under way and how it ended — a platform's status line, the cleanup dialog's — carries the
 throbber only while it says the first. Two waits that have no label of their own show it too: the pressed button of the
 save conflict dialog while it resolves, and the chosen tile of the SteamGridDB game picker while its game is applied.
-While a game is being stopped it stands in the chevron's place beside Resume, which still opens the menu, and beside the
-menu's Stop Game item.
+While a game is being stopped it stands in place of the chevron beside Resume — that button still opens the menu — and
+beside the menu item's Stopping….
 
 Where it does not stand:
 
 - **Beside a moving bar of the same operation** — an update's Installing…, a cleanup's stages, a download's bytes. Where
   only numbers count up (Removing _n_ of _m_…, Uninstalling _n_/_m_) it does, because a count can stand still on a large
   item.
+- **On a platform's status line while its shortcuts are removed** ("Removing _X_ shortcuts…"): the count line under it
+  (Removing _n_ of _m_…) carries that run's throbber — one per operation, on the line that counts.
 - **On Data Management's pane lines while a removal runs**: the list header above them spins and names the operation.
 - **On a BIOS row whose file is still waiting its turn to be identified**: only the row whose file is being asked about
   shows it, and the others keep their plain "Checking…".
@@ -865,7 +872,11 @@ Where it does not stand:
   answered.
 - **On the "Working on _X_" line of a platform pane whose platform is not the busy one**: the throbber stays on the pane
   whose run it is ([Library](#library)).
-- **In a tooltip, and on a short settings write** — an emulator source's switch, Tender's folder.
+- **In the desktop client's save conflict dialog** (dev build only): its spin would need a stylesheet on Steam's page
+  outside the restoration ledger ([desktop-dom-architecture.md](desktop-dom-architecture.md)), and no shipped bundle
+  carries that surface.
+- **In a tooltip** — the platform list's "Checking this platform's BIOS files…", the core picker's "Reading the
+  emulators for this platform…" — **and on a short settings write** — an emulator source's switch, Tender's folder.
 
 ### Notices and homes
 
@@ -2476,12 +2487,12 @@ reason Settings needs none: six rows that each name a thing are their own order.
 | Gone from RomM        | `scan` until asked — a local scan, no request to RomM           | Review, which opens the dialog below            |
 | Recovery bundles      | how many are sealed and what they take                          | the bundles one by one, and nothing to press    |
 
-**Every figure is reading, failed or answered, and its row's count slot shows which**: a spinner while it is being read,
-a dash where the read failed, the number once it is answered. The two scan rows add a fourth state before those three,
-not asked, shown as `scan`. A pane never borrows one state's words for another: under a read still in flight it says
-`Reading…` behind the throbber (a scan's own button says it is scanning, behind the throbber too, and cannot be pressed
-again), and under a failed one it says what could not be read and how to try again — reopening the page for a figure
-read on arrival, pressing the scan button again for a scan.
+**Every figure is reading, failed or answered, and its row's count slot shows which**: the throbber while it is being
+read, a dash where the read failed, the number once it is answered. The two scan rows add a fourth state before those
+three, not asked, shown as `scan`. A pane never borrows one state's words for another: under a read still in flight it
+says `Reading…` behind the throbber (a scan's own button says it is scanning, behind the throbber too, and cannot be
+pressed again), and under a failed one it says what could not be read and how to try again — reopening the page for a
+figure read on arrival, pressing the scan button again for a scan.
 
 **A number that costs a backend scan sits behind a press.** Focus selects on this layout, so a reading that rode on the
 selection would fire under every row the stick passes — a scan of the grid directory for one row, and for the other a

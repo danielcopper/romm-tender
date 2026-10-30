@@ -1449,6 +1449,13 @@ a modal opened from the notice; that modal _is_ the home, not an exception to th
 panel stays a notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names
 only), warning, alert.
 
+### Throbber
+
+The spinning ring the panel shows at every wait, left of the label that says what is under way — the ring Play shows
+while it checks saves. Which waits show it and which do not is `docs/architecture/qam-panel.md`'s, "Waiting".
+User-facing docs call it a **spinner**; code and architecture docs say **throbber**, Steam's own name for it. _Avoid_,
+in code: spinner (it named `@decky/ui`'s `Spinner`, which the panel no longer draws), loader.
+
 ### Available release / installed program
 
 An **available release** is a Tender release a user could install: GitHub calls it latest, its tag is

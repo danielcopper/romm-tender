@@ -2763,9 +2763,9 @@ whose matches landed on the same tree — not excluded, since the path-tail fall
 — would fire exactly the repeat the claim exists to prevent. Global costs at most the grace window of a stop the user is
 already watching, and the poll returns as soon as the tree is gone, so the usual cost is one 0.25 s interval rather than
 the full 6 s; that is the cheaper side of the trade. The frontend adds its own in-flight flag on top — the Stop Game
-menu item is disabled and reads "Stopping…" behind the throbber while the call is outstanding, and the throbber stands
-in the chevron's place — but that is a convenience, not the guarantee: a remount, a second game-detail page, or the
-retry the error toast invites all bypass component state, so the backend claim is the load-bearing half.
+menu item is disabled and reads "Stopping…" while the call is outstanding ([qam-panel.md](qam-panel.md#waiting) has what
+the throbber does meanwhile) — but that is a convenience, not the guarantee: a remount, a second game-detail page, or
+the retry the error toast invites all bypass component state, so the backend claim is the load-bearing half.
 
 Layering follows the usual split: `GameProcessControl` (`services/protocols/infra.py`) is the semantic seam — POSIX
 signal numbers and `/proc` never reach `services/` — `adapters/game_process.py` implements it, `RomLaunchPathReader`
