@@ -378,18 +378,27 @@ function readDesktopAppStore(): Map<number, unknown> | null {
  *
  * Polls every 100ms until no appId in *removed* (the ones a removal was tried for) is listed any more, or
  * *timeoutMs* has passed, then answers every appId of *appIds* absent from that last read — one tried for or
- * not. An unreadable store answers none: nothing was seen gone.
+ * not. An unreadable store answers none: nothing was seen gone. How long it waited and how many of *removed* it
+ * saw gone is logged.
  */
 export async function shortcutsGoneFromSteam(
   appIds: readonly number[],
   removed: readonly number[],
   timeoutMs = 3000,
 ): Promise<number[]> {
-  const deadline = Date.now() + timeoutMs;
+  const started = Date.now();
+  const deadline = started + timeoutMs;
   for (;;) {
     const apps = readDesktopAppStore();
     if (!apps) return [];
     if (removed.every((appId) => !apps.has(appId)) || Date.now() >= deadline) {
+      if (removed.length > 0) {
+        const gone = removed.filter((appId) => !apps.has(appId)).length;
+        const seconds = ((Date.now() - started) / 1000).toFixed(1);
+        logInfo(
+          `shortcutsGoneFromSteam: Steam stopped listing ${gone} of ${removed.length} removed shortcuts after ${seconds} s`,
+        );
+      }
       return appIds.filter((appId) => !apps.has(appId));
     }
     await delay(100);

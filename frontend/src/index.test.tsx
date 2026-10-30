@@ -1415,6 +1415,61 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("sync-complete-lease"));
   });
 
+  it("reads the bound rows for the after-sync passes only once the removal has reported, and files collections at once (#2653 D3)", async () => {
+    panelFactory();
+    await flush();
+    vi.mocked(getInstalledRelaunchOptions).mockClear();
+    vi.mocked(getAllPlaytime).mockClear();
+    vi.mocked(getAppIdRomIdMap).mockClear();
+    createOrUpdateCollections.mockClear();
+    let finishReport!: () => void;
+    reportSyncRemovals.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishReport = () => resolve({ success: true, message: "", unbound_count: 1 });
+        }),
+    );
+
+    act(() => {
+      emitHostEvent<SyncStaleData>("sync_stale", { remove: [{ rom_id: 99, app_id: 9900 }] });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: { SNES: [100] }, total_games: 1 });
+    });
+    await vi.waitFor(() => expect(reportSyncRemovals).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() =>
+      expect(createOrUpdateCollections).toHaveBeenCalledWith({ SNES: [100] }, undefined, expect.any(AbortSignal)),
+    );
+    await flush();
+    const readBeforeTheReport = [getInstalledRelaunchOptions, getAllPlaytime, getAppIdRomIdMap].map(
+      (read) => vi.mocked(read).mock.calls.length,
+    );
+
+    finishReport();
+    await vi.waitFor(() => expect(getInstalledRelaunchOptions).toHaveBeenCalled());
+    await vi.waitFor(() => expect(getAllPlaytime).toHaveBeenCalled());
+
+    expect(readBeforeTheReport).toEqual([0, 0, 0]);
+    expect(getAppIdRomIdMap).toHaveBeenCalled();
+  });
+
+  it("runs the after-sync passes when the removal's report fails (#2653 D3)", async () => {
+    panelFactory();
+    await flush();
+    vi.mocked(getInstalledRelaunchOptions).mockClear();
+    vi.mocked(getAllPlaytime).mockClear();
+    reportSyncRemovals.mockRejectedValueOnce(new Error("report lost"));
+
+    act(() => {
+      emitHostEvent<SyncStaleData>("sync_stale", { remove: [{ rom_id: 99, app_id: 9900 }] });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 0 });
+    });
+
+    await vi.waitFor(() =>
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining("stale shortcut removal failed")),
+    );
+    await vi.waitFor(() => expect(getInstalledRelaunchOptions).toHaveBeenCalled());
+    await vi.waitFor(() => expect(getAllPlaytime).toHaveBeenCalled());
+  });
+
   it("holds the sync event lease until the paced sync_stale tail settles", async () => {
     panelFactory();
     await flush();

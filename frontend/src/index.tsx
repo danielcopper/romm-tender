@@ -851,13 +851,18 @@ const tender = definePanel(() => {
           const signal = continuationController.signal;
           // Settle semantics, not Promise.all: one rejecting sibling must not
           // release this lease while the others are still writing to Steam.
-          await Promise.allSettled([
-            staleRemovals,
-            reconcileLaunchOptions(signal),
-            reconcileCollections(signal),
-            reconcilePlaytime(signal),
-            reconcileMetadata(signal),
-          ]);
+          // The passes that read the bound rows wait for the run's removal to
+          // report, whatever its outcome (docs/architecture/steam-non-steam-shortcuts.md,
+          // "A removal the panel did not finish").
+          const afterTheRemoval = async (): Promise<void> => {
+            await Promise.allSettled([staleRemovals]);
+            await Promise.allSettled([
+              reconcileLaunchOptions(signal),
+              reconcilePlaytime(signal),
+              reconcileMetadata(signal),
+            ]);
+          };
+          await Promise.allSettled([reconcileCollections(signal), afterTheRemoval()]);
         } finally {
           leaseSignal.removeEventListener("abort", abort);
         }

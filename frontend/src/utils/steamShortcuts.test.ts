@@ -995,6 +995,29 @@ describe("shortcutsGoneFromSteam (#2653)", () => {
     await expect(shortcutsGoneFromSteam([3, 4], [])).resolves.toEqual([4]);
   });
 
+  it("logs how many of the removed shortcuts Steam stopped listing, and after how long", async () => {
+    vi.useFakeTimers();
+    const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+    const apps = new Map<number, object>([
+      [1, {}],
+      [2, {}],
+      [3, {}],
+    ]);
+    vi.stubGlobal("collectionStore", { deckDesktopApps: { apps } });
+
+    // 4 was never listed and no removal was tried for it: it is not counted.
+    const answer = shortcutsGoneFromSteam([1, 2, 3, 4], [1, 2, 3], 3000);
+    apps.delete(1);
+    apps.delete(2);
+    await vi.advanceTimersByTimeAsync(3100);
+    await answer;
+
+    expect(logInfoSpy).toHaveBeenCalledWith(
+      "shortcutsGoneFromSteam: Steam stopped listing 2 of 3 removed shortcuts after 3.0 s",
+    );
+    logInfoSpy.mockRestore();
+  });
+
   it("answers none when Steam's shortcut store cannot be read", async () => {
     vi.stubGlobal("collectionStore", { deckDesktopApps: undefined });
 
