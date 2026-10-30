@@ -7,9 +7,9 @@
  * first, the file is not one the system starts from, or the entry does not
  * start it, with the resolver's reason where it states one. The other two let
  * it go ahead: it starts, which says nothing unless the resolver's reading of
- * the file stopped short of something or the file is an archive whose contents
- * were not read, or whether it starts could not be established, which says so
- * (#2195 D40). This is the one home of that rule.
+ * the file stopped short of something, its format included, or the file is an
+ * archive whose contents were not read, or whether it starts could not be
+ * established, which says so (#2195 D40, D41). This is the one home of that rule.
  */
 
 import { HostTransportError } from "../api/host";
@@ -64,7 +64,7 @@ const REFUSED_BECAUSE: Record<
   },
   not_a_game_file: {
     page: (launch) => `${launch.entry} cannot start ${launch.file}: it is neither a disc image nor a game program.`,
-    line: (launch) => `${launch.file} is neither a disc image nor a game program`,
+    line: () => "cannot start it: neither a disc image nor a game program",
   },
   disc_not_found: {
     page: (launch) =>
@@ -86,7 +86,7 @@ const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunc
   content_missing: (launch) => `${launch.file} was not found`,
   content_unreadable: (launch) => `what is at ${launch.file} could not be read`,
   game_list_unread: () => "the emulator's own list of installed games was not read",
-  game_kind_unfollowed: () => "the kind of game its PARAM.SFO names starts in a way that was not followed",
+  game_kind_unfollowed: () => "its PARAM.SFO names a kind of game whose start was not followed",
   inside_emulator_drive: () => "the game lies inside the emulator's own game folder, which starts games another way",
   emulator_drive_unknown: () => "where the emulator's internal drive is could not be read",
   savestate_unread: (launch) => `${launch.file} is a savestate, which was not read`,
@@ -179,8 +179,8 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
 /**
  * What the page says about a verdict that lets the game start, or `null` where
  * there is nothing to say: whether it starts could not be established, what the
- * reading of the file stopped short of, or that the file is an archive whose
- * contents were not read. `source` is the source the answer came from.
+ * reading of the file stopped short of, whether the entry reads its format
+ * (#2195 D41), or that the file is an archive whose contents were not read. `source` is the source the answer came from.
  */
 export function launchNote(launch: GameLaunch | null, source: AnsweringSource | null): string | null {
   if (launch === null) return null;
@@ -189,6 +189,9 @@ export function launchNote(launch: GameLaunch | null, source: AnsweringSource | 
   }
   const stoppedShort = stoppedShortBecause(launch);
   if (stoppedShort !== null) return `Whether ${launch.entry} starts this game cannot be established: ${stoppedShort}.`;
+  if (launch.state === "starts" && launch.format_unestablished) {
+    return `Whether ${launch.entry} reads ${launch.extension} files is not established.`;
+  }
   if (launch.state === "starts" && launch.contents_unread) {
     return `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`;
   }

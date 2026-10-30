@@ -471,9 +471,10 @@ system's entry for it where the system has one (D35); it is **not a launch file*
 extensions (a single Dreamcast track); **this emulator does not start it**, with the resolver's reason where it states
 one (RPCS3 Shortcut takes no folder) and the other emulators of the system established to start it, where there are any;
 or whether it starts is **not established**, with the reason. A file that starts may still carry what the resolver's
-reading of it stopped short of — RPCS3's own list of games not read, a disc image's key not checked — and is said with
-it (D40). Which of them refuse a start is `frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's
-extension case-exactly, as ES-DE does, and Tender folds no case before it asks (D3).
+reading of it stopped short of — RPCS3's own list of games not read, a disc image's key not checked, whether the entry
+reads its format at all — and is said with it (D40, D41). Which of them refuse a start is
+`frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's extension case-exactly, as ES-DE does, and Tender
+folds no case before it asks (D3).
 
 Launchability is a statement about a start, never about the download. Every installed game is recorded with its files
 and gets its launch command whatever its launchability (D28); installing a package by hand in the emulator is the

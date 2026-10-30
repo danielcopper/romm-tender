@@ -652,6 +652,8 @@ nothing is said; otherwise the answer stands under the **Play** button:
   but how far its start was followed stopped short, and the sentence says where: the emulator's own list of installed
   games was not read, the folder was not found, whether a disc image is encrypted or its key file fits could not be
   checked, or the emulator's version decides whether it reads that kind of file. **Play** stays on.
+- **"Whether RPCS3 Shortcut (Standalone) reads .iso files is not established."** — nobody has established which files
+  the emulator reads. **Play** stays on.
 
 Where **Play** is off, Steam's own **Play** on the game's shortcut is refused with the same words. While the page is
 still asking, **Play** is grey and reads **Checking...** beside the same spinning circle "Preparing..." shows. Where the

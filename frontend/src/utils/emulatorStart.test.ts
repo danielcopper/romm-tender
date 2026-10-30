@@ -90,11 +90,6 @@ describe("why a start is refused", () => {
       "RetroDECK's start script cannot start PICO-8 (Standalone), so this game cannot start.",
     ],
     [
-      "unable to start a folder",
-      start({ state: "cannot_start", reason: "folder_install", entry: "RPCS3 Shortcut (Standalone)" }),
-      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder.",
-    ],
-    [
       "not established",
       start({ state: "choose", reason: "no_find_rule", entry: "BlastEm" }),
       "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it).",

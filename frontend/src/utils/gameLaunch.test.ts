@@ -146,7 +146,14 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
   it("a file that starts says nothing", () => {
     expect(launchRefusal(launch(), true)).toBeNull();
     expect(launchNote(launch(), RETRODECK)).toBeNull();
-    expect(launchNote(launch({ format_unestablished: true }), RETRODECK)).toBeNull();
+  });
+
+  it("a format the entry was not established to read is said under Play, and lets the game start (#2195 D41)", () => {
+    const answer = launch({ format_unestablished: true });
+    expect(launchRefusal(answer, true)).toBeNull();
+    expect(launchNote(answer, RETRODECK)).toBe(
+      "Whether RPCS3 Directory (Standalone) reads .ps3 files is not established.",
+    );
   });
 
   it("nothing asked says nothing", () => {
@@ -199,7 +206,7 @@ describe("the resolver's own reasons (#2195 D21, D40)", () => {
     [
       "not_a_game_file",
       "RPCS3 Shortcut (Standalone) cannot start Game.ps3: it is neither a disc image nor a game program.",
-      "Game.ps3 is neither a disc image nor a game program",
+      "cannot start it: neither a disc image nor a game program",
     ],
     [
       "disc_not_found",
@@ -247,7 +254,7 @@ describe("the resolver's own reasons (#2195 D21, D40)", () => {
     ["content_missing", "Game.ps3 was not found"],
     ["content_unreadable", "what is at Game.ps3 could not be read"],
     ["game_list_unread", "the emulator's own list of installed games was not read"],
-    ["game_kind_unfollowed", "the kind of game its PARAM.SFO names starts in a way that was not followed"],
+    ["game_kind_unfollowed", "its PARAM.SFO names a kind of game whose start was not followed"],
     ["inside_emulator_drive", "the game lies inside the emulator's own game folder, which starts games another way"],
     ["emulator_drive_unknown", "where the emulator's internal drive is could not be read"],
     ["savestate_unread", "Game.ps3 is a savestate, which was not read"],
