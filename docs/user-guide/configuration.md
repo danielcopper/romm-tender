@@ -259,8 +259,8 @@ Controls how Steam handles controller input for ROM shortcuts. Found in **Settin
 | **Force Off**             | Raw HID passthrough. Only for advanced users — may break RetroArch menu navigation.                                        |
 
 After changing the mode, tap **Apply to All Shortcuts** to update all existing ROM shortcuts. The button reads
-**Applying to all shortcuts…** and stops responding while the run is going — a second tap is refused rather than
-starting a second pass over the same shortcuts.
+**Applying to all shortcuts…** beside a spinner and stops responding while the run is going — a second tap is refused
+rather than starting a second pass over the same shortcuts.
 
 The mode lives in Steam's own `localconfig.vdf`, and the line under the button says when it could not be written there.
 Nothing is changed for any shortcut in that case:

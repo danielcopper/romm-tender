@@ -926,7 +926,7 @@ game's detail panel or in Steam's own library — and a notification says why; s
 
 While a game is running, its detail panel shows **Resume** instead of Play, with a small chevron beside it. The
 chevron's menu holds one action: **Stop Game**. It asks you to confirm first, because any progress since your last
-in-game save may be lost.
+in-game save may be lost. While the stop runs, a spinner stands in the chevron's place.
 
 In Gaming Mode, Steam can end these games itself: **Exit Game** in Steam's overlay ends a RetroDECK game the way it ends
 any other. Tender's Stop Game is the way where that overlay does not reach — in Desktop Mode it does not open over a

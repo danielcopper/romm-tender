@@ -835,6 +835,38 @@ filters a list sits inline, above the list it filters** — Library › Collecti
 Other non-Steam games pane: its point is the result beside the field, narrowing as the reader types, and a modal would
 hide exactly that. What decides is what the reader has to see while typing, not how much room the keyboard wants.
 
+### Waiting
+
+**Every state in which the panel waits on work shows the throbber** — the spinning ring Play shows while it checks saves
+— left of the label that says what is under way; the label keeps its words. One component draws it,
+`frontend/src/shared/Throbber.tsx`: `ThrobberLabel` beside a label, which leaves the label a text child of its control
+so that a button's text and accessible name stay the label's alone, and `Throbber` by itself where a place lays it out —
+a loading row, a count slot, a picker's grid. Its rules are put into whichever document it mounts in, the Quick Access
+view, Steam's game page, a modal or the start-up failure page alike (`frontend/src/utils/throbberStyle.ts`), because
+each of those has stylesheets of its own. Play's own throbbers keep their markup, which also carries Steam's
+`appActionButtonClasses.Throbber`; the shared one leaves that class out, since every rule Steam's stylesheet holds for
+it is scoped under Steam's own play button and draws nothing anywhere else.
+
+A line that says both what is under way and how it ended — a platform's status line, the cleanup dialog's — carries the
+throbber only while it says the first. Two waits that have no label of their own show it too: the pressed button of the
+save conflict dialog while it resolves, and the chosen tile of the SteamGridDB game picker while its game is applied.
+While a game is being stopped it stands in the chevron's place beside Resume, which still opens the menu, and beside the
+menu's Stop Game item.
+
+Where it does not stand:
+
+- **Beside a moving bar of the same operation** — an update's Installing…, a cleanup's stages, a download's bytes. Where
+  only numbers count up (Removing _n_ of _m_…, Uninstalling _n_/_m_) it does, because a count can stand still on a large
+  item.
+- **On Data Management's pane lines while a removal runs**: the list header above them spins and names the operation.
+- **On a BIOS row whose file is still waiting its turn to be identified**: only the row whose file is being asked about
+  shows it, and the others keep their plain "Checking…".
+- **On the Steam Input status line while Apply runs**: the button carries the wait, and the line holds only what the run
+  answered.
+- **On the "Working on _X_" line of a platform pane whose platform is not the busy one**: the throbber stays on the pane
+  whose run it is ([Library](#library)).
+- **In a tooltip, and on a short settings write** — an emulator source's switch, Tender's folder.
+
 ### Notices and homes
 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in
@@ -1700,7 +1732,7 @@ it, for the focused platform:
   **The game page's BIOS tab is among its tabs for every game from the moment the page opens**, and no answer takes it
   away. The cached detail carries no BIOS answer, so the tab's comes from the live `get_bios_status` read a moment
   later, and the tab tells three states apart off `frontend/src/utils/biosReadState.ts`, the derivation the platform
-  page's BIOS block reads too: while the answer is still out, the `BIOS` heading over "Checking…" behind Steam's spinner
+  page's BIOS block reads too: while the answer is still out, the `BIOS` heading over "Checking…" behind the throbber
   (`WaitingLine`); a read that failed with nothing shown, "Could not read the BIOS state. Open the game page again to
   retry."; a re-read that failed over an answer the tab holds, that answer under "Could not re-read the BIOS state, so
   what is below may be out of date. Open the game page again to retry." A read that comes back carrying no answer counts
@@ -2038,8 +2070,8 @@ reads and the answers arrive underneath it, and five rules hold:
   read state (`pending` against `answered`) does. Drawn off the level, both would be the grey dot that means "unknown" —
   an ANSWER, and the wrong one, over most of the list for the first seconds of every visit. A waiting row draws the dot
   as an **outline** and says "Checking…"; the solid grey dot keeps its meaning. Its pane says "Checking what this
-  platform needs…" behind Steam's spinner (`WaitingLine`), as a game's BIOS tab waits for its own answer. The read state
-  is derived in `frontend/src/utils/biosReadState.ts`, which the game page's BIOS tab reads too.
+  platform needs…" behind the throbber (`WaitingLine`), as a game's BIOS tab waits for its own answer. The read state is
+  derived in `frontend/src/utils/biosReadState.ts`, which the game page's BIOS tab reads too.
 - **Leaving the page stops the work.** No further platform is asked for, and an answer already in flight is dropped
   rather than written — a visit's answers belong to that visit, and a fresh one has re-read them.
 - **A BIOS download or delete, and a core change, re-read that platform and no other.** The files (or the emulator)
@@ -2447,9 +2479,9 @@ reason Settings needs none: six rows that each name a thing are their own order.
 **Every figure is reading, failed or answered, and its row's count slot shows which**: a spinner while it is being read,
 a dash where the read failed, the number once it is answered. The two scan rows add a fourth state before those three,
 not asked, shown as `scan`. A pane never borrows one state's words for another: under a read still in flight it says
-`Reading…` (a scan's own button says it is scanning and cannot be pressed again), and under a failed one it says what
-could not be read and how to try again — reopening the page for a figure read on arrival, pressing the scan button again
-for a scan.
+`Reading…` behind the throbber (a scan's own button says it is scanning, behind the throbber too, and cannot be pressed
+again), and under a failed one it says what could not be read and how to try again — reopening the page for a figure
+read on arrival, pressing the scan button again for a scan.
 
 **A number that costs a backend scan sits behind a press.** Focus selects on this layout, so a reading that rode on the
 selection would fire under every row the stick passes — a scan of the grid directory for one row, and for the other a
