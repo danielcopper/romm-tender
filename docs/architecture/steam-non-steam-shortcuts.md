@@ -250,12 +250,42 @@ what Steam lets a running session move:
   kept one has none set in Steam, read from the loopback URL Steam shows it at and written with
   `SetCustomArtworkForApp`.
 
-Each part is best effort: one that fails is logged, and the removal still runs, since the backend unbinds the row
-whatever the panel does. What a session cannot move stays behind with the removed shortcut: its icon (a path in
-`shortcuts.vdf`), its Steam playtime, screenshots and last-played time, and a controller layout under a name the kept
-shortcut does not share. After the loop the panel calls `report_converged_removals` with the removed appIds, which
-resets each one's Steam Input setting and deletes its grid images, as a removal the user starts does; the per-ROM cover
-cache stays, because the ROM is still a version of a game with a shortcut.
+Each part is best effort: one that fails is logged, and the removal still runs. What a session cannot move stays behind
+with the removed shortcut: its icon (a path in `shortcuts.vdf`), its Steam playtime, screenshots and last-played time,
+and a controller layout under a name the kept shortcut does not share. The panel reports the removal like a stale one
+(below, "A removal the panel did not finish"); for a converged one `report_sync_removals` also resets the removed
+appId's Steam Input setting and deletes its grid images, as a removal the user starts does. The per-ROM cover cache
+stays, because the ROM is still a version of a game with a shortcut.
+
+### A removal the panel did not finish
+
+A row whose shortcut a run removes — stale or converged — keeps its binding through the run's finalize: the backend
+unbinds it only once the panel reports the shortcut gone from Steam (#2653). The finalize builds everything else as
+though the removal had happened — the collection maps, the platform-name cache and the terminal frame's game count leave
+the row out — and settles the stamps the removal affects (the skip of a platform the run did not process, the stamp of
+every collection holding the row).
+
+The `sync_stale` tail in `frontend/src/index.tsx` reports from a `finally`, so a tail the next run's `sync_plan` cuts
+short, one whose lease renewal is refused, or one a carry-over stopped reports too. After the paced loop it reads
+Steam's shortcut store once Steam has settled (`shortcutsGoneFromSteam` in `frontend/src/utils/steamShortcuts.ts`: every
+100 ms, until every shortcut a removal was tried for is gone or 3 s have passed) and reports every entry Steam no longer
+lists through `report_sync_removals` (`frontend/src/utils/syncRemovalReport.ts`), stale and converged apart. The backend
+unbinds each reported row only while it still holds the reported appId, so a report that arrives after a later run bound
+the row again changes nothing. An unreadable store reports nothing. A report that unbound a row re-reads the sync stats,
+so the panel's game count, which counts a pending row until then, drops.
+
+What is not reported is finished by the next sync, in one of two ways:
+
+- **The shortcut is still in Steam** — the removal was cut short, no panel received the event, or Steam did not remove
+  it. The row is still bound, so the next run's stale removal emits it again, or its group still holds two bound
+  shortcuts and converges again (the platform is fetched in full until it has), with the same `kept_*` and a carry-over
+  that adds nothing twice. The preview counts that removal.
+- **The shortcut is gone but the report was lost** — the backend or the panel stopped between the removal and the
+  report, or the backend refused it. The next sync's start reconcile (below) unbinds the row, so the run emits nothing
+  for it and the preview counts nothing.
+
+Not taken: removing, on a later sync, every live launcher shortcut no row is bound to. After a database reset that would
+remove the shortcuts of games a sync keeps on purpose, and the preview could not count it.
 
 ### Retained-row availability in the version picker
 
@@ -385,7 +415,9 @@ the skip-preview (`start_sync`) and preview (`sync_preview`) paths:
 
 The reconcile revokes the skip of every platform it unbinds a row on (`PlatformSyncStateRepository.revoke_skip`, in the
 same write UoW as the unbind), so the platform falls through to a full fetch that recreates the shortcut. The unbind is
-reversible by design — the next sync re-binds.
+reversible by design — the next sync re-binds. It also finishes a sync's removal whose report never arrived (above, "A
+removal the panel did not finish"): that row is still bound to a shortcut Steam no longer lists, so the reconcile
+unbinds it before the run decides what to remove, and the run removes nothing for it.
 
 This is **eager (sync-start) reconciliation of the Steam-shortcut binding**, distinct from `#951`'s lazy on-access
 reconciliation of the `rom_installs` (on-disk install) view: a different aggregate, a different cost driver, and —
