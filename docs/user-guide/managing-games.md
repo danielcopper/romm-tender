@@ -643,8 +643,8 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) or RPCS3 ISO
   (Standalone) can — choose one in the emulator menu."** — where the emulator's own reading of the game says why it
   cannot start it, the sentence says so: a folder it does not take, nothing in the folder for it to start, a file that
-  is neither a disc image nor a game program, a disc game whose disc cannot be found, or an encrypted disc image without
-  its key file. **Play** is off.
+  is neither a disc image nor a game program, a disc game whose disc cannot be mounted, or an encrypted disc image
+  without its key file. **Play** is off.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
   **Play** stays on.
 - **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game

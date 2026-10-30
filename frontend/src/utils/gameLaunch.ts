@@ -68,8 +68,8 @@ const REFUSED_BECAUSE: Record<
   },
   disc_not_found: {
     page: (launch) =>
-      `${launch.entry} cannot start this game: it is a disc game, and no valid PS3_DISC.SFB stands beside its PS3_GAME folder.`,
-    line: () => "the game's disc has no valid PS3_DISC.SFB",
+      `${launch.entry} cannot start this game: it is a disc game, and no PS3_GAME folder above it has a valid PS3_DISC.SFB beside it.`,
+    line: () => "the game's disc cannot be mounted",
   },
   disc_key_missing: {
     page: (launch) =>
@@ -84,19 +84,20 @@ const REFUSED_BECAUSE: Record<
  */
 const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunch) => string> = {
   content_missing: (launch) => `${launch.file} was not found`,
-  content_unreadable: (launch) => `what is at ${launch.file} could not be read`,
+  content_unreadable: () => "what RPCS3 would look at could not be read",
   game_list_unread: () => "the emulator's own list of installed games was not read",
   game_kind_unfollowed: () => "its PARAM.SFO names a kind of game whose start was not followed",
   inside_emulator_drive: () => "the game lies inside the emulator's own game folder, which starts games another way",
   emulator_drive_unknown: () => "where the emulator's internal drive is could not be read",
-  savestate_unread: (launch) => `${launch.file} is a savestate, which was not read`,
-  image_layout_unread: () => "the layout of the disc image could not be read",
+  savestate_unread: (launch) => `RPCS3 opens ${launch.file} as a savestate, which was not followed`,
+  image_layout_unread: () =>
+    "the disc image states a region count RPCS3 does not accept, and what its start does then was not followed",
   encryption_unread: () => "whether the disc image is encrypted could not be read",
   key_untested: () => "whether its key file fits the disc image was not checked",
   key_folder_unknown: () =>
     "no key file is beside the disc image, and where the emulator keeps its other key files could not be read",
   disc_folder_set: () =>
-    "the emulator is set to use a disc folder of its own instead, and what that holds was not read",
+    "the emulator's own disc folder holds a disc it mounts instead, and which disc that boots was not followed",
   disc_folder_unknown: () => "where the emulator's own disc folder is could not be read",
   content_unchecked: (launch) =>
     `${launch.extension} files are taken, but the content of ${launch.file} was not checked`,
