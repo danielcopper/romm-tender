@@ -62,6 +62,11 @@ _CATALOGUE = """\
     <command label="Flycast">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>
   </system>
   <system>
+    <name>n3ds</name>
+    <extension>.3ds .3DS .cci .CCI .zip .ZIP</extension>
+    <command label="Azahar (Standalone)">%EMULATOR_AZAHAR% %ROM%</command>
+  </system>
+  <system>
     <name>gba</name>
     <extension>.gba</extension>
     <command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>
@@ -116,6 +121,17 @@ class TestTheRealResolverOverARealTree:
         assert answer.state == NEEDS_INSTALLING
         assert answer.install_in == ("RPCS3 Directory (Standalone)",)
         assert (answer.file, answer.extension) == ("Puppeteer.pkg", ".pkg")
+
+    def test_an_installer_the_system_has_no_entry_for_is_left_out(self, tmp_path, traces):
+        # The resolver names Azahar and Azahar Plus as installing a .cia, which
+        # this system's list does not take; it has an entry for Azahar alone
+        # (#2195 D35).
+        adapter = _real(_seed_retrodeck(tmp_path), traces)
+
+        answer = adapter.launchability("n3ds", f"{_roms(tmp_path)}/n3ds/Game.cia", label="Azahar (Standalone)")
+
+        assert answer.state == NEEDS_INSTALLING
+        assert answer.install_in == ("Azahar (Standalone)",)
 
     def test_a_single_dreamcast_track_is_not_the_file_the_system_starts_from(self, tmp_path, traces):
         adapter = _real(_seed_retrodeck(tmp_path), traces)
@@ -249,7 +265,7 @@ class TestEachVerdictInTendersWords:
 
         assert (result.state, result.format_unestablished) == (STARTS, True)
 
-    def test_an_installer_with_no_entry_of_the_system_is_named_as_the_resolver_names_it(self, traces):
+    def test_an_installer_with_no_entry_of_the_system_is_left_out(self, traces):
         result, _ = _ask(
             LaunchabilityAnswer(
                 verdict=VERDICT_NEEDS_INSTALLATION, extension=".cia", installers=(Installer(emulator="AZAHARPLUS"),)
@@ -257,7 +273,7 @@ class TestEachVerdictInTendersWords:
             traces,
         )
 
-        assert (result.state, result.install_in) == (NEEDS_INSTALLING, ("AZAHARPLUS",))
+        assert (result.state, result.install_in) == (NEEDS_INSTALLING, ())
 
     def test_nothing_known_to_install_it_is_an_empty_list_not_none(self, traces):
         result, _ = _ask(

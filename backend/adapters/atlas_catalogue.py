@@ -388,9 +388,14 @@ def _launch_reason(answer: Any) -> str | None:
     return reason
 
 
-def _installer_name(installer: Any) -> str:
-    """The emulator that installs a file: the system's entry that runs it, else the emulator as the resolver says it."""
-    return installer.entry.label if installer.entry is not None else installer.emulator
+def _installed_in(installers: Any) -> tuple[str, ...]:
+    """The system's entries that install a file, by their labels.
+
+    An installer the system has no entry for is left out: the resolver names it
+    by an emulator token, no display name, and it cannot be chosen in the
+    emulator menu (#2195 D35).
+    """
+    return tuple(installer.entry.label for installer in installers if installer.entry is not None)
 
 
 def _launchability(answer: Any, *, system: str, content_path: str, label: str | None) -> Launchability:
@@ -405,7 +410,7 @@ def _launchability(answer: Any, *, system: str, content_path: str, label: str | 
         extension=answer.extension,
         starts_from=tuple(answer.accepted),
         other_entries=tuple(answer.alternatives),
-        install_in=None if answer.installers is None else tuple(_installer_name(i) for i in answer.installers),
+        install_in=None if answer.installers is None else _installed_in(answer.installers),
         reason=_launch_reason(answer) if state == LAUNCH_NOT_ESTABLISHED else None,
         contents_unread=CAVEAT_ARCHIVE_CONTENTS_UNREAD in codes,
         format_unestablished=CAVEAT_ENTRY_FORMAT_UNESTABLISHED in codes,

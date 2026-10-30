@@ -56,9 +56,12 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
   });
 
   it("several emulators that install it are named as alternatives", () => {
-    expect(launchRefusal(launch({ ...PS3_PKG, install_in: ["Azahar (Standalone)", "AZAHARPLUS"] }), true)).toBe(
-      "This game has to be installed in Azahar (Standalone) or AZAHARPLUS first.",
-    );
+    expect(
+      launchRefusal(
+        launch({ ...PS3_PKG, install_in: ["RPCS3 Game Serial (Standalone)", "RPCS3 Directory (Standalone)"] }),
+        true,
+      ),
+    ).toBe("This game has to be installed in RPCS3 Game Serial (Standalone) or RPCS3 Directory (Standalone) first.");
   });
 
   it("with nothing known to install it, the sentence names no emulator", () => {

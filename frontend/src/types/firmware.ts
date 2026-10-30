@@ -448,8 +448,9 @@ export interface EmulatorStart {
  * asked as and `file` the file's name;
  * `starts_from` is the system's extension list (for `not_a_launch_file`),
  * `other_entries` the entries established to start the file (for
- * `not_this_emulator`), and `install_in` the emulators that install it — for
- * `needs_installing` alone, empty where none is known, `null` otherwise.
+ * `not_this_emulator`), and `install_in` the system's entries that install
+ * it — for `needs_installing` alone, empty where the system has an entry for
+ * none of the emulators known to, `null` otherwise.
  * `reason` says why a verdict was `not_established`, `null` where nothing
  * Tender words was named. `contents_unread` says the file is an archive whose
  * contents were not read; `format_unestablished` that whether the entry reads

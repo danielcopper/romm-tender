@@ -223,7 +223,7 @@ def matching_entries[EntryT: LocalName](
 
 
 def _extension_of(name: str) -> str:
-    """The entry's extension as ES-DE spells it in its accept-list: lowercased, dot-led."""
+    """The entry's extension, dot-led and lowercased on the file's side, which ES-DE does not do."""
     return os.path.splitext(name)[1].lower()
 
 

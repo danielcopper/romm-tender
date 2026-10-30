@@ -543,10 +543,10 @@ Enumerating a ROM's discs needs two different facts kept separate:
   set. The disc unit is the image or the descriptor itself, never a track.
 - **The per-system accept-list is a capability and read live** —
   `AtlasCatalogueAdapter.get_supported_extensions(system)` (`adapters/atlas_catalogue.py`) returns the system's
-  es_systems `<extension>` set verbatim, both cases where the file lists both (ES-DE compares case-exactly; disc
-  enumeration still folds case on its side until [#2613](https://github.com/danielcopper/romm-tender/issues/2613), and
-  the adoption search folds it too), threaded into the resolver through the `SystemSupportedExtensionsFn` Protocol,
-  exactly as `system_supports_m3u` is read for the `.m3u` gate
+  es_systems `<extension>` set verbatim, both cases where the file lists both (ES-DE compares case-exactly; the
+  launch-file rule, the disc enumeration and the adoption search still fold case on the file's side, which ES-DE does
+  not), threaded into the resolver through the `SystemSupportedExtensionsFn` Protocol, exactly as `system_supports_m3u`
+  is read for the `.m3u` gate
   ([ADR-0013](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0013-platform-gated-m3u-via-es-systems.md)).
 
 Enumeration keeps the files whose extension is in **the intersection** of the two, so a disc the emulator cannot launch

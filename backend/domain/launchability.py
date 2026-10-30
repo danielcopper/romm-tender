@@ -40,8 +40,9 @@ class Launchability:
     ``extension`` the token compared, as the resolver states it. ``starts_from`` is the system's accept-list, read for
     :data:`NOT_A_LAUNCH_FILE`; ``other_entries`` the labels of the system's
     entries established to start the file, read for :data:`NOT_THIS_EMULATOR`;
-    ``install_in`` the emulators that install it, ``None`` on every state but
-    :data:`NEEDS_INSTALLING`, where an empty tuple says none is known.
+    ``install_in`` the labels of the system's entries that install it, ``None``
+    on every state but :data:`NEEDS_INSTALLING`, where an empty tuple says the
+    system has an entry for none of the emulators known to (#2195 D35).
     ``reason`` says why a verdict was :data:`NOT_ESTABLISHED`, ``None`` where
     the resolver named no reason Tender words. ``contents_unread`` says the file
     is an archive whose contents were not read; ``format_unestablished`` that
