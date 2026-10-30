@@ -310,19 +310,25 @@ class SetupWizard:
         }
 
     async def get_save_sync_availability(self, rom_id: int) -> dict[str, Any]:
-        """Whether a slot can be set up for this game at all, asking RomM nothing.
+        """Whether this game's saves sync, asking RomM nothing.
 
-        ``{"available": True}`` for a game that syncs or is not installed, or
-        ``{"available": False}`` with the refusal ``get_save_setup_info``
-        answers ``sync_unavailable`` with. One live reading and no device
+        ``available`` is whether a sync of the game would carry its saves, with
+        the refusal ``get_save_setup_info`` answers ``sync_unavailable`` with
+        where it would not. A game that is not installed is asked about the
+        path it would be downloaded to, and ``installed`` says which of the two
+        was asked. ``emulator_label`` is the label of the entry the game starts
+        with, ``None`` where it has none. One live reading and no device
         registration, so the panel can ask it while it holds RomM as
         unreachable, where the setup info would wait out the retry ladder.
         """
         rom_id = int(rom_id)
-        refusal = _sync_refusal(await self._sync_engine.read_save_answer(rom_id))
-        if refusal is None:
-            return {"available": True}
-        return {"available": False, **refusal}
+        answer, label = await self._loop.run_in_executor(None, self._availability_io, rom_id)
+        refusal = _sync_refusal(answer)
+        base = {"available": refusal is None, "installed": answer.content_installed, "emulator_label": label}
+        return base if refusal is None else {**base, **refusal}
+
+    def _availability_io(self, rom_id: int) -> tuple[SaveAnswer, str | None]:
+        return self._rom_info.save_answer(rom_id), self._rom_info.start_label(rom_id)
 
     async def confirm_slot_choice(
         self,
