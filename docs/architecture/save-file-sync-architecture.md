@@ -1988,10 +1988,13 @@ The Play button's path:
 5. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
 7. Online: `pre_launch_sync` — past its limit, the "Waiting for Save Sync" question above. The button turns into
-   "Syncing saves..." only on the backend's `pre_launch_sync_started` event for this ROM, which the sync sends once it
-   has passed "Sync before launch", the refusal of a game whose saves cannot sync and its own reachability check
-   (`heartbeat`), just before its first request that names the device. With save sync off, "Sync before launch" off or a
-   game whose saves the sync refuses, no event comes, and the button never reads "Syncing saves...": it goes from
+   "Syncing saves..." only on the backend's `pre_launch_sync_started` event for this ROM. The sync sends it once it has
+   passed "Sync before launch", the refusal of a game whose saves cannot sync and its own reachability check
+   (`heartbeat`), and once its first request that RomM can refuse for this device has passed without that refusal: the
+   `negotiate` session it opens for a confirmed slot, whatever else that request answers, or, where it opens none, just
+   before the sync itself. Before that request Tender cannot know whether RomM has save sync switched off for this
+   device. With save sync off, "Sync before launch" off, a game whose saves the sync refuses, or RomM's save sync
+   switched off for this device, no event comes, and the button never reads "Syncing saves...": it goes from
    "Preparing..." to "Launching...", or, for a missing saves folder, to the "Save Sync Unavailable" question below. No
    other sync sends it — not Sync Saves, not Sync All Saves Now, not the sync after a game. The panel listens for it,
    for its own ROM, only until its pre-launch step answers, so an event that arrives after that — Cancel or Play Anyway

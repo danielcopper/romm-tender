@@ -1,4 +1,4 @@
-"""What the sync before a start is doing, and the stop the panel can ask of it."""
+"""What the sync before a start is doing, the stop the panel can ask of it, and its answer."""
 
 from __future__ import annotations
 
@@ -38,6 +38,25 @@ def stopped_refusal(*, uploaded: int = 0, downloaded: int = 0) -> PreLaunchSyncS
     return PreLaunchSyncStopped(
         PRE_LAUNCH_SYNC_STOPPED, synced=uploaded + downloaded, uploaded=uploaded, downloaded=downloaded
     )
+
+
+def completed_answer(
+    uploaded: int, downloaded: int, errors: list[str], conflicts: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """The answer of a sync before a start that ran to its end; it fails only on per-file *errors*."""
+    synced = uploaded + downloaded
+    msg = f"Downloaded {synced} save(s)"
+    if errors:
+        msg += f", {len(errors)} error(s)"
+    return {
+        "success": len(errors) == 0,
+        "message": msg,
+        "synced": synced,
+        "uploaded": uploaded,
+        "downloaded": downloaded,
+        "errors": errors,
+        "conflicts": list(conflicts),
+    }
 
 
 class PreLaunchRun:

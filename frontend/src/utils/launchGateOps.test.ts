@@ -725,7 +725,7 @@ describe("makeLaunchGateOps", () => {
     expect(await makeLaunchGateOps(ROM_ID, options()).preLaunchSync()).toEqual({ success: false, message: "" });
   });
 
-  it("preLaunchSync: a throwing onSyncStart hook is caught and logged, and sync still runs", async () => {
+  it("preLaunchSync: a throwing onSyncStart hook is logged, and the step still answers with the sync's outcome", async () => {
     const onSyncStart = vi.fn(() => {
       throw new Error("hook boom");
     });

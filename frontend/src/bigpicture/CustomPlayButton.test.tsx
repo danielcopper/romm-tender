@@ -2910,7 +2910,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     await findByText("Resolve Conflict");
   });
 
-  it("a verdict modal helper that THROWS → resets to play (never frozen in syncing)", async () => {
+  it("a verdict modal helper that THROWS → resets to play (never frozen on its throbber)", async () => {
     // The pre-launch sync answers with a conflict, the gate returns a
     // conflict verdict, then the shared handleConflicts REJECTS at the framework
     // level. Without the outer try/catch the button would stay stuck on its

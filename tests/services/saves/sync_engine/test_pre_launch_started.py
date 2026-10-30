@@ -1,9 +1,10 @@
 """The sync before a start sends ``pre_launch_sync_started`` once save sync, Sync
 before launch, the save answer's refusal and RomM's heartbeat have passed, and
-before its first request that names the device; no other sync sends it. Each
-absence case stands beside its control — parametrized, or a test of its own — in
-which the one condition flipped sends the event, so an engine that sends nothing
-turns a test red.
+once its first request that RomM can refuse for this device has passed without
+that refusal — the ``negotiate`` session, or where none is opened, the sync
+itself; no other sync sends it. Each absence case stands beside its control —
+parametrized, or a test of its own — in which the one condition flipped sends
+the event, so an engine that sends nothing turns a test red.
 """
 
 from __future__ import annotations
@@ -82,16 +83,29 @@ def _refusing() -> SaveAnswer:
 
 class TestASyncThatProceedsIsAnnounced:
     @pytest.mark.asyncio
-    async def test_the_event_names_the_rom_once_after_romm_answered_and_before_any_request_naming_the_device(
-        self, tmp_path
-    ):
+    async def test_the_event_names_the_rom_once_after_the_session_romm_could_refuse_and_before_the_sync(self, tmp_path):
         svc, fake, heard = _service(tmp_path)
 
         result = await svc.pre_launch_sync(42)
 
         assert result["success"] is True
         assert heard.started() == [_STARTED]
-        assert heard.calls_before == [["heartbeat"]]
+        [before] = heard.calls_before
+        assert before[-1] == "negotiate_sync"
+        assert "list_saves" not in before
+        assert any(call[0] == "list_saves" for call in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_slot_not_confirmed_opens_no_session_and_is_announced_before_the_sync(self, tmp_path):
+        svc, fake, heard = _service(tmp_path)
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": False})
+
+        await svc.pre_launch_sync(42)
+
+        assert heard.started() == [_STARTED]
+        [before] = heard.calls_before
+        assert "list_saves" not in before
+        assert not any(call[0] == "negotiate_sync" for call in fake.call_log)
         assert any(call[0] == "list_saves" for call in fake.call_log)
 
 
@@ -134,6 +148,18 @@ class TestNoEventWhereNoSyncRuns:
         await svc.pre_launch_sync(42)
 
         assert heard.started() == [_STARTED]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("disabled", [True, False], ids=["romm-sync-off-for-this-device", "control-on"])
+    async def test_romm_s_own_sync_switched_off_for_this_device(self, tmp_path, disabled: bool):
+        svc, fake, heard = _service(tmp_path)
+        fake.negotiate_sync_disabled = disabled
+
+        result = await svc.pre_launch_sync(42)
+
+        assert result["success"] is True
+        assert any(call[0] == "negotiate_sync" for call in fake.call_log)
+        assert heard.started() == ([] if disabled else [_STARTED])
 
     @pytest.mark.asyncio
     async def test_romm_not_answering(self, tmp_path):
