@@ -68,3 +68,9 @@ def answer_shows_device_not_current(answer: dict[str, Any], device_id: str) -> b
         isinstance(ds, dict) and ds.get("device_id") == device_id and ds.get("is_current") is not True
         for ds in device_syncs
     )
+
+
+def answer_content_hash(answer: dict[str, Any]) -> str | None:
+    """The save's own content hash as *answer* states it, or ``None`` where it states none or not as a string."""
+    content_hash = answer.get("content_hash")
+    return content_hash if isinstance(content_hash, str) else None

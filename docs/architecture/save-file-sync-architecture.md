@@ -650,11 +650,13 @@ for an adopt that needs no acknowledgement) measures the file and runs the steps
 Keep Local alike. No core is recorded: an adopt transfers nothing, so which core wrote the bytes is unknown, and the one
 the last upload recorded stays for the core-change warning to compare against. An adopt is recorded only if the file
 still hashes to what the decision saw; one that no longer does is neither acknowledged nor recorded. An adopt that must
-be acknowledged then sends `POST /api/saves/{id}/downloaded` with the device id, through the retry strategy every RomM
-request in the sync uses, and records the baseline from that measure only after that succeeded: without it RomM keeps
-this device not current on the head, and the next local edit would read as one under a head that moved past it — a
-conflict nobody caused. Where the acknowledgement still fails, nothing is recorded, the file is reported as an error of
-that sync with its reason — not a conflict — and the next sync decides the same way again.
+be acknowledged then sends `POST /api/saves/{id}/downloaded` with the device id and the local file's content hash
+([A download is acknowledged once placed, never marked at the GET](#a-download-is-acknowledged-once-placed-never-marked-at-the-get)),
+through the retry strategy every RomM request in the sync uses, and records the baseline from that measure only after
+that succeeded: without it RomM keeps this device not current on the head, and the next local edit would read as one
+under a head that moved past it — a conflict nobody caused. Where the acknowledgement still fails, nothing is recorded,
+the file is reported as an error of that sync with its reason — not a conflict — and the next sync decides the same way
+again.
 
 The mutating sync path (`SyncEngine.do_sync_rom_saves`) records every adopt. The read-only status path
 (`StatusService._get_save_status_io`) records only one that needs no acknowledgement, and leaves the other to the next
@@ -1786,17 +1788,20 @@ adopt records, the file an upload sent — computed as RomM computes a save's `c
 of the file it sends as the `content_hash` query parameter, which RomM records as the row's device hash (D5), so a row
 Tender leaves no longer has the shape above. A row an older Tender left still takes the first acknowledgement without
 moving its sync time, so where RomM's answer to an acknowledgement still shows this device not current,
-`SaveTransfer._acknowledge` sends exactly one more, which RomM then records (D6); an answer that does not name the
-device says nothing either way and is taken as it is. Measured on RomM 5.4.1, after another client replaced a save in
-place: a download and one acknowledgement with the hash leave this device current where its upload carried the hash, and
-a second acknowledgement is needed where it did not.
+`SaveTransfer._acknowledge` sends exactly one more, which RomM then records (D6) — but only where that answer states the
+save still holds the hash Tender named: a client that replaced the save between the download and the acknowledgement
+would otherwise have the second one mark this device current on bytes it does not hold, so there the acknowledgement
+counts as not taken; an answer that does not name the device says nothing either way and is taken as it is. Measured on
+RomM 5.4.1, after another client replaced a save in place: a download and one acknowledgement with the hash leave this
+device current where its upload carried the hash, and a second acknowledgement is needed where it did not.
 
-An acknowledgement that fails — a RomM error, or a second answer that still shows this device not current
-(`RommAcknowledgementNotTaken`, which `classify_error` answers `server_error`) — raises with the file in place, its
-backup kept and nothing recorded ([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D8): the sync reports
-the file as an error, a slot switch counts it among the downloads that failed (`switch_incomplete`), and Use Server
-answers that error. The next sync finds the file identical to a head this device is not current on, and adopts and
-acknowledges it (rows 11a and 12a).
+An acknowledgement that fails — a RomM error, a first answer that names other bytes, or a second answer that still shows
+this device not current (`RommAcknowledgementNotTaken`, which `classify_error` answers `server_error`) — raises with the
+file in place, its backup kept and nothing recorded ([#2184](https://github.com/danielcopper/romm-tender/issues/2184)
+D8): the sync reports the file as an error, a slot switch counts it among the downloads that failed
+(`switch_incomplete`), and Use Server answers that error. The next sync finds the file identical to a head this device
+is not current on, and adopts and acknowledges it (rows 11a and 12a); where another client replaced the head meanwhile,
+it decides against that newer head as any sync does.
 
 `download_save(save_id, dest_path)` names no device: it fetches a server copy to compare
 (`SaveTransfer.fetch_server_copy`) and records nothing.

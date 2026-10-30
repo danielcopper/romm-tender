@@ -534,7 +534,11 @@ class TestAnAcknowledgementRomMDidNotTake:
 
         def not_taken(save_id: int, device_id: str, **_kwargs: Any) -> dict[str, Any]:
             acks.append(save_id)
-            return {"id": save_id, "device_syncs": [{"device_id": device_id, "is_current": False}]}
+            return {
+                "id": save_id,
+                "content_hash": hashlib.md5(b"server bytes").hexdigest(),
+                "device_syncs": [{"device_id": device_id, "is_current": False}],
+            }
 
         monkeypatch.setattr(fake, "confirm_download", not_taken)
         state = RomSaveSyncState()
@@ -545,6 +549,38 @@ class TestAnAcknowledgementRomMDidNotTake:
             download(server_save, saves_dir, "pokemon.srm", state, device_id, "gba")
 
         assert acks == [100, 100]
+        assert save_path.read_bytes() == b"server bytes"
+        assert state.files == {}
+
+    def test_a_save_replaced_since_the_download_is_not_acknowledged_again(self, tmp_path, monkeypatch):
+        """A second acknowledgement would mark this device current on bytes another client put there meanwhile."""
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        save_path = _create_save(tmp_path, content=b"local bytes")
+        fake.saves[100] = {
+            **_server_save(save_id=100, updated_at="2026-03-01T00:00:00Z"),
+            "content_hash": hashlib.md5(b"server bytes").hexdigest(),
+        }
+        fake.set_server_save_content(100, b"server bytes")
+        fake.stage_device_sync(100, "device-1", "2026-02-01T00:00:00Z", last_sync_server_hash="an-older-hash")
+        download_content = fake.download_save_content
+
+        def download_then_another_client_replaces_it(save_id, dest_path, **kwargs):
+            download_content(save_id, dest_path, **kwargs)
+            fake.saves[100]["updated_at"] = "2026-03-02T00:00:00Z"
+            fake.saves[100]["content_hash"] = hashlib.md5(b"replaced meanwhile").hexdigest()
+
+        monkeypatch.setattr(fake, "download_save_content", download_then_another_client_replaces_it)
+        state = RomSaveSyncState()
+        download = svc._save_transfer.download_save_file
+        server_save, saves_dir, device_id = fake.saves[100], str(save_path.parent), LiveDeviceId("device-1")
+
+        with pytest.raises(RommAcknowledgementNotTaken):
+            download(server_save, saves_dir, "pokemon.srm", state, device_id, "gba")
+
+        assert [c[0] for c in fake.call_log if c[0] == "confirm_download"] == ["confirm_download"]
+        (listed,) = fake.list_saves(42, device_id="device-1")
+        assert listed["device_syncs"][0]["is_current"] is False
         assert save_path.read_bytes() == b"server bytes"
         assert state.files == {}
 

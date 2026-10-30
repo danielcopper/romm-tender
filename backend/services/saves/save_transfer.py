@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from domain.emulator_tag import build_emulator_tag
 from domain.save_backup import BACKUP_RETENTION
 from domain.upload_response import (
+    answer_content_hash,
     answer_shows_device_not_current,
     dedup_returned_non_head,
     upload_response_proves_current,
@@ -307,18 +308,24 @@ class SaveTransfer:
 
         Every acknowledgement Tender sends goes through here. An answer that
         shows this device not current is answered with exactly one more
-        acknowledgement: RomM 5.4 keeps the old sync time of a row recorded
+        acknowledgement, and only where the answer states the save still holds
+        *content_hash*: RomM 5.4 keeps the old sync time of a row recorded
         without the device's hash and records the hash, so the second one is
-        taken (docs/architecture/save-file-sync-architecture.md, "A download is
+        taken — over bytes another client put there meanwhile as well
+        (docs/architecture/save-file-sync-architecture.md, "A download is
         acknowledged once placed, never marked at the GET"). Raises
-        :class:`RommAcknowledgementNotTaken` when the second answer still shows it
-        not current; a request's own failure propagates.
+        :class:`RommAcknowledgementNotTaken` where the first answer names other
+        bytes or the second still shows this device not current; a request's own
+        failure propagates.
         """
-        for _attempt in range(2):
-            answer = self._romm_api.confirm_download(save_id, device_id, content_hash=content_hash)
-            if not answer_shows_device_not_current(answer, device_id):
-                return
-        raise RommAcknowledgementNotTaken(save_id)
+        answer = self._romm_api.confirm_download(save_id, device_id, content_hash=content_hash)
+        if not answer_shows_device_not_current(answer, device_id):
+            return
+        if answer_content_hash(answer) != content_hash:
+            raise RommAcknowledgementNotTaken(save_id)
+        answer = self._romm_api.confirm_download(save_id, device_id, content_hash=content_hash)
+        if answer_shows_device_not_current(answer, device_id):
+            raise RommAcknowledgementNotTaken(save_id)
 
     # ------------------------------------------------------------------
     # A head adopted without a transfer
