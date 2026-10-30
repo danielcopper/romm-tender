@@ -8,7 +8,8 @@ import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS, SYNC_WAIT_MORE_MS } from "./
 import { ensureTrackingConfiguredBigPicture, makeLaunchGateOps, runPreLaunchSync } from "./launchGateOps";
 import { TimeoutError } from "./withTimeout";
 import type { LaunchPrompts } from "./launchVerdict";
-import type { SaveSetupInfo, SyncConflict } from "../types";
+import type { PreLaunchSyncStartedEvent, SaveSetupInfo, SyncConflict } from "../types";
+import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 
 type AskSyncWait = LaunchPrompts["askSyncWait"];
 
@@ -638,22 +639,84 @@ describe("makeLaunchGateOps", () => {
     );
   });
 
-  it("preLaunchSync tells the path the sync is starting before it runs, then answers with the shaped outcome", async () => {
-    const order: string[] = [];
-    const onSyncStart = vi.fn(() => {
-      order.push("start");
-    });
-    vi.mocked(backend.preLaunchSync).mockImplementation(() => {
-      order.push("sync");
-      return Promise.resolve({ success: true, message: "", uploaded: 0, downloaded: 2 });
-    });
+  it("preLaunchSync tells the path the sync began only on the backend's report, then answers with the shaped outcome", async () => {
+    const onSyncStart = vi.fn();
+    let answer!: (result: Awaited<ReturnType<typeof backend.preLaunchSync>>) => void;
+    vi.mocked(backend.preLaunchSync).mockReturnValue(new Promise((resolve) => (answer = resolve)));
 
-    const outcome = await makeLaunchGateOps(ROM_ID, options({ onSyncStart, toastSyncResult: true })).preLaunchSync();
-
-    expect(order).toEqual(["start", "sync"]);
+    const step = makeLaunchGateOps(ROM_ID, options({ onSyncStart, toastSyncResult: true })).preLaunchSync();
     expect(backend.preLaunchSync).toHaveBeenCalledWith(ROM_ID);
-    expect(outcome).toEqual({ success: true, message: "" });
+    expect(onSyncStart).not.toHaveBeenCalled();
+
+    emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: ROM_ID });
+    expect(onSyncStart).toHaveBeenCalledTimes(1);
+
+    answer({ success: true, message: "", uploaded: 0, downloaded: 2 });
+    expect(await step).toEqual({ success: true, message: "" });
     expect(toastBodies()).toEqual(["Saves downloaded from RomM"]);
+  });
+
+  it("preLaunchSync does not tell the path about another ROM's sync", async () => {
+    const onSyncStart = vi.fn();
+    vi.mocked(backend.preLaunchSync).mockReturnValue(new Promise(() => {}));
+
+    void makeLaunchGateOps(ROM_ID, options({ onSyncStart })).preLaunchSync();
+    expect(hostEventListenerCount("pre_launch_sync_started")).toBe(1);
+    emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: ROM_ID + 1 });
+
+    expect(onSyncStart).not.toHaveBeenCalled();
+  });
+
+  it("preLaunchSync stops listening once it has answered", async () => {
+    const onSyncStart = vi.fn();
+    vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0 });
+
+    await makeLaunchGateOps(ROM_ID, options({ onSyncStart })).preLaunchSync();
+    emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: ROM_ID });
+
+    expect(hostEventListenerCount("pre_launch_sync_started")).toBe(0);
+    expect(onSyncStart).not.toHaveBeenCalled();
+  });
+
+  describe("past the limit", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.mocked(backend.preLaunchSync).mockReturnValue(new Promise(() => {}));
+      vi.mocked(backend.preLaunchSyncState).mockResolvedValue({ state: "syncing" });
+      vi.mocked(backend.stopPreLaunchSync).mockResolvedValue({ success: true, stopped: true });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("a report while the wait question is open still tells the path", async () => {
+      const onSyncStart = vi.fn();
+      const askSyncWait = vi.fn<AskSyncWait>(() => new Promise(() => {}));
+
+      void makeLaunchGateOps(ROM_ID, options({ onSyncStart, askSyncWait })).preLaunchSync();
+      await vi.advanceTimersByTimeAsync(SERVER_CALL_LIMIT_MS);
+      expect(askSyncWait).toHaveBeenCalledTimes(1);
+      emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: ROM_ID });
+
+      expect(onSyncStart).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["cancel", "play_anyway"] as const)(
+      "after %s, a report from the sync that goes on tells the path nothing",
+      async (choice) => {
+        const onSyncStart = vi.fn();
+        const askSyncWait = vi.fn<AskSyncWait>(() => Promise.resolve(choice));
+
+        const step = makeLaunchGateOps(ROM_ID, options({ onSyncStart, askSyncWait })).preLaunchSync();
+        await vi.advanceTimersByTimeAsync(SERVER_CALL_LIMIT_MS);
+        expect(await step).toMatchObject({ chose: choice });
+        emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: ROM_ID });
+
+        expect(hostEventListenerCount("pre_launch_sync_started")).toBe(0);
+        expect(onSyncStart).not.toHaveBeenCalled();
+      },
+    );
   });
 
   it("preLaunchSync runs without a start hook", async () => {
@@ -667,16 +730,15 @@ describe("makeLaunchGateOps", () => {
       throw new Error("hook boom");
     });
     const ops = makeLaunchGateOps(ROM_ID, options({ onSyncStart }));
-    vi.mocked(backend.preLaunchSync).mockResolvedValue({
-      success: true,
-      synced: 1,
-      uploaded: 0,
-      downloaded: 0,
-      message: "ok",
-    });
+    let answer!: (result: Awaited<ReturnType<typeof backend.preLaunchSync>>) => void;
+    vi.mocked(backend.preLaunchSync).mockReturnValue(new Promise((resolve) => (answer = resolve)));
 
-    const outcome = await ops.preLaunchSync();
+    const step = ops.preLaunchSync();
+    emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: ROM_ID });
+    answer({ success: true, synced: 1, uploaded: 0, downloaded: 0, message: "ok" });
+    const outcome = await step;
 
+    expect(onSyncStart).toHaveBeenCalledTimes(1);
     expect("success" in outcome && outcome.success).toBe(true);
     expect(backend.logError).toHaveBeenCalledWith(`${TAG}: onSyncStart threw: Error: hook boom`);
     expect(backend.preLaunchSync).toHaveBeenCalledWith(ROM_ID);

@@ -28,7 +28,13 @@ import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
-import type { AdoptResult, DownloadCompleteEvent, DownloadFailedEvent, DownloadProgressEvent } from "../types";
+import type {
+  AdoptResult,
+  DownloadCompleteEvent,
+  DownloadFailedEvent,
+  DownloadProgressEvent,
+  PreLaunchSyncStartedEvent,
+} from "../types";
 
 // Stub the cached-detail store: synchronous Promise.resolve so the initial
 // useEffect settles within a single waitFor tick. The default test-setup
@@ -2800,7 +2806,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
       await Promise.resolve();
     });
     await waitFor(() => expect(backend.probeReachability).toHaveBeenCalledTimes(2));
-    expect(within(document.body).getByText("Checking saves...")).toBeInTheDocument();
+    expect(within(document.body).getByText("Preparing...")).toBeInTheDocument();
 
     await act(async () => {
       answerReprobe({ online: false });
@@ -2905,10 +2911,10 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
   });
 
   it("a verdict modal helper that THROWS → resets to play (never frozen in syncing)", async () => {
-    // onSyncStart flips the button to "syncing", the gate returns a
+    // The pre-launch sync answers with a conflict, the gate returns a
     // conflict verdict, then the shared handleConflicts REJECTS at the framework
-    // level. Without the outer try/catch the button would stay stuck in
-    // "syncing"; with it, handlePlay recovers to "play".
+    // level. Without the outer try/catch the button would stay stuck on its
+    // throbber; with it, handlePlay recovers to "play".
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({
       success: false,
@@ -2929,7 +2935,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
       await Promise.resolve();
     });
 
-    // Recovered: the Play label is back (NOT stuck on "Syncing saves...") and no
+    // Recovered: the Play label is back (NOT stuck on the throbber) and no
     // launch happened.
     expect(await findByText("Play")).toBeInTheDocument();
     expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
@@ -3455,12 +3461,12 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
   });
 
-  it("a press shows Checking saves... at once, before the backend has answered anything", async () => {
+  it("a press shows Preparing... at once, before the backend has answered anything", async () => {
     vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
 
     const { getByText, queryByText } = await pressPlay();
 
-    expect(getByText("Checking saves...").closest("button")).toBeDisabled();
+    expect(getByText("Preparing...").closest("button")).toBeDisabled();
     expect(queryByText("Play")).not.toBeInTheDocument();
   });
 
@@ -3512,7 +3518,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       );
     });
 
-    expect(getByText("Checking saves...")).toBeInTheDocument();
+    expect(getByText("Preparing...")).toBeInTheDocument();
     expect(queryByText("Play")).not.toBeInTheDocument();
   });
 
@@ -3521,7 +3527,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(new Promise((resolve) => (answer = resolve)));
 
     const { getByText, queryByText, rerender } = await pressPlay();
-    expect(getByText("Checking saves...")).toBeInTheDocument();
+    expect(getByText("Preparing...")).toBeInTheDocument();
     // The button rendered again for another game releases the owner the press
     // was admitted under. The new game's detail read never answers, so only the
     // stale start can put the button back on Play.
@@ -3533,23 +3539,93 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     await advance(0);
 
     expect(getByText("Play")).toBeInTheDocument();
-    expect(queryByText("Checking saves...")).not.toBeInTheDocument();
+    expect(queryByText("Preparing...")).not.toBeInTheDocument();
     expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
   });
 
-  it("the check's state changes to Syncing saves... when the pre-launch sync starts", async () => {
+  it("the check's state changes to Syncing saves... when the backend reports the pre-launch sync began", async () => {
     let answer!: (online: { online: boolean }) => void;
     vi.mocked(backend.probeReachability).mockReturnValue(new Promise((resolve) => (answer = resolve)));
     vi.mocked(backend.preLaunchSync).mockReturnValue(never());
 
     const { getByText, queryByText } = await pressPlay();
-    expect(getByText("Checking saves...")).toBeInTheDocument();
+    expect(getByText("Preparing...")).toBeInTheDocument();
 
     await act(async () => {
       answer({ online: true });
     });
+    expect(backend.preLaunchSync).toHaveBeenCalledWith(42);
+    act(() => emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: 42 }));
     expect(getByText("Syncing saves...")).toBeInTheDocument();
-    expect(queryByText("Checking saves...")).not.toBeInTheDocument();
+    expect(queryByText("Preparing...")).not.toBeInTheDocument();
+  });
+
+  it("without the backend's report the button stays on Preparing... while the pre-launch sync runs", async () => {
+    vi.mocked(backend.preLaunchSync).mockReturnValue(never());
+
+    const { getByText, queryByText } = await pressPlay();
+    await advance(0);
+
+    expect(backend.preLaunchSync).toHaveBeenCalledWith(42);
+    expect(getByText("Preparing...")).toBeInTheDocument();
+    expect(queryByText("Syncing saves...")).not.toBeInTheDocument();
+  });
+
+  it("a pre-launch sync that answers without reporting a start goes from Preparing... to Launching...", async () => {
+    let finish!: () => void;
+    vi.mocked(backend.preLaunchSync).mockReturnValue(
+      new Promise((resolve) => {
+        finish = () => resolve({ success: true, message: "Pre-launch sync disabled", synced: 0 });
+      }),
+    );
+
+    const { getByText, queryByText } = await pressPlay();
+    await advance(0);
+    expect(getByText("Preparing...")).toBeInTheDocument();
+
+    await act(async () => {
+      finish();
+    });
+    await advance(0);
+
+    expect(getByText("Launching...")).toBeInTheDocument();
+    expect(queryByText("Syncing saves...")).not.toBeInTheDocument();
+    expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
+  });
+
+  it("a report of another game's pre-launch sync leaves the button on Preparing...", async () => {
+    vi.mocked(backend.preLaunchSync).mockReturnValue(never());
+
+    const { getByText, queryByText } = await pressPlay();
+    await advance(0);
+    expect(hostEventListenerCount("pre_launch_sync_started")).toBe(1);
+    act(() => emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: 43 }));
+
+    expect(getByText("Preparing...")).toBeInTheDocument();
+    expect(queryByText("Syncing saves...")).not.toBeInTheDocument();
+  });
+
+  it("a report that arrives after the pre-launch step answered changes nothing, and nothing listens for it", async () => {
+    let finish!: () => void;
+    vi.mocked(backend.preLaunchSync).mockReturnValue(
+      new Promise((resolve) => {
+        finish = () => resolve({ success: true, message: "", synced: 0 });
+      }),
+    );
+
+    const { getByText, queryByText } = await pressPlay();
+    await advance(0);
+    expect(hostEventListenerCount("pre_launch_sync_started")).toBe(1);
+    await act(async () => {
+      finish();
+    });
+    await advance(0);
+    expect(getByText("Launching...")).toBeInTheDocument();
+
+    expect(hostEventListenerCount("pre_launch_sync_started")).toBe(0);
+    act(() => emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: 42 }));
+    expect(getByText("Launching...")).toBeInTheDocument();
+    expect(queryByText("Syncing saves...")).not.toBeInTheDocument();
   });
 
   describe("a dialog left open past every limit still acts on its answer", () => {
@@ -6007,7 +6083,7 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
     }
   });
 
-  it("renders Checking saves... as the same throbber button, online and offline", async () => {
+  it("renders Preparing... as the same throbber button, online and offline", async () => {
     vi.mocked(backend.isSaveTrackingConfigured).mockReturnValueOnce(new Promise<never>(() => {}));
     mockCachedDetail({ rom_id: 42, installed: true });
     const { container, findByText } = render(<CustomPlayButton appId={100} />);
@@ -6016,10 +6092,10 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
     await act(async () => {
       playBtn.click();
     });
-    expect(container.innerHTML).toBe(throbberMarkup("Checking saves...", false));
+    expect(container.innerHTML).toBe(throbberMarkup("Preparing...", false));
     expect(buttonStyle()).toEqual(THROBBER_BUTTON_STYLE);
     act(() => setRommConnectionState("offline"));
-    expect(container.innerHTML).toBe(throbberMarkup("Checking saves...", true));
+    expect(container.innerHTML).toBe(throbberMarkup("Preparing...", true));
   });
 
   it("renders Syncing saves... and then Launching... as the same throbber button, online and offline", async () => {
@@ -6036,6 +6112,8 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
     await act(async () => {
       playBtn.click();
     });
+    await waitFor(() => expect(backend.preLaunchSync).toHaveBeenCalledWith(42));
+    act(() => emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: 42 }));
     await findByText("Syncing saves...");
     expect(container.innerHTML).toBe(throbberMarkup("Syncing saves...", false));
     expect(buttonStyle()).toEqual(THROBBER_BUTTON_STYLE);

@@ -1973,8 +1973,9 @@ is stated at the skip set in `frontend/src/utils/launchGate.ts`.
 The Play button's path:
 
 1. User presses Play on the game detail page. A game that is already running is brought forward without the check.
-   Otherwise the button switches at once to a disabled "Checking saves..." throbber, so a second press starts no second
-   check; every outcome below leaves that state.
+   Otherwise the button switches at once to a disabled "Preparing..." throbber, so a second press starts no second
+   check; every outcome below leaves that state. The label names no step: the check covers more than saves, and it reads
+   the same whether save sync is on or off.
 2. Migration: a pending RetroDECK migration blocks the start, and the button returns to Play; the page already says why.
 3. Starting source: `check_start_source`. A source switched off blocks the start; where the source could not be checked,
    the user decides, and Cancel ends the press. Whether the game's file starts with its emulator is not a step of the
@@ -1986,15 +1987,22 @@ The Play button's path:
    for a game whose saves no sync carries (`sync_unavailable`), neither: the press goes on with nothing set up.
 5. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
-7. Online: `pre_launch_sync`, with the button on "Syncing saves..." — past its limit, the "Waiting for Save Sync"
-   question above. The backend fetches server saves and runs `do_sync_rom_saves`, which iterates files and dispatches
-   every `compute_sync_action` outcome. If a `Conflict` was returned for any file, the result includes a `conflicts`
-   list, and `actOnGateVerdict` puts each conflict through `LaunchPrompts.resolveConflicts` in turn — `handleConflicts`
-   (see [The modal](#the-modal)): once all are resolved it notifies siblings and goes on; on the first Cancel the button
-   switches to `conflict` and nothing launches. A sync that fails never launches unconditionally: the "Save Sync
-   Unavailable" dialog asks first, and Cancel returns the button to Play. The benign skips (`savefiles_in_content_dir`,
-   `save_shape_unsupported`) proceed silently; a missing saves folder (`saves_root_missing`) is a failure, so the dialog
-   asks with the sentence Main's notice shows for the folder — when it asks, and when the exit's toast says so, is
+7. Online: `pre_launch_sync` — past its limit, the "Waiting for Save Sync" question above. The button turns into
+   "Syncing saves..." only on the backend's `pre_launch_sync_started` event for this ROM, which the sync sends once it
+   has passed "Sync before launch", the refusal of a game whose saves cannot sync and the heartbeat, just before its
+   first request that names the device. With save sync off, "Sync before launch" off or a game whose saves cannot sync,
+   no event comes, and the button goes from "Preparing..." straight to "Launching...". No other sync sends it — not Sync
+   Saves, not Sync All Saves Now, not the sync after a game. The panel listens for it only while its call to
+   `pre_launch_sync` is open, for its own ROM, so an event that arrives after the step answered — Cancel or Play Anyway
+   past the limit included — changes nothing. The backend fetches server saves and runs `do_sync_rom_saves`, which
+   iterates files and dispatches every `compute_sync_action` outcome. If a `Conflict` was returned for any file, the
+   result includes a `conflicts` list, and `actOnGateVerdict` puts each conflict through
+   `LaunchPrompts.resolveConflicts` in turn — `handleConflicts` (see [The modal](#the-modal)): once all are resolved it
+   notifies siblings and goes on; on the first Cancel the button switches to `conflict` and nothing launches. A sync
+   that fails never launches unconditionally: the "Save Sync Unavailable" dialog asks first, and Cancel returns the
+   button to Play. The benign skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently; a missing
+   saves folder (`saves_root_missing`) is a failure, so the dialog asks with the sentence Main's notice shows for the
+   folder — when it asks, and when the exit's toast says so, is
    [The seven save states](save-sync-coverage.md#the-seven-save-states). With "Sync before launch" off the sync answers
    that before it raises the save answer's refusal, so the dialog never asks about a sync that was switched off. When
    the sync moved something, the per-direction completion toast above reports it (uploaded / downloaded / both); a

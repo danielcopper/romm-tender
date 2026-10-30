@@ -17,6 +17,8 @@ import {
   probeReachability,
   stopPreLaunchSync,
 } from "../api/backend";
+import { addEventListener, removeEventListener } from "../api/host";
+import type { PreLaunchSyncStartedEvent } from "../types";
 import { reportServerReachable } from "./connectionState";
 import { detach } from "./detach";
 import { BENIGN_SYNC_SKIP_REASONS, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS, SYNC_WAIT_MORE_MS } from "./launchGate";
@@ -248,7 +250,10 @@ interface LaunchGateOpsOptions extends PreLaunchSyncOptions {
   ensureTrackingConfigured: () => Promise<"proceed" | "abort">;
   confirmCoreChange: (oldLabel: string, newLabel: string) => Promise<boolean>;
   confirmUncheckedStartingSource: () => Promise<boolean>;
-  /** Called as the pre-launch sync starts, for a trigger that shows it. */
+  /**
+   * Called when the backend reports that the pre-launch sync of this ROM began,
+   * for a trigger that shows it; never once the step has answered.
+   */
   onSyncStart?: () => void;
 }
 
@@ -280,14 +285,22 @@ export function makeLaunchGateOps(romId: number, options: LaunchGateOpsOptions):
       reportServerReachable(probe.online);
       return probe.online;
     },
-    preLaunchSync: () => {
+    preLaunchSync: async () => {
+      const onStarted = (event: PreLaunchSyncStartedEvent) => {
+        if (event.rom_id !== romId) return;
+        try {
+          options.onSyncStart?.();
+        } catch (e) {
+          // A throwing trigger hook must not abort or bypass the pre-launch sync.
+          logError(`${tag}: onSyncStart threw: ${e}`);
+        }
+      };
+      addEventListener<PreLaunchSyncStartedEvent>("pre_launch_sync_started", onStarted);
       try {
-        options.onSyncStart?.();
-      } catch (e) {
-        // A throwing trigger hook must not abort or bypass the pre-launch sync.
-        logError(`${tag}: onSyncStart threw: ${e}`);
+        return await runPreLaunchSync(romId, options);
+      } finally {
+        removeEventListener("pre_launch_sync_started", onStarted);
       }
-      return runPreLaunchSync(romId, options);
     },
     checkLocalDrift: async () =>
       (

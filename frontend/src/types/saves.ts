@@ -28,6 +28,11 @@ export interface SyncConflict {
   created_at: string;
 }
 
+/** Payload of the `pre_launch_sync_started` event: the sync before a start of this ROM has begun. */
+export interface PreLaunchSyncStartedEvent {
+  rom_id: number;
+}
+
 export interface DeviceSyncInfo {
   device_id: string;
   device_name: string;

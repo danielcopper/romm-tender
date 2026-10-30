@@ -163,6 +163,7 @@ class SaveService:
                 running_rom_ids=config.running_rom_ids,
                 save_backup=self._save_backup,
                 save_transfer=self._save_transfer,
+                emit=config.emit,
             ),
         )
 

@@ -837,8 +837,8 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 
 ### Waiting
 
-**Every state in which the panel waits on work shows the throbber** — the spinning ring Play shows while it checks saves
-— left of the label that says what is under way; the label keeps its words. One module draws it,
+**Every state in which the panel waits on work shows the throbber** — the spinning ring Play shows while it prepares a
+start — left of the label that says what is under way; the label keeps its words. One module draws it,
 `frontend/src/shared/Throbber.tsx`: `ThrobberLabel` beside a label, which leaves the label a text child of its control
 so that a button's text and accessible name stay the label's alone, and `Throbber` by itself where a place lays it out —
 a loading row, a count slot, a picker's grid. Two places draw the `romm-throbber` span themselves, both on the game

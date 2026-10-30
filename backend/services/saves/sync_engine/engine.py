@@ -101,6 +101,7 @@ if TYPE_CHECKING:
         Clock,
         ComputeSyncActionFn,
         DebugLogger,
+        EventEmitter,
         HostnameReader,
         MachineIdReader,
         MigrationPendingFn,
@@ -143,8 +144,9 @@ class SyncEngineConfig:
     the per-ROM active-core resolver, the hostname and machine-id providers
     passed through to device registration, the update-in-progress and
     migration-pending callbacks its sync backstops and follow ask, the
-    reading of which ROMs' games are running, and the save backup and save
-    transfer the save service built for every peer.
+    reading of which ROMs' games are running, the save backup and save
+    transfer the save service built for every peer, and the event emitter
+    that tells the panel a sync before a start has begun.
     """
 
     settings: dict[str, Any]
@@ -169,6 +171,7 @@ class SyncEngineConfig:
     running_rom_ids: RunningRomIdsFn
     save_backup: SaveBackup
     save_transfer: SaveTransfer
+    emit: EventEmitter
 
 
 class SyncEngine:
@@ -193,6 +196,7 @@ class SyncEngine:
         self._is_update_in_progress = config.is_update_in_progress
         self._is_retrodeck_migration_pending = config.is_retrodeck_migration_pending
         self._build_inventory = config.build_inventory
+        self._emit = config.emit
         # Per-rom lock dict — serializes concurrent sync operations on the
         # same rom_id (pre_launch_sync, post_exit_sync, manual sync, resolve).
         self._rom_sync_locks: dict[int, asyncio.Lock] = {}
@@ -794,6 +798,9 @@ class SyncEngine:
         except (RommConnectionError, RommTimeoutError) as e:
             raise self._server_offline("pre_launch_sync", e) from e
 
+        # Only once every reason not to sync has passed: the panel reads this
+        # event as a sync of the game having begun.
+        await self._emit("pre_launch_sync_started", {"rom_id": rom_id})
         device_id = await self.live_device_id()
 
         uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
