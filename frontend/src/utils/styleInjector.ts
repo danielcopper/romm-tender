@@ -4,9 +4,10 @@
 // not got. styleInjector.test.ts pins the TEXT of one family of those rules —
 // the vanished-version trash, whose colour a component can only reference by
 // class name — and bigpicture/bios/rowStopFocus.test.ts the BIOS row stop's
-// focus rule against the values it copies; nothing else the file injects is
-// pinned: a drift lock on those rules, not coverage of the stylesheet or of
-// its effect.
+// focus rule against the values it copies; styleInjector.test.ts also pins
+// that the throbber's sheet reaches the play row's document. Nothing else the
+// file injects is pinned: a drift lock on those rules, not coverage of the
+// stylesheet or of its effect.
 import { findSP } from "./deckyUiInternals";
 import { ensureThrobberStyle } from "./throbberStyle";
 

@@ -744,8 +744,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
 
   // Chevron menu for the running overlay — the single destructive Stop Game
   // action, mirroring the download-state showDownloadActionsMenu shape. While a
-  // stop is in flight the item is disabled and reads "Stopping..." behind the
-  // throbber, so the seconds of no visible change don't read as a missed press.
+  // stop is in flight the item is disabled and reads "Stopping..." so the
+  // seconds of no visible change don't read as a missed press.
   const showRunningActionsMenu = (e: MouseEvent) => {
     showContextMenu(
       <Menu label="Game Actions">
@@ -1101,12 +1101,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
   // Running overlay (#1313) — top precedence over install/conflict/download. The
   // green Resume button brings the live session to front via `handleResumeGame`;
   // a chevron beside it opens the Stop Game action, which confirms and then has
-  // the backend terminate the emulator; while that stop is in flight the throbber
-  // stands in the chevron's place, as extraction's does, and the button still
-  // opens the menu, whose item says the stop is under way. No Uninstall entry here —
-  // uninstalling a running game is a footgun. On a stranded panel the chevron
-  // goes: Stop Game is its only entry, and it could only say that it cannot stop
-  // the game.
+  // the backend terminate the emulator. While that stop is in flight the chevron
+  // is not disabled, unlike extraction's: its menu must still open on the item
+  // that says the stop is under way (docs/architecture/qam-panel.md, "Waiting").
+  // No Uninstall entry here — uninstalling a running game is a footgun. On a
+  // stranded panel the chevron goes: Stop Game is its only entry, and it could
+  // only say that it cannot stop the game.
   if (isRunning) {
     return (
       <Focusable

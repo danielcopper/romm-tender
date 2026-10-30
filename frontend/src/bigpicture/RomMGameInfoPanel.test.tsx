@@ -4141,7 +4141,7 @@ describe("RomMGameInfoPanel", () => {
   });
 
   describe("biosStatusFromCache + saveStatusFromCache (cache-first rendering)", () => {
-    it("biosStatusFromCache(null) yields no biosStatus → the BIOS tab shows Steam's spinner and Checking…", async () => {
+    it("biosStatusFromCache(null) yields no biosStatus → the BIOS tab shows the throbber and Checking…", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1,

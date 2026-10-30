@@ -72,7 +72,7 @@ describe("BiosTab", () => {
     );
   });
 
-  it("shows its heading and Checking… behind Steam's spinner while no answer is held", () => {
+  it("shows its heading and Checking… behind the throbber while no answer is held", () => {
     const { container, getByTestId } = render(
       <BiosTabWithState biosStatus={null} biosLevel={null} coreInfo={coreInfo} />,
     );

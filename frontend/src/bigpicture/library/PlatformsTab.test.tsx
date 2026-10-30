@@ -652,7 +652,7 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("Checking what this platform needs…");
     });
 
-    it("puts Steam's spinner beside the line that says the answer is still out", async () => {
+    it("puts the throbber beside the line that says the answer is still out", async () => {
       mockFirmware([firmwarePlatform()]);
       const pending = deferredPlatformReads();
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -5908,7 +5908,7 @@ describe("Library › Platforms", () => {
       });
     });
 
-    it("puts the throbber beside the removal's status line and its count while they run, and none beside the result", async () => {
+    it("puts the throbber beside the removal's count alone while it runs, never beside its status line", async () => {
       let releaseClear: () => void = () => {};
       vi.mocked(clearPlatformCollection).mockImplementation(
         () =>
@@ -5927,8 +5927,9 @@ describe("Library › Platforms", () => {
 
       const waiting = within(container).getByTestId("status-remove");
       expect(waiting.textContent).toBe("Removing Game Boy Advance shortcuts…");
-      expect(throbberIn(waiting)).not.toBeNull();
+      expect(throbberIn(waiting)).toBeNull();
       expect(throbberIn(lineWithText(container, "Removing 2 of 2…"))).not.toBeNull();
+      expect(container.querySelectorAll('[data-testid="spinner"]')).toHaveLength(1);
 
       await act(async () => {
         releaseClear();

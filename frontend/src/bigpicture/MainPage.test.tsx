@@ -694,7 +694,7 @@ describe("MainPage", () => {
   // D. ConnectionIndicator — 5 states (covered via top-level rendering)
   // ===========================================================================
   describe("ConnectionIndicator", () => {
-    it("connected=null (testConnection never resolves) renders 'Checking...' + Spinner", async () => {
+    it("connected=null (testConnection never resolves) renders 'Checking...' + the throbber", async () => {
       vi.mocked(backend.testConnection).mockImplementation(
         () =>
           new Promise(() => {

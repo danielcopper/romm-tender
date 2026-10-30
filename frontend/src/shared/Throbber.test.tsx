@@ -22,8 +22,8 @@ describe("Throbber", () => {
   });
 
   it("brings its stylesheet into the document it is drawn in, not the one the code runs in", () => {
-    // The panel's code runs in one document while the Quick Access view, the
-    // game page and a modal each draw into their own.
+    // The panel's code runs in a different document from the ones it draws
+    // into — the Quick Access view's, Steam's game page's.
     const other = document.implementation.createHTMLDocument("quick access");
     const container = other.createElement("div");
     other.body.appendChild(container);

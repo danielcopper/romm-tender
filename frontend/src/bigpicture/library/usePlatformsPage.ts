@@ -707,7 +707,8 @@ export function usePlatformsPage(): PlatformsPageState {
   const removeShortcuts = useCallback(
     (row: PlatformRow) => {
       setBusySlug(row.slug);
-      setStatus({ slug: row.slug, scope: "remove", text: `Removing ${row.name} shortcuts…`, busy: true });
+      // Not busy: the count line under it carries this run's throbber (docs/architecture/qam-panel.md, "Waiting").
+      setStatus({ slug: row.slug, scope: "remove", text: `Removing ${row.name} shortcuts…` });
       const admission = capturePruneLeaseAdmission(LEASE_OWNER);
       detach(
         (async () => {

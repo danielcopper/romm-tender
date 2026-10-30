@@ -10,7 +10,7 @@ vi.mock("@decky/ui", () => {
   };
 });
 
-describe("LoadingRow (#1414)", () => {
+describe("LoadingRow", () => {
   it("renders a spinner constrained to the fixed LOADING_SPINNER_SIZE", () => {
     const { getByTestId } = render(<LoadingRow />);
     const spinner = getByTestId("spinner");
@@ -18,7 +18,7 @@ describe("LoadingRow (#1414)", () => {
     expect(spinner.style.height).toBe(`${LOADING_SPINNER_SIZE}px`);
   });
 
-  it("pins a small size, so every section's loading row draws the throbber alike", () => {
+  it("keeps the loading row's throbber within 32px", () => {
     expect(LOADING_SPINNER_SIZE).toBeGreaterThan(0);
     expect(LOADING_SPINNER_SIZE).toBeLessThanOrEqual(32);
   });

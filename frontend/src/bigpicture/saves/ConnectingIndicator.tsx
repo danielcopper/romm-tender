@@ -21,7 +21,7 @@ export const ConnectingIndicator: FC<ConnectingIndicatorProps> = ({ label = "Con
   const text = progress ? `${label}… (attempt ${progress.attempt}/${progress.maxAttempts})` : `${label}…`;
   return (
     <div className="romm-connecting" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 0" }}>
-      <Throbber size="14px" />
+      <Throbber size="18px" />
       <span style={{ fontSize: "13px", color: MUTED_COLOR }}>{text}</span>
     </div>
   );

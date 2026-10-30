@@ -378,7 +378,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
       style={switching ? { opacity: 0.55 } : {}}
     >
       <FaLayerGroup size={20} color={offDefault ? ACTIVE_ACCENT : NEUTRAL_GREY} />
-      {switching ? <Throbber size="14px" /> : <FaChevronDown size={10} color="#cfd3d8" />}
+      {switching ? <Throbber size="18px" /> : <FaChevronDown size={10} color="#cfd3d8" />}
     </DialogButton>
   );
 };

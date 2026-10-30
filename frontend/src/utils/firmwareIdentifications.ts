@@ -4,7 +4,7 @@
  *
  * The question is slow for each file (`identify_firmware`), so it is asked one
  * file at a time, and each row reads "Checking…" until its
- * answer arrives; only the row whose question is out shows the throbber. An answer is kept by MD5 for the page that asked, at most
+ * answer arrives. An answer is kept by MD5 for the page that asked, at most
  * thirty minutes, and forgotten when that page is left; the questions still out
  * then are not asked. The answer only labels a row: it decides no verdict and no
  * badge.
@@ -40,7 +40,7 @@ function heldAnswer(md5: string, now: number): Identification | undefined {
 
 export interface Identifications {
   answers: Record<string, Identification>;
-  /** The checksum whose question is out right now, or `null` between and after them. */
+  /** The checksum whose question is out right now, or `null` while none is. */
   asking: string | null;
 }
 

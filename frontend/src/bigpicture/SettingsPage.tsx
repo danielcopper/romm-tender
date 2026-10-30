@@ -532,7 +532,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     // device.
     if (applyingSteamInput) return;
     setApplyingSteamInput(true);
-    // The button carries the wait; this line holds only what the run answered.
     setSteamInputStatus("");
     try {
       const result = await applySteamInputSetting();
