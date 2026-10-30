@@ -180,7 +180,6 @@ describe("launchInterceptor — full funnel watcher", () => {
       system: "snes",
       platform_slug: "snes",
       installed_at: "2026-01-01T00:00:00Z",
-      launchable: true,
     });
     // Default: the source games start through is switched on.
     vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
@@ -577,7 +576,6 @@ describe("launchInterceptor — full funnel watcher", () => {
           system: "snes",
           platform_slug: "snes",
           installed_at: "2026-01-01T00:00:00Z",
-          launchable: true,
         });
         await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
 
@@ -1330,21 +1328,6 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(runGameMock()).not.toHaveBeenCalled();
     });
 
-    it("no_launch_target block → explains the download was kept, no relaunch", async () => {
-      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "block", reason: "no_launch_target" });
-
-      register();
-      const handler = captureHandler();
-      handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
-      await flush();
-
-      expect(toaster.toast).toHaveBeenCalledWith({
-        title: "Tender",
-        body: "This download has no file the emulator can launch. The files are on disk — see the game page.",
-      });
-      expect(runGameMock()).not.toHaveBeenCalled();
-    });
-
     it("source_switched_off block → says why, no relaunch", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({
         decision: "block",
@@ -1845,12 +1828,6 @@ describe("launchInterceptor — full funnel watcher", () => {
       };
 
       it.each([
-        {
-          call: "get_installed_rom",
-          limit: 5000,
-          op: "hasLaunchTarget",
-          arrange: () => vi.mocked(backend.getInstalledRom).mockReturnValue(never()),
-        },
         {
           call: "is_save_tracking_configured",
           limit: 5000,

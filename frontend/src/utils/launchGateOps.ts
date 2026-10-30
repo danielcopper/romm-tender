@@ -22,7 +22,6 @@ import { detach } from "./detach";
 import { BENIGN_SYNC_SKIP_REASONS, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS, SYNC_WAIT_MORE_MS } from "./launchGate";
 import type { LaunchGateOps, PreLaunchSyncAnswer, PreLaunchSyncOutcome, SyncWaitReason } from "./launchGate";
 import type { LaunchPrompts } from "./launchVerdict";
-import { romHasLaunchTarget } from "./launchTarget";
 import { confirmCoreChangeIfNeeded } from "./coreChange";
 import { getMigrationState } from "./migrationStore";
 import { readStartingSource } from "./startingSource";
@@ -265,7 +264,6 @@ export function makeLaunchGateOps(romId: number, options: LaunchGateOpsOptions):
   const { tag } = options;
   return {
     migrationPending: () => getMigrationState().pending,
-    hasLaunchTarget: () => romHasLaunchTarget(romId, tag),
     readStartingSource: () => readStartingSource(tag),
     confirmUncheckedStartingSource: options.confirmUncheckedStartingSource,
     ensureTrackingConfigured: options.ensureTrackingConfigured,

@@ -10,7 +10,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import { getAchievementProgress, debugLog } from "../api/backend";
 import { getBiosStatusShared, getPlatformCoreInfoShared } from "../api/sharedReads";
+import { detach } from "./detach";
+import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { extractBiosInfo, extractCoreInfo, type BiosInfoFields, type CoreInfoFields } from "./playSection";
+import { withTimeout } from "./withTimeout";
 
 interface AchievementFields {
   achievementEarned: number;
@@ -47,13 +50,17 @@ export function refreshBiosInBackground<S extends BiosInfoFields>(
  *  active core reflects a per-game DB override (epic #945) when one is pinned.
  *
  *  Shared with the info panel's load, which reads the same ROM's core info on
- *  the same page open — see `api/sharedReads.ts`. */
+ *  the same page open — see `api/sharedReads.ts`. The read is the page's check
+ *  of whether the game can start (#2195 D32), so one that gets no answer within
+ *  {@link LOCAL_CALL_LIMIT_MS} counts as failed; `onFailure` hears a failed
+ *  read, unless the caller cancelled it. */
 export function refreshCoreInfoInBackground<S extends CoreInfoFields>(
   romId: number,
   cancelled: () => boolean,
   setter: Dispatch<SetStateAction<S>>,
+  onFailure?: (e: unknown) => void,
 ): void {
-  getPlatformCoreInfoShared(romId)
+  withTimeout(getPlatformCoreInfoShared(romId), LOCAL_CALL_LIMIT_MS)
     .then((coreInfo) => {
       if (!cancelled()) {
         setter((prev) => ({
@@ -62,7 +69,10 @@ export function refreshCoreInfoInBackground<S extends CoreInfoFields>(
         }));
       }
     })
-    .catch((e) => debugLog(`Background core info fetch error: ${e}`));
+    .catch((e: unknown) => {
+      detach(debugLog(`Background core info fetch error: ${e}`));
+      if (!cancelled()) onFailure?.(e);
+    });
 }
 
 export function refreshAchievementsInBackground<S extends AchievementFields>(

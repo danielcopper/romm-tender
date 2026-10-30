@@ -17,6 +17,7 @@ import {
   startRefused,
   vanishedPickSentence,
 } from "./emulatorStart";
+import { coreInfo } from "../test-utils/coreFixtures";
 
 function start(overrides: Partial<EmulatorStart>): EmulatorStart {
   return { state: "starts", reason: null, entry: "mGBA", folder_entry: null, ...overrides };
@@ -224,5 +225,31 @@ describe("a start's own read of the emulator", () => {
   it("refuses nothing where the read fails", async () => {
     vi.mocked(getPlatformCoreInfo).mockRejectedValue(new Error("down"));
     expect(await emulatorRefusalForRom(7, "test")).toBeNull();
+  });
+
+  it("refuses with the file's own sentence where the emulator starts but the file does not (#2195 D2)", async () => {
+    vi.mocked(getPlatformCoreInfo).mockResolvedValue(
+      coreInfo({
+        start: start({ entry: "Flycast" }),
+        emulators: [row("Flycast")],
+        active_core_label: "Flycast",
+        launch: {
+          state: "not_a_launch_file",
+          entry: "Flycast",
+          system: "dreamcast",
+          file: "track03.bin",
+          extension: ".bin",
+          starts_from: [".cue", ".gdi"],
+          other_entries: [],
+          install_in: null,
+          reason: null,
+          contents_unread: false,
+          format_unestablished: false,
+        },
+      }),
+    );
+    expect(await emulatorRefusalForRom(7, "test")).toBe(
+      "track03.bin is not the file dreamcast starts from; it starts from .cue, .gdi.",
+    );
   });
 });

@@ -14,6 +14,7 @@ import type {
   EmulatorDataReason,
   EmulatorOption,
   EmulatorStart,
+  GameLaunch,
   PlatformSystemAnswer,
   SaveStatus,
   SaveSyncDisplay,
@@ -42,6 +43,14 @@ export interface BiosInfoFields {
   biosRequiredMissing: boolean;
 }
 
+/**
+ * The page's check of whether the game can start — the core read that carries
+ * the emulator's refusal and the file's launchability (#2195 D32): `checking`
+ * while it runs, `answered` once it landed, `failed` where the read itself
+ * failed or got no answer in time, `why` saying what went wrong.
+ */
+export type StartCheck = { state: "checking" } | { state: "answered" } | { state: "failed"; why: string };
+
 /** Core-selection fields for the play-section row, derived from the dedicated
  *  `get_platform_core_info` path (#923), decoupled from BIOS status. */
 export interface CoreInfoFields {
@@ -57,6 +66,10 @@ export interface CoreInfoFields {
   hasGameOverride: boolean;
   /** What starting with the game's entry comes to, and a stored pick whose label no longer exists. */
   emulatorStart: EmulatorStart | null;
+  /** Whether the installed game's file starts with that emulator (#2195 D2); absent reads as nothing asked. */
+  gameLaunch?: GameLaunch | null;
+  /** Where the page's check stands; absent reads as answered. */
+  startCheck?: StartCheck;
   vanishedPick: VanishedPick | null;
 }
 
@@ -144,6 +157,8 @@ export function extractCoreInfo(coreInfo: CoreInfo): CoreInfoFields {
     platformCoreLabel: coreInfo.platform_core_label ?? null,
     hasGameOverride: coreInfo.has_game_override,
     emulatorStart: coreInfo.start,
+    gameLaunch: coreInfo.launch,
+    startCheck: { state: "answered" },
     vanishedPick: coreInfo.vanished_pick,
   };
 }

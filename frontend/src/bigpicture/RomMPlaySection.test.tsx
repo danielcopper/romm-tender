@@ -30,7 +30,14 @@ import {
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
-import type { AnsweringSource, DownloadCompleteEvent, EmulatorDataReason, SaveStatus, SyncProgress } from "../types";
+import type {
+  AnsweringSource,
+  DownloadCompleteEvent,
+  EmulatorDataReason,
+  GameLaunch,
+  SaveStatus,
+  SyncProgress,
+} from "../types";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { stubAppStore } from "../test-utils/steamStubs";
 import * as cachedStore from "../utils/cachedGameDetailStore";
@@ -694,6 +701,7 @@ describe("RomMPlaySection", () => {
       // of the BIOS refresh.
       expect(sectionRefresh.refreshCoreInfoInBackground).toHaveBeenCalledWith(
         99,
+        expect.any(Function),
         expect.any(Function),
         expect.any(Function),
       );
@@ -5224,6 +5232,136 @@ describe("RomMPlaySection", () => {
       // The row is there, so the absence is the note's own.
       expect(container.querySelector('[title="Emulator Core"]')).not.toBeNull();
       expect(container.textContent).not.toContain("could not be established");
+    });
+  });
+
+  describe("whether the game's file starts with its emulator (#2195 D2, D22)", () => {
+    const LAUNCH: GameLaunch = {
+      state: "starts",
+      entry: "RPCS3 Directory (Standalone)",
+      system: "ps3",
+      file: "Puppeteer.pkg",
+      extension: ".pkg",
+      starts_from: [],
+      other_entries: [],
+      install_in: null,
+      reason: null,
+      contents_unread: false,
+      format_unestablished: false,
+    };
+    const TWO = [standaloneEmu("RPCS3 Shortcut (Standalone)", true), standaloneEmu("RPCS3 Directory (Standalone)")];
+
+    async function mountWith(fields: Partial<ReturnType<typeof playSectionUtils.extractCoreInfo>>, installed = true) {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 61,
+        installed,
+        platform_slug: "ps3",
+        rom_file: "game",
+      });
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFixture({}));
+      vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue({
+        activeCoreLabel: "RPCS3 Directory (Standalone)",
+        activeCoreIsDefault: false,
+        emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
+        emulators: TWO,
+        platformCoreLabel: null,
+        hasGameOverride: true,
+        emulatorStart: { state: "starts", reason: null, entry: "RPCS3 Directory (Standalone)", folder_entry: null },
+        vanishedPick: null,
+        ...fields,
+      });
+      const view = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      return view;
+    }
+
+    it("a verdict that refuses the start disables Play with its sentence under the row", async () => {
+      const { container } = await mountWith({
+        gameLaunch: { ...LAUNCH, state: "needs_installing", install_in: ["RPCS3 Game Serial (Standalone)"] },
+      });
+      const sentence = "This game has to be installed in RPCS3 Game Serial (Standalone) first.";
+
+      const refusal = container.querySelector<HTMLElement>('.romm-play-section-row [data-testid="emulator-refusal"]');
+      expect(refusal?.textContent).toBe(sentence);
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBe(sentence);
+      expect(container.querySelector('[data-testid="start-note"]')).toBeNull();
+    });
+
+    it("the emulator's own refusal is said before the file's", async () => {
+      const { container } = await mountWith({
+        emulatorStart: {
+          state: "cannot_start",
+          reason: "not_installed",
+          entry: "RPCS3 Directory (Standalone)",
+          folder_entry: null,
+        },
+        gameLaunch: { ...LAUNCH, state: "needs_installing", install_in: [] },
+      });
+
+      const refusal = container.querySelector<HTMLElement>('[data-testid="emulator-refusal"]');
+      expect(refusal?.textContent).toContain("RPCS3 Directory (Standalone) is not installed");
+      expect(container.textContent).not.toContain("This game has to be installed first.");
+    });
+
+    it("a verdict not established leaves Play on and says why under the row", async () => {
+      const { container } = await mountWith({
+        gameLaunch: { ...LAUNCH, state: "not_established", reason: "no_source" },
+      });
+
+      const note = container.querySelector<HTMLElement>('.romm-play-section-row [data-testid="start-note"]');
+      expect(note?.textContent).toBe("Whether Puppeteer.pkg starts cannot be established: no emulator source answers.");
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
+    });
+
+    it("tells Play while the page's check still runs (#2195 D32)", async () => {
+      await mountWith({ startCheck: { state: "checking" } });
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.startChecking).toBe(true);
+    });
+
+    it("where the check itself went wrong, writes nothing below Play and leaves it pressable (#2195 D33)", async () => {
+      const { container } = await mountWith({
+        startCheck: { state: "failed", why: "Tender could not check whether this game can start: boom." },
+        gameLaunch: { ...LAUNCH, state: "needs_installing", install_in: [] },
+      });
+
+      expect(container.querySelector('[data-testid="emulator-refusal"]')).toBeNull();
+      expect(container.querySelector('[data-testid="start-note"]')).toBeNull();
+      const play = capturedPlayButton[capturedPlayButton.length - 1]!;
+      expect(play.startCheckFailed).toBe(true);
+      expect(play.emulatorRefusal).toBeNull();
+      expect(play.startChecking).toBe(false);
+    });
+
+    it("tells Play the check no longer runs once it answered (#2195 D32)", async () => {
+      await mountWith({ startCheck: { state: "answered" } });
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.startChecking).toBe(false);
+    });
+
+    it("the emulator menu of an installed game asks, as it opens, whether each entry can start it", async () => {
+      vi.mocked(backend.getEmulatorLaunches).mockResolvedValue([]);
+      const { container } = await mountWith({});
+
+      act(() => {
+        container.querySelector<HTMLButtonElement>('button[title="Emulator Core"]')!.click();
+      });
+
+      expect(vi.mocked(backend.getEmulatorLaunches)).toHaveBeenCalledWith(61);
+      expect(lastContextMenuElement()).not.toBeNull();
+    });
+
+    it("the emulator menu of a game that is not installed asks nothing", async () => {
+      vi.mocked(backend.getEmulatorLaunches).mockClear();
+      const { container } = await mountWith({}, false);
+
+      act(() => {
+        container.querySelector<HTMLButtonElement>('button[title="Emulator Core"]')!.click();
+      });
+
+      expect(vi.mocked(backend.getEmulatorLaunches)).not.toHaveBeenCalled();
     });
   });
 

@@ -14,12 +14,14 @@
  * default, is marked so.
  */
 
-import type { ReactNode } from "react";
-import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
+import { useSyncExternalStore, type FC, type ReactNode } from "react";
+import { Menu, MenuItem, MenuSeparator, Spinner } from "@decky/ui";
 import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 import { entryForLabel } from "./emulatorEntries";
 import { notEstablishedNote } from "./emulatorInstallation";
+import type { EntryLaunches } from "./emulatorLaunches";
+import { entryLaunchLine } from "./gameLaunch";
 
 /** Map a backend un-bakeable reason slug to short menu copy. */
 export function reasonCopy(reason: string | null): string {
@@ -66,7 +68,30 @@ export interface EmulatorMenuConfig {
   followSystem?: { hasGameOverride: boolean; onFollowSystem: () => void };
   /** Called with the chosen entry's LABEL — what a pick stores — when a bakeable entry is chosen. */
   onPick: (label: string) => void;
+  /**
+   * Game-detail only, for an installed game: whether each entry can start it,
+   * as the answers land (#2195 D22, D31). Each entry shows a spinner until its
+   * answer is in, and stays choosable meanwhile.
+   */
+  launches?: EntryLaunches | undefined;
 }
+
+/** @decky/ui's Spinner fills its container unless sized; this is the size of a line of menu text beside it. */
+const ENTRY_SPINNER_SIZE = 14;
+
+/** The line under an entry saying whether it can start the game: a spinner until the answer lands, then its words. */
+const EntryLaunchLine: FC<{ launches: EntryLaunches; label: string }> = ({ launches, label }) => {
+  const launch = useSyncExternalStore(launches.subscribe, () => launches.forLabel(label));
+  if (launch === undefined) {
+    return (
+      <div>
+        <Spinner width={ENTRY_SPINNER_SIZE} height={ENTRY_SPINNER_SIZE} />
+      </div>
+    );
+  }
+  if (launch === null) return null;
+  return <div style={{ fontSize: "12px", opacity: 0.7 }}>{entryLaunchLine(launch)}</div>;
+};
 
 /**
  * The entry text: its label plus the markers saying what it is. "(default)" is
@@ -90,6 +115,16 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     config;
   const entryText = (text: string, isActive: boolean): ReactNode =>
     isActive ? <span style={{ color: activeColor }}>{text}</span> : text;
+  const { launches } = config;
+  const withLaunch = (text: ReactNode, label: string): ReactNode =>
+    launches === undefined ? (
+      text
+    ) : (
+      <div>
+        <div>{text}</div>
+        <EntryLaunchLine launches={launches} label={label} />
+      </div>
+    );
 
   if (!emulatorDataAvailable) {
     return (
@@ -139,7 +174,10 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     if (!e.bakeable) {
       children.push(
         <MenuItem key={key} disabled={true}>
-          {entryText(`${emulatorEntryLabel(e, isActive, isPlatformCore)} — ${reasonCopy(e.reason)}`, isActive)}
+          {withLaunch(
+            entryText(`${emulatorEntryLabel(e, isActive, isPlatformCore)} — ${reasonCopy(e.reason)}`, isActive),
+            e.label,
+          )}
         </MenuItem>,
       );
       continue;
@@ -148,7 +186,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     const noteSuffix = note === null ? "" : ` — ${note}`;
     children.push(
       <MenuItem key={key} onClick={() => onPick(e.label)}>
-        {entryText(`${emulatorEntryLabel(e, isActive, isPlatformCore)}${noteSuffix}`, isActive)}
+        {withLaunch(entryText(`${emulatorEntryLabel(e, isActive, isPlatformCore)}${noteSuffix}`, isActive), e.label)}
       </MenuItem>,
     );
   }

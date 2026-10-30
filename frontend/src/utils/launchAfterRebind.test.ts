@@ -77,7 +77,6 @@ const installRecord = (romId: number) => ({
   system: "snes",
   platform_slug: "snes",
   installed_at: "2026-01-01T00:00:00Z",
-  launchable: true,
 });
 
 const flush = () => new Promise<void>((r) => setTimeout(r, 0));

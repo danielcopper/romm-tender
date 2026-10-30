@@ -6,8 +6,9 @@
  */
 
 import { getPlatformCoreInfo, logError } from "../api/backend";
-import type { EmulatorOption, EmulatorStart, SourceDefault, VanishedPick } from "../types";
+import type { CoreInfo, EmulatorOption, EmulatorStart, SourceDefault, VanishedPick } from "../types";
 import { notEstablishedCause } from "./emulatorInstallation";
+import { launchRefusal } from "./gameLaunch";
 import { sourceName } from "./emulatorSourceWording";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
@@ -102,16 +103,21 @@ export function frontendChoiceSentence(
   return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.`;
 }
 
+/** Why a game cannot start, from its core read: its emulator's refusal first, then its file's (#2195 D2), or `null`. */
+export function gameStartRefusal(info: CoreInfo): string | null {
+  const canPick = gameCanPickAnother(info.emulators, info.active_core_label);
+  return emulatorStartRefusal(info.start, "this game", canPick) ?? launchRefusal(info.launch ?? null, canPick);
+}
+
 /**
- * Why the ROM `romId` cannot start with its emulator, read fresh for Steam's
- * own Play on the shortcut, or `null`.
- * A read that fails or gets no answer in time refuses nothing: a check of this
- * kind never traps a game.
+ * Why the ROM `romId` cannot start — with its emulator, or its file with that
+ * emulator (#2195 D2) — read fresh for Steam's own Play on the shortcut, or
+ * `null`. A read that fails or gets no answer in time refuses nothing: a check
+ * of this kind never traps a game.
  */
 export async function emulatorRefusalForRom(romId: number, context: string): Promise<string | null> {
   try {
-    const info = await withTimeout(getPlatformCoreInfo(romId), LOCAL_CALL_LIMIT_MS);
-    return emulatorStartRefusal(info.start, "this game", gameCanPickAnother(info.emulators, info.active_core_label));
+    return gameStartRefusal(await withTimeout(getPlatformCoreInfo(romId), LOCAL_CALL_LIMIT_MS));
   } catch (e) {
     logError(`${context}: emulator check failed (allowing launch): ${e}`);
     return null;

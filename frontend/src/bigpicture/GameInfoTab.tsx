@@ -96,18 +96,7 @@ function gameInfoRows(props: GameInfoTabProps): ReactElement[] {
 /** The ROM File section — present only once the ROM is on disk. */
 function romFileSection(installed: boolean, installedRom: InstalledRom | null): ReactElement | null {
   if (!installed || !installedRom) return null;
-
-  // A downloaded ROM the system cannot launch keeps its files and its row; only
-  // the shortcut's launch command is withheld. This is the one place that says
-  // so — without it the game simply never starts and nothing explains why.
-  const noLaunchTargetNote = installedRom.launchable ? null : (
-    <div key="no-launch-target" className="romm-panel-muted" style={{ marginTop: "4px" }}>
-      {`Downloaded, but nothing here is a format ${installedRom.system} can launch — no launch ` +
-        `command was set. The files are on disk; install them in the emulator to play.`}
-    </div>
-  );
-
-  return section("rom-file", "ROM File", infoRow("filename", "Filename", installedRom.file_name), noLaunchTargetNote);
+  return section("rom-file", "ROM File", infoRow("filename", "Filename", installedRom.file_name));
 }
 
 /** The cover Steam shows — the first of its URLs that loads — else RomM's cover. */

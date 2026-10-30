@@ -43,7 +43,6 @@ function makeOps(overrides: Partial<LaunchGateOps> = {}): LaunchGateOps {
   const okSync: PreLaunchSyncOutcome = { success: true, message: "" };
   return {
     migrationPending: vi.fn(() => false),
-    hasLaunchTarget: vi.fn(async () => true),
     readStartingSource: vi.fn(async (): Promise<StartingSourceAnswer> => ({ checked: true, switchedOff: null })),
     confirmUncheckedStartingSource: vi.fn(async () => true),
     ensureTrackingConfigured: vi.fn(async (): Promise<"proceed" | "abort"> => "proceed"),
@@ -63,22 +62,8 @@ describe("runLaunchGate — verdict branches", () => {
       reason: "migration_pending",
     });
     // Later steps must not run once migration blocks.
-    expect(ops.hasLaunchTarget).not.toHaveBeenCalled();
+    expect(ops.readStartingSource).not.toHaveBeenCalled();
     expect(ops.ensureTrackingConfigured).not.toHaveBeenCalled();
-    expect(ops.checkReachability).not.toHaveBeenCalled();
-  });
-
-  it("blocks with no_launch_target when the ROM has no launch target", async () => {
-    const ops = makeOps({ hasLaunchTarget: vi.fn(async () => false) });
-    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({
-      decision: "block",
-      reason: "no_launch_target",
-    });
-    // The save-sync work must not run: there is no session for a synced save to
-    // belong to, and a pre-launch upload before a launch that never happens is
-    // pure risk.
-    expect(ops.ensureTrackingConfigured).not.toHaveBeenCalled();
-    expect(ops.preLaunchSync).not.toHaveBeenCalled();
     expect(ops.checkReachability).not.toHaveBeenCalled();
   });
 
@@ -100,12 +85,6 @@ describe("runLaunchGate — verdict branches", () => {
     expect(ops.checkReachability).not.toHaveBeenCalled();
     expect(ops.preLaunchSync).not.toHaveBeenCalled();
     expect(ops.checkLocalDrift).not.toHaveBeenCalled();
-  });
-
-  it("does not ask about the source for a ROM with no launch target", async () => {
-    const ops = makeOps({ hasLaunchTarget: vi.fn(async () => false) });
-    await runLaunchGate(100, 42, ops);
-    expect(ops.readStartingSource).not.toHaveBeenCalled();
   });
 
   it("proceeds past the source step while the source is switched on", async () => {
@@ -138,13 +117,6 @@ describe("runLaunchGate — verdict branches", () => {
     const ops = makeOps();
     await runLaunchGate(100, 42, ops);
     expect(ops.confirmUncheckedStartingSource).not.toHaveBeenCalled();
-  });
-
-  it("proceeds past the launch-target step when the ROM has one", async () => {
-    const ops = makeOps({ hasLaunchTarget: vi.fn(async () => true) });
-    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "allow" });
-    expect(ops.hasLaunchTarget).toHaveBeenCalled();
-    expect(ops.ensureTrackingConfigured).toHaveBeenCalled();
   });
 
   it("aborts when tracking setup returns abort", async () => {
@@ -256,7 +228,6 @@ describe("runLaunchGate — a step that gets no answer in time", () => {
   };
 
   it.each([
-    ["the launch-target read", { hasLaunchTarget: noAnswer }],
     ["the tracking setup", { ensureTrackingConfigured: noAnswer }],
     ["the core-change check", { checkCoreChange: noAnswer }],
     ["the reachability probe", { checkReachability: noAnswer }],

@@ -19,6 +19,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { cleanup, render, waitFor, act, within } from "@testing-library/react";
 import { recheckStranded, toaster } from "../api/host";
+import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
 import { showContextMenu, showModal, Navigation } from "@decky/ui";
 import * as deckyUi from "@decky/ui";
 import type { ReactElement } from "react";
@@ -324,6 +325,35 @@ describe("CustomPlayButton — an emulator that cannot start the game (#2195 D7)
     const { findByText } = render(<CustomPlayButton appId={100} emulatorRefusal={null} />);
 
     expect((await findByText("Play")).closest("button")!.disabled).toBe(false);
+  });
+});
+
+describe("CustomPlayButton — while the page checks whether the game can start (#2195 D32)", () => {
+  beforeEach(() => {
+    vi.mocked(getCachedGameDetail).mockReset();
+  });
+
+  it("is grey, cannot be pressed and spins", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { findByText, getByTestId } = render(<CustomPlayButton appId={100} startChecking={true} />);
+    const play = (await findByText("Play")).closest("button")!;
+
+    expect(play.disabled).toBe(true);
+    expect(play.className).toContain("romm-start-checking");
+    expect(play.contains(getByTestId("spinner"))).toBe(true);
+  });
+
+  it("becomes Play once the check answered", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { findByText, rerender, queryByTestId } = render(<CustomPlayButton appId={100} startChecking={true} />);
+    await findByText("Play");
+
+    rerender(<CustomPlayButton appId={100} startChecking={false} />);
+    const play = (await findByText("Play")).closest("button")!;
+
+    expect(play.disabled).toBe(false);
+    expect(play.className).not.toContain("romm-start-checking");
+    expect(queryByTestId("spinner")).toBeNull();
   });
 });
 
@@ -2400,6 +2430,91 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     return result;
   }
 
+  describe("after the page's check itself went wrong (#2195 D33)", () => {
+    async function pressFailedCheckPlay(): Promise<ReturnType<typeof render>> {
+      mockCachedDetail();
+      const result = render(<CustomPlayButton appId={100} startCheckFailed={true} />);
+      const playBtn = await result.findByText("Play");
+      await act(async () => {
+        playBtn.click();
+        for (let index = 0; index < 8; index++) await Promise.resolve();
+      });
+      return result;
+    }
+
+    it("Play is grey but can be pressed", async () => {
+      mockCachedDetail();
+      const { findByText, queryByTestId } = render(<CustomPlayButton appId={100} startCheckFailed={true} />);
+      const play = (await findByText("Play")).closest("button")!;
+
+      expect(play.disabled).toBe(false);
+      expect(play.className).toContain("romm-start-check-failed");
+      expect(queryByTestId("spinner")).toBeNull();
+    });
+
+    it("a press asks again, and says what stands in the way instead of starting", async () => {
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+        coreInfoFixture({
+          start: { state: "starts", reason: null, entry: "RPCS3 Directory (Standalone)", folder_entry: null },
+          launch: {
+            state: "needs_installing",
+            entry: "RPCS3 Directory (Standalone)",
+            system: "ps3",
+            file: "Puppeteer.pkg",
+            extension: ".pkg",
+            starts_from: [],
+            other_entries: [],
+            install_in: [],
+            reason: null,
+            contents_unread: false,
+            format_unestablished: false,
+          },
+        }),
+      );
+
+      const { findByText } = await pressFailedCheckPlay();
+
+      await waitFor(() =>
+        expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "This game has to be installed first." }),
+      );
+      expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+      expect(await findByText("Play")).toBeInTheDocument();
+    });
+
+    it("a press whose second ask fails too goes ahead, and a start that succeeds is left alone", async () => {
+      vi.mocked(backend.getPlatformCoreInfo).mockRejectedValue(new Error("still down"));
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+
+      await pressFailedCheckPlay();
+
+      await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
+      expect(toaster.toast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining("could not start") }),
+      );
+    });
+
+    it("a start that throws says what went wrong", async () => {
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFixture());
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+      vi.stubGlobal("SteamClient", {
+        Apps: {
+          RunGame: vi.fn(() => {
+            throw new Error("Steam refused");
+          }),
+        },
+      });
+
+      await pressFailedCheckPlay();
+
+      await waitFor(() =>
+        expect(toaster.toast).toHaveBeenCalledWith({
+          title: "Tender",
+          body: "Tender could not start this game: Steam refused",
+        }),
+      );
+    });
+  });
+
   it("online allow → marks the launch skipped BEFORE RunGame and launches (C1 double-gate fix)", async () => {
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     // Clean sync → allow.
@@ -2416,49 +2531,6 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     expect(markOrder).toBeLessThan(runOrder);
     // The skip-set actually carries appId 100 (the real markLaunchSkipped ran).
     expect(consumeLaunchSkip(100)).toBe(true);
-  });
-
-  it("no launch target → toast explaining the files were kept, no launch (#1652)", async () => {
-    // A PS3 title downloaded as a .pkg installer: on disk, recorded, but nothing
-    // RPCS3 can boot. The gate blocks before any save work and the press must
-    // say so — a silent bail would read as a dead button.
-    vi.mocked(backend.getInstalledRom).mockResolvedValue({
-      rom_id: 42,
-      file_name: "Puppeteer.pkg",
-      file_path: "/roms/ps3/Puppeteer/Puppeteer.pkg",
-      system: "ps3",
-      platform_slug: "ps3",
-      installed_at: "2026-01-01T00:00:00Z",
-      launchable: false,
-    });
-    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
-
-    await clickPlay();
-
-    expect(toaster.toast).toHaveBeenCalledWith({
-      title: "Tender",
-      body: "This download has no file the emulator can launch. The files are on disk — see the game page.",
-    });
-    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
-    // Blocked before the save-sync work — no upload for a session that never starts.
-    expect(vi.mocked(backend.preLaunchSync)).not.toHaveBeenCalled();
-  });
-
-  it("a launchable install passes the launch-target step and launches", async () => {
-    vi.mocked(backend.getInstalledRom).mockResolvedValue({
-      rom_id: 42,
-      file_name: "game.chd",
-      file_path: "/roms/psx/game.chd",
-      system: "psx",
-      platform_slug: "psx",
-      installed_at: "2026-01-01T00:00:00Z",
-      launchable: true,
-    });
-    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
-
-    await clickPlay();
-
-    await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
   });
 
   it("RetroDECK switched off → pressing Play starts nothing and says why (#2269)", async () => {
@@ -3229,11 +3301,6 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
 
   it.each([
     {
-      wait: "get_installed_rom",
-      limit: 5000,
-      arrange: () => vi.mocked(backend.getInstalledRom).mockReturnValue(never()),
-    },
-    {
       wait: "is_save_tracking_configured",
       limit: 5000,
       arrange: () => vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never()),
@@ -3288,13 +3355,13 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
 
   it("a call the dropped connection rejects moves the wait to the next step, which then ends at its limit", async () => {
     // A call already on the wire when the socket closes is rejected; the
-    // launch-target read fails open and the check moves on — to a call that
-    // waits in the outbox for a connection that never comes back.
-    vi.mocked(backend.getInstalledRom).mockRejectedValue(new HostTransportError("connection_lost", "socket closed"));
-    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
+    // core-change check assumes the core unchanged and the check moves on — to
+    // a call that waits in the outbox for a connection that never comes back.
+    vi.mocked(backend.checkCoreChange).mockRejectedValue(new HostTransportError("connection_lost", "socket closed"));
+    vi.mocked(backend.probeReachability).mockReturnValue(never());
 
     await pressPlay();
-    expect(backend.isSaveTrackingConfigured).toHaveBeenCalledWith(42);
+    expect(backend.probeReachability).toHaveBeenCalled();
     await advance(4999);
     expect(showFallbackLaunchModal).not.toHaveBeenCalled();
 
@@ -3342,7 +3409,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
   });
 
   it("a press shows Checking saves... at once, before the backend has answered anything", async () => {
-    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
 
     const { getByText, queryByText } = await pressPlay();
 
@@ -3351,10 +3418,10 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
   });
 
   it("a second press during the check starts nothing", async () => {
-    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
 
     const { container } = await pressPlay();
-    expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
+    expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(1);
     // Whatever the button shows now is pressed again: the disabled throbber
     // and the press guard in the handler each stop a second check on their own.
     await act(async () => {
@@ -3362,17 +3429,17 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       for (let index = 0; index < 12; index++) await Promise.resolve();
     });
 
-    expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
+    expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(1);
   });
 
   it("a press on a stale Resume during the check starts no second check", async () => {
     // The one route into the handler the disabled throbber does not close: a
     // session start puts Resume over the check, and a press on it, with nothing
     // actually running, falls through to the press handler of that same render.
-    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
 
     const { getByText } = await pressPlay();
-    expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
+    expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(1);
     act(() => {
       globalThis.dispatchEvent(
         new CustomEvent("romm_session_changed", { detail: { running: true, appId: 100, romId: 42 } }),
@@ -3385,11 +3452,11 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     });
 
     expect(readGameRunning).toHaveBeenCalled();
-    expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
+    expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(1);
   });
 
   it("a save-status announcement during the check does not put Play back under it", async () => {
-    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
 
     const { getByText, queryByText } = await pressPlay();
     act(() => {
@@ -3403,8 +3470,8 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
   });
 
   it("a start whose admission went stale during the check puts the button back on Play", async () => {
-    let answer!: (rom: null) => void;
-    vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    let answer!: (tracking: { configured: boolean; active_slot: string | null }) => void;
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(new Promise((resolve) => (answer = resolve)));
 
     const { getByText, queryByText, rerender } = await pressPlay();
     expect(getByText("Checking saves...")).toBeInTheDocument();
@@ -3414,7 +3481,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     vi.mocked(getCachedGameDetail).mockReturnValue(never());
     rerender(<CustomPlayButton appId={101} />);
     await act(async () => {
-      answer(null);
+      answer({ configured: true, active_slot: "default" });
     });
     await advance(0);
 
@@ -5862,7 +5929,7 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
   });
 
   it("renders Checking saves... as the same throbber button, online and offline", async () => {
-    vi.mocked(backend.getInstalledRom).mockReturnValueOnce(new Promise<never>(() => {}));
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValueOnce(new Promise<never>(() => {}));
     mockCachedDetail({ rom_id: 42, installed: true });
     const { container, findByText } = render(<CustomPlayButton appId={100} />);
     const playBtn = await findByText("Play");

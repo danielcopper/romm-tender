@@ -37,9 +37,14 @@ import {
   updateBiosLinks,
 } from "../api/backend";
 import { getRomMetadataShared } from "../api/sharedReads";
-import type { DownloadCompleteEvent, SaveStatus, SaveSyncDisplay } from "../types";
+import type { CoreInfo, DownloadCompleteEvent, SaveStatus, SaveSyncDisplay } from "../types";
 import type { RommDataChangedDetail } from "../types/events";
 import { detach } from "./detach";
+import { gameStartRefusal } from "./emulatorStart";
+import { startCheckFailureSentence } from "./gameLaunch";
+import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
+import { showToast } from "./toast";
+import { withTimeout } from "./withTimeout";
 import {
   applySaveSyncDisplay,
   extractBiosInfo,
@@ -117,6 +122,8 @@ const DEFAULT_STATE: GameDetailState = {
   platformCoreLabel: null,
   hasGameOverride: false,
   emulatorStart: null,
+  gameLaunch: null,
+  startCheck: { state: "checking" },
   vanishedPick: null,
 };
 
@@ -315,6 +322,8 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
     write((prev) => ({
       ...prev,
       romId,
+      // Another version's check says nothing about this one; its own is asked below.
+      startCheck: prev.romId === romId ? (prev.startCheck ?? { state: "answered" }) : { state: "checking" },
       romName: cached.rom_name || "",
       platformSlug: cached.platform_slug || "",
       platformName: cached.platform_name || "",
@@ -376,7 +385,13 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
     // Core info is sourced from its OWN path (#923), independent of BIOS status,
     // and keyed on rom_id so the active core reflects a per-game DB override
     // (epic #945).
-    refreshCoreInfoInBackground(romId, cancelled, writeForRom);
+    // It is also the page's check of whether the game can start (#2195 D32):
+    // a read that fails or gets no answer in time is said in a notification.
+    refreshCoreInfoInBackground(romId, cancelled, writeForRom, (e) => {
+      const why = startCheckFailureSentence(e);
+      writeForRom((prev) => ({ ...prev, startCheck: { state: "failed", why } }));
+      showToast(why);
+    });
   } catch (e) {
     // Shared by the mount load and the version-switch re-derive — a failed cache
     // load leaves every subscribed surface stale either way, so surface at warn
@@ -598,6 +613,29 @@ export async function refreshCoreAndBios(appId: number): Promise<void> {
     ...biosInfo,
   }));
   invalidateCachedGameDetail(appId);
+}
+
+/**
+ * Ask again, at a press on Play, whether the ROM `romId` on the page for
+ * `appId` can start, after the page's own check went wrong (#2195 D33).
+ *
+ * An answer IS the page's check succeeding: it is folded into the entry showing
+ * that ROM as answered — so the page shows what stands in the way, or lets the
+ * game start — and the reason it cannot start is returned, `null` where nothing
+ * stands in its way. A read that fails or gets no answer in time writes
+ * nothing, and answers `null`: the press goes ahead.
+ */
+export async function recheckStart(appId: number, romId: number): Promise<string | null> {
+  let info: CoreInfo;
+  try {
+    info = await withTimeout(getPlatformCoreInfo(romId), LOCAL_CALL_LIMIT_MS);
+  } catch (e) {
+    logError(`gameDetailStore: the check at the press failed too (allowing the start): ${e}`);
+    return null;
+  }
+  const entry = _entries.get(appId);
+  if (entry) writerForRom(entry, entry.generation, romId)((prev) => ({ ...prev, ...extractCoreInfo(info) }));
+  return gameStartRefusal(info);
 }
 
 /** Re-read the cached detail after something invalidated it. A re-read is a new

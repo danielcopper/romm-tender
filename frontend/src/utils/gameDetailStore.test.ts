@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import * as backend from "../api/backend";
+import { HostTransportError, toaster } from "../api/host";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as cachedStore from "./cachedGameDetailStore";
 import {
   getGameDetail,
   noteSaveSyncDisplay,
+  recheckStart,
   refreshBiosStatus,
   refreshCoreAndBios,
   refreshSaveStatus,
@@ -2275,5 +2277,142 @@ describe("gameDetailStore", () => {
       });
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(42);
     });
+  });
+});
+
+describe("gameDetailStore — the page's check of whether the game can start (#2195 D32)", () => {
+  const found = (overrides: Partial<CachedGameDetail> = {}): CachedGameDetail => ({
+    found: true,
+    rom_id: 42,
+    rom_name: "Test ROM",
+    platform_slug: "snes",
+    installed: true,
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    nextAppId = ++appIdSeq;
+    installDomEventListenerSpy();
+    _resetSharedReadsForTests();
+    vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
+    vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus());
+    vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null, bios_label: null });
+    vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    openSubscriptions.splice(0).forEach((unsubscribe) => unsubscribe());
+    uninstallDomEventListenerSpy();
+    vi.useRealTimers();
+  });
+
+  it("is checking until the core read lands, then answered", async () => {
+    const read = deferred<CoreInfo>();
+    vi.mocked(backend.getPlatformCoreInfo).mockReturnValue(read.promise);
+    subscribe(nextAppId);
+    await flush();
+
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "checking" });
+
+    await act(async () => {
+      read.resolve(coreInfoFixture());
+      await read.promise;
+    });
+    await flush();
+
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "answered" });
+    expect(toaster.toast).not.toHaveBeenCalled();
+  });
+
+  it("another version's answer says nothing about this one: it is checking again until its own lands", async () => {
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFixture());
+    subscribe(nextAppId);
+    await flush();
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "answered" });
+
+    vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ rom_id: 43 }));
+    vi.mocked(backend.getPlatformCoreInfo).mockReturnValue(new Promise<never>(() => {}));
+    await act(async () => {
+      await reloadGameDetail(nextAppId);
+    });
+
+    expect(getGameDetail(nextAppId)).toMatchObject({ romId: 43, startCheck: { state: "checking" } });
+  });
+
+  it("a read that fails is failed, and a notification says what went wrong", async () => {
+    vi.mocked(backend.getPlatformCoreInfo).mockRejectedValue(
+      new HostTransportError("connection_lost", "socket closed"),
+    );
+    subscribe(nextAppId);
+    await flush();
+    await flush();
+
+    const sentence =
+      "Tender could not check whether this game can start: the connection to its backend failed (socket closed).";
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "failed", why: sentence });
+    expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: sentence }));
+  });
+
+  it("a read that gets no answer in time is failed, and the notification says so", async () => {
+    vi.useFakeTimers();
+    vi.mocked(backend.getPlatformCoreInfo).mockReturnValue(new Promise<never>(() => {}));
+    subscribe(nextAppId);
+    await flush();
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "checking" });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(getGameDetail(nextAppId).startCheck).toMatchObject({ state: "failed" });
+    expect(toaster.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringContaining("its backend gave no answer in time") }),
+    );
+  });
+
+  it("an answer at a press after a failed check is the check succeeding: the page shows what stands in the way (#2195 D33)", async () => {
+    vi.mocked(backend.getPlatformCoreInfo).mockRejectedValueOnce(new Error("down"));
+    subscribe(nextAppId);
+    await flush();
+    await flush();
+    expect(getGameDetail(nextAppId).startCheck).toMatchObject({ state: "failed" });
+
+    const launch = {
+      state: "needs_installing" as const,
+      entry: "RPCS3 Directory (Standalone)",
+      system: "ps3",
+      file: "Puppeteer.pkg",
+      extension: ".pkg",
+      starts_from: [],
+      other_entries: [],
+      install_in: [],
+      reason: null,
+      contents_unread: false,
+      format_unestablished: false,
+    };
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFixture({ launch }));
+    let refusal: string | null = null;
+    await act(async () => {
+      refusal = await recheckStart(nextAppId, 42);
+    });
+
+    expect(refusal).toBe("This game has to be installed first.");
+    expect(getGameDetail(nextAppId)).toMatchObject({ startCheck: { state: "answered" }, gameLaunch: launch });
+  });
+
+  it("a press whose ask fails too writes nothing and lets the start go ahead (#2195 D33)", async () => {
+    vi.mocked(backend.getPlatformCoreInfo).mockRejectedValue(new Error("down"));
+    subscribe(nextAppId);
+    await flush();
+    await flush();
+
+    let refusal: string | null = "unset";
+    await act(async () => {
+      refusal = await recheckStart(nextAppId, 42);
+    });
+
+    expect(refusal).toBeNull();
+    expect(getGameDetail(nextAppId).startCheck).toMatchObject({ state: "failed" });
   });
 });

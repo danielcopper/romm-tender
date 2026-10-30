@@ -5,8 +5,8 @@
  * switch says, so a start while that source is switched off would go through a
  * source the user turned off. The backend names such a source
  * (`check_start_source`); this is the read the gate blocks on. Apart from
- * `launchGate.ts` for the same reason as `launchTarget.ts`: the gate performs
- * no I/O itself.
+ * `launchGate.ts` because the gate performs no I/O itself: every side effect
+ * reaches it as an injected callback.
  */
 
 import { checkStartSource, logError } from "../api/backend";

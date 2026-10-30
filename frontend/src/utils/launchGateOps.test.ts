@@ -541,14 +541,6 @@ describe("makeLaunchGateOps", () => {
     expect(makeLaunchGateOps(ROM_ID, options()).migrationPending()).toBe(true);
   });
 
-  it("hasLaunchTarget asks for this ROM, and logs a failed check with the tag", async () => {
-    vi.mocked(backend.getInstalledRom).mockRejectedValue(new Error("net"));
-
-    expect(await makeLaunchGateOps(ROM_ID, options()).hasLaunchTarget()).toBe(true);
-    expect(backend.getInstalledRom).toHaveBeenCalledWith(ROM_ID);
-    expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining(`${TAG} launch-target check threw`));
-  });
-
   it("readStartingSource asks with the tag, and the unchecked-source question is the path's own", async () => {
     vi.mocked(backend.checkStartSource).mockRejectedValue(new Error("net"));
     const confirmUncheckedStartingSource = vi.fn(() => Promise.resolve(false));

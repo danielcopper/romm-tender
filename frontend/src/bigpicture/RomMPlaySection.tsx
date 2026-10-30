@@ -12,7 +12,7 @@
  * the item is built.
  */
 
-import { useState, useEffect, FC, Fragment, type ReactElement } from "react";
+import { useState, useEffect, useRef, FC, Fragment, type ReactElement } from "react";
 import { showToast } from "../utils/toast";
 import {
   ConfirmModal,
@@ -73,6 +73,8 @@ import {
   gameCanPickAnother,
   vanishedPickSentence,
 } from "../utils/emulatorStart";
+import { launchNote, launchRefusal } from "../utils/gameLaunch";
+import { askEntryLaunches } from "../utils/emulatorLaunches";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
 import { buildEmulatorMenu } from "../utils/emulatorMenu";
 import { formatBytes } from "../utils/formatters";
@@ -254,6 +256,12 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // save sync, BIOS, core selection — comes from the per-appId store, which owns
   // the reads and the romm_data_changed fold for all of them (#993).
   const detail = useGameDetail(appId);
+  // The ROM the page shows now, read when an answer lands: a version switch
+  // re-points it, and an answer asked for the version before is dropped.
+  const shownRomId = useRef(detail.romId);
+  useEffect(() => {
+    shownRomId.current = detail.romId;
+  }, [detail.romId]);
   const fileMissing = detail.fileMissingAt !== null;
   // Badge derives from the shared store so it appears/disappears live on any
   // reachability signal (mount check, a failed/succeeded call, or the offline
@@ -688,7 +696,11 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const showCoreMenu = (e: Event) => {
     // Both pickers share the builder in utils/emulatorMenu. The game-detail menu
     // carries the "Use System Override" reset item (the only clear path, #211);
-    // every bakeable emulator entry PINS the per-game override.
+    // every bakeable emulator entry PINS the per-game override. For an
+    // installed game it also asks, as it opens, whether each entry can start it.
+    const romId = detail.romId;
+    const launches =
+      detail.installed && romId ? askEntryLaunches(romId, () => shownRomId.current === romId) : undefined;
     showContextMenu(
       buildEmulatorMenu({
         emulators: detail.emulators,
@@ -708,6 +720,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         onPick: (label) => {
           detach(handleChangeGameCore(label));
         },
+        launches,
       }),
       getEventTarget(e),
     );
@@ -934,18 +947,40 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   }
 
-  // Why the game's emulator cannot start it: Play is disabled, and the same
+  // Why the game cannot start — its emulator cannot, or its file does not
+  // start with that emulator (#2195 D2): Play is disabled, and the same
   // sentence stands behind the warning sign on a line of its own under the
   // row's controls, inside the play row. Not on a stranded panel, and not for a
-  // download whose file is missing, where the row says that instead.
+  // download whose file is missing, where the row says that instead. A verdict
+  // that lets the game start but has something to say stands on that line
+  // with Play left on.
+  // Where the page's check itself went wrong, nothing is said below Play: the
+  // notification said what went wrong, and a press asks again (#2195 D33).
+  const canPick = gameCanPickAnother(detail.emulators, detail.activeCoreLabel);
+  const gameLaunch = detail.gameLaunch ?? null;
+  const startCheckFailed = !stranded && !fileMissing && detail.startCheck?.state === "failed";
   const emulatorRefusal =
-    stranded || fileMissing || detail.emulatorStart === null
+    stranded || fileMissing || startCheckFailed || detail.emulatorStart === null
       ? null
-      : emulatorStartRefusal(
-          detail.emulatorStart,
-          "this game",
-          gameCanPickAnother(detail.emulators, detail.activeCoreLabel),
-        );
+      : (emulatorStartRefusal(detail.emulatorStart, "this game", canPick) ?? launchRefusal(gameLaunch, canPick));
+  const startNote =
+    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null ? null : launchNote(gameLaunch);
+
+  const warningLine = (testId: string, text: string) => (
+    <div
+      data-testid={testId}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        fontSize: "12px",
+        color: "#ffaa00",
+      }}
+    >
+      <FaExclamationTriangle size={12} style={{ flexShrink: 0 }} />
+      <span>{text}</span>
+    </div>
+  );
 
   const playSectionRow = (
     <Focusable
@@ -975,7 +1010,12 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
           line under them, inside the same band. */}
       <div data-testid="play-row-controls" style={{ display: "flex", alignItems: "center", gap: "20px" }}>
         {/* Play button on the left */}
-        <CustomPlayButton appId={appId} emulatorRefusal={emulatorRefusal} />
+        <CustomPlayButton
+          appId={appId}
+          emulatorRefusal={emulatorRefusal}
+          startChecking={!stranded && !fileMissing && detail.startCheck?.state === "checking"}
+          startCheckFailed={startCheckFailed}
+        />
         {/* Disc picker for multi-disc ROMs — renders nothing otherwise (#865), and
             nothing for a download whose discs are missing */}
         {fileMissing || stranded ? null : <DiscSelector appId={appId} />}
@@ -1030,21 +1070,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
           </div>
         )}
       </div>
-      {emulatorRefusal === null ? null : (
-        <div
-          data-testid="emulator-refusal"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            fontSize: "12px",
-            color: "#ffaa00",
-          }}
-        >
-          <FaExclamationTriangle size={12} style={{ flexShrink: 0 }} />
-          <span>{emulatorRefusal}</span>
-        </div>
-      )}
+      {emulatorRefusal === null ? null : warningLine("emulator-refusal", emulatorRefusal)}
+      {startNote === null ? null : warningLine("start-note", startNote)}
     </Focusable>
   );
 

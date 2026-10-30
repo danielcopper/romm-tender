@@ -70,6 +70,7 @@ export function coreInfo(overrides: Partial<CoreInfo> = {}): CoreInfo {
     platform_core_label: null,
     has_game_override: false,
     start: emulatorStart(),
+    launch: null,
     vanished_pick: null,
     ...overrides,
   };

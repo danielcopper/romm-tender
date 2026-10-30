@@ -22,7 +22,7 @@ import { useState, useEffect, useRef, useCallback, FC, ReactElement } from "reac
 import { addEventListener, removeEventListener, strandedAnswer } from "../api/host";
 import { showToast } from "../utils/toast";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
-import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, showContextMenu } from "@decky/ui";
+import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, Spinner, showContextMenu } from "@decky/ui";
 import { appActionButtonClasses, basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";
 import { hideNativePlaySection, showNativePlaySection } from "../utils/styleInjector";
 import { hasAnySaveConflict } from "../utils/saveStatus";
@@ -73,7 +73,7 @@ import { handleConflicts } from "../shared/SyncConflictModal";
 import { gamepadLaunchPrompts } from "../shared/launchPrompts";
 import { showStopGameModal } from "./StopGameModal";
 import { showForgetDownloadModal } from "./ForgetDownloadModal";
-import { reloadGameDetail } from "../utils/gameDetailStore";
+import { recheckStart, reloadGameDetail } from "../utils/gameDetailStore";
 import { markLaunchSkipped } from "../utils/launchGate";
 import { ensureTrackingConfiguredBigPicture, makeLaunchGateOps } from "../utils/launchGateOps";
 import { runGateLoop } from "../utils/launchVerdict";
@@ -129,12 +129,21 @@ interface CustomPlayButtonProps {
   /** Why the game's emulator cannot start it, as the page says it under the row;
    *  Play is then disabled (#2195 D7, D21). Absent or `null`: nothing stands in its way. */
   emulatorRefusal?: string | null;
+  /** Whether the page's check of whether the game can start is still running; Play is then grey, disabled and
+   *  spins (#2195 D32). Absent: the check is not the page's to wait for. */
+  startChecking?: boolean;
+  /** Whether that check itself went wrong (#2195 D33): Play is grey but can be pressed, and a press asks again before
+   *  it starts, saying in a notification what stands in the way, or what went wrong with the start. */
+  startCheckFailed?: boolean;
 }
+
+/** @decky/ui's Spinner fills its container unless sized; this is the size of the label beside it. */
+const START_CHECK_SPINNER_SIZE = 16;
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
 // Prettier from relocating the trailing comment into the body (which would break the suppression).
 // prettier-ignore
-export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRefusal = null }) => { // NOSONAR(typescript:S3776) — remaining cc is the per-state render branching (download/dl_complete/uninstalling/launching/checking/syncing/conflict/play each return a distinct button shape); the gate chain now lives in runLaunchGate, not here.
+export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRefusal = null, startChecking = false, startCheckFailed = false }) => { // NOSONAR(typescript:S3776) — remaining cc is the per-state render branching (download/dl_complete/uninstalling/launching/checking/syncing/conflict/play each return a distinct button shape); the gate chain now lives in runLaunchGate, not here.
   const leaseOwner = `custom-play-button:${appId}`;
   const [state, setState] = useState<PlayButtonState>("loading");
   const [romId, setRomId] = useState<number | null>(null);
@@ -635,6 +644,17 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     // the Play-button equivalent is to reset the button to "play".
     setState("checking");
     try {
+      // The page could not tell whether the game can start, so the press asks
+      // again. Its answer is the page's check succeeding: the page shows it, and
+      // what stands in the way is said and the start goes no further.
+      if (startCheckFailed) {
+        const refusal = await recheckStart(appId, romId);
+        if (refusal !== null) {
+          showToast(refusal);
+          setState("play");
+          return;
+        }
+      }
       const ops = makeLaunchGateOps(romId, {
         tag: "CustomPlayButton",
         toastSyncResult: true,
@@ -659,6 +679,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       });
     } catch (e) {
       detach(debugLog(`CustomPlayButton: handlePlay unexpected error — resetting to play: ${e}`));
+      if (startCheckFailed) showToast(`Tender could not start this game: ${e instanceof Error ? e.message : String(e)}`);
       setState("play");
     }
   };
@@ -1496,10 +1517,38 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     );
   }
 
-  // state === "play"
-  const playBg = isOffline
-    ? "linear-gradient(to right, #6b7b6b 0%, #5a6a5a 60%)"
-    : "linear-gradient(to right, #70d61d 0%, #01a75b 60%)";
+  // state === "play", while the page's check runs: grey, disabled, spinning.
+  if (startChecking) {
+    return (
+      <Focusable ref={containerRef} className={appActionButtonClasses?.PlayButtonContainer} style={btnContainerStyle}>
+        <DialogButton
+          className={[appActionButtonClasses?.PlayButton, "romm-btn-play", "romm-start-checking"]
+            .filter(Boolean)
+            .join(" ")}
+          style={{
+            ...mainBtnStyle,
+            borderRadius: "2px",
+            background: "linear-gradient(to right, #6b7b6b 0%, #5a6a5a 60%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+          }}
+          onFocus={scrollToTop}
+          disabled
+        >
+          <Spinner width={START_CHECK_SPINNER_SIZE} height={START_CHECK_SPINNER_SIZE} />
+          <span>Play</span>
+        </DialogButton>
+      </Focusable>
+    );
+  }
+
+  // state === "play"; grey, still pressable, where the page's check went wrong.
+  const playBg =
+    isOffline || startCheckFailed
+      ? "linear-gradient(to right, #6b7b6b 0%, #5a6a5a 60%)"
+      : "linear-gradient(to right, #70d61d 0%, #01a75b 60%)";
   const dropdownBg = isOffline
     ? "linear-gradient(to right, #5a6a5a, #4d5d4d)"
     : "linear-gradient(to right, #4da636, #3f8a2b)";
@@ -1512,7 +1561,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       style={btnContainerStyle}
     >
       <DialogButton
-        className={[appActionButtonClasses?.PlayButton, "romm-btn-play", isOffline && "romm-offline"]
+        className={[
+          appActionButtonClasses?.PlayButton,
+          "romm-btn-play",
+          isOffline && "romm-offline",
+          startCheckFailed && "romm-start-check-failed",
+        ]
           .filter(Boolean)
           .join(" ")}
         style={{

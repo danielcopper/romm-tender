@@ -14,7 +14,6 @@ import {
   type SyncWaitReason,
 } from "./launchGate";
 import { startingSourceOffSentence } from "./emulatorSourceWording";
-import { NO_LAUNCH_TARGET_TOAST_BODY } from "./launchTarget";
 import { announceSaveSync } from "./saveSyncEvents";
 import { showToast } from "./toast";
 import type { SyncConflict } from "../types";
@@ -97,11 +96,8 @@ export async function actOnGateVerdict(
         hooks.onMigrationBlocked();
         return "done";
       }
-      // Nothing answers the press itself for a missing launch target (only the
-      // Info tab states it), so a silent bail would read as a dead button; a
-      // switched-off source is stated nowhere on the game page, so the start
+      // A switched-off source is stated nowhere on the game page, so the start
       // says why.
-      if (verdict.reason === "no_launch_target") showToast(NO_LAUNCH_TARGET_TOAST_BODY);
       if (verdict.reason === "source_switched_off") showToast(startingSourceOffSentence(verdict.source));
       hooks.onDeclined();
       return "done";

@@ -320,6 +320,31 @@ describe("refreshCoreInfoInBackground", () => {
   });
 });
 
+describe("refreshCoreInfoInBackground — a failed check (#2195 D32)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("tells the caller what went wrong where the read fails", async () => {
+    const error = new Error("network");
+    vi.mocked(backend.getPlatformCoreInfo).mockRejectedValueOnce(error);
+    vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+    const onFailure = vi.fn();
+    refreshCoreInfoInBackground(404, () => false, vi.fn(), onFailure);
+    await flushMicrotasks();
+
+    expect(onFailure).toHaveBeenCalledWith(error);
+  });
+
+  it("tells a cancelled caller nothing", async () => {
+    vi.mocked(backend.getPlatformCoreInfo).mockRejectedValueOnce(new Error("network"));
+    vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+    const onFailure = vi.fn();
+    refreshCoreInfoInBackground(404, () => true, vi.fn(), onFailure);
+    await flushMicrotasks();
+
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+});
+
 describe("refreshAchievementsInBackground", () => {
   beforeEach(() => vi.restoreAllMocks());
 

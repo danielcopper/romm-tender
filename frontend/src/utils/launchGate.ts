@@ -132,8 +132,8 @@ export type StartingSourceAnswer = { checked: true; switchedOff: string | null }
  *   - `block`            — a hard precondition failed and the user has not yet
  *                          been shown UI for it. `reason` selects the caller's
  *                          message (`not_installed`, `migration_pending`,
- *                          `no_launch_target`, `source_switched_off` with
- *                          the kind of the `source` switched off).
+ *                          `source_switched_off` with the kind of the
+ *                          `source` switched off).
  *   - `abort`            — the user was shown UI (tracking-setup or core-change)
  *                          and chose not to proceed. The caller bails silently,
  *                          with no further message — the user already decided.
@@ -154,7 +154,7 @@ export type StartingSourceAnswer = { checked: true; switchedOff: string | null }
  */
 export type GateVerdict =
   | { decision: "allow" }
-  | { decision: "block"; reason: "not_installed" | "migration_pending" | "no_launch_target" }
+  | { decision: "block"; reason: "not_installed" | "migration_pending" }
   | { decision: "block"; reason: "source_switched_off"; source: string }
   | { decision: "abort" }
   | { decision: "conflict"; conflicts: SyncConflict[] }
@@ -182,14 +182,6 @@ export interface LaunchGateOps {
    * a pending migration risks silent save-data loss.
    */
   migrationPending: () => boolean;
-
-  /**
-   * Does this ROM have a launch target at all? `false` for a ROM that is
-   * downloaded and on disk but whose content the system cannot boot — its
-   * shortcut carries no launch command, so letting the launch through would
-   * start nothing and say nothing. Blocks with `block`/`no_launch_target`.
-   */
-  hasLaunchTarget: () => Promise<boolean>;
 
   /**
    * Is the source that would start the game switched off in Settings ›
@@ -278,14 +270,16 @@ function preLaunchSyncVerdict(sync: PreLaunchSyncOutcome): GateVerdict {
  *
  * Step order (each step's failure short-circuits the rest):
  *   1. migration pending      -> block / migration_pending
- *   2. hasLaunchTarget        -> block / no_launch_target
- *   3. readStartingSource     -> block / source_switched_off;
+ *   2. readStartingSource     -> block / source_switched_off;
  *                                unchecked => confirmUncheckedStartingSource, cancel => abort
- *   4. ensureTrackingConfigured -> "abort" => abort
- *   5. checkCoreChange        -> cancel => abort
- *   6. checkReachability      -> online vs offline split
- *   7a. online:  preLaunchSync -> conflict | sync_failed | abort | play_anyway | allow
- *   7b. offline: checkLocalDrift -> offline_drift | allow
+ *   3. ensureTrackingConfigured -> "abort" => abort
+ *   4. checkCoreChange        -> cancel => abort
+ *   5. checkReachability      -> online vs offline split
+ *   6a. online:  preLaunchSync -> conflict | sync_failed | abort | play_anyway | allow
+ *   6b. offline: checkLocalDrift -> offline_drift | allow
+ *
+ * Whether the game's file starts with its emulator is not a step: the game's
+ * page reads it, and a start it refuses is never pressed (#2195 D26).
  *
  * The gate NEVER throws and NEVER blocks the user on an internal error: the
  * whole body is wrapped so any thrown error (from an injected callback or
@@ -306,41 +300,34 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
       return { decision: "block", reason: "migration_pending" };
     }
 
-    // 2. No launch target — the ROM is downloaded but nothing in it is
-    //    something this system can boot. Block before the save-sync work: there
-    //    is no session coming that a synced save would belong to.
-    if (!(await ops.hasLaunchTarget())) {
-      return { decision: "block", reason: "no_launch_target" };
-    }
-
-    // 3. The source that would start the game is switched off — the start
-    //    would go through it anyway. Block before the save-sync work, for the
-    //    same reason as step 2.
+    // 2. The source that would start the game is switched off — the start
+    //    would go through it anyway. Block before the save-sync work: there is
+    //    no session coming that a synced save would belong to.
     const sourceVerdict = await startingSourceVerdict(ops);
     if (sourceVerdict !== null) {
       return sourceVerdict;
     }
 
-    // 4. Save-slot tracking setup. "abort" means the user saw setup UI and
+    // 3. Save-slot tracking setup. "abort" means the user saw setup UI and
     //    declined — bail silently.
     if ((await ops.ensureTrackingConfigured()) === "abort") {
       return { decision: "abort" };
     }
 
-    // 5. Emulator core-change confirm. Cancel => bail silently.
+    // 4. Emulator core-change confirm. Cancel => bail silently.
     if (!(await ops.checkCoreChange())) {
       return { decision: "abort" };
     }
 
-    // 6. Fresh reachability probe decides the sync branch.
+    // 5. Fresh reachability probe decides the sync branch.
     const online = await ops.checkReachability();
 
     if (online) {
-      // 7a. Online — run pre-launch sync and map its outcome.
+      // 6a. Online — run pre-launch sync and map its outcome.
       return preLaunchSyncVerdict(await ops.preLaunchSync());
     }
 
-    // 7b. Offline — block only when the local save has drifted; otherwise allow.
+    // 6b. Offline — block only when the local save has drifted; otherwise allow.
     if (await ops.checkLocalDrift()) {
       return { decision: "offline_drift" };
     }
