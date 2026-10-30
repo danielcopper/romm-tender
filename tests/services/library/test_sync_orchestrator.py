@@ -8976,6 +8976,121 @@ class TestARemovalThePanelDidNotReport:
         assert self._bindings(library) == {30: 6030, 31: None}
 
 
+class TestAReportThatLandsBeforeTheFinalize:
+    """The panel's report can unbind a removed row before the run's finalize writes (#2653).
+
+    The orchestrator emits ``sync_stale`` and then measures the run's memory
+    before the finalize, and the report holds no rule the run holds, so it can
+    land in between. The finalize then still settles the row's stamps: a platform
+    or a collection turned off and back on gets its games' shortcuts back.
+    """
+
+    @staticmethod
+    def _report_while_the_memory_is_measured(library, emit):
+        """The panel reports what the run's ``sync_stale`` named while the orchestrator measures memory."""
+        budget = library.sync._orchestrator._session_budget
+        measure_rss = budget.measure_rss
+        run_start = {"at": 0}
+
+        async def report_then_measure():
+            await _the_panel_reports(library, _removals_since(emit, run_start["at"]))
+            return await measure_rss()
+
+        budget.measure_rss = report_then_measure
+        return run_start
+
+    @pytest.mark.asyncio
+    async def test_a_platform_turned_off_and_back_on_gets_its_games_back(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}, {"id": 3, "name": "C"}],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1])
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_n64_game(unit, event):
+            event.set()
+            return {"1": 5001, "2": 5002, "3": 5003} if unit.slug == "n64" else {}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
+        run_start = self._report_while_the_memory_is_measured(library, emit)
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            run_start["at"] = len(emit.call_args_list)
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 3)}
+
+        library.settings["enabled_platforms"] = {"1": True}
+        await complete_a_run("run-1")
+        library.settings["enabled_platforms"] = {"1": False}
+        await complete_a_run("run-2")
+        bindings_while_off = bindings()
+        with library.uow as uow:
+            stamp = uow.platform_sync_state.get("n64")
+        library.settings["enabled_platforms"] = {"1": True}
+        await complete_a_run("run-3")
+
+        assert bindings_while_off == {1: 5001, 2: None, 3: None}
+        assert stamp is not None
+        assert stamp.skip_revoked is True
+        assert bindings() == {1: 5001, 2: 5002, 3: 5003}
+
+    @pytest.mark.asyncio
+    async def test_a_collection_turned_off_and_back_on_gets_its_games_back(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(
+            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
+        )
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1, 2])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
+        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            event.set()
+            return {"collection": {"1": 5001, "2": 5002}, "platform": {"4": 5004}}[unit.type]
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        run_start = self._report_while_the_memory_is_measured(library, emit)
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            run_start["at"] = len(emit.call_args_list)
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2)}
+
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        await complete_a_run("run-1")
+        library.settings["enabled_collections"] = {"standard": {"7": False}}
+        await complete_a_run("run-2")
+        bindings_while_off = bindings()
+        with library.uow as uow:
+            stamp_while_off = uow.collection_sync_state.get("7", "standard")
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        await complete_a_run("run-3")
+
+        assert bindings_while_off == {1: None, 2: None}
+        assert stamp_while_off is None
+        assert bindings() == {1: 5001, 2: 5002}
+
+
 class TestDeltaRestrictedApply:
     """Delta-restricted apply (#1383): classify in the apply path, emit only new +
     changed, skip content-unchanged shortcuts while still committing every row."""
