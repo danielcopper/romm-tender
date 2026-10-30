@@ -51,6 +51,7 @@ from .installations import (
     EmulatorEntry,
     Health,
     Installation,
+    Boot,
     Installer,
     LaunchabilityAnswer,
     LaunchCommandAnswer,
@@ -762,7 +763,10 @@ def launchable_contract(answer: LaunchabilityAnswer) -> dict[str, Any]:
     other verdict: each emulator that installs the file, with the system's
     entry that runs it through the same form as ``entry``, or ``null`` where
     the system declares none — an empty list says that no emulator RetroDECK
-    or EmuDeck sets up installs it. ``accepted`` stays the declared tokens
+    or EmuDeck sets up installs it. ``boots`` is ``launchable``'s alone, and
+    only where atlas read the judged entry's own boot of the file: the
+    ``file`` the emulator's loader is handed and the ``disc_root`` it mounts,
+    ``null`` for a game that boots without one. ``accepted`` stays the declared tokens
     verbatim, the same non-vocabulary the ROM placement's ``extensions``
     field carries.
     """
@@ -773,8 +777,14 @@ def launchable_contract(answer: LaunchabilityAnswer) -> dict[str, Any]:
         "entry": emulator_contract(answer.entry) if answer.entry is not None else None,
         "alternatives": list(answer.alternatives),
         "installers": None if answer.installers is None else [_installer_body(i) for i in answer.installers],
+        "boots": None if answer.boots is None else _boot_body(answer.boots),
         "caveats": _caveats_contract(answer.caveats),
     }
+
+
+def _boot_body(boot: Boot) -> dict[str, Any]:
+    """What the judged entry boots: the file its emulator's loader is handed, and the disc it mounts or ``null``."""
+    return {"file": boot.file, "disc_root": boot.disc_root}
 
 
 def _installer_body(installer: Installer) -> dict[str, Any]:

@@ -1254,9 +1254,10 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
-              "code": "entry-format-unestablished",
+              "code": "entry-format-content-unread",
               "data": {
                 "entry": "Dolphin (Standalone)",
                 "extension": ".iso"

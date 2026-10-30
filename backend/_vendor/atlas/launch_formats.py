@@ -20,7 +20,9 @@ from typing import Any
 
 from ._data import packaged_text
 
-FORMATS_SCHEMA = 2
+_ROM = "%ROM%"
+
+FORMATS_SCHEMA = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,15 +51,39 @@ class StandaloneLaunchCard:
     case-exact scan. ``archives`` says whether the loader opens archive
     containers at all: a standalone gets the file itself, with no RetroArch
     in front of it to pick a matching entry out of a zip.
+
+    Three statements are optional (issue #618). ``arguments`` are the
+    argument lists the card was read for — the words a command hands the
+    emulator after its token — and ``None`` where the card states none.
+    ``content_checked`` says the loader reads the file's content once the
+    extension has passed, which the card does not. ``build_dependent`` pairs
+    each extension the builds the card serves disagree on with the citation
+    naming them.
     """
 
     token: str
     accepts: tuple[str, ...]
     archives: bool
     source: str
+    arguments: tuple[tuple[str, ...], ...] | None = None
+    content_checked: bool = False
+    build_dependent: tuple[tuple[str, str], ...] = ()
 
     def takes(self, extension: str) -> bool:
         return extension.lower() in self.accepts
+
+    def covers(self, arguments: tuple[str, ...] | None) -> bool:
+        """Whether the card answers for a command handing the emulator *arguments* after its token.
+
+        ``None`` is a command whose arguments could not be told apart; a card
+        that states no ``arguments`` answers for every command naming its token.
+        """
+        return self.arguments is None or arguments in self.arguments
+
+    def build_note(self, extension: str) -> str | None:
+        """The citation naming the builds that disagree on *extension*, or ``None`` where they agree."""
+        folded = extension.lower()
+        return next((note for token, note in self.build_dependent if token == folded), None)
 
 
 def _expect_str(value: Any, where: str) -> str:
@@ -138,28 +164,81 @@ def load_standalone_launch(text: str | None = None) -> tuple[StandaloneLaunchCar
     return tuple(_launch_card(token, entry) for token, entry in emulators.items())
 
 
+_CARD_KEYS = frozenset({"accepts", "archives", "source"})
+_CARD_OPTIONAL_KEYS = frozenset({"arguments", "content_checked", "build_dependent"})
+
+
 def _launch_card(token: str, entry: Any) -> StandaloneLaunchCard:
     where = f"standalone launch card {token!r}"
-    if not isinstance(entry, dict) or set(entry) != {"accepts", "archives", "source"}:
-        raise ValueError(f"{where}: a card names exactly 'accepts', 'archives' and 'source'")
+    if not isinstance(entry, dict) or not _CARD_KEYS <= set(entry) <= _CARD_KEYS | _CARD_OPTIONAL_KEYS:
+        raise ValueError(
+            f"{where}: a card names 'accepts', 'archives' and 'source', "
+            "and may also name 'arguments', 'content_checked' and 'build_dependent'"
+        )
     accepts = entry["accepts"]
     if not isinstance(accepts, list) or not accepts:
         raise ValueError(f"{where}: accepts must be a non-empty list")
     for token_ext in accepts:
-        if not isinstance(token_ext, str) or not token_ext.startswith(".") or token_ext == ".":
-            raise ValueError(f"{where}: accepts[{token_ext!r}] — an extension token starts with '.' and names one")
-        if token_ext != token_ext.lower():
-            # The match is case-insensitive by lowercasing the file's token, so
-            # a card token carrying upper case could never be hit.
-            raise ValueError(f"{where}: accepts[{token_ext!r}] must be recorded lowercase")
+        _card_extension(token_ext, f"{where}: accepts")
     if not isinstance(entry["archives"], bool):
         raise ValueError(f"{where}: archives must be a JSON boolean")
+    content_checked = entry.get("content_checked", False)
+    if not isinstance(content_checked, bool):
+        raise ValueError(f"{where}: content_checked must be a JSON boolean")
+    build_dependent = _build_dependent(entry["build_dependent"], accepts, where) if "build_dependent" in entry else ()
     return StandaloneLaunchCard(
         token=token,
         accepts=tuple(accepts),
         archives=entry["archives"],
         source=_expect_str(entry["source"], f"{where}: source"),
+        arguments=_arguments(entry["arguments"], where) if "arguments" in entry else None,
+        content_checked=content_checked,
+        build_dependent=build_dependent,
     )
+
+
+def _card_extension(value: Any, where: str) -> str:
+    """One extension token of a card — dotted, naming one, recorded lowercase."""
+    if not isinstance(value, str) or not value.startswith(".") or value == ".":
+        raise ValueError(f"{where}[{value!r}] — an extension token starts with '.' and names one")
+    if value != value.lower():
+        # The match is case-insensitive by lowercasing the file's token, so
+        # a card token carrying upper case could never be hit.
+        raise ValueError(f"{where}[{value!r}] must be recorded lowercase")
+    return value
+
+
+def _arguments(value: Any, where: str) -> tuple[tuple[str, ...], ...]:
+    """The argument lists a card was read for — each a list of words handing the emulator ``%ROM%``."""
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{where}: arguments must be a non-empty list of argument lists")
+    shapes: list[tuple[str, ...]] = []
+    for shape in value:
+        if not isinstance(shape, list) or not all(isinstance(word, str) and word for word in shape):
+            raise ValueError(f"{where}: arguments[{shape!r}] must be a list of non-empty words")
+        if shape.count(_ROM) != 1:
+            # The card judges the file a command hands its emulator, so a
+            # shape that hands none, or hands it twice, is not one it read.
+            raise ValueError(f"{where}: arguments[{shape!r}] must hand the emulator {_ROM} exactly once")
+        if tuple(shape) in shapes:
+            raise ValueError(f"{where}: arguments[{shape!r}] is listed twice")
+        shapes.append(tuple(shape))
+    return tuple(shapes)
+
+
+def _build_dependent(value: Any, accepts: list[str], where: str) -> tuple[tuple[str, str], ...]:
+    """The extensions the builds a card serves disagree on, each with its citation."""
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{where}: build_dependent must be a non-empty object")
+    notes: list[tuple[str, str]] = []
+    for extension, note in value.items():
+        _card_extension(extension, f"{where}: build_dependent")
+        if extension in accepts:
+            # One extension, two statements: taken by every build, and taken
+            # by some. The card states one.
+            raise ValueError(f"{where}: build_dependent[{extension!r}] is also in accepts")
+        notes.append((extension, _expect_str(note, f"{where}: build_dependent[{extension!r}]")))
+    return tuple(notes)
 
 
 _PACKAGED: tuple[InstallFirstFormat, ...] | None = None

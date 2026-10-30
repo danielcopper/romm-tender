@@ -1265,6 +1265,17 @@ def _content(content_path: str, view: CommandView) -> _Content | Caveat:
     )
 
 
+def rom_file(content_path: str, view: CommandView) -> str | None:
+    """The file ``%ROM%`` names for *content_path*, unescaped — ``None`` where the view cannot tell.
+
+    A directory holding a file of its own name is that file, the way ES-DE
+    takes a directory as a file (``FileData.cpp:1030-1043``); every other
+    path is itself, separators collapsed.
+    """
+    content = _content(content_path, view)
+    return None if isinstance(content, Caveat) else content.rom_file
+
+
 def _inner_file(directory: str, view: CommandView) -> str | None | Caveat:
     """The file inside *directory* that carries the directory's own name — ``None`` where none does."""
     names = view.listing(directory)
