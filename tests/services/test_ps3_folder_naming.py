@@ -10,7 +10,9 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from services.ps3_folder_naming import (
+    KV_PS3_FOLDERS_LIFTED,
     KV_PS3_FOLDERS_NAMED,
+    KV_PS3_FOLDERS_TO_LIFT,
     KV_PS3_FOLDERS_TO_NAME,
     Ps3FolderNamingService,
     Ps3FolderNamingServiceConfig,
@@ -68,6 +70,14 @@ class _Harness:
 
     def stamped(self) -> bool:
         return self.uow.kv_config.get(KV_PS3_FOLDERS_NAMED) == "1"
+
+    def lifted(self) -> bool:
+        return self.uow.kv_config.get(KV_PS3_FOLDERS_LIFTED) == "1"
+
+    def file_path(self, rom_id: int) -> str:
+        install = self.uow.rom_installs.get(rom_id)
+        assert install is not None
+        return install.file_path
 
 
 class TestAPs3FolderIsRenamedOnce:
@@ -227,3 +237,174 @@ class TestANameEsDeAlreadyScans:
         assert h.store.files == before
         assert h.rom_dir(1) == "/roms/ps3/MyGame.PS3"
         assert h.stamped()
+
+
+class TestAGameFolderOneLevelDeeperIsLiftedOnce:
+    """A game folder one level inside its install's folder is placed as that folder (#2195 D39)."""
+
+    def test_the_game_folder_takes_the_install_folder_s_place_and_the_record_follows(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
+        h.store.files["/roms/ps3/MyGame.ps3/Inner/PS3_DISC.SFB"] = b"s"
+
+        h.service.name_ps3_folders()
+
+        assert sorted(h.store.files) == [
+            "/roms/ps3/MyGame.ps3/PS3_DISC.SFB",
+            f"/roms/ps3/MyGame.ps3/{_EBOOT}",
+        ]
+        assert (h.rom_dir(1), h.file_path(1)) == ("/roms/ps3/MyGame.ps3", f"/roms/ps3/MyGame.ps3/{_EBOOT}")
+        assert h.lifted()
+
+    def test_an_install_named_neither_way_is_named_and_lifted_at_one_start(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame", file_path=f"/roms/ps3/MyGame/Inner/{_EBOOT}")
+
+        h.service.name_ps3_folders()
+
+        assert (h.rom_dir(1), h.file_path(1)) == ("/roms/ps3/MyGame.ps3", f"/roms/ps3/MyGame.ps3/{_EBOOT}")
+        assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3/{_EBOOT}"]
+        assert h.stamped() and h.lifted()
+
+    def test_a_game_folder_with_anything_beside_it_is_left_where_it_is_and_counts_as_done(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
+        h.store.files["/roms/ps3/MyGame.ps3/readme.txt"] = b"kept"
+        before = dict(h.store.files)
+
+        h.service.name_ps3_folders()
+
+        assert h.store.files == before
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}"
+        assert h.lifted()
+
+    def test_a_stamped_lift_runs_no_more_while_the_naming_step_still_runs(self):
+        h = _Harness()
+        h.uow.kv_config.set(KV_PS3_FOLDERS_LIFTED, "1")
+        h.install(1, rom_dir="/roms/ps3/MyGame", file_path=f"/roms/ps3/MyGame/Inner/{_EBOOT}")
+
+        h.service.name_ps3_folders()
+
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}"
+
+    def test_a_stamped_naming_step_does_not_stop_the_lift(self):
+        h = _Harness()
+        h.uow.kv_config.set(KV_PS3_FOLDERS_NAMED, "1")
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
+
+        h.service.name_ps3_folders()
+
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/{_EBOOT}"
+
+    def test_running_it_again_lifts_nothing_twice(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
+        h.service.name_ps3_folders()
+        h.uow.kv_config.set(KV_PS3_FOLDERS_LIFTED, "")
+
+        h.service.name_ps3_folders()
+
+        assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3/{_EBOOT}"]
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/{_EBOOT}"
+
+    def test_the_first_pass_records_which_installs_it_lifts(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/A.ps3", file_path=f"/roms/ps3/A.ps3/Inner/{_EBOOT}", on_disk=False)
+        h.install(2, rom_dir="/roms/ps3/B.ps3", file_path=f"/roms/ps3/B.ps3/{_EBOOT}")
+
+        h.service.name_ps3_folders()
+
+        assert h.uow.kv_config.get(KV_PS3_FOLDERS_TO_LIFT) == "[1]"
+        assert not h.lifted()
+
+    def test_a_folder_adopted_after_the_first_pass_is_left_as_it_stands(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/A.ps3", file_path=f"/roms/ps3/A.ps3/Inner/{_EBOOT}", on_disk=False)
+        h.service.name_ps3_folders()
+
+        h.install(2, rom_dir="/roms/ps3/B.ps3", file_path=f"/roms/ps3/B.ps3/Inner/{_EBOOT}")
+        h.service.name_ps3_folders()
+
+        assert h.file_path(2) == f"/roms/ps3/B.ps3/Inner/{_EBOOT}"
+
+
+class TestALiftStoppedPartWayIsFinishedAtTheNextStart:
+    def test_a_game_folder_waiting_beside_an_emptied_install_folder_is_put_in_place(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}", on_disk=False)
+        h.store.files[f"/roms/ps3/MyGame.ps3.tender-lift/{_EBOOT}"] = b"x"
+        h.store.dirs.add("/roms/ps3/MyGame.ps3")
+
+        h.service.name_ps3_folders()
+
+        assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3/{_EBOOT}"]
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/{_EBOOT}"
+        assert h.lifted()
+
+    def test_a_game_folder_waiting_where_the_install_folder_is_gone_is_put_in_place(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}", on_disk=False)
+        h.store.files[f"/roms/ps3/MyGame.ps3.tender-lift/{_EBOOT}"] = b"x"
+
+        h.service.name_ps3_folders()
+
+        assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3/{_EBOOT}"]
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/{_EBOOT}"
+
+    def test_a_lifted_folder_whose_record_still_names_the_folder_inside_gets_its_record_moved(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}", on_disk=False)
+        h.store.files[f"/roms/ps3/MyGame.ps3/{_EBOOT}"] = b"x"
+
+        h.service.name_ps3_folders()
+
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/{_EBOOT}"
+        assert h.lifted()
+
+    def test_a_folder_that_is_not_there_keeps_its_record_and_the_lift_unstamped(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}", on_disk=False)
+
+        h.service.name_ps3_folders()
+
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}"
+        assert not h.lifted()
+
+    def test_a_move_that_fails_keeps_the_record_and_the_lift_unstamped(self, monkeypatch):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
+
+        def refuse(src: str, dst: str) -> None:
+            raise PermissionError(src)
+
+        monkeypatch.setattr(h.store, "move_dir", refuse)
+
+        h.service.name_ps3_folders()
+
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}"
+        assert f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}" in h.store.files
+        assert not h.lifted()
+
+    def test_an_install_folder_that_cannot_be_emptied_keeps_the_game_waiting_for_the_next_start(self, monkeypatch):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
+        # The folder stays on disk once emptied, which the fake models only as a known directory.
+        h.store.dirs.add("/roms/ps3/MyGame.ps3")
+
+        def refuse(path: str) -> None:
+            raise OSError(path)
+
+        monkeypatch.setattr(h.store, "remove_empty_dir", refuse)
+
+        h.service.name_ps3_folders()
+
+        assert f"/roms/ps3/MyGame.ps3.tender-lift/{_EBOOT}" in h.store.files
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}"
+        assert not h.lifted()
+
+        monkeypatch.undo()
+        h.service.name_ps3_folders()
+
+        assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3/{_EBOOT}"]
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/{_EBOOT}"
+        assert h.lifted()

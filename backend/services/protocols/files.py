@@ -294,6 +294,15 @@ class DownloadFileStore(Protocol):
         """Create *path* and any missing parents. Idempotent."""
         ...
 
+    def remove_empty_dir(self, path: str) -> None:
+        """Remove the directory *path*, which must be empty; raises ``OSError`` where it is not.
+
+        The removal for a folder whose content was just moved out of it: where
+        anything has come into it since, it stays, rather than being deleted
+        with the folder.
+        """
+        ...
+
     def rename(self, src: str, dst: str) -> None:
         """Atomically rename *src* to *dst*, replacing any existing file at *dst*."""
         ...

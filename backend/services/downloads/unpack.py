@@ -28,6 +28,7 @@ from domain.rom_files import (
     folder_boot_layout_root,
     is_multi_file_download,
     needs_m3u,
+    ps3_folder_lift,
     ps3_folder_rename,
 )
 from domain.served_shape import holds_disc_image, is_zip_name, served_shapes, wrapper_prefix
@@ -298,6 +299,7 @@ class DownloadUnpacker:
             # auto-generated above), so the rename happens here, last of all the
             # filesystem work, so a later failure cleans up the renamed dir.
             extract_dir, launch_file = self._es_de_collapse(extract_dir, launch_file)
+            launch_file = self._ps3_folder_lift(extract_dir, launch_file)
             extract_dir, launch_file = self._ps3_folder_name(extract_dir, launch_file, system)
         except BaseException:
             self._remove_extract_dir(extract_dir)
@@ -396,6 +398,34 @@ class DownloadUnpacker:
             return (extract_dir, launch_file)
         self._download_file_store.move_dir(extract_dir, new_rom_dir)
         return (new_rom_dir, new_launch_file)
+
+    def _ps3_folder_lift(self, extract_dir: str, launch_file: str) -> str:
+        """Place a game folder found one level inside *extract_dir* as *extract_dir* itself (:func:`ps3_folder_lift`).
+
+        Returns the launch file where it then lies, or *launch_file* unchanged:
+        for any other layout, and where the game folder is not the only entry
+        of *extract_dir*, so nothing beside it is deleted or left behind outside
+        the install (#2195 D39). A failure from the first move on removes the
+        staging folder before it is raised, as the caller removes *extract_dir*.
+        """
+        lift = ps3_folder_lift(extract_dir, launch_file)
+        if lift is None:
+            return launch_file
+        names = [entry["name"] for entry in self._download_file_store.list_top_level_names(extract_dir)]
+        if names != [os.path.basename(lift.inner)]:
+            self._logger.info("PS3 game folder %s is not alone in %s; left where it is", lift.inner, extract_dir)
+            return launch_file
+        if self._download_file_store.exists(lift.staging):
+            self._logger.warning("PS3 folder lift skipped: '%s' already exists; keeping '%s'", lift.staging, lift.inner)
+            return launch_file
+        try:
+            self._download_file_store.move_dir(lift.inner, lift.staging)
+            self._download_file_store.remove_empty_dir(extract_dir)
+            self._download_file_store.move_dir(lift.staging, extract_dir)
+        except BaseException:
+            self._remove_extract_dir(lift.staging)
+            raise
+        return lift.launch_path
 
     def _ps3_folder_name(self, extract_dir: str, launch_file: str, system: str) -> tuple[str, str]:
         """Name a folder-boot game's folder ``<game>.ps3``, as ES-DE scans it (:func:`ps3_folder_rename`).

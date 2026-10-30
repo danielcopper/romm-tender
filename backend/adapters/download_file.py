@@ -291,6 +291,10 @@ class DownloadFileAdapter:
         """Create *path* and any missing parents. Idempotent."""
         os.makedirs(path, exist_ok=True)
 
+    def remove_empty_dir(self, path: str) -> None:
+        """Remove the directory *path* with ``os.rmdir``, which refuses one that is not empty."""
+        os.rmdir(path)
+
     def rename(self, src: str, dst: str) -> None:
         """Atomically rename *src* to *dst*, replacing any existing file at *dst*."""
         os.replace(src, dst)
