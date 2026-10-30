@@ -379,7 +379,8 @@ class UnitApplier:
         # above with the old stamp intact, so an unstarted apply keeps it. A
         # skipped platform returned before this point and keeps its stamp. A
         # collection's stamp is not cleared here: its final chunk replaces it,
-        # and the flows that unbind or delete one of its members delete it
+        # and the flows that remove a member's shortcut, unbind it or delete it
+        # delete the stamp
         # (docs/architecture/backend-architecture.md, "Incremental skip").
         # A dedicated short write UoW (not folded into the first chunk's commit)
         # so the clear is unconditional at apply start — even a first-chunk

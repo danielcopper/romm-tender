@@ -1220,15 +1220,16 @@ local removals and the stale removal on an unprocessed platform **revoke the sta
 flows** — "Remove all shortcuts" and per-platform removals (via `report_removal_results`) plus the Steam-UI-deletion
 reconcile (`reconcile_live_shortcuts`) — for every platform they touch, in the same write UoW as the unbind, and the run
 finalizer's server-side **stale removal** for every platform the run did not process that it removes a row's shortcut
-on, in the finalize's write UoW; that row is unbound later, by the panel's report (#2653), which revokes nothing. A
-platform the run did not process is one that was not among its platform units: its sync is turned off, or RomM no longer
-lists it. Where an enabled collection keeps one of that platform's games bound, a stamp still able to skip would let the
-platform skip once it is processed again: the bound rows keep the zero-bound guard quiet, and RomM's id set still
-matches the stamp's checksum, so the skip rebuilds the unit from the bound rows alone and never re-creates the unbound
-games' shortcuts. On a platform the run processed, skipped or fetched alike, the stale removal leaves the skip, because
-nothing the skip reads changes: a skipped platform's rebuilt rows are all among the rows the run returned, so none of
-them is stale, and a fetched platform was stamped by that run with a generation no stale row carries. Removed-game
-cleanup's own unbinds leave the skip too; why is under [Removed-game cleanup](removed-game-cleanup.md#discovery).
+on, in the finalize's write UoW, whatever the row's binding by then; the panel's report unbinds that row and revokes
+nothing ([Steam non-Steam shortcuts](steam-non-steam-shortcuts.md#a-removal-the-panel-did-not-finish)). A platform the
+run did not process is one that was not among its platform units: its sync is turned off, or RomM no longer lists it.
+Where an enabled collection keeps one of that platform's games bound, a stamp still able to skip would let the platform
+skip once it is processed again: the bound rows keep the zero-bound guard quiet, and RomM's id set still matches the
+stamp's checksum, so the skip rebuilds the unit from the bound rows alone and never re-creates the unbound games'
+shortcuts. On a platform the run processed, skipped or fetched alike, the stale removal leaves the skip, because nothing
+the skip reads changes: a skipped platform's rebuilt rows are all among the rows the run returned, so none of them is
+stale, and a fetched platform was stamped by that run with a generation no stale row carries. Removed-game cleanup's own
+unbinds leave the skip too; why is under [Removed-game cleanup](removed-game-cleanup.md#discovery).
 
 **A revoked stamp is kept rather than deleted, because the skip is not its only reader.** Removed-game discovery
 ([Removed-game cleanup](removed-game-cleanup.md#discovery)), its canary ids (`PruneRegistry.canary_rom_ids`) and the
@@ -1324,15 +1325,15 @@ passes over a member that is no longer bound, so a stamp standing over an unboun
 never re-creates that member's shortcut. The local destructive flows and removed-game cleanup's row delete therefore
 delete every collection stamp whose member set holds one of the rows they unbind or delete, in the same write UoW as
 that write, and the run finalizer deletes every one holding a row whose shortcut the run removes, in the finalize's
-write UoW, before the panel's report unbinds the row (`CollectionSyncStateRepository.delete_intersecting`). Removed-game
+write UoW, whatever the row's binding by then (`CollectionSyncStateRepository.delete_intersecting`). Removed-game
 discovery, its canary ids and the Library page's `reachable_count` — the readers a platform stamp is kept for — read no
 collection stamp, so there is nothing to keep one for. The stale removal needs no set of the collections the run
 processed, unlike its platform rule: a processed collection adds every member to the rows the run returned — every
 stamped member on a skip, every member a platform unit delivered or its walk fetched otherwise — so none of its current
 bound members is stale. For an own smart collection that holds because it walks the platforms the sync leaves off
 whatever its listing says: a bound member its lagging listing misses would otherwise go unreturned. A collection member
-the stale removal unbinds therefore belongs to a collection the run built no unit for, and that collection is fetched
-rather than skipped once a run builds one for it again.
+whose shortcut the stale removal removes therefore belongs to a collection the run built no unit for, and that
+collection is fetched rather than skipped once a run builds one for it again.
 
 **A listing that fails stops the run.** The platform listing and the standard, smart and virtual collection listings are
 read while the work queue is built, before any unit is fetched, and a failure of any of them raises to the same handler
@@ -1345,10 +1346,10 @@ no stale removal runs and neither `sync_collections` nor `sync_complete` is emit
 preview, emits the same `error` frame and raises the error on: a RomM error is answered with `classify_error`'s reason
 and message, and anything else reaches the panel as a transport error, for which the Sync page shows its own general
 line. Read as an empty listing instead, the run would build no unit for an enabled platform or collection, and once any
-other unit keeps the run from ending as "Nothing to sync", the stale removal would unbind the games only it brings in; a
-collection would also lose its stamp (every kind has one), and the frontend's stale-collection cleanup would delete its
-Steam collection. A collection absent from a list RomM did answer with is a real removal and still goes that way. Only a
-kind with an enabled id is listed, and of the virtual kind only a type an enabled id encodes
+other unit keeps the run from ending as "Nothing to sync", the stale removal would remove the shortcuts of the games
+only it brings in; a collection would also lose its stamp (every kind has one), and the frontend's stale-collection
+cleanup would delete its Steam collection. A collection absent from a list RomM did answer with is a real removal and
+still goes that way. Only a kind with an enabled id is listed, and of the virtual kind only a type an enabled id encodes
 (`domain/virtual_collection_id.py` reads it out of RomM's id; an id that does not decode lists every supported type), so
 an endpoint that keeps failing blocks the sync only for a user who has switched on a collection it serves — switched on,
 not synced: a foreign collection the owner scope drops from the queue still needs its kind listed. The platform listing

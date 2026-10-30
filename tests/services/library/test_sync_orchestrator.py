@@ -5415,7 +5415,7 @@ class TestCollectionTurnedOffAndBackOn:
     """A collection whose sync is turned off and back on gets its shortcuts back (#2106).
 
     Its games sit on a platform whose own sync is off, so while the collection is
-    off the stale-removal scan unbinds them. Were the collection's completion stamp
+    off the stale-removal scan removes their shortcuts. Were the collection's completion stamp
     left able to skip, nothing the skip reads would have moved: RomM's
     ``updated_at`` and count are the same and no member changed since the stamp,
     and the skip's reconstruction passes over an unbound member.
@@ -5514,7 +5514,7 @@ class TestCollectionTurnedOffAndBackOn:
         await complete_a_run("run-1")
         assert bindings() == {1: 5001, 2: 5002, 3: 5003}
 
-        # Run 2: N64 is off; the stale removal unbinds the two games the collection does not hold.
+        # Run 2: N64 is off; the stale removal removes the shortcuts of the two games the collection does not hold.
         library.settings["enabled_platforms"] = {"1": False}
         await complete_a_run("run-2")
         assert bindings() == {1: 5001, 2: None, 3: None}
@@ -5581,7 +5581,7 @@ class TestFailedCollectionListing:
     The games sit on a platform whose own sync is off, so no platform unit covers
     them. When RomM cannot be reached for the listing, the run has no unit for the
     collection; that must not read as "the collection holds nothing", which the
-    end-of-run stale removal would act on by unbinding its games and the frontend
+    end-of-run stale removal would act on by removing its games' shortcuts and the frontend
     by deleting the Steam collection.
     """
 
@@ -5701,8 +5701,8 @@ class TestPlatformListingThatIsNotAList:
     """A platform listing that answers with something but a list stops the run before it changes anything.
 
     Read as "no platforms" instead, a run with a collection enabled would still
-    complete, and the end-of-run stale removal would unbind every game only a
-    platform brings in.
+    complete, and the end-of-run stale removal would remove the shortcut of every
+    game only a platform brings in.
     """
 
     @pytest.mark.asyncio
@@ -6218,8 +6218,8 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
 class TestPlatformTurnedOffAndBackOn:
     """A platform whose sync is turned off and back on gets all its shortcuts back (#2094).
 
-    While the platform is off, the stale-removal scan unbinds its games except the
-    ones an enabled collection lists. Were its completion stamp left able to skip,
+    While the platform is off, the stale-removal scan removes its games' shortcuts
+    except the ones an enabled collection lists. Were its completion stamp left able to skip,
     the game the collection held would stay bound, which keeps the zero-bound guard
     quiet, and the unbound ones would still carry the stamp's generation, so every
     count the skip reads would match. The stamp itself stays, because removed-game

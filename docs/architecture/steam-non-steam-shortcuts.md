@@ -264,8 +264,8 @@ unbinds it only once the panel reports the shortcut gone from Steam (#2653). The
 though the removal had happened — the collection maps, the platform-name cache and the terminal frame's game count leave
 the row out — and settles the stamps the removal affects (the skip of a platform the run did not process, the stamp of
 every collection holding the row). It settles them whatever the row's binding by then: the run emits `sync_stale` before
-it measures its memory and writes the finalize, and the report holds no rule the run holds, so a report can unbind the
-row first.
+it measures its memory and writes the finalize, and a running sync does not refuse the report, so a report can unbind
+the row first.
 
 The `sync_stale` tail in `frontend/src/index.tsx` reports from a `finally`, so a tail the next run's `sync_plan` cuts
 short, one whose lease renewal is refused, or one a carry-over stopped reports too. After the paced loop it reads
