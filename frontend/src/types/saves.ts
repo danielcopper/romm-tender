@@ -110,14 +110,6 @@ export interface SaveStatus {
   /** False when per-version rollback is unavailable for the slot — currently
    *  only for multi-file saves (mirrors `!multi_file`). */
   rollback_supported?: boolean;
-  /** True when the emulator's answer puts a save Tender could otherwise
-   *  sync beside the game file, outside what Tender syncs, so save sync is
-   *  unsupported. Any other refusal — a save inside the game file, writes
-   *  discarded — is not this case. Read off the local machine, so it is correct
-   *  even when the server is unreachable (independent of `server_query_failed`).
-   *  In this case `files` is `[]` and `save_sync_display` reports the "off"
-   *  state. */
-  savefiles_in_content_dir?: boolean;
 }
 
 export interface SaveSlotSummary {
@@ -178,9 +170,13 @@ export type SyncRefusalReason = WireReasonSubset<
   "save_shape_unsupported" | "savefiles_in_content_dir" | "saves_root_missing"
 >;
 
-/** Whether a slot can be set up for a game at all, asked without RomM (backend `get_save_sync_availability`). */
+/** Whether a game's saves sync, asked without RomM (backend `get_save_sync_availability`). */
 export interface SaveSyncAvailability {
   available: boolean;
+  // Whether the game is downloaded; a game that is not is asked about the path it would be downloaded to.
+  installed: boolean;
+  // The label of the entry the game starts with, as the emulator menu shows it; `null` where it has none.
+  emulator_label: string | null;
   // Present only where `available` is false: the refusal the game's sync is refused with.
   reason?: SyncRefusalReason;
   message?: string;
