@@ -445,18 +445,18 @@ class TestBuildShortcutsData:
         )
         assert result[1]["launch_options"] == ""
 
-    def test_installed_rom_with_no_launch_target_gets_empty_launch_options(self):
+    def test_a_rom_mapped_to_the_empty_path_gets_empty_launch_options(self):
         # The bake writes no empty path into the map any more (#2195 D28); one
         # there still gets the empty launch command an un-downloaded ROM's does,
         # never a command composed around a bare "".
-        roms = [{"id": 1, "name": "Sealed In A PKG"}]
+        roms = [{"id": 1, "name": "Some Game"}]
         result = build_shortcuts_data(roms, _LAUNCHER, {1: ""}, {})
         assert result[0]["launch_options"] == ""
 
-    def test_no_launch_target_beats_a_core_override(self):
+    def test_the_empty_path_beats_a_core_override(self):
         # An emulator override composes no ``-e`` form around an empty path
         # either.
-        roms = [{"id": 1, "name": "Sealed In A PKG"}]
+        roms = [{"id": 1, "name": "Some Game"}]
         overrides = {1: _core("pcsx_rearmed_libretro")}
         result = build_shortcuts_data(roms, _LAUNCHER, {1: ""}, overrides)
         assert result[0]["launch_options"] == ""
