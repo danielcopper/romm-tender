@@ -907,10 +907,8 @@ can't carry — no `%INJECT%` form (that is _needs-setup_: the command injects a
 it), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script form, no embedded quoting (`"` or `\;`), no
 `%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no placeholder outside the known whitelist. The
 classifier `domain/emulator_commands.py` decides this per command
-([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). An entry that is not safely-bakeable stays a pick
-the picker offers, marked "Tender cannot start it yet", and a game starting with it has Play refused rather than started
-through `run_game.sh` without `-e`, which would start ES-DE's own choice (#2195 D7, D23). Whether an entry is
-safely-bakeable never decides which entry is the **default emulator**.
+([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). What a pick or a default that is not safely-bakeable
+comes to is [Core and Emulator Selection](docs/architecture/core-emulator-selection.md)'s.
 
 ### Default emulator
 

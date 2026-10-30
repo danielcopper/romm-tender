@@ -195,7 +195,7 @@ class FirmwareStatusReader:
 
         Takes the already-read *options* rather than the system name, because
         every caller needs the emulator list anyway and reading it costs a
-        catalogue read plus a glob per bakeable standalone entry.
+        catalogue read.
         """
         pick = pick_for(self._platform_core_reader.get_platform_core(platform_slug), source_kind(options))
         return resolve_firmware_option(options["options"], pick.label if pick is not None else None)

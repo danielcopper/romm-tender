@@ -25,6 +25,9 @@ import { isChoosable } from "./emulatorStart";
 import type { EntryLaunches } from "./emulatorLaunches";
 import { entryLaunchLine } from "./gameLaunch";
 
+/** The line an entry Tender cannot bake carries, so a pick of it does not surprise (#2195 D7). */
+const CANNOT_START_YET = "Tender cannot start it yet";
+
 /** Map a backend un-bakeable reason slug to short menu copy: the resolver's statement, else that Tender cannot start it. */
 export function reasonCopy(reason: string | null): string {
   switch (reason) {
@@ -36,7 +39,7 @@ export function reasonCopy(reason: string | null): string {
       return "RetroDECK's start script finds no emulator for it";
     default:
       // inject / shortcut_script / no_rom_target / quoting / startdir / unknown_placeholder / null
-      return "Tender cannot start it yet";
+      return CANNOT_START_YET;
   }
 }
 
@@ -44,7 +47,7 @@ export function reasonCopy(reason: string | null): string {
 function entryNotes(e: EmulatorOption): string {
   const note = notEstablishedNote(e.reason);
   const notes = note === null ? [] : [note];
-  if (!e.bakeable) notes.push(note === null ? reasonCopy(e.reason) : reasonCopy(null));
+  if (!e.bakeable) notes.push(note === null ? reasonCopy(e.reason) : CANNOT_START_YET);
   return notes.map((part) => ` — ${part}`).join("");
 }
 
@@ -75,9 +78,9 @@ export interface EmulatorMenuConfig {
   /** Called with the chosen entry's LABEL — what a pick stores — when an entry is chosen. */
   onPick: (label: string) => void;
   /**
-   * Game-detail only, for an installed game: whether each entry can start it,
-   * as the answers land (#2195 D22, D31). Each entry shows a spinner until its
-   * answer is in, and stays choosable meanwhile.
+   * Game-detail only, for an installed game: whether each entry can start it
+   * (#2195 D22, D31). The rows wait together on a spinner for the one request
+   * answering them all, and stay choosable meanwhile.
    */
   launches?: EntryLaunches | undefined;
 }

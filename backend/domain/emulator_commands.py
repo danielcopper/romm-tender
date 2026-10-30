@@ -85,10 +85,10 @@ START_SCRIPT_RUNS_NOTHING = "start_script_runs_nothing"
 # Why the entry a game would start with cannot start it, in Tender's words:
 # ``NOT_INSTALLED`` and ``START_SCRIPT_RUNS_NOTHING``, which the resolver states
 # about the entry itself, and ``NOT_BAKEABLE`` — any other entry Tender cannot
-# bake. RetroDECK's ``run_game.sh`` without ``-e`` would start ES-DE's own
-# choice rather than the entry in effect, so Tender does not start it (#2195 D7,
-# D23). A game with such an entry has Play refused with the reason. The panel
-# words each (``frontend/src/utils/emulatorStart.ts``).
+# bake, which Tender does not start (#2195 D7, D23; why is
+# docs/architecture/core-emulator-selection.md, "What starting comes to"). A
+# game with such an entry has Play refused with the reason. The panel words
+# each (``frontend/src/utils/emulatorStart.ts``).
 CANNOT_START = frozenset({NOT_INSTALLED, START_SCRIPT_RUNS_NOTHING})
 NOT_BAKEABLE = "not_bakeable"
 

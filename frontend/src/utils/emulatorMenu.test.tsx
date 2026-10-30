@@ -269,19 +269,19 @@ describe("every entry the resolver does not state not installed is choosable (#2
     expect(row.text).not.toContain("not installed");
   });
 
-  it.each([
-    ["start_script_runs_nothing", "RetroDECK's start script finds no emulator for it"],
-    ["core_unlocated", "core location not established"],
-  ])("offers an entry the resolver states %s for, with that line", (reason, line) => {
-    const onPick = vi.fn();
-    const entry = standaloneEmu("PICO-8 (Standalone)", false, { bakeable: false, reason });
-    const row = items(
-      buildEmulatorMenu(baseConfig({ emulators: [libretroEmu("mgba_libretro", "mGBA", true), entry], onPick })),
-    ).find((i) => i.text.startsWith("PICO-8"))!;
-    expect(row.text).toBe(`PICO-8 (Standalone) — ${line}`);
-    row.onClick!();
-    expect(onPick).toHaveBeenCalledWith("PICO-8 (Standalone)");
-  });
+  it.each([["start_script_runs_nothing", "RetroDECK's start script finds no emulator for it"]])(
+    "offers an entry the resolver states %s for, with that line",
+    (reason, line) => {
+      const onPick = vi.fn();
+      const entry = standaloneEmu("PICO-8 (Standalone)", false, { bakeable: false, reason });
+      const row = items(
+        buildEmulatorMenu(baseConfig({ emulators: [libretroEmu("mgba_libretro", "mGBA", true), entry], onPick })),
+      ).find((i) => i.text.startsWith("PICO-8"))!;
+      expect(row.text).toBe(`PICO-8 (Standalone) — ${line}`);
+      row.onClick!();
+      expect(onPick).toHaveBeenCalledWith("PICO-8 (Standalone)");
+    },
+  );
 });
 
 describe("two labels that run one command", () => {

@@ -14,10 +14,11 @@ first → ``None`` (:func:`domain.emulator_choice.choose_emulator`). An ES-DE
 (ADR-0012). A stored pick applies only while its source is the one games start
 through; otherwise the default applies and the pick is kept (#2222 D5). A
 stored label stands while it names an entry, whatever that entry's state: one
-Tender cannot bake renders no invocation, and one that cannot start is refused
-at Play. Only a label that no longer exists gives way to the next layer, with a
-warning. The per-game/per-platform label may name
-a **standalone** emulator (not just a libretro core); it resolves the same way.
+that cannot start — Tender cannot bake it among the reasons — is refused at
+Play (#2195 D7, D23), and one Tender cannot bake renders no invocation. Only a
+label that no longer exists gives way to the next layer, with a warning. The
+per-game/per-platform label may name a **standalone** emulator (not just a
+libretro core); it resolves the same way.
 """
 
 from __future__ import annotations

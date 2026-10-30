@@ -500,9 +500,10 @@ class CoreService:
         emulator source answers is refused with ``core_unavailable`` and
         **nothing is written**; an entry Tender cannot bake is pinned like any
         other, and the game page then says Tender cannot start it (D23). An
-        unknown ROM is refused with ``not_found``. On success the pin is written via the Unit-of-Work and
-        the response carries the freshly-baked ``launch_options`` (the ``-e``
-        override form) and ``app_id`` for the frontend to confirm-set on the live
+        unknown ROM is refused with ``not_found``. On success the pin is written
+        via the Unit-of-Work and the response carries the freshly-baked
+        ``launch_options`` (the ``-e`` override form for an entry Tender can
+        bake) and ``app_id`` for the frontend to confirm-set on the live
         Steam shortcut. When the ROM is not installed or not bound to a shortcut
         there is nothing to update live: the pin still lands and
         ``launch_options``/``app_id`` are ``None`` (the override applies on the

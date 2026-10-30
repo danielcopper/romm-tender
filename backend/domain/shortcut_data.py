@@ -120,8 +120,8 @@ def resolve_emulator_invocation(rom: dict[str, Any], emulator: EmulatorInvocatio
     """Return the emulator invocation prefix for *rom*.
 
     With *emulator* unset (``None``) the ROM follows the plain RetroDECK flatpak
-    command (the single genuine fallback for a platform with no resolvable
-    emulator). A :data:`RUN_GAME` invocation bakes its command into RetroDECK's
+    command: a platform with no resolvable emulator, and an entry Tender cannot
+    bake, whose start Play refuses (#2195 D7). A :data:`RUN_GAME` invocation bakes its command into RetroDECK's
     ``-e`` override: ``flatpak run … -e "<command … %ROM%>"`` (e.g.
     ``%EMULATOR_RPCS3% --no-gui %ROM%``) — RetroDECK resolves ``%EMULATOR_*%``
     and substitutes ``%ROM%`` at launch. *rom* is the per-emulator-branch seam
