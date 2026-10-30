@@ -322,8 +322,8 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
     write((prev) => ({
       ...prev,
       romId,
-      // Another version's check says nothing about this one; its own is asked below.
-      startCheck: prev.romId === romId ? (prev.startCheck ?? { state: "answered" }) : { state: "checking" },
+      // The page's check runs again below (#2195 D32).
+      startCheck: { state: "checking" },
       romName: cached.rom_name || "",
       platformSlug: cached.platform_slug || "",
       platformName: cached.platform_name || "",
@@ -388,9 +388,7 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
     // It is also the page's check of whether the game can start (#2195 D32):
     // a read that fails or gets no answer in time is said in a notification.
     refreshCoreInfoInBackground(romId, cancelled, writeForRom, (e) => {
-      const why = startCheckFailureSentence(e);
-      writeForRom((prev) => ({ ...prev, startCheck: { state: "failed", why } }));
-      showToast(why);
+      failStartCheck(writeForRom, e);
     });
   } catch (e) {
     // Shared by the mount load and the version-switch re-derive — a failed cache
@@ -568,6 +566,32 @@ export async function refreshBiosStatus(appId: number): Promise<void> {
   writerForRom(entry, generation, romId)((prev) => ({ ...prev, ...biosInfo }));
 }
 
+/** Mark the page's check of whether the game can start as failed, and say what went wrong (#2195 D32). */
+function failStartCheck(write: Dispatch<SetStateAction<GameDetailState>>, e: unknown): void {
+  const why = startCheckFailureSentence(e);
+  write((prev) => ({ ...prev, startCheck: { state: "failed", why } }));
+  showToast(why);
+}
+
+/**
+ * A core read run again for the ROM a page shows is the page's check of
+ * whether the game can start run again (#2195 D32): it is checking until the
+ * read lands, and a read that fails or gets no answer within
+ * {@link LOCAL_CALL_LIMIT_MS} is failed and said, then rejects with its error.
+ */
+async function checkStart(
+  write: Dispatch<SetStateAction<GameDetailState>>,
+  read: Promise<CoreInfo>,
+): Promise<CoreInfo> {
+  write((prev) => ({ ...prev, startCheck: { state: "checking" } }));
+  try {
+    return await withTimeout(read, LOCAL_CALL_LIMIT_MS);
+  } catch (e) {
+    failStartCheck(write, e);
+    throw e;
+  }
+}
+
 /**
  * Re-read core selection and BIOS after an override was pinned or cleared, and
  * drop the cached detail so the next read sees the new core.
@@ -590,7 +614,7 @@ export async function refreshCoreAndBios(appId: number): Promise<void> {
   const romId = entry?.state.romId;
   if (!entry || !romId) return;
   const generation = entry.generation;
-  const core = getPlatformCoreInfo(romId);
+  const core = checkStart(writerForRom(entry, generation, romId), getPlatformCoreInfo(romId));
   // The new emulator wants its files at its own places: its links are placed
   // from the store before the requirement is read again, and nothing is
   // downloaded.
@@ -713,7 +737,7 @@ async function handleCoreChange(entry: Entry): Promise<void> {
   // that failed: the core half still folds, and the shown level stands rather
   // than the whole fold being lost to the handler's catch (#1693).
   const [coreInfo, biosResult] = await Promise.all([
-    getPlatformCoreInfo(romId),
+    checkStart(writerForRom(entry, generation, romId), getPlatformCoreInfo(romId)),
     getBiosStatus(romId).catch(() => UNKNOWN_BIOS_STATUS),
   ]);
   const biosInfo = extractBiosInfo(biosResult);

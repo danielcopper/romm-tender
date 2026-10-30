@@ -2340,6 +2340,72 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
     expect(getGameDetail(nextAppId)).toMatchObject({ romId: 43, startCheck: { state: "checking" } });
   });
 
+  it("a re-read of the same ROM checks again: a reload after a download", async () => {
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFixture());
+    subscribe(nextAppId);
+    await flush();
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "answered" });
+
+    const read = deferred<CoreInfo>();
+    vi.mocked(backend.getPlatformCoreInfo).mockReturnValue(read.promise);
+    await act(async () => {
+      await reloadGameDetail(nextAppId);
+    });
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "checking" });
+
+    await act(async () => {
+      read.resolve(coreInfoFixture());
+      await read.promise;
+    });
+    await flush();
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "answered" });
+  });
+
+  it("a re-read of the same ROM checks again: an emulator switch", async () => {
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFixture());
+    vi.mocked(backend.updateBiosLinks).mockResolvedValue({
+      success: true,
+      placed: 0,
+      left_in_place: 0,
+      removed: 0,
+      link_failures: [],
+    });
+    subscribe(nextAppId);
+    await flush();
+
+    const read = deferred<CoreInfo>();
+    vi.mocked(backend.getPlatformCoreInfo).mockReturnValue(read.promise);
+    let done: Promise<void> = Promise.resolve();
+    await act(async () => {
+      done = refreshCoreAndBios(nextAppId);
+      await Promise.resolve();
+    });
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "checking" });
+
+    await act(async () => {
+      read.resolve(coreInfoFixture());
+      await done;
+    });
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "answered" });
+  });
+
+  it("a re-read of the same ROM checks again: a source switch, and a failed one is said", async () => {
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoFixture());
+    subscribe(nextAppId);
+    await flush();
+
+    vi.mocked(backend.getPlatformCoreInfo).mockRejectedValue(new Error("source gone"));
+    await act(async () => {
+      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+      await Promise.resolve();
+    });
+    await flush();
+
+    const sentence = "Tender could not check whether this game can start: source gone.";
+    expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "failed", why: sentence });
+    expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: sentence }));
+  });
+
   it("a read that fails is failed, and a notification says what went wrong", async () => {
     vi.mocked(backend.getPlatformCoreInfo).mockRejectedValue(
       new HostTransportError("connection_lost", "socket closed"),
