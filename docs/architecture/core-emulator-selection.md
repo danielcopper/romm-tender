@@ -142,7 +142,7 @@ resolve_rom(rom_id):
                                                            ── its state; a label that is gone gives way, named
   invocation = get_default_emulator(system) if the default layer answered, else the chosen entry rendered
   invocation = folder_boot_direct(invocation, install)     ── PS3 folder games (below)
-  return choice, invocation, folder_unstartable
+  return choice, invocation
 
 active_emulator_for_rom(rom_id) = resolve_rom(rom_id).invocation
 active_core_for_rom(rom_id):                               ── the .so-space projection
@@ -171,13 +171,14 @@ which promotion never touches. Where the default cannot be baked, or there is no
 returns `None` and the caller bakes the plain RetroDECK launch.
 
 **What starting comes to.** `domain/emulator_choice.py::start_payload` turns the choice into the `start` the game page
-and the platform page read: `starts`; `cannot_start` with the reason — `not_installed`, `start_script_runs_nothing`, or
-`folder_install` for a game installed as a folder its entry cannot start (D21), which names
-`RPCS3 Directory (Standalone)` as the entry that can; `choose` where the shipped default's installation is not
-established, so there is no default until the user picks one (D9); `no_entry` where there is nothing to start with. A
-`cannot_start` or `choose` answer disables the game page's Play, and the launch watcher refuses Steam's own Play on the
-shortcut with the same sentence (`frontend/src/utils/emulatorStart.ts`). Tender never switches such a game to another
-entry by itself.
+and the platform page read: `starts`; `cannot_start` with the reason — `not_installed` or `start_script_runs_nothing`;
+`choose` where the shipped default's installation is not established, so there is no default until the user picks one
+(D9); `no_entry` where there is nothing to start with. A `cannot_start` or `choose` answer disables the game page's
+Play, and the launch watcher refuses Steam's own Play on the shortcut with the same sentence
+(`frontend/src/utils/emulatorStart.ts`). Whether the entry starts the game's own file — a game installed as a folder
+included, which RPCS3 Shortcut does not take — is the resolver's launch verdict, not the start's (D21; see
+[Whether an entry starts the installed game](#whether-an-entry-starts-the-installed-game)). Tender never switches such a
+game to another entry by itself.
 
 ### Which emulator source answers
 
@@ -435,11 +436,12 @@ The emulator menu on an installed game's page shows, for each entry, whether it 
 launchability verdict asked with that entry's label (`CoreService.get_emulator_launches`, read when the menu opens); the
 menu opens at once with every entry choosable, each waiting on Play's throbber (`romm-throbber`) until its answer lands,
 and an answer that lands after the page moved to another version, or after the menu closed, is dropped
-(`utils/emulatorLaunches.ts`). An entry the resolver could not establish to read the file's format says so — for a game
-kept as a `<game>.ps3` folder, every RPCS3 entry does until the resolver states which one refuses a directory. The
-menu's answer never moves the pick; a pick of an entry that cannot start the game is the user's, and Play is then off
-with the verdict's sentence. What a game's own entry answers, and what each answer does to a start, is
-[Launch-target validation](backend-architecture.md#launch-target-validation).
+(`utils/emulatorLaunches.ts`). Each line says what the resolver states: an entry that refuses the file names the
+resolver's reason where it gives one — RPCS3 Shortcut "cannot start a game installed as a folder" for a game kept as a
+`<game>.ps3` folder — and an entry that starts it says what the resolver's reading of the file could not establish,
+where it stopped short (D40). The menu's answer never moves the pick; a pick of an entry that cannot start the game is
+the user's, and Play is then off with the verdict's sentence. What a game's own entry answers, and what each answer does
+to a start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 
 ## Application: baking `-e` into `launch_options`
 
@@ -621,9 +623,14 @@ and a PS3 ROM synced before this change self-heals on its next bake. See
 `domain/rom_files.py`), the name ps3's accept-list carries for a game kept as a folder, and the resolver is asked about
 that folder as about any other game's file: on the game's page with the entry the game starts with, in the emulator menu
 with each entry, never with an entry of Tender's own choosing; the marker run above still decides which directory inside
-it is baked ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11). A folder whose name already ends in
-a suffix the accept-list carries, compared verbatim as ES-DE compares it, keeps its name, and so does one whose new name
-is taken: nothing is moved over another folder. An older install is renamed once at start-up (D27; see
+it is baked ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11, D38), though the resolver names the
+folder RPCS3 boots too, until the direct start ([#2221](https://github.com/danielcopper/romm-tender/issues/2221)) reads
+that instead. A folder whose name already ends in a suffix the accept-list carries, compared verbatim as ES-DE compares
+it, keeps its name, and so does one whose new name is taken: nothing is moved over another folder. A download whose game
+folder lies exactly one level inside the folder it was unpacked into has that game folder placed as the folder itself
+(`ps3_folder_lift`), since ES-DE, the resolver and RPCS3 look only at the folder and find nothing to boot one level
+above the game (D39) — only where the game folder is its only entry, so nothing beside it is deleted or left outside the
+install. An older install is renamed and lifted once at start-up (D27, D39; see
 [Launch-target validation](backend-architecture.md#launch-target-validation)).
 
 ### The same three bake sites — disc path composes with the core

@@ -468,10 +468,12 @@ entry's label when the game's page, its emulator menu or a press on Steam's own 
 ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D2, D13, D26). It has five states, each with its own
 sentence: it **starts**; it **has to be installed first** in an emulator (a PS3 `.pkg`, a 3DS `.cia`), named by the
 system's entry for it where the system has one (D35); it is **not a launch file** of the system, which starts from other
-extensions (a single Dreamcast track); **this emulator does not start it**, with the other emulators of the system
-established to start it, where there are any; or whether it starts is **not established**, with the reason. Which of
-them refuse a start is `frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's extension case-exactly, as
-ES-DE does, and Tender folds no case before it asks (D3).
+extensions (a single Dreamcast track); **this emulator does not start it**, with the resolver's reason where it states
+one (RPCS3 Shortcut takes no folder) and the other emulators of the system established to start it, where there are any;
+or whether it starts is **not established**, with the reason. A file that starts may still carry what the resolver's
+reading of it stopped short of — RPCS3's own list of games not read, a disc image's key not checked — and is said with
+it (D40). Which of them refuse a start is `frontend/src/utils/gameLaunch.ts`'s. The resolver compares the file's
+extension case-exactly, as ES-DE does, and Tender folds no case before it asks (D3).
 
 Launchability is a statement about a start, never about the download. Every installed game is recorded with its files
 and gets its launch command whatever its launchability (D28); installing a package by hand in the emulator is the

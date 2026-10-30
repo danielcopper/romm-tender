@@ -640,10 +640,18 @@ nothing is said; otherwise the answer stands under the **Play** button:
   no file the system starts. **Play** is off.
 - **"Azahar (Standalone) does not start .zip; other emulators of this system do. Choose another emulator in the emulator
   menu."** — **Play** is off until you do.
+- **"RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) can — choose it
+  in the emulator menu."** — where the emulator's own reading of the game says why it cannot start it, the sentence says
+  so: a folder it does not take, nothing in the folder for it to start, a file that is neither a disc image nor a game
+  program, a disc game whose disc cannot be found, or an encrypted disc image without its key file. **Play** is off.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
   **Play** stays on.
 - **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game
   it starts was not read. **Play** stays on.
+- **"Whether RPCS3 Game Serial (Standalone) starts this game cannot be established: …"** — the emulator takes the file,
+  but how far its start was followed stopped short, and the sentence says where: the emulator's own list of installed
+  games was not read, the folder was not found, whether a disc image is encrypted or its key file fits could not be
+  checked, or the emulator's version decides whether it reads that kind of file. **Play** stays on.
 
 Where **Play** is off, Steam's own **Play** on the game's shortcut is refused with the same words. While the page is
 still asking, **Play** is grey and reads **Checking...** beside the same spinning circle "Preparing..." shows. Where the
@@ -659,7 +667,10 @@ because installing the package by hand in the emulator is exactly what you would
 
 **A PS3 game downloaded as a folder** is named `<game>.ps3`, the name ES-DE expects for a PS3 game kept as a folder. A
 PS3 folder downloaded before this version is renamed so once, when Tender next starts; a folder whose new name is
-already taken keeps its name.
+already taken keeps its name. Where the download holds the game one folder deeper — `<game>.ps3` holding just one
+folder, with `PS3_GAME` inside that — the inner folder becomes `<game>.ps3` itself, since neither ES-DE nor RPCS3 looks
+further in; a download already on the device is fixed so once, when Tender next starts. Where anything else lies beside
+that inner folder, nothing is moved, and the game's page says the emulator finds nothing to start in the folder.
 
 ## Picking a Disc for Multi-Disc Games
 
