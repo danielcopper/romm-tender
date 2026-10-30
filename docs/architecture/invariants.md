@@ -2199,7 +2199,8 @@ Format: **invariant** — tier — enforced by.
   launch watcher catches"); a container left behind would stay drawn over Steam's page after its start was settled.
   `frontend/src/desktop/launchPromptHost.test.tsx` holds it: the container is gone from the window's body however the
   question settles, a second window's included, and once it is answered the window's `pagehide` and `unload` listeners
-  and the dialog's `keydown` listener are removed. The rule's home is `.claude/rules/desktop-dom.md`, and the mechanism
+  are removed, and with the root's unmount the dialog's own `keydown` listener, which a component's effect cleanup gives
+  back outside the ledger. The rule's home is `.claude/rules/desktop-dom.md`, and the mechanism
   `docs/architecture/desktop-dom-architecture.md`, "The restoration ledger"
 - **No code under `frontend/src/desktop/` names one of Steam's minified class hashes** (dev build only) — check — a
   class hash is webpack's, and a Steam update may change it, so a selector that names one finds nothing after that

@@ -97,10 +97,10 @@ new code in it.
   constraint the code cannot express. A fact has one home, and how a value was arrived at goes in the commit rather than
   the file. Re-read the comment on the line you touch — a stale one is worse than none, because it is believed and
   nothing in the toolchain contradicts it. **No mechanical check exists.**
-- `desktop-dom.md` — every change the desktop surface makes to Steam's page goes through the restoration ledger, or
-  leaving the page leaves it behind; and a selector never names a hashed class. Both are in the register below, with
-  what checks them; the file's other rules — Steam's part hidden only behind a drawn view, every failure logged — have
-  no check.
+- `desktop-dom.md` — every change the desktop surface makes to Steam's page goes through a restoration ledger, or it is
+  left behind once the page is left or the launch question settled; and a selector never names a hashed class. Both are
+  in the register below, with what checks them; the file's other rules — Steam's part hidden only behind a drawn view,
+  every failure logged — have no check.
 
 ## Documentation
 
@@ -1322,9 +1322,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   from a change to the set of RomM shortcuts, a scroll and a resize, and leaving the page, with both views handed and
   with none; and "gives back what a pass changed before it threw" for a pass that threw partway;
   `frontend/src/desktop/launchPromptHost.test.tsx`: a question's container is gone from the window's body however it
-  settles, a second window's included, and once it is answered the window's `pagehide` and `unload` listeners and its
-  dialog's `keydown` listener are removed. Prompt-only: a write to anything but `style` — a class, another attribute, a
-  node moved — and a change to an element the test's page does not hold
+  settles, a second window's included, and once it is answered the window's `pagehide` and `unload` listeners are
+  removed, and with the root's unmount its dialog's own `keydown` listener. Prompt-only: beside the navigation watcher,
+  a write to anything but `style` — a class, another attribute, a node moved — and a change to an element its test's
+  page does not hold; beside a launch question, any change but its container and its window's listeners
 - **No code under `frontend/src/desktop/` names one of Steam's minified class hashes** (dev build only) — check —
   `frontend/eslint.config.js` (`no-restricted-syntax` over string literals, regex literals and template parts,
   `NO_CLASS_HASHES`; test files left out), kept live by `frontend/src/eslintNoClassHashes.test.ts`. Unseen by it: a hash

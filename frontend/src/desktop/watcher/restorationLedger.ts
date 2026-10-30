@@ -1,6 +1,6 @@
 /**
- * DOM restoration ledger: records each change the desktop watcher makes to
- * Steam's page so that `restoreAll` can give it back, idempotently
+ * DOM restoration ledger: records the changes made through it to Steam's
+ * desktop window so that `restoreAll` can give them back, idempotently
  * (docs/architecture/desktop-dom-architecture.md, "The restoration ledger").
  */
 

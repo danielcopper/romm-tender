@@ -40,7 +40,8 @@ global is false in QAM and desktop-client code".
 
 ### Which window is Steam's main UI
 
-Measured in Steam's `SharedJSContext` on a Steam Deck in Desktop Mode:
+Measured in Steam's `SharedJSContext` on a Steam Deck in Desktop Mode. The Big Picture reading (4, no `SP Desktop`
+popup) was taken again on a Steam Deck running Steam client build 1792618285.
 
 - `SteamUIStore.MainInstanceUIMode` reads **7** while the desktop client is the main window (`SP Desktop_uid0`) and
   **4** while Big Picture is (`SP BPM_uid0`), and reads 7 again after leaving Big Picture.
@@ -96,8 +97,8 @@ menu's `menuContent.type` fires zero times, since each open builds a fresh eleme
 
 ## The restoration ledger (`frontend/src/desktop/watcher/restorationLedger.ts`)
 
-Every change the watcher makes to Steam's page goes through one `DomRestorationLedger`, so that leaving the page gives
-all of it back:
+Every change the navigation watcher makes to Steam's page goes through one `DomRestorationLedger`, so that leaving the
+page gives all of it back:
 
 - **Styles:** `ledger.style(el, property, value)` records the element's own inline value of that property, named in its
   CSS spelling, before the first change; later changes keep that first record.
@@ -117,11 +118,14 @@ render callback and the sticky play bar controller's updates each do nothing onc
 controller's own set-up is no exception: when its first update throws, it disconnects its `ResizeObserver` before the
 throw reaches the pass.
 
-A test holds the whole rule: it records the `style` attribute of every element on a page, runs passes from Steam's
-mutations and from a change to the set of RomM shortcuts, re-pins the play bar on a scroll and a resize, leaves the
-page, and requires every attribute to be what it was (`frontend/src/desktop/navigationWatcher.test.ts`, "every change it
-makes is given back"). That a pass which threw partway is given back is held by its own test, "gives back what a pass
-changed before it threw".
+A launch question keeps a ledger of its own, whose changes are given back when the question settles ("Dialogs for a
+start the launch watcher catches").
+
+A test holds the whole rule for the navigation watcher: it records the `style` attribute of every element on a page,
+runs passes from Steam's mutations and from a change to the set of RomM shortcuts, re-pins the play bar on a scroll and
+a resize, leaves the page, and requires every attribute to be what it was
+(`frontend/src/desktop/navigationWatcher.test.ts`, "every change it makes is given back"). That a pass which threw
+partway is given back is held by its own test, "gives back what a pass changed before it threw".
 
 ## The selector ladder (`frontend/src/desktop/watcher/elementSelectors.ts`)
 

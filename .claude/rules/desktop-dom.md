@@ -17,8 +17,9 @@ invariant register with what checks them; the others have no mechanical check.
    and mounted roots alike ("The restoration ledger"). A bare `el.style.x = …` or `addEventListener` on one of Steam's
    elements is never restored. A React component's own listener, removed by its effect's cleanup, and styles on a host
    Tender creates itself are outside the rule. A callback that can fire after the teardown does nothing once it has run
-   (the `stopped` / `disposed` flags in `navigationWatcher.ts` and `stickyPlayBarController.ts`). The test that holds it
-   compares `style` attributes only; a write to anything else is on you.
+   (the `stopped` / `disposed` flags in `navigationWatcher.ts` and `stickyPlayBarController.ts`). The tests that hold it
+   are the watcher's comparison of `style` attributes and a launch question's checks that its container and its window's
+   `pagehide` / `unload` listeners are gone; a write to anything else is on you.
 3. **Fiber is read, never written** ("Fiber, read-only").
 4. **A constructor used on the desktop window's nodes comes from that window**, and from the global scope only where
    that window has none ("Two windows, two realms"); why is `CLAUDE.md`'s trap on `instanceof` and realms.
