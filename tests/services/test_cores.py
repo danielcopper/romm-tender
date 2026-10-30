@@ -524,10 +524,11 @@ class TestSetGameCore:
         assert result["app_id"] is None
         assert uow.roms.get(42).emulator_override == "bsnes"
 
-    def test_an_entry_tender_cannot_bake_is_pinned_and_bakes_the_plain_launch(
+    def test_an_entry_tender_cannot_bake_is_pinned_and_bakes_the_empty_command(
         self, event_loop, service, uow, core_info
     ):
-        # Pinned like any other (#2195 D23); the game page then refuses Play.
+        # Pinned like any other (#2195 D23); the game page then refuses Play, and
+        # its shortcut gets no start that would run ES-DE's own choice (D43).
         core_info.options = [
             standalone_option(
                 "%EMULATOR_OS-SHELL% %ROM%",
@@ -543,7 +544,7 @@ class TestSetGameCore:
 
         assert result["success"] is True
         assert uow.roms.get(42).emulator_override == "RPCS3 Shortcut (Standalone)"
-        assert result["launch_options"] == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/ps3/Game.iso'"
+        assert result["launch_options"] == ""
 
     def test_an_entry_not_installed_is_refused_and_nothing_written(self, event_loop, service, uow, core_info):
         core_info.options = [

@@ -589,7 +589,8 @@ class AtlasCatalogueAdapter:
         the source ships first) rendered into an :class:`EmulatorInvocation` — a
         libretro core or a standalone emulator. Returns ``None`` when that entry
         cannot be baked, when there is no default, or when the catalogue could not
-        be read; the caller bakes the plain RetroDECK launch.
+        be read; the active-core resolver bakes the empty command for the first
+        (#2195 D43) and the plain RetroDECK launch for the other two.
 
         Keeps the read-path/launch-path invariant: the resolved emulator is both
         what the ROM launches with and what derived values key on.

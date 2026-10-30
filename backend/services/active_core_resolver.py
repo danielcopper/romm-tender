@@ -15,7 +15,7 @@ first → ``None`` (:func:`domain.emulator_choice.choose_emulator`). An ES-DE
 through; otherwise the default applies and the pick is kept (#2222 D5). A
 stored label stands while it names an entry, whatever that entry's state: one
 that cannot start — Tender cannot bake it among the reasons — is refused at
-Play (#2195 D7, D23), and one Tender cannot bake renders no invocation. Only a
+Play (#2195 D7, D23), and one Tender cannot bake bakes the empty command (D43). Only a
 label that no longer exists gives way to the next layer, with a warning. The
 per-game/per-platform label may name a **standalone** emulator (not just a
 libretro core); it resolves the same way.
@@ -82,9 +82,11 @@ class ActiveCoreResolver:
         """Return the :class:`EmulatorInvocation` the ROM ``rom_id`` will launch with.
 
         The launch-bake seam, the invocation half of :meth:`resolve_rom`.
-        ``None`` is the plain launch: where the ROM's entry cannot be baked,
-        where it has no entry, including when ``es_systems.xml`` cannot be read
-        and when the platform has no switched-on system in the answering source.
+        ``None`` is the plain launch: where the ROM has no entry, including when
+        ``es_systems.xml`` cannot be read and when the platform has no
+        switched-on system in the answering source. An entry in effect Tender
+        cannot bake is :meth:`EmulatorInvocation.nothing`, the empty command
+        (#2195 D43).
         """
         resolved = self.resolve_rom(rom_id, reading=reading)
         return resolved.invocation if resolved is not None else None
@@ -147,6 +149,10 @@ class ActiveCoreResolver:
             emulator = self._core_info.get_default_emulator(system, reading=reading)
         else:
             emulator = option_to_invocation(choice.option)
+        if choice.option is not None and choice.option.status != "bakeable":
+            # The bake writes the empty command rather than RetroDECK's plain
+            # start, which would run ES-DE's own choice (#2195 D43).
+            emulator = EmulatorInvocation.nothing()
         invocation = self._maybe_folder_boot_direct(emulator, install, rom_id)
         return ResolvedEmulator(choice=choice, options=options, invocation=invocation)
 

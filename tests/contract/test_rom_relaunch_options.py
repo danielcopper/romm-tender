@@ -153,6 +153,17 @@ async def test_a_pick_of_an_entry_tender_cannot_bake_is_stored_and_its_start_ref
     assert info["start"] == {"state": "cannot_start", "reason": "not_bakeable", "entry": "RPCS3 Shortcut (Standalone)"}
 
 
+async def test_a_game_whose_entry_tender_cannot_bake_is_re_confirmed_with_the_empty_command(harness):
+    """The shipped default RPCS3 Shortcut bakes nothing, over the real catalogue (#2195 D43)."""
+    _seed_ps3_folder_game(harness, 58, find_rules=_PS3_AND_SHELL_FIND_RULES_XML, folder="MyGame.ps3")
+    seed_component_launcher(harness, "osshell")
+
+    item = await harness.endpoints.get_rom_relaunch_options(58)
+
+    assert item is not None
+    assert item["launch_options"] == ""
+
+
 async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
     """A PS3 folder game with RPCS3 Directory chosen bakes the direct sandbox invocation (ADR-0019 / #1212).
 

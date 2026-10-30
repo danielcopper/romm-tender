@@ -167,8 +167,10 @@ instead" where there is none (D5). The default layer's invocation is
 standalone (PCSX2, RPCS3, Dolphin, …) or libretro, rendered where Tender can bake it. **Only** the live file decides it
 — no bundled snapshot — and **no gamelist selection ever moves it**: the resolver states which entry a per-game
 `<altemulator>` or a system-level `<alternativeEmulator>` promotes, and the default is read off the declared position,
-which promotion never touches. Where the default cannot be baked, or there is none, or the catalogue cannot be read, it
-returns `None` and the caller bakes the plain RetroDECK launch.
+which promotion never touches. Where there is no default or the catalogue cannot be read, it returns `None` and the
+caller bakes the plain RetroDECK launch. Where the entry in effect — a pick or the default — is one Tender cannot bake,
+the resolver answers `EmulatorInvocation.nothing()` and every bake site writes the empty start command, so a start
+Tender does not see runs nothing rather than ES-DE's own choice (#2195 D43).
 
 **What starting comes to.** `domain/emulator_choice.py::start_payload` turns the choice into the `start` the game page
 and the platform page read: `starts`; `cannot_start` with the reason — `not_installed`, `start_script_runs_nothing`, or
@@ -679,13 +681,14 @@ The frontend CPU-button menu on the game detail page drives two backend endpoint
   label the list does not carry, or one whose emulator the resolver states not installed, is refused with
   `core_unavailable` and **nothing is written**; an entry Tender cannot bake is pinned like any other, and its start is
   then refused at Play (D7, D23). On success it `pin`s the override, then re-bakes and returns the new `launch_options`
-  (the `-e` override form for an entry Tender can bake) + the bound `app_id` for an installed ROM.
+  (the `-e` override form, or the empty command for an entry Tender cannot bake, D43) + the bound `app_id` for an
+  installed ROM.
 - **`clear_game_core(rom_id)`** (triggered by picking the **default-marked core** in the menu) `clear`s the override to
   `NULL`, then re-resolves the ROM's **full active core** through `ActiveCoreResolver` and bakes _that_ — the
   per-platform core or the default, in `-e` form, **not** an unconditional plain launch. Because Tender always bakes
-  `-e`, "follow the default" still means baking a concrete core; the plain launch appears only when the platform
-  resolves to `(None, None)`. There is no separate "Reset" item — selecting the default-marked entry is the clear path;
-  any other entry pins that core.
+  `-e`, "follow the default" still means baking a concrete core, or the empty command for a default Tender cannot bake;
+  the plain launch appears only when the platform resolves to `(None, None)`. There is no separate "Reset" item —
+  selecting the default-marked entry is the clear path; any other entry pins that core.
 
 Both refuse a ROM Tender does not track with `not_found`; a pin also refuses with `not_found` when the ROM is retired
 while its label is resolved, and with `core_unavailable` when its platform changed meanwhile.

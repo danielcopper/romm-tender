@@ -400,8 +400,9 @@ class CoreService:
         with a per-game ``emulator_override`` are skipped (the pin wins over the
         platform default), as are uninstalled or unbound ROMs (no live shortcut to
         rewrite). Each entry's ``launch_options`` is the FULL active core baked by
-        the shared resolver — the ``-e`` override form, or the plain launch when
-        the resolver yields ``(None, None)`` — over the disc-resolved bake path,
+        the shared resolver — the ``-e`` override form, the empty command for an
+        entry Tender cannot bake (#2195 D43), or the plain launch when the
+        resolver yields ``(None, None)`` — over the disc-resolved bake path,
         so a multi-disc ROM keeps its persisted ``selected_disc`` rather than
         reverting to disc 1 / the m3u (a single-disc ROM bakes its ``file_path``
         unchanged).
@@ -533,7 +534,8 @@ class CoreService:
             # Refuse BEFORE any write — never persist a label the system does not
             # list, or one whose emulator the resolver states not installed.
             raise Refused("core_unavailable", f"Emulator '{label}' is not available for {platform_slug}")
-        invocation = label_to_invocation(options["options"], label)
+        # A listed entry Tender cannot bake has no invocation: its shortcut gets the empty command (#2195 D43).
+        invocation = label_to_invocation(options["options"], label) or EmulatorInvocation.nothing()
         with self._uow_factory() as uow:
             # The row is re-read because the label was resolved against a
             # snapshot: a background sync, a finishing download or the
