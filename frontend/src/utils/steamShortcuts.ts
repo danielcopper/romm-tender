@@ -373,6 +373,29 @@ function readDesktopAppStore(): Map<number, unknown> | null {
   return collectionStore.deckDesktopApps?.apps ?? null;
 }
 
+/**
+ * Which of *appIds* Steam's shortcut store no longer holds, read once Steam has settled the removals just made.
+ *
+ * Polls every 100ms until no appId in *removed* (the ones a removal was tried for) is listed any more, or
+ * *timeoutMs* has passed, then answers every appId of *appIds* absent from that last read — one tried for or
+ * not. An unreadable store answers none: nothing was seen gone.
+ */
+export async function shortcutsGoneFromSteam(
+  appIds: readonly number[],
+  removed: readonly number[],
+  timeoutMs = 3000,
+): Promise<number[]> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const apps = readDesktopAppStore();
+    if (!apps) return [];
+    if (removed.every((appId) => !apps.has(appId)) || Date.now() >= deadline) {
+      return appIds.filter((appId) => !apps.has(appId));
+    }
+    await delay(100);
+  }
+}
+
 export interface ShortcutRemovalOutcome {
   status: "confirmed" | "not_attempted" | "attempted_unconfirmed";
 }
