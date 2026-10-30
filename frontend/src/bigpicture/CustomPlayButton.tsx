@@ -137,7 +137,7 @@ interface CustomPlayButtonProps {
   startCheckFailed?: boolean;
 }
 
-/** @decky/ui's Spinner fills its container unless sized; this is the size of the label beside it. */
+/** The size of the label beside it; why a spinner is sized at all is `LoadingRow.tsx`'s. */
 const START_CHECK_SPINNER_SIZE = 16;
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops

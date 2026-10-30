@@ -89,8 +89,8 @@ def enumerate_discs(files: list[str], supported_extensions: frozenset[str] | Non
         already-recursive listing). Non-disc files are ignored, and two
         descriptors of one disc are one disc (:func:`one_descriptor_per_disc`).
     supported_extensions:
-        The live per-system extension accept-list from es_systems
-        (lowercased), intersected with :data:`DISC_IMAGE_EXTENSIONS` so a disc
+        The live per-system extension accept-list from es_systems, verbatim,
+        intersected with :data:`DISC_IMAGE_EXTENSIONS` so a disc
         the emulator cannot launch is never listed. ``None`` (es_systems
         unavailable) falls back to the full disc set.
 

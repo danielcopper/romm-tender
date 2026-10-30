@@ -76,7 +76,7 @@ export interface EmulatorMenuConfig {
   launches?: EntryLaunches | undefined;
 }
 
-/** @decky/ui's Spinner fills its container unless sized; this is the size of a line of menu text beside it. */
+/** The size of a line of menu text beside it; why a spinner is sized at all is `LoadingRow.tsx`'s. */
 const ENTRY_SPINNER_SIZE = 14;
 
 /** The line under an entry saying whether it can start the game: a spinner until the answer lands, then its words. */

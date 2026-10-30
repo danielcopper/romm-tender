@@ -5,8 +5,9 @@
  *
  * Three states refuse a start: the game has to be installed in an emulator
  * first, the file is not one the system starts from, or the entry does not
- * start it. The other two let it go ahead: it starts, or whether it starts
- * could not be established.
+ * start it. The other two let it go ahead: it starts, which says nothing unless
+ * the file is an archive whose contents were not read, or whether it starts
+ * could not be established, which says so. This is the one home of that rule.
  */
 
 import { HostTransportError } from "../api/host";

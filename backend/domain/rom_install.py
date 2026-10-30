@@ -55,7 +55,7 @@ class RomInstall:
         )
 
     def relocate(self, new_rom_dir: str | None, new_file_path: str) -> None:
-        """Move the install to a new launch file and per-ROM directory (a RetroDECK home move, a PS3 folder's rename).
+        """Move the install to a new launch file and per-ROM directory.
 
         ``new_rom_dir`` stays ``None`` for a single-file ROM; a folder-backed
         ROM carries its relocated dedicated directory.

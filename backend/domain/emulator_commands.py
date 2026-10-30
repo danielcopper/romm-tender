@@ -90,9 +90,9 @@ START_SCRIPT_RUNS_NOTHING = "start_script_runs_nothing"
 FOLDER_INSTALL = "folder_install"
 CANNOT_START = frozenset({NOT_INSTALLED, START_SCRIPT_RUNS_NOTHING})
 
-# The entry ES-DE starts a PS3 game kept as a folder with (#2195 D11). Tender's
-# own rule, named in the sentence a folder game with another entry gets; which
-# directory inside it RPCS3 boots is not the resolver's answer yet.
+# The entry named in the sentence a PS3 game kept as a folder gets where its own
+# entry cannot start a folder (#2195 D21). Tender's own rule; which directory
+# inside it RPCS3 boots is not the resolver's answer yet.
 FOLDER_ENTRY_LABEL = "RPCS3 Directory (Standalone)"
 
 # What an entry launches, as the resolver states it, in Tender's words: a core

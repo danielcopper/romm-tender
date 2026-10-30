@@ -235,7 +235,7 @@ export interface LaunchGateOps {
 }
 
 /**
- * Step 3 of {@link runLaunchGate}: the verdict on the source that would start
+ * Step 2 of {@link runLaunchGate}: the verdict on the source that would start
  * the game, or `null` to go on. Where that could not be checked, the user
  * decides; Cancel bails silently.
  */
@@ -250,7 +250,7 @@ async function startingSourceVerdict(ops: LaunchGateOps): Promise<GateVerdict | 
   return null;
 }
 
-/** Step 7a of {@link runLaunchGate}: the verdict on the pre-launch sync's outcome ({@link PreLaunchSyncOutcome}). */
+/** Step 6a of {@link runLaunchGate}: the verdict on the pre-launch sync's outcome ({@link PreLaunchSyncOutcome}). */
 function preLaunchSyncVerdict(sync: PreLaunchSyncOutcome): GateVerdict {
   if ("chose" in sync) {
     return sync.chose === "cancel" ? { decision: "abort" } : { decision: "play_anyway", noAnswer: sync.noAnswer };
@@ -278,8 +278,10 @@ function preLaunchSyncVerdict(sync: PreLaunchSyncOutcome): GateVerdict {
  *   6a. online:  preLaunchSync -> conflict | sync_failed | abort | play_anyway | allow
  *   6b. offline: checkLocalDrift -> offline_drift | allow
  *
- * Whether the game's file starts with its emulator is not a step: the game's
- * page reads it, and a start it refuses is never pressed (#2195 D26).
+ * Whether the game starts with its emulator is not a step: the launch watcher
+ * asks it before it runs the gate (`emulatorRefusalForRom`), and the Play
+ * button is not pressable where the game's page found it refused — or asks it
+ * at the press where the page's own check failed (#2195 D32, D33).
  *
  * The gate NEVER throws and NEVER blocks the user on an internal error: the
  * whole body is wrapped so any thrown error (from an injected callback or

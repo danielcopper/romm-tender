@@ -2,8 +2,8 @@
 
 The verdict is the resolver's, read in :mod:`adapters.atlas_catalogue`; this is
 the value it is read into. Each of the five states has its own sentence, worded
-by the panel (#2195 D2). Three of them refuse a start — Play is off, Steam's own
-Play is refused — and two let it go ahead with a sentence on the game page.
+by the panel (#2195 D2), which also decides which of them refuse a start
+(``frontend/src/utils/gameLaunch.ts``).
 
 Pure compute — no I/O.
 """

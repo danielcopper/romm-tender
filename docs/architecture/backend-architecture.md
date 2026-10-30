@@ -1931,15 +1931,6 @@ folder layout until re-downloaded.
 
 **Folder-boot launch target (PS3)**: for a PS3 folder game `detect_launch_file` picks the nested
 `…/PS3_GAME/USRDIR/EBOOT.BIN` as the install's `file_path` — the correct launch _file_ identity (save path, core, and
-displayed filename all derive from it). But RPCS3's directory-boot wants the game **folder**, not the EBOOT, so the
-baked `launch_options` carries the game directory instead. This is a bake-time path override (`folder_boot_root`,
-`domain/rom_files.py`) applied in the `DiscLaunchResolver` seam, never a `file_path` rewrite: `file_path` stays the
-EBOOT anchor while only the argument baked into the shortcut becomes the folder
-([ADR-0019](../adr/0019-folder-as-launch-target.md), see
-[Core and Emulator Selection](core-emulator-selection.md#folder-boot-launch-target)).
-
-**Folder-boot launch target (PS3)**: for a PS3 folder game `detect_launch_file` picks the nested
-`…/PS3_GAME/USRDIR/EBOOT.BIN` as the install's `file_path` — the correct launch _file_ identity (save path, core, and
 displayed filename all derive from it). But RPCS3's directory-boot wants the game **folder**, not the EBOOT, and
 RetroDECK's `run_game.sh` reinterprets a directory `%ROM%` as a "directory as a file" (`run_game.sh:63-67`) so it can
 never launch a bare folder. Two overrides fire together, both keyed on the same `folder_boot_root` fact and neither a
@@ -1949,9 +1940,9 @@ never launch a bare folder. Two overrides fire together, both keyed on the same 
 resolved in `ActiveCoreResolver.active_emulator_for_rom` (standalone + folder-boot install → the launcher the resolver
 states for the entry, the `/app/…/component_launcher.sh` sandbox path → `EmulatorInvocation.direct`). `file_path` stays
 the EBOOT anchor ([ADR-0019](../adr/0019-folder-as-launch-target.md), see
-[Core and Emulator Selection](core-emulator-selection.md#folder-boot-launch-target)). The multi-file download path also
-**suppresses M3U generation** and **heals a `.txt`-suffixed `PS3_DISC.SFB`** for a folder-boot dump (`domain`
-`folder_boot_layout_root` + `DownloadUnpacker.heal_ps3_sfb`).
+[Core and Emulator Selection](core-emulator-selection.md#folder-boot-launch-target), which also says what the folder
+itself is named). The multi-file download path also **suppresses M3U generation** and **heals a `.txt`-suffixed
+`PS3_DISC.SFB`** for a folder-boot dump (`domain` `folder_boot_layout_root` + `DownloadUnpacker.heal_ps3_sfb`).
 
 **M3U generation rule** (`needs_m3u` in `domain/rom_files.py`): a game-named `<fs_name_no_ext>.m3u` is auto-generated
 (when no `.m3u` already exists) for **multi-disc** ROMs — two or more disc images of any format in
@@ -1991,23 +1982,22 @@ or a disc rip whose only sizeable file is a raw track. Whether the system starts
 Tender starts the game through, so the verdict is about Tender's emulator rather than ES-DE's; a game with no entry
 chosen — no default and no pick — is asked nothing, since its start is refused for that already. The path asked about is
 the one the shortcut starts (the disc pick folded over the install), except for a game kept as a folder, whose folder is
-asked about as ES-DE scans it. Three reads ask it, each for one game: `CoreService.get_platform_core_info` carries the
+asked about as ES-DE scans it. Two endpoints ask it, each for one game: `CoreService.get_platform_core_info` carries the
 chosen entry's verdict as `launch` — the game page, a core switch and Steam's own Play read it there — and
 `CoreService.get_emulator_launches` answers every entry's for the emulator menu, which opens at once and shows each
 answer as it lands (D22, D31). Nothing asks it for a list of games: an entry's first answer may probe its core, which
-costs seconds (D26).
+costs seconds (D31).
 
 **Every installed game gets its launch command.** The install recorder records every download with its files, and every
 bake site — library sync's `installed_paths`, download-complete's re-bake, the core-change re-bake, the startup
 relaunch-options heal — writes the command whatever the verdict (D28). Asking at each bake would ask for every installed
 game on every sync and preview. An empty launch command therefore means only "not downloaded".
 
-**What each verdict does** (D2): a file that has to be installed in an emulator first, one that is not a launch file of
-the system, and one the chosen entry does not start disable Play with the verdict's own sentence, and Steam's own Play
-on the shortcut is refused with the same words, asked fresh at its press (`emulatorRefusalForRom`); a verdict not
-established, and a file that starts but is an archive whose contents were not read, leave Play on and say so under the
-play row. The words are `frontend/src/utils/gameLaunch.ts`'s. The launch gate holds no step of its own for it: Tender's
-Play is never pressed where the page's read refuses the start.
+**What each verdict does** (D2): which verdicts refuse a start, and each one's words, are
+`frontend/src/utils/gameLaunch.ts`'s. A verdict that refuses disables Play with its own sentence, and Steam's own Play
+on the shortcut is refused with the same words, asked fresh at its press (`emulatorRefusalForRom`); one that lets the
+start go ahead leaves Play on, and its sentence, where it has one, stands under the play row. The launch gate holds no
+step of its own for it: Tender's Play is never pressed where the page's read refuses the start.
 
 **While the page's check runs, and where it fails** (D32, D33). The core read is the page's check of whether the game
 can start, bounded at the local call limit. While it runs, Play is grey, disabled and spinning; once it answers, Play
@@ -2018,13 +2008,14 @@ state with the sentence below it, a notification says it too, and nothing starts
 notification says that; a start that succeeds is left alone. The state is `startCheck` on the game page's store
 (`frontend/src/utils/gameDetailStore.ts`), set back to checking when the page moves to another version.
 
-**A PS3 folder is named as ES-DE scans it** (D11). A folder-boot download's folder is renamed `<game>.ps3`
-(`ps3_folder_rename`, `domain/rom_files.py`), the name ES-DE's ps3 accept-list carries for a game kept as a folder, so
-the resolver can be asked about it; a name already taken keeps the folder as it is. Which directory inside it RPCS3
-boots stays `FOLDER_BOOT_MARKERS`. A PS3 folder installed before that name came in is renamed once at start-up
-(`Ps3FolderNamingService`, D27), its install record following; the step stays in every later release, and is stamped
-done only once no folder it could still rename is left, so a folder on a drive that is not mounted is asked about again
-at the next start. An adopted folder is recorded as it stands, and gets the resolver's answer for its name.
+**A PS3 folder installed before its name came in is renamed once at start-up** (D27). What a PS3 folder is named, and
+why, is [Core and Emulator Selection](core-emulator-selection.md#folder-boot-launch-target)'s. `Ps3FolderNamingService`
+renames each such folder, its install record following. Which installs it renames is fixed at its first pass and
+recorded in `kv_config` as `ps3_folders_to_name`, so a folder adopted later is left as it stands and gets the resolver's
+answer for its name. The step is stamped done (`ps3_folders_named`) only after a pass that left none of those it could
+still rename: a folder on a drive that is not mounted, or whose move or record failed, is asked about again at the next
+start, and a folder already moved whose record still names its old place gets its record moved after it. The step stays
+in every later release.
 
 **The files are always kept.** A download whose file does not start is a real install: the row is written, the ROM is
 uninstallable through the normal path, and nothing is deleted — installing a package by hand in the emulator is the

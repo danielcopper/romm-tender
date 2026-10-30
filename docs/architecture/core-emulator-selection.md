@@ -173,11 +173,11 @@ returns `None` and the caller bakes the plain RetroDECK launch.
 **What starting comes to.** `domain/emulator_choice.py::start_payload` turns the choice into the `start` the game page
 and the platform page read: `starts`; `cannot_start` with the reason — `not_installed`, `start_script_runs_nothing`, or
 `folder_install` for a game installed as a folder its entry cannot start (D21), which names
-`RPCS3 Directory (Standalone)` as the entry that can (D11's rule); `choose` where the shipped default's installation is
-not established, so there is no default until the user picks one (D9); `no_entry` where there is nothing to start with.
-A `cannot_start` or `choose` answer disables the game page's Play, and the launch watcher refuses Steam's own Play on
-the shortcut with the same sentence (`frontend/src/utils/emulatorStart.ts`). Tender never switches such a game to
-another entry by itself.
+`RPCS3 Directory (Standalone)` as the entry that can; `choose` where the shipped default's installation is not
+established, so there is no default until the user picks one (D9); `no_entry` where there is nothing to start with. A
+`cannot_start` or `choose` answer disables the game page's Play, and the launch watcher refuses Steam's own Play on the
+shortcut with the same sentence (`frontend/src/utils/emulatorStart.ts`). Tender never switches such a game to another
+entry by itself.
 
 ### Which emulator source answers
 
@@ -544,9 +544,9 @@ Enumerating a ROM's discs needs two different facts kept separate:
 - **The per-system accept-list is a capability and read live** —
   `AtlasCatalogueAdapter.get_supported_extensions(system)` (`adapters/atlas_catalogue.py`) returns the system's
   es_systems `<extension>` set verbatim, both cases where the file lists both (ES-DE compares case-exactly; disc
-  enumeration still folds case on its side until [#2613](https://github.com/danielcopper/romm-tender/issues/2613)),
-  threaded into the resolver through the `SystemSupportedExtensionsFn` Protocol, exactly as `system_supports_m3u` is
-  read for the `.m3u` gate
+  enumeration still folds case on its side until [#2613](https://github.com/danielcopper/romm-tender/issues/2613), and
+  the adoption search folds it too), threaded into the resolver through the `SystemSupportedExtensionsFn` Protocol,
+  exactly as `system_supports_m3u` is read for the `.m3u` gate
   ([ADR-0013](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0013-platform-gated-m3u-via-es-systems.md)).
 
 Enumeration keeps the files whose extension is in **the intersection** of the two, so a disc the emulator cannot launch
@@ -617,10 +617,13 @@ below plus the download-complete, core set/clear, and startup-reconcile bakes) i
 and a PS3 ROM synced before this change self-heals on its next bake. See
 [ADR-0019](../adr/0019-folder-as-launch-target.md).
 
-**The folder is named as ES-DE scans it.** A folder-boot download's folder is renamed `<game>.ps3`, the name ps3's
-accept-list carries for a game kept as a folder, and the resolver is asked about that folder; the marker run above still
-decides which directory inside it is baked ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11). An
-older install is renamed once at start-up (D27; see
+**The folder is named as ES-DE scans it.** A folder-boot download's folder is renamed `<game>.ps3` (`ps3_folder_rename`,
+`domain/rom_files.py`), the name ps3's accept-list carries for a game kept as a folder, and the resolver is asked about
+that folder as about any other game's file: on the game's page with the entry the game starts with, in the emulator menu
+with each entry, never with an entry of Tender's own choosing; the marker run above still decides which directory inside
+it is baked ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11). A folder whose name already ends in
+a suffix the accept-list carries, compared verbatim as ES-DE compares it, keeps its name, and so does one whose new name
+is taken: nothing is moved over another folder. An older install is renamed once at start-up (D27; see
 [Launch-target validation](backend-architecture.md#launch-target-validation)).
 
 ### The same three bake sites — disc path composes with the core

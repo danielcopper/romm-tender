@@ -443,9 +443,8 @@ export interface EmulatorStart {
 
 /**
  * Whether one installed game's file starts with one emulator entry, as the
- * resolver answers it (#2195 D2). `needs_installing`, `not_a_launch_file` and
- * `not_this_emulator` refuse a start; `starts` and `not_established` let it go
- * ahead. `entry` is the label it was asked with, `system` the system it was
+ * resolver answers it (#2195 D2); which states refuse a start is
+ * `utils/gameLaunch.ts`'s. `entry` is the label it was asked with, `system` the system it was
  * asked as and `file` the file's name;
  * `starts_from` is the system's extension list (for `not_a_launch_file`),
  * `other_entries` the entries established to start the file (for
@@ -527,8 +526,8 @@ export interface CoreInfo {
   platform_core_label: string | null;
   has_game_override: boolean;
   start: EmulatorStart;
-  /** Whether the installed game's file starts with the entry it starts with; `null` for a game not installed
-   *  or with no entry chosen, where nothing was asked. */
+  /** Whether the installed game's file starts with the entry it starts with; `null` for a game not installed,
+   *  with no system to ask, or with no entry chosen, where nothing was asked. */
   launch: GameLaunch | null;
   vanished_pick: VanishedPick | null;
 }

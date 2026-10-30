@@ -226,7 +226,8 @@ class CoreInfoProvider(Protocol):
     emulator-kind-aware (libretro OR standalone).
 
     ``launchability`` answers for one game's file and one entry, asked when
-    that game's page or emulator menu is read, never for a list of games.
+    that game's page, its emulator menu or a press on Steam's own Play reads
+    it, never for a list of games.
     """
 
     def get_active_core(
@@ -339,13 +340,12 @@ class SystemM3uSupportFn(Protocol):
 
 
 class SystemSupportedExtensionsFn(Protocol):
-    """Return the extensions ES-DE accepts for a system (lowercased frozenset).
+    """Return the extensions ES-DE accepts for a system, verbatim (a frozenset).
 
     Backed by the same per-system ``<extension>`` list in ``es_systems.xml`` as
     :class:`SystemM3uSupportFn`, so a service can intersect the live accept-list
-    with the disc-image set and never offer a disc the emulator cannot launch,
-    and a completed download can be checked for whether the system can launch it
-    at all before a launch command is baked.
+    with the disc-image set and never offer a disc the emulator cannot launch.
+    The tokens are ES-DE's own, both cases where the file lists both.
     Default-safe: an empty frozenset for an unknown system or when
     ``es_systems.xml`` cannot be found (every caller treats the empty answer as
     "cannot tell" and falls back to its permissive branch, never to a refusal).

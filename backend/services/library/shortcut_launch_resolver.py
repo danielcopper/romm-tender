@@ -119,10 +119,10 @@ class ShortcutLaunchResolver:
         library — a single ``iter_all()`` is the cheapest way to cover them all.
         Each path is the disc-resolved launch path: a multi-disc ROM resolves its
         persisted ``selected_disc`` pin against its install directory (a
-        single-disc ROM resolves to its own ``file_path``, unchanged), or ``""``
-        when the install has no launch target. Only ROMs with a current install
-        record appear in the map; a ROM not downloaded is absent, and both cases
-        reach :func:`build_shortcuts_data` as the same empty launch command.
+        single-disc ROM resolves to its own ``file_path``, unchanged). Only ROMs
+        with a current install record appear in the map; a ROM not downloaded is
+        absent, and reaches :func:`build_shortcuts_data` as the empty launch
+        command.
         *reading* is the run's one reading of the emulator sources, which every
         folder-backed install's accept-list is asked through.
         """
@@ -144,10 +144,9 @@ class ShortcutLaunchResolver:
         only the unit's ROMs via ``get(rom_id)``. Each path is the disc-resolved
         launch path — a multi-disc ROM resolves its persisted ``selected_disc``
         pin against its install directory (a single-disc ROM resolves to its own
-        ``file_path``, unchanged), or ``""`` when the install has no launch
-        target. A ROM with no install record is absent; both cases reach
-        :func:`build_shortcuts_data` as the same empty launch command. *reading*
-        is the run's one reading of the emulator sources, as above.
+        ``file_path``, unchanged). A ROM with no install record is absent, and
+        reaches :func:`build_shortcuts_data` as the empty launch command.
+        *reading* is the run's one reading of the emulator sources, as above.
         """
         pending: list[tuple[RomInstall, str | None]] = []
         with self._uow_factory() as uow:

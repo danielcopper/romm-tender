@@ -1898,25 +1898,25 @@ started without syncing saves." and logs it. An answer that arrives after the de
 more. The later steps are not bounded by this deadline but by limits of their own, which both funnels share (below).
 
 Neither funnel waits for the backend without end. Every backend call the gate makes has a limit: `LOCAL_CALL_LIMIT_MS`
-(5 s) for the calls that stay on this machine — `get_installed_rom`, `check_start_source`,
-`is_save_tracking_configured`, `confirm_slot_choice`, `check_core_change` and `check_local_drift` — and for
-`probe_reachability`, whose single heartbeat to RomM gives up after about 3 s on its own; `SERVER_CALL_LIMIT_MS` (15 s)
-for the two that read or sync the server's saves, `get_save_setup_info` and `pre_launch_sync` — though the pre-launch
-sync goes on past its limit, and the start does not without the user (below). Both live in
-`frontend/src/utils/launchGate.ts`; the session manager bounds with them too the backend calls it waits for while
-handling Steam's start and stop notifications (see [Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a
-delay. A step's own fallback answers a call that **failed** — a launch-target read that throws lets the launch through,
-a probe that throws counts as offline — but never one that got **no answer**: that ends the check in the "Save Sync
-Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can expire on a
-slow RomM while Tender itself is fine, and `check_local_drift`'s while another holder keeps the game's `rom_lock` (step
-8 below), which is why the dialog does not blame either. "Launch Anyway" starts the game on the local save without
-re-confirming the launch options, because that re-confirm asks the same backend and its own timeout stops a start;
-"Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start still cancelled. An answer that
-arrives after the dialog appeared starts nothing more. The one exception is `check_start_source`, whose every unanswered
-case — no answer, a failed call, a failed detection — asks a question of its own instead of opening that dialog
-([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)). A wait on the user's answer
-in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits
-for `resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
+(5 s) for the calls that stay on this machine — `check_start_source`, `is_save_tracking_configured`,
+`confirm_slot_choice`, `check_core_change` and `check_local_drift` — and for `probe_reachability`, whose single
+heartbeat to RomM gives up after about 3 s on its own; `SERVER_CALL_LIMIT_MS` (15 s) for the two that read or sync the
+server's saves, `get_save_setup_info` and `pre_launch_sync` — though the pre-launch sync goes on past its limit, and the
+start does not without the user (below). Both live in `frontend/src/utils/launchGate.ts`; the session manager bounds
+with them too the backend calls it waits for while handling Steam's start and stop notifications (see
+[Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a delay. A step's own fallback answers a call that
+**failed** — a probe that throws counts as offline — but never one that got **no answer**: that ends the check in the
+"Save Sync Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can
+expire on a slow RomM while Tender itself is fine, and `check_local_drift`'s while another holder keeps the game's
+`rom_lock` (step 8 below), which is why the dialog does not blame either. "Launch Anyway" starts the game on the local
+save without re-confirming the launch options, because that re-confirm asks the same backend and its own timeout stops a
+start; "Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start still cancelled. An answer
+that arrives after the dialog appeared starts nothing more. The one exception is `check_start_source`, whose every
+unanswered case — no answer, a failed call, a failed detection — asks a question of its own instead of opening that
+dialog ([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)). A wait on the user's
+answer in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog
+waits for `resolve_sync_conflict` with its Cancel disabled
+([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
 
 **The pre-launch sync goes on past its limit, and no start goes past it without the user.** The backend gives it no time
 limit of its own: `SyncEngine.pre_launch_sync` waits for the device gate and for the game's `rom_lock` until each is
@@ -1976,7 +1976,10 @@ The Play button's path:
    Otherwise the button switches at once to a disabled "Checking saves..." throbber, so a second press starts no second
    check; every outcome below leaves that state.
 2. Migration: a pending RetroDECK migration blocks the start, and the button returns to Play; the page already says why.
-3. Launch target: `get_installed_rom`. A download with nothing the system can boot is blocked with a toast.
+3. Starting source: `check_start_source`. A source switched off blocks the start; where the source could not be checked,
+   the user decides, and Cancel ends the press. Whether the game's file starts with its emulator is not a step of the
+   check: the page has already decided whether Play can be pressed
+   ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D32).
 4. Save tracking: `is_save_tracking_configured`. When it is not set up, `get_save_setup_info` decides between an
    automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press — or,
    for a game whose saves no sync carries (`sync_unavailable`), neither: the press goes on with nothing set up.

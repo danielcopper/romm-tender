@@ -220,7 +220,7 @@ class CoreService:
         entries can start the game and why the others cannot (#2195 D22, D29).
         Empty for a ROM that is not installed or has no system to ask.
         Asked when the menu is opened, for one game: a verdict may read its
-        entry's core, which the first time costs a probe (#2195 D26).
+        entry's core, which the first time costs a probe (#2195 D31).
         """
         return await self._loop.run_in_executor(None, self._emulator_launches_io, rom_id)
 

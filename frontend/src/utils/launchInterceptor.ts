@@ -337,8 +337,9 @@ export function registerLaunchInterceptor(promptsForStart: () => LaunchPrompts):
               return;
             }
 
-            // The emulator the game starts with cannot start it: refused with the
-            // game page's own words, no relaunch (#2195 D7).
+            // The emulator the game starts with cannot start it, or the game's
+            // file does not start with it: refused with the game page's own
+            // words, no relaunch (#2195 D7, D2).
             const refusal = await emulatorRefusalForRom(rom.romId, WATCHER_TAG);
             if (refusal !== null) {
               showToast(refusal);
