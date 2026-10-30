@@ -96,9 +96,7 @@ class RunFinalizer:
         :meth:`_resolve_collection_memberships`). The platform loop still excludes
         rows whose ``shortcut_app_id`` is ``None``.
 
-        A row in *removed_rom_ids* counts as unbound throughout: the run removes
-        its shortcut, and the row keeps the binding only until the frontend
-        reports it gone (#2653).
+        A row in *removed_rom_ids* counts as unbound.
         """
         platform_app_ids, group_bound_app_id = self._scan_bound_rows(
             uow, pending_platform_rom_ids, platform_names, removed_rom_ids
@@ -243,9 +241,8 @@ class RunFinalizer:
         has already upserted its ROMs into ``uow.roms``, so we only need
         to: (1) revoke the skip of the platforms :meth:`finalize_per_unit_run`
         says to and delete the stamp of every collection whose member set holds
-        a ROM whose shortcut the run removes — such a row keeps its binding until
-        the frontend reports the shortcut gone (#2653), and (2) and (3) treat it
-        as unbound already — (2) refresh the offline
+        a ROM whose shortcut the run removes, whatever its binding now — and (2)
+        and (3) treat such a row as unbound — (2) refresh the offline
         ``platform_slug → name`` cache — the run's listed names plus
         each bound platform's kept name
         (:meth:`_names_with_bound_platforms_kept`) — and
@@ -262,8 +259,6 @@ class RunFinalizer:
             removed_rom_ids: set[int] = set()
             unprocessed_slugs_removed: set[str] = set()
             for rid in stale_rom_ids or []:
-                # A report may have unbound the row already, the run's emit and
-                # this write being apart; its stamps are settled all the same.
                 rom = uow.roms.get(rid)
                 if rom is None:
                     continue
@@ -305,7 +300,7 @@ class RunFinalizer:
     ) -> dict[str, str]:
         """*platform_names*, plus the cached name of every platform outside it that a bound row is still on.
 
-        A row in *removed_rom_ids* counts as unbound: the run removes its shortcut.
+        A row in *removed_rom_ids* counts as unbound.
 
         A platform RomM no longer lists keeps its games, and its Steam collection
         is found by this name: written over with the listed names alone, the
@@ -340,8 +335,11 @@ class RunFinalizer:
         collections are recomputed. ``stale_rom_ids`` (default ``None`` =
         none) are the rows whose shortcut the run removes, stale and converged
         alike. Each keeps its binding until the frontend reports the shortcut
-        gone (``ShortcutRemovalService.report_sync_removals``, #2653), and the
-        maps and the name cache built here leave it out as though it were unbound.
+        gone (``ShortcutRemovalService.report_sync_removals``;
+        docs/architecture/steam-non-steam-shortcuts.md, "A removal the panel did
+        not finish"), and the maps and the name cache built here leave it out as
+        though it were unbound. A report can land before this runs, so the stamps
+        are settled for every row handed in that still exists.
         ``platform_names`` is the ``platform_slug → name`` map of every
         platform the run's listing named, synced or not, cached for the offline
         ``roms``-derived queries.
@@ -488,11 +486,7 @@ class RunFinalizer:
         )
 
     def _count_bound_roms(self, removed_rom_ids: AbstractSet[int] = frozenset()) -> int:
-        """Count ROMs that carry a Steam-shortcut binding, a row in *removed_rom_ids* as unbound.
-
-        The run removes those rows' shortcuts; each keeps its binding until the
-        frontend reports the shortcut gone (#2653).
-        """
+        """Count ROMs that carry a Steam-shortcut binding; a row in *removed_rom_ids* counts as unbound."""
         with self._uow_factory() as uow:
             pending = sum(
                 1 for rid in removed_rom_ids if (rom := uow.roms.get(rid)) and rom.shortcut_app_id is not None

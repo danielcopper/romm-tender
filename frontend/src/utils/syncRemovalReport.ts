@@ -1,6 +1,6 @@
 /**
- * The panel's half of a sync's removals (#2653): the backend keeps each removed shortcut's row bound until the
- * panel reports the shortcut gone from Steam, so a removal this panel did not finish is made again by the next sync.
+ * The panel's half of a sync's removals: report the ones Steam no longer lists
+ * (docs/architecture/steam-non-steam-shortcuts.md, "A removal the panel did not finish").
  */
 
 import { logError, reportSyncRemovals } from "../api/backend";

@@ -1321,17 +1321,18 @@ stamped, so they are not counted.
 **A collection stamp is deleted, not revoked, when a local removal, the stale removal or removed-game cleanup's row
 delete reaches one of its members.** A skipped collection replays its `CollectionSyncState`'s `member_rom_ids` and
 passes over a member that is no longer bound, so a stamp standing over an unbound member lets the collection skip and
-never re-creates that member's shortcut. The local destructive flows, the run finalizer's stale removal and removed-game
-cleanup's row delete therefore delete every collection stamp whose member set holds one of the rows they remove, unbind
-or delete, in the same write UoW (`CollectionSyncStateRepository.delete_intersecting`). Removed-game discovery, its
-canary ids and the Library page's `reachable_count` — the readers a platform stamp is kept for — read no collection
-stamp, so there is nothing to keep one for. The stale removal needs no set of the collections the run processed, unlike
-its platform rule: a processed collection adds every member to the rows the run returned — every stamped member on a
-skip, every member a platform unit delivered or its walk fetched otherwise — so none of its current bound members is
-stale. For an own smart collection that holds because it walks the platforms the sync leaves off whatever its listing
-says: a bound member its lagging listing misses would otherwise go unreturned. A collection member the stale removal
-unbinds therefore belongs to a collection the run built no unit for, and that collection is fetched rather than skipped
-once a run builds one for it again.
+never re-creates that member's shortcut. The local destructive flows and removed-game cleanup's row delete therefore
+delete every collection stamp whose member set holds one of the rows they unbind or delete, in the same write UoW as
+that write, and the run finalizer deletes every one holding a row whose shortcut the run removes, in the finalize's
+write UoW, before the panel's report unbinds the row (`CollectionSyncStateRepository.delete_intersecting`). Removed-game
+discovery, its canary ids and the Library page's `reachable_count` — the readers a platform stamp is kept for — read no
+collection stamp, so there is nothing to keep one for. The stale removal needs no set of the collections the run
+processed, unlike its platform rule: a processed collection adds every member to the rows the run returned — every
+stamped member on a skip, every member a platform unit delivered or its walk fetched otherwise — so none of its current
+bound members is stale. For an own smart collection that holds because it walks the platforms the sync leaves off
+whatever its listing says: a bound member its lagging listing misses would otherwise go unreturned. A collection member
+the stale removal unbinds therefore belongs to a collection the run built no unit for, and that collection is fetched
+rather than skipped once a run builds one for it again.
 
 **A listing that fails stops the run.** The platform listing and the standard, smart and virtual collection listings are
 read while the work queue is built, before any unit is fetched, and a failure of any of them raises to the same handler

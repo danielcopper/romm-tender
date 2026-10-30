@@ -260,7 +260,7 @@ class LibrarySyncStateBox:
     run_skip_rebuilt_rows: dict[int, str] = field(default_factory=dict)
     # Every bound row a platform unit of the apply converged
     # (``domain.sync_diff.converge_bound_groups``), by ``rom_id``: the finalize
-    # of a run that was not stopped removes their shortcuts and unbinds them.
+    # of a run that was not stopped removes their shortcuts.
     # Reset by ``try_begin_run``.
     run_converged: dict[int, ConvergedBinding] = field(default_factory=dict)
     # Count of apply chunks emitted so far this run — the session-budget gate

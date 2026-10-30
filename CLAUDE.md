@@ -753,13 +753,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` and
   `TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts` for the apply and the preview, and
   `tests/services/library/test_fetcher.py::TestAGroupWithSeveralShortcutsIsFetchedInFull` for the skip;
-  `tests/services/library/test_sync_orchestrator.py::TestARemovalThePanelDidNotReport`,
-  `tests/services/test_shortcut_removal.py::TestReportSyncRemovals`, `frontend/src/utils/syncRemovalReport.test.ts`,
-  `frontend/src/utils/steamShortcuts.test.ts` ("shortcutsGoneFromSteam") and `frontend/src/index.test.tsx`'s
-  `sync_stale` listener for a removal the panel did not report. Prompt-only: the panel reports from the `sync_stale`
-  tail's `finally`, and only what Steam no longer lists; a new collapse caller on a complete view hands the collapse the
-  convergence's losers (`converged=`); the collection records are read before the run's first unit
-  (`do_read_collection_listed_rom_ids`); the platform listing is the run's own
+  `tests/services/library/test_sync_orchestrator.py::TestARemovalThePanelDidNotReport` and
+  `TestAReportThatLandsBeforeTheFinalize`, `tests/services/test_shortcut_removal.py::TestReportSyncRemovals`,
+  `frontend/src/utils/syncRemovalReport.test.ts`, `frontend/src/utils/steamShortcuts.test.ts` ("shortcutsGoneFromSteam")
+  and `frontend/src/index.test.tsx`'s `sync_stale` listener for a removal the panel did not report. Prompt-only: the
+  panel reports from the `sync_stale` tail's `finally`, and only what Steam no longer lists; a new collapse caller on a
+  complete view hands the collapse the convergence's losers (`converged=`); the collection records are read before the
+  run's first unit (`do_read_collection_listed_rom_ids`); the platform listing is the run's own
   (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; the chunk dispatcher names the unit's kind
   on every commit; the preview and the apply both sort through `services/library/_stale_rows.py::settle_stale_rows` with
   the group keys `domain/sync_diff.py::group_keys_of` reads for the run's synced ROMs; the preview names every platform
